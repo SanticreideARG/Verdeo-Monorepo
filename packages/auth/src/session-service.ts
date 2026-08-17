@@ -24,4 +24,8 @@ export class SessionService {
       userId: session.userId,
     };
   }
+
+  public async revoke(sessionId: string): Promise<void> {
+    await this.sessions.revoke(sessionId, this.now());
+  }
 }

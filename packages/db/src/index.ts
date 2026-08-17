@@ -3,9 +3,13 @@ import postgres from 'postgres';
 
 import * as schema from './schema/index.js';
 
-export function createDatabase(databaseUrl: string) {
+interface CreateDatabaseOptions {
+  maxConnections?: number;
+}
+
+export function createDatabase(databaseUrl: string, options: CreateDatabaseOptions = {}) {
   const client = postgres(databaseUrl, {
-    max: 5,
+    max: options.maxConnections ?? 5,
     prepare: false,
   });
 
@@ -15,4 +19,7 @@ export function createDatabase(databaseUrl: string) {
   };
 }
 
+export type Database = ReturnType<typeof createDatabase>['db'];
+
+export * from './repositories/index.js';
 export * from './schema/index.js';

@@ -16,6 +16,25 @@ These concerns remain separate even when executed in one request.
 - Hono request IDs, structured logs, and API error envelope;
 - provider-neutral auth ADR in `Proposed` state.
 
+## Implementation status (2026-08-17)
+
+The provider-neutral authenticated-read path is implemented:
+
+- `PostgresSessionRepository` loads only sessions whose user is still active;
+- `SessionService` rejects short, unknown, expired, or revoked opaque tokens and updates `last_seen_at`;
+- active role grants are combined and per-user overrides are applied with `deny` precedence;
+- `verdeo_session` is read from the request cookie and never returned or logged;
+- `GET /api/v1/me` returns only user/session identifiers, expiry, and sorted effective permissions;
+- `POST /api/v1/auth/logout` revokes a valid current session, records `session.logout` in the same
+  PostgreSQL transaction, and clears the cookie idempotently;
+- unauthenticated requests retain the standard `401` envelope;
+- `PostgresAuditSink` persists immutable audit records and accepts the database handle used by the caller.
+
+This completes the read/authentication core of AUTH-002 and RBAC-001. Provider callback, cookie issuance,
+session listing/administrative revocation endpoints, permission guards for protected domain routes, and
+transactional mutation tests remain pending. OAuth remains intentionally unimplemented until AUTH-001 is
+accepted.
+
 ## Authentication flow
 
 ```text
@@ -79,8 +98,8 @@ Hidden navigation is a UX aid, not authorization.
 
 ### Session
 
-- `GET /me`
-- `POST /auth/logout`
+- `GET /api/v1/me` (implemented)
+- `POST /api/v1/auth/logout` (implemented for the current session)
 - provider-specific login/callback routes behind an auth adapter
 - `GET /sessions` for the current user
 - `DELETE /sessions/:id` to revoke an owned session

@@ -1,4 +1,11 @@
-const runtimePackages = ['@verdeo/config', '@verdeo/contracts', '@verdeo/observability'];
+const runtimePackages = [
+  '@verdeo/audit',
+  '@verdeo/auth',
+  '@verdeo/config',
+  '@verdeo/contracts',
+  '@verdeo/db',
+  '@verdeo/observability',
+];
 
 for (const packageName of runtimePackages) {
   const resolvedUrl = import.meta.resolve(packageName);

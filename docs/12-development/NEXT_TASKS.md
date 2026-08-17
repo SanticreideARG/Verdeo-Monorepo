@@ -19,6 +19,9 @@ Available on `main`:
 - provider-neutral session primitives;
 - dynamic permission resolution with per-user `allow` and `deny` overrides;
 - initial Auth/RBAC/Audit/domain-event database schema, migration, and seed;
+- PostgreSQL session lookup, active-user enforcement, effective permission resolution, `/api/v1/me`, and
+  PostgreSQL audit sink;
+- Vercel Web deployment with direct `/pedido` SPA routing verified;
 - automated checks through `pnpm check`.
 
 ## Recommended execution order
@@ -116,6 +119,10 @@ revocation, `/me`, logout, and expired-session handling.
 **Acceptance:** raw session tokens are never persisted or logged; disabled users and revoked/expired
 sessions cannot authenticate.
 
+**Status:** in progress. Database-backed authentication middleware, `/api/v1/me`, and current-session
+logout/revocation are implemented. Provider callback, secure cookie issuance, session listing, and
+administrative revocation endpoints remain.
+
 ### RBAC-001 — Enforce dynamic authorization
 
 **Depends on:** AUTH-002.
@@ -125,6 +132,9 @@ and deny-by-default behavior.
 
 **Acceptance:** no authorization branch checks a role name; individual `deny` overrides role grants.
 
+**Status:** in progress. Session authentication now resolves active-role grants plus user overrides without
+role-name checks. Reusable endpoint/domain guards and scoped repository queries remain.
+
 ### AUDIT-001 — Persist audit events transactionally
 
 **Depends on:** DB-002.
@@ -133,6 +143,10 @@ and deny-by-default behavior.
 tests proving audit creation for successful relevant mutations.
 
 **Acceptance:** the business mutation and its required audit record commit or roll back together.
+
+**Status:** in progress. `PostgresAuditSink` exists and current-session logout writes revocation plus audit
+inside one transaction. A database integration rollback test and the remaining business mutations still
+need to prove the same coupling.
 
 ### ADMIN-001 — User, role, and permission administration
 

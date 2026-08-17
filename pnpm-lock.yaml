@@ -44,12 +44,21 @@ importers:
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.2)
+      '@verdeo/audit':
+        specifier: workspace:*
+        version: link:../../packages/audit
+      '@verdeo/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@verdeo/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@verdeo/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@verdeo/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@verdeo/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -118,6 +127,12 @@ importers:
 
   packages/db:
     dependencies:
+      '@verdeo/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@verdeo/auth':
+        specifier: workspace:*
+        version: link:../auth
       '@verdeo/rbac':
         specifier: workspace:*
         version: link:../rbac

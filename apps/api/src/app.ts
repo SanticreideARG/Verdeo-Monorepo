@@ -1,19 +1,31 @@
 import { cors } from 'hono/cors';
-import { Hono } from 'hono';
+import { deleteCookie, getCookie } from 'hono/cookie';
+import { Hono, type Context } from 'hono';
 
-import { HealthResponseSchema, type ApiErrorCode } from '@verdeo/contracts';
+import type { AuthenticatedSession } from '@verdeo/auth';
+import { HealthResponseSchema, MeResponseSchema, type ApiErrorCode } from '@verdeo/contracts';
 import { createRequestId, type Logger } from '@verdeo/observability';
 
 interface AppVariables {
   logger: Logger;
   requestId: string;
+  session: AuthenticatedSession;
+}
+
+interface SessionAuthenticator {
+  authenticate(token: string): Promise<AuthenticatedSession | null>;
+  revoke(session: AuthenticatedSession, requestId: string): Promise<void>;
 }
 
 interface CreateAppOptions {
   appOrigin: string;
   logger: Logger;
+  sessions: SessionAuthenticator;
+  secureCookies: boolean;
   version: string;
 }
+
+export const SESSION_COOKIE_NAME = 'verdeo_session';
 
 function statusForCode(code: ApiErrorCode): 400 | 401 | 403 | 404 | 409 | 429 | 500 {
   const statuses: Record<ApiErrorCode, 400 | 401 | 403 | 404 | 409 | 429 | 500> = {
@@ -66,18 +78,58 @@ export function createApp(options: CreateAppOptions) {
     context.json({ locale: 'es-AR', productName: 'Verdeo SCA' }),
   );
 
-  app.get('/api/v1/me', (context) => {
-    const code: ApiErrorCode = 'UNAUTHENTICATED';
-    return context.json(
-      {
-        error: {
-          code,
-          message: 'Necesitás iniciar sesión.',
-          requestId: context.get('requestId'),
+  app.use('/api/v1/me', async (context, next) => {
+    const token = getCookie(context as Context, SESSION_COOKIE_NAME);
+    const session = token ? await options.sessions.authenticate(token) : null;
+
+    if (!session) {
+      const code: ApiErrorCode = 'UNAUTHENTICATED';
+      return context.json(
+        {
+          error: {
+            code,
+            message: 'Necesitás iniciar sesión.',
+            requestId: context.get('requestId'),
+          },
         },
+        statusForCode(code),
+      );
+    }
+
+    context.set('session', session);
+    await next();
+  });
+
+  app.get('/api/v1/me', (context) => {
+    const session = context.get('session');
+    const payload = MeResponseSchema.parse({
+      permissions: [...session.permissions].sort(),
+      session: {
+        expiresAt: session.expiresAt.toISOString(),
+        id: session.sessionId,
       },
-      statusForCode(code),
-    );
+      user: { id: session.userId },
+    });
+
+    return context.json(payload);
+  });
+
+  app.post('/api/v1/auth/logout', async (context) => {
+    const token = getCookie(context as Context, SESSION_COOKIE_NAME);
+
+    if (token) {
+      const session = await options.sessions.authenticate(token);
+      if (session) await options.sessions.revoke(session, context.get('requestId'));
+    }
+
+    deleteCookie(context, SESSION_COOKIE_NAME, {
+      httpOnly: true,
+      path: '/',
+      sameSite: 'Lax',
+      secure: options.secureCookies,
+    });
+
+    return context.body(null, 204);
   });
 
   app.notFound((context) => {

@@ -26,6 +26,14 @@ The current tooling reads `DATABASE_URL`. Before deployment automation, add a se
 secret if the selected Neon configuration uses different URLs. Never expose either URL through `VITE_*`
 variables.
 
+If a connection string or password is pasted into chat, an issue, a log, or another non-secret channel,
+treat it as compromised even if the repository never contained it. Rotate the Neon role password, update
+the Vercel API environments with the new pooled URL, redeploy, verify connectivity, and only then revoke the
+old credential. Do not use the exposed value for migration or verification.
+
+As of 2026-08-17, the Neon database has been reported as created. Migration and schema verification remain
+pending until a rotated credential is available through an approved secret store.
+
 ## Local preparation
 
 1. Copy the environment template.

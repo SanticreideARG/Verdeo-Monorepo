@@ -28,6 +28,7 @@ compatibility for PostgreSQL, document generation, and provider adapters.
 - Vite SPA rewrite in `apps/web/vercel.json`;
 - Hono Web-standard Function entrypoint and catch-all rewrite in `apps/api`;
 - production package exports compiled to `dist` and verified during the Vercel build.
+- Web production deployment observed loading `/pedido` directly on 2026-08-17.
 
 ### API deployment adapter
 
@@ -43,6 +44,7 @@ apps/api/
 │  └─ index.ts          # Vercel Function entrypoint
 ├─ src/
 │  ├─ app.ts            # shared createApp factory
+│  ├─ runtime.ts        # env/logger/database/session composition root
 │  └─ server.ts         # local Node entrypoint only
 └─ vercel.json          # catch-all rewrite/function configuration
 ```
@@ -56,9 +58,10 @@ The Vercel entrypoint:
 5. never listen on a port;
 6. retain the original request path when the catch-all rewrite invokes the function.
 
-The remaining gate is to validate the function export and rewrite in a Preview Deployment before production. Do not reuse old
-community instructions that force Edge runtime or disable request parsing without evidence from the current
-Vercel/Hono versions.
+The Web SPA rewrite is now verified by a direct deployed `/pedido` request. The remaining adapter gate is
+to validate the API function, database-backed `/api/v1/me`, and catch-all rewrite in a Preview Deployment.
+Do not reuse old community instructions that force Edge runtime or disable request parsing without evidence
+from the current Vercel/Hono versions.
 
 Internal `@verdeo/*` packages expose TypeScript source only through `types`/`development` conditions and
 compiled `dist` JavaScript for production imports. `pnpm build:vercel` builds every internal package used
@@ -295,7 +298,7 @@ If the error persists after this fix:
 3. enable source access outside the Root Directory for pnpm workspace packages;
 4. remove any dashboard override that deploys `src/app.ts` directly;
 5. confirm the build runs the `buildCommand` from `apps/api/vercel.json`;
-6. confirm the build log contains `Verified compiled runtime exports for 3 workspace packages.`;
+6. confirm the build log contains `Verified compiled runtime exports for 6 workspace packages.`;
 7. redeploy without the previous build cache;
 8. inspect the deployed Function path—it should originate from `api/index.ts`, not `src/app.ts`.
 

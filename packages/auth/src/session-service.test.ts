@@ -20,6 +20,7 @@ describe('SessionService', () => {
     });
     const repository: SessionRepository = {
       findByTokenHash,
+      revoke: vi.fn(),
       touch,
     };
     const service = new SessionService(repository, () => new Date('2026-08-17T12:00:00Z'));
@@ -49,11 +50,26 @@ describe('SessionService', () => {
     });
     const repository: SessionRepository = {
       findByTokenHash,
+      revoke: vi.fn(),
       touch,
     };
     const service = new SessionService(repository, () => new Date('2026-08-17T12:00:00Z'));
 
     await expect(service.authenticate(token)).resolves.toBeNull();
     expect(touch).not.toHaveBeenCalled();
+  });
+
+  it('revokes a session at the current service time', async () => {
+    const revoke = vi.fn<SessionRepository['revoke']>();
+    const repository: SessionRepository = {
+      findByTokenHash: vi.fn(),
+      revoke,
+      touch: vi.fn(),
+    };
+    const service = new SessionService(repository, () => new Date('2026-08-17T12:00:00Z'));
+
+    await service.revoke('session-id');
+
+    expect(revoke).toHaveBeenCalledWith('session-id', new Date('2026-08-17T12:00:00Z'));
   });
 });

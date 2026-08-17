@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "pnpm build:packages && pnpm verify:workspace-runtime && tsup",
-    "build:packages": "pnpm --filter @verdeo/config --filter @verdeo/contracts --filter @verdeo/observability build",
+    "build:packages": "pnpm --filter @verdeo/audit --filter @verdeo/auth --filter @verdeo/config --filter @verdeo/contracts --filter @verdeo/rbac --filter @verdeo/db --filter @verdeo/observability build",
     "build:vercel": "pnpm build:packages && pnpm verify:workspace-runtime",
     "dev": "tsx --conditions=development watch --env-file=../../.env src/server.ts",
     "start": "node dist/server.js",
@@ -16,8 +16,11 @@
   },
   "dependencies": {
     "@hono/node-server": "2.1.1",
+    "@verdeo/audit": "workspace:*",
+    "@verdeo/auth": "workspace:*",
     "@verdeo/config": "workspace:*",
     "@verdeo/contracts": "workspace:*",
+    "@verdeo/db": "workspace:*",
     "@verdeo/observability": "workspace:*",
     "hono": "4.13.2",
     "pino": "10.3.1",

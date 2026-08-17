@@ -12,5 +12,6 @@ export interface SessionRecord extends AuthenticatedSession {
 
 export interface SessionRepository {
   findByTokenHash(tokenHash: string): Promise<SessionRecord | null>;
+  revoke(sessionId: string, revokedAt: Date): Promise<void>;
   touch(sessionId: string, seenAt: Date): Promise<void>;
 }
