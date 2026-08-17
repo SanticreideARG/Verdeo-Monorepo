@@ -57,3 +57,10 @@ The first foundation slice includes:
 - initial Drizzle schema and migration for auth, RBAC, audit, and event outbox records.
 
 OAuth provider selection, production database credentials, and the first superadmin bootstrap remain deployment decisions.
+
+## Next implementation block
+
+- `NEXT_TASKS.md`: ordered task register and definition of done.
+- `NEON_SETUP.md`: database environment, migration, seed, and recovery runbook.
+- `AUTH_RBAC_AUDIT_IMPLEMENTATION.md`: security foundation design and test matrix.
+- `CRM_IMPLEMENTATION.md`: customer-domain schema, services, API, privacy, and merge/unmerge plan.

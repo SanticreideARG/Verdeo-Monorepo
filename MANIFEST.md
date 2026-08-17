@@ -34,4 +34,8 @@
 - `docs/11-reference/DATA_MIGRATION.md`
 - `docs/11-reference/GLOSSARY.md`
 - `docs/12-development/DEVELOPMENT.md`
+- `docs/12-development/NEXT_TASKS.md`
+- `docs/12-development/NEON_SETUP.md`
+- `docs/12-development/AUTH_RBAC_AUDIT_IMPLEMENTATION.md`
+- `docs/12-development/CRM_IMPLEMENTATION.md`
 - `project.config.seed.json`

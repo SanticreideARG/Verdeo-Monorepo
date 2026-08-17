@@ -103,3 +103,6 @@ pnpm check
 ```
 
 Consulta `docs/12-development/DEVELOPMENT.md` para migraciones y estado de implementación.
+
+Las próximas tareas están especificadas en `docs/12-development/NEXT_TASKS.md`, con runbooks separados
+para Neon, Auth/RBAC/Audit y CRM.
