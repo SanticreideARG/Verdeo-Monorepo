@@ -1,7 +1,12 @@
 import { AuditService } from '@verdeo/audit';
-import { SessionService, type AuthenticatedSession } from '@verdeo/auth';
+import { SessionService, UserDirectoryService, type AuthenticatedSession } from '@verdeo/auth';
 import { parseServerEnv } from '@verdeo/config';
-import { createDatabase, PostgresAuditSink, PostgresSessionRepository } from '@verdeo/db';
+import {
+  createDatabase,
+  PostgresAuditSink,
+  PostgresSessionRepository,
+  PostgresUserDirectoryRepository,
+} from '@verdeo/db';
 import { createLogger } from '@verdeo/observability';
 
 import { createApp } from './app.js';
@@ -24,8 +29,10 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     maxConnections: environment.VERCEL ? 1 : 5,
   });
   const sessionService = new SessionService(new PostgresSessionRepository(database.db));
+  const userDirectory = new UserDirectoryService(new PostgresUserDirectoryRepository(database.db));
   const sessions = {
     authenticate: (token: string) => sessionService.authenticate(token),
+    listForUser: (userId: string) => sessionService.listForUser(userId),
     revoke: async (session: AuthenticatedSession, requestId: string) => {
       await database.db.transaction(async (transaction) => {
         const transactionalSessions = new SessionService(
@@ -33,7 +40,9 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
         );
         const audit = new AuditService(new PostgresAuditSink(transaction));
 
-        await transactionalSessions.revoke(session.sessionId);
+        const revoked = await transactionalSessions.revoke(session.sessionId);
+        if (!revoked) return;
+
         await audit.record({
           action: 'session.logout',
           actor: { type: 'user', userId: session.userId },
@@ -45,12 +54,39 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
         });
       });
     },
+    revokeOwned: async (
+      session: AuthenticatedSession,
+      targetSessionId: string,
+      requestId: string,
+    ) =>
+      database.db.transaction(async (transaction) => {
+        const transactionalSessions = new SessionService(
+          new PostgresSessionRepository(transaction),
+        );
+        const revoked = await transactionalSessions.revokeOwned(targetSessionId, session.userId);
+
+        if (!revoked) return false;
+
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        await audit.record({
+          action: 'session.revoked',
+          actor: { type: 'user', userId: session.userId },
+          correlationId: requestId,
+          entityId: targetSessionId,
+          entityType: 'session',
+          requestId,
+          source: 'api',
+        });
+
+        return true;
+      }),
   };
   const app = createApp({
     appOrigin: env.APP_URL,
     logger,
     sessions,
     secureCookies: env.NODE_ENV === 'production',
+    users: userDirectory,
     version: options.version,
   });
 

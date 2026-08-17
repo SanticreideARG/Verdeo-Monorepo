@@ -1,5 +1,5 @@
 import { hashSessionToken } from './session-token.js';
-import type { AuthenticatedSession, SessionRepository } from './types.js';
+import type { AuthenticatedSession, SessionRepository, SessionSummary } from './types.js';
 
 export class SessionService {
   public constructor(
@@ -25,7 +25,15 @@ export class SessionService {
     };
   }
 
-  public async revoke(sessionId: string): Promise<void> {
-    await this.sessions.revoke(sessionId, this.now());
+  public async revoke(sessionId: string): Promise<boolean> {
+    return this.sessions.revoke(sessionId, this.now());
+  }
+
+  public async listForUser(userId: string): Promise<readonly SessionSummary[]> {
+    return this.sessions.listForUser(userId, 50);
+  }
+
+  public async revokeOwned(sessionId: string, userId: string): Promise<boolean> {
+    return this.sessions.revokeOwned(sessionId, userId, this.now());
   }
 }

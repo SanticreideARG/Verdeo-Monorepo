@@ -10,8 +10,18 @@ export interface SessionRecord extends AuthenticatedSession {
   tokenHash: string;
 }
 
+export interface SessionSummary {
+  createdAt: Date;
+  expiresAt: Date;
+  id: string;
+  lastSeenAt: Date;
+  revokedAt: Date | null;
+}
+
 export interface SessionRepository {
   findByTokenHash(tokenHash: string): Promise<SessionRecord | null>;
-  revoke(sessionId: string, revokedAt: Date): Promise<void>;
+  listForUser(userId: string, limit: number): Promise<readonly SessionSummary[]>;
+  revoke(sessionId: string, revokedAt: Date): Promise<boolean>;
+  revokeOwned(sessionId: string, userId: string, revokedAt: Date): Promise<boolean>;
   touch(sessionId: string, seenAt: Date): Promise<void>;
 }

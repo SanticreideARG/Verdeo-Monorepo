@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 
 import type { SessionRecord, SessionRepository } from '@verdeo/auth';
 import { resolvePermissions } from '@verdeo/rbac';
@@ -69,10 +69,40 @@ export class PostgresSessionRepository implements SessionRepository {
       .where(eq(sessions.id, sessionId));
   }
 
-  public async revoke(sessionId: string, revokedAt: Date): Promise<void> {
-    await this.database
+  public async listForUser(userId: string, limit: number) {
+    return this.database
+      .select({
+        createdAt: sessions.createdAt,
+        expiresAt: sessions.expiresAt,
+        id: sessions.id,
+        lastSeenAt: sessions.lastSeenAt,
+        revokedAt: sessions.revokedAt,
+      })
+      .from(sessions)
+      .where(eq(sessions.userId, userId))
+      .orderBy(desc(sessions.createdAt))
+      .limit(limit);
+  }
+
+  public async revoke(sessionId: string, revokedAt: Date): Promise<boolean> {
+    const revokedSessions = await this.database
       .update(sessions)
       .set({ revokedAt })
-      .where(and(eq(sessions.id, sessionId), isNull(sessions.revokedAt)));
+      .where(and(eq(sessions.id, sessionId), isNull(sessions.revokedAt)))
+      .returning({ id: sessions.id });
+
+    return revokedSessions.length === 1;
+  }
+
+  public async revokeOwned(sessionId: string, userId: string, revokedAt: Date): Promise<boolean> {
+    const revokedSessions = await this.database
+      .update(sessions)
+      .set({ revokedAt })
+      .where(
+        and(eq(sessions.id, sessionId), eq(sessions.userId, userId), isNull(sessions.revokedAt)),
+      )
+      .returning({ id: sessions.id });
+
+    return revokedSessions.length === 1;
   }
 }

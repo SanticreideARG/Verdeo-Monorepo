@@ -21,6 +21,8 @@ Available on `main`:
 - initial Auth/RBAC/Audit/domain-event database schema, migration, and seed;
 - PostgreSQL session lookup, active-user enforcement, effective permission resolution, `/api/v1/me`, and
   PostgreSQL audit sink;
+- owned-session listing/revocation, reusable permission middleware, and a PII-minimized `users.read`
+  directory endpoint;
 - Vercel Web deployment with direct `/pedido` SPA routing verified;
 - automated checks through `pnpm check`.
 
@@ -119,9 +121,9 @@ revocation, `/me`, logout, and expired-session handling.
 **Acceptance:** raw session tokens are never persisted or logged; disabled users and revoked/expired
 sessions cannot authenticate.
 
-**Status:** in progress. Database-backed authentication middleware, `/api/v1/me`, and current-session
-logout/revocation are implemented. Provider callback, secure cookie issuance, session listing, and
-administrative revocation endpoints remain.
+**Status:** in progress. Database-backed authentication middleware, `/api/v1/me`, current-session logout,
+owned-session listing, and owned-session revocation are implemented. Provider callback, secure cookie
+issuance, and administrative all-user revocation remain.
 
 ### RBAC-001 — Enforce dynamic authorization
 
@@ -132,8 +134,9 @@ and deny-by-default behavior.
 
 **Acceptance:** no authorization branch checks a role name; individual `deny` overrides role grants.
 
-**Status:** in progress. Session authentication now resolves active-role grants plus user overrides without
-role-name checks. Reusable endpoint/domain guards and scoped repository queries remain.
+**Status:** in progress. Session authentication resolves active-role grants plus user overrides without
+role-name checks. The reusable endpoint guard is exercised by `GET /api/v1/users`, and session ownership is
+enforced in SQL. Broader domain guards and resource-scoped repositories remain.
 
 ### AUDIT-001 — Persist audit events transactionally
 
@@ -156,6 +159,10 @@ need to prove the same coupling.
 disable, and session revocation.
 
 **Acceptance:** privilege escalation, self-lockout edge cases, and audit visibility are tested.
+
+**Status:** started. `GET /api/v1/users` provides cursor-paginated identifiers, display names, statuses, and
+creation timestamps behind `users.read`; it intentionally omits normalized email. Mutations and detailed
+views remain pending.
 
 ### CRM-001 to CRM-004 — Customer foundation
 

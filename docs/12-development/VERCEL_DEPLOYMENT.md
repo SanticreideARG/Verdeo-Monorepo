@@ -234,6 +234,8 @@ DNS changes are external and potentially disruptive. Resolve exact target record
 - `/health` returns `200`, version, timestamp, and `x-request-id`;
 - unknown route returns the standard `404` envelope;
 - `/api/v1/me` returns `401` without a session;
+- `/api/v1/sessions` returns `401` without a session and never serializes token material;
+- `/api/v1/users` returns `403` for a session without `users.read`;
 - JSON `POST` body and validation errors work through the Vercel adapter;
 - CORS rejects unapproved origins and permits the configured Web origin;
 - database connectivity uses the Preview database only;

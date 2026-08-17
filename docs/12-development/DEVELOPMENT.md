@@ -56,6 +56,8 @@ The first foundation slice includes:
 - Audit Core and domain event boundaries;
 - initial Drizzle schema and migration for auth, RBAC, audit, and event outbox records.
 - Vercel Web/API configuration with compiled runtime exports for internal workspace packages.
+- PostgreSQL-backed session authentication, owned-session management, and transactional revocation audit.
+- enforced `users.read` middleware and a PII-minimized, cursor-paginated user directory endpoint.
 
 OAuth provider selection, production database credentials, and the first superadmin bootstrap remain deployment decisions.
 

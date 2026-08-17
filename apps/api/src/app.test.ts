@@ -1,15 +1,29 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { HealthResponseSchema, MeResponseSchema } from '@verdeo/contracts';
+import {
+  HealthResponseSchema,
+  MeResponseSchema,
+  SessionListResponseSchema,
+  UserListResponseSchema,
+} from '@verdeo/contracts';
 import { createLogger } from '@verdeo/observability';
 
 import { createApp } from './app.js';
 
+const emptySessions = {
+  authenticate: () => Promise.resolve(null),
+  listForUser: () => Promise.resolve([]),
+  revoke: () => Promise.resolve(),
+  revokeOwned: () => Promise.resolve(false),
+};
+const emptyUsers = { list: () => Promise.resolve({ items: [], nextCursor: null }) };
+
 const app = createApp({
   appOrigin: 'http://localhost:5173',
   logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
-  sessions: { authenticate: () => Promise.resolve(null), revoke: () => Promise.resolve() },
+  sessions: emptySessions,
   secureCookies: false,
+  users: emptyUsers,
   version: 'test',
 });
 
@@ -37,6 +51,7 @@ describe('API foundation', () => {
       appOrigin: 'http://localhost:5173',
       logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
       sessions: {
+        ...emptySessions,
         authenticate: () =>
           Promise.resolve({
             expiresAt: new Date('2026-08-18T12:00:00.000Z'),
@@ -44,9 +59,9 @@ describe('API foundation', () => {
             sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
             userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
           }),
-        revoke: () => Promise.resolve(),
       },
       secureCookies: false,
+      users: emptyUsers,
       version: 'test',
     });
     const response = await authenticatedApp.request('/api/v1/me', {
@@ -71,6 +86,7 @@ describe('API foundation', () => {
       appOrigin: 'http://localhost:5173',
       logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
       sessions: {
+        ...emptySessions,
         authenticate: () =>
           Promise.resolve({
             expiresAt: new Date('2026-08-18T12:00:00.000Z'),
@@ -81,6 +97,7 @@ describe('API foundation', () => {
         revoke,
       },
       secureCookies: true,
+      users: emptyUsers,
       version: 'test',
     });
 
@@ -97,5 +114,157 @@ describe('API foundation', () => {
     expect(response.headers.get('set-cookie')).toContain('verdeo_session=;');
     expect(response.headers.get('set-cookie')).toContain('HttpOnly');
     expect(response.headers.get('set-cookie')).toContain('Secure');
+  });
+
+  it('lists only safe session metadata for the authenticated user', async () => {
+    const sessionsApp = createApp({
+      appOrigin: 'http://localhost:5173',
+      logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      sessions: {
+        ...emptySessions,
+        authenticate: () =>
+          Promise.resolve({
+            expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+            permissions: [],
+            sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+            userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+          }),
+        listForUser: () =>
+          Promise.resolve([
+            {
+              createdAt: new Date('2026-08-17T10:00:00.000Z'),
+              expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+              id: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              lastSeenAt: new Date('2026-08-17T12:00:00.000Z'),
+              revokedAt: null,
+            },
+          ]),
+      },
+      secureCookies: false,
+      users: emptyUsers,
+      version: 'test',
+    });
+    const response = await sessionsApp.request('/api/v1/sessions', {
+      headers: { cookie: 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars' },
+    });
+    const body: unknown = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(SessionListResponseSchema.parse(body).items[0]).toMatchObject({
+      current: true,
+      id: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+      revokedAt: null,
+    });
+    expect(JSON.stringify(body)).not.toContain('token');
+  });
+
+  it('does not reveal whether an unowned session exists', async () => {
+    const revokeOwned = vi.fn(() => Promise.resolve(false));
+    const sessionsApp = createApp({
+      appOrigin: 'http://localhost:5173',
+      logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      sessions: {
+        ...emptySessions,
+        authenticate: () =>
+          Promise.resolve({
+            expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+            permissions: [],
+            sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+            userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+          }),
+        revokeOwned,
+      },
+      secureCookies: false,
+      users: emptyUsers,
+      version: 'test',
+    });
+
+    const response = await sessionsApp.request(
+      '/api/v1/sessions/97ecbe34-a5a2-49d7-ac45-9a816f2bc47c',
+      {
+        headers: { cookie: 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars' },
+        method: 'DELETE',
+      },
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'NOT_FOUND' } });
+    expect(revokeOwned).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: '55276601-ec66-4f63-9f2f-edf73904ede0' }),
+      '97ecbe34-a5a2-49d7-ac45-9a816f2bc47c',
+      expect.any(String),
+    );
+  });
+
+  it('denies the user directory without users.read', async () => {
+    const list = vi.fn(() => Promise.resolve({ items: [], nextCursor: null }));
+    const usersApp = createApp({
+      appOrigin: 'http://localhost:5173',
+      logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      sessions: {
+        ...emptySessions,
+        authenticate: () =>
+          Promise.resolve({
+            expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+            permissions: [],
+            sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+            userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+          }),
+      },
+      secureCookies: false,
+      users: { list },
+      version: 'test',
+    });
+
+    const response = await usersApp.request('/api/v1/users', {
+      headers: { cookie: 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars' },
+    });
+
+    expect(response.status).toBe(403);
+    expect(list).not.toHaveBeenCalled();
+  });
+
+  it('returns a paginated, PII-minimized user directory with users.read', async () => {
+    const usersApp = createApp({
+      appOrigin: 'http://localhost:5173',
+      logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      sessions: {
+        ...emptySessions,
+        authenticate: () =>
+          Promise.resolve({
+            expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+            permissions: ['users.read'],
+            sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+            userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+          }),
+      },
+      secureCookies: false,
+      users: {
+        list: () =>
+          Promise.resolve({
+            items: [
+              {
+                createdAt: new Date('2026-08-17T10:00:00.000Z'),
+                displayName: 'Operador',
+                id: '00000000-0000-4000-8000-000000000001',
+                status: 'active',
+              },
+            ],
+            nextCursor: null,
+          }),
+      },
+      version: 'test',
+    });
+    const response = await usersApp.request('/api/v1/users?limit=10', {
+      headers: { cookie: 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars' },
+    });
+    const body: unknown = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(UserListResponseSchema.parse(body).items[0]).toMatchObject({
+      displayName: 'Operador',
+      status: 'active',
+    });
+    expect(JSON.stringify(body)).not.toContain('email');
   });
 });

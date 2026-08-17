@@ -20,7 +20,9 @@ describe('SessionService', () => {
     });
     const repository: SessionRepository = {
       findByTokenHash,
+      listForUser: vi.fn(),
       revoke: vi.fn(),
+      revokeOwned: vi.fn(),
       touch,
     };
     const service = new SessionService(repository, () => new Date('2026-08-17T12:00:00Z'));
@@ -50,7 +52,9 @@ describe('SessionService', () => {
     });
     const repository: SessionRepository = {
       findByTokenHash,
+      listForUser: vi.fn(),
       revoke: vi.fn(),
+      revokeOwned: vi.fn(),
       touch,
     };
     const service = new SessionService(repository, () => new Date('2026-08-17T12:00:00Z'));
@@ -61,15 +65,54 @@ describe('SessionService', () => {
 
   it('revokes a session at the current service time', async () => {
     const revoke = vi.fn<SessionRepository['revoke']>();
+    revoke.mockResolvedValue(true);
     const repository: SessionRepository = {
       findByTokenHash: vi.fn(),
+      listForUser: vi.fn(),
       revoke,
+      revokeOwned: vi.fn(),
       touch: vi.fn(),
     };
     const service = new SessionService(repository, () => new Date('2026-08-17T12:00:00Z'));
 
-    await service.revoke('session-id');
+    await expect(service.revoke('session-id')).resolves.toBe(true);
 
     expect(revoke).toHaveBeenCalledWith('session-id', new Date('2026-08-17T12:00:00Z'));
+  });
+
+  it('lists a bounded set of sessions owned by the user', async () => {
+    const listForUser = vi.fn<SessionRepository['listForUser']>();
+    listForUser.mockResolvedValue([]);
+    const repository: SessionRepository = {
+      findByTokenHash: vi.fn(),
+      listForUser,
+      revoke: vi.fn(),
+      revokeOwned: vi.fn(),
+      touch: vi.fn(),
+    };
+    const service = new SessionService(repository);
+
+    await expect(service.listForUser('user-id')).resolves.toEqual([]);
+    expect(listForUser).toHaveBeenCalledWith('user-id', 50);
+  });
+
+  it('requires ownership when revoking another session', async () => {
+    const revokeOwned = vi.fn<SessionRepository['revokeOwned']>();
+    revokeOwned.mockResolvedValue(false);
+    const repository: SessionRepository = {
+      findByTokenHash: vi.fn(),
+      listForUser: vi.fn(),
+      revoke: vi.fn(),
+      revokeOwned,
+      touch: vi.fn(),
+    };
+    const service = new SessionService(repository, () => new Date('2026-08-17T12:00:00Z'));
+
+    await expect(service.revokeOwned('session-id', 'user-id')).resolves.toBe(false);
+    expect(revokeOwned).toHaveBeenCalledWith(
+      'session-id',
+      'user-id',
+      new Date('2026-08-17T12:00:00Z'),
+    );
   });
 });

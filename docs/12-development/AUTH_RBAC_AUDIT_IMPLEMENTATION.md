@@ -27,12 +27,16 @@ The provider-neutral authenticated-read path is implemented:
 - `GET /api/v1/me` returns only user/session identifiers, expiry, and sorted effective permissions;
 - `POST /api/v1/auth/logout` revokes a valid current session, records `session.logout` in the same
   PostgreSQL transaction, and clears the cookie idempotently;
+- `GET /api/v1/sessions` lists at most 50 owned sessions without hashes or raw tokens;
+- `DELETE /api/v1/sessions/:id` enforces ownership in SQL and audits successful revocation atomically;
+- reusable API permission middleware denies by default and returns the standard `403` envelope;
+- `GET /api/v1/users` exercises `users.read` with cursor pagination and a PII-minimized DTO;
 - unauthenticated requests retain the standard `401` envelope;
 - `PostgresAuditSink` persists immutable audit records and accepts the database handle used by the caller.
 
-This completes the read/authentication core of AUTH-002 and RBAC-001. Provider callback, cookie issuance,
-session listing/administrative revocation endpoints, permission guards for protected domain routes, and
-transactional mutation tests remain pending. OAuth remains intentionally unimplemented until AUTH-001 is
+This completes the provider-neutral session management core of AUTH-002 and the first enforced RBAC read.
+Provider callback, cookie issuance, administrative all-user revocation, broader domain guards, and database
+integration rollback tests remain pending. OAuth remains intentionally unimplemented until AUTH-001 is
 accepted.
 
 ## Authentication flow
@@ -101,12 +105,12 @@ Hidden navigation is a UX aid, not authorization.
 - `GET /api/v1/me` (implemented)
 - `POST /api/v1/auth/logout` (implemented for the current session)
 - provider-specific login/callback routes behind an auth adapter
-- `GET /sessions` for the current user
-- `DELETE /sessions/:id` to revoke an owned session
+- `GET /api/v1/sessions` for the current user (implemented)
+- `DELETE /api/v1/sessions/:id` to revoke an owned session (implemented)
 
 ### Administration
 
-- `GET /users`
+- `GET /api/v1/users` (implemented with `users.read`)
 - `POST /users`
 - `GET /users/:id`
 - `PATCH /users/:id`
