@@ -64,3 +64,4 @@ OAuth provider selection, production database credentials, and the first superad
 - `NEON_SETUP.md`: database environment, migration, seed, and recovery runbook.
 - `AUTH_RBAC_AUDIT_IMPLEMENTATION.md`: security foundation design and test matrix.
 - `CRM_IMPLEMENTATION.md`: customer-domain schema, services, API, privacy, and merge/unmerge plan.
+- `VERCEL_DEPLOYMENT.md`: Web/API projects, environments, domains, release gates, and rollback.

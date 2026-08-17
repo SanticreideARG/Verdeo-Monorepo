@@ -106,3 +106,6 @@ Consulta `docs/12-development/DEVELOPMENT.md` para migraciones y estado de imple
 
 Las próximas tareas están especificadas en `docs/12-development/NEXT_TASKS.md`, con runbooks separados
 para Neon, Auth/RBAC/Audit y CRM.
+
+El procedimiento de publicación está en `docs/12-development/VERCEL_DEPLOYMENT.md` e incluye la adaptación
+pendiente de Hono a Vercel Functions, configuración del monorepo, entornos, migraciones y rollback.

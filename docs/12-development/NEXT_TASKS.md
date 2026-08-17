@@ -27,6 +27,8 @@ Available on `main`:
 DB-001 Neon environments
   -> DB-002 migration credentials and migration run
   -> DB-003 seed and first-superadmin bootstrap
+  -> DEPLOY-001 Vercel entrypoints/configuration
+  -> DEPLOY-002 Web/API Vercel projects and previews
   -> AUTH-001 authentication provider decision
   -> AUTH-002 session repository and middleware
   -> RBAC-001 permission repository and guards
@@ -39,6 +41,9 @@ DB-001 Neon environments
 ```
 
 AI, WhatsApp, web ordering, and operational modules should not bypass these primitives.
+
+Vercel tasks may start in parallel with DB-001, but production deployment remains blocked until environment,
+migration, domain, and security gates in `VERCEL_DEPLOYMENT.md` are satisfied.
 
 ## Task register
 
@@ -93,6 +98,13 @@ operator-managed configuration.
 recovery/MFA policy for superadmins.
 
 **OPEN:** provider, permitted OAuth identity domains/accounts, and production callback URLs.
+
+### DEPLOY-001 to DEPLOY-004 — Vercel delivery
+
+**Depends on:** GitHub repository; production completion also depends on DB-001/DB-002 and approved domains.
+
+See `VERCEL_DEPLOYMENT.md` for the two-project topology, Hono function adaptation, SPA routing,
+environments, migrations, domains, smoke tests, observability, and rollback.
 
 ### AUTH-002 — Complete session authentication
 

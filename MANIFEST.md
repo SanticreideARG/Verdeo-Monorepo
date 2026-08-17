@@ -38,4 +38,5 @@
 - `docs/12-development/NEON_SETUP.md`
 - `docs/12-development/AUTH_RBAC_AUDIT_IMPLEMENTATION.md`
 - `docs/12-development/CRM_IMPLEMENTATION.md`
+- `docs/12-development/VERCEL_DEPLOYMENT.md`
 - `project.config.seed.json`
