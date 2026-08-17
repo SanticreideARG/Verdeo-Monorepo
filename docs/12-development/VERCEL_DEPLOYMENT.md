@@ -25,14 +25,17 @@ compatibility for PostgreSQL, document generation, and provider adapters.
 - environment variables validated by Zod;
 - API health endpoint and request IDs;
 - GitHub Actions quality gate.
+- Vite SPA rewrite in `apps/web/vercel.json`;
+- Hono Web-standard Function entrypoint and catch-all rewrite in `apps/api`;
+- production package exports compiled to `dist` and verified during the Vercel build.
 
-### Required before first API deployment
+### API deployment adapter
 
-The current `apps/api/src/server.ts` uses `@hono/node-server` and opens a TCP port. Vercel Functions require
-an HTTP function export instead. Keep `server.ts` for local/standalone Node development and add a separate
-Vercel entrypoint that creates the same Hono application without calling `serve()`.
+`apps/api/src/server.ts` uses `@hono/node-server` and opens a TCP port for local Node development.
+`apps/api/api/index.ts` is the separate Vercel Function entrypoint and creates the same Hono application
+without calling `serve()`.
 
-Expected shape:
+Implemented shape:
 
 ```text
 apps/api/
@@ -44,7 +47,7 @@ apps/api/
 └─ vercel.json          # catch-all rewrite/function configuration
 ```
 
-The Vercel entrypoint must:
+The Vercel entrypoint:
 
 1. parse server environment variables;
 2. create the structured logger;
@@ -53,9 +56,14 @@ The Vercel entrypoint must:
 5. never listen on a port;
 6. retain the original request path when the catch-all rewrite invokes the function.
 
-Validate the exact function export and rewrite in a Preview Deployment before production. Do not reuse old
+The remaining gate is to validate the function export and rewrite in a Preview Deployment before production. Do not reuse old
 community instructions that force Edge runtime or disable request parsing without evidence from the current
 Vercel/Hono versions.
+
+Internal `@verdeo/*` packages expose TypeScript source only through `types`/`development` conditions and
+compiled `dist` JavaScript for production imports. `pnpm build:vercel` builds every internal package used
+directly by the API and runs a runtime-resolution check before Vercel packages the Function. This prevents
+a Function from emitting an import to a missing `node_modules/@verdeo/*/src/index.ts` path.
 
 ## Repository changes required
 
@@ -264,6 +272,35 @@ Do not rely only on Vercel logs for business audit. `AuditEvent` remains an immu
 
 Rollback capability depends on the Vercel plan: Hobby supports the immediately previous production
 deployment, while broader history requires Pro/Enterprise.
+
+## Troubleshooting workspace module resolution
+
+### `ERR_MODULE_NOT_FOUND ... @verdeo/<package>/src/index.ts`
+
+This means a Vercel Function emitted a runtime import to TypeScript workspace source that was not copied
+into the Function bundle.
+
+The repository prevents this by:
+
+- exporting `src/index.ts` only for TypeScript types and the explicit `development` condition;
+- exporting `dist/index.js` for production `import`/`default` conditions;
+- building direct API workspace dependencies in `pnpm build:vercel`;
+- failing the build unless `import.meta.resolve()` points those dependencies to `dist`;
+- exposing the API through `apps/api/api/index.ts` instead of treating `src/app.ts` as a Function.
+
+If the error persists after this fix:
+
+1. verify the deployment uses a commit containing the fix;
+2. set the Vercel project Root Directory to `apps/api`;
+3. enable source access outside the Root Directory for pnpm workspace packages;
+4. remove any dashboard override that deploys `src/app.ts` directly;
+5. confirm the build runs the `buildCommand` from `apps/api/vercel.json`;
+6. confirm the build log contains `Verified compiled runtime exports for 3 workspace packages.`;
+7. redeploy without the previous build cache;
+8. inspect the deployed Function path—it should originate from `api/index.ts`, not `src/app.ts`.
+
+Do not fix the error by committing `node_modules`, exposing all source files through broad include globs, or
+copying workspace code manually into the API app.
 
 ## Task register
 

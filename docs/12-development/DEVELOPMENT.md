@@ -55,6 +55,7 @@ The first foundation slice includes:
 - dynamic RBAC resolution and initial permission seed catalog;
 - Audit Core and domain event boundaries;
 - initial Drizzle schema and migration for auth, RBAC, audit, and event outbox records.
+- Vercel Web/API configuration with compiled runtime exports for internal workspace packages.
 
 OAuth provider selection, production database credentials, and the first superadmin bootstrap remain deployment decisions.
 

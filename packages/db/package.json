@@ -4,10 +4,21 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./schema": "./src/schema/index.ts"
+    ".": {
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./src/schema/index.ts",
+      "development": "./src/schema/index.ts",
+      "import": "./dist/schema/index.js",
+      "default": "./dist/schema/index.js"
+    }
   },
   "scripts": {
+    "build": "tsup src/index.ts src/schema/index.ts --format esm --clean --sourcemap",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/migrate.ts",
     "db:seed": "tsx src/seed.ts",
