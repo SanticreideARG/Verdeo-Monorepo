@@ -1,0 +1,232 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-cream: #f5f2e8;
+  --color-forest: #174c3c;
+  --color-forest-deep: #0f352a;
+  --color-lime: #d7e979;
+  --color-ink: #183129;
+  --color-ink-muted: #5d6f68;
+  --font-sans:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+:root {
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background: var(--color-cream);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 3px solid #8da332;
+  outline-offset: 3px;
+}
+
+.brand {
+  color: var(--color-forest);
+  font-size: 1.8rem;
+  font-weight: 750;
+  letter-spacing: -0.065em;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.brand span {
+  color: #8da332;
+}
+
+.nav-link {
+  align-items: center;
+  min-height: 44px;
+  padding-inline: 1rem;
+  color: var(--color-forest);
+  font-size: 0.925rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.7rem 1.15rem;
+  font-size: 0.925rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.button:hover {
+  transform: translateY(-1px);
+}
+
+.button-primary {
+  background: var(--color-forest);
+  color: white;
+}
+
+.button-primary:hover {
+  background: var(--color-forest-deep);
+}
+
+.button-secondary {
+  border-color: color-mix(in srgb, var(--color-forest) 22%, transparent);
+  color: var(--color-forest);
+}
+
+.button-secondary:hover {
+  background: white;
+}
+
+.button-large {
+  min-height: 52px;
+  padding-inline: 1.45rem;
+}
+
+.eyebrow {
+  color: #637420;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.food-card {
+  position: relative;
+  display: grid;
+  min-height: 420px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 2rem;
+  background: var(--color-forest);
+  box-shadow: 0 28px 70px rgb(23 76 60 / 18%);
+}
+
+.food-card-glow {
+  position: absolute;
+  inset: -30% 20% 40% -25%;
+  border-radius: 50%;
+  background: var(--color-lime);
+  filter: blur(10px);
+  opacity: 0.9;
+}
+
+.plate {
+  position: relative;
+  display: grid;
+  width: min(68vw, 290px);
+  aspect-ratio: 1;
+  place-items: center;
+  border: 18px solid #ece8d9;
+  border-radius: 50%;
+  background: #fffdf7;
+  box-shadow: 0 22px 45px rgb(0 0 0 / 28%);
+}
+
+.plate-center {
+  display: grid;
+  width: 45%;
+  aspect-ratio: 1;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-lime);
+  color: var(--color-forest-deep);
+  font-size: 4rem;
+  font-weight: 800;
+}
+
+.plate-leaf {
+  position: absolute;
+  width: 33%;
+  height: 16%;
+  border-radius: 100% 0 100% 0;
+  background: #4f8b5d;
+}
+
+.plate-leaf-one {
+  top: 17%;
+  right: 12%;
+  rotate: 25deg;
+}
+
+.plate-leaf-two {
+  bottom: 18%;
+  left: 10%;
+  rotate: 205deg;
+}
+
+.food-caption {
+  position: absolute;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  left: 1.5rem;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  border-top: 1px solid rgb(255 255 255 / 25%);
+  padding-top: 1rem;
+  color: white;
+}
+
+.food-caption span {
+  color: rgb(255 255 255 / 70%);
+  font-size: 0.8rem;
+}
+
+.food-caption strong {
+  font-size: 1rem;
+}
+
+.step-card span {
+  color: #7a8d2b;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.step-card h2 {
+  margin-block: 0.6rem 0;
+  color: var(--color-forest);
+  font-size: 1.4rem;
+  letter-spacing: -0.025em;
+}
+
+.step-card p {
+  max-width: 22rem;
+  margin-top: 0.55rem;
+  color: var(--color-ink-muted);
+  line-height: 1.65;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .button {
+    transition: none;
+  }
+}

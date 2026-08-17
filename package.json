@@ -1,0 +1,37 @@
+{
+  "name": "verdeo-sca",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Verdeo Serverless CRM App monorepo",
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "dev": "pnpm --parallel --filter @verdeo/api --filter @verdeo/web dev",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "pnpm -r --if-present test",
+    "test:coverage": "pnpm -r --if-present test:coverage",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "db:generate": "pnpm --filter @verdeo/db db:generate",
+    "db:migrate": "pnpm --filter @verdeo/db db:migrate",
+    "db:seed": "pnpm --filter @verdeo/db db:seed",
+    "db:studio": "pnpm --filter @verdeo/db db:studio"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.2.0",
+    "@vitest/coverage-v8": "4.1.10",
+    "eslint": "10.8.1",
+    "prettier": "3.9.6",
+    "tsup": "8.5.1",
+    "tsx": "4.23.12",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.67.0",
+    "vitest": "4.1.10"
+  }
+}

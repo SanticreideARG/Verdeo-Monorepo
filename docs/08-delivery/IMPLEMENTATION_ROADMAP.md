@@ -1,0 +1,118 @@
+# Implementation Roadmap
+
+## Meta
+
+Llegar a V1 de pruebas reales rápidamente sin construir primero integraciones secundarias.
+
+## Fase 0 - Foundation (1-2 días)
+
+- monorepo;
+- TypeScript strict;
+- lint/format/test;
+- env/config;
+- Vercel;
+- Neon;
+- Drizzle;
+- Zod contracts;
+- observability;
+- base CI;
+- migrations.
+
+## Fase 1 - Auth, RBAC, Audit (1-2 días)
+
+- User/Role/Permission;
+- multi-role;
+- overrides;
+- sessions/OAuth;
+- admin users;
+- Audit Core.
+
+## Fase 2 - CRM / Customer Identity (1-2 días)
+
+- Customer;
+- identities;
+- addresses;
+- preferences;
+- restrictions;
+- geocoding adapter;
+- merge/unmerge base.
+
+## Fase 3 - Weekly Menu / Catalog (1-2 días)
+
+- ProductFamily/Variant;
+- WeeklyMenu;
+- Intuitivo;
+- prices;
+- publish;
+- history.
+
+## Fase 4 - Landing CMS + Web Orders (2-3 días)
+
+- CMS;
+- landing mobile;
+- menu;
+- guest checkout;
+- draft/confirm;
+- customer matching;
+- tracking base.
+
+## Fase 5 - Messaging Core / WhatsApp (2-4 días)
+
+- MessagingAccount;
+- Meta webhook;
+- router;
+- inbox;
+- outbound;
+- templates;
+- multioperator;
+- message audit.
+
+## Fase 6 - AI Core (paralela desde Foundation; 2-4 días acumulados)
+
+- provider interface;
+- router;
+- prompt registry;
+- quotas;
+- usage;
+- first tasks;
+- structured output;
+- workbench básico.
+
+## Fase 7 - Production (1-2 días)
+
+- kitchen snapshots;
+- partial/final/delta;
+- exports;
+- production report;
+- surplus;
+- opportunity sales.
+
+## Fase 8 - Routes / Delivery / Payments (3-5 días)
+
+- route builder;
+- optimizer adapter;
+- delivery PWA;
+- triggers;
+- payment states;
+- cash collection/settlement;
+- QR/labels.
+
+## Fase 9 - QA / Pilot (3-5 días)
+
+- migration/import;
+- permission tests;
+- mobile QA;
+- webhook resilience;
+- backup/restore;
+- load sanity;
+- operator pilot;
+- bug fixing.
+
+## Estimación
+
+- MVP interno: ~7-10 días con foco y agentes.
+- V1 completa para pruebas reales: ~14-18 días.
+- Estabilización: ~3 semanas.
+- Omnicanal completo/marketing avanzado: posterior.
+
+Las estimaciones son agresivas y dependen de acceso inmediato a Meta, datos, assets y decisiones abiertas.

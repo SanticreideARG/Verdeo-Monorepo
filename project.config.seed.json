@@ -1,0 +1,23 @@
+{
+  "project": "Verdeo SCA",
+  "architecture": "serverless-first",
+  "stack": {
+    "frontend": ["React", "Vite", "TypeScript", "Tailwind CSS", "Zustand"],
+    "backend": ["Hono", "Node.js", "Zod", "Drizzle"],
+    "database": "PostgreSQL / Neon",
+    "hosting": "Vercel"
+  },
+  "roles": ["superadmin", "operador", "repartidor", "cocina", "cliente"],
+  "productFamilies": ["Real", "Keto", "Anti-Age", "Detox", "Intuitivo"],
+  "variants": ["250", "400"],
+  "mealsPerUnit": 5,
+  "cycle": {
+    "partialKitchenCutoff": "Tuesday 20:00",
+    "orderClose": "Wednesday 19:00"
+  },
+  "orderStates": ["DRAFT", "CONFIRMED", "READY", "DELIVERED", "CANCELLED"],
+  "paymentStates": ["PENDING", "TO_SETTLE", "PAID"],
+  "messagingV1": "WhatsApp Cloud API",
+  "aiProviders": ["OpenAI", "Gemini", "Anthropic", "DeepSeek", "OpenAI-compatible"],
+  "storySize": "1080x1920"
+}
