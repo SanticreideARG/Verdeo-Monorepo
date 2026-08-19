@@ -28,6 +28,7 @@ compatibility for PostgreSQL, document generation, and provider adapters.
 - Vite SPA rewrite in `apps/web/vercel.json`;
 - Hono Web-standard Function entrypoint and catch-all rewrite in `apps/api`;
 - API framework autodetection disabled so only `api/index.ts` owns serverless routing;
+- empty `apps/api/public` output retained for Vercel's framework-neutral build contract;
 - production package exports compiled to `dist` and verified during the Vercel build.
 - Web production deployment observed loading `/pedido` directly on 2026-08-17.
 
