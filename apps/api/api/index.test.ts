@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-let handler: (request: Request) => Response | Promise<Response>;
+let handler: { fetch(request: Request): Response | Promise<Response> };
 
 beforeAll(async () => {
   vi.stubEnv('NODE_ENV', 'test');
@@ -17,7 +17,7 @@ beforeAll(async () => {
 
 describe('Vercel function entrypoint', () => {
   it('serves the Hono application without opening a Node server', async () => {
-    const response = await handler(new Request('https://api-preview.verdeo.example/health'));
+    const response = await handler.fetch(new Request('https://api-preview.verdeo.example/health'));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
@@ -28,7 +28,9 @@ describe('Vercel function entrypoint', () => {
   });
 
   it('accepts API routes through the same catch-all function', async () => {
-    const response = await handler(new Request('https://api-preview.verdeo.example/api/v1/me'));
+    const response = await handler.fetch(
+      new Request('https://api-preview.verdeo.example/api/v1/me'),
+    );
 
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toMatchObject({

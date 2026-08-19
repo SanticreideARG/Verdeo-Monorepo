@@ -193,7 +193,6 @@ export function createApp(options: CreateAppOptions) {
     await next();
   };
 
-  app.use('*', cors({ origin: options.appOrigin, credentials: true }));
   app.use('*', async (context, next) => {
     const startedAt = performance.now();
     const requestId = createRequestId(context.req.header('x-request-id'));
@@ -213,6 +212,7 @@ export function createApp(options: CreateAppOptions) {
       status: context.res.status,
     });
   });
+  app.use('*', cors({ origin: options.appOrigin, credentials: true }));
 
   app.get('/health', (context) => {
     const payload = HealthResponseSchema.parse({
@@ -716,7 +716,7 @@ export function createApp(options: CreateAppOptions) {
         statusForCode(code),
       );
     }
-    context.get('logger').error({ error, event: 'http.request.failed' });
+    (context.get('logger') ?? options.logger).error({ error, event: 'http.request.failed' });
     const code: ApiErrorCode = 'INTERNAL_ERROR';
     return context.json(
       {
