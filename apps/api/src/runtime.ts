@@ -9,7 +9,9 @@ import { parseServerEnv } from '@verdeo/config';
 import {
   createDatabase,
   PostgresAuditSink,
+  PostgresAIConfigurationService,
   PostgresPasswordCredentialRepository,
+  PostgresOperationsService,
   PostgresSessionRepository,
   PostgresUserDirectoryRepository,
 } from '@verdeo/db';
@@ -39,6 +41,11 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     new PostgresPasswordCredentialRepository(database.db),
   );
   const userDirectory = new UserDirectoryService(new PostgresUserDirectoryRepository(database.db));
+  const operations = new PostgresOperationsService(database.db);
+  const aiConfiguration = new PostgresAIConfigurationService(
+    database.db,
+    env.AI_CONFIG_ENCRYPTION_KEY,
+  );
   const sessions = {
     authenticate: (token: string) => sessionService.authenticate(token),
     listForUser: (userId: string) => sessionService.listForUser(userId),
@@ -132,10 +139,12 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     },
   };
   const app = createApp({
+    aiConfiguration,
     appOrigin: env.APP_URL,
     cookieSameSite: env.SESSION_COOKIE_SAME_SITE,
     credentials,
     logger,
+    operations,
     sessions,
     secureCookies: env.NODE_ENV === 'production',
     users: userDirectory,

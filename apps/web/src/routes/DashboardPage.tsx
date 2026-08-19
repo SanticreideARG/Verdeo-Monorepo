@@ -12,17 +12,40 @@ interface SessionProfile {
 const modules = [
   {
     copy: 'Identidades, direcciones y preferencias.',
+    href: '/app/operaciones#clientes',
     permission: 'customers.read',
     title: 'Clientes',
   },
-  { copy: 'Seguimiento comercial del ciclo semanal.', permission: 'orders.read', title: 'Pedidos' },
+  {
+    copy: 'Seguimiento comercial del ciclo semanal.',
+    href: '/app/operaciones#pedidos',
+    permission: 'orders.read',
+    title: 'Pedidos',
+  },
   {
     copy: 'Planificación y cantidades operativas.',
+    href: '/app/operaciones#cocina',
     permission: 'production.read',
     title: 'Producción',
   },
-  { copy: 'Rutas, entregas y ejecución en calle.', permission: 'routes.read', title: 'Reparto' },
-  { copy: 'Usuarios, roles y permisos.', permission: 'users.read', title: 'Administración' },
+  {
+    copy: 'Rutas, entregas y ejecución en calle.',
+    href: '#',
+    permission: 'routes.read',
+    title: 'Reparto',
+  },
+  {
+    copy: 'Usuarios, roles y permisos.',
+    href: '#',
+    permission: 'users.read',
+    title: 'Administración',
+  },
+  {
+    copy: 'Proveedores, modelos y plantillas asistidas.',
+    href: '/app/operaciones#ia',
+    permission: 'ai.providers.manage',
+    title: 'IA y plantillas',
+  },
 ] as const;
 
 export function DashboardPage() {
@@ -137,7 +160,16 @@ export function DashboardPage() {
                   {module.title}
                 </h2>
                 <p className="mt-2 leading-7 text-ink-muted">{module.copy}</p>
-                <p className="mt-7 text-sm font-semibold text-[#718325]">Módulo en construcción</p>
+                {module.href === '#' ? (
+                  <p className="mt-7 text-sm font-semibold text-[#718325]">Próximo sprint</p>
+                ) : (
+                  <Link
+                    className="mt-7 inline-flex text-sm font-semibold text-[#718325]"
+                    to={module.href}
+                  >
+                    Abrir módulo →
+                  </Link>
+                )}
               </article>
             ))}
           </section>

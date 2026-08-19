@@ -44,6 +44,9 @@ importers:
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.2)
+      '@verdeo/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@verdeo/audit':
         specifier: workspace:*
         version: link:../../packages/audit
@@ -62,6 +65,9 @@ importers:
       '@verdeo/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@verdeo/orders':
+        specifier: workspace:*
+        version: link:../../packages/orders
       hono:
         specifier: 4.13.2
         version: 4.13.2
@@ -109,6 +115,8 @@ importers:
         specifier: 19.2.4
         version: 19.2.4(@types/react@19.2.18)
 
+  packages/ai: {}
+
   packages/audit: {}
 
   packages/auth: {}
@@ -127,12 +135,18 @@ importers:
 
   packages/db:
     dependencies:
+      '@verdeo/ai':
+        specifier: workspace:*
+        version: link:../ai
       '@verdeo/audit':
         specifier: workspace:*
         version: link:../audit
       '@verdeo/auth':
         specifier: workspace:*
         version: link:../auth
+      '@verdeo/orders':
+        specifier: workspace:*
+        version: link:../orders
       '@verdeo/rbac':
         specifier: workspace:*
         version: link:../rbac
@@ -158,6 +172,8 @@ importers:
       pino-pretty:
         specifier: 13.1.3
         version: 13.1.3
+
+  packages/orders: {}
 
   packages/rbac: {}
 

@@ -151,6 +151,8 @@ Foundation variables:
 - `SESSION_SECRET` with at least 32 high-entropy characters.
 - `SESSION_TTL_HOURS=8` for the MVP default;
 - `SESSION_COOKIE_SAME_SITE=None` for separate Vercel preview hosts, or `Lax` for sibling custom domains.
+- `AI_CONFIG_ENCRYPTION_KEY`: optional until configuring providers; required before accepting an API key
+  from the Staff UI. It must be a base64-encoded 32-byte random value and must never use a `VITE_` prefix.
 
 Future server-only variables include OAuth, Meta, AI, geocoding, storage, and encryption secrets. Add them
 only when the owning adapter is implemented.
@@ -240,6 +242,10 @@ DNS changes are external and potentially disruptive. Resolve exact target record
   provisioned account;
 - `/api/v1/sessions` returns `401` without a session and never serializes token material;
 - `/api/v1/users` returns `403` for a session without `users.read`;
+- `/api/v1/public/menu/current` returns the published Preview menu and `POST /api/v1/public/orders` creates
+  a contract-valid order without requiring an account;
+- authenticated customer/menu/order/production mutations enforce their documented dynamic permissions;
+- `/api/v1/ai/providers` never returns encrypted or plaintext API key material;
 - JSON `POST` body and validation errors work through the Vercel adapter;
 - CORS rejects unapproved origins and permits the configured Web origin;
 - database connectivity uses the Preview database only;
@@ -304,7 +310,7 @@ If the error persists after this fix:
 3. enable source access outside the Root Directory for pnpm workspace packages;
 4. remove any dashboard override that deploys `src/app.ts` directly;
 5. confirm the build runs the `buildCommand` from `apps/api/vercel.json`;
-6. confirm the build log contains `Verified compiled runtime exports for 6 workspace packages.`;
+6. confirm the build log contains `Verified compiled runtime exports for 8 workspace packages.`;
 7. redeploy without the previous build cache;
 8. inspect the deployed Function path—it should originate from `api/index.ts`, not `src/app.ts`.
 

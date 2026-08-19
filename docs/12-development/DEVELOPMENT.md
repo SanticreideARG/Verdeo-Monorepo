@@ -59,6 +59,9 @@ The first foundation slice includes:
 - PostgreSQL-backed session authentication, owned-session management, and transactional revocation audit.
 - enforced `users.read` middleware and a PII-minimized, cursor-paginated user directory endpoint.
 - manually provisioned password login, account lockout, and protected Staff dashboard for the MVP sprint.
+- persisted customer, weekly-menu, order, state-history, and deterministic kitchen-output vertical slice.
+- guest checkout at `/pedido` and the Staff operations center at `/app/operaciones`.
+- encrypted, permission-protected AI provider configuration foundation.
 
 OAuth and email confirmation are deferred until after the MVP dashboard sprint. The first superadmin can be
 provisioned after rotating the Neon credential by following `MVP_DASHBOARD_ACCESS.md`.
@@ -71,3 +74,5 @@ provisioned after rotating the Neon credential by following `MVP_DASHBOARD_ACCES
 - `CRM_IMPLEMENTATION.md`: customer-domain schema, services, API, privacy, and merge/unmerge plan.
 - `VERCEL_DEPLOYMENT.md`: Web/API projects, environments, domains, release gates, and rollback.
 - `MVP_DASHBOARD_ACCESS.md`: credential login, provisioning, Vercel cookie settings, and smoke tests.
+- `MVP_ORDER_ENGINE.md`: order-engine guarantees, migrations, endpoints, UI, AI configuration, and release
+  validation.

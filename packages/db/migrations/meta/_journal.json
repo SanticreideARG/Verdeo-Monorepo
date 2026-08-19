@@ -15,6 +15,20 @@
       "when": 1786991115241,
       "tag": "0001_sharp_titanium_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787102132310,
+      "tag": "0002_tranquil_toad_men",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787102899238,
+      "tag": "0003_medical_tyger_tiger",
+      "breakpoints": true
     }
   ]
 }

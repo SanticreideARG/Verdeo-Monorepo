@@ -18,4 +18,14 @@ describe('parseServerEnv', () => {
       parseServerEnv({ DATABASE_URL: 'postgresql://localhost/verdeo', SESSION_SECRET: 'short' }),
     ).toThrow();
   });
+
+  it('rejects invalid AI configuration encryption keys', () => {
+    expect(() =>
+      parseServerEnv({
+        AI_CONFIG_ENCRYPTION_KEY: Buffer.from('short').toString('base64'),
+        DATABASE_URL: 'postgresql://localhost/verdeo',
+        SESSION_SECRET: 'a-secure-session-secret-with-32-chars',
+      }),
+    ).toThrow(/AI_CONFIG_ENCRYPTION_KEY/);
+  });
 });

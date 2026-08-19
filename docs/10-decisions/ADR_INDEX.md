@@ -107,3 +107,20 @@ existe registro público ni asignación de privilegios por email sin una transac
 Las contraseñas aleatorias se muestran una sola vez, se persisten con scrypt y se bloquean temporalmente
 tras cinco intentos fallidos. OAuth se añadirá después como otra `AuthIdentity` del mismo `User`; la
 confirmación por correo y Resend quedan fuera de este sprint.
+
+## ADR-021 - Pedido MVP con snapshots y cocina determinista
+
+**Status:** Accepted
+
+El menú, cliente y pedido se persisten en PostgreSQL. Cada `OrderItem` conserva nombre comercial, variante,
+precio y composición; el consolidado de cocina se calcula desde pedidos persistidos por código/SQL. Una
+composición modificada se guarda como Intuitivo y no altera el catálogo semanal publicado.
+
+## ADR-022 - Claves IA configurables cifradas en servidor
+
+**Status:** Accepted
+
+Los proveedores y modelos son datos configurables. Las API keys ingresadas por Staff se cifran mediante
+AES-256-GCM con una clave maestra exclusiva del servidor; el frontend recibe únicamente estado y máscara.
+La configuración no habilita ejecución hasta implementar Prompt Registry, routing, cuotas y auditoría de
+ejecuciones.

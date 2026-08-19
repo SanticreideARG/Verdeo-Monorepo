@@ -24,6 +24,9 @@ Available on `main`:
 - owned-session listing/revocation, reusable permission middleware, and a PII-minimized `users.read`
   directory endpoint;
 - MVP credential login, audited provisioning commands, account lockout, and protected `/app` dashboard;
+- persisted menu/customer/order engine, guest checkout, order status history, and deterministic kitchen
+  output;
+- encrypted AI provider configuration API and Staff UI foundation;
 - Vercel Web deployment with direct `/pedido` SPA routing verified;
 - automated checks through `pnpm check`.
 
@@ -47,6 +50,22 @@ DB-001 Neon environments
 ```
 
 AI, WhatsApp, web ordering, and operational modules should not bypass these primitives.
+
+## Current MVP priority
+
+The order vertical slice is implemented in code. The immediate release path is now:
+
+```text
+rotate exposed Neon credential
+  -> apply migrations 0000..0003 to Preview
+  -> seed RBAC + provision superadmin
+  -> validate menu -> customer -> order -> confirm -> kitchen against PostgreSQL
+  -> deploy/smoke-test API and Web on Vercel
+  -> add Prompt Registry + provider adapters + human-approved template generation
+```
+
+OAuth, email confirmation, messaging integrations, and customer self-service authentication remain
+secondary until the operational order flow passes the Preview release gate. See `MVP_ORDER_ENGINE.md`.
 
 Vercel tasks may start in parallel with DB-001, but production deployment remains blocked until environment,
 migration, domain, and security gates in `VERCEL_DEPLOYMENT.md` are satisfied.

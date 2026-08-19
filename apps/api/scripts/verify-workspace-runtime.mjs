@@ -1,10 +1,12 @@
 const runtimePackages = [
+  '@verdeo/ai',
   '@verdeo/audit',
   '@verdeo/auth',
   '@verdeo/config',
   '@verdeo/contracts',
   '@verdeo/db',
   '@verdeo/observability',
+  '@verdeo/orders',
 ];
 
 for (const packageName of runtimePackages) {

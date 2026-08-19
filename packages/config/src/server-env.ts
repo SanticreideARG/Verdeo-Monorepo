@@ -5,6 +5,15 @@ const ServerEnvSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   APP_URL: z.url().default('http://localhost:5173'),
   API_URL: z.url().default('http://localhost:3000'),
+  AI_CONFIG_ENCRYPTION_KEY: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z
+      .string()
+      .refine((value) => Buffer.from(value, 'base64').length === 32, {
+        message: 'AI_CONFIG_ENCRYPTION_KEY must be a base64-encoded 32-byte key',
+      })
+      .optional(),
+  ),
   DATABASE_URL: z.string().min(1),
   SESSION_SECRET: z.string().min(32),
   SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(8),

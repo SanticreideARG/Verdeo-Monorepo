@@ -2,6 +2,8 @@ import { Link, Route, Routes } from 'react-router-dom';
 
 import { DashboardPage } from './DashboardPage.js';
 import { LoginPage } from './LoginPage.js';
+import { OperationsPage } from './OperationsPage.js';
+import { PublicOrderPage } from './PublicOrderPage.js';
 
 function BrandMark() {
   return (
@@ -111,17 +113,10 @@ export function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
-      <Route
-        path="/pedido"
-        element={
-          <PlaceholderPage
-            title="El pedido web está en preparación"
-            copy="La base del sistema ya está funcionando. El próximo módulo conectará el menú semanal con el pedido de invitado."
-          />
-        }
-      />
+      <Route path="/pedido" element={<PublicOrderPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/app" element={<DashboardPage />} />
+      <Route path="/app/operaciones" element={<OperationsPage />} />
       <Route
         path="*"
         element={

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   HealthResponseSchema,
+  MenuListResponseSchema,
   LoginResponseSchema,
   MeResponseSchema,
   SessionListResponseSchema,
@@ -19,6 +20,31 @@ const emptySessions = {
 };
 const emptyUsers = { list: () => Promise.resolve({ items: [], nextCursor: null }) };
 const emptyCredentials = { login: () => Promise.resolve(null) };
+const sampleMenu = {
+  cycle: {
+    alias: 'Semana 34',
+    closeAt: new Date('2026-08-26T22:00:00.000Z'),
+    id: '10000000-0000-4000-8000-000000000001',
+    openAt: new Date('2026-08-20T12:00:00.000Z'),
+    partialKitchenCutoffAt: new Date('2026-08-25T23:00:00.000Z'),
+    status: 'OPEN',
+  },
+  id: '20000000-0000-4000-8000-000000000001',
+  offerings: [
+    {
+      currency: 'ARS',
+      dishes: ['A', 'B', 'C', 'D', 'E'],
+      familyName: 'Real',
+      id: '30000000-0000-4000-8000-000000000001',
+      mealsPerUnit: 5,
+      unitPriceMinor: 25_000,
+      variantName: '250',
+    },
+  ],
+  publishedAt: new Date('2026-08-20T12:00:00.000Z'),
+  revision: 1,
+  status: 'PUBLISHED',
+};
 
 const app = createApp({
   appOrigin: 'http://localhost:5173',
@@ -335,5 +361,116 @@ describe('API foundation', () => {
       status: 'active',
     });
     expect(JSON.stringify(body)).not.toContain('email');
+  });
+
+  it('exposes the published menu without requiring authentication', async () => {
+    const menuApp = createApp({
+      appOrigin: 'http://localhost:5173',
+      cookieSameSite: 'Lax',
+      credentials: emptyCredentials,
+      logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      operations: {
+        createCustomer: vi.fn(),
+        createMenu: vi.fn(),
+        createOrder: vi.fn(),
+        createPublicOrder: vi.fn(),
+        currentPublishedMenu: () => Promise.resolve(sampleMenu),
+        kitchenSummary: vi.fn(),
+        listCustomers: vi.fn(),
+        listMenus: vi.fn(),
+        listOrders: vi.fn(),
+        publishMenu: vi.fn(),
+        transitionOrder: vi.fn(),
+      },
+      sessions: emptySessions,
+      secureCookies: false,
+      users: emptyUsers,
+      version: 'test',
+    });
+
+    const response = await menuApp.request('/api/v1/public/menu/current');
+    const body: unknown = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(MenuListResponseSchema.parse({ items: [body] }).items[0]?.offerings).toHaveLength(1);
+  });
+
+  it('rejects malformed public orders before invoking the engine', async () => {
+    const createPublicOrder = vi.fn();
+    const orderApp = createApp({
+      appOrigin: 'http://localhost:5173',
+      cookieSameSite: 'Lax',
+      credentials: emptyCredentials,
+      logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      operations: {
+        createCustomer: vi.fn(),
+        createMenu: vi.fn(),
+        createOrder: vi.fn(),
+        createPublicOrder,
+        currentPublishedMenu: vi.fn(),
+        kitchenSummary: vi.fn(),
+        listCustomers: vi.fn(),
+        listMenus: vi.fn(),
+        listOrders: vi.fn(),
+        publishMenu: vi.fn(),
+        transitionOrder: vi.fn(),
+      },
+      sessions: emptySessions,
+      secureCookies: false,
+      users: emptyUsers,
+      version: 'test',
+    });
+
+    const response = await orderApp.request('/api/v1/public/orders', {
+      body: JSON.stringify({ customer: { displayName: '' }, items: [] }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(400);
+    expect(createPublicOrder).not.toHaveBeenCalled();
+  });
+
+  it('checks dynamic permissions before listing orders', async () => {
+    const listOrders = vi.fn(() => Promise.resolve([]));
+    const ordersApp = createApp({
+      appOrigin: 'http://localhost:5173',
+      cookieSameSite: 'Lax',
+      credentials: emptyCredentials,
+      logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      operations: {
+        createCustomer: vi.fn(),
+        createMenu: vi.fn(),
+        createOrder: vi.fn(),
+        createPublicOrder: vi.fn(),
+        currentPublishedMenu: vi.fn(),
+        kitchenSummary: vi.fn(),
+        listCustomers: vi.fn(),
+        listMenus: vi.fn(),
+        listOrders,
+        publishMenu: vi.fn(),
+        transitionOrder: vi.fn(),
+      },
+      sessions: {
+        ...emptySessions,
+        authenticate: () =>
+          Promise.resolve({
+            expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+            permissions: [],
+            sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+            userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+          }),
+      },
+      secureCookies: false,
+      users: emptyUsers,
+      version: 'test',
+    });
+
+    const response = await ordersApp.request('/api/v1/orders', {
+      headers: { cookie: 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars' },
+    });
+
+    expect(response.status).toBe(403);
+    expect(listOrders).not.toHaveBeenCalled();
   });
 });
