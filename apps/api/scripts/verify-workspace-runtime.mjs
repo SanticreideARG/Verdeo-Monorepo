@@ -5,6 +5,7 @@ const runtimePackages = [
   '@verdeo/config',
   '@verdeo/contracts',
   '@verdeo/customers',
+  '@verdeo/geocoding',
   '@verdeo/db',
   '@verdeo/observability',
   '@verdeo/orders',

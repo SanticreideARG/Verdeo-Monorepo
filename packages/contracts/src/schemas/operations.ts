@@ -196,6 +196,69 @@ export const CustomerAddressSchema = z.object({
   writtenAddress: z.string(),
 });
 
+export const AddressGeocodingCreateRequestSchema = z.object({
+  idempotencyKey: z.string().trim().min(8).max(200),
+});
+
+export const GeocodingCandidateSchema = z.object({
+  city: z.string().nullable(),
+  confidence: z.number().min(0).max(1),
+  formattedAddress: z.string(),
+  id: UuidSchema,
+  latitude: z.number().min(-90).max(90),
+  locationUrl: z.string().nullable(),
+  longitude: z.number().min(-180).max(180),
+  sector: z.string().nullable(),
+});
+
+export const GeocodingRequestStatusSchema = z.enum([
+  'PENDING',
+  'CANDIDATES',
+  'NO_MATCH',
+  'FAILED',
+  'CONFIRMED',
+  'REJECTED',
+  'SUPERSEDED',
+]);
+
+export const AddressGeocodingRequestSchema = z.object({
+  candidates: z.array(GeocodingCandidateSchema),
+  createdAt: IsoDateTimeSchema,
+  errorCode: z.string().nullable(),
+  id: UuidSchema,
+  providerKey: z.string(),
+  selectedCandidateId: UuidSchema.nullable(),
+  status: GeocodingRequestStatusSchema,
+  updatedAt: IsoDateTimeSchema,
+});
+
+export const AddressGeocodingConfirmRequestSchema = z
+  .object({
+    candidateId: UuidSchema.optional(),
+    city: z.string().trim().max(120).nullable().optional(),
+    latitude: z.number().min(-90).max(90).optional(),
+    locationUrl: z.url().max(2_000).nullable().optional(),
+    longitude: z.number().min(-180).max(180).optional(),
+    operationalZone: z.string().trim().min(1).max(120).nullable().optional(),
+    sector: z.string().trim().max(120).nullable().optional(),
+  })
+  .refine(
+    (value) =>
+      value.candidateId !== undefined ||
+      (value.latitude !== undefined && value.longitude !== undefined),
+    { message: 'Seleccioná un candidato o indicá coordenadas corregidas.' },
+  )
+  .refine(
+    (value) =>
+      (value.latitude === undefined && value.longitude === undefined) ||
+      (value.latitude !== undefined && value.longitude !== undefined),
+    { message: 'Latitud y longitud deben informarse juntas.' },
+  );
+
+export const AddressGeocodingRejectRequestSchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+
 export const CustomerPreferenceSchema = z.object({
   active: z.boolean(),
   category: z.string(),
@@ -291,6 +354,15 @@ export const IdParamSchema = z.object({ id: UuidSchema });
 export const CustomerRelationParamSchema = z.object({
   customerId: UuidSchema,
   relationId: UuidSchema,
+});
+export const CustomerAddressParamSchema = z.object({
+  addressId: UuidSchema,
+  customerId: UuidSchema,
+});
+export const AddressGeocodingParamSchema = z.object({
+  addressId: UuidSchema,
+  customerId: UuidSchema,
+  requestId: UuidSchema,
 });
 export const CycleIdParamSchema = z.object({ cycleId: UuidSchema });
 
@@ -482,6 +554,9 @@ export type CustomerIdentityCreateRequest = z.infer<typeof CustomerIdentityCreat
 export type CustomerIdentityUpdateRequest = z.infer<typeof CustomerIdentityUpdateRequestSchema>;
 export type CustomerAddressCreateRequest = z.infer<typeof CustomerAddressCreateRequestSchema>;
 export type CustomerAddressUpdateRequest = z.infer<typeof CustomerAddressUpdateRequestSchema>;
+export type AddressGeocodingCreateRequest = z.infer<typeof AddressGeocodingCreateRequestSchema>;
+export type AddressGeocodingConfirmRequest = z.infer<typeof AddressGeocodingConfirmRequestSchema>;
+export type AddressGeocodingRejectRequest = z.infer<typeof AddressGeocodingRejectRequestSchema>;
 export type CustomerPreferenceCreateRequest = z.infer<typeof CustomerPreferenceCreateRequestSchema>;
 export type CustomerPreferenceUpdateRequest = z.infer<typeof CustomerPreferenceUpdateRequestSchema>;
 export type CustomerRestrictionCreateRequest = z.infer<

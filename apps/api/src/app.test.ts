@@ -32,12 +32,16 @@ const customerOperationsStubs = {
   addCustomerIdentity: vi.fn(),
   addCustomerPreference: vi.fn(),
   addCustomerRestriction: vi.fn(),
+  confirmAddressGeocoding: vi.fn(),
   exportOrdersCsv: vi.fn(),
+  getAddressGeocodingRequest: vi.fn(),
   getCustomer: vi.fn(),
   getOrder: vi.fn(),
   listMessageTemplates: vi.fn(),
   orderHistory: vi.fn(),
   orderRevisionHistory: vi.fn(),
+  rejectAddressGeocoding: vi.fn(),
+  requestAddressGeocoding: vi.fn(),
   updateCustomer: vi.fn(),
   updateCustomerAddress: vi.fn(),
   updateCustomerIdentity: vi.fn(),
@@ -642,6 +646,80 @@ describe('API foundation', () => {
 
     expect(response.status).toBe(403);
     expect(addCustomerIdentity).not.toHaveBeenCalled();
+  });
+
+  it('requires sensitive CRM access and forwards an idempotent geocoding request', async () => {
+    const requestAddressGeocoding = vi.fn(() =>
+      Promise.resolve({
+        candidates: [],
+        createdAt: new Date('2026-08-20T12:00:00.000Z'),
+        errorCode: null,
+        id: '72000000-0000-4000-8000-000000000001',
+        providerKey: 'location-link',
+        selectedCandidateId: null,
+        status: 'NO_MATCH',
+        updatedAt: new Date('2026-08-20T12:00:00.000Z'),
+      }),
+    );
+    const session = {
+      expiresAt: new Date('2026-08-20T12:00:00.000Z'),
+      permissions: ['customers.edit'],
+      sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+      userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+    };
+    const createGeocodingApp = (permissions: string[]) =>
+      createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        operations: {
+          ...customerOperationsStubs,
+          createCustomer: vi.fn(),
+          createMenu: vi.fn(),
+          createOrder: vi.fn(),
+          createPublicOrder: vi.fn(),
+          currentPublishedMenu: vi.fn(),
+          kitchenSummary: vi.fn(),
+          listCustomers: vi.fn(),
+          listMenus: vi.fn(),
+          listOrders: vi.fn(),
+          publishMenu: vi.fn(),
+          requestAddressGeocoding,
+          transitionOrder: vi.fn(),
+        },
+        sessions: {
+          ...emptySessions,
+          authenticate: () => Promise.resolve({ ...session, permissions }),
+        },
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+    const path =
+      '/api/v1/customers/70000000-0000-4000-8000-000000000001/addresses/71000000-0000-4000-8000-000000000001/geocoding';
+    const request = {
+      body: JSON.stringify({ idempotencyKey: 'customer-7-address-71-attempt-1' }),
+      headers: {
+        'content-type': 'application/json',
+        cookie: 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars',
+      },
+      method: 'POST',
+    };
+
+    expect((await createGeocodingApp(['customers.edit']).request(path, request)).status).toBe(403);
+    const response = await createGeocodingApp([
+      'customers.edit',
+      'customers.view_sensitive',
+    ]).request(path, request);
+
+    expect(response.status).toBe(201);
+    expect(requestAddressGeocoding).toHaveBeenCalledWith(
+      '70000000-0000-4000-8000-000000000001',
+      '71000000-0000-4000-8000-000000000001',
+      { idempotencyKey: 'customer-7-address-71-attempt-1' },
+      expect.objectContaining({ actorUserId: session.userId }),
+    );
   });
 
   it('forwards validated order filters and exports CSV with safe headers', async () => {

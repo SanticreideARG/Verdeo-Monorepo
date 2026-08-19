@@ -164,3 +164,17 @@ fila. La composición se reemplaza como unidad, se vuelve a resolver contra las 
 los totales se recalculan en código usando enteros. Sólo `DRAFT` y `CONFIRMED` admiten cambios de composición;
 otros estados requieren una transición explícita previa. Los CSV se generan desde filtros validados, se
 auditan, neutralizan fórmulas de planilla y rechazan exportaciones superiores a 5000 registros.
+
+## ADR-027 - Geocodificación reemplazable con confirmación humana
+
+**Status:** Accepted
+
+El Core persiste cada solicitud y sus candidatos normalizados antes de que una ubicación pase a ser
+operativa. Un adaptador reemplazable encapsula al proveedor; el MVP `location-link` extrae coordenadas de
+enlaces que ya las contienen y devuelve `NO_MATCH` cuando no puede resolverlos, sin inventar datos ni
+seguir enlaces cortos. La respuesta cruda del proveedor no es fuente de verdad y no se conserva.
+
+Toda selección o corrección requiere confirmación humana. Ciudad, sector y zona operativa siguen siendo
+datos configurables o elegidos por el operador: el proveedor no los convierte automáticamente en reglas de
+negocio. Las solicitudes son idempotentes, los fallos dejan el domicilio en `NEEDS_LOCATION` y las
+mutaciones generan auditoría y eventos sin incluir coordenadas ni texto del domicilio en sus payloads.

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, ilike, inArray, lt, lte, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, ilike, inArray, lt, lte, ne, or } from 'drizzle-orm';
 
 import { AuditService, type JsonValue } from '@verdeo/audit';
 import {
@@ -7,6 +7,11 @@ import {
   normalizeCustomerIdentity,
   normalizeCustomerText,
 } from '@verdeo/customers';
+import {
+  GeocodingProviderError,
+  validateGeocodingCandidates,
+  type GeocodingProvider,
+} from '@verdeo/geocoding';
 import {
   assertOrderTransitionPolicy,
   buildOrdersCsv,
@@ -25,6 +30,8 @@ import {
   customerRestrictions,
   customers,
   domainEvents,
+  geocodingCandidates,
+  geocodingRequests,
   messageTemplates,
   orderDietaryInstructions,
   orderItemSelections,
@@ -109,6 +116,16 @@ export interface CustomerAddressUpdateInput {
   source?: string | undefined;
   unit?: string | null | undefined;
   writtenAddress?: string | undefined;
+}
+
+export interface AddressGeocodingConfirmInput {
+  candidateId?: string | undefined;
+  city?: string | null | undefined;
+  latitude?: number | undefined;
+  locationUrl?: string | null | undefined;
+  longitude?: number | undefined;
+  operationalZone?: string | null | undefined;
+  sector?: string | null | undefined;
 }
 
 export interface CustomerUpdateInput {
@@ -271,7 +288,10 @@ async function appendDomainEvent(
 }
 
 export class PostgresOperationsService {
-  public constructor(private readonly database: Database) {}
+  public constructor(
+    private readonly database: Database,
+    private readonly geocodingProvider: GeocodingProvider,
+  ) {}
 
   public async listCustomers(input: CustomerListInput, includeSensitive: boolean) {
     const conditions = [
@@ -879,6 +899,350 @@ export class PostgresOperationsService {
       .catch(translateDatabaseConflict);
   }
 
+  public async requestAddressGeocoding(
+    customerId: string,
+    addressId: string,
+    input: { idempotencyKey: string },
+    context: OperationsContext,
+  ) {
+    const initialized = await this.database.transaction(async (transaction) => {
+      const [address] = await transaction
+        .select()
+        .from(customerAddresses)
+        .where(
+          and(
+            eq(customerAddresses.id, addressId),
+            eq(customerAddresses.customerId, customerId),
+            eq(customerAddresses.active, true),
+          ),
+        )
+        .limit(1);
+      if (!address) throw new OperationsNotFoundError('Customer address not found');
+
+      const [created] = await transaction
+        .insert(geocodingRequests)
+        .values({
+          addressId,
+          idempotencyKey: input.idempotencyKey,
+          locationUrl: address.locationUrl,
+          providerKey: this.geocodingProvider.key,
+          queryText: address.writtenAddress,
+          requestedByUserId: context.actorUserId,
+        })
+        .onConflictDoNothing({ target: geocodingRequests.idempotencyKey })
+        .returning();
+
+      if (!created) {
+        const [existing] = await transaction
+          .select({ addressId: geocodingRequests.addressId, id: geocodingRequests.id })
+          .from(geocodingRequests)
+          .where(eq(geocodingRequests.idempotencyKey, input.idempotencyKey))
+          .limit(1);
+        if (!existing || existing.addressId !== addressId) {
+          throw new OperationsConflictError(
+            'La clave de idempotencia ya fue utilizada para otra solicitud.',
+          );
+        }
+        return { address, created: false as const, requestId: existing.id };
+      }
+
+      await transaction
+        .update(customerAddresses)
+        .set({ geocodingStatus: 'GEOCODING', updatedAt: new Date() })
+        .where(eq(customerAddresses.id, addressId));
+      await this.auditCustomerMutation(
+        transaction,
+        customerId,
+        'customer.address_geocoding_requested',
+        context,
+        { metadata: { addressId, geocodingRequestId: created.id } },
+      );
+      await appendDomainEvent(transaction, {
+        aggregateId: customerId,
+        aggregateType: 'customer',
+        correlationId: context.correlationId,
+        name: 'CUSTOMER_ADDRESS_GEOCODING_REQUESTED',
+        payload: { addressId, customerId, geocodingRequestId: created.id },
+      });
+      return { address, created: true as const, requestId: created.id };
+    });
+
+    if (!initialized.created) {
+      return this.loadAddressGeocodingRequest(customerId, addressId, initialized.requestId);
+    }
+
+    let candidates: ReturnType<typeof validateGeocodingCandidates>;
+    try {
+      candidates = validateGeocodingCandidates(
+        await this.geocodingProvider.geocode({
+          idempotencyKey: input.idempotencyKey,
+          ...(initialized.address.locationUrl
+            ? { locationUrl: initialized.address.locationUrl }
+            : {}),
+          requestId: initialized.requestId,
+          writtenAddress: initialized.address.writtenAddress,
+        }),
+      );
+    } catch (error) {
+      const errorCode =
+        error instanceof GeocodingProviderError ? error.code : 'PROVIDER_UNAVAILABLE';
+      const errorMessage =
+        error instanceof GeocodingProviderError
+          ? error.message.slice(0, 500)
+          : 'The geocoding provider is unavailable';
+      await this.database.transaction(async (transaction) => {
+        await transaction
+          .update(geocodingRequests)
+          .set({ errorCode, errorMessage, status: 'FAILED', updatedAt: new Date() })
+          .where(eq(geocodingRequests.id, initialized.requestId));
+        await transaction
+          .update(customerAddresses)
+          .set({ geocodingStatus: 'NEEDS_LOCATION', updatedAt: new Date() })
+          .where(eq(customerAddresses.id, addressId));
+        await this.auditCustomerMutation(
+          transaction,
+          customerId,
+          'customer.address_geocoding_failed',
+          context,
+          {
+            metadata: {
+              addressId,
+              errorCode,
+              geocodingRequestId: initialized.requestId,
+              providerKey: this.geocodingProvider.key,
+            },
+          },
+        );
+      });
+      return this.loadAddressGeocodingRequest(customerId, addressId, initialized.requestId);
+    }
+
+    const status = candidates.length > 0 ? 'CANDIDATES' : 'NO_MATCH';
+    await this.database.transaction(async (transaction) => {
+      if (candidates.length > 0) {
+        await transaction.insert(geocodingCandidates).values(
+          candidates.map((candidate) => ({
+            city: candidate.city,
+            confidence: candidate.confidence.toString(),
+            formattedAddress: candidate.formattedAddress,
+            latitude: candidate.latitude.toString(),
+            locationUrl: candidate.locationUrl,
+            longitude: candidate.longitude.toString(),
+            providerCandidateId: candidate.providerCandidateId,
+            requestId: initialized.requestId,
+            sector: candidate.sector,
+          })),
+        );
+      }
+      await transaction
+        .update(geocodingRequests)
+        .set({ errorCode: null, errorMessage: null, status, updatedAt: new Date() })
+        .where(eq(geocodingRequests.id, initialized.requestId));
+      await transaction
+        .update(customerAddresses)
+        .set({
+          geocodingStatus: candidates.length > 0 ? 'CANDIDATES' : 'NEEDS_LOCATION',
+          updatedAt: new Date(),
+        })
+        .where(eq(customerAddresses.id, addressId));
+      await this.auditCustomerMutation(
+        transaction,
+        customerId,
+        candidates.length > 0
+          ? 'customer.address_geocoding_candidates_created'
+          : 'customer.address_geocoding_no_match',
+        context,
+        {
+          metadata: {
+            addressId,
+            candidateCount: candidates.length,
+            geocodingRequestId: initialized.requestId,
+            providerKey: this.geocodingProvider.key,
+          },
+        },
+      );
+    });
+
+    return this.loadAddressGeocodingRequest(customerId, addressId, initialized.requestId);
+  }
+
+  public async getAddressGeocodingRequest(
+    customerId: string,
+    addressId: string,
+    requestId: string,
+  ) {
+    return this.loadAddressGeocodingRequest(customerId, addressId, requestId);
+  }
+
+  public async confirmAddressGeocoding(
+    customerId: string,
+    addressId: string,
+    requestId: string,
+    input: AddressGeocodingConfirmInput,
+    context: OperationsContext,
+  ) {
+    return this.database.transaction(async (transaction) => {
+      const [request] = await transaction
+        .select({ id: geocodingRequests.id, status: geocodingRequests.status })
+        .from(geocodingRequests)
+        .innerJoin(customerAddresses, eq(customerAddresses.id, geocodingRequests.addressId))
+        .where(
+          and(
+            eq(geocodingRequests.id, requestId),
+            eq(geocodingRequests.addressId, addressId),
+            eq(customerAddresses.customerId, customerId),
+          ),
+        )
+        .limit(1);
+      if (!request) throw new OperationsNotFoundError('Geocoding request not found');
+      if (!['CANDIDATES', 'NO_MATCH', 'FAILED'].includes(request.status)) {
+        throw new OperationsConflictError('La solicitud de geocodificación no puede confirmarse.');
+      }
+
+      const [address] = await transaction
+        .select()
+        .from(customerAddresses)
+        .where(and(eq(customerAddresses.id, addressId), eq(customerAddresses.active, true)))
+        .limit(1);
+      if (!address) throw new OperationsNotFoundError('Customer address not found');
+
+      const [candidate] = input.candidateId
+        ? await transaction
+            .select()
+            .from(geocodingCandidates)
+            .where(
+              and(
+                eq(geocodingCandidates.id, input.candidateId),
+                eq(geocodingCandidates.requestId, requestId),
+              ),
+            )
+            .limit(1)
+        : [undefined];
+      if (input.candidateId && !candidate) {
+        throw new OperationsNotFoundError('Geocoding candidate not found');
+      }
+
+      const latitude = input.latitude ?? (candidate ? Number(candidate.latitude) : undefined);
+      const longitude = input.longitude ?? (candidate ? Number(candidate.longitude) : undefined);
+      assertCoordinatePair(latitude, longitude);
+      if (latitude === undefined || longitude === undefined) {
+        throw new OperationsConflictError('La confirmación requiere coordenadas válidas.');
+      }
+
+      const [updated] = await transaction
+        .update(customerAddresses)
+        .set({
+          city: input.city !== undefined ? input.city : (candidate?.city ?? address.city),
+          geocodingStatus: 'CONFIRMED',
+          latitude: latitude.toString(),
+          locationUrl:
+            input.locationUrl !== undefined
+              ? input.locationUrl
+              : (candidate?.locationUrl ?? address.locationUrl),
+          longitude: longitude.toString(),
+          operationalZone:
+            input.operationalZone !== undefined ? input.operationalZone : address.operationalZone,
+          sector: input.sector !== undefined ? input.sector : (candidate?.sector ?? address.sector),
+          updatedAt: new Date(),
+        })
+        .where(eq(customerAddresses.id, addressId))
+        .returning();
+      if (!updated) throw new Error('Address geocoding confirmation did not return a row');
+
+      await transaction
+        .update(geocodingRequests)
+        .set({
+          errorCode: null,
+          errorMessage: null,
+          selectedCandidateId: candidate?.id ?? null,
+          status: 'CONFIRMED',
+          updatedAt: new Date(),
+        })
+        .where(eq(geocodingRequests.id, requestId));
+      await transaction
+        .update(geocodingRequests)
+        .set({ status: 'SUPERSEDED', updatedAt: new Date() })
+        .where(
+          and(
+            eq(geocodingRequests.addressId, addressId),
+            ne(geocodingRequests.id, requestId),
+            inArray(geocodingRequests.status, ['PENDING', 'CANDIDATES', 'NO_MATCH', 'FAILED']),
+          ),
+        );
+      await this.auditCustomerMutation(
+        transaction,
+        customerId,
+        'customer.address_geocoding_confirmed',
+        context,
+        {
+          after: { geocodingStatus: 'CONFIRMED' },
+          before: { geocodingStatus: address.geocodingStatus },
+          metadata: {
+            addressId,
+            correctedCoordinates: input.latitude !== undefined,
+            geocodingRequestId: requestId,
+            selectedCandidateId: candidate?.id ?? null,
+          },
+        },
+      );
+      await appendDomainEvent(transaction, {
+        aggregateId: customerId,
+        aggregateType: 'customer',
+        correlationId: context.correlationId,
+        name: 'CUSTOMER_ADDRESS_GEOCODED',
+        payload: { addressId, customerId, geocodingRequestId: requestId },
+      });
+      return {
+        ...updated,
+        latitude: Number(updated.latitude),
+        longitude: Number(updated.longitude),
+      };
+    });
+  }
+
+  public async rejectAddressGeocoding(
+    customerId: string,
+    addressId: string,
+    requestId: string,
+    reason: string,
+    context: OperationsContext,
+  ) {
+    await this.database.transaction(async (transaction) => {
+      const [request] = await transaction
+        .select({ id: geocodingRequests.id, status: geocodingRequests.status })
+        .from(geocodingRequests)
+        .innerJoin(customerAddresses, eq(customerAddresses.id, geocodingRequests.addressId))
+        .where(
+          and(
+            eq(geocodingRequests.id, requestId),
+            eq(geocodingRequests.addressId, addressId),
+            eq(customerAddresses.customerId, customerId),
+          ),
+        )
+        .limit(1);
+      if (!request) throw new OperationsNotFoundError('Geocoding request not found');
+      if (['CONFIRMED', 'REJECTED', 'SUPERSEDED'].includes(request.status)) {
+        throw new OperationsConflictError('La solicitud de geocodificación ya fue resuelta.');
+      }
+      await transaction
+        .update(geocodingRequests)
+        .set({ status: 'REJECTED', updatedAt: new Date() })
+        .where(eq(geocodingRequests.id, requestId));
+      await transaction
+        .update(customerAddresses)
+        .set({ geocodingStatus: 'NEEDS_LOCATION', updatedAt: new Date() })
+        .where(eq(customerAddresses.id, addressId));
+      await this.auditCustomerMutation(
+        transaction,
+        customerId,
+        'customer.address_geocoding_rejected',
+        context,
+        { metadata: { addressId, geocodingRequestId: requestId, reason } },
+      );
+    });
+    return this.loadAddressGeocodingRequest(customerId, addressId, requestId);
+  }
+
   public async addCustomerPreference(
     customerId: string,
     input: { category: string; source: string; value: string },
@@ -1058,6 +1422,57 @@ export class PostgresOperationsService {
       });
       return template;
     });
+  }
+
+  private async loadAddressGeocodingRequest(
+    customerId: string,
+    addressId: string,
+    requestId: string,
+  ) {
+    const [request] = await this.database
+      .select({
+        createdAt: geocodingRequests.createdAt,
+        errorCode: geocodingRequests.errorCode,
+        id: geocodingRequests.id,
+        providerKey: geocodingRequests.providerKey,
+        selectedCandidateId: geocodingRequests.selectedCandidateId,
+        status: geocodingRequests.status,
+        updatedAt: geocodingRequests.updatedAt,
+      })
+      .from(geocodingRequests)
+      .innerJoin(customerAddresses, eq(customerAddresses.id, geocodingRequests.addressId))
+      .where(
+        and(
+          eq(geocodingRequests.id, requestId),
+          eq(geocodingRequests.addressId, addressId),
+          eq(customerAddresses.customerId, customerId),
+        ),
+      )
+      .limit(1);
+    if (!request) throw new OperationsNotFoundError('Geocoding request not found');
+    const candidates = await this.database
+      .select({
+        city: geocodingCandidates.city,
+        confidence: geocodingCandidates.confidence,
+        formattedAddress: geocodingCandidates.formattedAddress,
+        id: geocodingCandidates.id,
+        latitude: geocodingCandidates.latitude,
+        locationUrl: geocodingCandidates.locationUrl,
+        longitude: geocodingCandidates.longitude,
+        sector: geocodingCandidates.sector,
+      })
+      .from(geocodingCandidates)
+      .where(eq(geocodingCandidates.requestId, requestId))
+      .orderBy(desc(geocodingCandidates.confidence), asc(geocodingCandidates.id));
+    return {
+      ...request,
+      candidates: candidates.map((candidate) => ({
+        ...candidate,
+        confidence: Number(candidate.confidence),
+        latitude: Number(candidate.latitude),
+        longitude: Number(candidate.longitude),
+      })),
+    };
   }
 
   private async requireCustomer(transaction: DatabaseTransaction, customerId: string) {

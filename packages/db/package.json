@@ -33,6 +33,7 @@
     "@verdeo/audit": "workspace:*",
     "@verdeo/auth": "workspace:*",
     "@verdeo/customers": "workspace:*",
+    "@verdeo/geocoding": "workspace:*",
     "@verdeo/orders": "workspace:*",
     "@verdeo/rbac": "workspace:*",
     "drizzle-orm": "0.45.2",

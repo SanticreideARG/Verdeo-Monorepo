@@ -24,6 +24,8 @@ is authoritative; the UI will consume these contracts and will not reconstruct c
 - audited CSV export with spreadsheet-formula protection and a 5000-row safety limit;
 - configurable message templates with channel, semantic action key, scope, activation, and exact variable
   validation;
+- idempotent address geocoding requests with normalized candidates, explicit no-match/failure states,
+  operator confirmation or correction, rejection, audit, and provider-neutral contracts;
 - audit records and `CUSTOMER_UPDATED`/template domain events in the same transaction as each mutation;
 - closed-cycle and reversal policy enforced in the order domain engine.
 
@@ -51,16 +53,29 @@ is authoritative; the UI will consume these contracts and will not reconstruct c
 - message templates require `messages.templates.use` to read and `messages.templates.manage` to change.
 - delivery-specific endpoints must never reuse the CRM detail DTO.
 
+## Geocoding baseline
+
+`POST .../geocoding` persists a `PENDING` request before invoking the configured adapter. The current MVP
+adapter only accepts a location URL that already contains coordinates. A provider result is validated,
+deduplicated and limited to 20 candidates before persistence. Reusing the same idempotency key returns the
+original request and never calls the adapter twice.
+
+An operator must confirm a stored candidate or supply corrected coordinates. Confirmation updates the
+address atomically, marks other unresolved requests for that address as `SUPERSEDED`, and never infers an
+operational zone. Rejection and provider failure return the address to `NEEDS_LOCATION`; written address
+and location URL are preserved. API DTOs omit provider error details and raw provider responses.
+
 ## Still OPEN / next slices
 
-- geocoding provider adapter and operator confirmation UI;
+- external geocoding provider selection, secret/configuration UI, confidence policy, and operator map UI;
 - configurable city/sector/operational-zone catalogs;
 - duplicate suggestion plus previewed, reversible merge/unmerge;
 - explicit revision restore workflow (revisions are readable now, but restoration remains a deliberate
   future mutation);
-- filtered order pagination, complete status history, CSV/Excel exports;
+- Excel export (filtered pagination, status/revision history, and safe CSV are implemented);
 - conversations/messages, idempotent inbound events, provider adapters, and outbound delivery receipts;
 - template version history and actual send records;
 - production and logistics state machines as separate aggregates.
 
-The migration for this baseline is `packages/db/migrations/0004_overrated_ezekiel.sql`.
+The CRM/order baseline migrations are `0004_overrated_ezekiel.sql`, `0005_worthless_felicia_hardy.sql`,
+and `0006_lean_black_knight.sql` under `packages/db/migrations`.

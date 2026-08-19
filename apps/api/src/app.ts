@@ -6,6 +6,12 @@ import type { AuthenticatedSession, SessionSummary, UserDirectoryPage } from '@v
 import {
   AIProviderConfigListResponseSchema,
   AIProviderConfigUpsertRequestSchema,
+  AddressGeocodingConfirmRequestSchema,
+  AddressGeocodingCreateRequestSchema,
+  AddressGeocodingParamSchema,
+  AddressGeocodingRejectRequestSchema,
+  AddressGeocodingRequestSchema,
+  CustomerAddressParamSchema,
   CustomerAddressCreateRequestSchema,
   CustomerAddressSchema,
   CustomerAddressUpdateRequestSchema,
@@ -51,6 +57,8 @@ import {
   UserListResponseSchema,
   type ApiErrorCode,
   type AIProviderConfigUpsertRequest,
+  type AddressGeocodingConfirmRequest,
+  type AddressGeocodingCreateRequest,
   type CustomerCreateRequest,
   type CustomerAddressCreateRequest,
   type CustomerAddressUpdateRequest,
@@ -131,12 +139,24 @@ interface OperationsEngine {
   createMenu(input: MenuCreateRequest, context: OperationsContext): Promise<unknown>;
   createOrder(input: OrderCreateRequest, context: OperationsContext): Promise<unknown>;
   createPublicOrder(input: PublicOrderCreateRequest, context: OperationsContext): Promise<unknown>;
+  confirmAddressGeocoding(
+    customerId: string,
+    addressId: string,
+    requestId: string,
+    input: AddressGeocodingConfirmRequest,
+    context: OperationsContext,
+  ): Promise<unknown>;
   currentPublishedMenu(): Promise<unknown>;
   exportOrdersCsv(
     input: Omit<OrderListQuery, 'cursor' | 'limit'>,
     context: OperationsContext,
   ): Promise<string>;
   getCustomer(customerId: string, includeSensitive: boolean): Promise<unknown>;
+  getAddressGeocodingRequest(
+    customerId: string,
+    addressId: string,
+    requestId: string,
+  ): Promise<unknown>;
   getOrder(orderId: string): Promise<unknown>;
   kitchenSummary(cycleId: string): Promise<unknown>;
   listCustomers(input: CustomerListQuery, includeSensitive: boolean): Promise<unknown>;
@@ -146,6 +166,19 @@ interface OperationsEngine {
   orderHistory(orderId: string): Promise<unknown>;
   orderRevisionHistory(orderId: string): Promise<unknown>;
   publishMenu(menuId: string, context: OperationsContext): Promise<unknown>;
+  rejectAddressGeocoding(
+    customerId: string,
+    addressId: string,
+    requestId: string,
+    reason: string,
+    context: OperationsContext,
+  ): Promise<unknown>;
+  requestAddressGeocoding(
+    customerId: string,
+    addressId: string,
+    input: AddressGeocodingCreateRequest,
+    context: OperationsContext,
+  ): Promise<unknown>;
   transitionOrder(
     orderId: string,
     status: OrderTransitionRequest['status'],
@@ -768,6 +801,113 @@ export function createApp(options: CreateAppOptions) {
     );
     return context.json(CustomerAddressSchema.parse(contractValue(address)));
   });
+
+  app.post('/api/v1/customers/:customerId/addresses/:addressId/geocoding', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (
+      !permissions.includes('customers.edit') ||
+      !permissions.includes('customers.view_sensitive')
+    )
+      return forbidden(context);
+    const params = CustomerAddressParamSchema.safeParse(context.req.param());
+    const input = AddressGeocodingCreateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá la solicitud de geocodificación.',
+        input.success ? undefined : input.error.issues,
+      );
+    const request = await requireOperations().requestAddressGeocoding(
+      params.data.customerId,
+      params.data.addressId,
+      input.data,
+      operationsContext(context),
+    );
+    return context.json(AddressGeocodingRequestSchema.parse(contractValue(request)), 201);
+  });
+
+  app.get(
+    '/api/v1/customers/:customerId/addresses/:addressId/geocoding/:requestId',
+    async (context) => {
+      const permissions = context.get('session').permissions;
+      if (
+        !permissions.includes('customers.read') ||
+        !permissions.includes('customers.view_sensitive')
+      )
+        return forbidden(context);
+      const params = AddressGeocodingParamSchema.safeParse(context.req.param());
+      if (!params.success)
+        return badRequest(context, 'La solicitud de geocodificación no es válida.');
+      const request = await requireOperations().getAddressGeocodingRequest(
+        params.data.customerId,
+        params.data.addressId,
+        params.data.requestId,
+      );
+      return context.json(AddressGeocodingRequestSchema.parse(contractValue(request)));
+    },
+  );
+
+  app.post(
+    '/api/v1/customers/:customerId/addresses/:addressId/geocoding/:requestId/confirm',
+    async (context) => {
+      const permissions = context.get('session').permissions;
+      if (
+        !permissions.includes('customers.edit') ||
+        !permissions.includes('customers.view_sensitive')
+      )
+        return forbidden(context);
+      const params = AddressGeocodingParamSchema.safeParse(context.req.param());
+      const input = AddressGeocodingConfirmRequestSchema.safeParse(
+        await context.req.json().catch(() => null),
+      );
+      if (!params.success || !input.success)
+        return badRequest(
+          context,
+          'Revisá la confirmación de ubicación.',
+          input.success ? undefined : input.error.issues,
+        );
+      const address = await requireOperations().confirmAddressGeocoding(
+        params.data.customerId,
+        params.data.addressId,
+        params.data.requestId,
+        input.data,
+        operationsContext(context),
+      );
+      return context.json(CustomerAddressSchema.parse(contractValue(address)));
+    },
+  );
+
+  app.post(
+    '/api/v1/customers/:customerId/addresses/:addressId/geocoding/:requestId/reject',
+    async (context) => {
+      const permissions = context.get('session').permissions;
+      if (
+        !permissions.includes('customers.edit') ||
+        !permissions.includes('customers.view_sensitive')
+      )
+        return forbidden(context);
+      const params = AddressGeocodingParamSchema.safeParse(context.req.param());
+      const input = AddressGeocodingRejectRequestSchema.safeParse(
+        await context.req.json().catch(() => null),
+      );
+      if (!params.success || !input.success)
+        return badRequest(
+          context,
+          'Revisá el rechazo de ubicación.',
+          input.success ? undefined : input.error.issues,
+        );
+      const request = await requireOperations().rejectAddressGeocoding(
+        params.data.customerId,
+        params.data.addressId,
+        params.data.requestId,
+        input.data.reason,
+        operationsContext(context),
+      );
+      return context.json(AddressGeocodingRequestSchema.parse(contractValue(request)));
+    },
+  );
 
   app.post('/api/v1/customers/:id/preferences', async (context) => {
     const permissions = context.get('session').permissions;

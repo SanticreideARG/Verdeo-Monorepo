@@ -101,6 +101,61 @@ export const customerAddresses = pgTable(
   ],
 );
 
+export const geocodingRequests = pgTable(
+  'geocoding_requests',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    addressId: uuid('address_id')
+      .notNull()
+      .references(() => customerAddresses.id, { onDelete: 'cascade' }),
+    idempotencyKey: text('idempotency_key').notNull().unique(),
+    providerKey: text('provider_key').notNull(),
+    queryText: text('query_text').notNull(),
+    locationUrl: text('location_url'),
+    status: text('status').default('PENDING').notNull(),
+    errorCode: text('error_code'),
+    errorMessage: text('error_message'),
+    selectedCandidateId: uuid('selected_candidate_id'),
+    requestedByUserId: uuid('requested_by_user_id'),
+    ...timestamps,
+  },
+  (table) => [
+    index('geocoding_requests_address_idx').on(table.addressId, table.createdAt),
+    index('geocoding_requests_status_idx').on(table.status, table.updatedAt),
+  ],
+);
+
+export const geocodingCandidates = pgTable(
+  'geocoding_candidates',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    requestId: uuid('request_id')
+      .notNull()
+      .references(() => geocodingRequests.id, { onDelete: 'cascade' }),
+    providerCandidateId: text('provider_candidate_id').notNull(),
+    formattedAddress: text('formatted_address').notNull(),
+    latitude: numeric('latitude', { precision: 9, scale: 6 }).notNull(),
+    longitude: numeric('longitude', { precision: 9, scale: 6 }).notNull(),
+    city: text('city'),
+    sector: text('sector'),
+    locationUrl: text('location_url'),
+    confidence: numeric('confidence', { precision: 5, scale: 4 }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('geocoding_candidates_provider_unique').on(
+      table.requestId,
+      table.providerCandidateId,
+    ),
+    index('geocoding_candidates_request_idx').on(table.requestId),
+    check(
+      'geocoding_candidates_coordinates_check',
+      sql`${table.latitude} between -90 and 90 and ${table.longitude} between -180 and 180`,
+    ),
+    check('geocoding_candidates_confidence_check', sql`${table.confidence} between 0 and 1`),
+  ],
+);
+
 export const customerPreferences = pgTable(
   'customer_preferences',
   {

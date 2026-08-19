@@ -15,6 +15,7 @@ import {
   PostgresSessionRepository,
   PostgresUserDirectoryRepository,
 } from '@verdeo/db';
+import { LocationLinkGeocodingProvider } from '@verdeo/geocoding';
 import { createLogger } from '@verdeo/observability';
 
 import { createApp } from './app.js';
@@ -41,7 +42,10 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     new PostgresPasswordCredentialRepository(database.db),
   );
   const userDirectory = new UserDirectoryService(new PostgresUserDirectoryRepository(database.db));
-  const operations = new PostgresOperationsService(database.db);
+  const operations = new PostgresOperationsService(
+    database.db,
+    new LocationLinkGeocodingProvider(),
+  );
   const aiConfiguration = new PostgresAIConfigurationService(
     database.db,
     env.AI_CONFIG_ENCRYPTION_KEY,

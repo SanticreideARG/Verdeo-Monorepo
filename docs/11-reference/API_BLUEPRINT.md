@@ -17,12 +17,20 @@ No es contrato final OpenAPI; es mapa inicial.
 - `PATCH /customers/:customerId/identities/:identityId`
 - `POST /customers/:id/addresses`
 - `PATCH /customers/:customerId/addresses/:addressId`
+- `POST /customers/:customerId/addresses/:addressId/geocoding`
+- `GET /customers/:customerId/addresses/:addressId/geocoding/:requestId`
+- `POST /customers/:customerId/addresses/:addressId/geocoding/:requestId/confirm`
+- `POST /customers/:customerId/addresses/:addressId/geocoding/:requestId/reject`
 - `POST /customers/:id/preferences`
 - `PATCH /customers/:customerId/preferences/:preferenceId`
 - `POST /customers/:id/merge`
 - `POST /customers/:id/unmerge`
 - `POST /customers/:id/restrictions`
 - `PATCH /customers/:customerId/restrictions/:restrictionId`
+
+Las rutas de geocodificación requieren `customers.view_sensitive`. Iniciar, confirmar y rechazar requieren
+además `customers.edit`; consultar requiere `customers.read`. El inicio recibe una `idempotencyKey`. La
+confirmación recibe un candidato persistido o un par latitud/longitud corregido por un operador.
 
 ## Menu
 
