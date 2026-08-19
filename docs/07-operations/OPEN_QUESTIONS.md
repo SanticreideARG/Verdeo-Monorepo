@@ -54,6 +54,15 @@ Estas preguntas no bloquean todo el proyecto, pero no deben resolverse inventand
 - templates oficiales;
 - estrategia de coexistencia/migración con WhatsApp Business actual.
 
+## Flujo operativo de pedidos
+
+- reconciliar mediante ADR la máquina vigente `DRAFT -> CONFIRMED -> READY -> DELIVERED/CANCELLED` con
+  la propuesta `pendiente -> confirmado -> produccion -> reparto -> entregado/cancelado`;
+- decidir si producción y reparto son estados del pedido, estados de sus módulos respectivos o vistas
+  operativas derivadas;
+- definir el criterio técnico para garantizar un único borrador activo por intención de pedido;
+- definir columnas y formato comercial de las exportaciones CSV/Excel.
+
 ## Auth cliente
 
 - método final: email, OTP WhatsApp, magic link u otro;

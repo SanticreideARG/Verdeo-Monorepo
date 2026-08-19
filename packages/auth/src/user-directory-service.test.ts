@@ -4,6 +4,7 @@ import { UserDirectoryService, type UserDirectoryRepository } from './user-direc
 
 describe('UserDirectoryService', () => {
   it('uses one extra row to produce a stable next cursor', async () => {
+    const findById = vi.fn<UserDirectoryRepository['findById']>();
     const listAfter = vi.fn<UserDirectoryRepository['listAfter']>();
     listAfter.mockResolvedValue([
       {
@@ -19,12 +20,25 @@ describe('UserDirectoryService', () => {
         status: 'active',
       },
     ]);
-    const service = new UserDirectoryService({ listAfter });
+    const service = new UserDirectoryService({ findById, listAfter });
 
     const page = await service.list(undefined, 1);
 
     expect(listAfter).toHaveBeenCalledWith(undefined, 2);
     expect(page.items).toHaveLength(1);
     expect(page.nextCursor).toBe('00000000-0000-4000-8000-000000000001');
+  });
+
+  it('returns the requested user profile', async () => {
+    const user = {
+      createdAt: new Date('2026-08-17T10:00:00Z'),
+      displayName: 'Santiago',
+      id: '00000000-0000-4000-8000-000000000001',
+      status: 'active',
+    };
+    const findById = vi.fn<UserDirectoryRepository['findById']>(() => Promise.resolve(user));
+    const service = new UserDirectoryService({ findById, listAfter: () => Promise.resolve([]) });
+
+    await expect(service.findById(user.id)).resolves.toEqual(user);
   });
 });

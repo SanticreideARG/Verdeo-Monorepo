@@ -4,6 +4,12 @@ import { IsoDateTimeSchema, UuidSchema } from './common.js';
 
 const RequiredTextSchema = z.string().trim().min(1).max(200);
 const OptionalTextSchema = z.string().trim().max(500).optional();
+const ConfigurableKeySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .regex(/^[a-zA-Z][a-zA-Z0-9_.-]*$/);
 
 export const OrderStatusSchema = z.enum(['DRAFT', 'CONFIRMED', 'READY', 'DELIVERED', 'CANCELLED']);
 export const OrderSourceSchema = z.enum([
@@ -17,10 +23,104 @@ export const OrderSourceSchema = z.enum([
   'opportunity_sale',
 ]);
 
+export const CustomerIdentityCreateRequestSchema = z.object({
+  primary: z.boolean().default(false),
+  source: ConfigurableKeySchema.default('manual'),
+  type: ConfigurableKeySchema,
+  value: z.string().trim().min(1).max(320),
+  verified: z.boolean().default(false),
+});
+
+export const CustomerIdentityUpdateRequestSchema = z
+  .object({
+    active: z.boolean().optional(),
+    primary: z.boolean().optional(),
+    value: z.string().trim().min(1).max(320).optional(),
+    verified: z.boolean().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, { message: 'No hay cambios para aplicar.' });
+
+const CustomerAddressFieldsSchema = z.object({
+  accessNotes: z.string().trim().max(1_000).optional(),
+  city: z.string().trim().max(120).optional(),
+  geocodingStatus: ConfigurableKeySchema.default('NEEDS_LOCATION'),
+  label: RequiredTextSchema,
+  latitude: z.number().min(-90).max(90).optional(),
+  locationUrl: z.url().max(2_000).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  operationalZone: z.string().trim().max(120).optional(),
+  primary: z.boolean().default(false),
+  propertyType: z.string().trim().max(80).optional(),
+  sector: z.string().trim().max(120).optional(),
+  source: ConfigurableKeySchema.default('manual'),
+  unit: z.string().trim().max(80).optional(),
+  writtenAddress: z.string().trim().min(4).max(500),
+});
+
+export const CustomerAddressCreateRequestSchema = CustomerAddressFieldsSchema.refine(
+  (value) =>
+    (value.latitude === undefined && value.longitude === undefined) ||
+    (value.latitude !== undefined && value.longitude !== undefined),
+  { message: 'Latitud y longitud deben informarse juntas.' },
+);
+
+export const CustomerAddressUpdateRequestSchema = z
+  .object({
+    accessNotes: z.string().trim().max(1_000).nullable().optional(),
+    active: z.boolean().optional(),
+    city: z.string().trim().max(120).nullable().optional(),
+    geocodingStatus: ConfigurableKeySchema.optional(),
+    label: RequiredTextSchema.optional(),
+    latitude: z.number().min(-90).max(90).nullable().optional(),
+    locationUrl: z.url().max(2_000).nullable().optional(),
+    longitude: z.number().min(-180).max(180).nullable().optional(),
+    operationalZone: z.string().trim().max(120).nullable().optional(),
+    primary: z.boolean().optional(),
+    propertyType: z.string().trim().max(80).nullable().optional(),
+    sector: z.string().trim().max(120).nullable().optional(),
+    source: ConfigurableKeySchema.optional(),
+    unit: z.string().trim().max(80).nullable().optional(),
+    writtenAddress: z.string().trim().min(4).max(500).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, { message: 'No hay cambios para aplicar.' })
+  .refine(
+    (value) =>
+      (value.latitude === undefined && value.longitude === undefined) ||
+      (value.latitude !== undefined && value.longitude !== undefined),
+    { message: 'Latitud y longitud deben informarse juntas.' },
+  );
+
+export const CustomerPreferenceCreateRequestSchema = z.object({
+  category: ConfigurableKeySchema,
+  source: ConfigurableKeySchema.default('manual'),
+  value: z.string().trim().min(1).max(500),
+});
+
+export const CustomerPreferenceUpdateRequestSchema = z
+  .object({
+    active: z.boolean().optional(),
+    category: ConfigurableKeySchema.optional(),
+    value: z.string().trim().min(1).max(500).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, { message: 'No hay cambios para aplicar.' });
+
+export const CustomerRestrictionCreateRequestSchema = z.object({
+  reason: z.string().trim().min(3).max(1_000),
+  type: ConfigurableKeySchema,
+});
+
+export const CustomerRestrictionUpdateRequestSchema = z.object({
+  active: z.boolean(),
+  reason: z.string().trim().min(3).max(1_000).optional(),
+});
+
 export const CustomerCreateRequestSchema = z.object({
+  addresses: z.array(CustomerAddressCreateRequestSchema).max(20).default([]),
   displayName: RequiredTextSchema,
   email: z.email().max(320).optional(),
   firstName: z.string().trim().max(100).optional(),
+  identities: z.array(CustomerIdentityCreateRequestSchema).max(20).default([]),
+  internalNotes: z.string().trim().max(5_000).optional(),
   lastName: z.string().trim().max(100).optional(),
   phone: z
     .string()
@@ -33,16 +133,107 @@ export const CustomerCreateRequestSchema = z.object({
     .optional(),
 });
 
+export const CustomerUpdateRequestSchema = z
+  .object({
+    displayName: RequiredTextSchema.optional(),
+    firstName: z.string().trim().max(100).nullable().optional(),
+    internalNotes: z.string().trim().max(5_000).nullable().optional(),
+    lastName: z.string().trim().max(100).nullable().optional(),
+    status: ConfigurableKeySchema.optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, { message: 'No hay cambios para aplicar.' });
+
+export const CustomerListQuerySchema = z.object({
+  cursor: UuidSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+  search: z.string().trim().max(200).optional(),
+  status: ConfigurableKeySchema.optional(),
+});
+
 export const CustomerSummarySchema = z.object({
   createdAt: IsoDateTimeSchema,
   displayName: z.string(),
   email: z.string().nullable().optional(),
   id: UuidSchema,
   phone: z.string().nullable().optional(),
+  whatsapp: z.string().nullable().optional(),
   status: z.string(),
 });
 
-export const CustomerListResponseSchema = z.object({ items: z.array(CustomerSummarySchema) });
+export const CustomerListResponseSchema = z.object({
+  items: z.array(CustomerSummarySchema),
+  nextCursor: UuidSchema.nullable().default(null),
+});
+
+export const CustomerIdentitySchema = z.object({
+  active: z.boolean(),
+  createdAt: IsoDateTimeSchema,
+  id: UuidSchema,
+  primary: z.boolean(),
+  source: z.string(),
+  type: z.string(),
+  value: z.string(),
+  verified: z.boolean(),
+});
+
+export const CustomerAddressSchema = z.object({
+  accessNotes: z.string().nullable(),
+  active: z.boolean(),
+  city: z.string().nullable(),
+  createdAt: IsoDateTimeSchema,
+  geocodingStatus: z.string(),
+  id: UuidSchema,
+  label: z.string(),
+  latitude: z.number().nullable(),
+  locationUrl: z.string().nullable(),
+  longitude: z.number().nullable(),
+  operationalZone: z.string().nullable(),
+  primary: z.boolean(),
+  propertyType: z.string().nullable(),
+  sector: z.string().nullable(),
+  source: z.string(),
+  unit: z.string().nullable(),
+  writtenAddress: z.string(),
+});
+
+export const CustomerPreferenceSchema = z.object({
+  active: z.boolean(),
+  category: z.string(),
+  createdAt: IsoDateTimeSchema,
+  id: UuidSchema,
+  source: z.string(),
+  value: z.string(),
+});
+
+export const CustomerRestrictionSchema = z.object({
+  active: z.boolean(),
+  createdAt: IsoDateTimeSchema,
+  id: UuidSchema,
+  reason: z.string(),
+  resolvedAt: IsoDateTimeSchema.nullable(),
+  type: z.string(),
+});
+
+export const CustomerOrderSummarySchema = z.object({
+  createdAt: IsoDateTimeSchema,
+  deliveryDate: z.iso.date(),
+  id: UuidSchema,
+  publicNumber: z.string(),
+  status: OrderStatusSchema,
+  totalMinor: z.number().int(),
+});
+
+export const CustomerDetailSchema = CustomerSummarySchema.extend({
+  addresses: z.array(CustomerAddressSchema).optional(),
+  firstName: z.string().nullable(),
+  identities: z.array(CustomerIdentitySchema).optional(),
+  internalNotes: z.string().nullable().optional(),
+  lastName: z.string().nullable(),
+  orders: z.array(CustomerOrderSummarySchema),
+  preferences: z.array(CustomerPreferenceSchema).optional(),
+  restrictions: z.array(CustomerRestrictionSchema).optional(),
+  updatedAt: IsoDateTimeSchema,
+});
 
 export const MenuOfferingInputSchema = z.object({
   currency: z.string().trim().length(3).default('ARS'),
@@ -97,6 +288,10 @@ export const WeeklyMenuSchema = z.object({
 export const MenuListResponseSchema = z.object({ items: z.array(WeeklyMenuSchema) });
 
 export const IdParamSchema = z.object({ id: UuidSchema });
+export const CustomerRelationParamSchema = z.object({
+  customerId: UuidSchema,
+  relationId: UuidSchema,
+});
 export const CycleIdParamSchema = z.object({ cycleId: UuidSchema });
 
 export const OrderItemInputSchema = z.object({
@@ -107,7 +302,9 @@ export const OrderItemInputSchema = z.object({
 
 export const OrderCreateRequestSchema = z.object({
   customerId: UuidSchema,
+  deliveryAddressId: UuidSchema.optional(),
   deliveryAddress: z.string().trim().min(4).max(500),
+  deliveryLocationUrl: z.url().max(2_000).optional(),
   deliveryDate: z.iso.date(),
   dietaryInstructions: z.array(RequiredTextSchema).max(20).default([]),
   items: z.array(OrderItemInputSchema).min(1).max(50),
@@ -129,12 +326,28 @@ export const OrderTransitionRequestSchema = z.object({
   status: OrderStatusSchema,
 });
 
+export const OrderUpdateRequestSchema = z
+  .object({
+    deliveryAddress: z.string().trim().min(4).max(500).optional(),
+    deliveryAddressId: UuidSchema.nullable().optional(),
+    deliveryDate: z.iso.date().optional(),
+    deliveryLocationUrl: z.url().max(2_000).nullable().optional(),
+    notes: z.string().trim().max(500).nullable().optional(),
+    paymentExpectation: z.string().trim().min(1).max(80).optional(),
+    reason: z.string().trim().min(3).max(500),
+  })
+  .refine((value) => Object.keys(value).some((key) => key !== 'reason'), {
+    message: 'No hay cambios para aplicar.',
+  });
+
 export const OrderSchema = z.object({
   createdAt: IsoDateTimeSchema,
   currency: z.string(),
   customer: z.object({ displayName: z.string(), id: UuidSchema }),
   deliveryAddress: z.string(),
+  deliveryAddressId: UuidSchema.nullable(),
   deliveryDate: z.iso.date(),
+  deliveryLocationUrl: z.string().nullable(),
   dietaryInstructions: z.array(z.string()),
   id: UuidSchema,
   items: z.array(
@@ -159,6 +372,41 @@ export const OrderSchema = z.object({
 });
 
 export const OrderListResponseSchema = z.object({ items: z.array(OrderSchema) });
+
+export const OrderStatusHistoryEntrySchema = z.object({
+  actorUserId: UuidSchema.nullable(),
+  createdAt: IsoDateTimeSchema,
+  fromStatus: OrderStatusSchema.nullable(),
+  id: UuidSchema,
+  reason: z.string().nullable(),
+  toStatus: OrderStatusSchema,
+});
+
+export const OrderStatusHistoryResponseSchema = z.object({
+  items: z.array(OrderStatusHistoryEntrySchema),
+});
+
+export const MessageTemplateUpsertRequestSchema = z.object({
+  actionKey: ConfigurableKeySchema.nullable().optional(),
+  active: z.boolean().default(true),
+  body: z.string().trim().min(1).max(5_000),
+  channel: ConfigurableKeySchema.default('whatsapp'),
+  displayName: RequiredTextSchema,
+  key: ConfigurableKeySchema,
+  scopeReferenceId: z.string().trim().max(200).nullable().optional(),
+  scopeType: ConfigurableKeySchema.default('global'),
+  variables: z.array(ConfigurableKeySchema).max(50).default([]),
+});
+
+export const MessageTemplateSchema = MessageTemplateUpsertRequestSchema.extend({
+  createdAt: IsoDateTimeSchema,
+  id: UuidSchema,
+  updatedAt: IsoDateTimeSchema,
+});
+
+export const MessageTemplateListResponseSchema = z.object({
+  items: z.array(MessageTemplateSchema),
+});
 
 export const KitchenSummaryResponseSchema = z.object({
   base: z.array(
@@ -194,11 +442,27 @@ export const KitchenSummaryResponseSchema = z.object({
 });
 
 export type CustomerCreateRequest = z.infer<typeof CustomerCreateRequestSchema>;
+export type CustomerUpdateRequest = z.infer<typeof CustomerUpdateRequestSchema>;
+export type CustomerIdentityCreateRequest = z.infer<typeof CustomerIdentityCreateRequestSchema>;
+export type CustomerIdentityUpdateRequest = z.infer<typeof CustomerIdentityUpdateRequestSchema>;
+export type CustomerAddressCreateRequest = z.infer<typeof CustomerAddressCreateRequestSchema>;
+export type CustomerAddressUpdateRequest = z.infer<typeof CustomerAddressUpdateRequestSchema>;
+export type CustomerPreferenceCreateRequest = z.infer<typeof CustomerPreferenceCreateRequestSchema>;
+export type CustomerPreferenceUpdateRequest = z.infer<typeof CustomerPreferenceUpdateRequestSchema>;
+export type CustomerRestrictionCreateRequest = z.infer<
+  typeof CustomerRestrictionCreateRequestSchema
+>;
+export type CustomerRestrictionUpdateRequest = z.infer<
+  typeof CustomerRestrictionUpdateRequestSchema
+>;
+export type CustomerListQuery = z.infer<typeof CustomerListQuerySchema>;
 export type CustomerSummary = z.infer<typeof CustomerSummarySchema>;
+export type MessageTemplateUpsertRequest = z.infer<typeof MessageTemplateUpsertRequestSchema>;
 export type MenuCreateRequest = z.infer<typeof MenuCreateRequestSchema>;
 export type WeeklyMenu = z.infer<typeof WeeklyMenuSchema>;
 export type OrderCreateRequest = z.infer<typeof OrderCreateRequestSchema>;
 export type PublicOrderCreateRequest = z.infer<typeof PublicOrderCreateRequestSchema>;
 export type Order = z.infer<typeof OrderSchema>;
 export type OrderTransitionRequest = z.infer<typeof OrderTransitionRequestSchema>;
+export type OrderUpdateRequest = z.infer<typeof OrderUpdateRequestSchema>;
 export type KitchenSummaryResponse = z.infer<typeof KitchenSummaryResponseSchema>;

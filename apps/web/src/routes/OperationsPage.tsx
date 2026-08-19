@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
+import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { apiRequest } from '../lib/api.js';
 import {
   errorMessage,
@@ -39,6 +40,7 @@ function formText(form: FormData, key: string): string {
 
 export function OperationsPage() {
   const navigate = useNavigate();
+  const [profile, setProfile] = useState<DashboardProfile | null>(null);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [menus, setMenus] = useState<WeeklyMenu[]>([]);
@@ -60,18 +62,19 @@ export function OperationsPage() {
       return;
     }
     if (!profileResponse.ok) throw new Error(await errorMessage(profileResponse));
-    const profile = (await profileResponse.json()) as { permissions: string[] };
-    setPermissions(profile.permissions);
+    const loadedProfile = (await profileResponse.json()) as DashboardProfile;
+    setProfile(loadedProfile);
+    setPermissions(loadedProfile.permissions);
 
     const [customerResponse, menuResponse, orderResponse, aiResponse] = await Promise.all([
-      profile.permissions.includes('customers.read') ? apiRequest('/api/v1/customers') : null,
-      profile.permissions.some((permission) =>
+      loadedProfile.permissions.includes('customers.read') ? apiRequest('/api/v1/customers') : null,
+      loadedProfile.permissions.some((permission) =>
         ['orders.read', 'production.read'].includes(permission),
       )
         ? apiRequest('/api/v1/menus')
         : null,
-      profile.permissions.includes('orders.read') ? apiRequest('/api/v1/orders') : null,
-      profile.permissions.includes('ai.providers.manage')
+      loadedProfile.permissions.includes('orders.read') ? apiRequest('/api/v1/orders') : null,
+      loadedProfile.permissions.includes('ai.providers.manage')
         ? apiRequest('/api/v1/ai/providers')
         : null,
     ]);
@@ -274,6 +277,11 @@ export function OperationsPage() {
     }
   }
 
+  async function logout() {
+    await apiRequest('/api/v1/auth/logout', { method: 'POST' }).catch(() => undefined);
+    await navigate('/login', { replace: true });
+  }
+
   if (loading)
     return (
       <main className="grid min-h-screen place-items-center bg-[#eef1e7] text-forest">
@@ -281,39 +289,11 @@ export function OperationsPage() {
       </main>
     );
 
-  return (
-    <div className="min-h-screen bg-[#eef1e7] text-ink">
-      <header className="sticky top-0 z-10 border-b border-forest/10 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
-          <Link className="brand" to="/app">
-            verdeo<span>.</span>
-          </Link>
-          <nav
-            className="flex gap-1 overflow-x-auto text-sm font-semibold text-forest"
-            aria-label="Módulos operativos"
-          >
-            <a className="nav-link inline-flex" href="#pedidos">
-              Pedidos
-            </a>
-            <a className="nav-link inline-flex" href="#menus">
-              Menús
-            </a>
-            <a className="nav-link inline-flex" href="#clientes">
-              Clientes
-            </a>
-            <a className="nav-link inline-flex" href="#cocina">
-              Cocina
-            </a>
-            {permissions.includes('ai.providers.manage') ? (
-              <a className="nav-link inline-flex" href="#ia">
-                IA
-              </a>
-            ) : null}
-          </nav>
-        </div>
-      </header>
+  if (!profile) return null;
 
-      <main className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-12">
+  return (
+    <DashboardShell profile={profile} onLogout={() => void logout()}>
+      <div className="operation-workspace">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
             <p className="eyebrow">Motor MVP</p>
@@ -858,7 +838,7 @@ export function OperationsPage() {
             </div>
           </section>
         ) : null}
-      </main>
-    </div>
+      </div>
+    </DashboardShell>
   );
 }

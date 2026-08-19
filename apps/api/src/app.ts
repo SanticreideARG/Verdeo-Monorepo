@@ -6,9 +6,25 @@ import type { AuthenticatedSession, SessionSummary, UserDirectoryPage } from '@v
 import {
   AIProviderConfigListResponseSchema,
   AIProviderConfigUpsertRequestSchema,
-  HealthResponseSchema,
+  CustomerAddressCreateRequestSchema,
+  CustomerAddressSchema,
+  CustomerAddressUpdateRequestSchema,
   CustomerCreateRequestSchema,
+  CustomerDetailSchema,
+  CustomerIdentityCreateRequestSchema,
+  CustomerIdentitySchema,
+  CustomerIdentityUpdateRequestSchema,
   CustomerListResponseSchema,
+  CustomerListQuerySchema,
+  CustomerPreferenceCreateRequestSchema,
+  CustomerPreferenceSchema,
+  CustomerPreferenceUpdateRequestSchema,
+  CustomerRelationParamSchema,
+  CustomerRestrictionCreateRequestSchema,
+  CustomerRestrictionSchema,
+  CustomerRestrictionUpdateRequestSchema,
+  CustomerUpdateRequestSchema,
+  HealthResponseSchema,
   CycleIdParamSchema,
   IdParamSchema,
   KitchenSummaryResponseSchema,
@@ -16,11 +32,16 @@ import {
   LoginResponseSchema,
   MenuCreateRequestSchema,
   MenuListResponseSchema,
+  MessageTemplateListResponseSchema,
+  MessageTemplateSchema,
+  MessageTemplateUpsertRequestSchema,
   MeResponseSchema,
   OrderCreateRequestSchema,
   OrderListResponseSchema,
   OrderSchema,
+  OrderStatusHistoryResponseSchema,
   OrderTransitionRequestSchema,
+  OrderUpdateRequestSchema,
   PublicOrderCreateRequestSchema,
   SessionIdParamSchema,
   SessionListResponseSchema,
@@ -29,9 +50,21 @@ import {
   type ApiErrorCode,
   type AIProviderConfigUpsertRequest,
   type CustomerCreateRequest,
+  type CustomerAddressCreateRequest,
+  type CustomerAddressUpdateRequest,
+  type CustomerIdentityCreateRequest,
+  type CustomerIdentityUpdateRequest,
+  type CustomerListQuery,
+  type CustomerPreferenceCreateRequest,
+  type CustomerPreferenceUpdateRequest,
+  type CustomerRestrictionCreateRequest,
+  type CustomerRestrictionUpdateRequest,
+  type CustomerUpdateRequest,
+  type MessageTemplateUpsertRequest,
   type MenuCreateRequest,
   type OrderCreateRequest,
   type OrderTransitionRequest,
+  type OrderUpdateRequest,
   type PublicOrderCreateRequest,
 } from '@verdeo/contracts';
 import { createRequestId, type Logger } from '@verdeo/observability';
@@ -56,6 +89,7 @@ interface SessionAuthenticator {
 }
 
 interface UserDirectory {
+  findById(id: string): Promise<{ displayName: string; id: string } | null>;
   list(afterId: string | undefined, limit: number): Promise<UserDirectoryPage>;
 }
 
@@ -70,21 +104,86 @@ interface CredentialLogin {
 }
 
 interface OperationsEngine {
+  addCustomerAddress(
+    customerId: string,
+    input: CustomerAddressCreateRequest,
+    context: OperationsContext,
+  ): Promise<unknown>;
+  addCustomerIdentity(
+    customerId: string,
+    input: CustomerIdentityCreateRequest,
+    context: OperationsContext,
+  ): Promise<unknown>;
+  addCustomerPreference(
+    customerId: string,
+    input: CustomerPreferenceCreateRequest,
+    context: OperationsContext,
+  ): Promise<unknown>;
+  addCustomerRestriction(
+    customerId: string,
+    input: CustomerRestrictionCreateRequest,
+    context: OperationsContext,
+  ): Promise<unknown>;
   createCustomer(input: CustomerCreateRequest, context: OperationsContext): Promise<unknown>;
   createMenu(input: MenuCreateRequest, context: OperationsContext): Promise<unknown>;
   createOrder(input: OrderCreateRequest, context: OperationsContext): Promise<unknown>;
   createPublicOrder(input: PublicOrderCreateRequest, context: OperationsContext): Promise<unknown>;
   currentPublishedMenu(): Promise<unknown>;
+  getCustomer(customerId: string, includeSensitive: boolean): Promise<unknown>;
+  getOrder(orderId: string): Promise<unknown>;
   kitchenSummary(cycleId: string): Promise<unknown>;
-  listCustomers(includeSensitive: boolean): Promise<unknown>;
+  listCustomers(input: CustomerListQuery, includeSensitive: boolean): Promise<unknown>;
+  listMessageTemplates(): Promise<unknown>;
   listMenus(onlyPublished?: boolean): Promise<unknown>;
   listOrders(): Promise<unknown>;
+  orderHistory(orderId: string): Promise<unknown>;
   publishMenu(menuId: string, context: OperationsContext): Promise<unknown>;
   transitionOrder(
     orderId: string,
     status: OrderTransitionRequest['status'],
     reason: string | undefined,
     confirmedReversal: boolean,
+    allowCycleOverride: boolean,
+    context: OperationsContext,
+  ): Promise<unknown>;
+  updateCustomer(
+    customerId: string,
+    input: CustomerUpdateRequest,
+    includeSensitive: boolean,
+    context: OperationsContext,
+  ): Promise<unknown>;
+  updateCustomerAddress(
+    customerId: string,
+    addressId: string,
+    input: CustomerAddressUpdateRequest,
+    context: OperationsContext,
+  ): Promise<unknown>;
+  updateCustomerIdentity(
+    customerId: string,
+    identityId: string,
+    input: CustomerIdentityUpdateRequest,
+    context: OperationsContext,
+  ): Promise<unknown>;
+  updateCustomerRestriction(
+    customerId: string,
+    restrictionId: string,
+    input: CustomerRestrictionUpdateRequest,
+    context: OperationsContext,
+  ): Promise<unknown>;
+  updateOrder(
+    orderId: string,
+    input: OrderUpdateRequest,
+    allowCycleOverride: boolean,
+    context: OperationsContext,
+  ): Promise<unknown>;
+  updateCustomerPreference(
+    customerId: string,
+    preferenceId: string,
+    input: CustomerPreferenceUpdateRequest,
+    context: OperationsContext,
+  ): Promise<unknown>;
+  upsertMessageTemplate(
+    input: MessageTemplateUpsertRequest,
     context: OperationsContext,
   ): Promise<unknown>;
 }
@@ -161,6 +260,25 @@ export function createApp(options: CreateAppOptions) {
         error: {
           code,
           message: 'No tenés permiso para realizar esta acción.',
+          requestId: context.get('requestId'),
+        },
+      },
+      statusForCode(code),
+    );
+  };
+
+  const badRequest = (
+    context: Context<{ Variables: AppVariables }>,
+    message: string,
+    details?: unknown,
+  ) => {
+    const code: ApiErrorCode = 'BAD_REQUEST';
+    return context.json(
+      {
+        error: {
+          code,
+          ...(details === undefined ? {} : { details }),
+          message,
           requestId: context.get('requestId'),
         },
       },
@@ -329,6 +447,8 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/sessions/*', requireAuthentication);
   app.use('/api/v1/users', requireAuthentication, requirePermission('users.read'));
   app.use('/api/v1/customers', requireAuthentication);
+  app.use('/api/v1/customers/*', requireAuthentication);
+  app.use('/api/v1/message-templates', requireAuthentication);
   app.use('/api/v1/menus', requireAuthentication);
   app.use('/api/v1/menus/*', requireAuthentication);
   app.use('/api/v1/orders', requireAuthentication);
@@ -336,15 +456,17 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/production/*', requireAuthentication);
   app.use('/api/v1/ai/providers', requireAuthentication);
 
-  app.get('/api/v1/me', (context) => {
+  app.get('/api/v1/me', async (context) => {
     const session = context.get('session');
+    const user = await options.users.findById(session.userId);
+    if (!user) throw new Error(`Authenticated user not found: ${session.userId}`);
     const payload = MeResponseSchema.parse({
       permissions: [...session.permissions].sort(),
       session: {
         expiresAt: session.expiresAt.toISOString(),
         id: session.sessionId,
       },
-      user: { id: session.userId },
+      user: { displayName: user.displayName, id: session.userId },
     });
 
     return context.json(payload);
@@ -467,10 +589,14 @@ export function createApp(options: CreateAppOptions) {
   app.get('/api/v1/customers', async (context) => {
     const session = context.get('session');
     if (!session.permissions.includes('customers.read')) return forbidden(context);
-    const items = await requireOperations().listCustomers(
+    const query = CustomerListQuerySchema.safeParse(context.req.query());
+    if (!query.success)
+      return badRequest(context, 'Los filtros de clientes no son válidos.', query.error.issues);
+    const page = await requireOperations().listCustomers(
+      query.data,
       session.permissions.includes('customers.view_sensitive'),
     );
-    return context.json(CustomerListResponseSchema.parse({ items: contractValue(items) }));
+    return context.json(CustomerListResponseSchema.parse(contractValue(page)));
   });
 
   app.post('/api/v1/customers', async (context) => {
@@ -495,9 +621,272 @@ export function createApp(options: CreateAppOptions) {
       operationsContext(context),
     );
     return context.json(
-      CustomerListResponseSchema.parse({ items: [contractValue(customer)] }).items[0],
+      CustomerListResponseSchema.parse({ items: [contractValue(customer)], nextCursor: null })
+        .items[0],
       201,
     );
+  });
+
+  app.get('/api/v1/customers/:id', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('customers.read')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El cliente indicado no es válido.');
+    const customer = await requireOperations().getCustomer(
+      params.data.id,
+      session.permissions.includes('customers.view_sensitive'),
+    );
+    return context.json(CustomerDetailSchema.parse(contractValue(customer)));
+  });
+
+  app.patch('/api/v1/customers/:id', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('customers.edit')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    const input = CustomerUpdateRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá los cambios del cliente.',
+        input.success ? undefined : input.error.issues,
+      );
+    const customer = await requireOperations().updateCustomer(
+      params.data.id,
+      input.data,
+      session.permissions.includes('customers.view_sensitive'),
+      operationsContext(context),
+    );
+    return context.json(CustomerDetailSchema.parse(contractValue(customer)));
+  });
+
+  app.post('/api/v1/customers/:id/identities', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (
+      !permissions.includes('customers.edit') ||
+      !permissions.includes('customers.view_sensitive')
+    )
+      return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    const input = CustomerIdentityCreateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá los datos de contacto.',
+        input.success ? undefined : input.error.issues,
+      );
+    const identity = await requireOperations().addCustomerIdentity(
+      params.data.id,
+      input.data,
+      operationsContext(context),
+    );
+    return context.json(CustomerIdentitySchema.parse(contractValue(identity)), 201);
+  });
+
+  app.patch('/api/v1/customers/:customerId/identities/:relationId', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (
+      !permissions.includes('customers.edit') ||
+      !permissions.includes('customers.view_sensitive')
+    )
+      return forbidden(context);
+    const params = CustomerRelationParamSchema.safeParse(context.req.param());
+    const input = CustomerIdentityUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá los cambios del contacto.',
+        input.success ? undefined : input.error.issues,
+      );
+    const identity = await requireOperations().updateCustomerIdentity(
+      params.data.customerId,
+      params.data.relationId,
+      input.data,
+      operationsContext(context),
+    );
+    return context.json(CustomerIdentitySchema.parse(contractValue(identity)));
+  });
+
+  app.post('/api/v1/customers/:id/addresses', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (
+      !permissions.includes('customers.edit') ||
+      !permissions.includes('customers.view_sensitive')
+    )
+      return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    const input = CustomerAddressCreateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá el domicilio.',
+        input.success ? undefined : input.error.issues,
+      );
+    const address = await requireOperations().addCustomerAddress(
+      params.data.id,
+      input.data,
+      operationsContext(context),
+    );
+    return context.json(CustomerAddressSchema.parse(contractValue(address)), 201);
+  });
+
+  app.patch('/api/v1/customers/:customerId/addresses/:relationId', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (
+      !permissions.includes('customers.edit') ||
+      !permissions.includes('customers.view_sensitive')
+    )
+      return forbidden(context);
+    const params = CustomerRelationParamSchema.safeParse(context.req.param());
+    const input = CustomerAddressUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá los cambios del domicilio.',
+        input.success ? undefined : input.error.issues,
+      );
+    const address = await requireOperations().updateCustomerAddress(
+      params.data.customerId,
+      params.data.relationId,
+      input.data,
+      operationsContext(context),
+    );
+    return context.json(CustomerAddressSchema.parse(contractValue(address)));
+  });
+
+  app.post('/api/v1/customers/:id/preferences', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (
+      !permissions.includes('customers.edit') ||
+      !permissions.includes('customers.view_sensitive')
+    )
+      return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    const input = CustomerPreferenceCreateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá la preferencia.',
+        input.success ? undefined : input.error.issues,
+      );
+    const preference = await requireOperations().addCustomerPreference(
+      params.data.id,
+      input.data,
+      operationsContext(context),
+    );
+    return context.json(CustomerPreferenceSchema.parse(contractValue(preference)), 201);
+  });
+
+  app.patch('/api/v1/customers/:customerId/preferences/:relationId', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (
+      !permissions.includes('customers.edit') ||
+      !permissions.includes('customers.view_sensitive')
+    )
+      return forbidden(context);
+    const params = CustomerRelationParamSchema.safeParse(context.req.param());
+    const input = CustomerPreferenceUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá los cambios de la preferencia.',
+        input.success ? undefined : input.error.issues,
+      );
+    const preference = await requireOperations().updateCustomerPreference(
+      params.data.customerId,
+      params.data.relationId,
+      input.data,
+      operationsContext(context),
+    );
+    return context.json(CustomerPreferenceSchema.parse(contractValue(preference)));
+  });
+
+  app.post('/api/v1/customers/:id/restrictions', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (
+      !permissions.includes('customers.restrict') ||
+      !permissions.includes('customers.view_sensitive')
+    )
+      return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    const input = CustomerRestrictionCreateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá la restricción.',
+        input.success ? undefined : input.error.issues,
+      );
+    const restriction = await requireOperations().addCustomerRestriction(
+      params.data.id,
+      input.data,
+      operationsContext(context),
+    );
+    return context.json(CustomerRestrictionSchema.parse(contractValue(restriction)), 201);
+  });
+
+  app.patch('/api/v1/customers/:customerId/restrictions/:relationId', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (
+      !permissions.includes('customers.restrict') ||
+      !permissions.includes('customers.view_sensitive')
+    )
+      return forbidden(context);
+    const params = CustomerRelationParamSchema.safeParse(context.req.param());
+    const input = CustomerRestrictionUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá los cambios de la restricción.',
+        input.success ? undefined : input.error.issues,
+      );
+    const restriction = await requireOperations().updateCustomerRestriction(
+      params.data.customerId,
+      params.data.relationId,
+      input.data,
+      operationsContext(context),
+    );
+    return context.json(CustomerRestrictionSchema.parse(contractValue(restriction)));
+  });
+
+  app.get('/api/v1/message-templates', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (
+      !permissions.includes('messages.templates.use') &&
+      !permissions.includes('messages.templates.manage')
+    )
+      return forbidden(context);
+    const items = await requireOperations().listMessageTemplates();
+    return context.json(MessageTemplateListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.put('/api/v1/message-templates', async (context) => {
+    if (!context.get('session').permissions.includes('messages.templates.manage'))
+      return forbidden(context);
+    const input = MessageTemplateUpsertRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'Revisá la plantilla de mensaje.', input.error.issues);
+    const template = await requireOperations().upsertMessageTemplate(
+      input.data,
+      operationsContext(context),
+    );
+    return context.json(MessageTemplateSchema.parse(contractValue(template)));
   });
 
   app.get('/api/v1/menus', async (context) => {
@@ -582,6 +971,43 @@ export function createApp(options: CreateAppOptions) {
     return context.json(OrderSchema.parse(contractValue(order)), 201);
   });
 
+  app.get('/api/v1/orders/:id', async (context) => {
+    if (!context.get('session').permissions.includes('orders.read')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El pedido indicado no es válido.');
+    return context.json(
+      OrderSchema.parse(contractValue(await requireOperations().getOrder(params.data.id))),
+    );
+  });
+
+  app.patch('/api/v1/orders/:id', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('orders.edit')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    const input = OrderUpdateRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá los cambios del pedido.',
+        input.success ? undefined : input.error.issues,
+      );
+    const order = await requireOperations().updateOrder(
+      params.data.id,
+      input.data,
+      session.permissions.includes('orders.override_cycle_lock'),
+      operationsContext(context),
+    );
+    return context.json(OrderSchema.parse(contractValue(order)));
+  });
+
+  app.get('/api/v1/orders/:id/history', async (context) => {
+    if (!context.get('session').permissions.includes('orders.read')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El pedido indicado no es válido.');
+    const items = await requireOperations().orderHistory(params.data.id);
+    return context.json(OrderStatusHistoryResponseSchema.parse({ items: contractValue(items) }));
+  });
+
   app.post('/api/v1/orders/:id/status', async (context) => {
     const session = context.get('session');
     const params = IdParamSchema.safeParse(context.req.param());
@@ -618,6 +1044,7 @@ export function createApp(options: CreateAppOptions) {
       input.data.status,
       input.data.reason,
       input.data.confirmedReversal,
+      session.permissions.includes('orders.override_cycle_lock'),
       operationsContext(context),
     );
     return context.json(OrderSchema.parse(contractValue(order)));
@@ -708,6 +1135,7 @@ export function createApp(options: CreateAppOptions) {
     if (
       error.name === 'OperationsConflictError' ||
       error.name === 'OrderRuleError' ||
+      error.name === 'CustomerRuleError' ||
       error.name === 'AIConfigurationUnavailableError'
     ) {
       const code: ApiErrorCode = 'CONFLICT';

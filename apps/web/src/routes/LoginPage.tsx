@@ -43,6 +43,13 @@ export function LoginPage() {
       <section className="flex items-center px-5 py-10 sm:px-10 lg:px-16">
         <div className="mx-auto w-full max-w-md">
           <Link className="brand" to="/" aria-label="Verdeo, inicio">
+            <img
+              className="brand-icon"
+              src="/brand/verdeo-icon.png"
+              alt=""
+              width="36"
+              height="36"
+            />
             verdeo<span>.</span>
           </Link>
           <p className="eyebrow mt-16">Acceso al equipo</p>

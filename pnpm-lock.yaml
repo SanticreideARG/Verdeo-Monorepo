@@ -59,6 +59,9 @@ importers:
       '@verdeo/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@verdeo/customers':
+        specifier: workspace:*
+        version: link:../../packages/customers
       '@verdeo/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -133,6 +136,8 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
+  packages/customers: {}
+
   packages/db:
     dependencies:
       '@verdeo/ai':
@@ -144,6 +149,9 @@ importers:
       '@verdeo/auth':
         specifier: workspace:*
         version: link:../auth
+      '@verdeo/customers':
+        specifier: workspace:*
+        version: link:../customers
       '@verdeo/orders':
         specifier: workspace:*
         version: link:../orders

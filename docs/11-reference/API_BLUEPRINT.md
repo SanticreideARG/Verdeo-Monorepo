@@ -13,9 +13,16 @@ No es contrato final OpenAPI; es mapa inicial.
 - `POST /customers`
 - `GET /customers/:id`
 - `PATCH /customers/:id`
+- `POST /customers/:id/identities`
+- `PATCH /customers/:customerId/identities/:identityId`
+- `POST /customers/:id/addresses`
+- `PATCH /customers/:customerId/addresses/:addressId`
+- `POST /customers/:id/preferences`
+- `PATCH /customers/:customerId/preferences/:preferenceId`
 - `POST /customers/:id/merge`
 - `POST /customers/:id/unmerge`
 - `POST /customers/:id/restrictions`
+- `PATCH /customers/:customerId/restrictions/:restrictionId`
 
 ## Menu
 
@@ -28,13 +35,15 @@ No es contrato final OpenAPI; es mapa inicial.
 ## Orders
 
 - `POST /public/orders`
-- `GET /orders`
+- `GET /orders?status=&zoneId=&customerId=&from=&to=`
 - `POST /orders`
 - `GET /orders/:id`
 - `PATCH /orders/:id`
 - `POST /orders/:id/confirm`
 - `POST /orders/:id/cancel`
 - `POST /orders/:id/status`
+- `GET /orders/:id/history`
+- `GET /orders/export?format=csv`
 
 ## Production
 
@@ -52,6 +61,13 @@ No es contrato final OpenAPI; es mapa inicial.
 - `GET /conversations/:id/messages`
 - `POST /conversations/:id/messages`
 - `POST /conversations/:id/ai-suggest`
+- `GET /message-templates`
+- `PUT /message-templates`
+- `POST /conversations/:id/order-draft`
+- `GET /order-drafts/:id`
+- `PATCH /order-drafts/:id`
+- `POST /order-drafts/:id/confirm`
+- `POST /order-drafts/:id/discard`
 
 ## Routes
 

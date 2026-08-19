@@ -124,3 +124,33 @@ Los proveedores y modelos son datos configurables. Las API keys ingresadas por S
 AES-256-GCM con una clave maestra exclusiva del servidor; el frontend recibe únicamente estado y máscara.
 La configuración no habilita ejecución hasta implementar Prompt Registry, routing, cuotas y auditoría de
 ejecuciones.
+
+## ADR-023 - Captura asistida con confirmación humana
+
+**Status:** Accepted
+
+La extracción desde conversaciones produce un único borrador estructurado validado, nunca un pedido real.
+Un operador vincula el cliente, revisa ítems, cantidades y precios, y confirma la creación mediante el motor
+determinista. Las sugerencias de respuesta también requieren revisión y envío humano en V1.
+
+## ADR-024 - Estados operativos del pedido
+
+**Status:** Accepted
+
+El MVP conserva `DRAFT/CONFIRMED/READY/DELIVERED/CANCELLED` como ciclo resumido del pedido. Producción,
+ruteo y entrega detallada son dominios relacionados con estados propios; no se agregan `produccion` o
+`reparto` al estado comercial. Las reversiones y cancelaciones requieren motivo, las reversiones además
+confirmación explícita. Al cerrar el ciclo se bloquean confirmaciones, cancelaciones y retornos a
+`CONFIRMED`, salvo permiso `orders.override_cycle_lock`; el avance normal `CONFIRMED -> READY -> DELIVERED`
+continúa permitido.
+
+## ADR-025 - CRM como fuente única y snapshots en pedidos
+
+**Status:** Accepted
+
+`Customer` es la fuente única del cliente comercial. Sus teléfonos, WhatsApp, emails y otros canales se
+guardan como `CustomerIdentity` normalizadas; los domicilios se modelan como relaciones independientes y
+pueden conservar texto escrito, enlace de ubicación y coordenadas. Un pedido puede referenciar el domicilio
+usado, pero siempre guarda snapshots de dirección y enlace para que su histórico no cambie al editar el CRM.
+Preferencias y restricciones no modifican retrospectivamente pedidos. Las plantillas de mensajes usan claves
+de acción configurables y sus variables deben coincidir exactamente con el cuerpo antes de persistirse.

@@ -11,7 +11,13 @@ const transitions: Readonly<Record<OrderStatus, readonly OrderStatus[]>> = {
 export class OrderRuleError extends Error {
   public constructor(
     public readonly code:
-      'INVALID_COMPOSITION' | 'INVALID_MONEY' | 'INVALID_QUANTITY' | 'INVALID_TRANSITION',
+      | 'CYCLE_LOCKED'
+      | 'INVALID_COMPOSITION'
+      | 'INVALID_MONEY'
+      | 'INVALID_QUANTITY'
+      | 'INVALID_TRANSITION'
+      | 'MISSING_REASON'
+      | 'REVERSAL_CONFIRMATION_REQUIRED',
     message: string,
   ) {
     super(message);
@@ -60,6 +66,45 @@ export function calculateOrderTotal(lineTotals: readonly number[]): number {
 export function assertOrderTransition(from: OrderStatus, to: OrderStatus): void {
   if (!transitions[from].includes(to)) {
     throw new OrderRuleError('INVALID_TRANSITION', `Order cannot transition from ${from} to ${to}`);
+  }
+}
+
+export function isOrderStatusReversal(from: OrderStatus, to: OrderStatus): boolean {
+  return (
+    (from === 'READY' && to === 'CONFIRMED') ||
+    (from === 'DELIVERED' && to === 'READY') ||
+    (from === 'CANCELLED' && to === 'CONFIRMED')
+  );
+}
+
+export function assertOrderTransitionPolicy(input: {
+  allowCycleOverride: boolean;
+  confirmedReversal: boolean;
+  cycleLocked: boolean;
+  from: OrderStatus;
+  reason?: string | undefined;
+  to: OrderStatus;
+}): void {
+  assertOrderTransition(input.from, input.to);
+  const reversal = isOrderStatusReversal(input.from, input.to);
+  if (reversal && !input.confirmedReversal) {
+    throw new OrderRuleError(
+      'REVERSAL_CONFIRMATION_REQUIRED',
+      'Status reversals require explicit confirmation',
+    );
+  }
+  if ((reversal || input.to === 'CANCELLED') && !input.reason?.trim()) {
+    throw new OrderRuleError(
+      'MISSING_REASON',
+      'Cancellations and reversals require an operational reason',
+    );
+  }
+  const changesCommercialCommitment = input.to === 'CONFIRMED' || input.to === 'CANCELLED';
+  if (input.cycleLocked && changesCommercialCommitment && !input.allowCycleOverride) {
+    throw new OrderRuleError(
+      'CYCLE_LOCKED',
+      'The sales cycle is closed; this transition requires an authorized override',
+    );
   }
 }
 

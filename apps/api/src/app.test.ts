@@ -18,8 +18,32 @@ const emptySessions = {
   revoke: () => Promise.resolve(),
   revokeOwned: () => Promise.resolve(false),
 };
-const emptyUsers = { list: () => Promise.resolve({ items: [], nextCursor: null }) };
+const emptyUsers = {
+  findById: (id: string) =>
+    Promise.resolve({
+      displayName: 'Santiago',
+      id,
+    }),
+  list: () => Promise.resolve({ items: [], nextCursor: null }),
+};
 const emptyCredentials = { login: () => Promise.resolve(null) };
+const customerOperationsStubs = {
+  addCustomerAddress: vi.fn(),
+  addCustomerIdentity: vi.fn(),
+  addCustomerPreference: vi.fn(),
+  addCustomerRestriction: vi.fn(),
+  getCustomer: vi.fn(),
+  getOrder: vi.fn(),
+  listMessageTemplates: vi.fn(),
+  orderHistory: vi.fn(),
+  updateCustomer: vi.fn(),
+  updateCustomerAddress: vi.fn(),
+  updateCustomerIdentity: vi.fn(),
+  updateCustomerPreference: vi.fn(),
+  updateCustomerRestriction: vi.fn(),
+  updateOrder: vi.fn(),
+  upsertMessageTemplate: vi.fn(),
+};
 const sampleMenu = {
   cycle: {
     alias: 'Semana 34',
@@ -161,7 +185,10 @@ describe('API foundation', () => {
         expiresAt: '2026-08-18T12:00:00.000Z',
         id: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
       },
-      user: { id: '55276601-ec66-4f63-9f2f-edf73904ede0' },
+      user: {
+        displayName: 'Santiago',
+        id: '55276601-ec66-4f63-9f2f-edf73904ede0',
+      },
     });
   });
 
@@ -305,7 +332,7 @@ describe('API foundation', () => {
           }),
       },
       secureCookies: false,
-      users: { list },
+      users: { ...emptyUsers, list },
       version: 'test',
     });
 
@@ -335,6 +362,7 @@ describe('API foundation', () => {
       },
       secureCookies: false,
       users: {
+        ...emptyUsers,
         list: () =>
           Promise.resolve({
             items: [
@@ -370,6 +398,7 @@ describe('API foundation', () => {
       credentials: emptyCredentials,
       logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
       operations: {
+        ...customerOperationsStubs,
         createCustomer: vi.fn(),
         createMenu: vi.fn(),
         createOrder: vi.fn(),
@@ -403,6 +432,7 @@ describe('API foundation', () => {
       credentials: emptyCredentials,
       logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
       operations: {
+        ...customerOperationsStubs,
         createCustomer: vi.fn(),
         createMenu: vi.fn(),
         createOrder: vi.fn(),
@@ -439,6 +469,7 @@ describe('API foundation', () => {
       credentials: emptyCredentials,
       logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
       operations: {
+        ...customerOperationsStubs,
         createCustomer: vi.fn(),
         createMenu: vi.fn(),
         createOrder: vi.fn(),
@@ -472,5 +503,142 @@ describe('API foundation', () => {
 
     expect(response.status).toBe(403);
     expect(listOrders).not.toHaveBeenCalled();
+  });
+
+  it('validates and forwards a complete CRM customer payload', async () => {
+    const createCustomer = vi.fn(() =>
+      Promise.resolve({
+        createdAt: new Date('2026-08-19T10:00:00.000Z'),
+        displayName: 'María Pérez',
+        email: 'maria@example.com',
+        id: '70000000-0000-4000-8000-000000000001',
+        phone: null,
+        status: 'active',
+        whatsapp: '+5491155551212',
+      }),
+    );
+    const crmApp = createApp({
+      appOrigin: 'http://localhost:5173',
+      cookieSameSite: 'Lax',
+      credentials: emptyCredentials,
+      logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      operations: {
+        ...customerOperationsStubs,
+        createCustomer,
+        createMenu: vi.fn(),
+        createOrder: vi.fn(),
+        createPublicOrder: vi.fn(),
+        currentPublishedMenu: vi.fn(),
+        kitchenSummary: vi.fn(),
+        listCustomers: vi.fn(),
+        listMenus: vi.fn(),
+        listOrders: vi.fn(),
+        publishMenu: vi.fn(),
+        transitionOrder: vi.fn(),
+      },
+      sessions: {
+        ...emptySessions,
+        authenticate: () =>
+          Promise.resolve({
+            expiresAt: new Date('2026-08-20T12:00:00.000Z'),
+            permissions: ['customers.create'],
+            sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+            userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+          }),
+      },
+      secureCookies: false,
+      users: emptyUsers,
+      version: 'test',
+    });
+
+    const response = await crmApp.request('/api/v1/customers', {
+      body: JSON.stringify({
+        addresses: [
+          {
+            label: 'Casa',
+            locationUrl: 'https://maps.google.com/?q=-34.6037,-58.3816',
+            primary: true,
+            writtenAddress: 'Av. Siempre Viva 742',
+          },
+        ],
+        displayName: 'María Pérez',
+        firstName: 'María',
+        identities: [
+          {
+            primary: true,
+            type: 'whatsapp',
+            value: '+54 9 11 5555-1212',
+          },
+        ],
+        lastName: 'Pérez',
+      }),
+      headers: {
+        'content-type': 'application/json',
+        cookie: 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars',
+      },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(201);
+    expect(createCustomer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        addresses: [expect.objectContaining({ geocodingStatus: 'NEEDS_LOCATION' })],
+        identities: [expect.objectContaining({ source: 'manual', verified: false })],
+      }),
+      expect.objectContaining({ actorUserId: '55276601-ec66-4f63-9f2f-edf73904ede0' }),
+    );
+  });
+
+  it('does not let edit permission bypass sensitive CRM field protection', async () => {
+    const addCustomerIdentity = vi.fn();
+    const crmApp = createApp({
+      appOrigin: 'http://localhost:5173',
+      cookieSameSite: 'Lax',
+      credentials: emptyCredentials,
+      logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      operations: {
+        ...customerOperationsStubs,
+        addCustomerIdentity,
+        createCustomer: vi.fn(),
+        createMenu: vi.fn(),
+        createOrder: vi.fn(),
+        createPublicOrder: vi.fn(),
+        currentPublishedMenu: vi.fn(),
+        kitchenSummary: vi.fn(),
+        listCustomers: vi.fn(),
+        listMenus: vi.fn(),
+        listOrders: vi.fn(),
+        publishMenu: vi.fn(),
+        transitionOrder: vi.fn(),
+      },
+      sessions: {
+        ...emptySessions,
+        authenticate: () =>
+          Promise.resolve({
+            expiresAt: new Date('2026-08-20T12:00:00.000Z'),
+            permissions: ['customers.edit'],
+            sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+            userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+          }),
+      },
+      secureCookies: false,
+      users: emptyUsers,
+      version: 'test',
+    });
+
+    const response = await crmApp.request(
+      '/api/v1/customers/70000000-0000-4000-8000-000000000001/identities',
+      {
+        body: JSON.stringify({ type: 'whatsapp', value: '+5491155551212' }),
+        headers: {
+          'content-type': 'application/json',
+          cookie: 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars',
+        },
+        method: 'POST',
+      },
+    );
+
+    expect(response.status).toBe(403);
+    expect(addCustomerIdentity).not.toHaveBeenCalled();
   });
 });

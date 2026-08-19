@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertOrderTransition,
+  assertOrderTransitionPolicy,
   buildKitchenSummary,
   calculateLineTotal,
   calculateOrderTotal,
@@ -20,6 +21,49 @@ describe('order engine', () => {
   it('enforces the documented state machine', () => {
     expect(() => assertOrderTransition('DRAFT', 'CONFIRMED')).not.toThrow();
     expect(() => assertOrderTransition('DELIVERED', 'CANCELLED')).toThrowError(/cannot transition/);
+  });
+
+  it('requires explicit confirmation and a reason for reversals', () => {
+    expect(() =>
+      assertOrderTransitionPolicy({
+        allowCycleOverride: true,
+        confirmedReversal: true,
+        cycleLocked: true,
+        from: 'READY',
+        reason: 'Corrección operativa',
+        to: 'CONFIRMED',
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertOrderTransitionPolicy({
+        allowCycleOverride: true,
+        confirmedReversal: true,
+        cycleLocked: false,
+        from: 'READY',
+        to: 'CONFIRMED',
+      }),
+    ).toThrowError(/reason/);
+  });
+
+  it('locks commercial transitions after close but allows forward fulfillment', () => {
+    expect(() =>
+      assertOrderTransitionPolicy({
+        allowCycleOverride: false,
+        confirmedReversal: false,
+        cycleLocked: true,
+        from: 'DRAFT',
+        to: 'CONFIRMED',
+      }),
+    ).toThrowError(/closed/);
+    expect(() =>
+      assertOrderTransitionPolicy({
+        allowCycleOverride: false,
+        confirmedReversal: false,
+        cycleLocked: true,
+        from: 'CONFIRMED',
+        to: 'READY',
+      }),
+    ).not.toThrow();
   });
 
   it('turns a changed base composition into Intuitivo and permits repetitions', () => {

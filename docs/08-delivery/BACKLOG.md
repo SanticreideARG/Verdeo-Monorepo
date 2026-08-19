@@ -37,6 +37,21 @@
 - [ ] Cancel/reprogram.
 - [ ] Public number.
 - [ ] Availability windows.
+- [ ] Filtered order log by status, zone, customer, and date range.
+- [ ] Visible order status history.
+- [ ] Audited order editing with reason.
+- [ ] CSV export and Excel adapter.
+
+## P0 - Operational capture
+
+- [ ] Persisted provider-neutral inbound events with idempotency.
+- [ ] Conversations and messages linked to customer identities.
+- [ ] Scoped quick-response template CRUD.
+- [ ] One reviewable order draft per order intent.
+- [ ] Zod-validated AI extraction candidates.
+- [ ] Human review before creating an order.
+- [ ] Inline customer lookup/create/edit from capture.
+- [ ] Combined customer order and conversation history.
 
 ## P0 - Web
 
@@ -56,6 +71,7 @@
 - [ ] Templates.
 - [ ] Delivery statuses.
 - [ ] Customer resolution.
+- [ ] Human-approved AI reply suggestions.
 
 ## P0 - AI
 

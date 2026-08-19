@@ -8,6 +8,7 @@ import { PublicOrderPage } from './PublicOrderPage.js';
 function BrandMark() {
   return (
     <Link className="brand" to="/" aria-label="Verdeo, inicio">
+      <img className="brand-icon" src="/brand/verdeo-icon.png" alt="" width="36" height="36" />
       verdeo<span>.</span>
     </Link>
   );

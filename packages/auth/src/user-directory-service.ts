@@ -11,11 +11,16 @@ export interface UserDirectoryPage {
 }
 
 export interface UserDirectoryRepository {
+  findById(id: string): Promise<UserDirectoryItem | null>;
   listAfter(afterId: string | undefined, limit: number): Promise<readonly UserDirectoryItem[]>;
 }
 
 export class UserDirectoryService {
   public constructor(private readonly users: UserDirectoryRepository) {}
+
+  public async findById(id: string): Promise<UserDirectoryItem | null> {
+    return this.users.findById(id);
+  }
 
   public async list(afterId: string | undefined, limit: number): Promise<UserDirectoryPage> {
     const rows = await this.users.listAfter(afterId, limit + 1);

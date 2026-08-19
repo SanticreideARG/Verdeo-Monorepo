@@ -5,6 +5,8 @@ import {
   date,
   index,
   integer,
+  jsonb,
+  numeric,
   pgSequence,
   pgTable,
   text,
@@ -25,6 +27,7 @@ export const customers = pgTable(
     displayName: text('display_name').notNull(),
     firstName: text('first_name'),
     lastName: text('last_name'),
+    internalNotes: text('internal_notes'),
     status: text('status').default('active').notNull(),
     ...timestamps,
   },
@@ -47,13 +50,122 @@ export const customerIdentities = pgTable(
     verified: boolean('verified').default(false).notNull(),
     primary: boolean('primary').default(false).notNull(),
     active: boolean('active').default(true).notNull(),
+    source: text('source').default('manual').notNull(),
     ...timestamps,
   },
   (table) => [
     uniqueIndex('customer_identities_active_value_unique')
       .on(table.type, table.valueNormalized)
       .where(sql`${table.active} = true`),
+    uniqueIndex('customer_identities_primary_type_unique')
+      .on(table.customerId, table.type)
+      .where(sql`${table.active} = true and ${table.primary} = true`),
     index('customer_identities_customer_idx').on(table.customerId),
+  ],
+);
+
+export const customerAddresses = pgTable(
+  'customer_addresses',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => customers.id, { onDelete: 'cascade' }),
+    label: text('label').notNull(),
+    writtenAddress: text('written_address').notNull(),
+    city: text('city'),
+    sector: text('sector'),
+    operationalZone: text('operational_zone'),
+    propertyType: text('property_type'),
+    unit: text('unit'),
+    accessNotes: text('access_notes'),
+    locationUrl: text('location_url'),
+    latitude: numeric('latitude', { precision: 9, scale: 6 }),
+    longitude: numeric('longitude', { precision: 9, scale: 6 }),
+    geocodingStatus: text('geocoding_status').default('NEEDS_LOCATION').notNull(),
+    primary: boolean('primary').default(false).notNull(),
+    active: boolean('active').default(true).notNull(),
+    source: text('source').default('manual').notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index('customer_addresses_customer_idx').on(table.customerId),
+    index('customer_addresses_zone_idx').on(table.operationalZone),
+    uniqueIndex('customer_addresses_primary_unique')
+      .on(table.customerId)
+      .where(sql`${table.active} = true and ${table.primary} = true`),
+    check(
+      'customer_addresses_coordinates_check',
+      sql`(${table.latitude} is null and ${table.longitude} is null) or (${table.latitude} between -90 and 90 and ${table.longitude} between -180 and 180)`,
+    ),
+  ],
+);
+
+export const customerPreferences = pgTable(
+  'customer_preferences',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => customers.id, { onDelete: 'cascade' }),
+    category: text('category').notNull(),
+    value: text('value').notNull(),
+    active: boolean('active').default(true).notNull(),
+    source: text('source').default('manual').notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index('customer_preferences_customer_idx').on(table.customerId),
+    uniqueIndex('customer_preferences_active_unique')
+      .on(table.customerId, table.category, table.value)
+      .where(sql`${table.active} = true`),
+  ],
+);
+
+export const customerRestrictions = pgTable(
+  'customer_restrictions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => customers.id, { onDelete: 'cascade' }),
+    type: text('type').notNull(),
+    reason: text('reason').notNull(),
+    active: boolean('active').default(true).notNull(),
+    createdByUserId: uuid('created_by_user_id'),
+    resolvedByUserId: uuid('resolved_by_user_id'),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index('customer_restrictions_customer_idx').on(table.customerId),
+    index('customer_restrictions_active_idx').on(table.active),
+  ],
+);
+
+export const messageTemplates = pgTable(
+  'message_templates',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    key: text('key').notNull().unique(),
+    displayName: text('display_name').notNull(),
+    channel: text('channel').default('whatsapp').notNull(),
+    actionKey: text('action_key'),
+    body: text('body').notNull(),
+    variables: jsonb('variables')
+      .$type<string[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    scopeType: text('scope_type').default('global').notNull(),
+    scopeReferenceId: text('scope_reference_id'),
+    active: boolean('active').default(true).notNull(),
+    createdByUserId: uuid('created_by_user_id'),
+    updatedByUserId: uuid('updated_by_user_id'),
+    ...timestamps,
+  },
+  (table) => [
+    index('message_templates_action_idx').on(table.actionKey, table.active),
+    index('message_templates_scope_idx').on(table.scopeType, table.scopeReferenceId),
   ],
 );
 
@@ -187,7 +299,11 @@ export const orders = pgTable(
     status: text('status').default('DRAFT').notNull(),
     source: text('source').notNull(),
     deliveryDate: date('delivery_date').notNull(),
+    deliveryAddressId: uuid('delivery_address_id').references(() => customerAddresses.id, {
+      onDelete: 'set null',
+    }),
     deliveryAddressSnapshot: text('delivery_address_snapshot').notNull(),
+    deliveryLocationUrlSnapshot: text('delivery_location_url_snapshot'),
     paymentExpectation: text('payment_expectation').notNull(),
     notes: text('notes'),
     currency: text('currency').default('ARS').notNull(),

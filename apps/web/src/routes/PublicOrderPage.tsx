@@ -128,6 +128,7 @@ export function PublicOrderPage() {
     <div className="min-h-screen bg-cream text-ink">
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-5 sm:px-8">
         <Link className="brand" to="/">
+          <img className="brand-icon" src="/brand/verdeo-icon.png" alt="" width="36" height="36" />
           verdeo<span>.</span>
         </Link>
         <Link className="button button-secondary" to="/">

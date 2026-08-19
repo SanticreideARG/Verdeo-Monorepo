@@ -1,61 +1,75 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
+import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { apiRequest } from '../lib/api.js';
-
-interface SessionProfile {
-  permissions: string[];
-  session: { expiresAt: string; id: string };
-  user: { id: string };
-}
 
 const modules = [
   {
-    copy: 'Identidades, direcciones y preferencias.',
+    accent: 'green',
+    cluster: 'Operación',
+    copy: 'Identidades, direcciones y preferencias para sostener cada vínculo.',
     href: '/app/operaciones#clientes',
     permission: 'customers.read',
     title: 'Clientes',
   },
   {
-    copy: 'Seguimiento comercial del ciclo semanal.',
+    accent: 'gold',
+    cluster: 'Operación',
+    copy: 'Registro, confirmación y seguimiento del ciclo comercial semanal.',
     href: '/app/operaciones#pedidos',
     permission: 'orders.read',
     title: 'Pedidos',
   },
   {
-    copy: 'Planificación y cantidades operativas.',
+    accent: 'blue',
+    cluster: 'Operación',
+    copy: 'Menús, cantidades consolidadas y formularios listos para cocina.',
     href: '/app/operaciones#cocina',
     permission: 'production.read',
     title: 'Producción',
   },
   {
-    copy: 'Rutas, entregas y ejecución en calle.',
-    href: '#',
+    accent: 'violet',
+    cluster: 'Logística',
+    copy: 'Rutas, entregas y ejecución en calle desde una única vista.',
+    href: '#reparto',
     permission: 'routes.read',
     title: 'Reparto',
   },
   {
-    copy: 'Usuarios, roles y permisos.',
-    href: '#',
+    accent: 'slate',
+    cluster: 'Administración',
+    copy: 'Usuarios, roles, permisos y trazabilidad de accesos.',
+    href: '#usuarios',
     permission: 'users.read',
     title: 'Administración',
   },
   {
-    copy: 'Proveedores, modelos y plantillas asistidas.',
+    accent: 'lime',
+    cluster: 'Inteligencia',
+    copy: 'Proveedores, modelos y plantillas asistidas para acelerar el contenido.',
     href: '/app/operaciones#ia',
     permission: 'ai.providers.manage',
     title: 'IA y plantillas',
   },
 ] as const;
 
+function ModuleArrow() {
+  return (
+    <svg aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m-5-5 5 5-5 5" />
+    </svg>
+  );
+}
+
 export function DashboardPage() {
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<SessionProfile | null>(null);
+  const [profile, setProfile] = useState<DashboardProfile | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
-
     void apiRequest('/api/v1/me')
       .then(async (response) => {
         if (response.status === 401) {
@@ -63,14 +77,12 @@ export function DashboardPage() {
           return;
         }
         if (!response.ok) throw new Error('Could not load session');
-
-        const body = (await response.json()) as SessionProfile;
+        const body = (await response.json()) as DashboardProfile;
         if (active) setProfile(body);
       })
       .catch(() => {
         if (active) setFailed(true);
       });
-
     return () => {
       active = false;
     };
@@ -80,6 +92,11 @@ export function DashboardPage() {
     await apiRequest('/api/v1/auth/logout', { method: 'POST' }).catch(() => undefined);
     await navigate('/login', { replace: true });
   }
+
+  const availableModules = useMemo(
+    () => modules.filter((module) => profile?.permissions.includes(module.permission)),
+    [profile?.permissions],
+  );
 
   if (failed) {
     return (
@@ -99,90 +116,115 @@ export function DashboardPage() {
 
   if (!profile) {
     return (
-      <main className="grid min-h-screen place-items-center bg-cream" aria-live="polite">
-        <p className="font-semibold text-forest">Cargando tu espacio…</p>
+      <main className="dashboard-loading" aria-live="polite">
+        <img src="/brand/verdeo-icon.png" alt="" width="54" height="54" />
+        <p>Cargando tu espacio…</p>
       </main>
     );
   }
 
-  const availableModules = modules.filter((module) =>
-    profile.permissions.includes(module.permission),
-  );
+  const sessionExpiry = new Intl.DateTimeFormat('es-AR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(profile.session.expiresAt));
 
   return (
-    <div className="min-h-screen bg-[#eef1e7] text-ink">
-      <header className="border-b border-forest/10 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
-          <Link className="brand" to="/app" aria-label="Verdeo SCA, dashboard">
-            verdeo<span>.</span>
+    <DashboardShell profile={profile} onLogout={() => void logout()}>
+      <section className="dashboard-hero">
+        <div>
+          <p className="dashboard-kicker">Centro operativo</p>
+          <h1>
+            Todo Verdeo,
+            <br />
+            en un lugar.
+          </h1>
+          <p>Una lectura clara de la semana y acceso directo a cada motor del negocio.</p>
+        </div>
+        <div className="dashboard-sprint-card">
+          <span>Sprint actual</span>
+          <strong>Motor de pedidos MVP</strong>
+          <p>Clientes, menús, pedidos y salida de producción conectados.</p>
+          <Link to="/app/operaciones#pedidos">
+            Abrir centro de pedidos <ModuleArrow />
           </Link>
-          <button className="button button-secondary" onClick={() => void logout()}>
-            Cerrar sesión
-          </button>
         </div>
-      </header>
+      </section>
 
-      <main className="mx-auto max-w-7xl px-5 py-10 sm:px-8 sm:py-14">
-        <p className="eyebrow">Dashboard operativo</p>
-        <div className="mt-3 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+      <section className="dashboard-metrics" aria-label="Resumen de acceso">
+        <article>
+          <span className="metric-dot metric-dot-green" />
           <div>
-            <h1 className="text-4xl font-semibold tracking-[-0.04em] text-forest sm:text-5xl">
-              Todo Verdeo, en un lugar.
-            </h1>
-            <p className="mt-3 text-ink-muted">
-              Sesión activa hasta{' '}
-              {new Intl.DateTimeFormat('es-AR', {
-                dateStyle: 'short',
-                timeStyle: 'short',
-              }).format(new Date(profile.session.expiresAt))}
-              .
-            </p>
+            <small>Estado del sistema</small>
+            <strong>En línea</strong>
           </div>
-          <span className="w-fit rounded-full bg-forest px-4 py-2 text-xs font-bold uppercase tracking-wider text-white">
-            MVP activo
-          </span>
-        </div>
+          <em>Operativo</em>
+        </article>
+        <article>
+          <span className="metric-symbol">◇</span>
+          <div>
+            <small>Módulos habilitados</small>
+            <strong>{availableModules.length}</strong>
+          </div>
+          <em>por permisos</em>
+        </article>
+        <article>
+          <span className="metric-symbol">✓</span>
+          <div>
+            <small>Permisos activos</small>
+            <strong>{profile.permissions.length}</strong>
+          </div>
+          <em>RBAC</em>
+        </article>
+        <article>
+          <span className="metric-symbol">◷</span>
+          <div>
+            <small>Sesión segura</small>
+            <strong>Hasta {sessionExpiry}</strong>
+          </div>
+          <em>HttpOnly</em>
+        </article>
+      </section>
 
-        {availableModules.length > 0 ? (
-          <section
-            className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
-            aria-label="Módulos disponibles"
-          >
-            {availableModules.map((module) => (
+      <section className="dashboard-section-heading">
+        <div>
+          <p className="dashboard-kicker">Navegación rápida</p>
+          <h2>Tus módulos</h2>
+        </div>
+        <span>{availableModules.length} accesos disponibles</span>
+      </section>
+
+      {availableModules.length > 0 ? (
+        <section className="dashboard-module-grid" aria-label="Módulos disponibles">
+          {availableModules.map((module, index) => {
+            const available = !module.href.startsWith('#');
+            return (
               <article
-                className="rounded-3xl border border-forest/10 bg-white p-6 shadow-sm"
+                className={`dashboard-module-card accent-${module.accent}`}
                 key={module.title}
               >
-                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-lime font-bold text-forest">
-                  {module.title.slice(0, 1)}
+                <div className="dashboard-module-card-top">
+                  <span>{String(index + 1).padStart(2, '0')}</span>
+                  <small>{module.cluster}</small>
                 </div>
-                <h2 className="mt-8 text-2xl font-semibold tracking-tight text-forest">
-                  {module.title}
-                </h2>
-                <p className="mt-2 leading-7 text-ink-muted">{module.copy}</p>
-                {module.href === '#' ? (
-                  <p className="mt-7 text-sm font-semibold text-[#718325]">Próximo sprint</p>
-                ) : (
-                  <Link
-                    className="mt-7 inline-flex text-sm font-semibold text-[#718325]"
-                    to={module.href}
-                  >
-                    Abrir módulo →
+                <h3>{module.title}</h3>
+                <p>{module.copy}</p>
+                {available ? (
+                  <Link to={module.href}>
+                    Entrar <ModuleArrow />
                   </Link>
+                ) : (
+                  <span className="dashboard-coming-soon">Próximo sprint</span>
                 )}
               </article>
-            ))}
-          </section>
-        ) : (
-          <section className="mt-10 rounded-3xl border border-forest/10 bg-white p-8">
-            <h2 className="text-2xl font-semibold text-forest">Acceso base habilitado</h2>
-            <p className="mt-2 max-w-2xl leading-7 text-ink-muted">
-              Tu cuenta todavía no tiene módulos operativos asignados. Un administrador puede
-              configurar permisos sin recrear el usuario.
-            </p>
-          </section>
-        )}
-      </main>
-    </div>
+            );
+          })}
+        </section>
+      ) : (
+        <section className="dashboard-empty-state">
+          <h2>Acceso base habilitado</h2>
+          <p>Tu cuenta todavía no tiene módulos operativos asignados.</p>
+        </section>
+      )}
+    </DashboardShell>
   );
 }

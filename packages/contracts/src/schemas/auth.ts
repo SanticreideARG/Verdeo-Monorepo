@@ -19,6 +19,7 @@ export const MeResponseSchema = z.object({
     id: UuidSchema,
   }),
   user: z.object({
+    displayName: z.string().min(1),
     id: UuidSchema,
   }),
 });
