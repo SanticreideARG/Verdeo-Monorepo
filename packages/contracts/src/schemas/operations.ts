@@ -279,6 +279,7 @@ export const CustomerRestrictionSchema = z.object({
 
 export const CustomerOrderSummarySchema = z.object({
   createdAt: IsoDateTimeSchema,
+  currency: z.string(),
   deliveryDate: z.iso.date(),
   id: UuidSchema,
   publicNumber: z.string(),

@@ -410,6 +410,7 @@ export class PostgresOperationsService {
     const customerOrders = await this.database
       .select({
         createdAt: orders.createdAt,
+        currency: orders.currency,
         deliveryDate: orders.deliveryDate,
         id: orders.id,
         publicNumber: orders.publicNumber,

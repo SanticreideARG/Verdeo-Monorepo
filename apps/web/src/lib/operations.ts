@@ -18,6 +18,93 @@ export interface CustomerSummary {
   id: string;
   phone?: string | null;
   status: string;
+  whatsapp?: string | null;
+}
+
+export interface CustomerIdentity {
+  active: boolean;
+  createdAt: string;
+  id: string;
+  primary: boolean;
+  source: string;
+  type: string;
+  value: string;
+  verified: boolean;
+}
+
+export interface CustomerAddress {
+  accessNotes: string | null;
+  active: boolean;
+  city: string | null;
+  createdAt: string;
+  geocodingStatus: string;
+  id: string;
+  label: string;
+  latitude: number | null;
+  locationUrl: string | null;
+  longitude: number | null;
+  operationalZone: string | null;
+  primary: boolean;
+  propertyType: string | null;
+  sector: string | null;
+  source: string;
+  unit: string | null;
+  writtenAddress: string;
+}
+
+export interface CustomerDetail extends CustomerSummary {
+  addresses?: CustomerAddress[];
+  firstName: string | null;
+  identities?: CustomerIdentity[];
+  internalNotes?: string | null;
+  lastName: string | null;
+  orders: Array<{
+    createdAt: string;
+    currency: string;
+    deliveryDate: string;
+    id: string;
+    publicNumber: string;
+    status: OrderSummary['status'];
+    totalMinor: number;
+  }>;
+  preferences?: Array<{
+    active: boolean;
+    category: string;
+    createdAt: string;
+    id: string;
+    source: string;
+    value: string;
+  }>;
+  restrictions?: Array<{
+    active: boolean;
+    createdAt: string;
+    id: string;
+    reason: string;
+    resolvedAt: string | null;
+    type: string;
+  }>;
+  updatedAt: string;
+}
+
+export interface AddressGeocodingRequest {
+  candidates: Array<{
+    city: string | null;
+    confidence: number;
+    formattedAddress: string;
+    id: string;
+    latitude: number;
+    locationUrl: string | null;
+    longitude: number;
+    sector: string | null;
+  }>;
+  createdAt: string;
+  errorCode: string | null;
+  id: string;
+  providerKey: string;
+  selectedCandidateId: string | null;
+  status:
+    'PENDING' | 'CANDIDATES' | 'NO_MATCH' | 'FAILED' | 'CONFIRMED' | 'REJECTED' | 'SUPERSEDED';
+  updatedAt: string;
 }
 
 export interface MenuOffering {

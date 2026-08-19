@@ -46,7 +46,7 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         permission: 'production.read',
       },
       {
-        href: '/app/operaciones#clientes',
+        href: '/app/clientes',
         icon: 'customers',
         label: 'Clientes',
         permission: 'customers.read',

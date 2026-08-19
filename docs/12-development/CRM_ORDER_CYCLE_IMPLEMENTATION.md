@@ -2,8 +2,8 @@
 
 ## Purpose
 
-This baseline completes the backend shape required before designing the operational dashboard. PostgreSQL
-is authoritative; the UI will consume these contracts and will not reconstruct customer or order rules.
+This baseline provides the backend and first dedicated CRM dashboard slice. PostgreSQL is authoritative;
+the UI consumes these contracts and does not reconstruct customer or order rules.
 
 ## Implemented vertical slice
 
@@ -28,6 +28,19 @@ is authoritative; the UI will consume these contracts and will not reconstruct c
   operator confirmation or correction, rejection, audit, and provider-neutral contracts;
 - audit records and `CUSTOMER_UPDATED`/template domain events in the same transaction as each mutation;
 - closed-cycle and reversal policy enforced in the order domain engine.
+
+## Dashboard slice
+
+`/app/clientes` provides a permission-filtered customer directory and sensitive detail view. Staff can
+search by the fields allowed by their session, create and update the customer core, add configurable
+contact identities and addresses, inspect associated orders, and open location links. Address validation
+starts an idempotent geocoding request and renders persisted candidates; staff must confirm a candidate or
+enter corrected coordinates. A provider failure is shown as an operational state rather than losing the
+written address.
+
+The screen never infers city, sector, operational zone, contact type, provider, or currency. These values
+come from API data or operator input, and mutation controls require the same sensitive-data permissions as
+their endpoints.
 
 ## Order invariants
 

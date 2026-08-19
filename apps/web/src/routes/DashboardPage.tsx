@@ -9,7 +9,7 @@ const modules = [
     accent: 'green',
     cluster: 'Operación',
     copy: 'Identidades, direcciones y preferencias para sostener cada vínculo.',
-    href: '/app/operaciones#clientes',
+    href: '/app/clientes',
     permission: 'customers.read',
     title: 'Clientes',
   },

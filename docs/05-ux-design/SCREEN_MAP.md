@@ -32,7 +32,7 @@
 - `/app/inbox`
 - `/app/orders`
 - `/app/orders/:id`
-- `/app/customers`
+- `/app/clientes` (MVP implementado; directorio y ficha en panel dividido)
 - `/app/customers/:id`
 - `/app/opportunities`
 
