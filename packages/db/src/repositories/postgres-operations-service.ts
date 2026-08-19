@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, ilike, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, ilike, inArray, lt, lte, or } from 'drizzle-orm';
 
 import { AuditService, type JsonValue } from '@verdeo/audit';
 import {
@@ -9,6 +9,7 @@ import {
 } from '@verdeo/customers';
 import {
   assertOrderTransitionPolicy,
+  buildOrdersCsv,
   buildKitchenSummary,
   calculateLineTotal,
   calculateOrderTotal,
@@ -28,6 +29,7 @@ import {
   orderDietaryInstructions,
   orderItemSelections,
   orderItems,
+  orderRevisions,
   orders,
   orderStatusHistory,
   productFamilies,
@@ -175,9 +177,41 @@ export interface OrderUpdateInput {
   deliveryAddressId?: string | null | undefined;
   deliveryDate?: string | undefined;
   deliveryLocationUrl?: string | null | undefined;
+  dietaryInstructions?: readonly string[] | undefined;
+  items?:
+    | readonly {
+        offeringId: string;
+        quantityUnits: number;
+        selectedDishNames?: readonly string[] | undefined;
+      }[]
+    | undefined;
   notes?: string | null | undefined;
   paymentExpectation?: string | undefined;
   reason: string;
+}
+
+export interface OrderListInput {
+  cursor?: string | undefined;
+  customerId?: string | undefined;
+  cycleId?: string | undefined;
+  from?: string | undefined;
+  limit: number;
+  search?: string | undefined;
+  status?: OrderStatus | undefined;
+  to?: string | undefined;
+  zone?: string | undefined;
+}
+
+interface ResolvedOrderItem {
+  currency: string;
+  dishSelections: readonly string[];
+  offeringId: string;
+  productNameSnapshot: string;
+  productVariantId: string;
+  quantityUnits: number;
+  totalMinor: number;
+  unitPriceMinor: number;
+  variantSnapshot: string;
 }
 
 export class OperationsNotFoundError extends Error {
@@ -1329,12 +1363,16 @@ export class PostgresOperationsService {
           deliveryAddressId: orders.deliveryAddressId,
           deliveryDate: orders.deliveryDate,
           deliveryLocationUrl: orders.deliveryLocationUrlSnapshot,
+          menuId: orders.weeklyMenuId,
           notes: orders.notes,
           paymentExpectation: orders.paymentExpectation,
+          status: orders.status,
+          totalMinor: orders.totalMinor,
         })
         .from(orders)
         .innerJoin(salesCycles, eq(salesCycles.id, orders.salesCycleId))
         .where(eq(orders.id, orderId))
+        .for('update')
         .limit(1);
       if (!current) throw new OperationsNotFoundError('Order not found');
       const cycleLocked = current.cycleStatus === 'CLOSED' || new Date() >= current.closeAt;
@@ -1342,6 +1380,42 @@ export class PostgresOperationsService {
         throw new OperationsConflictError(
           'The sales cycle is closed; editing this order requires an authorized override',
         );
+      }
+      if (
+        (input.items !== undefined || input.dietaryInstructions !== undefined) &&
+        current.status !== 'DRAFT' &&
+        current.status !== 'CONFIRMED'
+      ) {
+        throw new OperationsConflictError(
+          'Order composition can only be edited while the order is draft or confirmed',
+        );
+      }
+
+      const beforeSnapshot = await this.loadOrder(transaction, orderId);
+      if (!beforeSnapshot) throw new Error('Order snapshot could not be loaded');
+      const [latestRevision] = await transaction
+        .select({ revision: orderRevisions.revision })
+        .from(orderRevisions)
+        .where(eq(orderRevisions.orderId, orderId))
+        .orderBy(desc(orderRevisions.revision))
+        .limit(1);
+      await transaction.insert(orderRevisions).values({
+        actorUserId: context.actorUserId,
+        orderId,
+        reason: input.reason,
+        revision: (latestRevision?.revision ?? 0) + 1,
+        snapshot: JSON.parse(JSON.stringify(beforeSnapshot)) as Record<string, unknown>,
+      });
+
+      const resolvedItems = input.items
+        ? await this.resolveOrderItems(transaction, current.menuId, input.items)
+        : null;
+      const firstResolvedItem = resolvedItems?.[0];
+      const resolvedTotal = resolvedItems
+        ? calculateOrderTotal(resolvedItems.map(({ totalMinor }) => totalMinor))
+        : undefined;
+      if (resolvedItems && !firstResolvedItem) {
+        throw new OperationsConflictError('An order requires at least one item');
       }
 
       let deliveryAddress = input.deliveryAddress ?? current.deliveryAddress;
@@ -1370,6 +1444,12 @@ export class PostgresOperationsService {
       }
 
       const changes = {
+        ...(firstResolvedItem && resolvedTotal !== undefined
+          ? {
+              currency: firstResolvedItem.currency,
+              totalMinor: resolvedTotal,
+            }
+          : {}),
         deliveryAddressSnapshot: deliveryAddress,
         ...(input.deliveryAddressId !== undefined
           ? { deliveryAddressId: input.deliveryAddressId }
@@ -1382,6 +1462,20 @@ export class PostgresOperationsService {
           : {}),
         updatedAt: new Date(),
       };
+      if (resolvedItems) {
+        await transaction.delete(orderItems).where(eq(orderItems.orderId, orderId));
+        await this.persistOrderItems(transaction, orderId, resolvedItems);
+      }
+      if (input.dietaryInstructions !== undefined) {
+        await transaction
+          .delete(orderDietaryInstructions)
+          .where(eq(orderDietaryInstructions.orderId, orderId));
+        if (input.dietaryInstructions.length > 0) {
+          await transaction
+            .insert(orderDietaryInstructions)
+            .values(input.dietaryInstructions.map((instruction) => ({ instruction, orderId })));
+        }
+      }
       await transaction.update(orders).set(changes).where(eq(orders.id, orderId));
 
       const audit = new AuditService(new PostgresAuditSink(transaction));
@@ -1391,11 +1485,13 @@ export class PostgresOperationsService {
         after: {
           changedFields: Object.keys(input).filter((key) => key !== 'reason'),
           deliveryAddressId: input.deliveryAddressId ?? current.deliveryAddressId,
+          totalMinor: resolvedTotal ?? current.totalMinor,
         },
         before: {
           deliveryAddressId: current.deliveryAddressId,
           deliveryDate: current.deliveryDate,
           paymentExpectation: current.paymentExpectation,
+          totalMinor: current.totalMinor,
         },
         correlationId: context.correlationId,
         entityId: orderId,
@@ -1512,81 +1608,9 @@ export class PostgresOperationsService {
       deliveryLocationUrl = address.locationUrl ?? deliveryLocationUrl;
     }
 
-    const resolvedItems: {
-      currency: string;
-      dishSelections: readonly string[];
-      offeringId: string;
-      productNameSnapshot: string;
-      productVariantId: string;
-      quantityUnits: number;
-      totalMinor: number;
-      unitPriceMinor: number;
-      variantSnapshot: string;
-    }[] = [];
-
-    for (const item of input.items) {
-      const [offering] = await transaction
-        .select({
-          currency: weeklyMenuOfferings.currency,
-          familyName: productFamilies.displayName,
-          id: weeklyMenuOfferings.id,
-          productVariantId: productVariants.id,
-          unitPriceMinor: weeklyMenuOfferings.unitPriceMinor,
-          variantName: productVariants.displayName,
-        })
-        .from(weeklyMenuOfferings)
-        .innerJoin(productVariants, eq(productVariants.id, weeklyMenuOfferings.productVariantId))
-        .innerJoin(productFamilies, eq(productFamilies.id, productVariants.productFamilyId))
-        .where(
-          and(
-            eq(weeklyMenuOfferings.id, item.offeringId),
-            eq(weeklyMenuOfferings.weeklyMenuId, input.menuId),
-            eq(weeklyMenuOfferings.active, true),
-          ),
-        )
-        .limit(1);
-      if (!offering) throw new OperationsNotFoundError('Published menu offering not found');
-
-      const baseDishes = await transaction
-        .select({ dishName: weeklyMenuItems.dishName })
-        .from(weeklyMenuItems)
-        .where(eq(weeklyMenuItems.offeringId, offering.id))
-        .orderBy(asc(weeklyMenuItems.slot));
-      const variantUniverse = await transaction
-        .select({ dishName: weeklyMenuItems.dishName })
-        .from(weeklyMenuItems)
-        .innerJoin(weeklyMenuOfferings, eq(weeklyMenuOfferings.id, weeklyMenuItems.offeringId))
-        .innerJoin(productVariants, eq(productVariants.id, weeklyMenuOfferings.productVariantId))
-        .where(
-          and(
-            eq(weeklyMenuOfferings.weeklyMenuId, input.menuId),
-            eq(productVariants.displayName, offering.variantName),
-          ),
-        );
-      const composition = resolveOrderComposition({
-        allowedDishes: new Set(variantUniverse.map(({ dishName }) => dishName)),
-        baseDishes: baseDishes.map(({ dishName }) => dishName),
-        familyName: offering.familyName,
-        ...(item.selectedDishNames ? { selectedDishes: item.selectedDishNames } : {}),
-      });
-
-      resolvedItems.push({
-        currency: offering.currency,
-        dishSelections: composition.dishSelections,
-        offeringId: offering.id,
-        productNameSnapshot: composition.productNameSnapshot,
-        productVariantId: offering.productVariantId,
-        quantityUnits: item.quantityUnits,
-        totalMinor: calculateLineTotal(item.quantityUnits, offering.unitPriceMinor),
-        unitPriceMinor: offering.unitPriceMinor,
-        variantSnapshot: offering.variantName,
-      });
-    }
-
+    const resolvedItems = await this.resolveOrderItems(transaction, input.menuId, input.items);
     const currency = resolvedItems[0]?.currency;
-    if (!currency || resolvedItems.some((item) => item.currency !== currency)) {
-      throw new OperationsConflictError('All order items must use the same currency');
-    }
+    if (!currency) throw new OperationsConflictError('An order requires at least one item');
     const initialStatus = input.initialStatus ?? 'DRAFT';
     const [createdOrder] = await transaction
       .insert(orders)
@@ -1608,32 +1632,7 @@ export class PostgresOperationsService {
       .returning({ id: orders.id });
     if (!createdOrder) throw new Error('Order creation did not return a row');
 
-    for (const item of resolvedItems) {
-      const [createdItem] = await transaction
-        .insert(orderItems)
-        .values({
-          offeringId: item.offeringId,
-          orderId: createdOrder.id,
-          productNameSnapshot: item.productNameSnapshot,
-          productVariantId: item.productVariantId,
-          quantityUnits: item.quantityUnits,
-          totalMinor: item.totalMinor,
-          unitPriceMinor: item.unitPriceMinor,
-          variantSnapshot: item.variantSnapshot,
-        })
-        .returning({ id: orderItems.id });
-      if (!createdItem) throw new Error('Order item creation did not return a row');
-
-      if (item.dishSelections.length > 0) {
-        await transaction.insert(orderItemSelections).values(
-          item.dishSelections.map((dishNameSnapshot, index) => ({
-            dishNameSnapshot,
-            orderItemId: createdItem.id,
-            slot: index + 1,
-          })),
-        );
-      }
-    }
+    await this.persistOrderItems(transaction, createdOrder.id, resolvedItems);
     if (input.dietaryInstructions.length > 0) {
       await transaction.insert(orderDietaryInstructions).values(
         input.dietaryInstructions.map((instruction) => ({
@@ -1673,14 +1672,221 @@ export class PostgresOperationsService {
     return order;
   }
 
-  public async listOrders() {
-    const orderIds = await this.database
+  private async resolveOrderItems(
+    transaction: DatabaseTransaction,
+    menuId: string,
+    items: readonly {
+      offeringId: string;
+      quantityUnits: number;
+      selectedDishNames?: readonly string[] | undefined;
+    }[],
+  ): Promise<ResolvedOrderItem[]> {
+    if (items.length === 0)
+      throw new OperationsConflictError('An order requires at least one item');
+    const resolvedItems: ResolvedOrderItem[] = [];
+
+    for (const item of items) {
+      const [offering] = await transaction
+        .select({
+          currency: weeklyMenuOfferings.currency,
+          familyName: productFamilies.displayName,
+          id: weeklyMenuOfferings.id,
+          productVariantId: productVariants.id,
+          unitPriceMinor: weeklyMenuOfferings.unitPriceMinor,
+          variantName: productVariants.displayName,
+        })
+        .from(weeklyMenuOfferings)
+        .innerJoin(productVariants, eq(productVariants.id, weeklyMenuOfferings.productVariantId))
+        .innerJoin(productFamilies, eq(productFamilies.id, productVariants.productFamilyId))
+        .where(
+          and(
+            eq(weeklyMenuOfferings.id, item.offeringId),
+            eq(weeklyMenuOfferings.weeklyMenuId, menuId),
+            eq(weeklyMenuOfferings.active, true),
+          ),
+        )
+        .limit(1);
+      if (!offering) throw new OperationsNotFoundError('Published menu offering not found');
+
+      const baseDishes = await transaction
+        .select({ dishName: weeklyMenuItems.dishName })
+        .from(weeklyMenuItems)
+        .where(eq(weeklyMenuItems.offeringId, offering.id))
+        .orderBy(asc(weeklyMenuItems.slot));
+      const variantUniverse = await transaction
+        .select({ dishName: weeklyMenuItems.dishName })
+        .from(weeklyMenuItems)
+        .innerJoin(weeklyMenuOfferings, eq(weeklyMenuOfferings.id, weeklyMenuItems.offeringId))
+        .innerJoin(productVariants, eq(productVariants.id, weeklyMenuOfferings.productVariantId))
+        .where(
+          and(
+            eq(weeklyMenuOfferings.weeklyMenuId, menuId),
+            eq(productVariants.displayName, offering.variantName),
+          ),
+        );
+      const composition = resolveOrderComposition({
+        allowedDishes: new Set(variantUniverse.map(({ dishName }) => dishName)),
+        baseDishes: baseDishes.map(({ dishName }) => dishName),
+        familyName: offering.familyName,
+        ...(item.selectedDishNames ? { selectedDishes: item.selectedDishNames } : {}),
+      });
+
+      resolvedItems.push({
+        currency: offering.currency,
+        dishSelections: composition.dishSelections,
+        offeringId: offering.id,
+        productNameSnapshot: composition.productNameSnapshot,
+        productVariantId: offering.productVariantId,
+        quantityUnits: item.quantityUnits,
+        totalMinor: calculateLineTotal(item.quantityUnits, offering.unitPriceMinor),
+        unitPriceMinor: offering.unitPriceMinor,
+        variantSnapshot: offering.variantName,
+      });
+    }
+
+    const currency = resolvedItems[0]?.currency;
+    if (!currency || resolvedItems.some((item) => item.currency !== currency)) {
+      throw new OperationsConflictError('All order items must use the same currency');
+    }
+    return resolvedItems;
+  }
+
+  private async persistOrderItems(
+    transaction: DatabaseTransaction,
+    orderId: string,
+    items: readonly ResolvedOrderItem[],
+  ) {
+    for (const item of items) {
+      const [createdItem] = await transaction
+        .insert(orderItems)
+        .values({
+          offeringId: item.offeringId,
+          orderId,
+          productNameSnapshot: item.productNameSnapshot,
+          productVariantId: item.productVariantId,
+          quantityUnits: item.quantityUnits,
+          totalMinor: item.totalMinor,
+          unitPriceMinor: item.unitPriceMinor,
+          variantSnapshot: item.variantSnapshot,
+        })
+        .returning({ id: orderItems.id });
+      if (!createdItem) throw new Error('Order item creation did not return a row');
+      if (item.dishSelections.length > 0) {
+        await transaction.insert(orderItemSelections).values(
+          item.dishSelections.map((dishNameSnapshot, index) => ({
+            dishNameSnapshot,
+            orderItemId: createdItem.id,
+            slot: index + 1,
+          })),
+        );
+      }
+    }
+  }
+
+  public async listOrders(input: OrderListInput) {
+    const cursor = input.cursor
+      ? await this.database
+          .select({ createdAt: orders.createdAt, id: orders.id })
+          .from(orders)
+          .where(eq(orders.id, input.cursor))
+          .limit(1)
+          .then(([row]) => row)
+      : null;
+    if (input.cursor && !cursor) throw new OperationsNotFoundError('Order cursor not found');
+
+    const conditions = [
+      ...(input.status ? [eq(orders.status, input.status)] : []),
+      ...(input.customerId ? [eq(orders.customerId, input.customerId)] : []),
+      ...(input.cycleId ? [eq(orders.salesCycleId, input.cycleId)] : []),
+      ...(input.from ? [gte(orders.createdAt, new Date(input.from))] : []),
+      ...(input.to ? [lte(orders.createdAt, new Date(input.to))] : []),
+      ...(input.zone ? [eq(customerAddresses.operationalZone, input.zone)] : []),
+      ...(input.search
+        ? [
+            or(
+              ilike(orders.publicNumber, `%${input.search}%`),
+              ilike(customers.displayName, `%${input.search}%`),
+            )!,
+          ]
+        : []),
+      ...(cursor
+        ? [
+            or(
+              lt(orders.createdAt, cursor.createdAt),
+              and(eq(orders.createdAt, cursor.createdAt), lt(orders.id, cursor.id)),
+            )!,
+          ]
+        : []),
+    ];
+    const orderRows = await this.database
       .select({ id: orders.id })
       .from(orders)
-      .orderBy(desc(orders.createdAt))
-      .limit(200);
-    return Promise.all(orderIds.map(({ id }) => this.loadOrder(this.database, id))).then((rows) =>
-      rows.filter((row) => row !== null),
+      .innerJoin(customers, eq(customers.id, orders.customerId))
+      .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(orders.createdAt), desc(orders.id))
+      .limit(input.limit + 1);
+    const hasMore = orderRows.length > input.limit;
+    const pageRows = hasMore ? orderRows.slice(0, input.limit) : orderRows;
+    const loaded = await Promise.all(pageRows.map(({ id }) => this.loadOrder(this.database, id)));
+    return {
+      items: loaded.filter((row) => row !== null),
+      nextCursor: hasMore ? (pageRows.at(-1)?.id ?? null) : null,
+    };
+  }
+
+  public async exportOrdersCsv(
+    input: Omit<OrderListInput, 'cursor' | 'limit'>,
+    context: OperationsContext,
+  ) {
+    const exported: Awaited<ReturnType<PostgresOperationsService['getOrder']>>[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await this.listOrders({ ...input, cursor, limit: 100 });
+      exported.push(...page.items);
+      if (exported.length >= 5_000 && page.nextCursor) {
+        throw new OperationsConflictError(
+          'The export exceeds 5000 orders; narrow the filters before retrying',
+        );
+      }
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor);
+
+    await this.database.transaction(async (transaction) => {
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: 'orders.exported',
+        actor: auditActor(context),
+        after: { count: exported.length, format: 'csv' },
+        correlationId: context.correlationId,
+        entityId: context.requestId,
+        entityType: 'order_collection',
+        metadata: {
+          filters: Object.fromEntries(
+            Object.entries(input).filter(
+              (entry): entry is [string, string] => entry[1] !== undefined,
+            ),
+          ),
+        },
+        requestId: context.requestId,
+        source: context.source,
+      });
+    });
+
+    return buildOrdersCsv(
+      exported.map((order) => ({
+        createdAt: order.createdAt,
+        currency: order.currency,
+        customerDisplayName: order.customer.displayName,
+        deliveryAddress: order.deliveryAddress,
+        deliveryDate: order.deliveryDate,
+        deliveryZone: order.deliveryZone,
+        paymentExpectation: order.paymentExpectation,
+        publicNumber: order.publicNumber,
+        source: order.source,
+        status: order.status,
+        totalMinor: order.totalMinor,
+      })),
     );
   }
 
@@ -1711,6 +1917,27 @@ export class PostgresOperationsService {
       .orderBy(asc(orderStatusHistory.createdAt));
   }
 
+  public async orderRevisionHistory(orderId: string) {
+    const [order] = await this.database
+      .select({ id: orders.id })
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .limit(1);
+    if (!order) throw new OperationsNotFoundError('Order not found');
+    return this.database
+      .select({
+        actorUserId: orderRevisions.actorUserId,
+        createdAt: orderRevisions.createdAt,
+        id: orderRevisions.id,
+        reason: orderRevisions.reason,
+        revision: orderRevisions.revision,
+        snapshot: orderRevisions.snapshot,
+      })
+      .from(orderRevisions)
+      .where(eq(orderRevisions.orderId, orderId))
+      .orderBy(desc(orderRevisions.revision));
+  }
+
   private async loadOrder(database: Database | DatabaseTransaction, orderId: string) {
     const [row] = await database
       .select({
@@ -1722,6 +1949,7 @@ export class PostgresOperationsService {
         deliveryAddressId: orders.deliveryAddressId,
         deliveryDate: orders.deliveryDate,
         deliveryLocationUrl: orders.deliveryLocationUrlSnapshot,
+        deliveryZone: customerAddresses.operationalZone,
         id: orders.id,
         menuId: orders.weeklyMenuId,
         notes: orders.notes,
@@ -1734,6 +1962,7 @@ export class PostgresOperationsService {
       })
       .from(orders)
       .innerJoin(customers, eq(customers.id, orders.customerId))
+      .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
       .where(eq(orders.id, orderId))
       .limit(1);
     if (!row) return null;

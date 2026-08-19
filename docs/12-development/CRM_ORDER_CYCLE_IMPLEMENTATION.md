@@ -18,6 +18,10 @@ is authoritative; the UI will consume these contracts and will not reconstruct c
 - customer detail with associated order history;
 - optional order-to-address reference plus immutable address/location snapshots;
 - audited order reprogramming for address, location, delivery date, payment expectation, and notes;
+- deterministic full-line replacement for draft/confirmed orders, including Intuitivo resolution, dietary
+  instructions, integer total recalculation, and an immutable pre-change revision;
+- stable order pagination and filters by status, customer, cycle, date range, zone, public number, or name;
+- audited CSV export with spreadsheet-formula protection and a 5000-row safety limit;
 - configurable message templates with channel, semantic action key, scope, activation, and exact variable
   validation;
 - audit records and `CUSTOMER_UPDATED`/template domain events in the same transaction as each mutation;
@@ -52,7 +56,8 @@ is authoritative; the UI will consume these contracts and will not reconstruct c
 - geocoding provider adapter and operator confirmation UI;
 - configurable city/sector/operational-zone catalogs;
 - duplicate suggestion plus previewed, reversible merge/unmerge;
-- audited line-item/composition editing with deterministic total recalculation;
+- explicit revision restore workflow (revisions are readable now, but restoration remains a deliberate
+  future mutation);
 - filtered order pagination, complete status history, CSV/Excel exports;
 - conversations/messages, idempotent inbound events, provider adapters, and outbound delivery receipts;
 - template version history and actual send records;

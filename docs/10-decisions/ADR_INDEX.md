@@ -154,3 +154,13 @@ pueden conservar texto escrito, enlace de ubicación y coordenadas. Un pedido pu
 usado, pero siempre guarda snapshots de dirección y enlace para que su histórico no cambie al editar el CRM.
 Preferencias y restricciones no modifican retrospectivamente pedidos. Las plantillas de mensajes usan claves
 de acción configurables y sus variables deben coincidir exactamente con el cuerpo antes de persistirse.
+
+## ADR-026 - Revisión inmutable antes de editar pedidos
+
+**Status:** Accepted
+
+Cada edición operativa persiste primero una revisión JSON completa del pedido bajo bloqueo transaccional de
+fila. La composición se reemplaza como unidad, se vuelve a resolver contra las ofertas del menú original y
+los totales se recalculan en código usando enteros. Sólo `DRAFT` y `CONFIRMED` admiten cambios de composición;
+otros estados requieren una transición explícita previa. Los CSV se generan desde filtros validados, se
+auditan, neutralizan fórmulas de planilla y rechazan exportaciones superiores a 5000 registros.

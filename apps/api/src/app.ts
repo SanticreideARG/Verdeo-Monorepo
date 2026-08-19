@@ -37,7 +37,9 @@ import {
   MessageTemplateUpsertRequestSchema,
   MeResponseSchema,
   OrderCreateRequestSchema,
-  OrderListResponseSchema,
+  OrderListQuerySchema,
+  OrderPageResponseSchema,
+  OrderRevisionListResponseSchema,
   OrderSchema,
   OrderStatusHistoryResponseSchema,
   OrderTransitionRequestSchema,
@@ -63,6 +65,7 @@ import {
   type MessageTemplateUpsertRequest,
   type MenuCreateRequest,
   type OrderCreateRequest,
+  type OrderListQuery,
   type OrderTransitionRequest,
   type OrderUpdateRequest,
   type PublicOrderCreateRequest,
@@ -129,14 +132,19 @@ interface OperationsEngine {
   createOrder(input: OrderCreateRequest, context: OperationsContext): Promise<unknown>;
   createPublicOrder(input: PublicOrderCreateRequest, context: OperationsContext): Promise<unknown>;
   currentPublishedMenu(): Promise<unknown>;
+  exportOrdersCsv(
+    input: Omit<OrderListQuery, 'cursor' | 'limit'>,
+    context: OperationsContext,
+  ): Promise<string>;
   getCustomer(customerId: string, includeSensitive: boolean): Promise<unknown>;
   getOrder(orderId: string): Promise<unknown>;
   kitchenSummary(cycleId: string): Promise<unknown>;
   listCustomers(input: CustomerListQuery, includeSensitive: boolean): Promise<unknown>;
   listMessageTemplates(): Promise<unknown>;
   listMenus(onlyPublished?: boolean): Promise<unknown>;
-  listOrders(): Promise<unknown>;
+  listOrders(input: OrderListQuery): Promise<unknown>;
   orderHistory(orderId: string): Promise<unknown>;
+  orderRevisionHistory(orderId: string): Promise<unknown>;
   publishMenu(menuId: string, context: OperationsContext): Promise<unknown>;
   transitionOrder(
     orderId: string,
@@ -946,8 +954,32 @@ export function createApp(options: CreateAppOptions) {
 
   app.get('/api/v1/orders', async (context) => {
     if (!context.get('session').permissions.includes('orders.read')) return forbidden(context);
-    const items = await requireOperations().listOrders();
-    return context.json(OrderListResponseSchema.parse({ items: contractValue(items) }));
+    const query = OrderListQuerySchema.safeParse(context.req.query());
+    if (!query.success)
+      return badRequest(context, 'Los filtros de pedidos no son válidos.', query.error.issues);
+    const page = await requireOperations().listOrders(query.data);
+    return context.json(OrderPageResponseSchema.parse(contractValue(page)));
+  });
+
+  app.get('/api/v1/orders/export', async (context) => {
+    if (!context.get('session').permissions.includes('orders.read')) return forbidden(context);
+    const query = OrderListQuerySchema.safeParse(context.req.query());
+    if (!query.success)
+      return badRequest(context, 'Los filtros de exportación no son válidos.', query.error.issues);
+    const filters: Omit<OrderListQuery, 'cursor' | 'limit'> = {
+      ...(query.data.customerId ? { customerId: query.data.customerId } : {}),
+      ...(query.data.cycleId ? { cycleId: query.data.cycleId } : {}),
+      ...(query.data.from ? { from: query.data.from } : {}),
+      ...(query.data.search ? { search: query.data.search } : {}),
+      ...(query.data.status ? { status: query.data.status } : {}),
+      ...(query.data.to ? { to: query.data.to } : {}),
+      ...(query.data.zone ? { zone: query.data.zone } : {}),
+    };
+    const csv = await requireOperations().exportOrdersCsv(filters, operationsContext(context));
+    context.header('cache-control', 'private, no-store');
+    context.header('content-disposition', 'attachment; filename="verdeo-pedidos.csv"');
+    context.header('content-type', 'text/csv; charset=utf-8');
+    return context.body(csv);
   });
 
   app.post('/api/v1/orders', async (context) => {
@@ -1006,6 +1038,14 @@ export function createApp(options: CreateAppOptions) {
     if (!params.success) return badRequest(context, 'El pedido indicado no es válido.');
     const items = await requireOperations().orderHistory(params.data.id);
     return context.json(OrderStatusHistoryResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.get('/api/v1/orders/:id/revisions', async (context) => {
+    if (!context.get('session').permissions.includes('orders.read')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El pedido indicado no es válido.');
+    const items = await requireOperations().orderRevisionHistory(params.data.id);
+    return context.json(OrderRevisionListResponseSchema.parse({ items: contractValue(items) }));
   });
 
   app.post('/api/v1/orders/:id/status', async (context) => {

@@ -332,6 +332,8 @@ export const OrderUpdateRequestSchema = z
     deliveryAddressId: UuidSchema.nullable().optional(),
     deliveryDate: z.iso.date().optional(),
     deliveryLocationUrl: z.url().max(2_000).nullable().optional(),
+    dietaryInstructions: z.array(RequiredTextSchema).max(20).optional(),
+    items: z.array(OrderItemInputSchema).min(1).max(50).optional(),
     notes: z.string().trim().max(500).nullable().optional(),
     paymentExpectation: z.string().trim().min(1).max(80).optional(),
     reason: z.string().trim().min(3).max(500),
@@ -348,6 +350,7 @@ export const OrderSchema = z.object({
   deliveryAddressId: UuidSchema.nullable(),
   deliveryDate: z.iso.date(),
   deliveryLocationUrl: z.string().nullable(),
+  deliveryZone: z.string().nullable(),
   dietaryInstructions: z.array(z.string()),
   id: UuidSchema,
   items: z.array(
@@ -372,6 +375,38 @@ export const OrderSchema = z.object({
 });
 
 export const OrderListResponseSchema = z.object({ items: z.array(OrderSchema) });
+
+export const OrderListQuerySchema = z
+  .object({
+    cursor: UuidSchema.optional(),
+    customerId: UuidSchema.optional(),
+    cycleId: UuidSchema.optional(),
+    from: z.iso.datetime({ offset: true }).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(30),
+    search: z.string().trim().max(100).optional(),
+    status: OrderStatusSchema.optional(),
+    to: z.iso.datetime({ offset: true }).optional(),
+    zone: z.string().trim().max(120).optional(),
+  })
+  .refine((value) => !value.from || !value.to || new Date(value.from) <= new Date(value.to), {
+    message: 'El rango de fechas no es válido.',
+  });
+
+export const OrderPageResponseSchema = z.object({
+  items: z.array(OrderSchema),
+  nextCursor: UuidSchema.nullable(),
+});
+
+export const OrderRevisionSchema = z.object({
+  actorUserId: UuidSchema.nullable(),
+  createdAt: IsoDateTimeSchema,
+  id: UuidSchema,
+  reason: z.string(),
+  revision: z.number().int().positive(),
+  snapshot: OrderSchema,
+});
+
+export const OrderRevisionListResponseSchema = z.object({ items: z.array(OrderRevisionSchema) });
 
 export const OrderStatusHistoryEntrySchema = z.object({
   actorUserId: UuidSchema.nullable(),
@@ -465,4 +500,5 @@ export type PublicOrderCreateRequest = z.infer<typeof PublicOrderCreateRequestSc
 export type Order = z.infer<typeof OrderSchema>;
 export type OrderTransitionRequest = z.infer<typeof OrderTransitionRequestSchema>;
 export type OrderUpdateRequest = z.infer<typeof OrderUpdateRequestSchema>;
+export type OrderListQuery = z.infer<typeof OrderListQuerySchema>;
 export type KitchenSummaryResponse = z.infer<typeof KitchenSummaryResponseSchema>;

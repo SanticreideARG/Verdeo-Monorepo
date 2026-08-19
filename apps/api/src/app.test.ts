@@ -32,10 +32,12 @@ const customerOperationsStubs = {
   addCustomerIdentity: vi.fn(),
   addCustomerPreference: vi.fn(),
   addCustomerRestriction: vi.fn(),
+  exportOrdersCsv: vi.fn(),
   getCustomer: vi.fn(),
   getOrder: vi.fn(),
   listMessageTemplates: vi.fn(),
   orderHistory: vi.fn(),
+  orderRevisionHistory: vi.fn(),
   updateCustomer: vi.fn(),
   updateCustomerAddress: vi.fn(),
   updateCustomerIdentity: vi.fn(),
@@ -640,5 +642,66 @@ describe('API foundation', () => {
 
     expect(response.status).toBe(403);
     expect(addCustomerIdentity).not.toHaveBeenCalled();
+  });
+
+  it('forwards validated order filters and exports CSV with safe headers', async () => {
+    const listOrders = vi.fn(() => Promise.resolve({ items: [], nextCursor: null }));
+    const exportOrdersCsv = vi.fn(() => Promise.resolve('\uFEFF"numero_pedido"\r\n'));
+    const operationsApp = createApp({
+      appOrigin: 'http://localhost:5173',
+      cookieSameSite: 'Lax',
+      credentials: emptyCredentials,
+      logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      operations: {
+        ...customerOperationsStubs,
+        createCustomer: vi.fn(),
+        createMenu: vi.fn(),
+        createOrder: vi.fn(),
+        createPublicOrder: vi.fn(),
+        currentPublishedMenu: vi.fn(),
+        exportOrdersCsv,
+        kitchenSummary: vi.fn(),
+        listCustomers: vi.fn(),
+        listMenus: vi.fn(),
+        listOrders,
+        publishMenu: vi.fn(),
+        transitionOrder: vi.fn(),
+      },
+      sessions: {
+        ...emptySessions,
+        authenticate: () =>
+          Promise.resolve({
+            expiresAt: new Date('2026-08-20T12:00:00.000Z'),
+            permissions: ['orders.read'],
+            sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+            userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+          }),
+      },
+      secureCookies: false,
+      users: emptyUsers,
+      version: 'test',
+    });
+    const cookie = 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars';
+
+    const listResponse = await operationsApp.request(
+      '/api/v1/orders?status=CONFIRMED&limit=10&zone=Centro',
+      { headers: { cookie } },
+    );
+    expect(listResponse.status).toBe(200);
+    expect(listOrders).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 10, status: 'CONFIRMED', zone: 'Centro' }),
+    );
+
+    const exportResponse = await operationsApp.request(
+      '/api/v1/orders/export?status=CONFIRMED&zone=Centro',
+      { headers: { cookie } },
+    );
+    expect(exportResponse.status).toBe(200);
+    expect(exportResponse.headers.get('content-type')).toContain('text/csv');
+    expect(exportResponse.headers.get('content-disposition')).toContain('verdeo-pedidos.csv');
+    expect(exportOrdersCsv).toHaveBeenCalledWith(
+      { status: 'CONFIRMED', zone: 'Centro' },
+      expect.objectContaining({ actorUserId: '55276601-ec66-4f63-9f2f-edf73904ede0' }),
+    );
   });
 });

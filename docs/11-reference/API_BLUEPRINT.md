@@ -35,7 +35,7 @@ No es contrato final OpenAPI; es mapa inicial.
 ## Orders
 
 - `POST /public/orders`
-- `GET /orders?status=&zoneId=&customerId=&from=&to=`
+- `GET /orders?status=&zone=&customerId=&cycleId=&from=&to=&search=&cursor=&limit=`
 - `POST /orders`
 - `GET /orders/:id`
 - `PATCH /orders/:id`
@@ -43,6 +43,7 @@ No es contrato final OpenAPI; es mapa inicial.
 - `POST /orders/:id/cancel`
 - `POST /orders/:id/status`
 - `GET /orders/:id/history`
+- `GET /orders/:id/revisions`
 - `GET /orders/export?format=csv`
 
 ## Production

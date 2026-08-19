@@ -389,3 +389,22 @@ export const orderStatusHistory = pgTable(
   },
   (table) => [index('order_status_history_order_idx').on(table.orderId, table.createdAt)],
 );
+
+export const orderRevisions = pgTable(
+  'order_revisions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    revision: integer('revision').notNull(),
+    reason: text('reason').notNull(),
+    actorUserId: uuid('actor_user_id'),
+    snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('order_revisions_order_revision_unique').on(table.orderId, table.revision),
+    index('order_revisions_order_idx').on(table.orderId, table.createdAt),
+  ],
+);
