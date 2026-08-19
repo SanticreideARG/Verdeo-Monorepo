@@ -5,4 +5,6 @@ const runtime = createApiRuntime({
   version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? '0.1.0',
 });
 
-export default runtime.app;
+export default function handler(request: Request) {
+  return runtime.app.fetch(request);
+}

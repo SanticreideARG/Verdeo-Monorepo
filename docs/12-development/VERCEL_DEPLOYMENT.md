@@ -54,7 +54,7 @@ The Vercel entrypoint:
 1. parse server environment variables;
 2. create the structured logger;
 3. create the Hono app through `createApp`;
-4. export the Web-standard fetch handler expected by Vercel;
+4. export a default Web-standard `Request -> Response` handler that delegates to Hono;
 5. never listen on a port;
 6. retain the original request path when the catch-all rewrite invokes the function.
 
