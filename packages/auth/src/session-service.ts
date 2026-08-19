@@ -1,5 +1,10 @@
-import { hashSessionToken } from './session-token.js';
-import type { AuthenticatedSession, SessionRepository, SessionSummary } from './types.js';
+import { createSessionToken, hashSessionToken } from './session-token.js';
+import type {
+  AuthenticatedSession,
+  CreatedSession,
+  SessionRepository,
+  SessionSummary,
+} from './types.js';
 
 export class SessionService {
   public constructor(
@@ -23,6 +28,14 @@ export class SessionService {
       sessionId: session.sessionId,
       userId: session.userId,
     };
+  }
+
+  public async create(userId: string, durationMs: number): Promise<CreatedSession> {
+    const token = createSessionToken();
+    const expiresAt = new Date(this.now().getTime() + durationMs);
+    const sessionId = await this.sessions.create(userId, hashSessionToken(token), expiresAt);
+
+    return { expiresAt, sessionId, token };
   }
 
   public async revoke(sessionId: string): Promise<boolean> {

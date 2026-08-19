@@ -149,6 +149,8 @@ Foundation variables:
 - `API_URL`;
 - `DATABASE_URL` using the Neon pooled/serverless application connection;
 - `SESSION_SECRET` with at least 32 high-entropy characters.
+- `SESSION_TTL_HOURS=8` for the MVP default;
+- `SESSION_COOKIE_SAME_SITE=None` for separate Vercel preview hosts, or `Lax` for sibling custom domains.
 
 Future server-only variables include OAuth, Meta, AI, geocoding, storage, and encryption secrets. Add them
 only when the owning adapter is implemented.
@@ -234,6 +236,8 @@ DNS changes are external and potentially disruptive. Resolve exact target record
 - `/health` returns `200`, version, timestamp, and `x-request-id`;
 - unknown route returns the standard `404` envelope;
 - `/api/v1/me` returns `401` without a session;
+- `/api/v1/auth/login` returns a generic `401` for invalid credentials and a Secure/HttpOnly cookie for a
+  provisioned account;
 - `/api/v1/sessions` returns `401` without a session and never serializes token material;
 - `/api/v1/users` returns `403` for a session without `users.read`;
 - JSON `POST` body and validation errors work through the Vercel adapter;

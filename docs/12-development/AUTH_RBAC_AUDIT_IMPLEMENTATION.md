@@ -35,14 +35,15 @@ The provider-neutral authenticated-read path is implemented:
 - `PostgresAuditSink` persists immutable audit records and accepts the database handle used by the caller.
 
 This completes the provider-neutral session management core of AUTH-002 and the first enforced RBAC read.
-Provider callback, cookie issuance, administrative all-user revocation, broader domain guards, and database
-integration rollback tests remain pending. OAuth remains intentionally unimplemented until AUTH-001 is
-accepted.
+The MVP now also includes manually provisioned password credentials, scrypt hashing, temporary lockout,
+cookie issuance, `/login`, and protected `/app`. Administrative all-user revocation, broader domain guards,
+and database integration rollback tests remain pending. OAuth and email confirmation are intentionally
+deferred under ADR-020.
 
 ## Authentication flow
 
 ```text
-OAuth provider callback
+MVP password credential or future OAuth provider callback
   -> verify provider response
   -> resolve provider + providerSubject
   -> load active User
@@ -57,6 +58,8 @@ OAuth provider callback
 ### Required rules
 
 - provider tokens and raw session tokens are secrets;
+- passwords are accepted only over the login boundary and are never persisted, logged, or audited;
+- password accounts are provisioned by CLI only; there is no public signup;
 - raw session tokens never enter database, logs, audit metadata, analytics, or URLs;
 - cookies are `Secure` in production, `HttpOnly`, scoped narrowly, and have an explicit `SameSite` policy;
 - login rotates/creates a new session and logout revokes it server-side;
@@ -105,6 +108,7 @@ Hidden navigation is a UX aid, not authorization.
 - `GET /api/v1/me` (implemented)
 - `POST /api/v1/auth/logout` (implemented for the current session)
 - provider-specific login/callback routes behind an auth adapter
+- `POST /api/v1/auth/login` for the temporary provisioned-password adapter (implemented)
 - `GET /api/v1/sessions` for the current user (implemented)
 - `DELETE /api/v1/sessions/:id` to revoke an owned session (implemented)
 

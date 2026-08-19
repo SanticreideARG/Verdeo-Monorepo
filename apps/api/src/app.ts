@@ -1,10 +1,12 @@
 import { cors } from 'hono/cors';
-import { deleteCookie, getCookie } from 'hono/cookie';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { Hono, type Context } from 'hono';
 
 import type { AuthenticatedSession, SessionSummary, UserDirectoryPage } from '@verdeo/auth';
 import {
   HealthResponseSchema,
+  LoginRequestSchema,
+  LoginResponseSchema,
   MeResponseSchema,
   SessionIdParamSchema,
   SessionListResponseSchema,
@@ -37,8 +39,20 @@ interface UserDirectory {
   list(afterId: string | undefined, limit: number): Promise<UserDirectoryPage>;
 }
 
+interface LoginResult {
+  expiresAt: Date;
+  sessionId: string;
+  token: string;
+}
+
+interface CredentialLogin {
+  login(email: string, password: string, requestId: string): Promise<LoginResult | null>;
+}
+
 interface CreateAppOptions {
   appOrigin: string;
+  cookieSameSite: 'Lax' | 'None';
+  credentials: CredentialLogin;
   logger: Logger;
   sessions: SessionAuthenticator;
   secureCookies: boolean;
@@ -124,6 +138,57 @@ export function createApp(options: CreateAppOptions) {
     context.json({ locale: 'es-AR', productName: 'Verdeo SCA' }),
   );
 
+  app.post('/api/v1/auth/login', async (context) => {
+    const input = LoginRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success) {
+      const code: ApiErrorCode = 'BAD_REQUEST';
+      return context.json(
+        {
+          error: {
+            code,
+            details: input.error.issues,
+            message: 'Revisá el email y la contraseña.',
+            requestId: context.get('requestId'),
+          },
+        },
+        statusForCode(code),
+      );
+    }
+
+    const login = await options.credentials.login(
+      input.data.email,
+      input.data.password,
+      context.get('requestId'),
+    );
+    if (!login) {
+      const code: ApiErrorCode = 'UNAUTHENTICATED';
+      return context.json(
+        {
+          error: {
+            code,
+            message: 'El email o la contraseña no son válidos.',
+            requestId: context.get('requestId'),
+          },
+        },
+        statusForCode(code),
+      );
+    }
+
+    setCookie(context, SESSION_COOKIE_NAME, login.token, {
+      expires: login.expiresAt,
+      httpOnly: true,
+      path: '/',
+      sameSite: options.cookieSameSite,
+      secure: options.secureCookies || options.cookieSameSite === 'None',
+    });
+
+    const payload = LoginResponseSchema.parse({
+      expiresAt: login.expiresAt.toISOString(),
+      sessionId: login.sessionId,
+    });
+    return context.json(payload);
+  });
+
   app.use('/api/v1/me', requireAuthentication);
   app.use('/api/v1/sessions', requireAuthentication);
   app.use('/api/v1/sessions/*', requireAuthentication);
@@ -154,8 +219,8 @@ export function createApp(options: CreateAppOptions) {
     deleteCookie(context, SESSION_COOKIE_NAME, {
       httpOnly: true,
       path: '/',
-      sameSite: 'Lax',
-      secure: options.secureCookies,
+      sameSite: options.cookieSameSite,
+      secure: options.secureCookies || options.cookieSameSite === 'None',
     });
 
     return context.body(null, 204);
@@ -220,8 +285,8 @@ export function createApp(options: CreateAppOptions) {
       deleteCookie(context, SESSION_COOKIE_NAME, {
         httpOnly: true,
         path: '/',
-        sameSite: 'Lax',
-        secure: options.secureCookies,
+        sameSite: options.cookieSameSite,
+        secure: options.secureCookies || options.cookieSameSite === 'None',
       });
     }
 

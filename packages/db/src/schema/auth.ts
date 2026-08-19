@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
+  integer,
   pgTable,
   primaryKey,
   text,
@@ -51,6 +52,19 @@ export const authIdentities = pgTable(
     index('auth_identities_user_id_idx').on(table.userId),
   ],
 );
+
+export const passwordCredentials = pgTable('password_credentials', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  passwordHash: text('password_hash').notNull(),
+  failedAttempts: integer('failed_attempts').default(0).notNull(),
+  lockedUntil: timestamp('locked_until', { withTimezone: true }),
+  passwordChangedAt: timestamp('password_changed_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
 
 export const roles = pgTable('roles', {
   id: uuid('id').defaultRandom().primaryKey(),

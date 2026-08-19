@@ -8,6 +8,8 @@
     "node": ">=22.0.0"
   },
   "scripts": {
+    "auth:provision-user": "pnpm --filter @verdeo/db auth:provision-user",
+    "auth:seed-test-users": "pnpm --filter @verdeo/db auth:seed-test-users",
     "build": "pnpm -r --if-present build",
     "dev": "pnpm --parallel --filter @verdeo/api --filter @verdeo/web dev",
     "lint": "eslint .",

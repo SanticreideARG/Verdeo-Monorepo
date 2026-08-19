@@ -23,6 +23,7 @@ Available on `main`:
   PostgreSQL audit sink;
 - owned-session listing/revocation, reusable permission middleware, and a PII-minimized `users.read`
   directory endpoint;
+- MVP credential login, audited provisioning commands, account lockout, and protected `/app` dashboard;
 - Vercel Web deployment with direct `/pedido` SPA routing verified;
 - automated checks through `pnpm check`.
 
@@ -95,14 +96,17 @@ database can be reproduced from the repository.
 **Acceptance:** no default password exists and rerunning the seed does not duplicate records or remove
 operator-managed configuration.
 
-### AUTH-001 — Decide the staff authentication provider
+### AUTH-001 — Decide the long-term staff authentication provider
 
 **Depends on:** owner decision.
 
 **Deliverables:** proposed ADR updated to `Accepted`, provider configuration, redirect URLs, and account
 recovery/MFA policy for superadmins.
 
-**OPEN:** provider, permitted OAuth identity domains/accounts, and production callback URLs.
+**Status:** deferred until after the MVP dashboard sprint. ADR-020 accepts manually provisioned password
+credentials as the temporary adapter.
+
+**OPEN:** OAuth provider, permitted identity domains/accounts, and production callback URLs.
 
 ### DEPLOY-001 to DEPLOY-004 — Vercel delivery
 

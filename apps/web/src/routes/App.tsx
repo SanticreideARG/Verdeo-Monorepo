@@ -1,5 +1,8 @@
 import { Link, Route, Routes } from 'react-router-dom';
 
+import { DashboardPage } from './DashboardPage.js';
+import { LoginPage } from './LoginPage.js';
+
 function BrandMark() {
   return (
     <Link className="brand" to="/" aria-label="Verdeo, inicio">
@@ -117,15 +120,8 @@ export function App() {
           />
         }
       />
-      <Route
-        path="/login"
-        element={
-          <PlaceholderPage
-            title="Acceso seguro"
-            copy="La autenticación se habilitará junto con los roles y permisos configurables del equipo."
-          />
-        }
-      />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/app" element={<DashboardPage />} />
       <Route
         path="*"
         element={

@@ -15,7 +15,7 @@ import {
 } from '../schema/index.js';
 
 export class PostgresSessionRepository implements SessionRepository {
-  public constructor(private readonly database: Pick<Database, 'select' | 'update'>) {}
+  public constructor(private readonly database: Pick<Database, 'insert' | 'select' | 'update'>) {}
 
   public async findByTokenHash(tokenHash: string): Promise<SessionRecord | null> {
     const [session] = await this.database
@@ -60,6 +60,16 @@ export class PostgresSessionRepository implements SessionRepository {
       ...session,
       permissions: [...resolvedPermissions].sort(),
     };
+  }
+
+  public async create(userId: string, tokenHash: string, expiresAt: Date): Promise<string> {
+    const [createdSession] = await this.database
+      .insert(sessions)
+      .values({ expiresAt, tokenHash, userId })
+      .returning({ id: sessions.id });
+
+    if (!createdSession) throw new Error('Session creation did not return an identifier');
+    return createdSession.id;
   }
 
   public async touch(sessionId: string, seenAt: Date): Promise<void> {

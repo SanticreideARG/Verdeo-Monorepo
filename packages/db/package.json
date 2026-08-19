@@ -18,6 +18,8 @@
     }
   },
   "scripts": {
+    "auth:provision-user": "tsx src/provision-user.ts",
+    "auth:seed-test-users": "tsx src/seed-test-users.ts",
     "build": "tsup src/index.ts src/schema/index.ts --format esm --clean --sourcemap",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/migrate.ts",

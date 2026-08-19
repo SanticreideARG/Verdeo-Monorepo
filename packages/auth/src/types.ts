@@ -18,7 +18,14 @@ export interface SessionSummary {
   revokedAt: Date | null;
 }
 
+export interface CreatedSession {
+  expiresAt: Date;
+  sessionId: string;
+  token: string;
+}
+
 export interface SessionRepository {
+  create(userId: string, tokenHash: string, expiresAt: Date): Promise<string>;
   findByTokenHash(tokenHash: string): Promise<SessionRecord | null>;
   listForUser(userId: string, limit: number): Promise<readonly SessionSummary[]>;
   revoke(sessionId: string, revokedAt: Date): Promise<boolean>;

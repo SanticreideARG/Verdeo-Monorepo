@@ -2,12 +2,12 @@
 
 ## ADR-001 - Serverless-first
 
-**Status:** Accepted  
+**Status:** Accepted
 Core en Vercel/Neon. Procesos persistentes sólo si una integración futura lo exige.
 
 ## ADR-002 - Hono + Node runtime
 
-**Status:** Accepted  
+**Status:** Accepted
 Hono/TypeScript sobre funciones Node.js.
 
 ## ADR-003 - PostgreSQL / Neon
@@ -92,7 +92,18 @@ Histórico no cambia al actualizar precios.
 
 ## ADR-019 - Provider-neutral authentication boundary
 
-**Status:** Proposed  
+**Status:** Accepted
+
 El Core representa identidades de autenticación por `provider + providerSubject`. Los adaptadores OAuth
 resuelven la identidad y el Core mantiene sesiones revocables, guardando sólo hashes de tokens opacos.
-La selección del proveedor de autenticación permanece OPEN.
+La selección del proveedor OAuth permanece OPEN, pero no modifica este límite.
+
+## ADR-020 - Acceso MVP mediante credenciales provisionadas
+
+**Status:** Accepted
+
+El sprint MVP habilita email/contraseña únicamente para cuentas creadas por un operador mediante CLI. No
+existe registro público ni asignación de privilegios por email sin una transacción de provisión auditada.
+Las contraseñas aleatorias se muestran una sola vez, se persisten con scrypt y se bloquean temporalmente
+tras cinco intentos fallidos. OAuth se añadirá después como otra `AuthIdentity` del mismo `User`; la
+confirmación por correo y Resend quedan fuera de este sprint.

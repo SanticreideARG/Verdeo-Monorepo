@@ -95,6 +95,7 @@ pnpm dev
 - Web: `http://localhost:5173`
 - API: `http://localhost:3000`
 - Health: `http://localhost:3000/health`
+- Staff dashboard: `http://localhost:5173/app`
 
 Para ejecutar todos los controles de calidad:
 
@@ -106,6 +107,9 @@ Consulta `docs/12-development/DEVELOPMENT.md` para migraciones y estado de imple
 
 Las próximas tareas están especificadas en `docs/12-development/NEXT_TASKS.md`, con runbooks separados
 para Neon, Auth/RBAC/Audit y CRM.
+
+El acceso temporal al dashboard MVP y la provisión del primer superadmin están documentados en
+`docs/12-development/MVP_DASHBOARD_ACCESS.md`.
 
 El procedimiento de publicación está en `docs/12-development/VERCEL_DEPLOYMENT.md` e incluye los
 entrypoints ya implementados para Hono/Vite, configuración del monorepo, entornos, migraciones, smoke tests

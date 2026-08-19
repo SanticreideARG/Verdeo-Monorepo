@@ -82,17 +82,13 @@ pnpm check
 
 ## First-superadmin bootstrap
 
-The bootstrap identity is intentionally not implemented until the staff authentication provider is chosen.
-The approved flow must:
+ADR-020 permits a temporary, manually provisioned password account for the MVP dashboard. After migration
+and role seed, run the authenticated operator command documented in `MVP_DASHBOARD_ACCESS.md`. It creates
+the `User`, `AuthIdentity`, scrypt credential, role assignment, and audit event in one transaction, then
+shows a random password once.
 
-1. receive an authenticated provider identity;
-2. create or link a `User` and `AuthIdentity`;
-3. assign the seeded `superadmin` role;
-4. emit an audit event including actor/source and correlation ID;
-5. disable the one-time bootstrap path;
-6. require MFA when supported by the chosen provider.
-
-Do not implement a default password, public bootstrap endpoint, or email-only privilege assignment.
+There is still no default password, public bootstrap endpoint, or automatic privilege assignment based only
+on an email claim. OAuth linking and MFA remain required follow-up work for the long-term superadmin policy.
 
 ## Backup and recovery gate
 

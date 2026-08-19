@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   HealthResponseSchema,
+  LoginResponseSchema,
   MeResponseSchema,
   SessionListResponseSchema,
   UserListResponseSchema,
@@ -17,9 +18,12 @@ const emptySessions = {
   revokeOwned: () => Promise.resolve(false),
 };
 const emptyUsers = { list: () => Promise.resolve({ items: [], nextCursor: null }) };
+const emptyCredentials = { login: () => Promise.resolve(null) };
 
 const app = createApp({
   appOrigin: 'http://localhost:5173',
+  cookieSameSite: 'Lax',
+  credentials: emptyCredentials,
   logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
   sessions: emptySessions,
   secureCookies: false,
@@ -46,9 +50,64 @@ describe('API foundation', () => {
     });
   });
 
+  it('creates a secure cookie after a valid credential login', async () => {
+    const login = vi.fn(() =>
+      Promise.resolve({
+        expiresAt: new Date('2026-08-17T20:00:00.000Z'),
+        sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+        token: 'opaque-session-token-that-is-never-returned-to-the-browser-body',
+      }),
+    );
+    const loginApp = createApp({
+      appOrigin: 'https://verdeo-web.example',
+      cookieSameSite: 'None',
+      credentials: { login },
+      logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      sessions: emptySessions,
+      secureCookies: true,
+      users: emptyUsers,
+      version: 'test',
+    });
+
+    const response = await loginApp.request('/api/v1/auth/login', {
+      body: JSON.stringify({
+        email: 'santi.creide@gmail.com',
+        password: 'a-strong-temporary-password',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    const body: unknown = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(LoginResponseSchema.parse(body).sessionId).toBe('4c35a5ce-5c11-47b3-b31a-41a7d2983354');
+    expect(JSON.stringify(body)).not.toContain('opaque-session-token');
+    expect(response.headers.get('set-cookie')).toContain('HttpOnly');
+    expect(response.headers.get('set-cookie')).toContain('SameSite=None');
+    expect(response.headers.get('set-cookie')).toContain('Secure');
+  });
+
+  it('returns a generic authentication error for invalid credentials', async () => {
+    const response = await app.request('/api/v1/auth/login', {
+      body: JSON.stringify({
+        email: 'santi.creide@gmail.com',
+        password: 'a-wrong-password-with-enough-length',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'UNAUTHENTICATED' },
+    });
+  });
+
   it('returns the resolved principal for an authenticated session', async () => {
     const authenticatedApp = createApp({
       appOrigin: 'http://localhost:5173',
+      cookieSameSite: 'Lax',
+      credentials: emptyCredentials,
       logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
       sessions: {
         ...emptySessions,
@@ -84,6 +143,8 @@ describe('API foundation', () => {
     const revoke = vi.fn(() => Promise.resolve());
     const logoutApp = createApp({
       appOrigin: 'http://localhost:5173',
+      cookieSameSite: 'Lax',
+      credentials: emptyCredentials,
       logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
       sessions: {
         ...emptySessions,
@@ -119,6 +180,8 @@ describe('API foundation', () => {
   it('lists only safe session metadata for the authenticated user', async () => {
     const sessionsApp = createApp({
       appOrigin: 'http://localhost:5173',
+      cookieSameSite: 'Lax',
+      credentials: emptyCredentials,
       logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
       sessions: {
         ...emptySessions,
@@ -162,6 +225,8 @@ describe('API foundation', () => {
     const revokeOwned = vi.fn(() => Promise.resolve(false));
     const sessionsApp = createApp({
       appOrigin: 'http://localhost:5173',
+      cookieSameSite: 'Lax',
+      credentials: emptyCredentials,
       logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
       sessions: {
         ...emptySessions,
@@ -200,6 +265,8 @@ describe('API foundation', () => {
     const list = vi.fn(() => Promise.resolve({ items: [], nextCursor: null }));
     const usersApp = createApp({
       appOrigin: 'http://localhost:5173',
+      cookieSameSite: 'Lax',
+      credentials: emptyCredentials,
       logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
       sessions: {
         ...emptySessions,
@@ -227,6 +294,8 @@ describe('API foundation', () => {
   it('returns a paginated, PII-minimized user directory with users.read', async () => {
     const usersApp = createApp({
       appOrigin: 'http://localhost:5173',
+      cookieSameSite: 'Lax',
+      credentials: emptyCredentials,
       logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
       sessions: {
         ...emptySessions,

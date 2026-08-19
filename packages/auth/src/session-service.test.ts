@@ -19,6 +19,7 @@ describe('SessionService', () => {
       userId: 'user-id',
     });
     const repository: SessionRepository = {
+      create: vi.fn(),
       findByTokenHash,
       listForUser: vi.fn(),
       revoke: vi.fn(),
@@ -51,6 +52,7 @@ describe('SessionService', () => {
       userId: 'user-id',
     });
     const repository: SessionRepository = {
+      create: vi.fn(),
       findByTokenHash,
       listForUser: vi.fn(),
       revoke: vi.fn(),
@@ -67,6 +69,7 @@ describe('SessionService', () => {
     const revoke = vi.fn<SessionRepository['revoke']>();
     revoke.mockResolvedValue(true);
     const repository: SessionRepository = {
+      create: vi.fn(),
       findByTokenHash: vi.fn(),
       listForUser: vi.fn(),
       revoke,
@@ -84,6 +87,7 @@ describe('SessionService', () => {
     const listForUser = vi.fn<SessionRepository['listForUser']>();
     listForUser.mockResolvedValue([]);
     const repository: SessionRepository = {
+      create: vi.fn(),
       findByTokenHash: vi.fn(),
       listForUser,
       revoke: vi.fn(),
@@ -100,6 +104,7 @@ describe('SessionService', () => {
     const revokeOwned = vi.fn<SessionRepository['revokeOwned']>();
     revokeOwned.mockResolvedValue(false);
     const repository: SessionRepository = {
+      create: vi.fn(),
       findByTokenHash: vi.fn(),
       listForUser: vi.fn(),
       revoke: vi.fn(),
@@ -113,6 +118,31 @@ describe('SessionService', () => {
       'session-id',
       'user-id',
       new Date('2026-08-17T12:00:00Z'),
+    );
+  });
+
+  it('creates an opaque session while persisting only its hash', async () => {
+    const create = vi.fn<SessionRepository['create']>();
+    create.mockResolvedValue('session-id');
+    const repository: SessionRepository = {
+      create,
+      findByTokenHash: vi.fn(),
+      listForUser: vi.fn(),
+      revoke: vi.fn(),
+      revokeOwned: vi.fn(),
+      touch: vi.fn(),
+    };
+    const service = new SessionService(repository, () => new Date('2026-08-17T12:00:00.000Z'));
+
+    const result = await service.create('user-id', 8 * 60 * 60 * 1000);
+
+    expect(result.sessionId).toBe('session-id');
+    expect(result.token).toHaveLength(43);
+    expect(result.expiresAt).toEqual(new Date('2026-08-17T20:00:00.000Z'));
+    expect(create).toHaveBeenCalledWith(
+      'user-id',
+      expect.not.stringContaining(result.token),
+      result.expiresAt,
     );
   });
 });

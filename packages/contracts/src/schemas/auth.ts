@@ -2,6 +2,16 @@ import { z } from 'zod';
 
 import { IsoDateTimeSchema, UuidSchema } from './common.js';
 
+export const LoginRequestSchema = z.object({
+  email: z.email().max(320),
+  password: z.string().min(12).max(256),
+});
+
+export const LoginResponseSchema = z.object({
+  expiresAt: IsoDateTimeSchema,
+  sessionId: UuidSchema,
+});
+
 export const MeResponseSchema = z.object({
   permissions: z.array(z.string()).readonly(),
   session: z.object({
@@ -14,3 +24,5 @@ export const MeResponseSchema = z.object({
 });
 
 export type MeResponse = z.infer<typeof MeResponseSchema>;
+export type LoginRequest = z.infer<typeof LoginRequestSchema>;
+export type LoginResponse = z.infer<typeof LoginResponseSchema>;

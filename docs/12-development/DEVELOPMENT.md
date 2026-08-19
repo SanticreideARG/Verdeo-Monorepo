@@ -58,8 +58,10 @@ The first foundation slice includes:
 - Vercel Web/API configuration with compiled runtime exports for internal workspace packages.
 - PostgreSQL-backed session authentication, owned-session management, and transactional revocation audit.
 - enforced `users.read` middleware and a PII-minimized, cursor-paginated user directory endpoint.
+- manually provisioned password login, account lockout, and protected Staff dashboard for the MVP sprint.
 
-OAuth provider selection, production database credentials, and the first superadmin bootstrap remain deployment decisions.
+OAuth and email confirmation are deferred until after the MVP dashboard sprint. The first superadmin can be
+provisioned after rotating the Neon credential by following `MVP_DASHBOARD_ACCESS.md`.
 
 ## Next implementation block
 
@@ -68,3 +70,4 @@ OAuth provider selection, production database credentials, and the first superad
 - `AUTH_RBAC_AUDIT_IMPLEMENTATION.md`: security foundation design and test matrix.
 - `CRM_IMPLEMENTATION.md`: customer-domain schema, services, API, privacy, and merge/unmerge plan.
 - `VERCEL_DEPLOYMENT.md`: Web/API projects, environments, domains, release gates, and rollback.
+- `MVP_DASHBOARD_ACCESS.md`: credential login, provisioning, Vercel cookie settings, and smoke tests.
