@@ -27,6 +27,7 @@ compatibility for PostgreSQL, document generation, and provider adapters.
 - GitHub Actions quality gate.
 - Vite SPA rewrite in `apps/web/vercel.json`;
 - Hono Web-standard Function entrypoint and catch-all rewrite in `apps/api`;
+- API framework autodetection disabled so only `api/index.ts` owns serverless routing;
 - production package exports compiled to `dist` and verified during the Vercel build.
 - Web production deployment observed loading `/pedido` directly on 2026-08-17.
 
@@ -120,9 +121,10 @@ remains useful as a standalone production-build check, but must not replace the 
 5. Enable skip-unaffected-project behavior.
 6. Import the same GitHub repository again as `verdeo-api`.
 7. Set Root Directory to `apps/api` and enable outside-root workspace sources.
-8. Configure the Node.js Function entrypoint and route settings.
-9. Keep `main` as the Production Branch.
-10. Protect previews when they can display operational or customer data.
+8. Keep Framework Preset as `Other`; `apps/api/vercel.json` pins this with `"framework": null`.
+9. Configure the Node.js Function entrypoint and route settings.
+10. Keep `main` as the Production Branch.
+11. Protect previews when they can display operational or customer data.
 
 Vercel creates Preview Deployments for non-production branches and Production Deployments from the
 production branch. Do not use a production database for arbitrary previews.
