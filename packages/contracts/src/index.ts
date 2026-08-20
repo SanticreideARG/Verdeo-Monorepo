@@ -2,6 +2,7 @@ export * from './schemas/auth.js';
 export * from './schemas/ai.js';
 export * from './schemas/common.js';
 export * from './schemas/errors.js';
+export * from './schemas/geography.js';
 export * from './schemas/health.js';
 export * from './schemas/operations.js';
 export * from './schemas/sessions.js';

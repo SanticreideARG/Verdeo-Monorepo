@@ -3,7 +3,18 @@ import { eq } from 'drizzle-orm';
 import { initialPermissionCatalog } from '@verdeo/rbac';
 
 import { createDatabase } from './index.js';
-import { permissions, rolePermissions, roles } from './schema/index.js';
+import {
+  customerOperatingSites,
+  customers,
+  geographicZones,
+  operatingSiteOrderCounters,
+  operatingSites,
+  permissions,
+  rolePermissions,
+  roles,
+  userOperatingSites,
+  userRoles,
+} from './schema/index.js';
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -44,6 +55,71 @@ try {
       await transaction
         .insert(rolePermissions)
         .values(permissionRows.map(({ id }) => ({ permissionId: id, roleId: superadmin.id })))
+        .onConflictDoNothing();
+    }
+
+    const [neuquenSite] = await transaction
+      .insert(operatingSites)
+      .values({
+        displayName: 'Neuquén',
+        orderPrefix: 'NQN',
+        slug: 'neuquen',
+        sortOrder: 0,
+        timezone: 'America/Argentina/Buenos_Aires',
+      })
+      .onConflictDoUpdate({
+        set: {
+          displayName: 'Neuquén',
+          updatedAt: new Date(),
+        },
+        target: operatingSites.slug,
+      })
+      .returning({ id: operatingSites.id });
+    if (!neuquenSite) throw new Error('Could not seed the Neuquén operating site');
+
+    await transaction
+      .insert(geographicZones)
+      .values({
+        displayName: 'Neuquén',
+        operatingSiteId: neuquenSite.id,
+        slug: 'neuquen',
+        sortOrder: 0,
+      })
+      .onConflictDoNothing();
+
+    await transaction
+      .insert(operatingSiteOrderCounters)
+      .values({ operatingSiteId: neuquenSite.id })
+      .onConflictDoNothing();
+
+    const superadminUsers = await transaction
+      .select({ userId: userRoles.userId })
+      .from(userRoles)
+      .where(eq(userRoles.roleId, superadmin.id));
+    if (superadminUsers.length > 0) {
+      await transaction
+        .insert(userOperatingSites)
+        .values(
+          superadminUsers.map(({ userId }) => ({
+            active: true,
+            defaultSite: true,
+            operatingSiteId: neuquenSite.id,
+            userId,
+          })),
+        )
+        .onConflictDoNothing();
+    }
+
+    const customerRows = await transaction.select({ customerId: customers.id }).from(customers);
+    if (customerRows.length > 0) {
+      await transaction
+        .insert(customerOperatingSites)
+        .values(
+          customerRows.map(({ customerId }) => ({
+            customerId,
+            operatingSiteId: neuquenSite.id,
+          })),
+        )
         .onConflictDoNothing();
     }
   });

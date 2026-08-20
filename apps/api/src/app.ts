@@ -50,6 +50,7 @@ import {
   OrderStatusHistoryResponseSchema,
   OrderTransitionRequestSchema,
   OrderUpdateRequestSchema,
+  OAuthExchangeRequestSchema,
   PublicOrderCreateRequestSchema,
   SessionIdParamSchema,
   SessionListResponseSchema,
@@ -112,6 +113,10 @@ interface LoginResult {
 
 interface CredentialLogin {
   login(email: string, password: string, requestId: string): Promise<LoginResult | null>;
+}
+
+interface OAuthLogin {
+  exchange(accessToken: string, requestId: string): Promise<LoginResult | null>;
 }
 
 interface OperationsEngine {
@@ -254,6 +259,7 @@ interface CreateAppOptions {
   cookieSameSite: 'Lax' | 'None';
   credentials: CredentialLogin;
   logger: Logger;
+  oauth?: OAuthLogin;
   operations?: OperationsEngine;
   sessions: SessionAuthenticator;
   secureCookies: boolean;
@@ -263,14 +269,15 @@ interface CreateAppOptions {
 
 export const SESSION_COOKIE_NAME = 'verdeo_session';
 
-function statusForCode(code: ApiErrorCode): 400 | 401 | 403 | 404 | 409 | 429 | 500 {
-  const statuses: Record<ApiErrorCode, 400 | 401 | 403 | 404 | 409 | 429 | 500> = {
+function statusForCode(code: ApiErrorCode): 400 | 401 | 403 | 404 | 409 | 429 | 500 | 503 {
+  const statuses: Record<ApiErrorCode, 400 | 401 | 403 | 404 | 409 | 429 | 500 | 503> = {
     BAD_REQUEST: 400,
     UNAUTHENTICATED: 401,
     FORBIDDEN: 403,
     NOT_FOUND: 404,
     CONFLICT: 409,
     RATE_LIMITED: 429,
+    SERVICE_UNAVAILABLE: 503,
     INTERNAL_ERROR: 500,
   };
   return statuses[code];
@@ -293,6 +300,16 @@ export function createApp(options: CreateAppOptions) {
   });
 
   const contractValue = (value: unknown): unknown => JSON.parse(JSON.stringify(value)) as unknown;
+
+  const setSessionCookie = (context: Context, login: LoginResult) => {
+    setCookie(context, SESSION_COOKIE_NAME, login.token, {
+      expires: login.expiresAt,
+      httpOnly: true,
+      path: '/',
+      sameSite: options.cookieSameSite,
+      secure: options.secureCookies || options.cookieSameSite === 'None',
+    });
+  };
 
   const forbidden = (context: Context<{ Variables: AppVariables }>) => {
     const code: ApiErrorCode = 'FORBIDDEN';
@@ -468,19 +485,70 @@ export function createApp(options: CreateAppOptions) {
       );
     }
 
-    setCookie(context, SESSION_COOKIE_NAME, login.token, {
-      expires: login.expiresAt,
-      httpOnly: true,
-      path: '/',
-      sameSite: options.cookieSameSite,
-      secure: options.secureCookies || options.cookieSameSite === 'None',
-    });
+    setSessionCookie(context, login);
 
     const payload = LoginResponseSchema.parse({
       expiresAt: login.expiresAt.toISOString(),
       sessionId: login.sessionId,
     });
     return context.json(payload);
+  });
+
+  app.post('/api/v1/auth/oauth/exchange', async (context) => {
+    const input = OAuthExchangeRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success) {
+      const code: ApiErrorCode = 'BAD_REQUEST';
+      return context.json(
+        {
+          error: {
+            code,
+            details: input.error.issues,
+            message: 'La respuesta de autenticación no es válida.',
+            requestId: context.get('requestId'),
+          },
+        },
+        statusForCode(code),
+      );
+    }
+
+    if (!options.oauth) {
+      const code: ApiErrorCode = 'SERVICE_UNAVAILABLE';
+      return context.json(
+        {
+          error: {
+            code,
+            message: 'El acceso con Google todavía no está disponible.',
+            requestId: context.get('requestId'),
+          },
+        },
+        statusForCode(code),
+      );
+    }
+
+    const login = await options.oauth.exchange(input.data.accessToken, context.get('requestId'));
+    if (!login) {
+      const code: ApiErrorCode = 'UNAUTHENTICATED';
+      return context.json(
+        {
+          error: {
+            code,
+            message: 'Esta cuenta no tiene acceso habilitado en Verdeo.',
+            requestId: context.get('requestId'),
+          },
+        },
+        statusForCode(code),
+      );
+    }
+
+    setSessionCookie(context, login);
+    context.header('cache-control', 'no-store');
+
+    return context.json(
+      LoginResponseSchema.parse({
+        expiresAt: login.expiresAt.toISOString(),
+        sessionId: login.sessionId,
+      }),
+    );
   });
 
   app.use('/api/v1/me', requireAuthentication);

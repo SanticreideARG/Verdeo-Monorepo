@@ -2,13 +2,29 @@ import { type FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { apiRequest } from '../lib/api.js';
+import { startGoogleOAuth } from '../lib/oauth.js';
+import { isSupabaseOAuthConfigured } from '../lib/supabase.js';
 
 export function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [oauthSubmitting, setOAuthSubmitting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const oauthAvailable = isSupabaseOAuthConfigured();
+
+  async function continueWithGoogle() {
+    setError(null);
+    setOAuthSubmitting(true);
+
+    try {
+      await startGoogleOAuth();
+    } catch {
+      setError('No pudimos iniciar el acceso con Google. Intentá nuevamente.');
+      setOAuthSubmitting(false);
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,7 +76,34 @@ export function LoginPage() {
             Usá la cuenta que te asignó un administrador de Verdeo.
           </p>
 
-          <form className="mt-10 space-y-5" onSubmit={(event) => void submit(event)}>
+          {oauthAvailable ? (
+            <>
+              <button
+                className="button button-secondary button-large mt-10 w-full disabled:cursor-wait disabled:opacity-60"
+                disabled={oauthSubmitting || submitting}
+                onClick={() => void continueWithGoogle()}
+                type="button"
+              >
+                <span
+                  className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-sm font-bold text-blue-600 shadow-sm"
+                  aria-hidden="true"
+                >
+                  G
+                </span>
+                {oauthSubmitting ? 'Conectando con Google…' : 'Continuar con Google'}
+              </button>
+              <div className="my-7 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
+                <span className="h-px flex-1 bg-forest/15" />
+                o ingresá con contraseña
+                <span className="h-px flex-1 bg-forest/15" />
+              </div>
+            </>
+          ) : null}
+
+          <form
+            className={oauthAvailable ? 'space-y-5' : 'mt-10 space-y-5'}
+            onSubmit={(event) => void submit(event)}
+          >
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-forest">Email</span>
               <input
@@ -98,7 +141,7 @@ export function LoginPage() {
 
             <button
               className="button button-primary button-large w-full disabled:cursor-wait disabled:opacity-60"
-              disabled={submitting}
+              disabled={submitting || oauthSubmitting}
               type="submit"
             >
               {submitting ? 'Ingresando…' : 'Ingresar'}

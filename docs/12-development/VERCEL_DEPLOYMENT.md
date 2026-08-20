@@ -137,6 +137,8 @@ production branch. Do not use a production database for arbitrary previews.
 Only browser-safe values may use the `VITE_` prefix:
 
 - `VITE_API_URL`: public API origin when direct cross-origin requests are used;
+- `VITE_SUPABASE_URL`: public Supabase project URL after the OAuth adapter is implemented;
+- `VITE_SUPABASE_PUBLISHABLE_KEY`: public Supabase publishable key after the OAuth adapter is implemented;
 - future public analytics/site identifiers after privacy review.
 
 Never place database URLs, session secrets, provider API keys, Meta secrets, or encryption keys in Web
@@ -159,6 +161,12 @@ Foundation variables:
 
 Future server-only variables include OAuth, Meta, AI, geocoding, storage, and encryption secrets. Add them
 only when the owning adapter is implemented.
+
+For the planned Supabase OAuth adapter, the API will use `SUPABASE_URL` and
+`SUPABASE_PUBLISHABLE_KEY` to validate identity. `SUPABASE_SECRET_KEY` is required only for server-side
+administrative operations such as invitations and must never use a `VITE_` prefix. The Vercel Marketplace
+integration may also add Supabase PostgreSQL variables; they must not replace Verdeo's Neon `DATABASE_URL`.
+See `SUPABASE_OAUTH_SETUP.md` for the complete setup and verification runbook.
 
 ### Environment separation
 

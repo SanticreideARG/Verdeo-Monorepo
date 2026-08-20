@@ -12,6 +12,10 @@ export const LoginResponseSchema = z.object({
   sessionId: UuidSchema,
 });
 
+export const OAuthExchangeRequestSchema = z.object({
+  accessToken: z.string().min(20).max(16_384),
+});
+
 export const MeResponseSchema = z.object({
   permissions: z.array(z.string()).readonly(),
   session: z.object({
@@ -27,3 +31,4 @@ export const MeResponseSchema = z.object({
 export type MeResponse = z.infer<typeof MeResponseSchema>;
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
 export type LoginResponse = z.infer<typeof LoginResponseSchema>;
+export type OAuthExchangeRequest = z.infer<typeof OAuthExchangeRequestSchema>;

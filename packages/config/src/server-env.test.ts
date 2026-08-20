@@ -28,4 +28,25 @@ describe('parseServerEnv', () => {
       }),
     ).toThrow(/AI_CONFIG_ENCRYPTION_KEY/);
   });
+
+  it('accepts a complete optional Supabase configuration', () => {
+    const config = parseServerEnv({
+      DATABASE_URL: 'postgresql://localhost/verdeo',
+      SESSION_SECRET: 'a-secure-session-secret-with-32-chars',
+      SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_a-valid-public-key',
+      SUPABASE_URL: 'https://project-ref.supabase.co',
+    });
+
+    expect(config.SUPABASE_URL).toBe('https://project-ref.supabase.co');
+  });
+
+  it('rejects a partial Supabase configuration', () => {
+    expect(() =>
+      parseServerEnv({
+        DATABASE_URL: 'postgresql://localhost/verdeo',
+        SESSION_SECRET: 'a-secure-session-secret-with-32-chars',
+        SUPABASE_URL: 'https://project-ref.supabase.co',
+      }),
+    ).toThrow(/SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY/);
+  });
 });

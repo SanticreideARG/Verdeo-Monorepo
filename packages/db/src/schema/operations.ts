@@ -3,17 +3,21 @@ import {
   boolean,
   check,
   date,
+  foreignKey,
   index,
   integer,
   jsonb,
   numeric,
   pgSequence,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+
+import { geographicZones, operatingSites } from './geography.js';
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -34,6 +38,32 @@ export const customers = pgTable(
   (table) => [
     index('customers_display_name_idx').on(table.displayName),
     index('customers_status_idx').on(table.status),
+  ],
+);
+
+export const customerOperatingSites = pgTable(
+  'customer_operating_sites',
+  {
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => customers.id, { onDelete: 'cascade' }),
+    operatingSiteId: uuid('operating_site_id')
+      .notNull()
+      .references(() => operatingSites.id, { onDelete: 'cascade' }),
+    preferredZoneId: uuid('preferred_zone_id'),
+    status: text('status').default('active').notNull(),
+    internalNotes: text('internal_notes'),
+    ...timestamps,
+  },
+  (table) => [
+    primaryKey({ columns: [table.customerId, table.operatingSiteId] }),
+    foreignKey({
+      columns: [table.preferredZoneId, table.operatingSiteId],
+      foreignColumns: [geographicZones.id, geographicZones.operatingSiteId],
+      name: 'customer_operating_sites_zone_site_fk',
+    }).onDelete('restrict'),
+    index('customer_operating_sites_site_status_idx').on(table.operatingSiteId, table.status),
+    index('customer_operating_sites_customer_idx').on(table.customerId),
   ],
 );
 

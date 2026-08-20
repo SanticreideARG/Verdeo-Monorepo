@@ -159,6 +159,86 @@ describe('API foundation', () => {
     });
   });
 
+  it('exchanges a verified OAuth identity for the existing Verdeo session cookie', async () => {
+    const exchange = vi.fn(() =>
+      Promise.resolve({
+        expiresAt: new Date('2026-08-17T20:00:00.000Z'),
+        sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+        token: 'opaque-oauth-session-token-that-is-never-returned-in-the-body',
+      }),
+    );
+    const oauthApp = createApp({
+      appOrigin: 'https://verdeo-web.example',
+      cookieSameSite: 'None',
+      credentials: emptyCredentials,
+      logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      oauth: { exchange },
+      sessions: emptySessions,
+      secureCookies: true,
+      users: emptyUsers,
+      version: 'test',
+    });
+
+    const response = await oauthApp.request('/api/v1/auth/oauth/exchange', {
+      body: JSON.stringify({ accessToken: 'a-supabase-access-token-long-enough' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    const body: unknown = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(LoginResponseSchema.parse(body).sessionId).toBe('4c35a5ce-5c11-47b3-b31a-41a7d2983354');
+    expect(exchange).toHaveBeenCalledWith(
+      'a-supabase-access-token-long-enough',
+      expect.any(String),
+    );
+    expect(JSON.stringify(body)).not.toContain('opaque-oauth-session-token');
+    expect(response.headers.get('set-cookie')).toContain('HttpOnly');
+    expect(response.headers.get('set-cookie')).toContain('SameSite=None');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it('does not reveal whether an OAuth email is provisioned', async () => {
+    const oauthApp = createApp({
+      appOrigin: 'http://localhost:5173',
+      cookieSameSite: 'Lax',
+      credentials: emptyCredentials,
+      logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      oauth: { exchange: () => Promise.resolve(null) },
+      sessions: emptySessions,
+      secureCookies: false,
+      users: emptyUsers,
+      version: 'test',
+    });
+
+    const response = await oauthApp.request('/api/v1/auth/oauth/exchange', {
+      body: JSON.stringify({ accessToken: 'an-unknown-access-token-long-enough' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: 'UNAUTHENTICATED',
+        message: 'Esta cuenta no tiene acceso habilitado en Verdeo.',
+      },
+    });
+  });
+
+  it('reports OAuth as unavailable when the API adapter is not configured', async () => {
+    const response = await app.request('/api/v1/auth/oauth/exchange', {
+      body: JSON.stringify({ accessToken: 'a-supabase-access-token-long-enough' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'SERVICE_UNAVAILABLE' },
+    });
+  });
+
   it('returns the resolved principal for an authenticated session', async () => {
     const authenticatedApp = createApp({
       appOrigin: 'http://localhost:5173',

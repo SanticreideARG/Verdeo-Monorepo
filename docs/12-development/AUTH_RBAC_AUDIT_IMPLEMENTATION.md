@@ -37,8 +37,9 @@ The provider-neutral authenticated-read path is implemented:
 This completes the provider-neutral session management core of AUTH-002 and the first enforced RBAC read.
 The MVP now also includes manually provisioned password credentials, scrypt hashing, temporary lockout,
 cookie issuance, `/login`, and protected `/app`. Administrative all-user revocation, broader domain guards,
-and database integration rollback tests remain pending. OAuth and email confirmation are intentionally
-deferred under ADR-020.
+and database integration rollback tests remain pending. The Supabase/Google OAuth adapter now implements
+the verified-token exchange and safe link to preprovisioned users under ADR-029; invitations, MFA, account
+recovery, and the complete user-administration panel remain pending.
 
 ## Authentication flow
 
@@ -109,6 +110,7 @@ Hidden navigation is a UX aid, not authorization.
 - `POST /api/v1/auth/logout` (implemented for the current session)
 - provider-specific login/callback routes behind an auth adapter
 - `POST /api/v1/auth/login` for the temporary provisioned-password adapter (implemented)
+- `POST /api/v1/auth/oauth/exchange` for Supabase verified-token exchange (implemented)
 - `GET /api/v1/sessions` for the current user (implemented)
 - `DELETE /api/v1/sessions/:id` to revoke an owned session (implemented)
 
@@ -205,7 +207,7 @@ Technical logs are not a replacement for `AuditEvent`.
 
 ## OPEN decisions
 
-- staff OAuth provider;
+- MFA and account-recovery policy for Supabase/Google;
 - allowed accounts/domains;
 - session duration and idle timeout;
 - MFA enforcement and recovery policy;

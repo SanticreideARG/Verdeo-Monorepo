@@ -119,3 +119,7 @@ El motor MVP de menús, clientes, pedidos, cocina y la base de configuración IA
 El procedimiento de publicación está en `docs/12-development/VERCEL_DEPLOYMENT.md` e incluye los
 entrypoints ya implementados para Hono/Vite, configuración del monorepo, entornos, migraciones, smoke tests
 y rollback.
+
+La preparación de Google OAuth mediante Supabase, sus variables Web/API, el vínculo seguro con los usuarios
+y permisos internos, las invitaciones y el rollback están en
+`docs/12-development/SUPABASE_OAUTH_SETUP.md`.

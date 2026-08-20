@@ -39,4 +39,5 @@
 - `docs/12-development/AUTH_RBAC_AUDIT_IMPLEMENTATION.md`
 - `docs/12-development/CRM_IMPLEMENTATION.md`
 - `docs/12-development/VERCEL_DEPLOYMENT.md`
+- `docs/12-development/SUPABASE_OAUTH_SETUP.md`
 - `project.config.seed.json`

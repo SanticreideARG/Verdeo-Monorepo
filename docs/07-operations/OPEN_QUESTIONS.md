@@ -7,6 +7,9 @@ Estas preguntas no bloquean todo el proyecto, pero no deben resolverse inventand
 - ciudades exactas y asignación Isabella/Tamara;
 - límites exactos de sectores norte/sur/este/oeste;
 - números WhatsApp y zonas asociadas.
+- prefijos públicos definitivos para cada operación que se cree después de Neuquén;
+- composición inicial de operaciones y zonas fuera de Neuquén (Capital Federal, Zona Norte, Córdoba,
+  Río Negro y Mendoza).
 
 ## Rutas
 

@@ -12,6 +12,7 @@ import {
   PostgresAIConfigurationService,
   PostgresPasswordCredentialRepository,
   PostgresOperationsService,
+  PostgresOAuthIdentityRepository,
   PostgresSessionRepository,
   PostgresUserDirectoryRepository,
 } from '@verdeo/db';
@@ -19,6 +20,7 @@ import { LocationLinkGeocodingProvider } from '@verdeo/geocoding';
 import { createLogger } from '@verdeo/observability';
 
 import { createApp } from './app.js';
+import { SupabaseAuthClient } from './integrations/supabase-auth.js';
 
 interface CreateApiRuntimeOptions {
   environment?: NodeJS.ProcessEnv;
@@ -142,12 +144,96 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
       });
     },
   };
+  const supabaseAuth =
+    env.SUPABASE_URL && env.SUPABASE_PUBLISHABLE_KEY
+      ? new SupabaseAuthClient(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY)
+      : undefined;
+  const oauth = supabaseAuth
+    ? {
+        exchange: async (accessToken: string, requestId: string) => {
+          const identity = await supabaseAuth.verifyAccessToken(accessToken);
+
+          if (!identity) {
+            const audit = new AuditService(new PostgresAuditSink(database.db));
+            await audit.record({
+              action: 'auth.oauth_failed',
+              actor: { type: 'system' },
+              correlationId: requestId,
+              entityId: 'supabase',
+              entityType: 'authentication',
+              metadata: { reason: 'invalid_or_unverified_identity' },
+              requestId,
+              source: 'api',
+            });
+            return null;
+          }
+
+          return database.db.transaction(async (transaction) => {
+            const identities = new PostgresOAuthIdentityRepository(transaction);
+            const resolvedIdentity = await identities.resolveOrLink({
+              email: identity.email,
+              provider: 'supabase',
+              providerSubject: identity.providerSubject,
+            });
+            const audit = new AuditService(new PostgresAuditSink(transaction));
+
+            if (!resolvedIdentity) {
+              await audit.record({
+                action: 'auth.oauth_failed',
+                actor: { type: 'system' },
+                correlationId: requestId,
+                entityId: identity.providerSubject,
+                entityType: 'authentication',
+                metadata: { reason: 'user_not_provisioned_or_identity_conflict' },
+                requestId,
+                source: 'api',
+              });
+              return null;
+            }
+
+            if (resolvedIdentity.linked) {
+              await audit.record({
+                action: 'auth.identity_linked',
+                actor: { type: 'user', userId: resolvedIdentity.userId },
+                after: { provider: 'supabase' },
+                correlationId: requestId,
+                entityId: identity.providerSubject,
+                entityType: 'auth_identity',
+                requestId,
+                source: 'api',
+              });
+            }
+
+            const transactionalSessions = new SessionService(
+              new PostgresSessionRepository(transaction),
+            );
+            const createdSession = await transactionalSessions.create(
+              resolvedIdentity.userId,
+              env.SESSION_TTL_HOURS * 60 * 60 * 1000,
+            );
+            await audit.record({
+              action: 'auth.login_succeeded',
+              actor: { type: 'user', userId: resolvedIdentity.userId },
+              correlationId: requestId,
+              entityId: createdSession.sessionId,
+              entityType: 'session',
+              metadata: { authenticationProvider: 'supabase' },
+              requestId,
+              source: 'api',
+            });
+
+            return createdSession;
+          });
+        },
+      }
+    : undefined;
   const app = createApp({
     aiConfiguration,
     appOrigin: env.APP_URL,
     cookieSameSite: env.SESSION_COOKIE_SAME_SITE,
     credentials,
     logger,
+    ...(oauth ? { oauth } : {}),
     operations,
     sessions,
     secureCookies: env.NODE_ENV === 'production',

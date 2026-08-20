@@ -63,8 +63,10 @@ The first foundation slice includes:
 - guest checkout at `/pedido` and the Staff operations center at `/app/operaciones`.
 - encrypted, permission-protected AI provider configuration foundation.
 
-OAuth and email confirmation are deferred until after the MVP dashboard sprint. The first superadmin can be
-provisioned after rotating the Neon credential by following `MVP_DASHBOARD_ACCESS.md`.
+OAuth and email confirmation were deferred during the first MVP dashboard slice. Supabase Auth is now the
+planned identity broker for the next authentication adapter, while Neon and Verdeo RBAC remain authoritative.
+The first superadmin can be provisioned after rotating the Neon credential by following
+`MVP_DASHBOARD_ACCESS.md`.
 
 ## Next implementation block
 
@@ -73,6 +75,8 @@ provisioned after rotating the Neon credential by following `MVP_DASHBOARD_ACCES
 - `AUTH_RBAC_AUDIT_IMPLEMENTATION.md`: security foundation design and test matrix.
 - `CRM_IMPLEMENTATION.md`: customer-domain schema, services, API, privacy, and merge/unmerge plan.
 - `VERCEL_DEPLOYMENT.md`: Web/API projects, environments, domains, release gates, and rollback.
+- `SUPABASE_OAUTH_SETUP.md`: Google/Supabase/Vercel OAuth configuration, secure identity linking, environment
+  variables, verification, and rollback.
 - `MVP_DASHBOARD_ACCESS.md`: credential login, provisioning, Vercel cookie settings, and smoke tests.
 - `MVP_ORDER_ENGINE.md`: order-engine guarantees, migrations, endpoints, UI, AI configuration, and release
   validation.

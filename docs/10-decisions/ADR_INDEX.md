@@ -57,7 +57,7 @@ Conservar indefinidamente.
 
 ## ADR-012 - Order public number
 
-**Status:** Accepted  
+**Status:** Superseded by ADR-028
 ID interno UUID + número global `Nxxxxx`.
 
 ## ADR-013 - Production snapshots
@@ -96,7 +96,7 @@ Histórico no cambia al actualizar precios.
 
 El Core representa identidades de autenticación por `provider + providerSubject`. Los adaptadores OAuth
 resuelven la identidad y el Core mantiene sesiones revocables, guardando sólo hashes de tokens opacos.
-La selección del proveedor OAuth permanece OPEN, pero no modifica este límite.
+Supabase Auth fue seleccionado posteriormente como broker y Google como primer proveedor bajo ADR-029.
 
 ## ADR-020 - Acceso MVP mediante credenciales provisionadas
 
@@ -178,3 +178,42 @@ Toda selección o corrección requiere confirmación humana. Ciudad, sector y zo
 datos configurables o elegidos por el operador: el proveedor no los convierte automáticamente en reglas de
 negocio. Las solicitudes son idempotentes, los fallos dejan el domicilio en `NEEDS_LOCATION` y las
 mutaciones generan auditoría y eventos sin incluir coordenadas ni texto del domicilio en sus payloads.
+
+## ADR-028 - Operaciones y zonas geográficas configurables
+
+**Status:** Accepted
+
+`OperatingSite` representa el límite operativo y de acceso para pedidos, cocina, reparto y configuración.
+`GeographicZone` representa una cobertura geográfica configurable y pertenece a un `OperatingSite`. Son
+entidades diferentes: una operación puede usar una o varias zonas sin cambiar el modelo ni el código.
+
+Los usuarios acceden a operaciones mediante membresías explícitas. Superadmin puede seleccionar una
+operación o la vista global consolidada; otros usuarios sólo reciben las operaciones asignadas. El alcance
+se aplica en repositorios y servicios, no únicamente en la interfaz. No se crean tablas físicas por región:
+los registros operativos comparten tablas y se aíslan mediante `operatingSiteId` e índices compuestos.
+
+Los clientes conservan una identidad CRM global, mientras sus relaciones operativas y domicilios pueden
+asociarse a una operación y zona. La migración inicial asignará los registros sin alcance a Neuquén.
+Bahía Blanca no forma parte del alta inicial.
+
+Los números públicos de pedido mantienen UUID interno y secuencia legible, pero sustituyen el prefijo global
+por un prefijo configurable por operación. La asignación debe ser transaccional y segura ante concurrencia;
+el formato exacto es dato administrable y nunca una condición hardcodeada.
+
+Los menús pueden originarse globalmente y distribuirse como revisiones independientes por operación. Una
+distribución no sobrescribe personalizaciones regionales sin vista previa, permiso y confirmación explícita.
+
+## ADR-029 - Supabase Auth como broker OAuth para Staff
+
+**Status:** Accepted
+
+Supabase Auth ejecuta OAuth/PKCE y Google es el primer proveedor habilitado. Neon continúa siendo la fuente
+de verdad de `User`, `AuthIdentity`, sesiones, RBAC, zonas y auditoría. La API valida el access token contra
+el proyecto Supabase configurado y guarda el UUID estable del usuario Supabase como
+`AuthIdentity(provider = 'supabase', providerSubject = sub)`.
+
+El primer vínculo exige email confirmado y coincidencia con un usuario interno activo previamente
+provisionado. Una identidad externa no crea usuarios, roles, permisos ni membresías geográficas. Después de
+resolver la identidad, la API emite la misma sesión opaca HttpOnly que utiliza el adaptador de contraseña;
+los tokens Supabase no se persisten en Neon ni se devuelven como credencial operativa. El login provisionado
+por contraseña se conserva durante el rollout y la política definitiva de MFA/recuperación permanece OPEN.

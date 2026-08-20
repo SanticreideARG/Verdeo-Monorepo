@@ -122,10 +122,11 @@ operator-managed configuration.
 **Deliverables:** proposed ADR updated to `Accepted`, provider configuration, redirect URLs, and account
 recovery/MFA policy for superadmins.
 
-**Status:** deferred until after the MVP dashboard sprint. ADR-020 accepts manually provisioned password
-credentials as the temporary adapter.
+**Status:** in progress. ADR-029 accepts Supabase Auth as broker and Google as the initial provider. The Web
+PKCE callback, API token verification, safe identity linking, and internal session exchange are implemented;
+invitations, MFA, recovery, and production smoke testing remain.
 
-**OPEN:** OAuth provider, permitted identity domains/accounts, and production callback URLs.
+**OPEN:** permitted identity domains/accounts, MFA/recovery policy, and final production callback URLs.
 
 ### DEPLOY-001 to DEPLOY-004 — Vercel delivery
 
@@ -145,8 +146,8 @@ revocation, `/me`, logout, and expired-session handling.
 sessions cannot authenticate.
 
 **Status:** in progress. Database-backed authentication middleware, `/api/v1/me`, current-session logout,
-owned-session listing, and owned-session revocation are implemented. Provider callback, secure cookie
-issuance, and administrative all-user revocation remain.
+owned-session listing/revocation, Supabase/Google callback exchange, and secure cookie issuance are
+implemented. Invitations and administrative all-user revocation remain.
 
 ### RBAC-001 — Enforce dynamic authorization
 

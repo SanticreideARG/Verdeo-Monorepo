@@ -28,6 +28,12 @@ No usar `if role === ...` como autorización.
 - `customers.restrict`
 - `customers.view_sensitive`
 
+### Operaciones y zonas
+
+- `sites.read`
+- `sites.manage`
+- `zones.manage`
+
 ### Pedidos
 
 - `orders.read`

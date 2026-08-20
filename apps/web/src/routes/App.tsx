@@ -3,6 +3,7 @@ import { Link, Route, Routes } from 'react-router-dom';
 import { DashboardPage } from './DashboardPage.js';
 import { CustomersPage } from './CustomersPage.js';
 import { LoginPage } from './LoginPage.js';
+import { OAuthCallbackPage } from './OAuthCallbackPage.js';
 import { OperationsPage } from './OperationsPage.js';
 import { PublicOrderPage } from './PublicOrderPage.js';
 
@@ -117,6 +118,7 @@ export function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/pedido" element={<PublicOrderPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/auth/callback" element={<OAuthCallbackPage />} />
       <Route path="/app" element={<DashboardPage />} />
       <Route path="/app/clientes" element={<CustomersPage />} />
       <Route path="/app/operaciones" element={<OperationsPage />} />

@@ -50,6 +50,13 @@
       "when": 1787139483020,
       "tag": "0006_lean_black_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787186433924,
+      "tag": "0007_next_paper_doll",
+      "breakpoints": true
     }
   ]
 }
