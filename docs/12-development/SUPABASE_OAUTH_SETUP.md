@@ -182,8 +182,10 @@ Sólo variables públicas:
 | `VITE_SUPABASE_URL`             | mismo valor que `SUPABASE_URL`          | Development, Preview, Production |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | clave `sb_publishable_...` del proyecto | Development, Preview, Production |
 
-Si la instalación creó `NEXT_PUBLIC_SUPABASE_URL` o `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, no alcanza para
-esta aplicación: `NEXT_PUBLIC_` pertenece a Next.js y Vite sólo expone variables `VITE_`.
+La configuración de build de Verdeo mapea específicamente los aliases públicos
+`NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` creados por la integración oficial a
+las variables Vite. Para desarrollo local se mantienen `VITE_SUPABASE_URL` y
+`VITE_SUPABASE_PUBLISHABLE_KEY`. No se habilita el prefijo `NEXT_PUBLIC_` de forma global.
 
 Nunca crear en Web:
 

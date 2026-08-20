@@ -141,6 +141,10 @@ Only browser-safe values may use the `VITE_` prefix:
 - `VITE_SUPABASE_PUBLISHABLE_KEY`: public Supabase publishable key after the OAuth adapter is implemented;
 - future public analytics/site identifiers after privacy review.
 
+The Web Vite config also maps the official Supabase Marketplace aliases
+`NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` to those two specific browser values. It
+does not expose the complete `NEXT_PUBLIC_` prefix or any server-only Supabase variable.
+
 Never place database URLs, session secrets, provider API keys, Meta secrets, or encryption keys in Web
 project variables exposed to Vite.
 
