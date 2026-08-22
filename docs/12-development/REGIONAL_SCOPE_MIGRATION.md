@@ -23,22 +23,41 @@ the zone mandatory on addresses, and replaces global order numbering with a regi
   the first regional number lands above the historical `Nxxxxx` series. Already emitted public numbers
   are never rewritten.
 
+## Rehearsal status
+
+Both migrations are rehearsed automatically against a real PostgreSQL engine (PGlite, in process)
+by `packages/db/src/migrations.test.ts`, which runs inside `pnpm check`. It proves three things on
+every commit: a clean database reproduces from the repository alone, pre-regional rows backfill
+without leaving a null in any newly mandatory column, and the composite key refuses an order whose
+zone belongs to another operation.
+
+That covers the SQL. It does not cover **your data**, which is what the checklist below is for.
+
 ## Rehearsal checklist
 
 Run against a restored copy, not the live database.
 
-1. Apply `0008` and `0009` in order.
-2. `select count(*) from product_variants where product_size_id is null;` must be `0`.
-3. `select count(*) from customer_addresses where geographic_zone_id is null;` must be `0`.
-4. `select count(*) from orders where operating_site_id is null;` must be `0`.
-5. `select count(*) from weekly_menu_offerings where unit_price_minor is not null;` — every row here is
-   a variety that priced differently from its size. A high count means the old data had real price
-   divergence worth reviewing before it becomes a permanent override.
-6. `select display_name, last_order_number from operating_site_order_counters join operating_sites on id = operating_site_id;`
-   must show the initial operation at the historical order count.
-7. Confirm the composable variety: `select code, display_name, kind from product_families;`. If the
-   composable variety is not coded `intuitivo`, update its `kind` manually — `0008` recognises existing
-   rows by code only once, and from then on the engine reads `kind`.
+1. Apply `0008` and `0009` in order: `pnpm db:migrate`.
+2. Run the verification script; every row must report `PASS`:
+
+   ```bash
+   psql "$DATABASE_URL" -f packages/db/scripts/verify-regional-scope.sql
+   ```
+
+What the script reports, and how to read it:
+
+- **Mandatory columns.** Every row must say `PASS`. A `FAIL` means the backfill left data the new model
+  cannot represent. Active users without a membership report `WARN`, not `FAIL`: they can still work if
+  they hold `sites.access_all`, and otherwise they need a membership assigned.
+- **Price model.** Each row listed is a variety that priced differently from its size and therefore
+  survived as a permanent override. An empty list is the expected outcome; a long one means the old
+  data had real price divergence worth reviewing before it becomes policy.
+- **Composable variety.** Exactly one `COMPOSABLE` family is expected. If yours is not coded
+  `intuitivo`, `0008` will not have found it — set its `kind` manually once, and from then on the
+  engine reads the column rather than the name.
+- **Regional numbering.** The initial operation must show `last_order_number` equal to the number of
+  orders it holds, so the first regional number lands above the historical series.
+- **Operator follow-up.** The count of addresses still parked in `sin-clasificar`.
 
 ## After applying
 
