@@ -308,13 +308,22 @@ export const CustomerDetailSchema = CustomerSummarySchema.extend({
   updatedAt: IsoDateTimeSchema,
 });
 
-export const MenuOfferingInputSchema = z.object({
+// One price per size for the whole week. The variety never changes the price (ADR-030).
+export const MenuSizePriceInputSchema = z.object({
   currency: z.string().trim().length(3).default('ARS'),
+  mealsPerUnit: z.number().int().min(1).max(20).default(5),
+  sizeName: z.string().trim().min(1).max(40),
+  unitPriceMinor: z.number().int().nonnegative(),
+});
+
+export const MenuOfferingInputSchema = z.object({
+  // A composable variety has no fixed five dishes; the customer picks from the published universe.
+  composable: z.boolean().default(false),
   dishes: z.array(RequiredTextSchema).length(5),
   familyName: RequiredTextSchema,
-  mealsPerUnit: z.number().int().min(1).max(20).default(5),
-  unitPriceMinor: z.number().int().nonnegative(),
-  variantName: z.string().trim().min(1).max(40),
+  // Deliberate per-variety exception; omitted means the size price applies.
+  overridePriceMinor: z.number().int().nonnegative().optional(),
+  sizeName: z.string().trim().min(1).max(40),
 });
 
 export const MenuCreateRequestSchema = z
@@ -324,20 +333,35 @@ export const MenuCreateRequestSchema = z
     offerings: z.array(MenuOfferingInputSchema).min(1).max(100),
     openAt: IsoDateTimeSchema,
     partialKitchenCutoffAt: IsoDateTimeSchema,
+    prices: z.array(MenuSizePriceInputSchema).min(1).max(20),
   })
   .refine(
     (value) =>
       new Date(value.openAt) < new Date(value.partialKitchenCutoffAt) &&
       new Date(value.partialKitchenCutoffAt) < new Date(value.closeAt),
     { message: 'Los horarios del ciclo deben estar en orden cronológico.' },
+  )
+  .refine(
+    (value) => new Set(value.prices.map((price) => price.sizeName)).size === value.prices.length,
+    { message: 'Cada tamaño puede tener un solo precio por semana.' },
+  )
+  .refine(
+    (value) => {
+      const priced = new Set(value.prices.map((price) => price.sizeName));
+      return value.offerings.every((offering) => priced.has(offering.sizeName));
+    },
+    { message: 'Cada variedad debe usar un tamaño con precio definido.' },
   );
 
 export const MenuOfferingSchema = z.object({
+  composable: z.boolean(),
   currency: z.string(),
   dishes: z.array(z.string()),
   familyName: z.string(),
   id: UuidSchema,
   mealsPerUnit: z.number().int(),
+  priceOverridden: z.boolean(),
+  sizeName: z.string(),
   unitPriceMinor: z.number().int(),
   variantName: z.string(),
 });

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, ilike, inArray, lt, lte, ne, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, ilike, inArray, lt, lte, ne, or, sql } from 'drizzle-orm';
 
 import { AuditService, type JsonValue } from '@verdeo/audit';
 import {
@@ -40,10 +40,12 @@ import {
   orders,
   orderStatusHistory,
   productFamilies,
+  productSizes,
   productVariants,
   salesCycles,
   weeklyMenuItems,
   weeklyMenuOfferings,
+  weeklyMenuPrices,
   weeklyMenus,
 } from '../schema/index.js';
 import { PostgresAuditSink } from './postgres-audit-sink.js';
@@ -159,15 +161,22 @@ export interface MenuInput {
   alias: string;
   closeAt: string;
   offerings: readonly {
-    currency: string;
+    composable?: boolean | undefined;
     dishes: readonly string[];
     familyName: string;
-    mealsPerUnit: number;
-    unitPriceMinor: number;
-    variantName: string;
+    // Deliberate per-variety exception; omitted means the size price applies.
+    overridePriceMinor?: number | undefined;
+    sizeName: string;
   }[];
   openAt: string;
   partialKitchenCutoffAt: string;
+  // One price per size for the whole week. Two varieties of the same size cost the same (ADR-030).
+  prices: readonly {
+    currency: string;
+    mealsPerUnit: number;
+    sizeName: string;
+    unitPriceMinor: number;
+  }[];
 }
 
 export interface OrderInput {
@@ -1564,17 +1573,29 @@ export class PostgresOperationsService {
     if (menuRows.length === 0) return [];
     const offeringRows = await this.database
       .select({
-        currency: weeklyMenuOfferings.currency,
+        composable: sql<boolean>`${productFamilies.kind} = 'COMPOSABLE'`,
         familyName: productFamilies.displayName,
         id: weeklyMenuOfferings.id,
         mealsPerUnit: productVariants.mealsPerUnit,
         menuId: weeklyMenuOfferings.weeklyMenuId,
-        unitPriceMinor: weeklyMenuOfferings.unitPriceMinor,
+        overrideCurrency: weeklyMenuOfferings.currency,
+        overridePriceMinor: weeklyMenuOfferings.unitPriceMinor,
+        sizeCurrency: weeklyMenuPrices.currency,
+        sizeName: productSizes.displayName,
+        sizePriceMinor: weeklyMenuPrices.unitPriceMinor,
         variantName: productVariants.displayName,
       })
       .from(weeklyMenuOfferings)
       .innerJoin(productVariants, eq(productVariants.id, weeklyMenuOfferings.productVariantId))
       .innerJoin(productFamilies, eq(productFamilies.id, productVariants.productFamilyId))
+      .innerJoin(productSizes, eq(productSizes.id, productVariants.productSizeId))
+      .leftJoin(
+        weeklyMenuPrices,
+        and(
+          eq(weeklyMenuPrices.weeklyMenuId, weeklyMenuOfferings.weeklyMenuId),
+          eq(weeklyMenuPrices.productSizeId, productVariants.productSizeId),
+        ),
+      )
       .where(
         and(
           inArray(
@@ -1584,7 +1605,7 @@ export class PostgresOperationsService {
           eq(weeklyMenuOfferings.active, true),
         ),
       )
-      .orderBy(asc(productFamilies.displayName), asc(productVariants.displayName));
+      .orderBy(asc(productFamilies.displayName), asc(productSizes.sortOrder));
     const itemRows =
       offeringRows.length === 0
         ? []
@@ -1615,12 +1636,24 @@ export class PostgresOperationsService {
       id: menu.id,
       offerings: offeringRows
         .filter((offering) => offering.menuId === menu.id)
-        .map((offering) => ({
-          ...offering,
-          dishes: itemRows
-            .filter((item) => item.offeringId === offering.id)
-            .map((item) => item.dishName),
-        })),
+        .map(
+          ({
+            overrideCurrency,
+            overridePriceMinor,
+            sizeCurrency,
+            sizePriceMinor,
+            ...offering
+          }) => ({
+            ...offering,
+            currency: (overridePriceMinor === null ? sizeCurrency : overrideCurrency) ?? 'ARS',
+            dishes: itemRows
+              .filter((item) => item.offeringId === offering.id)
+              .map((item) => item.dishName),
+            // The published price an operator sees is the resolved one, not the raw override.
+            priceOverridden: overridePriceMinor !== null,
+            unitPriceMinor: overridePriceMinor ?? sizePriceMinor ?? 0,
+          }),
+        ),
       publishedAt: menu.publishedAt,
       revision: menu.revision,
       status: menu.status,
@@ -1658,31 +1691,81 @@ export class PostgresOperationsService {
           .returning({ id: weeklyMenus.id });
         if (!menu) throw new Error('Menu creation did not return a row');
 
+        // Sizes and their prices are established first: an offering only names the size it belongs to.
+        const sizeIdsByName = new Map<string, string>();
+        for (const [index, price] of input.prices.entries()) {
+          const sizeCode = catalogCode(price.sizeName);
+          const [size] = await transaction
+            .insert(productSizes)
+            .values({
+              code: sizeCode,
+              displayName: price.sizeName,
+              mealsPerUnit: price.mealsPerUnit,
+              sortOrder: index,
+            })
+            .onConflictDoUpdate({
+              set: {
+                displayName: price.sizeName,
+                mealsPerUnit: price.mealsPerUnit,
+                updatedAt: new Date(),
+              },
+              target: productSizes.code,
+            })
+            .returning({ id: productSizes.id });
+          if (!size) throw new Error('Product size upsert did not return a row');
+          sizeIdsByName.set(price.sizeName, size.id);
+
+          await transaction.insert(weeklyMenuPrices).values({
+            currency: price.currency.toUpperCase(),
+            productSizeId: size.id,
+            unitPriceMinor: price.unitPriceMinor,
+            weeklyMenuId: menu.id,
+          });
+        }
+
         for (const offering of input.offerings) {
+          const sizeId = sizeIdsByName.get(offering.sizeName);
+          if (!sizeId)
+            throw new OperationsConflictError(
+              `El tamaño "${offering.sizeName}" no tiene precio definido para esta semana`,
+            );
+
           const familyCode = catalogCode(offering.familyName);
           const [family] = await transaction
             .insert(productFamilies)
-            .values({ code: familyCode, displayName: offering.familyName })
+            .values({
+              code: familyCode,
+              displayName: offering.familyName,
+              kind: offering.composable ? 'COMPOSABLE' : 'FIXED',
+            })
             .onConflictDoUpdate({
-              set: { displayName: offering.familyName, updatedAt: new Date() },
+              set: {
+                displayName: offering.familyName,
+                kind: offering.composable ? 'COMPOSABLE' : 'FIXED',
+                updatedAt: new Date(),
+              },
               target: productFamilies.code,
             })
             .returning({ id: productFamilies.id });
           if (!family) throw new Error('Product family upsert did not return a row');
 
-          const variantCode = catalogCode(offering.variantName);
+          const mealsPerUnit =
+            input.prices.find((price) => price.sizeName === offering.sizeName)?.mealsPerUnit ?? 5;
+          const variantCode = catalogCode(offering.sizeName);
           const [variant] = await transaction
             .insert(productVariants)
             .values({
               code: variantCode,
-              displayName: offering.variantName,
-              mealsPerUnit: offering.mealsPerUnit,
+              displayName: offering.sizeName,
+              mealsPerUnit,
               productFamilyId: family.id,
+              productSizeId: sizeId,
             })
             .onConflictDoUpdate({
               set: {
-                displayName: offering.variantName,
-                mealsPerUnit: offering.mealsPerUnit,
+                displayName: offering.sizeName,
+                mealsPerUnit,
+                productSizeId: sizeId,
                 updatedAt: new Date(),
               },
               target: [productVariants.productFamilyId, productVariants.code],
@@ -1693,10 +1776,11 @@ export class PostgresOperationsService {
           const [createdOffering] = await transaction
             .insert(weeklyMenuOfferings)
             .values({
-              currency: offering.currency.toUpperCase(),
               productVariantId: variant.id,
-              unitPriceMinor: offering.unitPriceMinor,
               weeklyMenuId: menu.id,
+              ...(offering.overridePriceMinor === undefined
+                ? {}
+                : { unitPriceMinor: offering.overridePriceMinor }),
             })
             .returning({ id: weeklyMenuOfferings.id });
           if (!createdOffering) throw new Error('Menu offering creation did not return a row');
@@ -2120,16 +2204,28 @@ export class PostgresOperationsService {
     for (const item of items) {
       const [offering] = await transaction
         .select({
-          currency: weeklyMenuOfferings.currency,
           familyName: productFamilies.displayName,
           id: weeklyMenuOfferings.id,
+          mealsPerUnit: productVariants.mealsPerUnit,
+          overrideCurrency: weeklyMenuOfferings.currency,
+          // A per-variety amount is a deliberate exception; the menu's per-size list is the norm.
+          overridePriceMinor: weeklyMenuOfferings.unitPriceMinor,
+          productSizeId: productVariants.productSizeId,
           productVariantId: productVariants.id,
-          unitPriceMinor: weeklyMenuOfferings.unitPriceMinor,
+          sizeCurrency: weeklyMenuPrices.currency,
+          sizePriceMinor: weeklyMenuPrices.unitPriceMinor,
           variantName: productVariants.displayName,
         })
         .from(weeklyMenuOfferings)
         .innerJoin(productVariants, eq(productVariants.id, weeklyMenuOfferings.productVariantId))
         .innerJoin(productFamilies, eq(productFamilies.id, productVariants.productFamilyId))
+        .leftJoin(
+          weeklyMenuPrices,
+          and(
+            eq(weeklyMenuPrices.weeklyMenuId, weeklyMenuOfferings.weeklyMenuId),
+            eq(weeklyMenuPrices.productSizeId, productVariants.productSizeId),
+          ),
+        )
         .where(
           and(
             eq(weeklyMenuOfferings.id, item.offeringId),
@@ -2140,12 +2236,22 @@ export class PostgresOperationsService {
         .limit(1);
       if (!offering) throw new OperationsNotFoundError('Published menu offering not found');
 
+      const unitPriceMinor = offering.overridePriceMinor ?? offering.sizePriceMinor;
+      if (unitPriceMinor === null)
+        throw new OperationsConflictError(
+          'The menu has no price for this size and the offering defines no override',
+        );
+      const currency =
+        offering.overridePriceMinor === null ? offering.sizeCurrency : offering.overrideCurrency;
+
       const baseDishes = await transaction
         .select({ dishName: weeklyMenuItems.dishName })
         .from(weeklyMenuItems)
         .where(eq(weeklyMenuItems.offeringId, offering.id))
         .orderBy(asc(weeklyMenuItems.slot));
-      const variantUniverse = await transaction
+      // The composable universe is every dish published this week for the same size, matched by
+      // size id rather than by the variant's display name.
+      const sizeUniverse = await transaction
         .select({ dishName: weeklyMenuItems.dishName })
         .from(weeklyMenuItems)
         .innerJoin(weeklyMenuOfferings, eq(weeklyMenuOfferings.id, weeklyMenuItems.offeringId))
@@ -2153,25 +2259,27 @@ export class PostgresOperationsService {
         .where(
           and(
             eq(weeklyMenuOfferings.weeklyMenuId, menuId),
-            eq(productVariants.displayName, offering.variantName),
+            eq(productVariants.productSizeId, offering.productSizeId),
           ),
         );
       const composition = resolveOrderComposition({
-        allowedDishes: new Set(variantUniverse.map(({ dishName }) => dishName)),
+        allowedDishes: new Set(sizeUniverse.map(({ dishName }) => dishName)),
         baseDishes: baseDishes.map(({ dishName }) => dishName),
+        composableFamilyName: await this.composableFamilyName(transaction),
         familyName: offering.familyName,
+        mealsPerUnit: offering.mealsPerUnit,
         ...(item.selectedDishNames ? { selectedDishes: item.selectedDishNames } : {}),
       });
 
       resolvedItems.push({
-        currency: offering.currency,
+        currency: currency ?? 'ARS',
         dishSelections: composition.dishSelections,
         offeringId: offering.id,
         productNameSnapshot: composition.productNameSnapshot,
         productVariantId: offering.productVariantId,
         quantityUnits: item.quantityUnits,
-        totalMinor: calculateLineTotal(item.quantityUnits, offering.unitPriceMinor),
-        unitPriceMinor: offering.unitPriceMinor,
+        totalMinor: calculateLineTotal(item.quantityUnits, unitPriceMinor),
+        unitPriceMinor,
         variantSnapshot: offering.variantName,
       });
     }
@@ -2370,6 +2478,23 @@ export class PostgresOperationsService {
       .orderBy(desc(orderRevisions.revision));
   }
 
+  // The composable variety is found by kind, never by name. Its display name is only used as the
+  // snapshot label for a composed unit (ADR-030).
+  private async composableFamilyName(database: Database | DatabaseTransaction): Promise<string> {
+    const [family] = await database
+      .select({ displayName: productFamilies.displayName })
+      .from(productFamilies)
+      .where(and(eq(productFamilies.kind, 'COMPOSABLE'), eq(productFamilies.active, true)))
+      .orderBy(asc(productFamilies.displayName))
+      .limit(1);
+
+    if (!family)
+      throw new OperationsConflictError(
+        'No hay una variedad componible activa configurada en el catálogo',
+      );
+    return family.displayName;
+  }
+
   private async loadOrder(database: Database | DatabaseTransaction, orderId: string) {
     const [row] = await database
       .select({
@@ -2527,6 +2652,9 @@ export class PostgresOperationsService {
 
     const lines = await this.database
       .select({
+        // Derived from the catalog rather than compared against a variety name. A line whose variant
+        // was since removed falls back to its own composition, which is still correct.
+        composable: sql<boolean>`coalesce(${productFamilies.kind} = 'COMPOSABLE', false)`,
         customerDisplayName: customers.displayName,
         familyName: orderItems.productNameSnapshot,
         orderId: orders.id,
@@ -2538,6 +2666,8 @@ export class PostgresOperationsService {
       .from(orderItems)
       .innerJoin(orders, eq(orders.id, orderItems.orderId))
       .innerJoin(customers, eq(customers.id, orders.customerId))
+      .leftJoin(productVariants, eq(productVariants.id, orderItems.productVariantId))
+      .leftJoin(productFamilies, eq(productFamilies.id, productVariants.productFamilyId))
       .where(
         and(
           eq(orders.salesCycleId, cycleId),

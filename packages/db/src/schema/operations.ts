@@ -276,13 +276,40 @@ export const salesCycles = pgTable(
   ],
 );
 
-export const productFamilies = pgTable('product_families', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  code: text('code').notNull().unique(),
-  displayName: text('display_name').notNull(),
-  active: boolean('active').default(true).notNull(),
-  ...timestamps,
-});
+// `kind` is a domain discriminator, not a reconfigurable catalog: FIXED families define their five
+// dishes, COMPOSABLE ones let the customer pick five from the published universe. The engine branches
+// on this value so the display name stays freely renameable (ADR-030).
+export const productFamilies = pgTable(
+  'product_families',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    code: text('code').notNull().unique(),
+    displayName: text('display_name').notNull(),
+    kind: text('kind').default('FIXED').notNull(),
+    active: boolean('active').default(true).notNull(),
+    ...timestamps,
+  },
+  (table) => [check('product_families_kind_check', sql`${table.kind} in ('FIXED', 'COMPOSABLE')`)],
+);
+
+// Commercial size. '250' and '400' are commercial names and never express a unit of measure.
+export const productSizes = pgTable(
+  'product_sizes',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    code: text('code').notNull().unique(),
+    displayName: text('display_name').notNull(),
+    mealsPerUnit: integer('meals_per_unit').default(5).notNull(),
+    sortOrder: integer('sort_order').default(0).notNull(),
+    active: boolean('active').default(true).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index('product_sizes_active_order_idx').on(table.active, table.sortOrder),
+    check('product_sizes_meals_positive_check', sql`${table.mealsPerUnit} > 0`),
+    check('product_sizes_sort_order_check', sql`${table.sortOrder} >= 0`),
+  ],
+);
 
 export const productVariants = pgTable(
   'product_variants',
@@ -291,6 +318,9 @@ export const productVariants = pgTable(
     productFamilyId: uuid('product_family_id')
       .notNull()
       .references(() => productFamilies.id, { onDelete: 'restrict' }),
+    productSizeId: uuid('product_size_id')
+      .notNull()
+      .references(() => productSizes.id, { onDelete: 'restrict' }),
     code: text('code').notNull(),
     displayName: text('display_name').notNull(),
     mealsPerUnit: integer('meals_per_unit').default(5).notNull(),
@@ -299,6 +329,10 @@ export const productVariants = pgTable(
   },
   (table) => [
     uniqueIndex('product_variants_family_code_unique').on(table.productFamilyId, table.code),
+    uniqueIndex('product_variants_family_size_unique').on(
+      table.productFamilyId,
+      table.productSizeId,
+    ),
     check('product_variants_meals_positive_check', sql`${table.mealsPerUnit} > 0`),
   ],
 );
@@ -321,6 +355,28 @@ export const weeklyMenus = pgTable(
   ],
 );
 
+// Price depends on size and scope, never on the variety: two varieties of the same size cost the
+// same within one menu (ADR-030). This list is the authority.
+export const weeklyMenuPrices = pgTable(
+  'weekly_menu_prices',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    weeklyMenuId: uuid('weekly_menu_id')
+      .notNull()
+      .references(() => weeklyMenus.id, { onDelete: 'cascade' }),
+    productSizeId: uuid('product_size_id')
+      .notNull()
+      .references(() => productSizes.id, { onDelete: 'restrict' }),
+    unitPriceMinor: integer('unit_price_minor').notNull(),
+    currency: text('currency').default('ARS').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('weekly_menu_prices_menu_size_unique').on(table.weeklyMenuId, table.productSizeId),
+    check('weekly_menu_prices_price_check', sql`${table.unitPriceMinor} >= 0`),
+  ],
+);
+
 export const weeklyMenuOfferings = pgTable(
   'weekly_menu_offerings',
   {
@@ -331,7 +387,9 @@ export const weeklyMenuOfferings = pgTable(
     productVariantId: uuid('product_variant_id')
       .notNull()
       .references(() => productVariants.id, { onDelete: 'restrict' }),
-    unitPriceMinor: integer('unit_price_minor').notNull(),
+    // Deliberate per-variety exception. Null means "use the menu's price for this size", which is
+    // the normal case; a value here is an explicit override an operator chose.
+    unitPriceMinor: integer('unit_price_minor'),
     currency: text('currency').default('ARS').notNull(),
     active: boolean('active').default(true).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -341,7 +399,10 @@ export const weeklyMenuOfferings = pgTable(
       table.weeklyMenuId,
       table.productVariantId,
     ),
-    check('weekly_menu_offerings_price_check', sql`${table.unitPriceMinor} >= 0`),
+    check(
+      'weekly_menu_offerings_price_check',
+      sql`${table.unitPriceMinor} is null or ${table.unitPriceMinor} >= 0`,
+    ),
   ],
 );
 

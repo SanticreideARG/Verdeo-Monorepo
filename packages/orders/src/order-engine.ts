@@ -111,7 +111,11 @@ export function assertOrderTransitionPolicy(input: {
 interface ResolveCompositionInput {
   allowedDishes: ReadonlySet<string>;
   baseDishes: readonly string[];
+  // Display name of the family whose kind is COMPOSABLE. Passed in as data so renaming the variety
+  // never changes engine behaviour (ADR-030).
+  composableFamilyName: string;
   familyName: string;
+  mealsPerUnit: number;
   selectedDishes?: readonly string[];
 }
 
@@ -122,10 +126,10 @@ export function resolveOrderComposition(input: ResolveCompositionInput): {
   if (!input.selectedDishes) {
     return { dishSelections: [], productNameSnapshot: input.familyName };
   }
-  if (input.selectedDishes.length !== 5) {
+  if (input.selectedDishes.length !== input.mealsPerUnit) {
     throw new OrderRuleError(
       'INVALID_COMPOSITION',
-      'An Intuitivo composition requires five dishes',
+      `A composed unit requires exactly ${input.mealsPerUnit} dishes`,
     );
   }
   if (input.selectedDishes.some((dish) => !input.allowedDishes.has(dish))) {
@@ -141,7 +145,7 @@ export function resolveOrderComposition(input: ResolveCompositionInput): {
 
   return {
     dishSelections: isBase ? [] : [...input.selectedDishes],
-    productNameSnapshot: isBase ? input.familyName : 'Intuitivo',
+    productNameSnapshot: isBase ? input.familyName : input.composableFamilyName,
   };
 }
 
@@ -152,7 +156,9 @@ export function buildKitchenSummary(lines: readonly KitchenSourceLine[]): Kitche
 
   for (const line of lines) {
     totalUnits += line.quantityUnits;
-    if (line.dishSelections.length > 0 || line.familyName === 'Intuitivo') {
+    // A line is custom because it carries its own composition or belongs to a composable family,
+    // never because of what the family is called.
+    if (line.dishSelections.length > 0 || line.composable) {
       custom.push({ ...line, sequence: custom.length + 1 });
       continue;
     }

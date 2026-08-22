@@ -1,6 +1,8 @@
 export type OrderStatus = 'DRAFT' | 'CONFIRMED' | 'READY' | 'DELIVERED' | 'CANCELLED';
 
 export interface KitchenSourceLine {
+  // True when the family's kind is COMPOSABLE. Kitchen groups by behaviour, not by variety name.
+  composable: boolean;
   customerDisplayName: string;
   dietaryInstructions: readonly string[];
   dishSelections: readonly string[];

@@ -66,11 +66,13 @@ describe('order engine', () => {
     ).not.toThrow();
   });
 
-  it('turns a changed base composition into Intuitivo and permits repetitions', () => {
+  it('labels a changed base composition with the composable family and permits repetitions', () => {
     const result = resolveOrderComposition({
       allowedDishes: new Set(['A', 'B', 'C', 'D', 'E']),
       baseDishes: ['A', 'B', 'C', 'D', 'E'],
+      composableFamilyName: 'Intuitivo',
       familyName: 'Real',
+      mealsPerUnit: 5,
       selectedDishes: ['A', 'A', 'C', 'D', 'E'],
     });
 
@@ -83,7 +85,9 @@ describe('order engine', () => {
       resolveOrderComposition({
         allowedDishes: new Set(['A', 'B', 'C', 'D', 'E']),
         baseDishes: ['A', 'B', 'C', 'D', 'E'],
+        composableFamilyName: 'Intuitivo',
         familyName: 'Keto',
+        mealsPerUnit: 5,
         selectedDishes: ['A', 'B', 'C', 'D', 'F'],
       }),
     ).toThrowError(/published universe/);
@@ -92,6 +96,7 @@ describe('order engine', () => {
   it('consolidates base quantities and keeps custom units identifiable', () => {
     const summary = buildKitchenSummary([
       {
+        composable: false,
         customerDisplayName: 'Rosa',
         dietaryInstructions: ['Sin cebolla'],
         dishSelections: [],
@@ -101,6 +106,7 @@ describe('order engine', () => {
         variantName: '250',
       },
       {
+        composable: false,
         customerDisplayName: 'Juan',
         dietaryInstructions: [],
         dishSelections: [],
@@ -110,6 +116,7 @@ describe('order engine', () => {
         variantName: '250',
       },
       {
+        composable: true,
         customerDisplayName: 'Lola',
         dietaryInstructions: [],
         dishSelections: ['A', 'A', 'B', 'C', 'D'],

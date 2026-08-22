@@ -14,18 +14,29 @@ import {
 } from '../lib/operations.js';
 
 interface OfferingDraft {
+  composable: boolean;
   dishes: string;
   familyName: string;
+  sizeName: string;
+}
+
+interface SizePriceDraft {
+  sizeName: string;
   unitPrice: string;
-  variantName: string;
 }
 
 const emptyOffering = (): OfferingDraft => ({
+  composable: false,
   dishes: '',
   familyName: '',
-  unitPrice: '',
-  variantName: '',
+  sizeName: '',
 });
+
+// The price belongs to the size, so the week starts from its price list and the varieties hang off it.
+const defaultSizePrices = (): SizePriceDraft[] => [
+  { sizeName: '250', unitPrice: '' },
+  { sizeName: '400', unitPrice: '' },
+];
 
 function localDate(daysFromToday = 0): string {
   const date = new Date();
@@ -51,6 +62,7 @@ export function OperationsPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [offerings, setOfferings] = useState<OfferingDraft[]>([emptyOffering()]);
+  const [sizePrices, setSizePrices] = useState<SizePriceDraft[]>(defaultSizePrices);
   const [selectedMenuId, setSelectedMenuId] = useState('');
 
   const loadData = useCallback(async () => {
@@ -149,21 +161,38 @@ export function OperationsPage() {
   async function createMenu(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const parsedPrices = sizePrices
+      .filter((price) => price.sizeName.trim() && price.unitPrice.trim())
+      .map((price) => ({
+        currency: 'ARS',
+        mealsPerUnit: 5,
+        sizeName: price.sizeName.trim(),
+        unitPriceMinor: Math.round(Number(price.unitPrice) * 100),
+      }));
+    if (parsedPrices.length === 0) {
+      setMessage('Definí al menos un tamaño con su precio.');
+      return;
+    }
+
     const parsedOfferings = offerings.map((offering) => ({
-      currency: 'ARS',
+      composable: offering.composable,
       dishes: offering.dishes
         .split('\n')
         .map((dish) => dish.trim())
         .filter(Boolean),
       familyName: offering.familyName,
-      mealsPerUnit: 5,
-      unitPriceMinor: Math.round(Number(offering.unitPrice) * 100),
-      variantName: offering.variantName,
+      sizeName: offering.sizeName.trim(),
     }));
     if (parsedOfferings.some((offering) => offering.dishes.length !== 5)) {
       setMessage('Cada opción del menú necesita exactamente cinco platos.');
       return;
     }
+    const pricedSizes = new Set(parsedPrices.map((price) => price.sizeName));
+    if (parsedOfferings.some((offering) => !pricedSizes.has(offering.sizeName))) {
+      setMessage('Cada variedad debe usar un tamaño que tenga precio definido.');
+      return;
+    }
+
     try {
       await mutate('/api/v1/menus', {
         alias: formText(form, 'alias'),
@@ -171,8 +200,10 @@ export function OperationsPage() {
         offerings: parsedOfferings,
         openAt: new Date(formText(form, 'openAt')).toISOString(),
         partialKitchenCutoffAt: new Date(formText(form, 'partialKitchenCutoffAt')).toISOString(),
+        prices: parsedPrices,
       });
       setOfferings([emptyOffering()]);
+      setSizePrices(defaultSizePrices());
       event.currentTarget.reset();
       setMessage('Menú guardado como borrador.');
       await loadData();
@@ -482,6 +513,35 @@ export function OperationsPage() {
                   <input name="closeAt" type="datetime-local" required />
                 </label>
               </div>
+              <fieldset className="mt-6 rounded-2xl border border-forest/10 p-4">
+                <legend className="px-2 text-sm font-bold text-forest">Precios por tamaño</legend>
+                <p className="mb-3 text-sm text-ink-muted">
+                  El precio depende del tamaño, no de la variedad: todas las variedades de un mismo
+                  tamaño valen igual esta semana.
+                </p>
+                <div className="form-grid">
+                  {sizePrices.map((price, index) => (
+                    <label className="field" key={index}>
+                      Precio de {price.sizeName || `tamaño ${index + 1}`} en ARS
+                      <input
+                        min="0"
+                        onChange={(event) =>
+                          setSizePrices((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? { ...item, unitPrice: event.target.value }
+                                : item,
+                            ),
+                          )
+                        }
+                        step="0.01"
+                        type="number"
+                        value={price.unitPrice}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
               <div className="mt-6 grid gap-4">
                 {offerings.map((offering, index) => (
                   <fieldset className="rounded-2xl border border-forest/10 p-4" key={index}>
@@ -507,38 +567,46 @@ export function OperationsPage() {
                       </label>
                       <label className="field">
                         Tamaño
-                        <input
-                          value={offering.variantName}
+                        <select
                           onChange={(event) =>
                             setOfferings((current) =>
                               current.map((item, itemIndex) =>
                                 itemIndex === index
-                                  ? { ...item, variantName: event.target.value }
+                                  ? { ...item, sizeName: event.target.value }
                                   : item,
                               ),
                             )
                           }
                           required
-                        />
+                          value={offering.sizeName}
+                        >
+                          <option value="">Elegí un tamaño</option>
+                          {sizePrices
+                            .filter((price) => price.sizeName.trim())
+                            .map((price) => (
+                              <option key={price.sizeName} value={price.sizeName}>
+                                {price.sizeName}
+                              </option>
+                            ))}
+                        </select>
                       </label>
                       <label className="field">
-                        Precio en ARS
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={offering.unitPrice}
+                        Composición
+                        <select
                           onChange={(event) =>
                             setOfferings((current) =>
                               current.map((item, itemIndex) =>
                                 itemIndex === index
-                                  ? { ...item, unitPrice: event.target.value }
+                                  ? { ...item, composable: event.target.value === 'composable' }
                                   : item,
                               ),
                             )
                           }
-                          required
-                        />
+                          value={offering.composable ? 'composable' : 'fixed'}
+                        >
+                          <option value="fixed">Fija (cinco platos definidos)</option>
+                          <option value="composable">Elegida por el cliente</option>
+                        </select>
                       </label>
                       <label className="field field-wide">
                         Cinco platos, uno por línea

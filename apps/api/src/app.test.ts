@@ -79,11 +79,14 @@ const sampleMenu = {
   id: '20000000-0000-4000-8000-000000000001',
   offerings: [
     {
+      composable: false,
       currency: 'ARS',
       dishes: ['A', 'B', 'C', 'D', 'E'],
       familyName: 'Real',
       id: '30000000-0000-4000-8000-000000000001',
       mealsPerUnit: 5,
+      priceOverridden: false,
+      sizeName: '250',
       unitPriceMinor: 25_000,
       variantName: '250',
     },

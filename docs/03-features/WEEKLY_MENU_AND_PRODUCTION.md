@@ -26,6 +26,27 @@ Cada una:
 - 400 usa universo 400;
 - cualquier modificación de una variedad base convierte la unidad en Intuitivo.
 
+## Precios
+
+El precio depende del tamaño y del alcance comercial, nunca de la variedad: Keto 250 y Real 250
+cuestan lo mismo dentro de la misma semana y operación. La lista `weekly_menu_prices` es la autoridad;
+`weekly_menu_offerings.unit_price_minor` queda como override deliberado por variedad y es nulo en el
+caso normal.
+
+El tamaño es un catálogo administrable (`product_sizes`) con nombre comercial, comidas por unidad y
+orden de presentación. `250` y `400` son nombres comerciales y no expresan unidad de medida.
+
+La variedad declara su tipo de composición como dato (`product_families.kind`): `FIXED` define cinco
+platos, `COMPOSABLE` deja que el cliente elija cinco del universo publicado para su mismo tamaño.
+Ningún branch del motor identifica la variedad componible por su nombre.
+
+El `slot` 1..5 es orden de carga y presentación; no representa un día de entrega.
+
+Precios y composición se congelan como snapshot en el pedido: cambiar el catálogo o la lista nunca
+altera pedidos ya emitidos.
+
+La configuración de menú y precios por ciudad queda pendiente; hoy la carga es global (ADR-028).
+
 ## Weekly Menu Builder
 
 Funciones V1:

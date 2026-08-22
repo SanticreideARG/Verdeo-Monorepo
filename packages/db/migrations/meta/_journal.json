@@ -57,6 +57,13 @@
       "when": 1787186433924,
       "tag": "0007_next_paper_doll",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787365521265,
+      "tag": "0008_wakeful_luminals",
+      "breakpoints": true
     }
   ]
 }

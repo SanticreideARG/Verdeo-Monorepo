@@ -108,11 +108,15 @@ export interface AddressGeocodingRequest {
 }
 
 export interface MenuOffering {
+  composable: boolean;
   currency: string;
   dishes: string[];
   familyName: string;
   id: string;
   mealsPerUnit: number;
+  // True when this variety carries a deliberate exception to the size price.
+  priceOverridden: boolean;
+  sizeName: string;
   unitPriceMinor: number;
   variantName: string;
 }
