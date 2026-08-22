@@ -234,6 +234,31 @@ CHAT-1 carries the link policy because a conversation cannot be created without 
 pair is allowed, which makes it larger than a plain messaging slice. Locations and references moved
 to CHAT-3 so the parked service is a working text chat rather than a half-built one.
 
+## As built (CHAT-1)
+
+Tables are `chat_role_links`, `chat_user_links`, `staff_conversations`,
+`staff_conversation_participants` and `staff_messages` (migration 0011, purely additive). The
+resolver lives in `@verdeo/chat` as pure functions so the policy is testable without a database, and
+`PostgresChatService` applies it.
+
+Screens: `/app/chat` for the conversation, `/app/ajustes/chat` for the role matrix and the
+exceptions.
+
+Three things worth knowing:
+
+- **Polling backs off when the tab is hidden**, from five seconds to thirty. Every poll is a function
+  invocation, and an operator with the window behind another does not need the faster cadence.
+- **A non-participant is told the conversation does not exist**, never that it exists and is
+  forbidden. A 403 there would confirm the thread is real.
+- **The retention job authenticates with a shared secret, not a session**, and lives at
+  `/api/v1/cron/chat-retention` rather than under `/api/v1/chat`, so it is not behind the session
+  guard. With no `CRON_SECRET` configured it refuses everyone: a purge nobody can trigger beats one
+  anybody can. Vercel runs it daily at 04:00.
+
+The seed grants `chat.use` to the operator and driver roles; superadmin already holds every
+permission. It seeds **no links**: an installation starts with nobody able to talk until a superadmin
+fills the matrix, which is the documented deny-by-default.
+
 ## Still OPEN
 
 - Can a conversation ever be read by someone who was not a participant — for an audit or a dispute?

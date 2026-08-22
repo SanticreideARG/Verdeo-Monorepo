@@ -16,6 +16,10 @@ const ServerEnvSchema = z
         message: 'AI_CONFIG_ENCRYPTION_KEY must be a base64-encoded 32-byte key',
       }),
     ),
+    // Shared secret for scheduled jobs. Without it the retention endpoint refuses every caller,
+    // which is the safe direction: a purge nobody can trigger beats one anybody can.
+    CRON_SECRET: optionalString(z.string().min(16)),
+    CHAT_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
     DATABASE_URL: z.string().min(1),
     SESSION_SECRET: z.string().min(32),
     SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(8),

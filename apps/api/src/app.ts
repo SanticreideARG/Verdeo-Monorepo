@@ -11,6 +11,18 @@ import {
   AddressGeocodingParamSchema,
   AddressGeocodingRejectRequestSchema,
   AddressGeocodingRequestSchema,
+  ChatContactListResponseSchema,
+  ChatConversationListResponseSchema,
+  ChatConversationOpenRequestSchema,
+  ChatConversationParamSchema,
+  ChatLinksResponseSchema,
+  ChatMessageCreateRequestSchema,
+  ChatMessageListResponseSchema,
+  ChatMessageQuerySchema,
+  ChatMessageSchema,
+  ChatPurgeResponseSchema,
+  ChatRoleLinkRequestSchema,
+  ChatUserLinkRequestSchema,
   CustomerAddressParamSchema,
   CustomerAddressCreateRequestSchema,
   CustomerAddressSchema,
@@ -73,6 +85,9 @@ import {
   type AIProviderConfigUpsertRequest,
   type AddressGeocodingConfirmRequest,
   type AddressGeocodingCreateRequest,
+  type ChatMessageQuery,
+  type ChatRoleLinkRequest,
+  type ChatUserLinkRequest,
   type CustomerCreateRequest,
   type CustomerAddressCreateRequest,
   type CustomerAddressUpdateRequest,
@@ -131,6 +146,30 @@ interface UserDirectory {
 }
 
 type ScopedInput<T> = T & { operatingSiteId: string | null };
+
+interface ChatEngine {
+  listContacts(userId: string): Promise<unknown>;
+  listConversations(userId: string): Promise<unknown>;
+  listLinks(): Promise<unknown>;
+  listMessages(conversationId: string, userId: string, input: ChatMessageQuery): Promise<unknown>;
+  markRead(conversationId: string, userId: string): Promise<void>;
+  openDirectConversation(otherUserId: string, context: ChatContext): Promise<unknown>;
+  removeUserLink(linkId: string, context: ChatContext): Promise<void>;
+  sendMessage(conversationId: string, body: string, context: ChatContext): Promise<unknown>;
+  setRoleLink(input: ChatRoleLinkRequest, context: ChatContext): Promise<unknown>;
+  purgeExpiredMessages(
+    retentionDays: number,
+    context: ChatContext,
+  ): Promise<{ cutoff: Date; removed: number }>;
+  setUserLink(input: ChatUserLinkRequest, context: ChatContext): Promise<unknown>;
+}
+
+interface ChatContext {
+  actorUserId: string;
+  correlationId: string;
+  requestId: string;
+  source: string;
+}
 
 interface ResolvedScope {
   canSelectGlobal: boolean;
@@ -328,6 +367,9 @@ interface CreateAppOptions {
   aiConfiguration?: AIConfigurationEngine;
   appOrigin: string;
   cookieSameSite: 'Lax' | 'None';
+  chat?: ChatEngine;
+  chatRetentionDays?: number | undefined;
+  cronSecret?: string | undefined;
   credentials: CredentialLogin;
   geography?: GeographyEngine;
   logger: Logger;
@@ -341,6 +383,8 @@ interface CreateAppOptions {
 
 export const SESSION_COOKIE_NAME = 'verdeo_session';
 export const SITE_SCOPE_HEADER = 'x-verdeo-site';
+// Messages live 30 days (ADR-032); the runtime overrides this from configuration.
+const DEFAULT_CHAT_RETENTION_DAYS = 30;
 
 function statusForCode(code: ApiErrorCode): 400 | 401 | 403 | 404 | 409 | 429 | 500 | 503 {
   const statuses: Record<ApiErrorCode, 400 | 401 | 403 | 404 | 409 | 429 | 500 | 503> = {
@@ -364,6 +408,20 @@ export function createApp(options: CreateAppOptions) {
     if (!operations) throw new Error('Operations engine is not configured');
     return operations;
   };
+
+  const chat = options.chat;
+
+  const requireChat = () => {
+    if (!chat) throw new Error('Chat engine is not configured');
+    return chat;
+  };
+
+  const chatContext = (context: Context<{ Variables: AppVariables }>): ChatContext => ({
+    actorUserId: context.get('session').userId,
+    correlationId: context.get('requestId'),
+    requestId: context.get('requestId'),
+    source: 'api',
+  });
 
   const geography = options.geography;
 
@@ -701,6 +759,8 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/operating-sites/*', requireAuthentication);
   app.use('/api/v1/zones', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/zones/*', requireAuthentication);
+  app.use('/api/v1/chat', requireAuthentication);
+  app.use('/api/v1/chat/*', requireAuthentication);
   app.use('/api/v1/customers', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/customers/*', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/message-templates', requireAuthentication);
@@ -928,6 +988,134 @@ export function createApp(options: CreateAppOptions) {
       geographyContext(context),
     );
     return context.json(GeographicZoneSchema.parse(contractValue(zone)));
+  });
+
+  // ---- Internal staff messaging (ADR-032). Separate from the customer channel above. ----
+
+  app.get('/api/v1/chat/links', requirePermission('chat.links.manage'), async (context) => {
+    const links = await requireChat().listLinks();
+    return context.json(ChatLinksResponseSchema.parse(contractValue(links)));
+  });
+
+  app.put('/api/v1/chat/links/roles', requirePermission('chat.links.manage'), async (context) => {
+    const input = ChatRoleLinkRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success)
+      return badRequest(context, 'Revisá el enlace de roles.', input.error.issues);
+    await requireChat().setRoleLink(input.data, chatContext(context));
+    return context.json(
+      ChatLinksResponseSchema.parse(contractValue(await requireChat().listLinks())),
+    );
+  });
+
+  app.put('/api/v1/chat/links/users', requirePermission('chat.links.manage'), async (context) => {
+    const input = ChatUserLinkRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success) return badRequest(context, 'Revisá la excepción.', input.error.issues);
+    await requireChat().setUserLink(input.data, chatContext(context));
+    return context.json(
+      ChatLinksResponseSchema.parse(contractValue(await requireChat().listLinks())),
+    );
+  });
+
+  app.delete(
+    '/api/v1/chat/links/users/:id',
+    requirePermission('chat.links.manage'),
+    async (context) => {
+      const params = IdParamSchema.safeParse(context.req.param());
+      if (!params.success)
+        return badRequest(context, 'Identificador inválido.', params.error.issues);
+      await requireChat().removeUserLink(params.data.id, chatContext(context));
+      return context.body(null, 204);
+    },
+  );
+
+  app.get('/api/v1/chat/contacts', requirePermission('chat.use'), async (context) => {
+    const items = await requireChat().listContacts(context.get('session').userId);
+    return context.json(ChatContactListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.get('/api/v1/chat/conversations', requirePermission('chat.use'), async (context) => {
+    const items = await requireChat().listConversations(context.get('session').userId);
+    return context.json(ChatConversationListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.post('/api/v1/chat/conversations', requirePermission('chat.use'), async (context) => {
+    const input = ChatConversationOpenRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) return badRequest(context, 'Elegí una persona válida.', input.error.issues);
+    const conversation = await requireChat().openDirectConversation(
+      input.data.userId,
+      chatContext(context),
+    );
+    return context.json(contractValue(conversation), 201);
+  });
+
+  app.get(
+    '/api/v1/chat/conversations/:conversationId/messages',
+    requirePermission('chat.use'),
+    async (context) => {
+      const params = ChatConversationParamSchema.safeParse(context.req.param());
+      if (!params.success)
+        return badRequest(context, 'Conversación inválida.', params.error.issues);
+      const query = ChatMessageQuerySchema.safeParse(context.req.query());
+      if (!query.success) return badRequest(context, 'Filtros inválidos.', query.error.issues);
+      const items = await requireChat().listMessages(
+        params.data.conversationId,
+        context.get('session').userId,
+        query.data,
+      );
+      return context.json(ChatMessageListResponseSchema.parse({ items: contractValue(items) }));
+    },
+  );
+
+  app.post(
+    '/api/v1/chat/conversations/:conversationId/messages',
+    requirePermission('chat.use'),
+    async (context) => {
+      const params = ChatConversationParamSchema.safeParse(context.req.param());
+      if (!params.success)
+        return badRequest(context, 'Conversación inválida.', params.error.issues);
+      const input = ChatMessageCreateRequestSchema.safeParse(
+        await context.req.json().catch(() => null),
+      );
+      if (!input.success) return badRequest(context, 'Escribí un mensaje.', input.error.issues);
+      const message = await requireChat().sendMessage(
+        params.data.conversationId,
+        input.data.body,
+        chatContext(context),
+      );
+      return context.json(ChatMessageSchema.parse(contractValue(message)), 201);
+    },
+  );
+
+  app.post(
+    '/api/v1/chat/conversations/:conversationId/read',
+    requirePermission('chat.use'),
+    async (context) => {
+      const params = ChatConversationParamSchema.safeParse(context.req.param());
+      if (!params.success)
+        return badRequest(context, 'Conversación inválida.', params.error.issues);
+      await requireChat().markRead(params.data.conversationId, context.get('session').userId);
+      return context.body(null, 204);
+    },
+  );
+
+  // Scheduled retention. Authenticated by a shared secret rather than a session: no person triggers
+  // it. With no secret configured the endpoint refuses everyone, which is the safe direction.
+  app.post('/api/v1/cron/chat-retention', async (context) => {
+    const provided = context.req.header('authorization');
+    if (!options.cronSecret || provided !== `Bearer ${options.cronSecret}`)
+      return forbidden(context);
+    const result = await requireChat().purgeExpiredMessages(
+      options.chatRetentionDays ?? DEFAULT_CHAT_RETENTION_DAYS,
+      {
+        actorUserId: 'system',
+        correlationId: context.get('requestId'),
+        requestId: context.get('requestId'),
+        source: 'cron',
+      },
+    );
+    return context.json(ChatPurgeResponseSchema.parse(contractValue(result)));
   });
 
   app.get('/api/v1/customers', async (context) => {
@@ -1670,6 +1858,7 @@ export function createApp(options: CreateAppOptions) {
     if (
       error.name === 'OperationsNotFoundError' ||
       error.name === 'OperatingSiteNotFoundError' ||
+      error.name === 'ChatNotFoundError' ||
       error.name === 'GeographicZoneNotFoundError'
     ) {
       const code: ApiErrorCode = 'NOT_FOUND';
@@ -1678,9 +1867,17 @@ export function createApp(options: CreateAppOptions) {
         statusForCode(code),
       );
     }
+    if (error.name === 'ChatForbiddenError') {
+      const code: ApiErrorCode = 'FORBIDDEN';
+      return context.json(
+        { error: { code, message: error.message, requestId: context.get('requestId') } },
+        statusForCode(code),
+      );
+    }
     if (
       error.name === 'OperationsConflictError' ||
       error.name === 'GeographyConflictError' ||
+      error.name === 'ChatConflictError' ||
       error.name === 'OrderRuleError' ||
       error.name === 'CustomerRuleError' ||
       error.name === 'AIConfigurationUnavailableError'

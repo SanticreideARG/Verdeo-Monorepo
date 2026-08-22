@@ -1,6 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "pnpm build:vercel",
+  "crons": [
+    {
+      "path": "/api/v1/cron/chat-retention",
+      "schedule": "0 4 * * *"
+    }
+  ],
   "framework": null,
   "outputDirectory": "public",
   "regions": ["gru1"],

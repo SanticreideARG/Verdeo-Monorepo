@@ -133,6 +133,8 @@ importers:
 
   packages/auth: {}
 
+  packages/chat: {}
+
   packages/config:
     dependencies:
       zod:
@@ -158,6 +160,9 @@ importers:
       '@verdeo/auth':
         specifier: workspace:*
         version: link:../auth
+      '@verdeo/chat':
+        specifier: workspace:*
+        version: link:../chat
       '@verdeo/customers':
         specifier: workspace:*
         version: link:../customers

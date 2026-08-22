@@ -33,6 +33,7 @@
     "@verdeo/ai": "workspace:*",
     "@verdeo/audit": "workspace:*",
     "@verdeo/auth": "workspace:*",
+    "@verdeo/chat": "workspace:*",
     "@verdeo/customers": "workspace:*",
     "@verdeo/geocoding": "workspace:*",
     "@verdeo/orders": "workspace:*",

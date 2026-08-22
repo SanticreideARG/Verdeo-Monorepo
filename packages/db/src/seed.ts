@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 
 import { initialPermissionCatalog } from '@verdeo/rbac';
 
@@ -56,6 +56,26 @@ try {
         .insert(rolePermissions)
         .values(permissionRows.map(({ id }) => ({ permissionId: id, roleId: superadmin.id })))
         .onConflictDoNothing();
+    }
+
+    // Chat reaches operators, superadmins and drivers. Superadmin already holds every permission,
+    // so only the other two need an explicit grant. Expressed as data: no code checks a role name.
+    const [chatPermission] = await transaction
+      .select({ id: permissions.id })
+      .from(permissions)
+      .where(eq(permissions.key, 'chat.use'))
+      .limit(1);
+    if (chatPermission) {
+      const chatRoles = await transaction
+        .select({ id: roles.id })
+        .from(roles)
+        .where(inArray(roles.key, ['operador', 'repartidor']));
+      if (chatRoles.length > 0) {
+        await transaction
+          .insert(rolePermissions)
+          .values(chatRoles.map(({ id }) => ({ permissionId: chatPermission.id, roleId: id })))
+          .onConflictDoNothing();
+      }
     }
 
     const [neuquenSite] = await transaction

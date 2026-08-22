@@ -9,6 +9,7 @@ import { parseServerEnv } from '@verdeo/config';
 import {
   createDatabase,
   PostgresAuditSink,
+  PostgresChatService,
   PostgresAIConfigurationService,
   PostgresGeographyService,
   PostgresPasswordCredentialRepository,
@@ -50,6 +51,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     new LocationLinkGeocodingProvider(),
   );
   const geography = new PostgresGeographyService(database.db);
+  const chat = new PostgresChatService(database.db);
   const aiConfiguration = new PostgresAIConfigurationService(
     database.db,
     env.AI_CONFIG_ENCRYPTION_KEY,
@@ -232,6 +234,9 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
   const app = createApp({
     aiConfiguration,
     appOrigin: env.APP_URL,
+    chat,
+    chatRetentionDays: env.CHAT_RETENTION_DAYS,
+    ...(env.CRON_SECRET ? { cronSecret: env.CRON_SECRET } : {}),
     cookieSameSite: env.SESSION_COOKIE_SAME_SITE,
     credentials,
     geography,

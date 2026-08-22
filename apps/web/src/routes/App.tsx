@@ -1,6 +1,8 @@
 import { Link, Route, Routes } from 'react-router-dom';
 
 import { DashboardPage } from './DashboardPage.js';
+import { ChatLinksPage } from './ChatLinksPage.js';
+import { ChatPage } from './ChatPage.js';
 import { CustomersPage } from './CustomersPage.js';
 import { GeographySettingsPage } from './GeographySettingsPage.js';
 import { LoginPage } from './LoginPage.js';
@@ -123,7 +125,9 @@ export function App() {
       <Route path="/app" element={<DashboardPage />} />
       <Route path="/app/clientes" element={<CustomersPage />} />
       <Route path="/app/operaciones" element={<OperationsPage />} />
+      <Route path="/app/chat" element={<ChatPage />} />
       <Route path="/app/ajustes/zonas" element={<GeographySettingsPage />} />
+      <Route path="/app/ajustes/chat" element={<ChatLinksPage />} />
       <Route
         path="*"
         element={

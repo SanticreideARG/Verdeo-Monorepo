@@ -29,6 +29,7 @@ const GLOBAL_OPTION = 'global';
 
 type IconName =
   | 'ai'
+  | 'chat'
   | 'customers'
   | 'dashboard'
   | 'delivery'
@@ -78,6 +79,7 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         permission: 'production.read',
       },
       { href: '/app#reparto', icon: 'delivery', label: 'Reparto', permission: 'routes.read' },
+      { href: '/app/chat', icon: 'chat', label: 'Chat', permission: 'chat.use' },
     ],
   },
   {
@@ -96,6 +98,12 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
     label: 'Administración',
     items: [
       { href: '/app#usuarios', icon: 'users', label: 'Usuarios', permission: 'users.read' },
+      {
+        href: '/app/ajustes/chat',
+        icon: 'chat',
+        label: 'Enlaces de chat',
+        permission: 'chat.links.manage',
+      },
       {
         href: '/app/ajustes/zonas',
         icon: 'settings',
@@ -123,6 +131,11 @@ function NavIcon({ name }: { name: IconName }) {
       <>
         <path d="M9.8 16.1 9 19l-.8-2.9a4.6 4.6 0 0 0-3.2-3.2L2 12l3-.9a4.6 4.6 0 0 0 3.2-3.2L9 5l.8 2.9a4.6 4.6 0 0 0 3.2 3.2l3 .9-3 .9a4.6 4.6 0 0 0-3.2 3.2Z" />
         <path d="m18 3 .4 1.4A2.3 2.3 0 0 0 20 6l1.5.4-1.5.4a2.3 2.3 0 0 0-1.6 1.6L18 10l-.4-1.6A2.3 2.3 0 0 0 16 6.8l-1.5-.4L16 6a2.3 2.3 0 0 0 1.6-1.6L18 3Z" />
+      </>
+    ),
+    chat: (
+      <>
+        <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.6 9.6 0 0 1-2.8-.4L3 21l1.6-4.6A8.2 8.2 0 0 1 3.6 11.5 8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4Z" />
       </>
     ),
     customers: (
