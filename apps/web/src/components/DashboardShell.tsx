@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import { Link, useLocation } from 'react-router-dom';
 
 import { apiRequest, storeOperatingSiteId, storedOperatingSiteId } from '../lib/api.js';
+import { PresenceControl } from './PresenceControl.js';
 import { RequestProgressBar } from './RequestProgressBar.js';
 
 export interface DashboardProfile {
@@ -440,6 +441,7 @@ export function DashboardShell({
             <strong>{profile.user.displayName}</strong>
           </div>
           <div className="dashboard-topbar-tools">
+            <PresenceControl enabled={profile.permissions.includes('chat.use')} />
             {scope && (scope.sites.length > 0 || scope.canSelectGlobal) ? (
               <label className="dashboard-scope">
                 <span>Ciudad</span>

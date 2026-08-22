@@ -259,6 +259,31 @@ The seed grants `chat.use` to the operator and driver roles; superadmin already 
 permission. It seeds **no links**: an installation starts with nobody able to talk until a superadmin
 fills the matrix, which is the documented deny-by-default.
 
+## As built (CHAT-2)
+
+`chat_presence_statuses` and `staff_presence` (migration 0012, additive; the migration seeds the
+three documented statuses as rows). `effectivePresence` is a pure function in `@verdeo/chat`.
+
+- **The heartbeat beats while the tab is hidden**, unlike the message polling that backs off. A
+  minimised window is still a reachable colleague, which is the whole point of presence.
+- **A plain beat never resets a declared status.** The status field is omitted rather than defaulted,
+  so 'I am here' and 'I am busy' stay separate statements.
+- **A colleague who never connected is reported offline, not omitted.** Missing from a list reads as
+  'not a colleague'; offline reads as 'not right now'.
+- **Presence follows the link policy.** `listPresence` is built from the contact list, so someone you
+  cannot message is someone whose presence you cannot observe either.
+- **The dot is never the only signal**: each carries a label for anyone who cannot rely on colour.
+
+`away` is offered as a choice and never inferred from idleness. A status the system invents is a
+status colleagues cannot trust.
+
+## Standby
+
+The service stops here by decision. CHAT-3 (references and locations), CHAT-4 (groups) and CHAT-5
+(Realtime transport) are designed above and unscheduled. Nothing in what is built assumes they will
+not arrive: message `kind` already admits `location` and `reference`, conversations already admit
+`group`, and the transport sits behind the polling client rather than in it.
+
 ## Still OPEN
 
 - Can a conversation ever be read by someone who was not a participant — for an audit or a dispute?

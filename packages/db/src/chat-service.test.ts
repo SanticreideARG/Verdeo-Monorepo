@@ -270,3 +270,65 @@ describe('chat retention', () => {
     expect((await service.purgeExpiredMessages(30, context(ISABELLA))).removed).toBe(0);
   });
 });
+
+describe('chat presence', () => {
+  it('offers the seeded statuses as data', async () => {
+    const { service } = await seededService();
+
+    const statuses = await service.listPresenceStatuses();
+
+    expect(statuses.map((status) => status.key)).toEqual(['available', 'away', 'busy']);
+  });
+
+  it('refuses a status that is not in the catalog', async () => {
+    const { service } = await seededService();
+
+    await expect(service.heartbeat(CHOFER, 'inventado')).rejects.toThrow(/no está disponible/);
+  });
+
+  it('keeps a declared status across a plain heartbeat', async () => {
+    const { service } = await seededService();
+
+    await service.heartbeat(CHOFER, 'busy');
+    const afterPlainBeat = await service.heartbeat(CHOFER, undefined);
+
+    // A beat says "I am here", not "reset what I chose".
+    expect(afterPlainBeat.status).toBe('busy');
+  });
+
+  it('reports a colleague offline once the heartbeat goes stale', async () => {
+    const { client, service } = await seededService();
+    await service.heartbeat(CHOFER, 'busy');
+
+    await client.exec(`update staff_presence set last_seen_at = now() - interval '10 minutes'`);
+    const seenByOperator = await service.listPresence(TAMARA);
+
+    const driver = seenByOperator.find((entry) => entry.userId === CHOFER);
+    // Someone who declared busy and then closed the tab must not read as busy forever.
+    expect(driver).toMatchObject({ connected: false, status: 'offline' });
+  });
+
+  it('shows presence only for colleagues the policy connects', async () => {
+    const { service } = await seededService();
+    await service.heartbeat(CHOFER_DOS, 'available');
+
+    const seenByDriver = await service.listPresence(CHOFER);
+
+    // The other driver is unreachable, so their presence is not observable either.
+    expect(seenByDriver.map((entry) => entry.userId)).not.toContain(CHOFER_DOS);
+    expect(seenByDriver.map((entry) => entry.userId)).toEqual(
+      expect.arrayContaining([CHOFER, ISABELLA, TAMARA]),
+    );
+  });
+
+  it('reports a colleague who never connected as offline rather than omitting them', async () => {
+    const { service } = await seededService();
+
+    const seenByDriver = await service.listPresence(CHOFER);
+
+    expect(seenByDriver.find((entry) => entry.userId === TAMARA)).toMatchObject({
+      connected: false,
+      status: 'offline',
+    });
+  });
+});

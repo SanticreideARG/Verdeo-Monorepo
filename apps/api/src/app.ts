@@ -19,7 +19,11 @@ import {
   ChatMessageCreateRequestSchema,
   ChatMessageListResponseSchema,
   ChatMessageQuerySchema,
+  ChatHeartbeatRequestSchema,
   ChatMessageSchema,
+  ChatPresenceEntrySchema,
+  ChatPresenceListResponseSchema,
+  ChatPresenceStatusListResponseSchema,
   ChatPurgeResponseSchema,
   ChatRoleLinkRequestSchema,
   ChatUserLinkRequestSchema,
@@ -152,6 +156,9 @@ interface ChatEngine {
   listConversations(userId: string): Promise<unknown>;
   listLinks(): Promise<unknown>;
   listMessages(conversationId: string, userId: string, input: ChatMessageQuery): Promise<unknown>;
+  heartbeat(userId: string, status: string | undefined): Promise<unknown>;
+  listPresence(userId: string): Promise<unknown>;
+  listPresenceStatuses(): Promise<unknown>;
   markRead(conversationId: string, userId: string): Promise<void>;
   openDirectConversation(otherUserId: string, context: ChatContext): Promise<unknown>;
   removeUserLink(linkId: string, context: ChatContext): Promise<void>;
@@ -1031,6 +1038,29 @@ export function createApp(options: CreateAppOptions) {
   app.get('/api/v1/chat/contacts', requirePermission('chat.use'), async (context) => {
     const items = await requireChat().listContacts(context.get('session').userId);
     return context.json(ChatContactListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.get('/api/v1/chat/presence/statuses', requirePermission('chat.use'), async (context) => {
+    const items = await requireChat().listPresenceStatuses();
+    return context.json(
+      ChatPresenceStatusListResponseSchema.parse({ items: contractValue(items) }),
+    );
+  });
+
+  app.post('/api/v1/chat/presence/heartbeat', requirePermission('chat.use'), async (context) => {
+    const input = ChatHeartbeatRequestSchema.safeParse(await context.req.json().catch(() => ({})));
+    if (!input.success) return badRequest(context, 'Estado inválido.', input.error.issues);
+    // The user is the session's: presence cannot be asserted on someone else's behalf.
+    const presence = await requireChat().heartbeat(
+      context.get('session').userId,
+      input.data.status,
+    );
+    return context.json(ChatPresenceEntrySchema.parse(contractValue(presence)));
+  });
+
+  app.get('/api/v1/chat/presence', requirePermission('chat.presence.read'), async (context) => {
+    const items = await requireChat().listPresence(context.get('session').userId);
+    return context.json(ChatPresenceListResponseSchema.parse({ items: contractValue(items) }));
   });
 
   app.get('/api/v1/chat/conversations', requirePermission('chat.use'), async (context) => {

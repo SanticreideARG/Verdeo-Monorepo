@@ -3,6 +3,7 @@ import {
   boolean,
   check,
   index,
+  integer,
   pgTable,
   primaryKey,
   text,
@@ -143,4 +144,38 @@ export const staffMessages = pgTable(
       sql`${table.deletedAt} is not null or ${table.kind} <> 'text' or ${table.body} is not null`,
     ),
   ],
+);
+
+// Declared statuses are a catalog, not a union type in code: a business that wants "en ruta" for
+// drivers adds a row. Only the offline derivation is a rule, and that lives in @verdeo/chat.
+export const chatPresenceStatuses = pgTable(
+  'chat_presence_statuses',
+  {
+    key: text('key').primaryKey(),
+    displayName: text('display_name').notNull(),
+    // Whether colleagues should read this as reachable. Presentation, not authorization.
+    reachable: boolean('reachable').default(true).notNull(),
+    sortOrder: integer('sort_order').default(0).notNull(),
+    active: boolean('active').default(true).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index('chat_presence_statuses_active_order_idx').on(table.active, table.sortOrder),
+    check('chat_presence_statuses_sort_order_check', sql`${table.sortOrder} >= 0`),
+  ],
+);
+
+export const staffPresence = pgTable(
+  'staff_presence',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    status: text('status').notNull(),
+    statusMessage: text('status_message'),
+    // The heartbeat. Freshness is judged by the server, never asserted by the client.
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index('staff_presence_last_seen_idx').on(table.lastSeenAt)],
 );

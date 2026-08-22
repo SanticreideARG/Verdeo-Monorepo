@@ -40,6 +40,7 @@ export const initialPermissionCatalog: readonly PermissionDefinition[] = [
     description: 'Modificar ciclos bloqueados',
   },
   { key: 'chat.use', group: 'chat', description: 'Usar el chat interno' },
+  { key: 'chat.presence.read', group: 'chat', description: 'Ver la presencia de colegas' },
   { key: 'chat.links.manage', group: 'chat', description: 'Configurar quién habla con quién' },
   { key: 'messages.read', group: 'messaging', description: 'Ver mensajes' },
   { key: 'messages.send', group: 'messaging', description: 'Enviar mensajes' },

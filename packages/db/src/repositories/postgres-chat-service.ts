@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gt, inArray, isNull, lt, or, sql } from 'drizzle-or
 import { AuditService, type JsonValue } from '@verdeo/audit';
 import {
   directConversationKey,
+  effectivePresence,
   normalizePair,
   resolveChatLink,
   type ChatLinkPolicy,
@@ -11,6 +12,7 @@ import {
 
 import type { Database } from '../index.js';
 import {
+  chatPresenceStatuses,
   chatRoleLinks,
   chatUserLinks,
   permissions,
@@ -19,6 +21,7 @@ import {
   staffConversationParticipants,
   staffConversations,
   staffMessages,
+  staffPresence,
   userPermissionOverrides,
   userRoles,
   users,
@@ -600,6 +603,84 @@ export class PostgresChatService {
           eq(staffConversationParticipants.userId, userId),
         ),
       );
+  }
+
+  // ---------------------------------------------------------------- presence
+
+  /** The declared statuses an operator may choose. Data, so adding one needs no deploy. */
+  public async listPresenceStatuses() {
+    return this.database
+      .select({
+        displayName: chatPresenceStatuses.displayName,
+        key: chatPresenceStatuses.key,
+        reachable: chatPresenceStatuses.reachable,
+      })
+      .from(chatPresenceStatuses)
+      .where(eq(chatPresenceStatuses.active, true))
+      .orderBy(asc(chatPresenceStatuses.sortOrder), asc(chatPresenceStatuses.displayName));
+  }
+
+  /**
+   * Records that the user is here, and optionally what they are declaring. The timestamp is the
+   * server's: a client cannot claim to have been present at a time of its choosing.
+   */
+  public async heartbeat(userId: string, status: string | undefined) {
+    if (status !== undefined) {
+      const [known] = await this.database
+        .select({ key: chatPresenceStatuses.key })
+        .from(chatPresenceStatuses)
+        .where(and(eq(chatPresenceStatuses.key, status), eq(chatPresenceStatuses.active, true)))
+        .limit(1);
+      if (!known) throw new ChatConflictError('Ese estado no está disponible.');
+    }
+
+    const now = new Date();
+    const [saved] = await this.database
+      .insert(staffPresence)
+      .values({ lastSeenAt: now, status: status ?? 'available', updatedAt: now, userId })
+      .onConflictDoUpdate({
+        set: {
+          lastSeenAt: now,
+          updatedAt: now,
+          // A plain beat must not silently reset a declared status.
+          ...(status === undefined ? {} : { status }),
+        },
+        target: staffPresence.userId,
+      })
+      .returning({
+        lastSeenAt: staffPresence.lastSeenAt,
+        status: staffPresence.status,
+        statusMessage: staffPresence.statusMessage,
+      });
+    if (!saved) throw new Error('Presence upsert did not return a row');
+
+    return { ...effectivePresence(saved, now), userId };
+  }
+
+  /**
+   * Presence for the colleagues this user may already contact, and their own. Restricted to the
+   * link policy on purpose: presence must not become a way to observe people you cannot reach.
+   */
+  public async listPresence(userId: string) {
+    const contacts = await this.listContacts(userId);
+    const visibleIds = [userId, ...contacts.map((contact) => contact.id)];
+
+    const rows = await this.database
+      .select({
+        lastSeenAt: staffPresence.lastSeenAt,
+        status: staffPresence.status,
+        statusMessage: staffPresence.statusMessage,
+        userId: staffPresence.userId,
+      })
+      .from(staffPresence)
+      .where(inArray(staffPresence.userId, visibleIds));
+
+    const now = new Date();
+    const byUser = new Map(rows.map((row) => [row.userId, row]));
+    return visibleIds.map((id) => ({
+      ...effectivePresence(byUser.get(id) ?? null, now),
+      userId: id,
+    }));
   }
 
   // ---------------------------------------------------------------- retention

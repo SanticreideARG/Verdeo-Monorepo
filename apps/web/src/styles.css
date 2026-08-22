@@ -2324,3 +2324,45 @@ a {
     grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
   }
 }
+
+.dashboard-presence {
+  display: grid;
+  min-height: 41px;
+  align-content: center;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--db-border-soft);
+  border-radius: 0.78rem;
+  background: color-mix(in srgb, var(--db-bg-2) 55%, transparent);
+}
+.dashboard-presence span {
+  color: var(--db-muted);
+  font-size: 0.61rem;
+}
+.dashboard-presence select {
+  max-width: 150px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--db-text);
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+/* Presence dot beside a colleague. Colour alone never carries the meaning: the title says it too. */
+.chat-presence-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 30%, transparent);
+}
+.chat-presence-dot.is-available {
+  background: #4e9e5a;
+}
+.chat-presence-dot.is-busy {
+  background: #c0562f;
+}
+.chat-presence-dot.is-away {
+  background: #c8a030;
+}

@@ -28,10 +28,21 @@ const CONVERSATION = '30000000-0000-4000-8000-000000000001';
 
 function chatStubs() {
   return {
+    heartbeat: vi
+      .fn<(userId: string, status: string | undefined) => Promise<unknown>>()
+      .mockResolvedValue({ connected: true, status: 'available', statusMessage: null, userId: ME }),
     listContacts: vi
       .fn<(userId: string) => Promise<unknown>>()
       .mockResolvedValue([{ displayName: 'Tamara', id: OTHER }]),
     listConversations: vi.fn<(userId: string) => Promise<unknown>>().mockResolvedValue([]),
+    listPresence: vi
+      .fn<(userId: string) => Promise<unknown>>()
+      .mockResolvedValue([
+        { connected: true, status: 'available', statusMessage: null, userId: ME },
+      ]),
+    listPresenceStatuses: vi
+      .fn<() => Promise<unknown>>()
+      .mockResolvedValue([{ displayName: 'Disponible', key: 'available', reachable: true }]),
     listLinks: vi
       .fn<() => Promise<unknown>>()
       .mockResolvedValue({ roleLinks: [], roles: [], userLinks: [] }),
@@ -297,5 +308,72 @@ describe('chat retention endpoint', () => {
       30,
       expect.objectContaining({ source: 'cron' }),
     );
+  });
+});
+
+describe('chat presence', () => {
+  it('records a heartbeat for the session user, never an arbitrary one', async () => {
+    const chat = chatStubs();
+
+    const response = await chatApp(['chat.use'], chat).request('/api/v1/chat/presence/heartbeat', {
+      body: JSON.stringify({ status: 'busy' }),
+      headers: jsonHeaders,
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(200);
+    expect(chat.heartbeat).toHaveBeenCalledWith(ME, 'busy');
+  });
+
+  it('accepts a plain beat with no declared status', async () => {
+    const chat = chatStubs();
+
+    const response = await chatApp(['chat.use'], chat).request('/api/v1/chat/presence/heartbeat', {
+      headers: jsonHeaders,
+      method: 'POST',
+    });
+
+    // Undefined, not a default: a beat must not silently reset what the person declared.
+    expect(response.status).toBe(200);
+    expect(chat.heartbeat).toHaveBeenCalledWith(ME, undefined);
+  });
+
+  it('denies presence to a session without chat.presence.read', async () => {
+    const chat = chatStubs();
+
+    const response = await chatApp(['chat.use'], chat).request('/api/v1/chat/presence', {
+      headers: sessionCookie,
+    });
+
+    expect(response.status).toBe(403);
+    expect(chat.listPresence).not.toHaveBeenCalled();
+  });
+
+  it('returns presence for the session user with chat.presence.read', async () => {
+    const chat = chatStubs();
+
+    const response = await chatApp(['chat.presence.read'], chat).request('/api/v1/chat/presence', {
+      headers: sessionCookie,
+    });
+
+    expect(response.status).toBe(200);
+    expect(chat.listPresence).toHaveBeenCalledWith(ME);
+  });
+
+  it('turns an unknown status into a conflict rather than a server error', async () => {
+    const chat = chatStubs();
+    chat.heartbeat = vi.fn(() => {
+      const error = new Error('Ese estado no está disponible.');
+      error.name = 'ChatConflictError';
+      return Promise.reject(error);
+    });
+
+    const response = await chatApp(['chat.use'], chat).request('/api/v1/chat/presence/heartbeat', {
+      body: JSON.stringify({ status: 'inventado' }),
+      headers: jsonHeaders,
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(409);
   });
 });

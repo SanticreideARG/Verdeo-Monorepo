@@ -19,6 +19,13 @@ interface ChatConversation {
   unreadCount: number;
 }
 
+interface ChatPresence {
+  connected: boolean;
+  status: string;
+  statusMessage: string | null;
+  userId: string;
+}
+
 interface ChatMessage {
   authorDisplayName: string | null;
   authorUserId: string | null;
@@ -39,6 +46,15 @@ function conversationName(conversation: ChatConversation): string {
   return conversation.participants.map((person) => person.displayName).join(', ') || 'Conversación';
 }
 
+function PresenceDot({ entry }: { entry: ChatPresence | undefined }) {
+  const status = entry?.status ?? 'offline';
+  const label =
+    { available: 'Disponible', away: 'Ausente', busy: 'Ocupado', offline: 'Desconectado' }[
+      status
+    ] ?? status;
+  return <i aria-label={label} className={`chat-presence-dot is-${status}`} title={label} />;
+}
+
 function timeLabel(value: string): string {
   return new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit' }).format(
     new Date(value),
@@ -55,6 +71,7 @@ export function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [message, setMessage] = useState('');
+  const [presence, setPresence] = useState<Map<string, ChatPresence>>(new Map());
   const transcriptRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -78,6 +95,15 @@ export function ChatPage() {
   }, [navigate]);
 
   const canChat = profile?.permissions.includes('chat.use') ?? false;
+  const canSeePresence = profile?.permissions.includes('chat.presence.read') ?? false;
+
+  const loadPresence = useCallback(async () => {
+    if (!canSeePresence) return;
+    const response = await apiRequest('/api/v1/chat/presence');
+    if (!response.ok) return;
+    const body = (await response.json()) as { items: ChatPresence[] };
+    setPresence(new Map(body.items.map((entry) => [entry.userId, entry])));
+  }, [canSeePresence]);
 
   const loadConversations = useCallback(async () => {
     const response = await apiRequest('/api/v1/chat/conversations');
@@ -89,6 +115,7 @@ export function ChatPage() {
   useEffect(() => {
     if (!canChat) return;
     void loadConversations();
+    void loadPresence();
     void apiRequest('/api/v1/chat/contacts')
       .then(async (response) => {
         if (!response.ok) return;
@@ -96,7 +123,7 @@ export function ChatPage() {
         setContacts(body.items);
       })
       .catch(() => setContacts([]));
-  }, [canChat, loadConversations]);
+  }, [canChat, loadConversations, loadPresence]);
 
   const loadMessages = useCallback(async (conversationId: string) => {
     const response = await apiRequest(
@@ -126,6 +153,7 @@ export function ChatPage() {
       timer = window.setTimeout(() => {
         void (async () => {
           await loadConversations();
+          await loadPresence();
           if (selectedId) await loadMessages(selectedId);
           tick();
         })();
@@ -133,7 +161,7 @@ export function ChatPage() {
     };
     tick();
     return () => window.clearTimeout(timer);
-  }, [canChat, loadConversations, loadMessages, selectedId]);
+  }, [canChat, loadConversations, loadMessages, loadPresence, selectedId]);
 
   useEffect(() => {
     transcriptRef.current?.scrollTo({
@@ -263,7 +291,10 @@ export function ChatPage() {
                     onClick={() => void openWith(contact)}
                     type="button"
                   >
-                    <span>{contact.displayName}</span>
+                    <span>
+                      {canSeePresence ? <PresenceDot entry={presence.get(contact.id)} /> : null}
+                      {contact.displayName}
+                    </span>
                   </button>
                 </li>
               ))}

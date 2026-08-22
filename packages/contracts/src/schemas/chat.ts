@@ -102,3 +102,24 @@ export const ChatPurgeResponseSchema = z.object({
 export type ChatRoleLinkRequest = z.infer<typeof ChatRoleLinkRequestSchema>;
 export type ChatUserLinkRequest = z.infer<typeof ChatUserLinkRequestSchema>;
 export type ChatMessageQuery = z.infer<typeof ChatMessageQuerySchema>;
+
+/** Presence: a heartbeat plus an optional declared status (ADR-032). */
+export const ChatHeartbeatRequestSchema = z.object({
+  // Omitted on a plain beat, so a heartbeat never silently resets what the person declared.
+  status: z.string().trim().min(1).max(40).optional(),
+});
+
+export const ChatPresenceEntrySchema = z.object({
+  connected: z.boolean(),
+  status: z.string(),
+  statusMessage: z.string().nullable(),
+  userId: UuidSchema,
+});
+
+export const ChatPresenceListResponseSchema = z.object({
+  items: z.array(ChatPresenceEntrySchema),
+});
+
+export const ChatPresenceStatusListResponseSchema = z.object({
+  items: z.array(z.object({ displayName: z.string(), key: z.string(), reachable: z.boolean() })),
+});
