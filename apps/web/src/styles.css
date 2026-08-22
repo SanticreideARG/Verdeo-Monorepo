@@ -735,6 +735,10 @@ a {
   font-weight: 650;
   cursor: pointer;
 }
+.dashboard-scope select option {
+  background: var(--db-surface-solid);
+  color: var(--db-text);
+}
 .dashboard-themes {
   display: flex;
   align-items: center;
@@ -2378,6 +2382,10 @@ a {
   font-size: 0.82rem;
   font-weight: 650;
   cursor: pointer;
+}
+.dashboard-presence select option {
+  background: var(--db-surface-solid);
+  color: var(--db-text);
 }
 /* Presence dot beside a colleague. Colour alone never carries the meaning: the title says it too. */
 .chat-presence-dot {
