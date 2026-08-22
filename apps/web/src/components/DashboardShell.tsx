@@ -111,7 +111,7 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
   {
     label: 'Administración',
     items: [
-      { href: '/app#usuarios', icon: 'users', label: 'Usuarios', permission: 'users.read' },
+      { href: '/app/usuarios', icon: 'users', label: 'Usuarios', permission: 'users.read' },
       {
         href: '/app/ajustes/chat',
         icon: 'chat',

@@ -54,6 +54,8 @@ export const geographicZones = pgTable(
     displayName: text('display_name').notNull(),
     coverageDescription: text('coverage_description'),
     coverImageUrl: text('cover_image_url'),
+    // The person who owns this zone operationally — not a login, just an informational contact.
+    managerName: text('manager_name'),
     publicPhoneOverride: text('public_phone_override'),
     publicWhatsappOverride: text('public_whatsapp_override'),
     active: boolean('active').default(true).notNull(),

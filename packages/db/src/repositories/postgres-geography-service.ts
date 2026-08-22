@@ -49,6 +49,7 @@ export interface GeographicZoneInput {
   coverImageUrl?: string | undefined;
   coverageDescription?: string | undefined;
   displayName: string;
+  managerName?: string | undefined;
   operatingSiteId: string;
   publicPhoneOverride?: string | undefined;
   publicWhatsappOverride?: string | undefined;
@@ -61,6 +62,7 @@ export interface GeographicZoneUpdateInput {
   coverImageUrl?: string | null | undefined;
   coverageDescription?: string | null | undefined;
   displayName?: string | undefined;
+  managerName?: string | null | undefined;
   publicPhoneOverride?: string | null | undefined;
   publicWhatsappOverride?: string | null | undefined;
   slug?: string | undefined;
@@ -120,6 +122,7 @@ const zoneColumns = {
   createdAt: geographicZones.createdAt,
   displayName: geographicZones.displayName,
   id: geographicZones.id,
+  managerName: geographicZones.managerName,
   operatingSiteId: geographicZones.operatingSiteId,
   publicPhoneOverride: geographicZones.publicPhoneOverride,
   publicWhatsappOverride: geographicZones.publicWhatsappOverride,
@@ -396,6 +399,7 @@ export class PostgresGeographyService {
           coverImageUrl: input.coverImageUrl ?? null,
           coverageDescription: input.coverageDescription ?? null,
           displayName: input.displayName,
+          managerName: input.managerName ?? null,
           operatingSiteId: input.operatingSiteId,
           publicPhoneOverride: input.publicPhoneOverride ?? null,
           publicWhatsappOverride: input.publicWhatsappOverride ?? null,
@@ -444,6 +448,7 @@ export class PostgresGeographyService {
             ? {}
             : { coverageDescription: input.coverageDescription }),
           ...(input.displayName === undefined ? {} : { displayName: input.displayName }),
+          ...(input.managerName === undefined ? {} : { managerName: input.managerName }),
           ...(input.publicPhoneOverride === undefined
             ? {}
             : { publicPhoneOverride: input.publicPhoneOverride }),

@@ -16,6 +16,7 @@ import { OrderIntakePage } from './OrderIntakePage.js';
 import { OrdersPage } from './OrdersPage.js';
 import { ProfilePage } from './ProfilePage.js';
 import { PublicOrderPage } from './PublicOrderPage.js';
+import { UsersAdminPage } from './UsersAdminPage.js';
 
 function BrandMark() {
   return (
@@ -140,6 +141,7 @@ export function App() {
       <Route path="/app/ia" element={<AIProvidersPage />} />
       <Route path="/app/chat" element={<ChatPage />} />
       <Route path="/app/perfil" element={<ProfilePage />} />
+      <Route path="/app/usuarios" element={<UsersAdminPage />} />
       <Route path="/app/ajustes/zonas" element={<GeographySettingsPage />} />
       <Route path="/app/ajustes/chat" element={<ChatLinksPage />} />
       <Route

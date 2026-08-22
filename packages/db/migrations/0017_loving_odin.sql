@@ -1,0 +1,1 @@
+ALTER TABLE "geographic_zones" ADD COLUMN "manager_name" text;

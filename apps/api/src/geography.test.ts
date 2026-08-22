@@ -49,6 +49,7 @@ const sampleZone = {
   createdAt: new Date('2026-08-17T10:00:00.000Z'),
   displayName: 'Centro',
   id: '90000000-0000-4000-8000-000000000002',
+  managerName: null,
   operatingSiteId: sampleSite.id,
   publicPhoneOverride: null,
   publicWhatsappOverride: null,

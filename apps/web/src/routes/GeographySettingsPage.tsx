@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
@@ -28,6 +28,7 @@ export interface GeographicZone {
   createdAt: string;
   displayName: string;
   id: string;
+  managerName: string | null;
   operatingSiteId: string;
   publicPhoneOverride: string | null;
   publicWhatsappOverride: string | null;
@@ -58,6 +59,17 @@ async function readError(response: Response, fallback: string): Promise<string> 
   return body?.error?.message ?? fallback;
 }
 
+function formText(form: FormData, key: string): string {
+  const value = form.get(key);
+  return typeof value === 'string' ? value : '';
+}
+
+function timeLabel(value: string): string {
+  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(
+    new Date(value),
+  );
+}
+
 export function GeographySettingsPage() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<DashboardProfile | null>(null);
@@ -65,13 +77,23 @@ export function GeographySettingsPage() {
   const [sites, setSites] = useState<OperatingSite[]>([]);
   const [zones, setZones] = useState<GeographicZone[]>([]);
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [siteFormOpen, setSiteFormOpen] = useState(false);
   const [siteDraft, setSiteDraft] = useState(emptySiteDraft);
   const [zoneDraft, setZoneDraft] = useState(emptyZoneDraft);
+  const [zoneEdit, setZoneEdit] = useState({
+    coverageDescription: '',
+    managerName: '',
+    publicPhoneOverride: '',
+  });
+  const [repartidores, setRepartidores] = useState<{ displayName: string; id: string }[]>([]);
+  const [issuedToken, setIssuedToken] = useState<{ expiresAt: string; token: string } | null>(null);
 
   const canManageSites = profile?.permissions.includes('sites.manage') ?? false;
   const canManageZones = profile?.permissions.includes('zones.manage') ?? false;
+  const canIssueTokens = profile?.permissions.includes('access_tokens.manage') ?? false;
 
   useEffect(() => {
     let active = true;
@@ -133,6 +155,82 @@ export function GeographySettingsPage() {
     () => sites.find((site) => site.id === selectedSiteId) ?? null,
     [selectedSiteId, sites],
   );
+
+  const selectedZone = useMemo(
+    () => zones.find((zone) => zone.id === selectedZoneId) ?? null,
+    [selectedZoneId, zones],
+  );
+
+  useEffect(() => {
+    if (!selectedZone) return;
+    setZoneEdit({
+      coverageDescription: selectedZone.coverageDescription ?? '',
+      managerName: selectedZone.managerName ?? '',
+      publicPhoneOverride: selectedZone.publicPhoneOverride ?? '',
+    });
+    setIssuedToken(null);
+  }, [selectedZone]);
+
+  useEffect(() => {
+    if (!canIssueTokens) return;
+    void apiRequest('/api/v1/users?limit=100')
+      .then(async (response) => {
+        if (!response.ok) return;
+        const body = (await response.json()) as { items: { displayName: string; id: string }[] };
+        setRepartidores(body.items);
+      })
+      .catch(() => undefined);
+  }, [canIssueTokens]);
+
+  async function saveZoneDetails() {
+    if (!selectedZone) return;
+    setBusy(true);
+    setMessage(null);
+    const response = await apiRequest(`/api/v1/zones/${selectedZone.id}`, {
+      body: JSON.stringify({
+        coverageDescription: zoneEdit.coverageDescription.trim() || undefined,
+        managerName: zoneEdit.managerName.trim() || undefined,
+        publicPhoneOverride: zoneEdit.publicPhoneOverride.trim() || undefined,
+      }),
+      method: 'PATCH',
+    });
+    setBusy(false);
+    if (!response.ok) {
+      setMessage(await readError(response, 'No pudimos actualizar la zona.'));
+      return;
+    }
+    const updated = (await response.json()) as GeographicZone;
+    setZones((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    setMessage('Datos de la zona actualizados.');
+  }
+
+  async function issueRepartidorToken(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedSite) return;
+    const form = new FormData(event.currentTarget);
+    const boundUserId = formText(form, 'boundUserId');
+    const ttlHours = Number(formText(form, 'ttlHours'));
+    if (!boundUserId || !ttlHours) return;
+    setBusy(true);
+    setMessage(null);
+    const response = await apiRequest('/api/v1/access-tokens', {
+      body: JSON.stringify({
+        boundUserId,
+        kind: 'repartidor_access',
+        label: `Repartidor ${selectedSite.displayName}`,
+        operatingSiteId: selectedSite.id,
+        ttlHours,
+      }),
+      method: 'POST',
+    });
+    setBusy(false);
+    if (!response.ok) {
+      setMessage(await readError(response, 'No pudimos generar el token.'));
+      return;
+    }
+    const created = (await response.json()) as { expiresAt: string; token: string };
+    setIssuedToken(created);
+  }
 
   async function logout() {
     await apiRequest('/api/v1/auth/logout', { method: 'POST' }).catch(() => undefined);
@@ -337,63 +435,80 @@ export function GeographySettingsPage() {
             </ul>
 
             {canManageSites ? (
-              <form
-                className="mt-6 space-y-3 rounded-xl border border-[var(--db-border)] bg-[var(--db-surface)] p-4"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void createSite();
-                }}
-              >
-                <h3 className="font-semibold text-forest">Nueva operación</h3>
-                <label className="block text-sm">
-                  Nombre
-                  <input
-                    className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
-                    onChange={(event) =>
-                      setSiteDraft((current) => ({ ...current, displayName: event.target.value }))
-                    }
-                    value={siteDraft.displayName}
-                  />
-                </label>
-                <label className="block text-sm">
-                  Identificador (slug)
-                  <input
-                    className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
-                    onChange={(event) =>
-                      setSiteDraft((current) => ({ ...current, slug: event.target.value }))
-                    }
-                    placeholder="neuquen"
-                    value={siteDraft.slug}
-                  />
-                </label>
-                <label className="block text-sm">
-                  Prefijo de pedidos
-                  <input
-                    className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
-                    onChange={(event) =>
-                      setSiteDraft((current) => ({ ...current, orderPrefix: event.target.value }))
-                    }
-                    placeholder="NQN"
-                    value={siteDraft.orderPrefix}
-                  />
-                </label>
-                <label className="block text-sm">
-                  Zona horaria
-                  <input
-                    className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
-                    onChange={(event) =>
-                      setSiteDraft((current) => ({ ...current, timezone: event.target.value }))
-                    }
-                    value={siteDraft.timezone}
-                  />
-                </label>
-                <p className="text-xs text-ink-muted">
-                  El prefijo queda fijo una vez que la operación emitió pedidos.
-                </p>
-                <button className="button button-primary" disabled={busy} type="submit">
-                  Crear operación
+              <>
+                <button
+                  className="button button-secondary mt-6"
+                  onClick={() => setSiteFormOpen((current) => !current)}
+                  type="button"
+                >
+                  {siteFormOpen ? 'Cerrar' : '+ Nueva operación'}
                 </button>
-              </form>
+                {siteFormOpen ? (
+                  <form
+                    className="mt-4 space-y-3 rounded-xl border border-[var(--db-border)] bg-[var(--db-surface)] p-4"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void createSite().then(() => setSiteFormOpen(false));
+                    }}
+                  >
+                    <h3 className="font-semibold text-forest">Nueva operación</h3>
+                    <label className="block text-sm">
+                      Nombre
+                      <input
+                        className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
+                        onChange={(event) =>
+                          setSiteDraft((current) => ({
+                            ...current,
+                            displayName: event.target.value,
+                          }))
+                        }
+                        value={siteDraft.displayName}
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      Identificador (slug)
+                      <input
+                        className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
+                        onChange={(event) =>
+                          setSiteDraft((current) => ({ ...current, slug: event.target.value }))
+                        }
+                        placeholder="neuquen"
+                        value={siteDraft.slug}
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      Prefijo de pedidos
+                      <input
+                        className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
+                        onChange={(event) =>
+                          setSiteDraft((current) => ({
+                            ...current,
+                            orderPrefix: event.target.value,
+                          }))
+                        }
+                        placeholder="NQN"
+                        value={siteDraft.orderPrefix}
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      Zona horaria
+                      <input
+                        className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
+                        onChange={(event) =>
+                          setSiteDraft((current) => ({ ...current, timezone: event.target.value }))
+                        }
+                        value={siteDraft.timezone}
+                      />
+                    </label>
+                    <p className="text-xs text-ink-muted">
+                      El prefijo queda fijo una vez que la operación emitió pedidos.
+                    </p>
+                    <button className="button button-primary" disabled={busy} type="submit">
+                      Crear operación
+                    </button>
+                  </form>
+                ) : null}
+              </>
             ) : null}
           </div>
 
@@ -409,18 +524,27 @@ export function GeographySettingsPage() {
                 <ul className="mt-4 space-y-2">
                   {zones.map((zone) => (
                     <li
-                      className="flex items-center justify-between gap-3 rounded-xl border border-[var(--db-border)] bg-[var(--db-surface)] px-4 py-3"
+                      className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
+                        zone.id === selectedZoneId
+                          ? 'border-forest bg-forest/5'
+                          : 'border-[var(--db-border)] bg-[var(--db-surface)]'
+                      }`}
                       key={zone.id}
                     >
-                      <div>
+                      <button
+                        className="flex-1 text-left"
+                        onClick={() => setSelectedZoneId(zone.id)}
+                        type="button"
+                      >
                         <strong className="block text-forest">{zone.displayName}</strong>
                         <small className="text-ink-muted">
                           {zone.slug} · {zone.active ? 'activa' : 'inactiva'}
+                          {zone.managerName ? ` · Responsable: ${zone.managerName}` : ''}
                         </small>
                         {zone.coverageDescription ? (
                           <p className="mt-1 text-sm text-ink-muted">{zone.coverageDescription}</p>
                         ) : null}
-                      </div>
+                      </button>
                       {canManageZones ? (
                         <button
                           className="button button-secondary"
@@ -436,6 +560,120 @@ export function GeographySettingsPage() {
                   {zones.length === 0 ? (
                     <li className="rounded-xl border border-dashed border-forest/20 px-4 py-6 text-center text-ink-muted">
                       Esta operación todavía no tiene zonas.
+                    </li>
+                  ) : null}
+
+                  {selectedZone ? (
+                    <li className="rounded-xl border border-forest/20 bg-forest/5 p-4">
+                      <h3 className="font-semibold text-forest">{selectedZone.displayName}</h3>
+                      <div className="mt-3 grid gap-3">
+                        <label className="block text-sm">
+                          Número de teléfono
+                          <input
+                            className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
+                            disabled={!canManageZones}
+                            onChange={(event) =>
+                              setZoneEdit((current) => ({
+                                ...current,
+                                publicPhoneOverride: event.target.value,
+                              }))
+                            }
+                            value={zoneEdit.publicPhoneOverride}
+                          />
+                        </label>
+                        <label className="block text-sm">
+                          Área de cobertura
+                          <textarea
+                            className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
+                            disabled={!canManageZones}
+                            onChange={(event) =>
+                              setZoneEdit((current) => ({
+                                ...current,
+                                coverageDescription: event.target.value,
+                              }))
+                            }
+                            rows={2}
+                            value={zoneEdit.coverageDescription}
+                          />
+                        </label>
+                        <label className="block text-sm">
+                          Responsable
+                          <input
+                            className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
+                            disabled={!canManageZones}
+                            onChange={(event) =>
+                              setZoneEdit((current) => ({
+                                ...current,
+                                managerName: event.target.value,
+                              }))
+                            }
+                            value={zoneEdit.managerName}
+                          />
+                        </label>
+                        {canManageZones ? (
+                          <button
+                            className="button button-secondary justify-self-start"
+                            disabled={busy}
+                            onClick={() => void saveZoneDetails()}
+                            type="button"
+                          >
+                            Guardar
+                          </button>
+                        ) : null}
+                      </div>
+
+                      {canIssueTokens ? (
+                        <div className="mt-5 border-t border-forest/10 pt-4">
+                          <h4 className="text-sm font-semibold text-forest">
+                            Generar token para repartidor
+                          </h4>
+                          {issuedToken ? (
+                            <div className="mt-2 rounded-lg border border-forest/20 bg-white/60 p-3 text-sm">
+                              <p className="font-semibold text-forest">
+                                Copiá este token ahora: no se puede volver a mostrar.
+                              </p>
+                              <code className="mt-1 block break-all">{issuedToken.token}</code>
+                              <p className="mt-1 text-ink-muted">
+                                Vence: {timeLabel(issuedToken.expiresAt)}
+                              </p>
+                            </div>
+                          ) : null}
+                          <form
+                            className="mt-3 flex flex-wrap items-end gap-3"
+                            onSubmit={(event) => void issueRepartidorToken(event)}
+                          >
+                            <label className="block text-sm">
+                              Repartidor
+                              <select
+                                className="mt-1 rounded-lg border border-forest/20 px-3 py-2"
+                                name="boundUserId"
+                                required
+                              >
+                                <option value="">Seleccionar</option>
+                                {repartidores.map((user) => (
+                                  <option key={user.id} value={user.id}>
+                                    {user.displayName}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="block text-sm">
+                              Duración (hs)
+                              <input
+                                className="mt-1 w-24 rounded-lg border border-forest/20 px-3 py-2"
+                                defaultValue={48}
+                                min="1"
+                                name="ttlHours"
+                                required
+                                type="number"
+                              />
+                            </label>
+                            <button className="button button-primary" disabled={busy} type="submit">
+                              Generar
+                            </button>
+                          </form>
+                        </div>
+                      ) : null}
                     </li>
                   ) : null}
                 </ul>
