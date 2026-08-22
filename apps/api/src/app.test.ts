@@ -392,6 +392,106 @@ describe('API foundation', () => {
     expect(updateProfile).not.toHaveBeenCalled();
   });
 
+  function buildAvatarApp(avatarStorage?: {
+    upload: (userId: string, bytes: Uint8Array, contentType: string) => Promise<{ url: string }>;
+  }) {
+    const updateProfile = vi.fn((id: string, input: { avatarUrl?: string }) =>
+      Promise.resolve({
+        avatarUrl: input.avatarUrl ?? null,
+        displayName: 'Santiago',
+        email: null,
+        id,
+      }),
+    );
+    return {
+      app: createApp({
+        appOrigin: 'http://localhost:5173',
+        ...(avatarStorage ? { avatarStorage } : {}),
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            Promise.resolve({
+              expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+              permissions: [],
+              sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+            }),
+        },
+        secureCookies: false,
+        users: { ...emptyUsers, updateProfile },
+        version: 'test',
+      }),
+      updateProfile,
+    };
+  }
+
+  it('uploads an avatar and persists the returned Blob URL', async () => {
+    const upload = vi.fn<
+      (userId: string, bytes: Uint8Array, contentType: string) => Promise<{ url: string }>
+    >(() => Promise.resolve({ url: 'https://blob.example/avatars/55276601.jpg' }));
+    const { app, updateProfile } = buildAvatarApp({ upload });
+
+    const response = await app.request('/api/v1/me/avatar', {
+      body: new Uint8Array([1, 2, 3]),
+      headers: {
+        cookie: 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars',
+        'content-type': 'image/jpeg',
+      },
+      method: 'POST',
+    });
+    const body = (await response.json()) as { avatarUrl: string | null };
+
+    expect(response.status).toBe(200);
+    expect(body.avatarUrl).toBe('https://blob.example/avatars/55276601.jpg');
+    expect(upload).toHaveBeenCalledWith(
+      '55276601-ec66-4f63-9f2f-edf73904ede0',
+      expect.any(Uint8Array),
+      'image/jpeg',
+    );
+    expect(updateProfile).toHaveBeenCalledWith('55276601-ec66-4f63-9f2f-edf73904ede0', {
+      avatarUrl: 'https://blob.example/avatars/55276601.jpg',
+    });
+  });
+
+  it('rejects an unsupported content type before touching storage', async () => {
+    const upload = vi.fn<
+      (userId: string, bytes: Uint8Array, contentType: string) => Promise<{ url: string }>
+    >(() => Promise.resolve({ url: 'unused' }));
+    const { app } = buildAvatarApp({ upload });
+
+    const response = await app.request('/api/v1/me/avatar', {
+      body: new Uint8Array([1, 2, 3]),
+      headers: {
+        cookie: 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars',
+        'content-type': 'application/pdf',
+      },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(400);
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  // Matches requireOperations/requireChat/requireGeography: a "not configured" adapter throws
+  // and falls through to the generic 500 handler, not a dedicated 503 path.
+  it('fails avatar upload when Blob storage is not configured', async () => {
+    const { app } = buildAvatarApp();
+
+    const response = await app.request('/api/v1/me/avatar', {
+      body: new Uint8Array([1, 2, 3]),
+      headers: {
+        cookie: 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars',
+        'content-type': 'image/jpeg',
+      },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(500);
+  });
+
   it('revokes a valid session and clears its cookie on logout', async () => {
     const revoke = vi.fn(() => Promise.resolve());
     const logoutApp = createApp({
@@ -1234,6 +1334,346 @@ describe('API foundation', () => {
         { headers: { cookie } },
       );
       expect(response.status).toBe(404);
+    });
+  });
+
+  describe('user administration', () => {
+    const TARGET_USER = '60000000-0000-4000-8000-000000000001';
+    const sampleDetail = {
+      avatarUrl: null,
+      displayName: 'María Pérez',
+      effectivePermissions: ['orders.read'],
+      email: 'maria@example.com',
+      id: TARGET_USER,
+      overrides: [],
+      roles: [
+        {
+          active: true,
+          description: null,
+          id: '70000000-0000-4000-8000-000000000001',
+          key: 'operador',
+          name: 'Operador',
+        },
+      ],
+      status: 'active',
+    };
+
+    function buildUserAdminApp(userAdmin: Record<string, unknown>, permissions: string[]) {
+      return createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            Promise.resolve({
+              expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+              permissions,
+              sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+            }),
+        },
+        secureCookies: false,
+        userAdmin: userAdmin as never,
+        users: emptyUsers,
+        version: 'test',
+      });
+    }
+
+    const cookie = 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars';
+
+    it('reads a user detail with users.read and denies without it', async () => {
+      const getDetail = vi.fn(() => Promise.resolve(sampleDetail));
+      const app = buildUserAdminApp({ getDetail }, ['users.read']);
+
+      const response = await app.request(`/api/v1/users/${TARGET_USER}`, { headers: { cookie } });
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { displayName: string };
+      expect(body.displayName).toBe('María Pérez');
+
+      const denied = buildUserAdminApp({ getDetail: vi.fn() }, []);
+      const deniedResponse = await denied.request(`/api/v1/users/${TARGET_USER}`, {
+        headers: { cookie },
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('404s a user detail that does not exist', async () => {
+      const getDetail = vi.fn(() => Promise.resolve(null));
+      const app = buildUserAdminApp({ getDetail }, ['users.read']);
+
+      const response = await app.request(`/api/v1/users/${TARGET_USER}`, { headers: { cookie } });
+      expect(response.status).toBe(404);
+    });
+
+    it('disables a user with users.disable and denies without it', async () => {
+      const setStatus = vi.fn(() => Promise.resolve({ ...sampleDetail, status: 'disabled' }));
+      const app = buildUserAdminApp({ setStatus }, ['users.disable']);
+
+      const response = await app.request(`/api/v1/users/${TARGET_USER}/status`, {
+        body: JSON.stringify({ active: false }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'PATCH',
+      });
+      expect(response.status).toBe(200);
+      expect(setStatus).toHaveBeenCalledWith(TARGET_USER, false);
+
+      const denied = buildUserAdminApp({ setStatus: vi.fn() }, ['users.read']);
+      const deniedResponse = await denied.request(`/api/v1/users/${TARGET_USER}/status`, {
+        body: JSON.stringify({ active: false }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'PATCH',
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('replaces roles with roles.manage and denies without it', async () => {
+      const setRoles = vi.fn(() => Promise.resolve(sampleDetail));
+      const app = buildUserAdminApp({ setRoles }, ['roles.manage']);
+
+      const response = await app.request(`/api/v1/users/${TARGET_USER}/roles`, {
+        body: JSON.stringify({ roleIds: ['70000000-0000-4000-8000-000000000001'] }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'PUT',
+      });
+      expect(response.status).toBe(200);
+      expect(setRoles).toHaveBeenCalledWith(
+        TARGET_USER,
+        ['70000000-0000-4000-8000-000000000001'],
+        '55276601-ec66-4f63-9f2f-edf73904ede0',
+      );
+
+      const denied = buildUserAdminApp({ setRoles: vi.fn() }, ['users.read']);
+      const deniedResponse = await denied.request(`/api/v1/users/${TARGET_USER}/roles`, {
+        body: JSON.stringify({ roleIds: [] }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'PUT',
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('replaces permission overrides with permissions.override and denies without it', async () => {
+      const setPermissionOverrides = vi.fn(() => Promise.resolve(sampleDetail));
+      const app = buildUserAdminApp({ setPermissionOverrides }, ['permissions.override']);
+
+      const response = await app.request(`/api/v1/users/${TARGET_USER}/permissions`, {
+        body: JSON.stringify({
+          overrides: [{ effect: 'deny', permissionId: '80000000-0000-4000-8000-000000000001' }],
+        }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'PUT',
+      });
+      expect(response.status).toBe(200);
+      expect(setPermissionOverrides).toHaveBeenCalledWith(
+        TARGET_USER,
+        [{ effect: 'deny', permissionId: '80000000-0000-4000-8000-000000000001' }],
+        '55276601-ec66-4f63-9f2f-edf73904ede0',
+      );
+
+      const denied = buildUserAdminApp({ setPermissionOverrides: vi.fn() }, ['users.read']);
+      const deniedResponse = await denied.request(`/api/v1/users/${TARGET_USER}/permissions`, {
+        body: JSON.stringify({ overrides: [] }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'PUT',
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('lists roles and the permission catalog behind users.read', async () => {
+      const listRoles = vi.fn(() => Promise.resolve(sampleDetail.roles));
+      const listPermissionsCatalog = vi.fn(() =>
+        Promise.resolve([
+          {
+            description: 'Ver pedidos',
+            group: 'orders',
+            id: '80000000-0000-4000-8000-000000000001',
+            key: 'orders.read',
+          },
+        ]),
+      );
+      const app = buildUserAdminApp({ listRoles, listPermissionsCatalog }, ['users.read']);
+
+      const rolesResponse = await app.request('/api/v1/roles', { headers: { cookie } });
+      expect(rolesResponse.status).toBe(200);
+      const permissionsResponse = await app.request('/api/v1/permissions', { headers: { cookie } });
+      expect(permissionsResponse.status).toBe(200);
+    });
+  });
+
+  describe('access tokens', () => {
+    function buildAccessTokenApp(accessTokens: Record<string, unknown>, permissions: string[]) {
+      return createApp({
+        accessTokens: accessTokens as never,
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            Promise.resolve({
+              expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+              permissions,
+              sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+            }),
+        },
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+    }
+
+    const cookie = 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars';
+
+    it('issues a repartidor_access token with access_tokens.manage and denies without it', async () => {
+      const issue = vi.fn(() =>
+        Promise.resolve({
+          expiresAt: new Date('2026-08-27T12:00:00.000Z'),
+          id: '90000000-0000-4000-8000-000000000001',
+          token: 'vrd_raw-token-value',
+        }),
+      );
+      const app = buildAccessTokenApp({ issue }, ['access_tokens.manage']);
+
+      const response = await app.request('/api/v1/access-tokens', {
+        body: JSON.stringify({
+          boundUserId: '90000000-0000-4000-8000-000000000002',
+          kind: 'repartidor_access',
+          label: 'Repartidor Neuquén',
+          ttlHours: 48,
+        }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(201);
+      const body = (await response.json()) as { token: string };
+      expect(body.token).toBe('vrd_raw-token-value');
+
+      const denied = buildAccessTokenApp({ issue: vi.fn() }, ['users.read']);
+      const deniedResponse = await denied.request('/api/v1/access-tokens', {
+        body: JSON.stringify({
+          boundUserId: '90000000-0000-4000-8000-000000000002',
+          kind: 'repartidor_access',
+          label: 'x',
+          ttlHours: 48,
+        }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('rejects a repartidor_access token with no bound user', async () => {
+      const issue = vi.fn();
+      const app = buildAccessTokenApp({ issue }, ['access_tokens.manage']);
+
+      const response = await app.request('/api/v1/access-tokens', {
+        body: JSON.stringify({ kind: 'repartidor_access', label: 'x', ttlHours: 48 }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(400);
+      expect(issue).not.toHaveBeenCalled();
+    });
+
+    it('rejects a user_invite token with no role', async () => {
+      const issue = vi.fn();
+      const app = buildAccessTokenApp({ issue }, ['access_tokens.manage']);
+
+      const response = await app.request('/api/v1/access-tokens', {
+        body: JSON.stringify({ kind: 'user_invite', label: 'x', ttlHours: 48 }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(400);
+      expect(issue).not.toHaveBeenCalled();
+    });
+
+    it('revokes a token with access_tokens.manage and denies without it', async () => {
+      const revoke = vi.fn(() => Promise.resolve());
+      const app = buildAccessTokenApp({ revoke }, ['access_tokens.manage']);
+
+      const response = await app.request(
+        '/api/v1/access-tokens/90000000-0000-4000-8000-000000000001',
+        { headers: { cookie }, method: 'DELETE' },
+      );
+      expect(response.status).toBe(204);
+      expect(revoke).toHaveBeenCalledWith('90000000-0000-4000-8000-000000000001');
+
+      const denied = buildAccessTokenApp({ revoke: vi.fn() }, ['users.read']);
+      const deniedResponse = await denied.request(
+        '/api/v1/access-tokens/90000000-0000-4000-8000-000000000001',
+        { headers: { cookie }, method: 'DELETE' },
+      );
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('redeems a valid token, sets the session cookie, and answers the same shape as password login', async () => {
+      const redeem = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          session: {
+            expiresAt: new Date('2026-08-27T12:00:00.000Z'),
+            sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+            token: 'opaque-session-token-that-is-never-returned-to-the-browser-body',
+          },
+        }),
+      );
+      const app = buildAccessTokenApp({ redeem }, []);
+
+      const response = await app.request('/api/v1/auth/token-login', {
+        body: JSON.stringify({ token: 'vrd_raw-token-value' }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      const body: unknown = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(LoginResponseSchema.parse(body).sessionId).toBe(
+        '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+      );
+      expect(response.headers.get('set-cookie')).toContain('HttpOnly');
+      expect(redeem).toHaveBeenCalledWith('vrd_raw-token-value', undefined);
+    });
+
+    it('answers a generic error for an invalid, expired, or already-used token', async () => {
+      const redeem = vi.fn(() => Promise.resolve({ ok: false, reason: 'expired' }));
+      const app = buildAccessTokenApp({ redeem }, []);
+
+      const response = await app.request('/api/v1/auth/token-login', {
+        body: JSON.stringify({ token: 'vrd_some-token' }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+
+      expect(response.status).toBe(401);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'UNAUTHENTICATED' },
+      });
+    });
+
+    it('passes displayName through for a user_invite redemption', async () => {
+      const redeem = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          session: {
+            expiresAt: new Date('2026-08-27T12:00:00.000Z'),
+            sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+            token: 'opaque-session-token-that-is-never-returned-to-the-browser-body',
+          },
+        }),
+      );
+      const app = buildAccessTokenApp({ redeem }, []);
+
+      const response = await app.request('/api/v1/auth/token-login', {
+        body: JSON.stringify({ displayName: 'Nueva Operadora', token: 'vrd_invite-token' }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(200);
+      expect(redeem).toHaveBeenCalledWith('vrd_invite-token', 'Nueva Operadora');
     });
   });
 });

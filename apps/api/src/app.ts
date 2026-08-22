@@ -95,8 +95,18 @@ import {
   SurplusConfigUpdateRequestSchema,
   SurplusReportResponseSchema,
   SurplusWriteoffRequestSchema,
+  AccessTokenIssueRequestSchema,
+  AccessTokenIssuedResponseSchema,
+  AccessTokenListResponseSchema,
+  AccessTokenRedeemRequestSchema,
+  PermissionCatalogResponseSchema,
+  RoleListResponseSchema,
+  UserAdminDetailSchema,
   UserListQuerySchema,
   UserListResponseSchema,
+  UserPermissionOverridesUpdateRequestSchema,
+  UserRolesUpdateRequestSchema,
+  UserStatusUpdateRequestSchema,
   type ApiErrorCode,
   type AIProviderConfigUpsertRequest,
   type AddressGeocodingConfirmRequest,
@@ -128,11 +138,12 @@ import {
   type OrderListQuery,
   type OrderTransitionRequest,
   type OrderUpdateRequest,
+  type AccessTokenIssueRequest,
   type ProductionReportRequest,
   type ProductionSnapshotRequest,
-  type ProfileUpdateRequest,
   type PublicOrderCreateRequest,
   type SurplusWriteoffRequest,
+  type UserPermissionOverridesUpdateRequest,
 } from '@verdeo/contracts';
 import { createRequestId, type Logger } from '@verdeo/observability';
 
@@ -175,11 +186,18 @@ interface UserProfile {
   id: string;
 }
 
+// Wider than ProfileUpdateRequest (the PATCH /me contract) on purpose: avatarUrl is set only by
+// the upload endpoint after a Blob write succeeds, never accepted directly as client JSON input.
+interface UserProfileUpdateInput {
+  avatarUrl?: string;
+  displayName?: string;
+}
+
 interface UserDirectory {
   findById(id: string): Promise<{ displayName: string; id: string } | null>;
   findProfileById(id: string): Promise<UserProfile | null>;
   list(afterId: string | undefined, limit: number): Promise<UserDirectoryPage>;
-  updateProfile(id: string, input: ProfileUpdateRequest): Promise<UserProfile>;
+  updateProfile(id: string, input: UserProfileUpdateInput): Promise<UserProfile>;
 }
 
 type ScopedInput<T> = T & { operatingSiteId: string | null };
@@ -434,9 +452,48 @@ interface AIConfigurationContext {
   source: string;
 }
 
+interface AvatarStorageEngine {
+  upload(userId: string, bytes: Uint8Array, contentType: string): Promise<{ url: string }>;
+}
+
+interface UserAdminEngine {
+  getDetail(id: string): Promise<unknown>;
+  listPermissionsCatalog(): Promise<unknown>;
+  listRoles(): Promise<unknown>;
+  setPermissionOverrides(
+    id: string,
+    overrides: UserPermissionOverridesUpdateRequest['overrides'],
+    actorUserId: string | undefined,
+  ): Promise<unknown>;
+  setRoles(
+    id: string,
+    roleIds: readonly string[],
+    actorUserId: string | undefined,
+  ): Promise<unknown>;
+  setStatus(id: string, active: boolean): Promise<unknown>;
+}
+
+interface AccessTokenRedeemOutcome {
+  ok: boolean;
+  reason?: string;
+  session?: LoginResult;
+}
+
+interface AccessTokenEngine {
+  issue(
+    input: AccessTokenIssueRequest,
+    createdByUserId: string | undefined,
+  ): Promise<{ expiresAt: Date; id: string; token: string }>;
+  list(operatingSiteId: string | undefined): Promise<unknown>;
+  redeem(token: string, displayName: string | undefined): Promise<AccessTokenRedeemOutcome>;
+  revoke(id: string): Promise<void>;
+}
+
 interface CreateAppOptions {
   aiConfiguration?: AIConfigurationEngine;
   appOrigin: string;
+  accessTokens?: AccessTokenEngine;
+  avatarStorage?: AvatarStorageEngine;
   cookieSameSite: 'Lax' | 'None';
   chat?: ChatEngine;
   chatRetentionDays?: number | undefined;
@@ -448,6 +505,7 @@ interface CreateAppOptions {
   operations?: OperationsEngine;
   sessions: SessionAuthenticator;
   secureCookies: boolean;
+  userAdmin?: UserAdminEngine;
   users: UserDirectory;
   version: string;
 }
@@ -499,6 +557,27 @@ export function createApp(options: CreateAppOptions) {
   const requireGeography = () => {
     if (!geography) throw new Error('Geography engine is not configured');
     return geography;
+  };
+
+  const avatarStorage = options.avatarStorage;
+
+  const requireAvatarStorage = () => {
+    if (!avatarStorage) throw new Error('Avatar storage is not configured');
+    return avatarStorage;
+  };
+
+  const userAdmin = options.userAdmin;
+
+  const requireUserAdmin = () => {
+    if (!userAdmin) throw new Error('User admin engine is not configured');
+    return userAdmin;
+  };
+
+  const accessTokens = options.accessTokens;
+
+  const requireAccessTokens = () => {
+    if (!accessTokens) throw new Error('Access token engine is not configured');
+    return accessTokens;
   };
 
   // The client sends its selected operation, but membership is resolved server-side and intersected
@@ -764,6 +843,54 @@ export function createApp(options: CreateAppOptions) {
     return context.json(payload);
   });
 
+  // "Acceder con token": no password, a repartidor pastes the token a superadmin generated for
+  // them. A generic error covers every failure reason (invalid, expired, revoked, already used) —
+  // same "don't help an attacker narrow it down" posture as the password login above.
+  app.post('/api/v1/auth/token-login', async (context) => {
+    const input = AccessTokenRedeemRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) {
+      const code: ApiErrorCode = 'BAD_REQUEST';
+      return context.json(
+        {
+          error: {
+            code,
+            details: input.error.issues,
+            message: 'Revisá el token ingresado.',
+            requestId: context.get('requestId'),
+          },
+        },
+        statusForCode(code),
+      );
+    }
+
+    const outcome = await requireAccessTokens().redeem(input.data.token, input.data.displayName);
+    if (!outcome.ok || !outcome.session) {
+      const code: ApiErrorCode = 'UNAUTHENTICATED';
+      return context.json(
+        {
+          error: {
+            code,
+            message:
+              outcome.reason === 'display_name_required'
+                ? 'Ingresá tu nombre para crear la cuenta.'
+                : 'El token no es válido, expiró o ya fue usado.',
+            requestId: context.get('requestId'),
+          },
+        },
+        statusForCode(code),
+      );
+    }
+
+    setSessionCookie(context, outcome.session);
+    const payload = LoginResponseSchema.parse({
+      expiresAt: outcome.session.expiresAt.toISOString(),
+      sessionId: outcome.session.sessionId,
+    });
+    return context.json(payload);
+  });
+
   app.post('/api/v1/auth/oauth/exchange', async (context) => {
     const input = OAuthExchangeRequestSchema.safeParse(await context.req.json().catch(() => null));
     if (!input.success) {
@@ -822,9 +949,15 @@ export function createApp(options: CreateAppOptions) {
   });
 
   app.use('/api/v1/me', requireAuthentication);
+  app.use('/api/v1/me/*', requireAuthentication);
   app.use('/api/v1/sessions', requireAuthentication);
   app.use('/api/v1/sessions/*', requireAuthentication);
   app.use('/api/v1/users', requireAuthentication, requirePermission('users.read'));
+  app.use('/api/v1/users/*', requireAuthentication);
+  app.use('/api/v1/roles', requireAuthentication);
+  app.use('/api/v1/permissions', requireAuthentication);
+  app.use('/api/v1/access-tokens', requireAuthentication);
+  app.use('/api/v1/access-tokens/*', requireAuthentication);
   app.use('/api/v1/scope', requireAuthentication);
   app.use('/api/v1/operating-sites', requireAuthentication);
   app.use('/api/v1/operating-sites/*', requireAuthentication);
@@ -872,6 +1005,30 @@ export function createApp(options: CreateAppOptions) {
     if (!input.success)
       return badRequest(context, 'Revisá el nombre a mostrar.', input.error.issues);
     const user = await options.users.updateProfile(session.userId, input.data);
+    const payload = MeResponseSchema.shape.user.parse({
+      avatarUrl: user.avatarUrl,
+      displayName: user.displayName,
+      email: user.email,
+      id: user.id,
+    });
+    return context.json(payload);
+  });
+
+  const AVATAR_ALLOWED_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+  const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+
+  app.post('/api/v1/me/avatar', async (context) => {
+    const session = context.get('session');
+    const contentType = context.req.header('content-type') ?? '';
+    if (!AVATAR_ALLOWED_CONTENT_TYPES.has(contentType))
+      return badRequest(context, 'La imagen debe ser JPEG, PNG o WebP.');
+    const bytes = new Uint8Array(await context.req.arrayBuffer());
+    if (bytes.byteLength === 0) return badRequest(context, 'El archivo está vacío.');
+    if (bytes.byteLength > AVATAR_MAX_BYTES)
+      return badRequest(context, 'La imagen no puede superar los 5 MB.');
+
+    const { url } = await requireAvatarStorage().upload(session.userId, bytes, contentType);
+    const user = await options.users.updateProfile(session.userId, { avatarUrl: url });
     const payload = MeResponseSchema.shape.user.parse({
       avatarUrl: user.avatarUrl,
       displayName: user.displayName,
@@ -993,6 +1150,107 @@ export function createApp(options: CreateAppOptions) {
     });
 
     return context.json(payload);
+  });
+
+  app.get('/api/v1/users/:id', async (context) => {
+    if (!context.get('session').permissions.includes('users.read')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El usuario indicado no es válido.');
+    const detail = await requireUserAdmin().getDetail(params.data.id);
+    if (!detail) {
+      const code: ApiErrorCode = 'NOT_FOUND';
+      return context.json(
+        { error: { code, message: 'Usuario no encontrado.', requestId: context.get('requestId') } },
+        statusForCode(code),
+      );
+    }
+    return context.json(UserAdminDetailSchema.parse(contractValue(detail)));
+  });
+
+  app.get('/api/v1/roles', async (context) => {
+    if (!context.get('session').permissions.includes('users.read')) return forbidden(context);
+    const items = await requireUserAdmin().listRoles();
+    return context.json(RoleListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.get('/api/v1/permissions', async (context) => {
+    if (!context.get('session').permissions.includes('users.read')) return forbidden(context);
+    const items = await requireUserAdmin().listPermissionsCatalog();
+    return context.json(PermissionCatalogResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.patch('/api/v1/users/:id/status', async (context) => {
+    if (!context.get('session').permissions.includes('users.disable')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    const input = UserStatusUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(context, 'Revisá el estado del usuario.');
+    const detail = await requireUserAdmin().setStatus(params.data.id, input.data.active);
+    return context.json(UserAdminDetailSchema.parse(contractValue(detail)));
+  });
+
+  app.put('/api/v1/users/:id/roles', async (context) => {
+    if (!context.get('session').permissions.includes('roles.manage')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    const input = UserRolesUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(context, 'Revisá los roles seleccionados.');
+    const detail = await requireUserAdmin().setRoles(
+      params.data.id,
+      input.data.roleIds,
+      context.get('session').userId,
+    );
+    return context.json(UserAdminDetailSchema.parse(contractValue(detail)));
+  });
+
+  app.put('/api/v1/users/:id/permissions', async (context) => {
+    if (!context.get('session').permissions.includes('permissions.override'))
+      return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    const input = UserPermissionOverridesUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(context, 'Revisá las excepciones de permisos.');
+    const detail = await requireUserAdmin().setPermissionOverrides(
+      params.data.id,
+      input.data.overrides,
+      context.get('session').userId,
+    );
+    return context.json(UserAdminDetailSchema.parse(contractValue(detail)));
+  });
+
+  app.get('/api/v1/access-tokens', async (context) => {
+    if (!context.get('session').permissions.includes('access_tokens.manage'))
+      return forbidden(context);
+    const operatingSiteId = context.req.query('operatingSiteId') ?? undefined;
+    const items = await requireAccessTokens().list(operatingSiteId);
+    return context.json(AccessTokenListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.post('/api/v1/access-tokens', async (context) => {
+    if (!context.get('session').permissions.includes('access_tokens.manage'))
+      return forbidden(context);
+    const input = AccessTokenIssueRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'Revisá los datos del token.', input.error.issues);
+    const issued = await requireAccessTokens().issue(input.data, context.get('session').userId);
+    return context.json(AccessTokenIssuedResponseSchema.parse(contractValue(issued)), 201);
+  });
+
+  app.delete('/api/v1/access-tokens/:id', async (context) => {
+    if (!context.get('session').permissions.includes('access_tokens.manage'))
+      return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El token indicado no es válido.');
+    await requireAccessTokens().revoke(params.data.id);
+    return context.body(null, 204);
   });
 
   app.get('/api/v1/scope', async (context) => {

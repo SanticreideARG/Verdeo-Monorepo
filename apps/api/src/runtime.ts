@@ -1,13 +1,16 @@
 import { AuditService } from '@verdeo/audit';
 import {
+  AccessTokenService,
   PasswordCredentialService,
   SessionService,
+  UserAdminService,
   UserDirectoryService,
   type AuthenticatedSession,
 } from '@verdeo/auth';
 import { parseServerEnv } from '@verdeo/config';
 import {
   createDatabase,
+  PostgresAccessTokenRepository,
   PostgresAuditSink,
   PostgresChatService,
   PostgresAIConfigurationService,
@@ -16,12 +19,14 @@ import {
   PostgresOperationsService,
   PostgresOAuthIdentityRepository,
   PostgresSessionRepository,
+  PostgresUserAdminRepository,
   PostgresUserDirectoryRepository,
 } from '@verdeo/db';
 import { LocationLinkGeocodingProvider } from '@verdeo/geocoding';
 import { createLogger } from '@verdeo/observability';
 
 import { createApp } from './app.js';
+import { VercelBlobAvatarStorage } from './integrations/avatar-storage.js';
 import { SupabaseAuthClient } from './integrations/supabase-auth.js';
 
 interface CreateApiRuntimeOptions {
@@ -46,6 +51,37 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     new PostgresPasswordCredentialRepository(database.db),
   );
   const userDirectory = new UserDirectoryService(new PostgresUserDirectoryRepository(database.db));
+  const userAdmin = new UserAdminService(new PostgresUserAdminRepository(database.db));
+  const accessTokenService = new AccessTokenService(
+    new PostgresAccessTokenRepository(database.db),
+    sessionService,
+  );
+  const accessTokens = {
+    issue: (
+      input: {
+        boundUserId?: string;
+        kind: 'repartidor_access' | 'user_invite';
+        label: string;
+        operatingSiteId?: string;
+        roleId?: string;
+        ttlHours: number;
+      },
+      createdByUserId: string | undefined,
+    ) => accessTokenService.issue({ ...input, createdByUserId }),
+    list: (operatingSiteId: string | undefined) =>
+      accessTokenService.list(operatingSiteId ? { operatingSiteId } : undefined),
+    redeem: async (token: string, displayName: string | undefined) => {
+      const result = await accessTokenService.redeem(
+        token,
+        { displayName },
+        env.SESSION_TTL_HOURS * 60 * 60 * 1000,
+      );
+      return result.ok
+        ? { ok: true as const, session: result.session }
+        : { ok: false as const, reason: result.reason };
+    },
+    revoke: (id: string) => accessTokenService.revoke(id),
+  };
   const operations = new PostgresOperationsService(
     database.db,
     new LocationLinkGeocodingProvider(),
@@ -56,6 +92,9 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     database.db,
     env.AI_CONFIG_ENCRYPTION_KEY,
   );
+  const avatarStorage = env.VERDEO_READ_WRITE_TOKEN
+    ? new VercelBlobAvatarStorage(env.VERDEO_READ_WRITE_TOKEN, env.VERDEO_STORE_ID)
+    : undefined;
   const sessions = {
     authenticate: (token: string) => sessionService.authenticate(token),
     listForUser: (userId: string) => sessionService.listForUser(userId),
@@ -234,6 +273,8 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
   const app = createApp({
     aiConfiguration,
     appOrigin: env.APP_URL,
+    accessTokens,
+    ...(avatarStorage ? { avatarStorage } : {}),
     chat,
     chatRetentionDays: env.CHAT_RETENTION_DAYS,
     ...(env.CRON_SECRET ? { cronSecret: env.CRON_SECRET } : {}),
@@ -245,6 +286,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     operations,
     sessions,
     secureCookies: env.NODE_ENV === 'production',
+    userAdmin,
     users: userDirectory,
     version: options.version,
   });

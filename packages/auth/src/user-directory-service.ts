@@ -18,6 +18,7 @@ export interface UserDirectoryPage {
 }
 
 export interface UserProfileUpdateInput {
+  avatarUrl?: string;
   displayName?: string;
 }
 

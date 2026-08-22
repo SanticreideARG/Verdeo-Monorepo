@@ -29,6 +29,10 @@ const ServerEnvSchema = z
     SYSTEM_TIMEZONE: z.string().min(1).default('America/Argentina/Buenos_Aires'),
     SYSTEM_CURRENCY: z.string().length(3).default('ARS'),
     SYSTEM_LOCALE: z.string().min(2).default('es-AR'),
+    // Vercel Blob store for avatar uploads. Names match what Vercel injects when the store is
+    // connected with the "VERDEO" env var prefix; without it, avatar upload just answers 503.
+    VERDEO_READ_WRITE_TOKEN: optionalString(z.string().min(20)),
+    VERDEO_STORE_ID: optionalString(z.string().min(1)),
   })
   .superRefine((value, context) => {
     if (Boolean(value.SUPABASE_URL) === Boolean(value.SUPABASE_PUBLISHABLE_KEY)) return;

@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@hono/node-server": "2.1.1",
+    "@vercel/blob": "^2.8.0",
     "@verdeo/ai": "workspace:*",
     "@verdeo/audit": "workspace:*",
     "@verdeo/auth": "workspace:*",

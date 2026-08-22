@@ -4,6 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { apiRequest, storeOperatingSiteId, storedOperatingSiteId } from '../lib/api.js';
 import { PresenceControl } from './PresenceControl.js';
 import { RequestProgressBar } from './RequestProgressBar.js';
+import { WeatherWidget } from './WeatherWidget.js';
 
 export interface DashboardProfile {
   permissions: string[];
@@ -343,6 +344,12 @@ export function DashboardShell({
     second: '2-digit',
   }).format(now);
   const initial = profile.user.displayName.trim().slice(0, 1).toLocaleUpperCase('es-AR') || 'V';
+  // The selected operation drives the weather city; with no selection (global view or nothing
+  // loaded yet) it falls back to the first site the session can reach.
+  const weatherCityName =
+    scope?.sites.find((site) => site.id === selectedSiteId)?.displayName ??
+    scope?.sites[0]?.displayName ??
+    null;
 
   return (
     <div
@@ -490,22 +497,7 @@ export function DashboardShell({
                 />
               ))}
             </div>
-            <div className="dashboard-weather" title="Integración meteorológica: próximo sprint">
-              <svg
-                aria-hidden="true"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth="1.7"
-              >
-                <path
-                  strokeLinecap="round"
-                  d="M7 18h10a4 4 0 0 0 .5-8 6 6 0 0 0-11.2-1.6A4.8 4.8 0 0 0 7 18Z"
-                />
-              </svg>
-              <span>Clima</span>
-              <small>próximamente</small>
-            </div>
+            <WeatherWidget cityName={weatherCityName} />
             <div className="dashboard-clock">
               <span>{timeLabel}</span>
               <small>{dateLabel}</small>

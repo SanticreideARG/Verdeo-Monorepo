@@ -69,6 +69,7 @@ export class PostgresUserDirectoryRepository implements UserDirectoryRepository 
     const [updated] = await this.database
       .update(users)
       .set({
+        ...(input.avatarUrl === undefined ? {} : { avatarUrl: input.avatarUrl }),
         ...(input.displayName === undefined ? {} : { displayName: input.displayName }),
         updatedAt: new Date(),
       })
