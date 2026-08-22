@@ -188,6 +188,22 @@ export interface MenuInput {
   }[];
 }
 
+export type MenuDistributionMode = 'CREATE_MISSING' | 'UPDATE_UNCUSTOMIZED' | 'REPLACE';
+
+export interface MenuDistributionInput {
+  /** Required for REPLACE: it overwrites regional customisations. */
+  confirmedReplace?: boolean | undefined;
+  mode: MenuDistributionMode;
+  operatingSiteIds: readonly string[];
+}
+
+export interface MenuDistributionResult {
+  operatingSiteId: string;
+  outcome: 'CREATED' | 'REFRESHED' | 'REPLACED' | 'SKIPPED_EXISTING' | 'SKIPPED_PUBLISHED';
+  preservedCustomizations?: number;
+  weeklyMenuId: string;
+}
+
 export interface OrderInput {
   customerId: string;
   // Active scope. Used only when no stored address supplies the zone; the zone always wins.
@@ -1605,13 +1621,17 @@ export class PostgresOperationsService {
         cycleStatus: salesCycles.status,
         id: weeklyMenus.id,
         openAt: salesCycles.openAt,
+        operatingSiteId: weeklyMenus.operatingSiteId,
+        operatingSiteName: operatingSites.displayName,
         partialKitchenCutoffAt: salesCycles.partialKitchenCutoffAt,
         publishedAt: weeklyMenus.publishedAt,
+        sourceMenuId: weeklyMenus.sourceMenuId,
         revision: weeklyMenus.revision,
         status: weeklyMenus.status,
       })
       .from(weeklyMenus)
       .innerJoin(salesCycles, eq(salesCycles.id, weeklyMenus.salesCycleId))
+      .leftJoin(operatingSites, eq(operatingSites.id, weeklyMenus.operatingSiteId))
       .where(onlyPublished ? eq(weeklyMenus.status, 'PUBLISHED') : undefined)
       .orderBy(desc(salesCycles.openAt));
 
@@ -1699,20 +1719,32 @@ export class PostgresOperationsService {
             unitPriceMinor: overridePriceMinor ?? sizePriceMinor ?? 0,
           }),
         ),
+      operatingSiteId: menu.operatingSiteId,
+      operatingSiteName: menu.operatingSiteName,
       publishedAt: menu.publishedAt,
       revision: menu.revision,
+      sourceMenuId: menu.sourceMenuId,
       status: menu.status,
     }));
   }
 
-  public async currentPublishedMenu() {
+  /**
+   * The published menu an operation sells this week. Selection, not composition: an operation with
+   * its own published revision uses that concrete row, and one without falls back to the global
+   * master. Nothing merges global and regional field by field (ADR-028).
+   */
+  public async currentPublishedMenu(operatingSiteId?: string | null) {
     const menus = await this.listMenus(true);
     const now = Date.now();
-    return (
-      menus.find(
-        (menu) => menu.cycle.openAt.getTime() <= now && menu.cycle.closeAt.getTime() >= now,
-      ) ?? null
+    const open = menus.filter(
+      (menu) => menu.cycle.openAt.getTime() <= now && menu.cycle.closeAt.getTime() >= now,
     );
+
+    if (operatingSiteId) {
+      const regional = open.find((menu) => menu.operatingSiteId === operatingSiteId);
+      if (regional) return regional;
+    }
+    return open.find((menu) => menu.operatingSiteId === null) ?? null;
   }
 
   public async createMenu(input: MenuInput, context: OperationsContext) {
@@ -1900,6 +1932,287 @@ export class PostgresOperationsService {
     const menu = (await this.listMenus()).find(({ id }) => id === menuId);
     if (!menu) throw new OperationsNotFoundError('Weekly menu not found');
     return menu;
+  }
+
+  /**
+   * Materialises a regional revision of a master menu for each selected operation. A distribution
+   * never composes global plus regional at order time: it writes a concrete revision that an order
+   * can reference as a stable snapshot (ADR-028).
+   *
+   * `CREATE_MISSING` only creates where no regional revision exists. `UPDATE_UNCUSTOMIZED` also
+   * refreshes the rows nobody edited locally. `REPLACE` overwrites customised rows too, which is
+   * why it needs its own permission and an explicit confirmation from the caller.
+   */
+  public async distributeMenu(
+    menuId: string,
+    input: MenuDistributionInput,
+    context: OperationsContext,
+  ) {
+    return this.database
+      .transaction(async (transaction) => {
+        const [master] = await transaction
+          .select({
+            id: weeklyMenus.id,
+            operatingSiteId: weeklyMenus.operatingSiteId,
+            salesCycleId: weeklyMenus.salesCycleId,
+            status: weeklyMenus.status,
+          })
+          .from(weeklyMenus)
+          .where(eq(weeklyMenus.id, menuId))
+          .limit(1);
+        if (!master) throw new OperationsNotFoundError('Weekly menu not found');
+        if (master.operatingSiteId !== null)
+          throw new OperationsConflictError(
+            'Sólo un menú global puede distribuirse; este ya pertenece a una operación',
+          );
+        if (input.mode === 'REPLACE' && !input.confirmedReplace)
+          throw new OperationsConflictError(
+            'Reemplazar personalizaciones regionales requiere confirmación explícita',
+          );
+
+        const masterPrices = await transaction
+          .select({
+            currency: weeklyMenuPrices.currency,
+            productSizeId: weeklyMenuPrices.productSizeId,
+            unitPriceMinor: weeklyMenuPrices.unitPriceMinor,
+          })
+          .from(weeklyMenuPrices)
+          .where(eq(weeklyMenuPrices.weeklyMenuId, master.id));
+        const masterOfferings = await transaction
+          .select({
+            currency: weeklyMenuOfferings.currency,
+            id: weeklyMenuOfferings.id,
+            productVariantId: weeklyMenuOfferings.productVariantId,
+            unitPriceMinor: weeklyMenuOfferings.unitPriceMinor,
+          })
+          .from(weeklyMenuOfferings)
+          .where(eq(weeklyMenuOfferings.weeklyMenuId, master.id));
+        const masterItems = await transaction
+          .select({
+            dishName: weeklyMenuItems.dishName,
+            offeringId: weeklyMenuItems.offeringId,
+            slot: weeklyMenuItems.slot,
+          })
+          .from(weeklyMenuItems)
+          .where(
+            inArray(
+              weeklyMenuItems.offeringId,
+              masterOfferings.map(({ id }) => id),
+            ),
+          );
+
+        const results: MenuDistributionResult[] = [];
+
+        for (const operatingSiteId of input.operatingSiteIds) {
+          const [site] = await transaction
+            .select({ id: operatingSites.id })
+            .from(operatingSites)
+            .where(and(eq(operatingSites.id, operatingSiteId), eq(operatingSites.active, true)))
+            .limit(1);
+          if (!site) throw new OperationsNotFoundError('Operating site not found');
+
+          const [existing] = await transaction
+            .select({ id: weeklyMenus.id, status: weeklyMenus.status })
+            .from(weeklyMenus)
+            .where(
+              and(
+                eq(weeklyMenus.salesCycleId, master.salesCycleId),
+                eq(weeklyMenus.operatingSiteId, operatingSiteId),
+              ),
+            )
+            .for('update')
+            .limit(1);
+
+          if (existing && input.mode === 'CREATE_MISSING') {
+            results.push({
+              operatingSiteId,
+              outcome: 'SKIPPED_EXISTING',
+              weeklyMenuId: existing.id,
+            });
+            continue;
+          }
+
+          // A published regional revision is what live orders reference, so it is never rewritten
+          // in place: refreshing it would mutate the snapshot those orders were priced against.
+          if (existing?.status === 'PUBLISHED') {
+            results.push({
+              operatingSiteId,
+              outcome: 'SKIPPED_PUBLISHED',
+              weeklyMenuId: existing.id,
+            });
+            continue;
+          }
+
+          const regionalId =
+            existing?.id ??
+            (
+              await transaction
+                .insert(weeklyMenus)
+                .values({
+                  operatingSiteId,
+                  salesCycleId: master.salesCycleId,
+                  sourceMenuId: master.id,
+                  status: 'DRAFT',
+                })
+                .returning({ id: weeklyMenus.id })
+            )[0]?.id;
+          if (!regionalId) throw new Error('Regional menu creation did not return a row');
+
+          const replacing = input.mode === 'REPLACE';
+          const refreshed = await this.copyMenuContent(transaction, {
+            items: masterItems,
+            offerings: masterOfferings,
+            prices: masterPrices,
+            replacing,
+            targetMenuId: regionalId,
+          });
+
+          results.push({
+            operatingSiteId,
+            outcome: existing ? (replacing ? 'REPLACED' : 'REFRESHED') : 'CREATED',
+            preservedCustomizations: refreshed.preserved,
+            weeklyMenuId: regionalId,
+          });
+        }
+
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        await audit.record({
+          action: 'weekly_menu.distributed',
+          actor: auditActor(context),
+          after: {
+            mode: input.mode,
+            results: results.map((result) => ({
+              operatingSiteId: result.operatingSiteId,
+              outcome: result.outcome,
+            })),
+          },
+          correlationId: context.correlationId,
+          entityId: master.id,
+          entityType: 'weekly_menu',
+          requestId: context.requestId,
+          source: context.source,
+        });
+
+        return results;
+      })
+      .catch(translateDatabaseConflict);
+  }
+
+  /** Copies master content onto a regional revision, leaving customised rows alone unless replacing. */
+  private async copyMenuContent(
+    transaction: DatabaseTransaction,
+    input: {
+      items: readonly { dishName: string; offeringId: string; slot: number }[];
+      offerings: readonly {
+        currency: string;
+        id: string;
+        productVariantId: string;
+        unitPriceMinor: number | null;
+      }[];
+      prices: readonly {
+        currency: string;
+        productSizeId: string;
+        unitPriceMinor: number;
+      }[];
+      replacing: boolean;
+      targetMenuId: string;
+    },
+  ): Promise<{ preserved: number }> {
+    let preserved = 0;
+
+    const existingPrices = await transaction
+      .select({
+        customized: weeklyMenuPrices.customized,
+        id: weeklyMenuPrices.id,
+        productSizeId: weeklyMenuPrices.productSizeId,
+      })
+      .from(weeklyMenuPrices)
+      .where(eq(weeklyMenuPrices.weeklyMenuId, input.targetMenuId));
+
+    for (const price of input.prices) {
+      const current = existingPrices.find((row) => row.productSizeId === price.productSizeId);
+      if (current?.customized && !input.replacing) {
+        preserved += 1;
+        continue;
+      }
+      if (current) {
+        await transaction
+          .update(weeklyMenuPrices)
+          .set({
+            currency: price.currency,
+            customized: false,
+            unitPriceMinor: price.unitPriceMinor,
+          })
+          .where(eq(weeklyMenuPrices.id, current.id));
+        continue;
+      }
+      await transaction.insert(weeklyMenuPrices).values({
+        currency: price.currency,
+        productSizeId: price.productSizeId,
+        unitPriceMinor: price.unitPriceMinor,
+        weeklyMenuId: input.targetMenuId,
+      });
+    }
+
+    const existingOfferings = await transaction
+      .select({
+        customized: weeklyMenuOfferings.customized,
+        id: weeklyMenuOfferings.id,
+        productVariantId: weeklyMenuOfferings.productVariantId,
+      })
+      .from(weeklyMenuOfferings)
+      .where(eq(weeklyMenuOfferings.weeklyMenuId, input.targetMenuId));
+
+    for (const offering of input.offerings) {
+      const current = existingOfferings.find(
+        (row) => row.productVariantId === offering.productVariantId,
+      );
+      if (current?.customized && !input.replacing) {
+        preserved += 1;
+        continue;
+      }
+
+      const targetOfferingId =
+        current?.id ??
+        (
+          await transaction
+            .insert(weeklyMenuOfferings)
+            .values({
+              currency: offering.currency,
+              productVariantId: offering.productVariantId,
+              weeklyMenuId: input.targetMenuId,
+              ...(offering.unitPriceMinor === null
+                ? {}
+                : { unitPriceMinor: offering.unitPriceMinor }),
+            })
+            .returning({ id: weeklyMenuOfferings.id })
+        )[0]?.id;
+      if (!targetOfferingId) throw new Error('Regional offering upsert did not return a row');
+
+      if (current) {
+        await transaction
+          .update(weeklyMenuOfferings)
+          .set({ customized: false, unitPriceMinor: offering.unitPriceMinor })
+          .where(eq(weeklyMenuOfferings.id, current.id));
+      }
+
+      // Dishes are replaced as a unit: a partially refreshed composition is not a valid menu.
+      await transaction
+        .delete(weeklyMenuItems)
+        .where(eq(weeklyMenuItems.offeringId, targetOfferingId));
+      const dishes = input.items.filter((item) => item.offeringId === offering.id);
+      if (dishes.length > 0) {
+        await transaction.insert(weeklyMenuItems).values(
+          dishes.map((dish) => ({
+            dishName: dish.dishName,
+            offeringId: targetOfferingId,
+            slot: dish.slot,
+          })),
+        );
+      }
+    }
+
+    return { preserved };
   }
 
   public async createOrder(input: OrderInput, context: OperationsContext) {

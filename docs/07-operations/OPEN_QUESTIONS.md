@@ -6,7 +6,7 @@ Estas preguntas no bloquean todo el proyecto, pero no deben resolverse inventand
 
 - la operación de un pedido se deriva de la zona del domicilio de entrega (ADR-031);
 - toda dirección operativa debe referenciar una zona activa; la localidad escrita es descriptiva;
-- el menú semanal se carga de forma global; su configuración por operación queda pendiente (ADR-028);
+- el menú semanal se carga de forma global y se distribuye como revisión propia por operación (ADR-028);
 - el precio depende del tamaño y del alcance, nunca de la variedad (ADR-030);
 - el `slot` 1..5 del menú es orden de carga, no día de entrega (ADR-030);
 - el pedido web público resuelve la operación con un selector explícito (ADR-031).

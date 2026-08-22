@@ -46,6 +46,8 @@ import {
   LoginRequestSchema,
   LoginResponseSchema,
   MenuCreateRequestSchema,
+  MenuDistributeRequestSchema,
+  MenuDistributionResponseSchema,
   MenuListResponseSchema,
   MessageTemplateListResponseSchema,
   MessageTemplateSchema,
@@ -88,6 +90,7 @@ import {
   type OperatingSiteCreateRequest,
   type OperatingSiteUpdateRequest,
   type MenuCreateRequest,
+  type MenuDistributeRequest,
   type OrderCreateRequest,
   type OrderListQuery,
   type OrderTransitionRequest,
@@ -205,6 +208,11 @@ interface OperationsEngine {
     context: OperationsContext,
   ): Promise<readonly unknown[]>;
   createMenu(input: MenuCreateRequest, context: OperationsContext): Promise<unknown>;
+  distributeMenu(
+    menuId: string,
+    input: MenuDistributeRequest,
+    context: OperationsContext,
+  ): Promise<unknown>;
   createOrder(input: ScopedInput<OrderCreateRequest>, context: OperationsContext): Promise<unknown>;
   createPublicOrder(input: PublicOrderCreateRequest, context: OperationsContext): Promise<unknown>;
   confirmAddressGeocoding(
@@ -214,7 +222,7 @@ interface OperationsEngine {
     input: AddressGeocodingConfirmRequest,
     context: OperationsContext,
   ): Promise<unknown>;
-  currentPublishedMenu(): Promise<unknown>;
+  currentPublishedMenu(operatingSiteId: string | null): Promise<unknown>;
   exportOrdersCsv(
     input: ScopedInput<Omit<OrderListQuery, 'cursor' | 'limit'>>,
     context: OperationsContext,
@@ -528,7 +536,17 @@ export function createApp(options: CreateAppOptions) {
   });
 
   app.get('/api/v1/public/menu/current', async (context) => {
-    const menu = await requireOperations().currentPublishedMenu();
+    // A visitor's city selects which published revision they see; without one, the global master.
+    const requestedSlug = context.req.query('site')?.trim();
+    const sites = requestedSlug
+      ? ((await requireGeography().listSites()) as readonly {
+          active: boolean;
+          id: string;
+          slug: string;
+        }[])
+      : [];
+    const site = sites.find((candidate) => candidate.active && candidate.slug === requestedSlug);
+    const menu = await requireOperations().currentPublishedMenu(site?.id ?? null);
     if (!menu) {
       const code: ApiErrorCode = 'NOT_FOUND';
       return context.json(
@@ -1385,6 +1403,25 @@ export function createApp(options: CreateAppOptions) {
       MenuListResponseSchema.parse({ items: [contractValue(menu)] }).items[0],
       201,
     );
+  });
+
+  app.post('/api/v1/menus/:id/distribute', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (!permissions.includes('menus.distribute')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success)
+      return badRequest(context, 'El menú indicado no es válido.', params.error.issues);
+    const input = MenuDistributeRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success) return badRequest(context, 'Revisá la distribución.', input.error.issues);
+    // Replacing regional customisations is a separate grant, not a stronger flag on the same one.
+    if (input.data.mode === 'REPLACE' && !permissions.includes('menus.distribute_replace'))
+      return forbidden(context);
+    const results = await requireOperations().distributeMenu(
+      params.data.id,
+      input.data,
+      operationsContext(context),
+    );
+    return context.json(MenuDistributionResponseSchema.parse({ results: contractValue(results) }));
   });
 
   app.post('/api/v1/menus/:id/publish', async (context) => {

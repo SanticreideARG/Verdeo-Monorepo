@@ -44,7 +44,9 @@ export function PublicOrderPage() {
   }, []);
 
   useEffect(() => {
-    void apiRequest('/api/v1/public/menu/current')
+    void apiRequest(
+      `/api/v1/public/menu/current${siteSlug ? `?site=${encodeURIComponent(siteSlug)}` : ''}`,
+    )
       .then(async (response) => {
         if (!response.ok) throw new Error(await errorMessage(response));
         const loaded = (await response.json()) as WeeklyMenu;
@@ -55,7 +57,7 @@ export function PublicOrderPage() {
         setMessage(error instanceof Error ? error.message : 'No pudimos cargar el menú.'),
       )
       .finally(() => setLoading(false));
-  }, []);
+  }, [siteSlug]);
 
   const offering = useMemo(
     () => menu?.offerings.find((candidate) => candidate.id === offeringId),

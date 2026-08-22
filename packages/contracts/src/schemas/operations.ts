@@ -381,12 +381,45 @@ export const WeeklyMenuSchema = z.object({
   }),
   id: UuidSchema,
   offerings: z.array(MenuOfferingSchema),
+  // Null means the global master revision.
+  operatingSiteId: UuidSchema.nullable(),
+  operatingSiteName: z.string().nullable(),
   publishedAt: IsoDateTimeSchema.nullable(),
   revision: z.number().int().positive(),
+  sourceMenuId: UuidSchema.nullable(),
   status: z.string(),
 });
 
 export const MenuListResponseSchema = z.object({ items: z.array(WeeklyMenuSchema) });
+
+// Distribution materialises a regional revision per operation; it never merges global and regional
+// at order time (ADR-028).
+export const MenuDistributeRequestSchema = z
+  .object({
+    confirmedReplace: z.boolean().default(false),
+    mode: z.enum(['CREATE_MISSING', 'UPDATE_UNCUSTOMIZED', 'REPLACE']),
+    operatingSiteIds: z.array(UuidSchema).min(1).max(50),
+  })
+  .refine((value) => value.mode !== 'REPLACE' || value.confirmedReplace, {
+    message: 'Reemplazar personalizaciones regionales requiere confirmación explícita.',
+  });
+
+export const MenuDistributionResponseSchema = z.object({
+  results: z.array(
+    z.object({
+      operatingSiteId: UuidSchema,
+      outcome: z.enum([
+        'CREATED',
+        'REFRESHED',
+        'REPLACED',
+        'SKIPPED_EXISTING',
+        'SKIPPED_PUBLISHED',
+      ]),
+      preservedCustomizations: z.number().int().nonnegative().optional(),
+      weeklyMenuId: UuidSchema,
+    }),
+  ),
+});
 
 export const IdParamSchema = z.object({ id: UuidSchema });
 export const CustomerRelationParamSchema = z.object({
@@ -624,6 +657,7 @@ export type CustomerListQuery = z.infer<typeof CustomerListQuerySchema>;
 export type CustomerSummary = z.infer<typeof CustomerSummarySchema>;
 export type MessageTemplateUpsertRequest = z.infer<typeof MessageTemplateUpsertRequestSchema>;
 export type MenuCreateRequest = z.infer<typeof MenuCreateRequestSchema>;
+export type MenuDistributeRequest = z.infer<typeof MenuDistributeRequestSchema>;
 export type WeeklyMenu = z.infer<typeof WeeklyMenuSchema>;
 export type OrderCreateRequest = z.infer<typeof OrderCreateRequestSchema>;
 export type PublicOrderCreateRequest = z.infer<typeof PublicOrderCreateRequestSchema>;

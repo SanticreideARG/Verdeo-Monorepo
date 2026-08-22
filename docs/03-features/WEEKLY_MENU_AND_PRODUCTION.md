@@ -45,7 +45,25 @@ El `slot` 1..5 es orden de carga y presentación; no representa un día de entre
 Precios y composición se congelan como snapshot en el pedido: cambiar el catálogo o la lista nunca
 altera pedidos ya emitidos.
 
-La configuración de menú y precios por ciudad queda pendiente; hoy la carga es global (ADR-028).
+La carga es global: el menú maestro no pertenece a ninguna operación. La distribución materializa
+una revisión propia por operación, y a partir de ahí cada ciudad tiene sus propios precios por tamaño
+y su propia composición. Un pedido referencia siempre una revisión concreta; nunca se compone menú
+global más overrides regionales en el momento del pedido (ADR-028).
+
+Modos de distribución:
+
+1. **Sólo donde no exista** — crea la revisión regional y no toca las que ya están.
+2. **Actualizar lo no personalizado** — además refresca precios y variedades que ninguna ciudad editó.
+   Cada fila lleva su marca `customized`, así que la personalización se preserva a nivel de precio y
+   de variedad, no de menú entero.
+3. **Reemplazar** — sobrescribe también lo personalizado. Requiere el permiso `menus.distribute_replace`
+   y confirmación explícita; el permiso de distribuir por sí solo no alcanza.
+
+Una revisión regional ya publicada nunca se reescribe: es el snapshot contra el que se cotizaron los
+pedidos vivos. La distribución la omite e informa `SKIPPED_PUBLISHED`.
+
+Una operación sin revisión propia vende el menú maestro publicado. Eso es selección de revisión, no
+fallback campo por campo.
 
 ## Weekly Menu Builder
 

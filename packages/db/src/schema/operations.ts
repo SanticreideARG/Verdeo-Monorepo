@@ -343,6 +343,9 @@ export const productVariants = pgTable(
   ],
 );
 
+// A menu with no operation is the global master. Distribution materialises an independent revision
+// per operation, so an order always references one concrete row and never composes global plus
+// regional at order time (ADR-028).
 export const weeklyMenus = pgTable(
   'weekly_menus',
   {
@@ -350,14 +353,30 @@ export const weeklyMenus = pgTable(
     salesCycleId: uuid('sales_cycle_id')
       .notNull()
       .references(() => salesCycles.id, { onDelete: 'restrict' }),
+    operatingSiteId: uuid('operating_site_id').references(() => operatingSites.id, {
+      onDelete: 'restrict',
+    }),
+    sourceMenuId: uuid('source_menu_id'),
     status: text('status').default('DRAFT').notNull(),
     publishedAt: timestamp('published_at', { withTimezone: true }),
     revision: integer('revision').default(1).notNull(),
     ...timestamps,
   },
   (table) => [
-    uniqueIndex('weekly_menus_cycle_revision_unique').on(table.salesCycleId, table.revision),
+    // One master revision per cycle, and one regional revision per cycle and operation.
+    uniqueIndex('weekly_menus_master_revision_unique')
+      .on(table.salesCycleId, table.revision)
+      .where(sql`${table.operatingSiteId} is null`),
+    uniqueIndex('weekly_menus_site_revision_unique')
+      .on(table.salesCycleId, table.operatingSiteId, table.revision)
+      .where(sql`${table.operatingSiteId} is not null`),
     index('weekly_menus_status_idx').on(table.status),
+    index('weekly_menus_site_status_idx').on(table.operatingSiteId, table.status),
+    foreignKey({
+      columns: [table.sourceMenuId],
+      foreignColumns: [table.id],
+      name: 'weekly_menus_source_menu_fk',
+    }).onDelete('set null'),
   ],
 );
 
@@ -375,6 +394,9 @@ export const weeklyMenuPrices = pgTable(
       .references(() => productSizes.id, { onDelete: 'restrict' }),
     unitPriceMinor: integer('unit_price_minor').notNull(),
     currency: text('currency').default('ARS').notNull(),
+    // Set when an operator edits this row on a distributed menu. A later distribution refreshes
+    // only what nobody customised, unless it is an explicit replace (ADR-028).
+    customized: boolean('customized').default(false).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -398,6 +420,7 @@ export const weeklyMenuOfferings = pgTable(
     unitPriceMinor: integer('unit_price_minor'),
     currency: text('currency').default('ARS').notNull(),
     active: boolean('active').default(true).notNull(),
+    customized: boolean('customized').default(false).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

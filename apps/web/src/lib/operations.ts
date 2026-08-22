@@ -132,8 +132,12 @@ export interface WeeklyMenu {
   };
   id: string;
   offerings: MenuOffering[];
+  // Null means the global master revision.
+  operatingSiteId: string | null;
+  operatingSiteName: string | null;
   publishedAt: string | null;
   revision: number;
+  sourceMenuId: string | null;
   status: string;
 }
 

@@ -46,6 +46,12 @@ export const initialPermissionCatalog: readonly PermissionDefinition[] = [
   { key: 'messaging.accounts.manage', group: 'messaging', description: 'Administrar cuentas' },
   { key: 'production.read', group: 'production', description: 'Ver producción' },
   { key: 'production.generate', group: 'production', description: 'Generar producción' },
+  { key: 'menus.distribute', group: 'production', description: 'Distribuir menús por operación' },
+  {
+    key: 'menus.distribute_replace',
+    group: 'production',
+    description: 'Reemplazar personalizaciones regionales de menú',
+  },
   { key: 'production.report', group: 'production', description: 'Informar producción real' },
   { key: 'production.adjust_surplus', group: 'production', description: 'Ajustar excedente' },
   { key: 'routes.read', group: 'delivery', description: 'Ver rutas' },
