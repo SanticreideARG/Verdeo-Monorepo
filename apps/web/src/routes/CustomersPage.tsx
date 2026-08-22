@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { apiRequest } from '../lib/api.js';
@@ -45,6 +45,9 @@ async function responseJson<T>(response: Response): Promise<T> {
 
 export function CustomersPage() {
   const navigate = useNavigate();
+  // Deep-links a shared customer reference from chat straight to that customer's detail.
+  const [searchParams] = useSearchParams();
+  const linkedCustomerId = searchParams.get('customerId') ?? '';
   const [profile, setProfile] = useState<DashboardProfile | null>(null);
   const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [selectedId, setSelectedId] = useState('');
@@ -123,7 +126,13 @@ export function CustomersPage() {
       }
       if (!active) return;
       setProfile(loadedProfile);
-      await loadDirectory('');
+      await loadDirectory('', linkedCustomerId);
+      // The default page may not include the linked customer at all (it isn't a search match), so
+      // its selection is forced regardless of what loadDirectory picked.
+      if (linkedCustomerId && active) {
+        setSelectedId(linkedCustomerId);
+        await loadCustomer(linkedCustomerId).catch(() => undefined);
+      }
     })()
       .catch((error: unknown) => {
         if (active)
@@ -135,7 +144,7 @@ export function CustomersPage() {
     return () => {
       active = false;
     };
-  }, [loadDirectory, navigate]);
+  }, [linkedCustomerId, loadCustomer, loadDirectory, navigate]);
 
   async function logout() {
     await apiRequest('/api/v1/auth/logout', { method: 'POST' }).catch(() => undefined);

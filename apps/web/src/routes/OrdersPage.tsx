@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
@@ -9,11 +10,16 @@ import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 const STATUS_OPTIONS = ['DRAFT', 'CONFIRMED', 'READY', 'DELIVERED', 'CANCELLED'] as const;
 
 /** "Ver pedidos": browsing the full history, filterable by status, with a CSV export. No creation
- * or transition controls here — those live in "Tomar y confirmar pedidos". */
+ * or transition controls here — those live in "Tomar y confirmar pedidos".
+ *
+ * `?search=` deep-links a shared order reference here: the search matches its public number, so a
+ * chat card can point at one order without a dedicated detail route. */
 export function OrdersPage() {
   const { failed, logout, profile } = useDashboardProfile();
+  const [searchParams] = useSearchParams();
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [status, setStatus] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -22,6 +28,7 @@ export function OrdersPage() {
     async (cursor?: string) => {
       const params = new URLSearchParams();
       if (status) params.set('status', status);
+      if (search.trim()) params.set('search', search.trim());
       if (cursor) params.set('cursor', cursor);
       const response = await apiRequest(`/api/v1/orders?${params.toString()}`);
       if (!response.ok) {
@@ -32,7 +39,7 @@ export function OrdersPage() {
       setOrders((current) => (cursor ? [...current, ...body.items] : body.items));
       setNextCursor(body.nextCursor);
     },
-    [status],
+    [search, status],
   );
 
   useEffect(() => {
@@ -45,6 +52,7 @@ export function OrdersPage() {
     setMessage('');
     const params = new URLSearchParams();
     if (status) params.set('status', status);
+    if (search.trim()) params.set('search', search.trim());
     const response = await apiRequest(`/api/v1/orders/export?${params.toString()}`);
     if (!response.ok) {
       setMessage(await errorMessage(response));
@@ -82,6 +90,14 @@ export function OrdersPage() {
             <h1 className="text-2xl font-semibold text-forest">Ver pedidos</h1>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <label className="field">
+              Buscar
+              <input
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="N° de pedido o cliente"
+                value={search}
+              />
+            </label>
             <label className="field">
               Estado
               <select onChange={(event) => setStatus(event.target.value)} value={status}>

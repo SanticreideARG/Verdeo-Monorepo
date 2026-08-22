@@ -61,6 +61,20 @@ function chatStubs() {
     removeUserLink: vi
       .fn<(linkId: string, context: unknown) => Promise<void>>()
       .mockResolvedValue(),
+    sendLocation: vi
+      .fn<(conversationId: string, input: unknown, context: unknown) => Promise<unknown>>()
+      .mockResolvedValue({
+        authorDisplayName: null,
+        authorUserId: ME,
+        body: null,
+        createdAt: new Date('2026-08-22T12:00:00.000Z'),
+        deletedAt: null,
+        editedAt: null,
+        id: '40000000-0000-4000-8000-000000000002',
+        kind: 'location',
+        location: { label: 'Depósito', latitude: -38.95, longitude: -68.06 },
+        reference: null,
+      }),
     sendMessage: vi
       .fn<(conversationId: string, body: string, context: unknown) => Promise<unknown>>()
       .mockResolvedValue({
@@ -72,6 +86,22 @@ function chatStubs() {
         editedAt: null,
         id: '40000000-0000-4000-8000-000000000001',
         kind: 'text',
+        location: null,
+        reference: null,
+      }),
+    sendReference: vi
+      .fn<(conversationId: string, input: unknown, context: unknown) => Promise<unknown>>()
+      .mockResolvedValue({
+        authorDisplayName: null,
+        authorUserId: ME,
+        body: null,
+        createdAt: new Date('2026-08-22T12:00:00.000Z'),
+        deletedAt: null,
+        editedAt: null,
+        id: '40000000-0000-4000-8000-000000000003',
+        kind: 'reference',
+        location: null,
+        reference: { resourceId: OTHER, resourceType: 'customer' },
       }),
     setRoleLink: vi
       .fn<(input: unknown, context: unknown) => Promise<unknown>>()
@@ -375,5 +405,130 @@ describe('chat presence', () => {
     });
 
     expect(response.status).toBe(409);
+  });
+});
+
+describe('chat locations', () => {
+  it('sends a location as the session user', async () => {
+    const chat = chatStubs();
+
+    const response = await chatApp(['chat.use'], chat).request(
+      `/api/v1/chat/conversations/${CONVERSATION}/locations`,
+      {
+        body: JSON.stringify({ label: 'Depósito', latitude: -38.95, longitude: -68.06 }),
+        headers: jsonHeaders,
+        method: 'POST',
+      },
+    );
+
+    expect(response.status).toBe(201);
+    expect(chat.sendLocation.mock.calls[0]?.[1]).toMatchObject({ latitude: -38.95 });
+    expect(chat.sendLocation.mock.calls[0]?.[2]).toMatchObject({ actorUserId: ME });
+  });
+
+  it('rejects coordinates outside the valid range', async () => {
+    const chat = chatStubs();
+
+    const response = await chatApp(['chat.use'], chat).request(
+      `/api/v1/chat/conversations/${CONVERSATION}/locations`,
+      {
+        body: JSON.stringify({ latitude: 200, longitude: -68.06 }),
+        headers: jsonHeaders,
+        method: 'POST',
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect(chat.sendLocation).not.toHaveBeenCalled();
+  });
+
+  it('denies sending a location without chat.use', async () => {
+    const chat = chatStubs();
+
+    const response = await chatApp([], chat).request(
+      `/api/v1/chat/conversations/${CONVERSATION}/locations`,
+      {
+        body: JSON.stringify({ latitude: -38.95, longitude: -68.06 }),
+        headers: jsonHeaders,
+        method: 'POST',
+      },
+    );
+
+    expect(response.status).toBe(403);
+    expect(chat.sendLocation).not.toHaveBeenCalled();
+  });
+});
+
+describe('chat references', () => {
+  it('requires chat.share_reference, not just chat.use', async () => {
+    const chat = chatStubs();
+
+    const response = await chatApp(['chat.use'], chat).request(
+      `/api/v1/chat/conversations/${CONVERSATION}/references`,
+      {
+        body: JSON.stringify({ resourceId: OTHER, resourceType: 'customer' }),
+        headers: jsonHeaders,
+        method: 'POST',
+      },
+    );
+
+    // A user may need chat without being able to point colleagues at customer records.
+    expect(response.status).toBe(403);
+    expect(chat.sendReference).not.toHaveBeenCalled();
+  });
+
+  it('shares a customer reference for a session with chat.share_reference', async () => {
+    const chat = chatStubs();
+
+    const response = await chatApp(['chat.use', 'chat.share_reference'], chat).request(
+      `/api/v1/chat/conversations/${CONVERSATION}/references`,
+      {
+        body: JSON.stringify({ resourceId: OTHER, resourceType: 'customer' }),
+        headers: jsonHeaders,
+        method: 'POST',
+      },
+    );
+    const body: unknown = await response.json();
+
+    expect(response.status).toBe(201);
+    expect((body as { reference: { resourceType: string } }).reference.resourceType).toBe(
+      'customer',
+    );
+  });
+
+  it('rejects an unknown resource type', async () => {
+    const chat = chatStubs();
+
+    const response = await chatApp(['chat.use', 'chat.share_reference'], chat).request(
+      `/api/v1/chat/conversations/${CONVERSATION}/references`,
+      {
+        body: JSON.stringify({ resourceId: OTHER, resourceType: 'product' }),
+        headers: jsonHeaders,
+        method: 'POST',
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect(chat.sendReference).not.toHaveBeenCalled();
+  });
+
+  it('reports a dangling reference as not found rather than a server error', async () => {
+    const chat = chatStubs();
+    chat.sendReference = vi.fn(() => {
+      const error = new Error('El cliente indicado no existe.');
+      error.name = 'ChatNotFoundError';
+      return Promise.reject(error);
+    });
+
+    const response = await chatApp(['chat.use', 'chat.share_reference'], chat).request(
+      `/api/v1/chat/conversations/${CONVERSATION}/references`,
+      {
+        body: JSON.stringify({ resourceId: OTHER, resourceType: 'customer' }),
+        headers: jsonHeaders,
+        method: 'POST',
+      },
+    );
+
+    expect(response.status).toBe(404);
   });
 });

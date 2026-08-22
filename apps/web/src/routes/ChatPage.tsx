@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { apiRequest } from '../lib/api.js';
-import { errorMessage } from '../lib/operations.js';
+import { errorMessage, formatMoney } from '../lib/operations.js';
 
 interface ChatContact {
   displayName: string;
@@ -26,6 +26,19 @@ interface ChatPresence {
   userId: string;
 }
 
+interface ChatLocation {
+  label: string | null;
+  latitude: number;
+  longitude: number;
+}
+
+type ChatReferenceType = 'customer' | 'order';
+
+interface ChatReference {
+  resourceId: string;
+  resourceType: ChatReferenceType;
+}
+
 interface ChatMessage {
   authorDisplayName: string | null;
   authorUserId: string | null;
@@ -35,6 +48,15 @@ interface ChatMessage {
   editedAt: string | null;
   id: string;
   kind: string;
+  location: ChatLocation | null;
+  reference: ChatReference | null;
+}
+
+/** Search result shape used by the reference picker — the same fields exist on both the customer
+ * and order list endpoints, just under a different label field, so we normalize to this locally. */
+interface ReferenceCandidate {
+  id: string;
+  label: string;
 }
 
 /** Serverless functions cannot hold a socket, so the transcript is polled while the tab is open. */
@@ -61,6 +83,73 @@ function timeLabel(value: string): string {
   );
 }
 
+function mapsUrl(location: ChatLocation): string {
+  return `https://www.google.com/maps?q=${location.latitude},${location.longitude}`;
+}
+
+/** Resolves a shared pointer through the viewer's own session and permissions — never a copy of the
+ * data, always a live lookup, so a viewer without access sees "no disponible" instead of stale PII. */
+function ReferenceCard({ reference }: { reference: ChatReference }) {
+  const [state, setState] = useState<'loading' | 'ok' | 'denied'>('loading');
+  const [summary, setSummary] = useState<{ href: string; title: string; subtitle: string } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const response = await apiRequest(
+        reference.resourceType === 'customer'
+          ? `/api/v1/customers/${reference.resourceId}`
+          : `/api/v1/orders/${reference.resourceId}`,
+      );
+      if (!active) return;
+      if (!response.ok) {
+        setState('denied');
+        return;
+      }
+      if (reference.resourceType === 'customer') {
+        const customer = (await response.json()) as { displayName: string; id: string };
+        setSummary({
+          href: `/app/clientes?customerId=${customer.id}`,
+          subtitle: 'Cliente',
+          title: customer.displayName,
+        });
+      } else {
+        const order = (await response.json()) as {
+          currency: string;
+          publicNumber: string;
+          status: string;
+          totalMinor: number;
+        };
+        setSummary({
+          href: `/app/pedidos?search=${encodeURIComponent(order.publicNumber)}`,
+          subtitle: `${order.status} · ${formatMoney(order.totalMinor, order.currency)}`,
+          title: order.publicNumber,
+        });
+      }
+      setState('ok');
+    };
+    void load().catch(() => {
+      if (active) setState('denied');
+    });
+    return () => {
+      active = false;
+    };
+  }, [reference.resourceId, reference.resourceType]);
+
+  if (state === 'loading')
+    return <p className="chat-reference-card text-sm text-ink-muted">Cargando…</p>;
+  if (state === 'denied' || !summary)
+    return <p className="chat-reference-card text-sm text-ink-muted">Referencia no disponible.</p>;
+  return (
+    <Link className="chat-reference-card" to={summary.href}>
+      <strong>{summary.title}</strong>
+      <span>{summary.subtitle}</span>
+    </Link>
+  );
+}
+
 export function ChatPage() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<DashboardProfile | null>(null);
@@ -72,6 +161,12 @@ export function ChatPage() {
   const [draft, setDraft] = useState('');
   const [message, setMessage] = useState('');
   const [presence, setPresence] = useState<Map<string, ChatPresence>>(new Map());
+  const [locationBusy, setLocationBusy] = useState(false);
+  const [referencePickerOpen, setReferencePickerOpen] = useState(false);
+  const [referenceType, setReferenceType] = useState<ChatReferenceType>('customer');
+  const [referenceQuery, setReferenceQuery] = useState('');
+  const [referenceCandidates, setReferenceCandidates] = useState<ReferenceCandidate[]>([]);
+  const [referenceSearching, setReferenceSearching] = useState(false);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -96,6 +191,7 @@ export function ChatPage() {
 
   const canChat = profile?.permissions.includes('chat.use') ?? false;
   const canSeePresence = profile?.permissions.includes('chat.presence.read') ?? false;
+  const canShareReference = profile?.permissions.includes('chat.share_reference') ?? false;
 
   const loadPresence = useCallback(async () => {
     if (!canSeePresence) return;
@@ -213,6 +309,100 @@ export function ChatPage() {
     await loadConversations();
   }
 
+  function sendLocation() {
+    if (!selectedId || !navigator.geolocation) return;
+    setMessage('');
+    setLocationBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        void (async () => {
+          const response = await apiRequest(`/api/v1/chat/conversations/${selectedId}/locations`, {
+            body: JSON.stringify({
+              label: null,
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+            }),
+            method: 'POST',
+          });
+          setLocationBusy(false);
+          if (!response.ok) {
+            setMessage(await errorMessage(response));
+            return;
+          }
+          await loadMessages(selectedId);
+          await loadConversations();
+        })();
+      },
+      () => {
+        setLocationBusy(false);
+        setMessage('No pudimos obtener tu ubicación. Revisá los permisos del navegador.');
+      },
+      { enableHighAccuracy: true, timeout: 10_000 },
+    );
+  }
+
+  function openReferencePicker() {
+    setReferencePickerOpen(true);
+    setReferenceType('customer');
+    setReferenceQuery('');
+    setReferenceCandidates([]);
+  }
+
+  useEffect(() => {
+    if (!referencePickerOpen) return;
+    const query = referenceQuery.trim();
+    if (!query) {
+      setReferenceCandidates([]);
+      return;
+    }
+    let active = true;
+    setReferenceSearching(true);
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const endpoint =
+          referenceType === 'customer'
+            ? `/api/v1/customers?search=${encodeURIComponent(query)}`
+            : `/api/v1/orders?search=${encodeURIComponent(query)}`;
+        const response = await apiRequest(endpoint);
+        if (!active) return;
+        setReferenceSearching(false);
+        if (!response.ok) {
+          setReferenceCandidates([]);
+          return;
+        }
+        const body = (await response.json()) as {
+          items: Array<{ displayName?: string; id: string; publicNumber?: string }>;
+        };
+        setReferenceCandidates(
+          body.items.map((item) => ({
+            id: item.id,
+            label: item.displayName ?? item.publicNumber ?? item.id,
+          })),
+        );
+      })();
+    }, 300);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [referencePickerOpen, referenceQuery, referenceType]);
+
+  async function sendReference(candidate: ReferenceCandidate) {
+    if (!selectedId) return;
+    setMessage('');
+    setReferencePickerOpen(false);
+    const response = await apiRequest(`/api/v1/chat/conversations/${selectedId}/references`, {
+      body: JSON.stringify({ resourceId: candidate.id, resourceType: referenceType }),
+      method: 'POST',
+    });
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    await loadMessages(selectedId);
+    await loadConversations();
+  }
+
   if (failed) {
     return (
       <main className="grid min-h-screen place-items-center bg-cream px-5 text-center">
@@ -318,7 +508,24 @@ export function ChatPage() {
                       }`}
                       key={entry.id}
                     >
-                      <p>{entry.deletedAt ? <em>Mensaje eliminado</em> : entry.body}</p>
+                      {entry.deletedAt ? (
+                        <p>
+                          <em>Mensaje eliminado</em>
+                        </p>
+                      ) : entry.kind === 'location' && entry.location ? (
+                        <a
+                          className="chat-location-card"
+                          href={mapsUrl(entry.location)}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          📍 {entry.location.label ?? 'Ubicación compartida'}
+                        </a>
+                      ) : entry.kind === 'reference' && entry.reference ? (
+                        <ReferenceCard reference={entry.reference} />
+                      ) : (
+                        <p>{entry.body}</p>
+                      )}
                       <small>{timeLabel(entry.createdAt)}</small>
                     </article>
                   ))}
@@ -326,7 +533,80 @@ export function ChatPage() {
                     <p className="text-sm text-ink-muted">Escribí el primer mensaje.</p>
                   ) : null}
                 </div>
+                {referencePickerOpen ? (
+                  <div className="chat-reference-picker">
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="field">
+                        Tipo
+                        <select
+                          onChange={(event) =>
+                            setReferenceType(event.target.value as ChatReferenceType)
+                          }
+                          value={referenceType}
+                        >
+                          <option value="customer">Cliente</option>
+                          <option value="order">Pedido</option>
+                        </select>
+                      </label>
+                      <button
+                        className="button button-secondary"
+                        onClick={() => setReferencePickerOpen(false)}
+                        type="button"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                    <input
+                      aria-label="Buscar"
+                      autoFocus
+                      onChange={(event) => setReferenceQuery(event.target.value)}
+                      placeholder={
+                        referenceType === 'customer' ? 'Buscar cliente…' : 'Buscar pedido…'
+                      }
+                      value={referenceQuery}
+                    />
+                    <ul className="mt-2 space-y-1">
+                      {referenceCandidates.map((candidate) => (
+                        <li key={candidate.id}>
+                          <button
+                            className="chat-thread"
+                            onClick={() => void sendReference(candidate)}
+                            type="button"
+                          >
+                            {candidate.label}
+                          </button>
+                        </li>
+                      ))}
+                      {!referenceSearching &&
+                      referenceQuery.trim() &&
+                      referenceCandidates.length === 0 ? (
+                        <li className="text-sm text-ink-muted">Sin resultados.</li>
+                      ) : null}
+                    </ul>
+                  </div>
+                ) : null}
                 <form className="chat-composer" onSubmit={(event) => void send(event)}>
+                  <button
+                    aria-label="Compartir ubicación"
+                    className="button button-secondary"
+                    disabled={locationBusy}
+                    onClick={() => void sendLocation()}
+                    title="Compartir ubicación"
+                    type="button"
+                  >
+                    📍
+                  </button>
+                  {canShareReference ? (
+                    <button
+                      aria-label="Compartir referencia"
+                      className="button button-secondary"
+                      onClick={openReferencePicker}
+                      title="Compartir pedido o cliente"
+                      type="button"
+                    >
+                      🔗
+                    </button>
+                  ) : null}
                   <input
                     aria-label="Mensaje"
                     maxLength={4000}

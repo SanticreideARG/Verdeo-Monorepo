@@ -15,11 +15,15 @@ import {
   chatPresenceStatuses,
   chatRoleLinks,
   chatUserLinks,
+  customers,
+  orders,
   permissions,
   rolePermissions,
   roles,
   staffConversationParticipants,
   staffConversations,
+  staffMessageLocations,
+  staffMessageReferences,
   staffMessages,
   staffPresence,
   userPermissionOverrides,
@@ -531,9 +535,16 @@ export class PostgresChatService {
         editedAt: staffMessages.editedAt,
         id: staffMessages.id,
         kind: staffMessages.kind,
+        locationLabel: staffMessageLocations.label,
+        locationLatitude: staffMessageLocations.latitude,
+        locationLongitude: staffMessageLocations.longitude,
+        referenceResourceId: staffMessageReferences.resourceId,
+        referenceResourceType: staffMessageReferences.resourceType,
       })
       .from(staffMessages)
       .leftJoin(users, eq(users.id, staffMessages.authorUserId))
+      .leftJoin(staffMessageLocations, eq(staffMessageLocations.messageId, staffMessages.id))
+      .leftJoin(staffMessageReferences, eq(staffMessageReferences.messageId, staffMessages.id))
       .where(
         and(
           eq(staffMessages.conversationId, conversationId),
@@ -545,51 +556,202 @@ export class PostgresChatService {
       .limit(input.limit);
 
     const ordered = input.after ? rows : [...rows].reverse();
-    return ordered.map((row) => ({
-      ...row,
-      // A deleted message keeps its place in the transcript without its content.
-      body: row.deletedAt ? null : row.body,
-    }));
+    return ordered.map(
+      ({
+        locationLabel,
+        locationLatitude,
+        locationLongitude,
+        referenceResourceId,
+        referenceResourceType,
+        ...row
+      }) => ({
+        ...row,
+        // A deleted message keeps its place in the transcript without its content or attachment.
+        body: row.deletedAt ? null : row.body,
+        location:
+          !row.deletedAt && locationLatitude !== null && locationLongitude !== null
+            ? {
+                label: locationLabel,
+                latitude: Number(locationLatitude),
+                longitude: Number(locationLongitude),
+              }
+            : null,
+        reference:
+          !row.deletedAt && referenceResourceId && referenceResourceType
+            ? { resourceId: referenceResourceId, resourceType: referenceResourceType }
+            : null,
+      }),
+    );
   }
 
   public async sendMessage(conversationId: string, body: string, context: ChatContext) {
     return this.database.transaction(async (transaction) => {
       await this.assertParticipant(transaction, conversationId, context.actorUserId);
+      const message = await this.insertMessage(transaction, {
+        authorUserId: context.actorUserId,
+        conversationId,
+        kind: 'text',
+        values: { body },
+      });
+      return { ...message, location: null, reference: null };
+    });
+  }
 
-      const [message] = await transaction
-        .insert(staffMessages)
-        .values({ authorUserId: context.actorUserId, body, conversationId, kind: 'text' })
-        .returning({
-          body: staffMessages.body,
-          createdAt: staffMessages.createdAt,
-          id: staffMessages.id,
-          kind: staffMessages.kind,
-        });
-      if (!message) throw new Error('Message insert did not return a row');
+  /**
+   * A location is the coordinates the sender chose, with an optional label — never a customer's
+   * stored address. Sharing an address goes through `sendReference` instead, so the recipient's own
+   * `customers.read` applies rather than being bypassed by a raw pair of coordinates (ADR-032).
+   */
+  public async sendLocation(
+    conversationId: string,
+    input: { label?: string | undefined; latitude: number; longitude: number },
+    context: ChatContext,
+  ) {
+    return this.database.transaction(async (transaction) => {
+      await this.assertParticipant(transaction, conversationId, context.actorUserId);
+      const message = await this.insertMessage(transaction, {
+        authorUserId: context.actorUserId,
+        conversationId,
+        kind: 'location',
+        values: { body: null },
+      });
 
-      await transaction
-        .update(staffConversations)
-        .set({ lastMessageAt: message.createdAt, updatedAt: message.createdAt })
-        .where(eq(staffConversations.id, conversationId));
-      // The author has read what they just wrote.
-      await transaction
-        .update(staffConversationParticipants)
-        .set({ lastReadAt: message.createdAt })
-        .where(
-          and(
-            eq(staffConversationParticipants.conversationId, conversationId),
-            eq(staffConversationParticipants.userId, context.actorUserId),
-          ),
-        );
+      await transaction.insert(staffMessageLocations).values({
+        label: input.label ?? null,
+        latitude: input.latitude.toString(),
+        longitude: input.longitude.toString(),
+        messageId: message.id,
+      });
 
       return {
         ...message,
-        authorDisplayName: null,
-        authorUserId: context.actorUserId,
-        deletedAt: null,
-        editedAt: null,
+        location: {
+          label: input.label ?? null,
+          latitude: input.latitude,
+          longitude: input.longitude,
+        },
+        reference: null,
       };
     });
+  }
+
+  /**
+   * Stores a pointer, never a copy: `{resourceType, resourceId}`. The viewer resolves it through the
+   * existing order/customer endpoint with their own permissions when they render it, so a recipient
+   * without `customers.read` sees "referencia no disponible" instead of a cached, staling snapshot.
+   * Sharing a customer is a PII disclosure and is audited; sharing an order is not (ADR-032).
+   */
+  public async sendReference(
+    conversationId: string,
+    input: { resourceId: string; resourceType: 'customer' | 'order' },
+    context: ChatContext,
+  ) {
+    return this.database.transaction(async (transaction) => {
+      await this.assertParticipant(transaction, conversationId, context.actorUserId);
+
+      const exists =
+        input.resourceType === 'customer'
+          ? await transaction
+              .select({ id: customers.id })
+              .from(customers)
+              .where(eq(customers.id, input.resourceId))
+              .limit(1)
+          : await transaction
+              .select({ id: orders.id })
+              .from(orders)
+              .where(eq(orders.id, input.resourceId))
+              .limit(1);
+      if (exists.length === 0)
+        throw new ChatNotFoundError(
+          input.resourceType === 'customer'
+            ? 'El cliente indicado no existe.'
+            : 'El pedido indicado no existe.',
+        );
+
+      const message = await this.insertMessage(transaction, {
+        authorUserId: context.actorUserId,
+        conversationId,
+        kind: 'reference',
+        values: { body: null },
+      });
+
+      await transaction.insert(staffMessageReferences).values({
+        messageId: message.id,
+        resourceId: input.resourceId,
+        resourceType: input.resourceType,
+      });
+
+      if (input.resourceType === 'customer') {
+        await new AuditService(new PostgresAuditSink(transaction)).record({
+          action: 'chat.customer_reference.shared',
+          actor: { type: 'user', userId: context.actorUserId },
+          after: { conversationId, messageId: message.id },
+          correlationId: context.correlationId,
+          entityId: input.resourceId,
+          entityType: 'customer',
+          requestId: context.requestId,
+          source: context.source,
+        });
+      }
+
+      return {
+        ...message,
+        location: null,
+        reference: { resourceId: input.resourceId, resourceType: input.resourceType },
+      };
+    });
+  }
+
+  /** Shared write path for every message kind: insert, bump the conversation, mark it read by its
+   * own author. Kind-specific rows (location, reference) are inserted by the caller in the same
+   * transaction. */
+  private async insertMessage(
+    transaction: DatabaseTransaction,
+    input: {
+      authorUserId: string;
+      conversationId: string;
+      kind: 'location' | 'reference' | 'text';
+      values: { body: string | null };
+    },
+  ) {
+    const [message] = await transaction
+      .insert(staffMessages)
+      .values({
+        authorUserId: input.authorUserId,
+        body: input.values.body,
+        conversationId: input.conversationId,
+        kind: input.kind,
+      })
+      .returning({
+        body: staffMessages.body,
+        createdAt: staffMessages.createdAt,
+        id: staffMessages.id,
+        kind: staffMessages.kind,
+      });
+    if (!message) throw new Error('Message insert did not return a row');
+
+    await transaction
+      .update(staffConversations)
+      .set({ lastMessageAt: message.createdAt, updatedAt: message.createdAt })
+      .where(eq(staffConversations.id, input.conversationId));
+    // The author has read what they just sent.
+    await transaction
+      .update(staffConversationParticipants)
+      .set({ lastReadAt: message.createdAt })
+      .where(
+        and(
+          eq(staffConversationParticipants.conversationId, input.conversationId),
+          eq(staffConversationParticipants.userId, input.authorUserId),
+        ),
+      );
+
+    return {
+      ...message,
+      authorDisplayName: null as string | null,
+      authorUserId: input.authorUserId as string | null,
+      deletedAt: null as Date | null,
+      editedAt: null as Date | null,
+    };
   }
 
   public async markRead(conversationId: string, userId: string) {

@@ -16,12 +16,14 @@ import {
   ChatConversationOpenRequestSchema,
   ChatConversationParamSchema,
   ChatLinksResponseSchema,
+  ChatLocationCreateRequestSchema,
   ChatMessageCreateRequestSchema,
   ChatMessageListResponseSchema,
   ChatMessageQuerySchema,
   ChatHeartbeatRequestSchema,
   ChatMessageSchema,
   ChatPresenceEntrySchema,
+  ChatReferenceCreateRequestSchema,
   ChatPresenceListResponseSchema,
   ChatPresenceStatusListResponseSchema,
   ChatPurgeResponseSchema,
@@ -89,7 +91,9 @@ import {
   type AIProviderConfigUpsertRequest,
   type AddressGeocodingConfirmRequest,
   type AddressGeocodingCreateRequest,
+  type ChatLocationCreateRequest,
   type ChatMessageQuery,
+  type ChatReferenceCreateRequest,
   type ChatRoleLinkRequest,
   type ChatUserLinkRequest,
   type CustomerCreateRequest,
@@ -162,7 +166,17 @@ interface ChatEngine {
   markRead(conversationId: string, userId: string): Promise<void>;
   openDirectConversation(otherUserId: string, context: ChatContext): Promise<unknown>;
   removeUserLink(linkId: string, context: ChatContext): Promise<void>;
+  sendLocation(
+    conversationId: string,
+    input: ChatLocationCreateRequest,
+    context: ChatContext,
+  ): Promise<unknown>;
   sendMessage(conversationId: string, body: string, context: ChatContext): Promise<unknown>;
+  sendReference(
+    conversationId: string,
+    input: ChatReferenceCreateRequest,
+    context: ChatContext,
+  ): Promise<unknown>;
   setRoleLink(input: ChatRoleLinkRequest, context: ChatContext): Promise<unknown>;
   purgeExpiredMessages(
     retentionDays: number,
@@ -1112,6 +1126,48 @@ export function createApp(options: CreateAppOptions) {
       const message = await requireChat().sendMessage(
         params.data.conversationId,
         input.data.body,
+        chatContext(context),
+      );
+      return context.json(ChatMessageSchema.parse(contractValue(message)), 201);
+    },
+  );
+
+  app.post(
+    '/api/v1/chat/conversations/:conversationId/locations',
+    requirePermission('chat.use'),
+    async (context) => {
+      const params = ChatConversationParamSchema.safeParse(context.req.param());
+      if (!params.success)
+        return badRequest(context, 'Conversación inválida.', params.error.issues);
+      const input = ChatLocationCreateRequestSchema.safeParse(
+        await context.req.json().catch(() => null),
+      );
+      if (!input.success) return badRequest(context, 'Ubicación inválida.', input.error.issues);
+      const message = await requireChat().sendLocation(
+        params.data.conversationId,
+        input.data,
+        chatContext(context),
+      );
+      return context.json(ChatMessageSchema.parse(contractValue(message)), 201);
+    },
+  );
+
+  // Sharing a customer or order reference needs its own grant: a user may hold chat.use without
+  // being able to point colleagues at customer records (ADR-032).
+  app.post(
+    '/api/v1/chat/conversations/:conversationId/references',
+    requirePermission('chat.share_reference'),
+    async (context) => {
+      const params = ChatConversationParamSchema.safeParse(context.req.param());
+      if (!params.success)
+        return badRequest(context, 'Conversación inválida.', params.error.issues);
+      const input = ChatReferenceCreateRequestSchema.safeParse(
+        await context.req.json().catch(() => null),
+      );
+      if (!input.success) return badRequest(context, 'Referencia inválida.', input.error.issues);
+      const message = await requireChat().sendReference(
+        params.data.conversationId,
+        input.data,
         chatContext(context),
       );
       return context.json(ChatMessageSchema.parse(contractValue(message)), 201);

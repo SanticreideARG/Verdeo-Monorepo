@@ -25,6 +25,9 @@ const ISABELLA = '20000000-0000-4000-8000-000000000001';
 const TAMARA = '20000000-0000-4000-8000-000000000002';
 const CHOFER = '20000000-0000-4000-8000-000000000003';
 const CHOFER_DOS = '20000000-0000-4000-8000-000000000004';
+// A CRM customer and one order, to give sendReference something real to point at.
+const CRM_CUSTOMER = '90000000-0000-4000-8000-000000000001';
+const ORDER = '90000000-0000-4000-8000-000000000002';
 
 const seed = `
   insert into permissions (id, key, group_name, description)
@@ -51,6 +54,23 @@ const seed = `
     ('${TAMARA}', '${OPERADOR}'),
     ('${CHOFER}', '${REPARTIDOR}'),
     ('${CHOFER_DOS}', '${REPARTIDOR}');
+
+  insert into customers (id, display_name) values ('${CRM_CUSTOMER}', 'María Pérez');
+
+  -- 0009 already creates the initial 'neuquen' operating site on a clean database; reuse it
+  -- rather than insert a second row with the same slug.
+  insert into sales_cycles (id, alias, open_at, partial_kitchen_cutoff_at, close_at)
+  values ('90000000-0000-4000-8000-000000000004', 'Semana 34',
+          '2026-08-20T12:00:00Z', '2026-08-25T23:00:00Z', '2026-08-26T22:00:00Z');
+  insert into weekly_menus (id, sales_cycle_id, status)
+  values ('90000000-0000-4000-8000-000000000005',
+          '90000000-0000-4000-8000-000000000004', 'PUBLISHED');
+  insert into orders (id, public_number, customer_id, sales_cycle_id, weekly_menu_id, source,
+                      delivery_date, delivery_address_snapshot, payment_expectation, total_minor,
+                      operating_site_id)
+  values ('${ORDER}', 'NQN-00001', '${CRM_CUSTOMER}', '90000000-0000-4000-8000-000000000004',
+          '90000000-0000-4000-8000-000000000005', 'manual', '2026-08-26', 'Av. Siempre Viva 742',
+          'transferencia', 25000, (select id from operating_sites where slug = 'neuquen'));
 `;
 
 function context(actorUserId: string) {
@@ -330,5 +350,91 @@ describe('chat presence', () => {
       connected: false,
       status: 'offline',
     });
+  });
+});
+
+describe('chat locations and references', () => {
+  it('carries plain coordinates chosen by the sender', async () => {
+    const { service } = await seededService();
+    const conversation = await service.openDirectConversation(TAMARA, context(CHOFER));
+
+    const sent = await service.sendLocation(
+      conversation.id,
+      { label: 'Depósito', latitude: -38.95, longitude: -68.06 },
+      context(CHOFER),
+    );
+
+    expect(sent.location).toEqual({ label: 'Depósito', latitude: -38.95, longitude: -68.06 });
+    const transcript = await service.listMessages(conversation.id, TAMARA, { limit: 10 });
+    expect(transcript[0]?.location).toEqual({
+      label: 'Depósito',
+      latitude: -38.95,
+      longitude: -68.06,
+    });
+  });
+
+  it('shares a customer reference and audits the disclosure', async () => {
+    const { client, service } = await seededService();
+    const conversation = await service.openDirectConversation(TAMARA, context(CHOFER));
+
+    const sent = await service.sendReference(
+      conversation.id,
+      { resourceId: CRM_CUSTOMER, resourceType: 'customer' },
+      context(TAMARA),
+    );
+
+    expect(sent.reference).toEqual({ resourceId: CRM_CUSTOMER, resourceType: 'customer' });
+    const events = await client.query<{ action: string; entity_id: string }>(
+      `select action, entity_id from audit_events where action = 'chat.customer_reference.shared'`,
+    );
+    // Who shared which customer with whom is exactly what the disclosure audit must answer.
+    expect(events.rows).toEqual([
+      { action: 'chat.customer_reference.shared', entity_id: CRM_CUSTOMER },
+    ]);
+  });
+
+  it('shares an order reference without auditing it as a disclosure', async () => {
+    const { client, service } = await seededService();
+    const conversation = await service.openDirectConversation(TAMARA, context(CHOFER));
+
+    const sent = await service.sendReference(
+      conversation.id,
+      { resourceId: ORDER, resourceType: 'order' },
+      context(TAMARA),
+    );
+
+    expect(sent.reference).toEqual({ resourceId: ORDER, resourceType: 'order' });
+    const events = await client.query(
+      `select 1 from audit_events where action = 'chat.customer_reference.shared'`,
+    );
+    expect(events.rows).toHaveLength(0);
+  });
+
+  it('refuses a reference to a customer that does not exist', async () => {
+    const { service } = await seededService();
+    const conversation = await service.openDirectConversation(TAMARA, context(CHOFER));
+
+    await expect(
+      service.sendReference(
+        conversation.id,
+        { resourceId: '99999999-0000-4000-8000-000000000000', resourceType: 'customer' },
+        context(TAMARA),
+      ),
+    ).rejects.toThrow(/no existe/);
+  });
+
+  it('keeps a deleted message from exposing its location or reference', async () => {
+    const { client, service } = await seededService();
+    const conversation = await service.openDirectConversation(TAMARA, context(CHOFER));
+    const sent = await service.sendReference(
+      conversation.id,
+      { resourceId: CRM_CUSTOMER, resourceType: 'customer' },
+      context(TAMARA),
+    );
+    await client.exec(`update staff_messages set deleted_at = now() where id = '${sent.id}'`);
+
+    const transcript = await service.listMessages(conversation.id, TAMARA, { limit: 10 });
+
+    expect(transcript[0]).toMatchObject({ location: null, reference: null });
   });
 });

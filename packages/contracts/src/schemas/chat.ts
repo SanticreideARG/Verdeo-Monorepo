@@ -67,16 +67,33 @@ export const ChatConversationListResponseSchema = z.object({
   ),
 });
 
+/** Plain coordinates the sender chose. A customer's stored address goes through a reference
+ * instead, so the recipient's own permission applies rather than a raw pair of numbers (ADR-032). */
+export const ChatLocationSchema = z.object({
+  label: z.string().nullable(),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+});
+
+/** A pointer, never a copy. The viewer resolves it through the existing order/customer endpoint
+ * with their own permissions when they render it. */
+export const ChatReferenceSchema = z.object({
+  resourceId: UuidSchema,
+  resourceType: z.enum(['customer', 'order']),
+});
+
 export const ChatMessageSchema = z.object({
   authorDisplayName: z.string().nullable(),
   authorUserId: UuidSchema.nullable(),
-  // Null when the message was deleted: the gap stays visible without its content.
+  // Null when the message was deleted: the gap stays visible without its content or attachment.
   body: z.string().nullable(),
   createdAt: IsoDateTimeSchema,
   deletedAt: IsoDateTimeSchema.nullable(),
   editedAt: IsoDateTimeSchema.nullable(),
   id: UuidSchema,
   kind: z.string(),
+  location: ChatLocationSchema.nullable(),
+  reference: ChatReferenceSchema.nullable(),
 });
 
 export const ChatMessageListResponseSchema = z.object({ items: z.array(ChatMessageSchema) });
@@ -92,6 +109,17 @@ export const ChatMessageCreateRequestSchema = z.object({
   body: z.string().trim().min(1).max(4_000),
 });
 
+export const ChatLocationCreateRequestSchema = z.object({
+  label: z.string().trim().max(200).optional(),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+});
+
+export const ChatReferenceCreateRequestSchema = z.object({
+  resourceId: UuidSchema,
+  resourceType: z.enum(['customer', 'order']),
+});
+
 export const ChatConversationParamSchema = z.object({ conversationId: UuidSchema });
 
 export const ChatPurgeResponseSchema = z.object({
@@ -102,6 +130,8 @@ export const ChatPurgeResponseSchema = z.object({
 export type ChatRoleLinkRequest = z.infer<typeof ChatRoleLinkRequestSchema>;
 export type ChatUserLinkRequest = z.infer<typeof ChatUserLinkRequestSchema>;
 export type ChatMessageQuery = z.infer<typeof ChatMessageQuerySchema>;
+export type ChatLocationCreateRequest = z.infer<typeof ChatLocationCreateRequestSchema>;
+export type ChatReferenceCreateRequest = z.infer<typeof ChatReferenceCreateRequestSchema>;
 
 /** Presence: a heartbeat plus an optional declared status (ADR-032). */
 export const ChatHeartbeatRequestSchema = z.object({

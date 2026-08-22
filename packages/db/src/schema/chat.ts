@@ -4,6 +4,7 @@ import {
   check,
   index,
   integer,
+  numeric,
   pgTable,
   primaryKey,
   text,
@@ -142,6 +143,47 @@ export const staffMessages = pgTable(
     check(
       'staff_messages_body_check',
       sql`${table.deletedAt} is not null or ${table.kind} <> 'text' or ${table.body} is not null`,
+    ),
+  ],
+);
+
+// A location is the coordinates the sender chose, never a customer's stored address — that goes
+// through staff_message_references instead, where the viewer's own permission applies (ADR-032).
+export const staffMessageLocations = pgTable(
+  'staff_message_locations',
+  {
+    messageId: uuid('message_id')
+      .primaryKey()
+      .references(() => staffMessages.id, { onDelete: 'cascade' }),
+    latitude: numeric('latitude', { precision: 9, scale: 6 }).notNull(),
+    longitude: numeric('longitude', { precision: 9, scale: 6 }).notNull(),
+    label: text('label'),
+  },
+  (table) => [
+    check(
+      'staff_message_locations_coordinates_check',
+      sql`${table.latitude} between -90 and 90 and ${table.longitude} between -180 and 180`,
+    ),
+  ],
+);
+
+// A pointer, never a copy: {resource_type, resource_id}. The viewer resolves it through the
+// existing order/customer endpoint with their own permissions at render time, so a recipient
+// without customers.read sees "referencia no disponible" instead of a cached, staling snapshot.
+export const staffMessageReferences = pgTable(
+  'staff_message_references',
+  {
+    messageId: uuid('message_id')
+      .primaryKey()
+      .references(() => staffMessages.id, { onDelete: 'cascade' }),
+    resourceType: text('resource_type').notNull(),
+    resourceId: uuid('resource_id').notNull(),
+  },
+  (table) => [
+    index('staff_message_references_resource_idx').on(table.resourceType, table.resourceId),
+    check(
+      'staff_message_references_resource_type_check',
+      sql`${table.resourceType} in ('order', 'customer')`,
     ),
   ],
 );

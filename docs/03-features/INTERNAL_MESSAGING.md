@@ -220,13 +220,13 @@ it is a judgement about what "relevant" means for internal communication.
 
 ## Milestones
 
-The service is built to CHAT-2 and then parked. CHAT-3 onwards is designed but not scheduled.
+The service is built through CHAT-3 and then parked. CHAT-4 onwards is designed but not scheduled.
 
 | #          | Scope                                                                                                           | Prerequisites                                                             | Notes                                      |
 | ---------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------ |
 | **CHAT-1** | Link policy and its admin screen; direct conversations, text messages, read state; REST + polling; 30-day purge | none                                                                      | No new infrastructure                      |
-| **CHAT-2** | Presence: heartbeat, declared status, indicator in the shell                                                    | CHAT-1                                                                    | Still no provider — **standby after this** |
-| CHAT-3     | References to orders and customers resolved per viewer; locations                                               | CHAT-1                                                                    | The audited part                           |
+| **CHAT-2** | Presence: heartbeat, declared status, indicator in the shell                                                    | CHAT-1                                                                    | Still no provider                          |
+| **CHAT-3** | References to orders and customers resolved per viewer; locations                                               | CHAT-1                                                                    | The audited part — **standby after this**  |
 | CHAT-4     | Group conversations                                                                                             | CHAT-1                                                                    |                                            |
 | CHAT-5     | Realtime transport swap behind the adapter                                                                      | CHAT-1..3, a measured reason, and a session model covering password users | Polling stays as fallback                  |
 
@@ -277,12 +277,38 @@ three documented statuses as rows). `effectivePresence` is a pure function in `@
 `away` is offered as a choice and never inferred from idleness. A status the system invents is a
 status colleagues cannot trust.
 
+## As built (CHAT-3)
+
+`staff_message_locations` and `staff_message_references` (migration 0013, additive; both hang off
+`staff_messages` by primary-key/foreign-key). New permission `chat.share_reference` seeded only to
+`operador` (migration seed, not a schema change) — `repartidor` keeps `chat.use` without it, a
+conservative default since a reference still resolves per viewer regardless.
+
+- **A reference is a pointer, not a copy.** `sendReference` validates the target exists at write
+  time (404 via `ChatNotFoundError` for a dangling id) but stores only `{resourceType, resourceId}`.
+  `listMessages` never joins the customer/order tables — the frontend resolves the pointer itself,
+  through the viewer's own session, against the existing `GET /api/v1/customers/:id` and
+  `GET /api/v1/orders/:id` endpoints. A 403 or 404 there renders as "Referencia no disponible.",
+  exactly the same way it would if the viewer had opened the record directly.
+- **Sharing a customer reference is audited** (`chat.customer_reference.shared`, entity `customer`)
+  as a PII disclosure event; sharing an order reference is not, matching the design.
+  `chat.share_reference` gates who may *send* either kind — separate from `chat.use` — but does not
+  change what a recipient can *see*, which is still enforced at the two GET endpoints above.
+- **Locations are plain sender-chosen coordinates**, never a customer's stored address. `sendLocation`
+  only takes `{label?, latitude, longitude}`; there is no path from an address record to a location
+  message.
+- **A deleted message exposes neither.** `listMessages` nulls `location` and `reference` alongside
+  `body` once `deletedAt` is set, so removing a message removes what it pointed at, not just its text.
+- **Deep links reuse existing screens, not new detail routes.** A customer reference resolves to
+  `/app/clientes?customerId=<id>` (pre-selects that customer in the directory); an order reference
+  resolves to `/app/pedidos?search=<publicNumber>` (reuses the existing order search). No new
+  per-record page was built for chat to link into.
+
 ## Standby
 
-The service stops here by decision. CHAT-3 (references and locations), CHAT-4 (groups) and CHAT-5
-(Realtime transport) are designed above and unscheduled. Nothing in what is built assumes they will
-not arrive: message `kind` already admits `location` and `reference`, conversations already admit
-`group`, and the transport sits behind the polling client rather than in it.
+The service stops here by decision. CHAT-4 (groups) and CHAT-5 (Realtime transport) are designed
+above and unscheduled. Nothing in what is built assumes they will not arrive: conversations already
+admit `group`, and the transport sits behind the polling client rather than in it.
 
 ## Still OPEN
 

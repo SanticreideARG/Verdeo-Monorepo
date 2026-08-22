@@ -2302,6 +2302,37 @@ a {
   color: inherit;
   font: inherit;
 }
+.chat-location-card,
+.chat-reference-card {
+  display: grid;
+  gap: 0.1rem;
+  text-decoration: none;
+  color: inherit;
+}
+.chat-reference-card strong {
+  font-size: 0.9rem;
+}
+.chat-reference-card span {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+.chat-reference-picker {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 0.9rem;
+}
+.chat-reference-picker input {
+  min-height: 40px;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
 .chat-matrix {
   border-collapse: collapse;
 }

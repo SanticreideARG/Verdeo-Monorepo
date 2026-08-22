@@ -81,6 +81,29 @@ try {
       }
     }
 
+    // Sharing a customer reference is a PII disclosure (ADR-032), so it defaults to operators only.
+    // A reference still resolves to "no disponible" for a viewer without customers.read regardless,
+    // but not handing a driver the ability to point colleagues at customer records in the first
+    // place is the more conservative default the seed can pick.
+    const [shareReferencePermission] = await transaction
+      .select({ id: permissions.id })
+      .from(permissions)
+      .where(eq(permissions.key, 'chat.share_reference'))
+      .limit(1);
+    if (shareReferencePermission) {
+      const [operadorRole] = await transaction
+        .select({ id: roles.id })
+        .from(roles)
+        .where(eq(roles.key, 'operador'))
+        .limit(1);
+      if (operadorRole) {
+        await transaction
+          .insert(rolePermissions)
+          .values({ permissionId: shareReferencePermission.id, roleId: operadorRole.id })
+          .onConflictDoNothing();
+      }
+    }
+
     const [neuquenSite] = await transaction
       .insert(operatingSites)
       .values({
