@@ -13,7 +13,11 @@ const emptySessions = {
 };
 const emptyUsers = {
   findById: (id: string) => Promise.resolve({ displayName: 'Santiago', id }),
+  findProfileById: (id: string) =>
+    Promise.resolve({ avatarUrl: null, displayName: 'Santiago', email: null, id }),
   list: () => Promise.resolve({ items: [], nextCursor: null }),
+  updateProfile: (id: string) =>
+    Promise.resolve({ avatarUrl: null, displayName: 'Santiago', email: null, id }),
 };
 const emptyCredentials = { login: () => Promise.resolve(null) };
 

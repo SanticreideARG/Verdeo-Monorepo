@@ -14,6 +14,7 @@ import { OAuthCallbackPage } from './OAuthCallbackPage.js';
 import { OrderDetailPage } from './OrderDetailPage.js';
 import { OrderIntakePage } from './OrderIntakePage.js';
 import { OrdersPage } from './OrdersPage.js';
+import { ProfilePage } from './ProfilePage.js';
 import { PublicOrderPage } from './PublicOrderPage.js';
 
 function BrandMark() {
@@ -138,6 +139,7 @@ export function App() {
       <Route path="/app/cocina" element={<KitchenPage />} />
       <Route path="/app/ia" element={<AIProvidersPage />} />
       <Route path="/app/chat" element={<ChatPage />} />
+      <Route path="/app/perfil" element={<ProfilePage />} />
       <Route path="/app/ajustes/zonas" element={<GeographySettingsPage />} />
       <Route path="/app/ajustes/chat" element={<ChatLinksPage />} />
       <Route

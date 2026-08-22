@@ -22,6 +22,9 @@ export const users = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     displayName: text('display_name').notNull(),
     emailNormalized: text('email_normalized'),
+    // Set by the (separate, not-yet-built) avatar upload flow once Vercel Blob is configured. Null
+    // means the UI falls back to the display-name initial.
+    avatarUrl: text('avatar_url'),
     status: text('status').default('active').notNull(),
     ...timestamps,
   },

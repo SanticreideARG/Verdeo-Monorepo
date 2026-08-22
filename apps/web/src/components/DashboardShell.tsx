@@ -8,7 +8,7 @@ import { RequestProgressBar } from './RequestProgressBar.js';
 export interface DashboardProfile {
   permissions: string[];
   session: { expiresAt: string; id: string };
-  user: { displayName: string; id: string };
+  user: { avatarUrl: string | null; displayName: string; email: string | null; id: string };
 }
 
 interface ScopeSite {
@@ -406,13 +406,17 @@ export function DashboardShell({
         </button>
 
         <div className="dashboard-sidebar-footer">
-          <div className="dashboard-sidebar-user">
-            <span>{initial}</span>
+          <Link className="dashboard-sidebar-user" to="/app/perfil">
+            {profile.user.avatarUrl ? (
+              <img alt="" src={profile.user.avatarUrl} />
+            ) : (
+              <span>{initial}</span>
+            )}
             <div>
               <strong>{profile.user.displayName}</strong>
               <small>Equipo Verdeo</small>
             </div>
-          </div>
+          </Link>
           <button aria-label="Cerrar sesión" onClick={onLogout} title="Cerrar sesión" type="button">
             <svg
               aria-hidden="true"
@@ -506,7 +510,14 @@ export function DashboardShell({
               <span>{timeLabel}</span>
               <small>{dateLabel}</small>
             </div>
-            <div className="dashboard-topbar-avatar">{initial}</div>
+            <Link
+              aria-label="Mi perfil"
+              className="dashboard-topbar-avatar"
+              title="Mi perfil"
+              to="/app/perfil"
+            >
+              {profile.user.avatarUrl ? <img alt="" src={profile.user.avatarUrl} /> : initial}
+            </Link>
           </div>
         </header>
         <RequestProgressBar />

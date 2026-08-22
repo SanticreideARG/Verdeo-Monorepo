@@ -24,7 +24,11 @@ const emptyUsers = {
       displayName: 'Santiago',
       id,
     }),
+  findProfileById: (id: string) =>
+    Promise.resolve({ avatarUrl: null, displayName: 'Santiago', email: null, id }),
   list: () => Promise.resolve({ items: [], nextCursor: null }),
+  updateProfile: (id: string) =>
+    Promise.resolve({ avatarUrl: null, displayName: 'Santiago', email: null, id }),
 };
 const emptyCredentials = { login: () => Promise.resolve(null) };
 // Scoped endpoints resolve the operating scope before reaching operations, so every app that
@@ -304,10 +308,88 @@ describe('API foundation', () => {
         id: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
       },
       user: {
+        avatarUrl: null,
         displayName: 'Santiago',
+        email: null,
         id: '55276601-ec66-4f63-9f2f-edf73904ede0',
       },
     });
+  });
+
+  it('updates the display name for the authenticated user only, no permission required', async () => {
+    const updateProfile = vi.fn((id: string, input: { displayName: string }) =>
+      Promise.resolve({ avatarUrl: null, displayName: input.displayName, email: null, id }),
+    );
+    const profileApp = createApp({
+      appOrigin: 'http://localhost:5173',
+      cookieSameSite: 'Lax',
+      credentials: emptyCredentials,
+      logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      sessions: {
+        ...emptySessions,
+        authenticate: () =>
+          Promise.resolve({
+            expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+            permissions: [],
+            sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+            userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+          }),
+      },
+      secureCookies: false,
+      users: { ...emptyUsers, updateProfile },
+      version: 'test',
+    });
+
+    const response = await profileApp.request('/api/v1/me', {
+      body: JSON.stringify({ displayName: 'Santi' }),
+      headers: {
+        cookie: 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars',
+        'content-type': 'application/json',
+      },
+      method: 'PATCH',
+    });
+    const body: unknown = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ displayName: 'Santi' });
+    expect(updateProfile).toHaveBeenCalledWith('55276601-ec66-4f63-9f2f-edf73904ede0', {
+      displayName: 'Santi',
+    });
+  });
+
+  it('rejects a blank display name before invoking the engine', async () => {
+    const updateProfile = vi.fn();
+    const profileApp = createApp({
+      appOrigin: 'http://localhost:5173',
+      cookieSameSite: 'Lax',
+      credentials: emptyCredentials,
+      logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      sessions: {
+        ...emptySessions,
+        authenticate: () =>
+          Promise.resolve({
+            expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+            permissions: [],
+            sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+            userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+          }),
+      },
+      secureCookies: false,
+      users: { ...emptyUsers, updateProfile },
+      version: 'test',
+    });
+
+    const response = await profileApp.request('/api/v1/me', {
+      body: JSON.stringify({ displayName: '' }),
+      headers: {
+        cookie: 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars',
+        'content-type': 'application/json',
+      },
+      method: 'PATCH',
+    });
+
+    expect(response.status).toBe(400);
+    expect(updateProfile).not.toHaveBeenCalled();
   });
 
   it('revokes a valid session and clears its cookie on logout', async () => {
@@ -485,6 +567,7 @@ describe('API foundation', () => {
           Promise.resolve({
             items: [
               {
+                avatarUrl: null,
                 createdAt: new Date('2026-08-17T10:00:00.000Z'),
                 displayName: 'Operador',
                 id: '00000000-0000-4000-8000-000000000001',

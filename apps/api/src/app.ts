@@ -80,6 +80,7 @@ import {
   OrderTransitionRequestSchema,
   OrderUpdateRequestSchema,
   OAuthExchangeRequestSchema,
+  ProfileUpdateRequestSchema,
   ProductionActualListResponseSchema,
   ProductionReportRequestSchema,
   ProductionSnapshotListResponseSchema,
@@ -129,6 +130,7 @@ import {
   type OrderUpdateRequest,
   type ProductionReportRequest,
   type ProductionSnapshotRequest,
+  type ProfileUpdateRequest,
   type PublicOrderCreateRequest,
   type SurplusWriteoffRequest,
 } from '@verdeo/contracts';
@@ -166,9 +168,18 @@ interface SessionAuthenticator {
   ): Promise<boolean>;
 }
 
+interface UserProfile {
+  avatarUrl: string | null;
+  displayName: string;
+  email: string | null;
+  id: string;
+}
+
 interface UserDirectory {
   findById(id: string): Promise<{ displayName: string; id: string } | null>;
+  findProfileById(id: string): Promise<UserProfile | null>;
   list(afterId: string | undefined, limit: number): Promise<UserDirectoryPage>;
+  updateProfile(id: string, input: ProfileUpdateRequest): Promise<UserProfile>;
 }
 
 type ScopedInput<T> = T & { operatingSiteId: string | null };
@@ -834,7 +845,7 @@ export function createApp(options: CreateAppOptions) {
 
   app.get('/api/v1/me', async (context) => {
     const session = context.get('session');
-    const user = await options.users.findById(session.userId);
+    const user = await options.users.findProfileById(session.userId);
     if (!user) throw new Error(`Authenticated user not found: ${session.userId}`);
     const payload = MeResponseSchema.parse({
       permissions: [...session.permissions].sort(),
@@ -842,9 +853,31 @@ export function createApp(options: CreateAppOptions) {
         expiresAt: session.expiresAt.toISOString(),
         id: session.sessionId,
       },
-      user: { displayName: user.displayName, id: session.userId },
+      user: {
+        avatarUrl: user.avatarUrl,
+        displayName: user.displayName,
+        email: user.email,
+        id: session.userId,
+      },
     });
 
+    return context.json(payload);
+  });
+
+  // Self-service only: editing your own display name needs authentication, not a permission — it
+  // is not the admin user-management surface (which does not exist yet).
+  app.patch('/api/v1/me', async (context) => {
+    const session = context.get('session');
+    const input = ProfileUpdateRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success)
+      return badRequest(context, 'Revisá el nombre a mostrar.', input.error.issues);
+    const user = await options.users.updateProfile(session.userId, input.data);
+    const payload = MeResponseSchema.shape.user.parse({
+      avatarUrl: user.avatarUrl,
+      displayName: user.displayName,
+      email: user.email,
+      id: user.id,
+    });
     return context.json(payload);
   });
 

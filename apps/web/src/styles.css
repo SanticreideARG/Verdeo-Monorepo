@@ -248,6 +248,29 @@ a {
   letter-spacing: -0.035em;
 }
 
+.profile-avatar {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  flex: none;
+  place-items: center;
+  border-radius: 999px;
+  background: linear-gradient(
+    135deg,
+    var(--color-forest),
+    color-mix(in srgb, var(--color-forest) 60%, #8da332)
+  );
+  color: white;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  object-fit: cover;
+}
 .operation-card {
   border: 1px solid color-mix(in srgb, var(--color-forest) 10%, transparent);
   border-radius: 1.5rem;
@@ -584,8 +607,11 @@ a {
   flex: 1;
   align-items: center;
   gap: 0.65rem;
+  color: inherit;
+  text-decoration: none;
 }
 .dashboard-sidebar-user > span,
+.dashboard-sidebar-user > img,
 .dashboard-topbar-avatar {
   display: grid;
   width: 34px;
@@ -595,9 +621,14 @@ a {
   border-radius: 0.65rem;
   background: linear-gradient(135deg, var(--db-accent-strong), var(--db-accent));
   color: white;
+  text-decoration: none;
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 700;
   box-shadow: 0 4px 14px color-mix(in srgb, var(--db-accent) 30%, transparent);
+}
+.dashboard-sidebar-user > img,
+.dashboard-topbar-avatar > img {
+  object-fit: cover;
 }
 .dashboard-sidebar-user div {
   min-width: 0;

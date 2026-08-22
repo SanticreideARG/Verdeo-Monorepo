@@ -1,8 +1,15 @@
 export interface UserDirectoryItem {
+  avatarUrl: string | null;
   createdAt: Date;
   displayName: string;
   id: string;
   status: string;
+}
+
+// The self-profile view additionally carries the user's own email — never included in the plain
+// directory listing (UserDirectoryItem), which other people's sessions can read.
+export interface UserProfile extends UserDirectoryItem {
+  email: string | null;
 }
 
 export interface UserDirectoryPage {
@@ -10,9 +17,15 @@ export interface UserDirectoryPage {
   nextCursor: string | null;
 }
 
+export interface UserProfileUpdateInput {
+  displayName?: string;
+}
+
 export interface UserDirectoryRepository {
   findById(id: string): Promise<UserDirectoryItem | null>;
+  findProfileById(id: string): Promise<UserProfile | null>;
   listAfter(afterId: string | undefined, limit: number): Promise<readonly UserDirectoryItem[]>;
+  updateProfile(id: string, input: UserProfileUpdateInput): Promise<UserProfile>;
 }
 
 export class UserDirectoryService {
@@ -20,6 +33,14 @@ export class UserDirectoryService {
 
   public async findById(id: string): Promise<UserDirectoryItem | null> {
     return this.users.findById(id);
+  }
+
+  public async findProfileById(id: string): Promise<UserProfile | null> {
+    return this.users.findProfileById(id);
+  }
+
+  public async updateProfile(id: string, input: UserProfileUpdateInput): Promise<UserProfile> {
+    return this.users.updateProfile(id, input);
   }
 
   public async list(afterId: string | undefined, limit: number): Promise<UserDirectoryPage> {
