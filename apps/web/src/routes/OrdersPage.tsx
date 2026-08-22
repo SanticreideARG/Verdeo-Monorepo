@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
@@ -130,7 +130,7 @@ export function OrdersPage() {
         ) : (
           <div className="mt-6 grid gap-3">
             {orders.map((order) => (
-              <article className="operation-card" key={order.id}>
+              <Link className="operation-card block" key={order.id} to={`/app/pedidos/${order.id}`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <strong className="text-xl text-forest">{order.publicNumber}</strong>
@@ -149,7 +149,7 @@ export function OrdersPage() {
                     )
                     .join(', ')}
                 </p>
-              </article>
+              </Link>
             ))}
             {orders.length === 0 ? (
               <p className="empty-state">No hay pedidos para este filtro.</p>

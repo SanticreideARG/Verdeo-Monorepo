@@ -11,7 +11,6 @@ interface OfferingDraft {
   composable: boolean;
   dishes: string;
   familyName: string;
-  sizeName: string;
 }
 
 interface SizePriceDraft {
@@ -23,7 +22,6 @@ const emptyOffering = (): OfferingDraft => ({
   composable: false,
   dishes: '',
   familyName: '',
-  sizeName: '',
 });
 
 // The price belongs to the size, so the week starts from its price list and the varieties hang off it.
@@ -61,24 +59,23 @@ export function MenuBuilderPage() {
       return;
     }
 
-    const parsedOfferings = offerings.map((offering) => ({
+    const varieties = offerings.map((offering) => ({
       composable: offering.composable,
       dishes: offering.dishes
         .split('\n')
         .map((dish) => dish.trim())
         .filter(Boolean),
       familyName: offering.familyName,
-      sizeName: offering.sizeName.trim(),
     }));
-    if (parsedOfferings.some((offering) => offering.dishes.length !== 5)) {
-      setMessage('Cada opción del menú necesita exactamente cinco platos.');
+    if (varieties.some((offering) => offering.dishes.length !== 5)) {
+      setMessage('Cada variedad necesita exactamente cinco platos.');
       return;
     }
-    const pricedSizes = new Set(parsedPrices.map((price) => price.sizeName));
-    if (parsedOfferings.some((offering) => !pricedSizes.has(offering.sizeName))) {
-      setMessage('Cada variedad debe usar un tamaño que tenga precio definido.');
-      return;
-    }
+    // Size and variety are unrelated axes: every variety comes in every size defined above, so one
+    // offering per (variety, size) pair is generated here instead of asked for per option.
+    const parsedOfferings = varieties.flatMap((variety) =>
+      parsedPrices.map((price) => ({ ...variety, sizeName: price.sizeName })),
+    );
 
     try {
       const response = await apiRequest('/api/v1/menus', {
@@ -189,9 +186,12 @@ export function MenuBuilderPage() {
           <div className="mt-5 grid gap-4">
             {offerings.map((offering, index) => (
               <fieldset className="rounded-2xl border border-forest/10 p-4" key={index}>
-                <legend className="px-2 text-sm font-bold text-forest">Opción {index + 1}</legend>
+                <legend className="px-2 text-sm font-bold text-forest">Variedad {index + 1}</legend>
+                <p className="mb-3 text-sm text-ink-muted">
+                  Se carga una vez: sale disponible en todos los tamaños definidos arriba.
+                </p>
                 <div className="form-grid">
-                  <label className="field">
+                  <label className="field field-wide">
                     Variedad
                     <input
                       onChange={(event) =>
@@ -206,29 +206,6 @@ export function MenuBuilderPage() {
                       required
                       value={offering.familyName}
                     />
-                  </label>
-                  <label className="field">
-                    Tamaño
-                    <select
-                      onChange={(event) =>
-                        setOfferings((current) =>
-                          current.map((item, itemIndex) =>
-                            itemIndex === index ? { ...item, sizeName: event.target.value } : item,
-                          ),
-                        )
-                      }
-                      required
-                      value={offering.sizeName}
-                    >
-                      <option value="">Elegí un tamaño</option>
-                      {sizePrices
-                        .filter((price) => price.sizeName.trim())
-                        .map((price) => (
-                          <option key={price.sizeName} value={price.sizeName}>
-                            {price.sizeName}
-                          </option>
-                        ))}
-                    </select>
                   </label>
                   <label className="field">
                     Composición

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
@@ -278,7 +279,12 @@ export function OrderIntakePage() {
             >
               <div>
                 <div className="flex items-center gap-3">
-                  <strong className="text-xl text-forest">{order.publicNumber}</strong>
+                  <Link
+                    className="text-xl font-semibold text-forest"
+                    to={`/app/pedidos/${order.id}`}
+                  >
+                    {order.publicNumber}
+                  </Link>
                   <span className="status-chip">{order.status}</span>
                 </div>
                 <p className="mt-2 text-sm text-ink-muted">

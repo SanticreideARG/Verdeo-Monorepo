@@ -146,7 +146,10 @@ export interface OrderSummary {
   currency: string;
   customer: { displayName: string; id: string };
   deliveryAddress: string;
+  deliveryAddressId: string | null;
   deliveryDate: string;
+  deliveryLocationUrl: string | null;
+  deliveryZone: string | null;
   dietaryInstructions: string[];
   id: string;
   items: {
@@ -166,6 +169,24 @@ export interface OrderSummary {
   status: 'DRAFT' | 'CONFIRMED' | 'READY' | 'DELIVERED' | 'CANCELLED';
   totalMinor: number;
   updatedAt: string;
+}
+
+export interface OrderStatusHistoryEntry {
+  actorUserId: string | null;
+  createdAt: string;
+  fromStatus: OrderSummary['status'] | null;
+  id: string;
+  reason: string | null;
+  toStatus: OrderSummary['status'];
+}
+
+export interface OrderRevision {
+  actorUserId: string | null;
+  createdAt: string;
+  id: string;
+  reason: string;
+  revision: number;
+  snapshot: OrderSummary;
 }
 
 export interface KitchenSummary {

@@ -11,6 +11,7 @@ import { LoginPage } from './LoginPage.js';
 import { MenuBuilderPage } from './MenuBuilderPage.js';
 import { MenusPage } from './MenusPage.js';
 import { OAuthCallbackPage } from './OAuthCallbackPage.js';
+import { OrderDetailPage } from './OrderDetailPage.js';
 import { OrderIntakePage } from './OrderIntakePage.js';
 import { OrdersPage } from './OrdersPage.js';
 import { PublicOrderPage } from './PublicOrderPage.js';
@@ -130,6 +131,7 @@ export function App() {
       <Route path="/app" element={<DashboardPage />} />
       <Route path="/app/clientes" element={<CustomersPage />} />
       <Route path="/app/pedidos/nuevo" element={<OrderIntakePage />} />
+      <Route path="/app/pedidos/:id" element={<OrderDetailPage />} />
       <Route path="/app/pedidos" element={<OrdersPage />} />
       <Route path="/app/menus/nuevo" element={<MenuBuilderPage />} />
       <Route path="/app/menus" element={<MenusPage />} />
