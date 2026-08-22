@@ -37,11 +37,16 @@ That covers the SQL. It does not cover **your data**, which is what the checklis
 
 Run against a restored copy, not the live database.
 
-1. Apply `0008` and `0009` in order: `pnpm db:migrate`.
-2. Run the verification script; every row must report `PASS`:
+1. Apply the pending migrations in order: `pnpm db:migrate`. An installation that never ran `0007`
+   applies it here too; Drizzle resolves what is missing from its journal.
+2. Re-seed the permission catalog: `pnpm db:seed`. **This step is not optional.** The catalog is code,
+   not data, so `sites.access_all`, `menus.distribute` and `menus.distribute_replace` only reach the
+   database through the seed. Skipping it leaves the regional features unusable even though the
+   schema is correct. The seed is idempotent and never removes operator-managed configuration.
+3. Run the verification; every row must report `PASS`:
 
    ```bash
-   psql "$DATABASE_URL" -f packages/db/scripts/verify-regional-scope.sql
+   pnpm db:verify-scope
    ```
 
 What the script reports, and how to read it:
@@ -68,6 +73,12 @@ Two follow-ups are operator work, not code:
   orders to the initial operation.
 - **Assign user memberships** in `user_operating_sites` for anyone who should see more than the initial
   operation, and grant `sites.access_all` to whoever needs the consolidated global view.
+
+## Verified against Neon
+
+Migrations `0007`..`0010` were applied to a Neon branch on 2026-08-22 and the verification passed.
+The run surfaced two things worth carrying forward: the seed step above, which was missing from this
+runbook, and a false `FAIL` when the product catalog is empty, since fixed.
 
 ## Rollback
 
