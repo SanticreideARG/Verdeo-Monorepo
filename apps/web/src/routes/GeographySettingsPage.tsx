@@ -301,7 +301,7 @@ export function GeographySettingsPage() {
                     className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
                       site.id === selectedSiteId
                         ? 'border-forest bg-forest/5'
-                        : 'border-forest/15 bg-white/60'
+                        : 'border-[var(--db-border)] bg-[var(--db-surface)]'
                     }`}
                   >
                     <button
@@ -338,7 +338,7 @@ export function GeographySettingsPage() {
 
             {canManageSites ? (
               <form
-                className="mt-6 space-y-3 rounded-xl border border-forest/15 bg-white/60 p-4"
+                className="mt-6 space-y-3 rounded-xl border border-[var(--db-border)] bg-[var(--db-surface)] p-4"
                 onSubmit={(event) => {
                   event.preventDefault();
                   void createSite();
@@ -409,7 +409,7 @@ export function GeographySettingsPage() {
                 <ul className="mt-4 space-y-2">
                   {zones.map((zone) => (
                     <li
-                      className="flex items-center justify-between gap-3 rounded-xl border border-forest/15 bg-white/60 px-4 py-3"
+                      className="flex items-center justify-between gap-3 rounded-xl border border-[var(--db-border)] bg-[var(--db-surface)] px-4 py-3"
                       key={zone.id}
                     >
                       <div>
@@ -442,7 +442,7 @@ export function GeographySettingsPage() {
 
                 {canManageZones ? (
                   <form
-                    className="mt-6 space-y-3 rounded-xl border border-forest/15 bg-white/60 p-4"
+                    className="mt-6 space-y-3 rounded-xl border border-[var(--db-border)] bg-[var(--db-surface)] p-4"
                     onSubmit={(event) => {
                       event.preventDefault();
                       void createZone();
