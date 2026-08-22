@@ -1,11 +1,30 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
+import { apiRequest, storeOperatingSiteId, storedOperatingSiteId } from '../lib/api.js';
+
 export interface DashboardProfile {
   permissions: string[];
   session: { expiresAt: string; id: string };
   user: { displayName: string; id: string };
 }
+
+interface ScopeSite {
+  active: boolean;
+  displayName: string;
+  id: string;
+  orderPrefix: string;
+  slug: string;
+  timezone: string;
+}
+
+interface ScopeResponse {
+  canSelectGlobal: boolean;
+  defaultSiteId: string | null;
+  sites: ScopeSite[];
+}
+
+const GLOBAL_OPTION = 'global';
 
 type IconName =
   | 'ai'
@@ -199,6 +218,10 @@ export function DashboardShell({
     () => window.localStorage.getItem('verdeo-sidebar-collapsed') === 'true',
   );
   const [now, setNow] = useState(() => new Date());
+  const [scope, setScope] = useState<ScopeResponse | null>(null);
+  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(() =>
+    storedOperatingSiteId(),
+  );
   const [theme, setTheme] = useState<ThemeName>(() => {
     const saved = window.localStorage.getItem('verdeo-dashboard-theme');
     return themes.some((item) => item.value === saved) ? (saved as ThemeName) : 'natural';
@@ -218,6 +241,44 @@ export function DashboardShell({
   useEffect(() => {
     window.localStorage.setItem('verdeo-sidebar-collapsed', String(sidebarCollapsed));
   }, [sidebarCollapsed]);
+
+  // The stored selection is validated against the server on every mount: a user who lost access to
+  // an operation falls back to their default instead of sending a header that would answer 403.
+  useEffect(() => {
+    let active = true;
+    void apiRequest('/api/v1/scope')
+      .then(async (response) => {
+        if (!response.ok) throw new Error('scope');
+        const body = (await response.json()) as ScopeResponse;
+        if (!active) return;
+
+        setScope(body);
+
+        const stored = storedOperatingSiteId();
+        if (stored && body.sites.some((site) => site.id === stored)) {
+          setSelectedSiteId(stored);
+          return;
+        }
+        const fallback = body.canSelectGlobal ? null : body.defaultSiteId;
+        storeOperatingSiteId(fallback);
+        setSelectedSiteId(fallback);
+      })
+      .catch(() => {
+        if (active) setScope(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  function selectScope(value: string) {
+    const next = value === GLOBAL_OPTION ? null : value;
+    storeOperatingSiteId(next);
+    setSelectedSiteId(next);
+    // Every open view holds data for the previous operation, so reload rather than leave a screen
+    // showing one operation's data under another operation's label.
+    window.location.reload();
+  }
 
   const visibleClusters = useMemo(
     () =>
@@ -354,6 +415,24 @@ export function DashboardShell({
             <strong>{profile.user.displayName}</strong>
           </div>
           <div className="dashboard-topbar-tools">
+            {scope && (scope.sites.length > 0 || scope.canSelectGlobal) ? (
+              <label className="dashboard-scope">
+                <span>Ciudad</span>
+                <select
+                  onChange={(event) => selectScope(event.target.value)}
+                  value={selectedSiteId ?? GLOBAL_OPTION}
+                >
+                  {scope.canSelectGlobal ? (
+                    <option value={GLOBAL_OPTION}>Todas las ciudades</option>
+                  ) : null}
+                  {scope.sites.map((site) => (
+                    <option key={site.id} value={site.id}>
+                      {site.displayName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <div className="dashboard-themes" aria-label="Tema visual">
               {themes.map((item) => (
                 <button

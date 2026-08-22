@@ -14,6 +14,11 @@ export const initialPermissionCatalog: readonly PermissionDefinition[] = [
   { key: 'roles.manage', group: 'users', description: 'Administrar roles' },
   { key: 'permissions.override', group: 'users', description: 'Administrar excepciones' },
   { key: 'sites.read', group: 'operations', description: 'Ver operaciones y zonas' },
+  {
+    key: 'sites.access_all',
+    group: 'operations',
+    description: 'Acceder a todas las operaciones y a la vista global',
+  },
   { key: 'sites.manage', group: 'operations', description: 'Administrar operaciones' },
   { key: 'zones.manage', group: 'operations', description: 'Administrar zonas geográficas' },
   { key: 'customers.read', group: 'customers', description: 'Ver clientes' },

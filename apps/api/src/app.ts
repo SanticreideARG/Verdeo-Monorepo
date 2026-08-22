@@ -61,6 +61,7 @@ import {
   OrderUpdateRequestSchema,
   OAuthExchangeRequestSchema,
   PublicOrderCreateRequestSchema,
+  ScopeResponseSchema,
   SessionIdParamSchema,
   SessionListResponseSchema,
   UserListQuerySchema,
@@ -100,7 +101,13 @@ import { requirePermission } from './middleware/authorization.js';
 interface AppVariables {
   logger: Logger;
   requestId: string;
+  scope: ScopeSelection;
   session: AuthenticatedSession;
+}
+
+// `operatingSiteId: null` is the consolidated global view, never a persisted operation (ADR-028).
+interface ScopeSelection {
+  operatingSiteId: string | null;
 }
 
 interface SessionAuthenticator {
@@ -119,11 +126,18 @@ interface UserDirectory {
   list(afterId: string | undefined, limit: number): Promise<UserDirectoryPage>;
 }
 
+interface ResolvedScope {
+  canSelectGlobal: boolean;
+  defaultSiteId: string | null;
+  sites: readonly { id: string }[];
+}
+
 interface GeographyEngine {
   createSite(input: OperatingSiteCreateRequest, context: GeographyContext): Promise<unknown>;
   createZone(input: GeographicZoneCreateRequest, context: GeographyContext): Promise<unknown>;
   listSites(): Promise<unknown>;
   listZones(operatingSiteId: string): Promise<unknown>;
+  resolveScope(userId: string, canAccessAllSites: boolean): Promise<ResolvedScope>;
   updateSite(
     id: string,
     input: OperatingSiteUpdateRequest,
@@ -311,6 +325,7 @@ interface CreateAppOptions {
 }
 
 export const SESSION_COOKIE_NAME = 'verdeo_session';
+export const SITE_SCOPE_HEADER = 'x-verdeo-site';
 
 function statusForCode(code: ApiErrorCode): 400 | 401 | 403 | 404 | 409 | 429 | 500 | 503 {
   const statuses: Record<ApiErrorCode, 400 | 401 | 403 | 404 | 409 | 429 | 500 | 503> = {
@@ -340,6 +355,35 @@ export function createApp(options: CreateAppOptions) {
   const requireGeography = () => {
     if (!geography) throw new Error('Geography engine is not configured');
     return geography;
+  };
+
+  // The client sends its selected operation, but membership is resolved server-side and intersected
+  // with it. An operation the session cannot reach answers 403, never an empty list (ADR-031).
+  const resolveScopeSelection = async (
+    context: Context<{ Variables: AppVariables }>,
+    next: () => Promise<void>,
+  ) => {
+    const session = context.get('session');
+    const scope = await requireGeography().resolveScope(
+      session.userId,
+      session.permissions.includes('sites.access_all'),
+    );
+    const requested = context.req.header(SITE_SCOPE_HEADER)?.trim();
+
+    if (!requested || requested.toLowerCase() === 'global') {
+      // No explicit selection never widens access: global only for sessions allowed to use it,
+      // otherwise the session's own default operation.
+      context.set('scope', {
+        operatingSiteId: scope.canSelectGlobal ? null : scope.defaultSiteId,
+      });
+      await next();
+      return;
+    }
+
+    if (!scope.sites.some((site) => site.id === requested)) return forbidden(context);
+
+    context.set('scope', { operatingSiteId: requested });
+    await next();
   };
 
   const geographyContext = (context: Context<{ Variables: AppVariables }>): GeographyContext => ({
@@ -612,17 +656,18 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/sessions', requireAuthentication);
   app.use('/api/v1/sessions/*', requireAuthentication);
   app.use('/api/v1/users', requireAuthentication, requirePermission('users.read'));
+  app.use('/api/v1/scope', requireAuthentication);
   app.use('/api/v1/operating-sites', requireAuthentication);
   app.use('/api/v1/operating-sites/*', requireAuthentication);
   app.use('/api/v1/zones/*', requireAuthentication);
-  app.use('/api/v1/customers', requireAuthentication);
-  app.use('/api/v1/customers/*', requireAuthentication);
+  app.use('/api/v1/customers', requireAuthentication, resolveScopeSelection);
+  app.use('/api/v1/customers/*', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/message-templates', requireAuthentication);
   app.use('/api/v1/menus', requireAuthentication);
   app.use('/api/v1/menus/*', requireAuthentication);
-  app.use('/api/v1/orders', requireAuthentication);
-  app.use('/api/v1/orders/*', requireAuthentication);
-  app.use('/api/v1/production/*', requireAuthentication);
+  app.use('/api/v1/orders', requireAuthentication, resolveScopeSelection);
+  app.use('/api/v1/orders/*', requireAuthentication, resolveScopeSelection);
+  app.use('/api/v1/production/*', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/ai/providers', requireAuthentication);
 
   app.get('/api/v1/me', async (context) => {
@@ -753,6 +798,15 @@ export function createApp(options: CreateAppOptions) {
     });
 
     return context.json(payload);
+  });
+
+  app.get('/api/v1/scope', async (context) => {
+    const session = context.get('session');
+    const scope = await requireGeography().resolveScope(
+      session.userId,
+      session.permissions.includes('sites.access_all'),
+    );
+    return context.json(ScopeResponseSchema.parse(contractValue(scope)));
   });
 
   app.get('/api/v1/operating-sites', requirePermission('sites.read'), async (context) => {

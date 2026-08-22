@@ -117,3 +117,22 @@ export const GeographicZoneListResponseSchema = z.object({
 
 export type OperatingSite = z.infer<typeof OperatingSiteSchema>;
 export type GeographicZone = z.infer<typeof GeographicZoneSchema>;
+
+export const ScopeSiteSchema = z.object({
+  active: z.boolean(),
+  displayName: z.string(),
+  id: UuidSchema,
+  orderPrefix: z.string(),
+  slug: z.string(),
+  timezone: z.string(),
+});
+
+// `Global` is a consolidated read-only view, never a persisted operation (ADR-028).
+export const ScopeResponseSchema = z.object({
+  canSelectGlobal: z.boolean(),
+  defaultSiteId: UuidSchema.nullable(),
+  sites: z.array(ScopeSiteSchema),
+});
+
+export type ScopeSite = z.infer<typeof ScopeSiteSchema>;
+export type ScopeResponse = z.infer<typeof ScopeResponseSchema>;

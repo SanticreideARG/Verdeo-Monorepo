@@ -1,9 +1,14 @@
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 
 import { AuditService, type JsonValue } from '@verdeo/audit';
 
 import type { Database } from '../index.js';
-import { geographicZones, operatingSiteOrderCounters, operatingSites } from '../schema/index.js';
+import {
+  geographicZones,
+  operatingSiteOrderCounters,
+  operatingSites,
+  userOperatingSites,
+} from '../schema/index.js';
 import { PostgresAuditSink } from './postgres-audit-sink.js';
 
 export interface GeographyContext {
@@ -99,6 +104,15 @@ const siteColumns = {
   updatedAt: operatingSites.updatedAt,
 };
 
+const scopeSiteColumns = {
+  active: operatingSites.active,
+  displayName: operatingSites.displayName,
+  id: operatingSites.id,
+  orderPrefix: operatingSites.orderPrefix,
+  slug: operatingSites.slug,
+  timezone: operatingSites.timezone,
+};
+
 const zoneColumns = {
   active: geographicZones.active,
   coverImageUrl: geographicZones.coverImageUrl,
@@ -182,6 +196,48 @@ export class PostgresGeographyService {
       .orderBy(asc(operatingSites.sortOrder), asc(operatingSites.displayName));
 
     return rows;
+  }
+
+  // Scope resolution. The membership table is the authority over what a session may select;
+  // the client's stored preference is never trusted (ADR-031).
+  public async resolveScope(userId: string, canAccessAllSites: boolean) {
+    if (canAccessAllSites) {
+      const sites = await this.database
+        .select(scopeSiteColumns)
+        .from(operatingSites)
+        .where(eq(operatingSites.active, true))
+        .orderBy(asc(operatingSites.sortOrder), asc(operatingSites.displayName));
+
+      return { canSelectGlobal: true, defaultSiteId: sites[0]?.id ?? null, sites };
+    }
+
+    const rows = await this.database
+      .select({ ...scopeSiteColumns, defaultSite: userOperatingSites.defaultSite })
+      .from(userOperatingSites)
+      .innerJoin(operatingSites, eq(operatingSites.id, userOperatingSites.operatingSiteId))
+      .where(
+        and(
+          eq(userOperatingSites.userId, userId),
+          eq(userOperatingSites.active, true),
+          eq(operatingSites.active, true),
+        ),
+      )
+      .orderBy(asc(operatingSites.sortOrder), asc(operatingSites.displayName));
+
+    const preferred = rows.find((row) => row.defaultSite) ?? rows[0];
+
+    return {
+      canSelectGlobal: false,
+      defaultSiteId: preferred?.id ?? null,
+      sites: rows.map((row) => ({
+        active: row.active,
+        displayName: row.displayName,
+        id: row.id,
+        orderPrefix: row.orderPrefix,
+        slug: row.slug,
+        timezone: row.timezone,
+      })),
+    };
   }
 
   public async listZones(operatingSiteId: string) {

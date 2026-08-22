@@ -27,6 +27,23 @@ const emptyUsers = {
   list: () => Promise.resolve({ items: [], nextCursor: null }),
 };
 const emptyCredentials = { login: () => Promise.resolve(null) };
+// Scoped endpoints resolve the operating scope before reaching operations, so every app that
+// exercises customers/orders/production must wire a geography engine.
+const singleSiteGeography = {
+  createSite: vi.fn(),
+  createZone: vi.fn(),
+  listSites: vi.fn(() => Promise.resolve([])),
+  listZones: vi.fn(() => Promise.resolve([])),
+  resolveScope: vi.fn(() =>
+    Promise.resolve({
+      canSelectGlobal: true,
+      defaultSiteId: '90000000-0000-4000-8000-000000000001',
+      sites: [{ id: '90000000-0000-4000-8000-000000000001' }],
+    }),
+  ),
+  updateSite: vi.fn(),
+  updateZone: vi.fn(),
+};
 const customerOperationsStubs = {
   addCustomerAddress: vi.fn(),
   addCustomerIdentity: vi.fn(),
@@ -483,6 +500,7 @@ describe('API foundation', () => {
       cookieSameSite: 'Lax',
       credentials: emptyCredentials,
       logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      geography: singleSiteGeography,
       operations: {
         ...customerOperationsStubs,
         createCustomer: vi.fn(),
@@ -517,6 +535,7 @@ describe('API foundation', () => {
       cookieSameSite: 'Lax',
       credentials: emptyCredentials,
       logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      geography: singleSiteGeography,
       operations: {
         ...customerOperationsStubs,
         createCustomer: vi.fn(),
@@ -554,6 +573,7 @@ describe('API foundation', () => {
       cookieSameSite: 'Lax',
       credentials: emptyCredentials,
       logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      geography: singleSiteGeography,
       operations: {
         ...customerOperationsStubs,
         createCustomer: vi.fn(),
@@ -608,6 +628,7 @@ describe('API foundation', () => {
       cookieSameSite: 'Lax',
       credentials: emptyCredentials,
       logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      geography: singleSiteGeography,
       operations: {
         ...customerOperationsStubs,
         createCustomer,
@@ -682,6 +703,7 @@ describe('API foundation', () => {
       cookieSameSite: 'Lax',
       credentials: emptyCredentials,
       logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      geography: singleSiteGeography,
       operations: {
         ...customerOperationsStubs,
         addCustomerIdentity,
@@ -753,6 +775,7 @@ describe('API foundation', () => {
         cookieSameSite: 'Lax',
         credentials: emptyCredentials,
         logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        geography: singleSiteGeography,
         operations: {
           ...customerOperationsStubs,
           createCustomer: vi.fn(),
@@ -810,6 +833,7 @@ describe('API foundation', () => {
       cookieSameSite: 'Lax',
       credentials: emptyCredentials,
       logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      geography: singleSiteGeography,
       operations: {
         ...customerOperationsStubs,
         createCustomer: vi.fn(),

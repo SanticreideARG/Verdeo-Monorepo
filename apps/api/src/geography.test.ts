@@ -53,6 +53,21 @@ const sampleZone = {
   updatedAt: new Date('2026-08-17T10:00:00.000Z'),
 };
 
+interface ResolvedScope {
+  canSelectGlobal: boolean;
+  defaultSiteId: string | null;
+  sites: readonly { id: string }[];
+}
+
+const scopeSite = {
+  active: true,
+  displayName: sampleSite.displayName,
+  id: sampleSite.id,
+  orderPrefix: sampleSite.orderPrefix,
+  slug: sampleSite.slug,
+  timezone: sampleSite.timezone,
+};
+
 function geographyStubs() {
   return {
     createSite: vi
@@ -62,6 +77,13 @@ function geographyStubs() {
       .fn<(input: unknown, context: unknown) => Promise<unknown>>()
       .mockResolvedValue(sampleZone),
     listSites: vi.fn<() => Promise<unknown>>().mockResolvedValue([sampleSite]),
+    resolveScope: vi
+      .fn<(userId: string, canAccessAllSites: boolean) => Promise<ResolvedScope>>()
+      .mockResolvedValue({
+        canSelectGlobal: false,
+        defaultSiteId: scopeSite.id,
+        sites: [scopeSite],
+      }),
     listZones: vi
       .fn<(operatingSiteId: string) => Promise<unknown>>()
       .mockResolvedValue([sampleZone]),
