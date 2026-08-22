@@ -140,7 +140,11 @@ const families = await sql<{ code: string; displayName: string; kind: string }[]
 `;
 for (const family of families) console.log(`  ${family.kind.padEnd(10)} ${family.displayName}`);
 const composable = families.filter((family) => family.kind === 'COMPOSABLE').length;
-if (composable !== 1) {
+if (families.length === 0) {
+  // An installation that has never loaded a menu has no catalog to classify. The first menu the
+  // operator creates carries the composition kind, so there is nothing to fix here.
+  console.log('  Catálogo vacío: todavía no se cargó ningún menú.');
+} else if (composable !== 1) {
   failures += 1;
   console.log(
     `\n  FAIL  hay ${composable} variedades componibles. Ajustá el kind a mano: 0008 reconoce` +
