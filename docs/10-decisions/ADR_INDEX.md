@@ -217,3 +217,47 @@ provisionado. Una identidad externa no crea usuarios, roles, permisos ni membres
 resolver la identidad, la API emite la misma sesión opaca HttpOnly que utiliza el adaptador de contraseña;
 los tokens Supabase no se persisten en Neon ni se devuelven como credencial operativa. El login provisionado
 por contraseña se conserva durante el rollout y la política definitiva de MFA/recuperación permanece OPEN.
+
+## ADR-030 - Catálogo de menús: tamaño, precio y composición
+
+**Status:** Accepted
+
+El precio de una unidad depende del tamaño y del alcance comercial, nunca de la variedad. Dos variedades
+distintas del mismo tamaño valen igual dentro de la misma operación. Por eso el precio deja de vivir en la
+oferta (menú x variante) y pasa a una lista por tamaño; la oferta conserva un override opcional para
+excepciones deliberadas, no como valor por defecto.
+
+El tamaño deja de estar embebido en el código de la variante y pasa a ser un catálogo administrable con
+nombre comercial, comidas por unidad y orden de presentación. `250` y `400` son nombres comerciales y no
+expresan unidad de medida.
+
+Una variedad declara su tipo de composición como dato. Las variedades fijas definen cinco platos; la
+variedad componible permite que el cliente elija cinco platos del universo publicado esa semana para su
+mismo tamaño. Ninguna rama del motor puede identificar la variedad componible por su nombre: el nombre es
+dato administrable y renombrarlo no debe alterar el comportamiento.
+
+El `slot` 1..5 de un menú es orden de carga y presentación. No representa un día de entrega y no debe
+usarse para organizar cocina, etiquetas ni reparto.
+
+Los precios y la composición se congelan como snapshot en el pedido. Cambiar el catálogo o la lista de
+precios nunca altera pedidos ya emitidos.
+
+## ADR-031 - Alcance geográfico derivado de la zona de entrega
+
+**Status:** Accepted
+
+Refina ADR-028. Una operación cubre un área geográfica definida que puede incluir localidades vecinas; la
+localidad escrita del domicilio es dato descriptivo y no determina alcance. La zona geográfica es el ancla
+operativa: todo domicilio operativo debe referenciar una zona activa.
+
+La operación de un pedido no se elige: se deriva de la zona del domicilio de entrega. El pedido persiste
+zona y operación juntas, y una clave foránea compuesta contra la unicidad `(id, operating_site_id)` de la
+zona garantiza en la base que no puedan pertenecer a operaciones distintas. La consistencia es una
+restricción de esquema y no una validación de aplicación.
+
+El selector superior determina el conjunto de datos que el operador ve y el valor por defecto al crear,
+pero la autoridad sobre el alcance permitido es la membresía del usuario resuelta en el servidor. Una
+operación sin membresía responde `403` y nunca una lista vacía.
+
+El pedido web público resuelve su operación mediante un selector explícito del visitante. No se infiere
+por IP, dominio ni geolocalización.

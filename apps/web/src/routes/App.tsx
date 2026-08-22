@@ -2,6 +2,7 @@ import { Link, Route, Routes } from 'react-router-dom';
 
 import { DashboardPage } from './DashboardPage.js';
 import { CustomersPage } from './CustomersPage.js';
+import { GeographySettingsPage } from './GeographySettingsPage.js';
 import { LoginPage } from './LoginPage.js';
 import { OAuthCallbackPage } from './OAuthCallbackPage.js';
 import { OperationsPage } from './OperationsPage.js';
@@ -122,6 +123,7 @@ export function App() {
       <Route path="/app" element={<DashboardPage />} />
       <Route path="/app/clientes" element={<CustomersPage />} />
       <Route path="/app/operaciones" element={<OperationsPage />} />
+      <Route path="/app/ajustes/zonas" element={<GeographySettingsPage />} />
       <Route
         path="*"
         element={

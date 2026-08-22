@@ -20,10 +20,21 @@ function cleanHeader(value: string): string {
   return value.trim().toLocaleLowerCase('es-AR').replace(/\s+/g, ' ');
 }
 
+// Spreadsheet cells arrive as unknown. Only these shapes carry a contact value; anything else
+// would stringify to '[object Object]' and silently import garbage.
 function cleanValue(value: unknown): string | undefined {
   if (value === undefined || value === null) return undefined;
-  const text = String(value).trim();
-  return text || undefined;
+
+  const text =
+    typeof value === 'string'
+      ? value
+      : typeof value === 'number' || typeof value === 'boolean'
+        ? String(value)
+        : value instanceof Date
+          ? value.toISOString()
+          : '';
+
+  return text.trim() || undefined;
 }
 
 function valueFor(row: SheetRow, aliases: readonly string[]): string | undefined {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ContactImportError, parseContactImport } from './contact-import.js';
+import { parseContactImport, type ContactImportError } from './contact-import.js';
 
 function csvFile(contents: string, name = 'contactos.csv'): File {
   return new File([contents], name, { type: 'text/csv' });

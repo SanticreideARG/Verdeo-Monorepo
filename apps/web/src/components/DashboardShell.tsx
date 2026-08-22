@@ -76,6 +76,12 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
     label: 'Administración',
     items: [
       { href: '/app#usuarios', icon: 'users', label: 'Usuarios', permission: 'users.read' },
+      {
+        href: '/app/ajustes/zonas',
+        icon: 'settings',
+        label: 'Zonas geográficas',
+        permission: 'sites.read',
+      },
       { href: '/app#ajustes', icon: 'settings', label: 'Ajustes', permission: 'roles.read' },
     ],
   },

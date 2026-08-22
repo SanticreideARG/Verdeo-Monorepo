@@ -10,6 +10,7 @@ import {
   createDatabase,
   PostgresAuditSink,
   PostgresAIConfigurationService,
+  PostgresGeographyService,
   PostgresPasswordCredentialRepository,
   PostgresOperationsService,
   PostgresOAuthIdentityRepository,
@@ -48,6 +49,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     database.db,
     new LocationLinkGeocodingProvider(),
   );
+  const geography = new PostgresGeographyService(database.db);
   const aiConfiguration = new PostgresAIConfigurationService(
     database.db,
     env.AI_CONFIG_ENCRYPTION_KEY,
@@ -232,6 +234,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     appOrigin: env.APP_URL,
     cookieSameSite: env.SESSION_COOKIE_SAME_SITE,
     credentials,
+    geography,
     logger,
     ...(oauth ? { oauth } : {}),
     operations,

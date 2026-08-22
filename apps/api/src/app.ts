@@ -33,7 +33,15 @@ import {
   CustomerUpdateRequestSchema,
   HealthResponseSchema,
   CycleIdParamSchema,
+  GeographicZoneCreateRequestSchema,
+  GeographicZoneListResponseSchema,
+  GeographicZoneSchema,
+  GeographicZoneUpdateRequestSchema,
   IdParamSchema,
+  OperatingSiteCreateRequestSchema,
+  OperatingSiteListResponseSchema,
+  OperatingSiteSchema,
+  OperatingSiteUpdateRequestSchema,
   KitchenSummaryResponseSchema,
   LoginRequestSchema,
   LoginResponseSchema,
@@ -72,7 +80,11 @@ import {
   type CustomerRestrictionCreateRequest,
   type CustomerRestrictionUpdateRequest,
   type CustomerUpdateRequest,
+  type GeographicZoneCreateRequest,
+  type GeographicZoneUpdateRequest,
   type MessageTemplateUpsertRequest,
+  type OperatingSiteCreateRequest,
+  type OperatingSiteUpdateRequest,
   type MenuCreateRequest,
   type OrderCreateRequest,
   type OrderListQuery,
@@ -105,6 +117,30 @@ interface SessionAuthenticator {
 interface UserDirectory {
   findById(id: string): Promise<{ displayName: string; id: string } | null>;
   list(afterId: string | undefined, limit: number): Promise<UserDirectoryPage>;
+}
+
+interface GeographyEngine {
+  createSite(input: OperatingSiteCreateRequest, context: GeographyContext): Promise<unknown>;
+  createZone(input: GeographicZoneCreateRequest, context: GeographyContext): Promise<unknown>;
+  listSites(): Promise<unknown>;
+  listZones(operatingSiteId: string): Promise<unknown>;
+  updateSite(
+    id: string,
+    input: OperatingSiteUpdateRequest,
+    context: GeographyContext,
+  ): Promise<unknown>;
+  updateZone(
+    id: string,
+    input: GeographicZoneUpdateRequest,
+    context: GeographyContext,
+  ): Promise<unknown>;
+}
+
+interface GeographyContext {
+  actorUserId?: string | undefined;
+  correlationId: string;
+  requestId: string;
+  source: string;
 }
 
 interface LoginResult {
@@ -264,6 +300,7 @@ interface CreateAppOptions {
   appOrigin: string;
   cookieSameSite: 'Lax' | 'None';
   credentials: CredentialLogin;
+  geography?: GeographyEngine;
   logger: Logger;
   oauth?: OAuthLogin;
   operations?: OperationsEngine;
@@ -297,6 +334,20 @@ export function createApp(options: CreateAppOptions) {
     if (!operations) throw new Error('Operations engine is not configured');
     return operations;
   };
+
+  const geography = options.geography;
+
+  const requireGeography = () => {
+    if (!geography) throw new Error('Geography engine is not configured');
+    return geography;
+  };
+
+  const geographyContext = (context: Context<{ Variables: AppVariables }>): GeographyContext => ({
+    actorUserId: context.get('session')?.userId,
+    correlationId: context.get('requestId'),
+    requestId: context.get('requestId'),
+    source: 'api',
+  });
 
   const operationsContext = (context: Context<{ Variables: AppVariables }>): OperationsContext => ({
     actorUserId: context.get('session')?.userId,
@@ -561,6 +612,9 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/sessions', requireAuthentication);
   app.use('/api/v1/sessions/*', requireAuthentication);
   app.use('/api/v1/users', requireAuthentication, requirePermission('users.read'));
+  app.use('/api/v1/operating-sites', requireAuthentication);
+  app.use('/api/v1/operating-sites/*', requireAuthentication);
+  app.use('/api/v1/zones/*', requireAuthentication);
   app.use('/api/v1/customers', requireAuthentication);
   app.use('/api/v1/customers/*', requireAuthentication);
   app.use('/api/v1/message-templates', requireAuthentication);
@@ -699,6 +753,78 @@ export function createApp(options: CreateAppOptions) {
     });
 
     return context.json(payload);
+  });
+
+  app.get('/api/v1/operating-sites', requirePermission('sites.read'), async (context) => {
+    const items = await requireGeography().listSites();
+    return context.json(OperatingSiteListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.post('/api/v1/operating-sites', requirePermission('sites.manage'), async (context) => {
+    const input = OperatingSiteCreateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'Revisá los datos de la operación.', input.error.issues);
+    const site = await requireGeography().createSite(input.data, geographyContext(context));
+    return context.json(OperatingSiteSchema.parse(contractValue(site)), 201);
+  });
+
+  app.patch('/api/v1/operating-sites/:id', requirePermission('sites.manage'), async (context) => {
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'Identificador inválido.', params.error.issues);
+    const input = OperatingSiteUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'Revisá los datos de la operación.', input.error.issues);
+    const site = await requireGeography().updateSite(
+      params.data.id,
+      input.data,
+      geographyContext(context),
+    );
+    return context.json(OperatingSiteSchema.parse(contractValue(site)));
+  });
+
+  app.get('/api/v1/operating-sites/:id/zones', requirePermission('sites.read'), async (context) => {
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'Identificador inválido.', params.error.issues);
+    const items = await requireGeography().listZones(params.data.id);
+    return context.json(GeographicZoneListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.post(
+    '/api/v1/operating-sites/:id/zones',
+    requirePermission('zones.manage'),
+    async (context) => {
+      const params = IdParamSchema.safeParse(context.req.param());
+      if (!params.success)
+        return badRequest(context, 'Identificador inválido.', params.error.issues);
+      const input = GeographicZoneCreateRequestSchema.safeParse({
+        ...((await context.req.json().catch(() => null)) ?? {}),
+        operatingSiteId: params.data.id,
+      });
+      if (!input.success)
+        return badRequest(context, 'Revisá los datos de la zona.', input.error.issues);
+      const zone = await requireGeography().createZone(input.data, geographyContext(context));
+      return context.json(GeographicZoneSchema.parse(contractValue(zone)), 201);
+    },
+  );
+
+  app.patch('/api/v1/zones/:id', requirePermission('zones.manage'), async (context) => {
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'Identificador inválido.', params.error.issues);
+    const input = GeographicZoneUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'Revisá los datos de la zona.', input.error.issues);
+    const zone = await requireGeography().updateZone(
+      params.data.id,
+      input.data,
+      geographyContext(context),
+    );
+    return context.json(GeographicZoneSchema.parse(contractValue(zone)));
   });
 
   app.get('/api/v1/customers', async (context) => {
@@ -1403,7 +1529,11 @@ export function createApp(options: CreateAppOptions) {
   });
 
   app.onError((error, context) => {
-    if (error.name === 'OperationsNotFoundError') {
+    if (
+      error.name === 'OperationsNotFoundError' ||
+      error.name === 'OperatingSiteNotFoundError' ||
+      error.name === 'GeographicZoneNotFoundError'
+    ) {
       const code: ApiErrorCode = 'NOT_FOUND';
       return context.json(
         { error: { code, message: error.message, requestId: context.get('requestId') } },
@@ -1412,6 +1542,7 @@ export function createApp(options: CreateAppOptions) {
     }
     if (
       error.name === 'OperationsConflictError' ||
+      error.name === 'GeographyConflictError' ||
       error.name === 'OrderRuleError' ||
       error.name === 'CustomerRuleError' ||
       error.name === 'AIConfigurationUnavailableError'

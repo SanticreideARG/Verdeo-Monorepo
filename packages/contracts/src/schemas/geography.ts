@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { UuidSchema } from './common.js';
+import { IsoDateTimeSchema, UuidSchema } from './common.js';
 
 const SlugSchema = z
   .string()
@@ -74,3 +74,46 @@ export type OperatingSiteCreateRequest = z.infer<typeof OperatingSiteCreateReque
 export type OperatingSiteUpdateRequest = z.infer<typeof OperatingSiteUpdateRequestSchema>;
 export type GeographicZoneCreateRequest = z.infer<typeof GeographicZoneCreateRequestSchema>;
 export type GeographicZoneUpdateRequest = z.infer<typeof GeographicZoneUpdateRequestSchema>;
+
+export const OperatingSiteSchema = z.object({
+  active: z.boolean(),
+  coverImageUrl: z.string().nullable(),
+  createdAt: IsoDateTimeSchema,
+  displayName: z.string(),
+  id: UuidSchema,
+  orderPrefix: z.string(),
+  publicEmail: z.string().nullable(),
+  publicPhone: z.string().nullable(),
+  publicWhatsapp: z.string().nullable(),
+  slug: z.string(),
+  sortOrder: z.number().int(),
+  timezone: z.string(),
+  updatedAt: IsoDateTimeSchema,
+  zoneCount: z.number().int(),
+});
+
+export const GeographicZoneSchema = z.object({
+  active: z.boolean(),
+  coverImageUrl: z.string().nullable(),
+  coverageDescription: z.string().nullable(),
+  createdAt: IsoDateTimeSchema,
+  displayName: z.string(),
+  id: UuidSchema,
+  operatingSiteId: UuidSchema,
+  publicPhoneOverride: z.string().nullable(),
+  publicWhatsappOverride: z.string().nullable(),
+  slug: z.string(),
+  sortOrder: z.number().int(),
+  updatedAt: IsoDateTimeSchema,
+});
+
+export const OperatingSiteListResponseSchema = z.object({
+  items: z.array(OperatingSiteSchema),
+});
+
+export const GeographicZoneListResponseSchema = z.object({
+  items: z.array(GeographicZoneSchema),
+});
+
+export type OperatingSite = z.infer<typeof OperatingSiteSchema>;
+export type GeographicZone = z.infer<typeof GeographicZoneSchema>;
