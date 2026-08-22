@@ -272,22 +272,39 @@ retención y distinta autorización. `Conversation`, `Message`, `MessagingAccoun
 `conversations`/`messages` y el grupo de permisos `messages.*` quedan reservados para el canal con
 clientes. La mensajería interna usa tablas `staff_*` y el grupo `chat.*`.
 
+El acceso al chat se expresa como el permiso `chat.use`, otorgado por seed a operadores, superadmins
+y repartidores. Ninguna rama del código consulta el nombre de un rol: renombrar o dividir un rol no
+puede cambiar quién habla.
+
+Quién puede hablar con quién lo configura un superadmin y se resuelve con el mismo idioma que ya usa
+la autorización: enlaces entre pares de roles como base, y excepciones explícitas por par de
+personas. El `deny` de una excepción gana siempre, y en ausencia de reglas nadie puede iniciar una
+conversación. La política de enlaces es la única autoridad sobre el alcance del chat: las
+conversaciones no se filtran por operación, de modo que si un operador de una ciudad puede escribirle
+a otra lo decide la matriz y no el alcance regional. Cambiar la política no borra conversaciones
+existentes; sólo deja de permitir nuevas.
+
 Una referencia compartida a un pedido o un cliente se persiste como puntero, nunca como copia, y se
 resuelve en el momento de mostrarla con los permisos de quien la mira. Un snapshot congelaría datos
 que el destinatario podría no tener permitido ver y quedaría desactualizado. Compartir una
 referencia a un cliente es un evento de divulgación de PII y se audita; el cuerpo de los mensajes no.
+Los mensajes viven treinta días y una purga diaria idempotente los elimina, de modo que la
+auditoría de una divulgación sobrevive al mensaje que la produjo.
 
 La ubicación es un par de coordenadas elegido por quien envía. El domicilio de un cliente no se
 comparte como ubicación sino como referencia, para que aplique el control de permisos.
 
 La presencia separa dos hechos: la conexión, derivada de un latido cuya frescura decide el servidor,
 y el estado declarado por la persona. El estado efectivo es `offline` cuando el latido venció, y en
-caso contrario el declarado. El servidor nunca adivina `away`. La presencia expone identificador,
-nombre visible y estado, y nada más, para no convertirse en un segundo directorio de usuarios.
+caso contrario el declarado. El servidor nunca adivina `away`. La presencia sólo es visible entre
+personas que la política de enlaces ya conecta, y expone identificador, nombre visible y estado.
 
-El transporte arranca por sondeo con latido, sin proveedor nuevo, detrás de un adaptador. Las
-funciones serverless no pueden sostener un WebSocket, y Supabase Realtime —ya aceptado como broker de
-identidad en ADR-029— es la vía natural cuando exista una razón medida para cambiar. En ese caso sólo
-aplican canales de Broadcast y Presence: la base es Neon, así que "Postgres Changes" no observa estas
-tablas. Un broadcast anuncia que una conversación cambió y nunca transporta contenido; el cliente lee
-por la API para que RBAC se aplique en un solo lugar.
+El transporte es sondeo con latido, detrás de un adaptador. Las funciones serverless no pueden
+sostener un WebSocket. Supabase está disponible y su base está enlazada al proyecto, pero el
+almacenamiento permanece en Neon: repartir usuarios y conversaciones entre dos bases sería la segunda
+fuente de verdad que las reglas del repositorio prohíben. Además, el cliente Supabase del front se
+crea sin refresco automático de token y los usuarios provisionados por contraseña nunca obtienen
+sesión Supabase, así que una presencia basada en Realtime funcionaría para unas personas y no para
+otras. Cuando exista una razón medida y un modelo de sesión que cubra a todos, sólo aplicarán canales
+de Broadcast y Presence —la base es Neon, así que "Postgres Changes" no observa estas tablas— y un
+broadcast anunciará que una conversación cambió sin transportar contenido.
