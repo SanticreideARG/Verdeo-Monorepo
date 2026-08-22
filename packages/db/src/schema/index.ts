@@ -2,6 +2,7 @@ export * from './audit.js';
 export * from './access-tokens.js';
 export * from './ai.js';
 export * from './auth.js';
+export * from './cms.js';
 export * from './chat.js';
 export * from './events.js';
 export * from './geography.js';

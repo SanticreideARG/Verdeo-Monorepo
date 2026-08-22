@@ -19,6 +19,7 @@ import {
   PostgresOperationsService,
   PostgresOAuthIdentityRepository,
   PostgresSessionRepository,
+  PostgresCmsService,
   PostgresUserAdminRepository,
   PostgresUserDirectoryRepository,
 } from '@verdeo/db';
@@ -52,6 +53,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
   );
   const userDirectory = new UserDirectoryService(new PostgresUserDirectoryRepository(database.db));
   const userAdmin = new UserAdminService(new PostgresUserAdminRepository(database.db));
+  const cms = new PostgresCmsService(database.db);
   const accessTokenService = new AccessTokenService(
     new PostgresAccessTokenRepository(database.db),
     sessionService,
@@ -274,6 +276,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     aiConfiguration,
     appOrigin: env.APP_URL,
     accessTokens,
+    cms,
     ...(avatarStorage ? { avatarStorage } : {}),
     chat,
     chatRetentionDays: env.CHAT_RETENTION_DAYS,

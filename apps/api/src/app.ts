@@ -99,6 +99,16 @@ import {
   AccessTokenIssuedResponseSchema,
   AccessTokenListResponseSchema,
   AccessTokenRedeemRequestSchema,
+  MediaAssetListResponseSchema,
+  MediaAssetSchema,
+  PageCreateRequestSchema,
+  PageDetailSchema,
+  PageDraftUpdateRequestSchema,
+  PageListResponseSchema,
+  PagePublicResponseSchema,
+  PagePublishRequestSchema,
+  PageRevisionListResponseSchema,
+  PageRevisionSchema,
   PermissionCatalogResponseSchema,
   RoleListResponseSchema,
   UserAdminDetailSchema,
@@ -139,6 +149,8 @@ import {
   type OrderTransitionRequest,
   type OrderUpdateRequest,
   type AccessTokenIssueRequest,
+  type PageCreateRequest,
+  type PageSection,
   type ProductionReportRequest,
   type ProductionSnapshotRequest,
   type PublicOrderCreateRequest,
@@ -452,8 +464,11 @@ interface AIConfigurationContext {
   source: string;
 }
 
+// Doubles as the CMS media upload adapter: same Blob store, same trust boundary (staff-only,
+// content-type/size checked before this is ever called), just a different path prefix.
 interface AvatarStorageEngine {
   upload(userId: string, bytes: Uint8Array, contentType: string): Promise<{ url: string }>;
+  uploadMedia(bytes: Uint8Array, contentType: string): Promise<{ url: string }>;
 }
 
 interface UserAdminEngine {
@@ -489,6 +504,28 @@ interface AccessTokenEngine {
   revoke(id: string): Promise<void>;
 }
 
+interface CmsContext {
+  actorUserId?: string | undefined;
+  correlationId: string;
+  requestId: string;
+  source: string;
+}
+
+interface CmsEngine {
+  createPage(input: PageCreateRequest, context: CmsContext): Promise<unknown>;
+  getPageDetail(slug: string): Promise<unknown>;
+  getPublicPage(slug: string): Promise<unknown>;
+  listMediaAssets(): Promise<unknown>;
+  listPages(): Promise<unknown>;
+  listRevisions(slug: string): Promise<unknown>;
+  publish(slug: string, revisionId: string, context: CmsContext): Promise<unknown>;
+  recordMediaAsset(
+    input: { contentType: string; label: string | undefined; url: string },
+    uploadedByUserId: string | undefined,
+  ): Promise<unknown>;
+  saveDraft(slug: string, sections: PageSection[], context: CmsContext): Promise<unknown>;
+}
+
 interface CreateAppOptions {
   aiConfiguration?: AIConfigurationEngine;
   appOrigin: string;
@@ -497,6 +534,7 @@ interface CreateAppOptions {
   cookieSameSite: 'Lax' | 'None';
   chat?: ChatEngine;
   chatRetentionDays?: number | undefined;
+  cms?: CmsEngine;
   cronSecret?: string | undefined;
   credentials: CredentialLogin;
   geography?: GeographyEngine;
@@ -580,6 +618,13 @@ export function createApp(options: CreateAppOptions) {
     return accessTokens;
   };
 
+  const cms = options.cms;
+
+  const requireCms = () => {
+    if (!cms) throw new Error('CMS engine is not configured');
+    return cms;
+  };
+
   // The client sends its selected operation, but membership is resolved server-side and intersected
   // with it. An operation the session cannot reach answers 403, never an empty list (ADR-031).
   const resolveScopeSelection = async (
@@ -615,6 +660,13 @@ export function createApp(options: CreateAppOptions) {
   });
 
   const geographyContext = (context: Context<{ Variables: AppVariables }>): GeographyContext => ({
+    actorUserId: context.get('session')?.userId,
+    correlationId: context.get('requestId'),
+    requestId: context.get('requestId'),
+    source: 'api',
+  });
+
+  const cmsContext = (context: Context<{ Variables: AppVariables }>): CmsContext => ({
     actorUserId: context.get('session')?.userId,
     correlationId: context.get('requestId'),
     requestId: context.get('requestId'),
@@ -769,6 +821,19 @@ export function createApp(options: CreateAppOptions) {
       );
     }
     return context.json(MenuListResponseSchema.parse({ items: [contractValue(menu)] }).items[0]);
+  });
+
+  app.get('/api/v1/public/pages/:slug', async (context) => {
+    const slug = context.req.param('slug');
+    const page = await requireCms().getPublicPage(slug);
+    if (!page) {
+      const code: ApiErrorCode = 'NOT_FOUND';
+      return context.json(
+        { error: { code, message: 'Página no encontrada.', requestId: context.get('requestId') } },
+        statusForCode(code),
+      );
+    }
+    return context.json(PagePublicResponseSchema.parse(contractValue(page)));
   });
 
   app.post('/api/v1/public/orders', async (context) => {
@@ -957,6 +1022,7 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/roles', requireAuthentication);
   app.use('/api/v1/permissions', requireAuthentication);
   app.use('/api/v1/access-tokens', requireAuthentication);
+  app.use('/api/v1/cms/*', requireAuthentication);
   app.use('/api/v1/access-tokens/*', requireAuthentication);
   app.use('/api/v1/scope', requireAuthentication);
   app.use('/api/v1/operating-sites', requireAuthentication);
@@ -1251,6 +1317,101 @@ export function createApp(options: CreateAppOptions) {
     if (!params.success) return badRequest(context, 'El token indicado no es válido.');
     await requireAccessTokens().revoke(params.data.id);
     return context.body(null, 204);
+  });
+
+  app.get('/api/v1/cms/pages', async (context) => {
+    if (!context.get('session').permissions.includes('cms.read')) return forbidden(context);
+    const items = await requireCms().listPages();
+    return context.json(PageListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.post('/api/v1/cms/pages', async (context) => {
+    if (!context.get('session').permissions.includes('cms.edit')) return forbidden(context);
+    const input = PageCreateRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success)
+      return badRequest(context, 'Revisá el slug y el título de la página.', input.error.issues);
+    try {
+      const page = await requireCms().createPage(input.data, cmsContext(context));
+      return context.json(PageDetailSchema.parse(contractValue(page)), 201);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'CmsConflictError') {
+        const code: ApiErrorCode = 'CONFLICT';
+        return context.json(
+          { error: { code, message: error.message, requestId: context.get('requestId') } },
+          statusForCode(code),
+        );
+      }
+      throw error;
+    }
+  });
+
+  app.get('/api/v1/cms/pages/:slug', async (context) => {
+    if (!context.get('session').permissions.includes('cms.read')) return forbidden(context);
+    const slug = context.req.param('slug');
+    const page = await requireCms().getPageDetail(slug);
+    if (!page) {
+      const code: ApiErrorCode = 'NOT_FOUND';
+      return context.json(
+        { error: { code, message: 'Página no encontrada.', requestId: context.get('requestId') } },
+        statusForCode(code),
+      );
+    }
+    return context.json(PageDetailSchema.parse(contractValue(page)));
+  });
+
+  app.get('/api/v1/cms/pages/:slug/revisions', async (context) => {
+    if (!context.get('session').permissions.includes('cms.read')) return forbidden(context);
+    const slug = context.req.param('slug');
+    const items = await requireCms().listRevisions(slug);
+    return context.json(PageRevisionListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.put('/api/v1/cms/pages/:slug/draft', async (context) => {
+    if (!context.get('session').permissions.includes('cms.edit')) return forbidden(context);
+    const slug = context.req.param('slug');
+    const input = PageDraftUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'Revisá las secciones de la página.', input.error.issues);
+    const revision = await requireCms().saveDraft(slug, input.data.sections, cmsContext(context));
+    return context.json(PageRevisionSchema.parse(contractValue(revision)));
+  });
+
+  app.post('/api/v1/cms/pages/:slug/publish', async (context) => {
+    if (!context.get('session').permissions.includes('cms.publish')) return forbidden(context);
+    const slug = context.req.param('slug');
+    const input = PagePublishRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success) return badRequest(context, 'Indicá la revisión a publicar.');
+    const page = await requireCms().publish(slug, input.data.revisionId, cmsContext(context));
+    return context.json(PageDetailSchema.parse(contractValue(page)));
+  });
+
+  app.get('/api/v1/cms/media', async (context) => {
+    if (!context.get('session').permissions.includes('cms.read')) return forbidden(context);
+    const items = await requireCms().listMediaAssets();
+    return context.json(MediaAssetListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  const MEDIA_ALLOWED_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+  const MEDIA_MAX_BYTES = 8 * 1024 * 1024;
+
+  app.post('/api/v1/cms/media', async (context) => {
+    if (!context.get('session').permissions.includes('cms.edit')) return forbidden(context);
+    const contentType = context.req.header('content-type') ?? '';
+    if (!MEDIA_ALLOWED_CONTENT_TYPES.has(contentType))
+      return badRequest(context, 'La imagen debe ser JPEG, PNG o WebP.');
+    const bytes = new Uint8Array(await context.req.arrayBuffer());
+    if (bytes.byteLength === 0) return badRequest(context, 'El archivo está vacío.');
+    if (bytes.byteLength > MEDIA_MAX_BYTES)
+      return badRequest(context, 'La imagen no puede superar los 8 MB.');
+
+    const { url } = await requireAvatarStorage().uploadMedia(bytes, contentType);
+    const asset = await requireCms().recordMediaAsset(
+      { contentType, label: context.req.query('label'), url },
+      context.get('session').userId,
+    );
+    return context.json(MediaAssetSchema.parse(contractValue(asset)), 201);
   });
 
   app.get('/api/v1/scope', async (context) => {

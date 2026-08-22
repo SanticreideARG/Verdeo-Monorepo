@@ -406,7 +406,7 @@ describe('API foundation', () => {
     return {
       app: createApp({
         appOrigin: 'http://localhost:5173',
-        ...(avatarStorage ? { avatarStorage } : {}),
+        ...(avatarStorage ? { avatarStorage: { ...avatarStorage, uploadMedia: vi.fn() } } : {}),
         cookieSameSite: 'Lax',
         credentials: emptyCredentials,
         logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
@@ -1674,6 +1674,181 @@ describe('API foundation', () => {
       });
       expect(response.status).toBe(200);
       expect(redeem).toHaveBeenCalledWith('vrd_invite-token', 'Nueva Operadora');
+    });
+  });
+
+  describe('cms', () => {
+    function buildCmsApp(cms: Record<string, unknown>, permissions: string[]) {
+      return createApp({
+        appOrigin: 'http://localhost:5173',
+        cms: cms as never,
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            Promise.resolve({
+              expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+              permissions,
+              sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+            }),
+        },
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+    }
+
+    const cookie = 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars';
+    const sampleRevision = {
+      createdAt: new Date('2026-08-25T12:00:00.000Z'),
+      createdByDisplayName: 'Santiago',
+      id: '90000000-0000-4000-8000-000000000001',
+      revision: 1,
+      sections: [] as unknown[],
+    };
+    const sampleDetail = {
+      draft: sampleRevision,
+      id: '90000000-0000-4000-8000-000000000002',
+      published: null,
+      slug: 'home',
+      title: 'Inicio',
+    };
+
+    it('serves a public page without authentication', async () => {
+      const getPublicPage = vi.fn(() =>
+        Promise.resolve({ sections: [], slug: 'home', title: 'Inicio' }),
+      );
+      const app = buildCmsApp({ getPublicPage }, []);
+
+      const response = await app.request('/api/v1/public/pages/home');
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { slug: string };
+      expect(body.slug).toBe('home');
+    });
+
+    it('404s a public page that was never published', async () => {
+      const getPublicPage = vi.fn(() => Promise.resolve(null));
+      const app = buildCmsApp({ getPublicPage }, []);
+
+      const response = await app.request('/api/v1/public/pages/unknown');
+      expect(response.status).toBe(404);
+    });
+
+    it('creates a page with cms.edit and denies without it', async () => {
+      const createPage = vi.fn(() => Promise.resolve(sampleDetail));
+      const app = buildCmsApp({ createPage }, ['cms.edit']);
+
+      const response = await app.request('/api/v1/cms/pages', {
+        body: JSON.stringify({ slug: 'home', title: 'Inicio' }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(201);
+
+      const denied = buildCmsApp({ createPage: vi.fn() }, ['cms.read']);
+      const deniedResponse = await denied.request('/api/v1/cms/pages', {
+        body: JSON.stringify({ slug: 'home', title: 'Inicio' }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('answers 409 when the slug already exists', async () => {
+      const conflict = new Error('Ya existe una página con ese slug');
+      conflict.name = 'CmsConflictError';
+      const createPage = vi.fn(() => Promise.reject(conflict));
+      const app = buildCmsApp({ createPage }, ['cms.edit']);
+
+      const response = await app.request('/api/v1/cms/pages', {
+        body: JSON.stringify({ slug: 'home', title: 'Inicio' }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(409);
+    });
+
+    it('saves a draft with cms.edit and denies without it', async () => {
+      const saveDraft = vi.fn(() => Promise.resolve(sampleRevision));
+      const app = buildCmsApp({ saveDraft }, ['cms.edit']);
+
+      const response = await app.request('/api/v1/cms/pages/home/draft', {
+        body: JSON.stringify({ sections: [] }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'PUT',
+      });
+      expect(response.status).toBe(200);
+
+      const denied = buildCmsApp({ saveDraft: vi.fn() }, ['cms.read']);
+      const deniedResponse = await denied.request('/api/v1/cms/pages/home/draft', {
+        body: JSON.stringify({ sections: [] }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'PUT',
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('publishes with cms.publish and denies without it', async () => {
+      const publish = vi.fn(() => Promise.resolve(sampleDetail));
+      const app = buildCmsApp({ publish }, ['cms.publish']);
+
+      const response = await app.request('/api/v1/cms/pages/home/publish', {
+        body: JSON.stringify({ revisionId: sampleRevision.id }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(200);
+      expect(publish).toHaveBeenCalledWith(
+        'home',
+        sampleRevision.id,
+        expect.objectContaining({ actorUserId: '55276601-ec66-4f63-9f2f-edf73904ede0' }),
+      );
+
+      const denied = buildCmsApp({ publish: vi.fn() }, ['cms.edit']);
+      const deniedResponse = await denied.request('/api/v1/cms/pages/home/publish', {
+        body: JSON.stringify({ revisionId: sampleRevision.id }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('rejects an unsupported media content type before touching storage', async () => {
+      const uploadMedia = vi.fn();
+      const recordMediaAsset = vi.fn();
+      const app = createApp({
+        appOrigin: 'http://localhost:5173',
+        avatarStorage: { upload: vi.fn(), uploadMedia },
+        cms: { recordMediaAsset },
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            Promise.resolve({
+              expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+              permissions: ['cms.edit'],
+              sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+            }),
+        },
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      } as never);
+
+      const response = await app.request('/api/v1/cms/media', {
+        body: new Uint8Array([1, 2, 3]),
+        headers: { cookie, 'content-type': 'application/pdf' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(400);
+      expect(uploadMedia).not.toHaveBeenCalled();
+      expect(recordMediaAsset).not.toHaveBeenCalled();
     });
   });
 });

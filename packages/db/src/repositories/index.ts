@@ -1,5 +1,6 @@
 export * from './postgres-access-token-repository.js';
 export * from './postgres-audit-sink.js';
+export * from './postgres-cms-service.js';
 export * from './postgres-chat-service.js';
 export * from './postgres-geography-service.js';
 export * from './postgres-ai-configuration-service.js';

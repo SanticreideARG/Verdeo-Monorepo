@@ -8,6 +8,7 @@ import { put } from '@vercel/blob';
  */
 export interface AvatarStorage {
   upload(userId: string, bytes: Uint8Array, contentType: string): Promise<{ url: string }>;
+  uploadMedia(bytes: Uint8Array, contentType: string): Promise<{ url: string }>;
 }
 
 const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
@@ -37,6 +38,21 @@ export class VercelBlobAvatarStorage implements AvatarStorage {
     const result = await put(`avatars/${userId}.${extension}`, Buffer.from(bytes), {
       access: 'public',
       allowOverwrite: true,
+      contentType,
+      ...(this.storeId ? { storeId: this.storeId } : {}),
+      token: this.token,
+    });
+    return { url: result.url };
+  }
+
+  // CMS media, unlike an avatar, has no natural fixed key to overwrite — a random suffix avoids
+  // collisions between unrelated uploads.
+  public async uploadMedia(bytes: Uint8Array, contentType: string): Promise<{ url: string }> {
+    const extension = EXTENSION_BY_CONTENT_TYPE[contentType];
+    if (!extension) throw new Error(`Unsupported media content type: ${contentType}`);
+    const result = await put(`media/${Date.now()}.${extension}`, Buffer.from(bytes), {
+      access: 'public',
+      addRandomSuffix: true,
       contentType,
       ...(this.storeId ? { storeId: this.storeId } : {}),
       token: this.token,
