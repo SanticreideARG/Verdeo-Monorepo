@@ -53,20 +53,32 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
     items: [{ href: '/app', icon: 'dashboard', label: 'Dashboard' }],
   },
   {
-    label: 'Operación',
+    label: 'Pedidos',
     items: [
       {
-        href: '/app/operaciones#pedidos',
+        href: '/app/pedidos/nuevo',
         icon: 'orders',
-        label: 'Pedidos',
+        label: 'Tomar y confirmar pedidos',
         permission: 'orders.read',
       },
+      { href: '/app/pedidos', icon: 'orders', label: 'Ver pedidos', permission: 'orders.read' },
+    ],
+  },
+  {
+    label: 'Menús',
+    items: [
       {
-        href: '/app/operaciones#menus',
+        href: '/app/menus/nuevo',
         icon: 'menus',
-        label: 'Menús',
-        permission: 'production.read',
+        label: 'Configurar la semana',
+        permission: 'production.generate',
       },
+      { href: '/app/menus', icon: 'menus', label: 'Ver menús', permission: 'production.read' },
+    ],
+  },
+  {
+    label: 'Operación',
+    items: [
       {
         href: '/app/clientes',
         icon: 'customers',
@@ -74,7 +86,7 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         permission: 'customers.read',
       },
       {
-        href: '/app/operaciones#cocina',
+        href: '/app/cocina',
         icon: 'kitchen',
         label: 'Cocina',
         permission: 'production.read',
@@ -87,7 +99,7 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
     label: 'Inteligencia',
     items: [
       {
-        href: '/app/operaciones#ia',
+        href: '/app/ia',
         icon: 'ai',
         label: 'IA y plantillas',
         permission: 'ai.providers.manage',
@@ -214,8 +226,9 @@ function NavIcon({ name }: { name: IconName }) {
 function isNavigationActive(pathname: string, hash: string, href: string): boolean {
   const [targetPath, targetHash = ''] = href.split('#');
   if (targetPath !== pathname) return false;
-  if (!targetHash) return pathname === '/app' && !hash;
-  return hash === `#${targetHash}`;
+  // A plain route (no hash in href) is only active with no hash in the URL either — otherwise
+  // e.g. '/app' would read as active while viewing '/app#usuarios'.
+  return targetHash ? hash === `#${targetHash}` : hash === '';
 }
 
 export function DashboardShell({

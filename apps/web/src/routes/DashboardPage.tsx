@@ -17,7 +17,7 @@ const modules = [
     accent: 'gold',
     cluster: 'Operación',
     copy: 'Registro, confirmación y seguimiento del ciclo comercial semanal.',
-    href: '/app/operaciones#pedidos',
+    href: '/app/pedidos/nuevo',
     permission: 'orders.read',
     title: 'Pedidos',
   },
@@ -25,7 +25,7 @@ const modules = [
     accent: 'blue',
     cluster: 'Operación',
     copy: 'Menús, cantidades consolidadas y formularios listos para cocina.',
-    href: '/app/operaciones#cocina',
+    href: '/app/cocina',
     permission: 'production.read',
     title: 'Producción',
   },
@@ -49,7 +49,7 @@ const modules = [
     accent: 'lime',
     cluster: 'Inteligencia',
     copy: 'Proveedores, modelos y plantillas asistidas para acelerar el contenido.',
-    href: '/app/operaciones#ia',
+    href: '/app/ia',
     permission: 'ai.providers.manage',
     title: 'IA y plantillas',
   },
@@ -144,7 +144,7 @@ export function DashboardPage() {
           <span>Sprint actual</span>
           <strong>Motor de pedidos MVP</strong>
           <p>Clientes, menús, pedidos y salida de producción conectados.</p>
-          <Link to="/app/operaciones#pedidos">
+          <Link to="/app/pedidos/nuevo">
             Abrir centro de pedidos <ModuleArrow />
           </Link>
         </div>

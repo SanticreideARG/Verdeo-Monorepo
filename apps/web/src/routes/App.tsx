@@ -1,13 +1,18 @@
 import { Link, Route, Routes } from 'react-router-dom';
 
+import { AIProvidersPage } from './AIProvidersPage.js';
 import { DashboardPage } from './DashboardPage.js';
 import { ChatLinksPage } from './ChatLinksPage.js';
 import { ChatPage } from './ChatPage.js';
 import { CustomersPage } from './CustomersPage.js';
 import { GeographySettingsPage } from './GeographySettingsPage.js';
+import { KitchenPage } from './KitchenPage.js';
 import { LoginPage } from './LoginPage.js';
+import { MenuBuilderPage } from './MenuBuilderPage.js';
+import { MenusPage } from './MenusPage.js';
 import { OAuthCallbackPage } from './OAuthCallbackPage.js';
-import { OperationsPage } from './OperationsPage.js';
+import { OrderIntakePage } from './OrderIntakePage.js';
+import { OrdersPage } from './OrdersPage.js';
 import { PublicOrderPage } from './PublicOrderPage.js';
 
 function BrandMark() {
@@ -124,7 +129,12 @@ export function App() {
       <Route path="/auth/callback" element={<OAuthCallbackPage />} />
       <Route path="/app" element={<DashboardPage />} />
       <Route path="/app/clientes" element={<CustomersPage />} />
-      <Route path="/app/operaciones" element={<OperationsPage />} />
+      <Route path="/app/pedidos/nuevo" element={<OrderIntakePage />} />
+      <Route path="/app/pedidos" element={<OrdersPage />} />
+      <Route path="/app/menus/nuevo" element={<MenuBuilderPage />} />
+      <Route path="/app/menus" element={<MenusPage />} />
+      <Route path="/app/cocina" element={<KitchenPage />} />
+      <Route path="/app/ia" element={<AIProvidersPage />} />
       <Route path="/app/chat" element={<ChatPage />} />
       <Route path="/app/ajustes/zonas" element={<GeographySettingsPage />} />
       <Route path="/app/ajustes/chat" element={<ChatLinksPage />} />
