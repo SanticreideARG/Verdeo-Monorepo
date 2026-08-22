@@ -1,4 +1,5 @@
-# Performance and perceived-latency roadmap
+Las tres ganancias hechas sólo se pueden medir desplegadas: la región y la latencia de base no
+existen en local.# Performance and perceived-latency roadmap
 
 ## Why this exists
 
@@ -76,7 +77,7 @@ avoids adding a data-fetching library.
 These are independent of each other and of the frontend phases. Item 1 is one line and probably the
 single largest measurable win.
 
-### 4.1 Co-locate the API with the database
+### 4.1 Co-locate the API with the database ✅ done
 
 **Priority:** high. **Prerequisites:** none. **Effort:** trivial.
 
@@ -85,14 +86,17 @@ Neon. Today every database round trip crosses regions, and endpoints make severa
 
 **Verify:** compare `/health` and one database-backed endpoint before and after, on a warm function.
 
-### 4.2 Remove the order listing N+1
+### 4.2 Remove the order listing N+1 ✅ done
 
 **Priority:** high. **Prerequisites:** none. **Effort:** medium.
 
-`listOrders` selects the page's ids and then calls `loadOrder` per row, four queries each. Replace
-with a single query joining items, selections and instructions, aggregated in one pass.
-`resolveOrderItems` has the same shape on the write path — four queries per line item, including
-`composableFamilyName`, which returns the same value for every line and should be resolved once.
+A page now costs four queries regardless of size: orders, items, selections and instructions are
+fetched in bulk and grouped in memory, keeping the pagination order. `resolveOrderItems` resolves
+the composable variety once per order instead of once per line.
+
+Covered by `packages/db/src/order-listing.test.ts`, which runs the service against a real engine and
+asserts the failure modes a batched loader can hide: lost pagination order, items attached to the
+wrong order, and dropped orders.
 
 **Verify:** count queries per request in the structured logs; the listing should be a small constant.
 
@@ -126,13 +130,14 @@ characteristic, not a defect. Worth knowing before attributing cold latency to t
 
 ```text
 FASE 1 ✅
-  -> 4.1 región          (una línea, mayor ganancia medible)
-  -> 4.2 N+1 de pedidos  (la pantalla más lenta)
-  -> FASE 2 sesión/alcance compartidos
+  -> 4.1 región ✅
+  -> 4.2 N+1 de pedidos ✅
+  -> FASE 2 sesión/alcance compartidos   <- siguiente
   -> 4.3 pool
   -> FASE 3 cache
   -> 4.4 code splitting
 ```
 
-Measure after 4.1 and 4.2 before starting Fase 3: the cache may turn out to be unnecessary for the
-screens that feel slow today.
+The three completed items can only be measured once deployed: neither the function region nor the
+database round trip exists locally. Take the baseline table again from Preview before starting
+Fase 3 — the cache may turn out to be unnecessary for the screens that feel slow today.

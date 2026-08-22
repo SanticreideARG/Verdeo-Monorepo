@@ -3,6 +3,7 @@
   "buildCommand": "pnpm build:vercel",
   "framework": null,
   "outputDirectory": "public",
+  "regions": ["gru1"],
   "rewrites": [
     {
       "source": "/(.*)",

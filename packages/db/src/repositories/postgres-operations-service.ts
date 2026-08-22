@@ -2608,6 +2608,8 @@ export class PostgresOperationsService {
     if (items.length === 0)
       throw new OperationsConflictError('An order requires at least one item');
     const resolvedItems: ResolvedOrderItem[] = [];
+    // The composable variety is the same for every line, so it is resolved once instead of per item.
+    const composableFamilyName = await this.composableFamilyName(transaction);
 
     for (const item of items) {
       const [offering] = await transaction
@@ -2673,7 +2675,7 @@ export class PostgresOperationsService {
       const composition = resolveOrderComposition({
         allowedDishes: new Set(sizeUniverse.map(({ dishName }) => dishName)),
         baseDishes: baseDishes.map(({ dishName }) => dishName),
-        composableFamilyName: await this.composableFamilyName(transaction),
+        composableFamilyName,
         familyName: offering.familyName,
         mealsPerUnit: offering.mealsPerUnit,
         ...(item.selectedDishNames ? { selectedDishes: item.selectedDishNames } : {}),
@@ -2778,9 +2780,12 @@ export class PostgresOperationsService {
       .limit(input.limit + 1);
     const hasMore = orderRows.length > input.limit;
     const pageRows = hasMore ? orderRows.slice(0, input.limit) : orderRows;
-    const loaded = await Promise.all(pageRows.map(({ id }) => this.loadOrder(this.database, id)));
+    const loaded = await this.loadOrders(
+      this.database,
+      pageRows.map(({ id }) => id),
+    );
     return {
-      items: loaded.filter((row) => row !== null),
+      items: loaded,
       nextCursor: hasMore ? (pageRows.at(-1)?.id ?? null) : null,
     };
   }
@@ -2935,8 +2940,17 @@ export class PostgresOperationsService {
     return family.displayName;
   }
 
-  private async loadOrder(database: Database | DatabaseTransaction, orderId: string) {
-    const [row] = await database
+  /**
+   * Loads a whole page of orders in four queries regardless of page size. Fetching one order at a
+   * time cost 4N round trips, which on a serverless function holding a single connection to a
+   * database in another region made the listing the slowest screen in the product.
+   *
+   * The result keeps the caller's id order, because that is the pagination order.
+   */
+  private async loadOrders(database: Database | DatabaseTransaction, orderIds: readonly string[]) {
+    if (orderIds.length === 0) return [];
+
+    const rows = await database
       .select({
         createdAt: orders.createdAt,
         currency: orders.currency,
@@ -2960,13 +2974,14 @@ export class PostgresOperationsService {
       .from(orders)
       .innerJoin(customers, eq(customers.id, orders.customerId))
       .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
-      .where(eq(orders.id, orderId))
-      .limit(1);
-    if (!row) return null;
+      .where(inArray(orders.id, [...orderIds]));
+    if (rows.length === 0) return [];
 
+    const presentIds = rows.map(({ id }) => id);
     const itemRows = await database
       .select({
         id: orderItems.id,
+        orderId: orderItems.orderId,
         productName: orderItems.productNameSnapshot,
         quantityUnits: orderItems.quantityUnits,
         totalMinor: orderItems.totalMinor,
@@ -2974,7 +2989,7 @@ export class PostgresOperationsService {
         variantName: orderItems.variantSnapshot,
       })
       .from(orderItems)
-      .where(eq(orderItems.orderId, orderId));
+      .where(inArray(orderItems.orderId, presentIds));
     const selections =
       itemRows.length === 0
         ? []
@@ -2993,21 +3008,59 @@ export class PostgresOperationsService {
             )
             .orderBy(asc(orderItemSelections.slot));
     const instructions = await database
-      .select({ instruction: orderDietaryInstructions.instruction })
+      .select({
+        instruction: orderDietaryInstructions.instruction,
+        orderId: orderDietaryInstructions.orderId,
+      })
       .from(orderDietaryInstructions)
-      .where(eq(orderDietaryInstructions.orderId, orderId));
+      .where(inArray(orderDietaryInstructions.orderId, presentIds));
 
-    return {
-      ...row,
-      customer: { displayName: row.customerDisplayName, id: row.customerId },
-      dietaryInstructions: instructions.map(({ instruction }) => instruction),
-      items: itemRows.map((item) => ({
-        ...item,
-        dishSelections: selections
-          .filter((selection) => selection.orderItemId === item.id)
-          .map((selection) => selection.dishName),
-      })),
-    };
+    const dishesByItem = new Map<string, string[]>();
+    for (const selection of selections) {
+      const bucket = dishesByItem.get(selection.orderItemId);
+      if (bucket) bucket.push(selection.dishName);
+      else dishesByItem.set(selection.orderItemId, [selection.dishName]);
+    }
+    const itemsByOrder = new Map<string, typeof itemRows>();
+    for (const item of itemRows) {
+      const bucket = itemsByOrder.get(item.orderId);
+      if (bucket) bucket.push(item);
+      else itemsByOrder.set(item.orderId, [item]);
+    }
+    const instructionsByOrder = new Map<string, string[]>();
+    for (const entry of instructions) {
+      const bucket = instructionsByOrder.get(entry.orderId);
+      if (bucket) bucket.push(entry.instruction);
+      else instructionsByOrder.set(entry.orderId, [entry.instruction]);
+    }
+
+    const byId = new Map(
+      rows.map((row) => [
+        row.id,
+        {
+          ...row,
+          customer: { displayName: row.customerDisplayName, id: row.customerId },
+          dietaryInstructions: instructionsByOrder.get(row.id) ?? [],
+          // orderId is the grouping key, not part of the item DTO.
+          items: (itemsByOrder.get(row.id) ?? []).map((item) => ({
+            dishSelections: dishesByItem.get(item.id) ?? [],
+            id: item.id,
+            productName: item.productName,
+            quantityUnits: item.quantityUnits,
+            totalMinor: item.totalMinor,
+            unitPriceMinor: item.unitPriceMinor,
+            variantName: item.variantName,
+          })),
+        },
+      ]),
+    );
+
+    return orderIds.map((id) => byId.get(id)).filter((row) => row !== undefined);
+  }
+
+  private async loadOrder(database: Database | DatabaseTransaction, orderId: string) {
+    const [order] = await this.loadOrders(database, [orderId]);
+    return order ?? null;
   }
 
   public async transitionOrder(
