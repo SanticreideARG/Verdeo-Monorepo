@@ -261,3 +261,33 @@ operación sin membresía responde `403` y nunca una lista vacía.
 
 El pedido web público resuelve su operación mediante un selector explícito del visitante. No se infiere
 por IP, dominio ni geolocalización.
+
+## ADR-032 - Mensajería interna separada del canal con clientes
+
+**Status:** Proposed
+
+La mensajería entre usuarios del staff es un dominio distinto del canal con clientes. Comparten la
+palabra "mensaje" y nada más: distintos participantes, distintas reglas de privacidad, distinta
+retención y distinta autorización. `Conversation`, `Message`, `MessagingAccount`, las tablas
+`conversations`/`messages` y el grupo de permisos `messages.*` quedan reservados para el canal con
+clientes. La mensajería interna usa tablas `staff_*` y el grupo `chat.*`.
+
+Una referencia compartida a un pedido o un cliente se persiste como puntero, nunca como copia, y se
+resuelve en el momento de mostrarla con los permisos de quien la mira. Un snapshot congelaría datos
+que el destinatario podría no tener permitido ver y quedaría desactualizado. Compartir una
+referencia a un cliente es un evento de divulgación de PII y se audita; el cuerpo de los mensajes no.
+
+La ubicación es un par de coordenadas elegido por quien envía. El domicilio de un cliente no se
+comparte como ubicación sino como referencia, para que aplique el control de permisos.
+
+La presencia separa dos hechos: la conexión, derivada de un latido cuya frescura decide el servidor,
+y el estado declarado por la persona. El estado efectivo es `offline` cuando el latido venció, y en
+caso contrario el declarado. El servidor nunca adivina `away`. La presencia expone identificador,
+nombre visible y estado, y nada más, para no convertirse en un segundo directorio de usuarios.
+
+El transporte arranca por sondeo con latido, sin proveedor nuevo, detrás de un adaptador. Las
+funciones serverless no pueden sostener un WebSocket, y Supabase Realtime —ya aceptado como broker de
+identidad en ADR-029— es la vía natural cuando exista una razón medida para cambiar. En ese caso sólo
+aplican canales de Broadcast y Presence: la base es Neon, así que "Postgres Changes" no observa estas
+tablas. Un broadcast anuncia que una conversación cambió y nunca transporta contenido; el cliente lee
+por la API para que RBAC se aplique en un solo lugar.

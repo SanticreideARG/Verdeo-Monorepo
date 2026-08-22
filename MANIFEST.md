@@ -13,6 +13,7 @@
 - `docs/03-features/CMS_AND_PUBLIC_WEB.md`
 - `docs/03-features/DELIVERY_AND_ROUTES.md`
 - `docs/03-features/LABELS_AND_QR.md`
+- `docs/03-features/INTERNAL_MESSAGING.md`
 - `docs/03-features/MESSAGING_WHATSAPP.md`
 - `docs/03-features/ORDERS_AND_SALES_CYCLES.md`
 - `docs/03-features/PAYMENTS.md`
