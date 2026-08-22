@@ -52,14 +52,19 @@ const checks: Check[] = [
     `,
   },
   {
-    hint: 'Sin contador, la operación no puede emitir números de pedido.',
-    label: 'operaciones sin contador de pedidos',
+    // The counter row is created lazily by an upsert on the first order (see
+    // postgres-operations-service.ts#nextPublicNumber), so a brand-new site with zero orders is
+    // expected to be missing one — that alone is not corruption. Only a site that HAS orders but
+    // no counter indicates the upsert was bypassed (e.g. a manual insert into `orders`).
+    hint: 'Ya tiene pedidos pero no tiene contador: el alta manual saltó el camino que lo crea.',
+    label: 'operaciones con pedidos y sin contador de pedidos',
     run: () => sql`
       select count(*)::int as count
       from operating_sites s
-      where not exists (
-        select 1 from operating_site_order_counters c where c.operating_site_id = s.id
-      )
+      where exists (select 1 from orders o where o.operating_site_id = s.id)
+        and not exists (
+          select 1 from operating_site_order_counters c where c.operating_site_id = s.id
+        )
     `,
   },
   {

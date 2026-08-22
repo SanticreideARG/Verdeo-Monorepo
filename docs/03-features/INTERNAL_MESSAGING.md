@@ -222,13 +222,13 @@ it is a judgement about what "relevant" means for internal communication.
 
 The service is built through CHAT-3 and then parked. CHAT-4 onwards is designed but not scheduled.
 
-| #          | Scope                                                                                                           | Prerequisites                                                             | Notes                                      |
-| ---------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------ |
-| **CHAT-1** | Link policy and its admin screen; direct conversations, text messages, read state; REST + polling; 30-day purge | none                                                                      | No new infrastructure                      |
-| **CHAT-2** | Presence: heartbeat, declared status, indicator in the shell                                                    | CHAT-1                                                                    | Still no provider                          |
-| **CHAT-3** | References to orders and customers resolved per viewer; locations                                               | CHAT-1                                                                    | The audited part — **standby after this**  |
-| CHAT-4     | Group conversations                                                                                             | CHAT-1                                                                    |                                            |
-| CHAT-5     | Realtime transport swap behind the adapter                                                                      | CHAT-1..3, a measured reason, and a session model covering password users | Polling stays as fallback                  |
+| #          | Scope                                                                                                           | Prerequisites                                                             | Notes                                     |
+| ---------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------- |
+| **CHAT-1** | Link policy and its admin screen; direct conversations, text messages, read state; REST + polling; 30-day purge | none                                                                      | No new infrastructure                     |
+| **CHAT-2** | Presence: heartbeat, declared status, indicator in the shell                                                    | CHAT-1                                                                    | Still no provider                         |
+| **CHAT-3** | References to orders and customers resolved per viewer; locations                                               | CHAT-1                                                                    | The audited part — **standby after this** |
+| CHAT-4     | Group conversations                                                                                             | CHAT-1                                                                    |                                           |
+| CHAT-5     | Realtime transport swap behind the adapter                                                                      | CHAT-1..3, a measured reason, and a session model covering password users | Polling stays as fallback                 |
 
 CHAT-1 carries the link policy because a conversation cannot be created without knowing whether the
 pair is allowed, which makes it larger than a plain messaging slice. Locations and references moved
@@ -292,8 +292,8 @@ conservative default since a reference still resolves per viewer regardless.
   exactly the same way it would if the viewer had opened the record directly.
 - **Sharing a customer reference is audited** (`chat.customer_reference.shared`, entity `customer`)
   as a PII disclosure event; sharing an order reference is not, matching the design.
-  `chat.share_reference` gates who may *send* either kind — separate from `chat.use` — but does not
-  change what a recipient can *see*, which is still enforced at the two GET endpoints above.
+  `chat.share_reference` gates who may _send_ either kind — separate from `chat.use` — but does not
+  change what a recipient can _see_, which is still enforced at the two GET endpoints above.
 - **Locations are plain sender-chosen coordinates**, never a customer's stored address. `sendLocation`
   only takes `{label?, latitude, longitude}`; there is no path from an address record to a location
   message.

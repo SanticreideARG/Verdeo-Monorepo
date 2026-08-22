@@ -26,10 +26,14 @@ from orders o
 join geographic_zones z on z.id = o.geographic_zone_id
 where z.operating_site_id <> o.operating_site_id
 union all
-select 'operations without an order counter', count(*),
+-- The counter row is created lazily on the site's first order (see
+-- postgres-operations-service.ts#nextPublicNumber); a brand-new site with zero orders is expected
+-- to be missing one. Only a site that HAS orders but no counter is real corruption.
+select 'operations with orders but no order counter', count(*),
        case when count(*) = 0 then 'PASS' else 'FAIL' end
 from operating_sites s
-where not exists (select 1 from operating_site_order_counters c where c.operating_site_id = s.id)
+where exists (select 1 from orders o where o.operating_site_id = s.id)
+  and not exists (select 1 from operating_site_order_counters c where c.operating_site_id = s.id)
 union all
 select 'customers without a membership', count(*),
        case when count(*) = 0 then 'PASS' else 'FAIL' end
