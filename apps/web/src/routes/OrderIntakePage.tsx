@@ -250,6 +250,7 @@ export function OrderIntakePage() {
                   <option value="phone">Teléfono</option>
                   <option value="instagram">Instagram</option>
                   <option value="email">Email</option>
+                  <option value="opportunity_sale">Venta de oportunidad (excedente)</option>
                 </select>
               </label>
               <label className="field">

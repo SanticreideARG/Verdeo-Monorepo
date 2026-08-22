@@ -216,6 +216,51 @@ export interface KitchenSummary {
   totalUnits: number;
 }
 
+export interface ProductionActual {
+  familyName: string;
+  quantityUnits: number;
+  reportedAt: string;
+  reportedByUserId: string | null;
+  variantName: string;
+}
+
+export interface ProductionSnapshot {
+  generatedAt: string;
+  generatedByUserId: string | null;
+  id: string;
+  kind: 'partial' | 'final';
+  payload: {
+    actuals: ProductionActual[];
+    base: KitchenSummary['base'];
+    custom: KitchenSummary['custom'];
+    cycle: { alias: string; id: string };
+    delta:
+      | { deltaUnits: number; familyName: string; quantityUnits: number; variantName: string }[]
+      | null;
+    totalUnits: number;
+  };
+  salesCycleId: string;
+}
+
+export interface SurplusItem {
+  bajaMerma: number;
+  demandaConfirmada: number;
+  disponible: number;
+  excedenteEfectivo: number;
+  familyName: string;
+  produccionPlanificada: number;
+  produccionReal: number | null;
+  variantName: string;
+  vendidoOportunidad: number;
+}
+
+export interface SurplusReport {
+  coefficientPercent: number;
+  cycle: { alias: string; id: string };
+  generatedAt: string;
+  items: SurplusItem[];
+}
+
 export async function errorMessage(response: Response): Promise<string> {
   const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
   return body?.error?.message ?? 'No pudimos completar la operación.';

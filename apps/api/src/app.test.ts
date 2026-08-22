@@ -52,14 +52,21 @@ const customerOperationsStubs = {
   addCustomerRestriction: vi.fn(),
   confirmAddressGeocoding: vi.fn(),
   exportOrdersCsv: vi.fn(),
+  generateProductionSnapshot: vi.fn(),
   getAddressGeocodingRequest: vi.fn(),
   getCustomer: vi.fn(),
   getOrder: vi.fn(),
+  getSurplusConfig: vi.fn(),
   listMessageTemplates: vi.fn(),
+  listProductionActuals: vi.fn(),
+  listProductionSnapshots: vi.fn(),
   orderHistory: vi.fn(),
   orderRevisionHistory: vi.fn(),
   rejectAddressGeocoding: vi.fn(),
+  reportProduction: vi.fn(),
   requestAddressGeocoding: vi.fn(),
+  setSurplusConfig: vi.fn(),
+  surplusReport: vi.fn(),
   updateCustomer: vi.fn(),
   updateCustomerAddress: vi.fn(),
   updateCustomerIdentity: vi.fn(),
@@ -67,6 +74,7 @@ const customerOperationsStubs = {
   updateCustomerRestriction: vi.fn(),
   updateOrder: vi.fn(),
   upsertMessageTemplate: vi.fn(),
+  writeOffSurplus: vi.fn(),
 };
 const sampleMenu = {
   cycle: {
@@ -900,5 +908,249 @@ describe('API foundation', () => {
       expect.objectContaining({ status: 'CONFIRMED', zone: 'Centro' }),
       expect.objectContaining({ actorUserId: '55276601-ec66-4f63-9f2f-edf73904ede0' }),
     );
+  });
+
+  describe('production and surplus', () => {
+    const CYCLE = '10000000-0000-4000-8000-000000000099';
+
+    function buildApp(operationsOverrides: Record<string, unknown>, permissions: string[]) {
+      return createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        geography: singleSiteGeography,
+        operations: {
+          ...customerOperationsStubs,
+          createCustomer: vi.fn(),
+          createMenu: vi.fn(),
+          distributeMenu: vi.fn(),
+          createOrder: vi.fn(),
+          createPublicOrder: vi.fn(),
+          currentPublishedMenu: vi.fn(),
+          kitchenSummary: vi.fn(),
+          listCustomers: vi.fn(),
+          listMenus: vi.fn(),
+          listOrders: vi.fn(),
+          publishMenu: vi.fn(),
+          transitionOrder: vi.fn(),
+          ...operationsOverrides,
+        },
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            Promise.resolve({
+              expiresAt: new Date('2026-08-20T12:00:00.000Z'),
+              permissions,
+              sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+            }),
+        },
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+    }
+
+    const cookie = 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars';
+
+    it('reports production with production.report and denies without it', async () => {
+      const reportProduction = vi.fn(() => Promise.resolve([]));
+      const app = buildApp({ reportProduction }, ['production.report']);
+
+      const response = await app.request(`/api/v1/production/${CYCLE}/actuals`, {
+        body: JSON.stringify({
+          entries: [{ familyName: 'Keto', quantityUnits: 5, variantName: '250' }],
+        }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(200);
+      expect(reportProduction).toHaveBeenCalledWith(
+        CYCLE,
+        [{ familyName: 'Keto', quantityUnits: 5, variantName: '250' }],
+        expect.objectContaining({ actorUserId: '55276601-ec66-4f63-9f2f-edf73904ede0' }),
+      );
+
+      const denied = buildApp({ reportProduction: vi.fn() }, ['production.read']);
+      const deniedResponse = await denied.request(`/api/v1/production/${CYCLE}/actuals`, {
+        body: JSON.stringify({
+          entries: [{ familyName: 'Keto', quantityUnits: 5, variantName: '250' }],
+        }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('generates a snapshot with production.generate and denies without it', async () => {
+      const generateProductionSnapshot = vi.fn(() =>
+        Promise.resolve({
+          generatedAt: new Date('2026-08-25T20:00:00.000Z'),
+          generatedByUserId: null,
+          id: '20000000-0000-4000-8000-000000000001',
+          kind: 'partial',
+          payload: {
+            actuals: [],
+            base: [],
+            custom: [],
+            cycle: { alias: 'Semana 34', id: CYCLE },
+            delta: null,
+            totalUnits: 0,
+          },
+          salesCycleId: CYCLE,
+        }),
+      );
+      const app = buildApp({ generateProductionSnapshot }, ['production.generate']);
+
+      const response = await app.request(`/api/v1/production/${CYCLE}/snapshots`, {
+        body: JSON.stringify({ kind: 'partial' }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(201);
+
+      const denied = buildApp({ generateProductionSnapshot: vi.fn() }, ['production.read']);
+      const deniedResponse = await denied.request(`/api/v1/production/${CYCLE}/snapshots`, {
+        body: JSON.stringify({ kind: 'partial' }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('reads the surplus report with production.read', async () => {
+      const surplusReport = vi.fn(() =>
+        Promise.resolve({
+          coefficientPercent: 10,
+          cycle: { alias: 'Semana 34', id: CYCLE },
+          generatedAt: new Date('2026-08-25T20:00:00.000Z'),
+          items: [
+            {
+              bajaMerma: 0,
+              demandaConfirmada: 4,
+              disponible: 2,
+              excedenteEfectivo: 2,
+              familyName: 'Keto',
+              produccionPlanificada: 5,
+              produccionReal: 6,
+              variantName: '250',
+              vendidoOportunidad: 0,
+            },
+          ],
+        }),
+      );
+      const app = buildApp({ surplusReport }, ['production.read']);
+
+      const response = await app.request(`/api/v1/production/${CYCLE}/surplus`, {
+        headers: { cookie },
+      });
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { items: { disponible: number }[] };
+      expect(body.items[0]?.disponible).toBe(2);
+    });
+
+    it('writes off surplus with production.adjust_surplus and denies without it', async () => {
+      const writeOffSurplus = vi.fn(() => Promise.resolve([]));
+      const app = buildApp({ writeOffSurplus }, ['production.adjust_surplus']);
+
+      const response = await app.request(`/api/v1/production/${CYCLE}/surplus/writeoffs`, {
+        body: JSON.stringify({
+          entries: [
+            { familyName: 'Keto', quantityUnits: 1, reason: 'Vencimiento', variantName: '250' },
+          ],
+        }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(200);
+
+      const denied = buildApp({ writeOffSurplus: vi.fn() }, ['production.read']);
+      const deniedResponse = await denied.request(`/api/v1/production/${CYCLE}/surplus/writeoffs`, {
+        body: JSON.stringify({
+          entries: [
+            { familyName: 'Keto', quantityUnits: 1, reason: 'Vencimiento', variantName: '250' },
+          ],
+        }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('updates the surplus coefficient with production.adjust_surplus and denies without it', async () => {
+      const setSurplusConfig = vi.fn(() => Promise.resolve({ coefficientPercent: '15.00' }));
+      const app = buildApp({ setSurplusConfig }, ['production.adjust_surplus']);
+
+      const response = await app.request('/api/v1/surplus/config', {
+        body: JSON.stringify({ coefficientPercent: 15 }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'PATCH',
+      });
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { coefficientPercent: number };
+      expect(body.coefficientPercent).toBe(15);
+
+      const denied = buildApp({ setSurplusConfig: vi.fn() }, ['production.read']);
+      const deniedResponse = await denied.request('/api/v1/surplus/config', {
+        body: JSON.stringify({ coefficientPercent: 15 }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'PATCH',
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    const sampleSnapshot = {
+      generatedAt: new Date('2026-08-25T20:00:00.000Z'),
+      generatedByUserId: null,
+      id: '20000000-0000-4000-8000-000000000001',
+      kind: 'partial',
+      payload: {
+        actuals: [],
+        base: [{ exceptions: [], familyName: 'Keto', quantityUnits: 4, variantName: '250' }],
+        custom: [],
+        cycle: { alias: 'Semana 34', id: CYCLE },
+        delta: null,
+        totalUnits: 4,
+      },
+      salesCycleId: CYCLE,
+    };
+
+    it('exports a snapshot as xlsx, whatsapp text, and a print page', async () => {
+      const listProductionSnapshots = vi.fn(() => Promise.resolve([sampleSnapshot]));
+      const app = buildApp({ listProductionSnapshots }, ['production.read']);
+
+      const xlsx = await app.request(
+        `/api/v1/production/${CYCLE}/snapshots/export?kind=partial&format=xlsx`,
+        { headers: { cookie } },
+      );
+      expect(xlsx.status).toBe(200);
+      expect(xlsx.headers.get('content-type')).toContain('spreadsheetml');
+
+      const whatsapp = await app.request(
+        `/api/v1/production/${CYCLE}/snapshots/export?kind=partial&format=whatsapp`,
+        { headers: { cookie } },
+      );
+      expect(whatsapp.status).toBe(200);
+      expect(await whatsapp.text()).toContain('Keto 250');
+
+      const pdf = await app.request(
+        `/api/v1/production/${CYCLE}/snapshots/export?kind=partial&format=pdf`,
+        { headers: { cookie } },
+      );
+      expect(pdf.status).toBe(200);
+      expect(pdf.headers.get('content-type')).toContain('text/html');
+    });
+
+    it('404s exporting a snapshot kind that was never generated', async () => {
+      const listProductionSnapshots = vi.fn(() => Promise.resolve([]));
+      const app = buildApp({ listProductionSnapshots }, ['production.read']);
+
+      const response = await app.request(
+        `/api/v1/production/${CYCLE}/snapshots/export?kind=final&format=pdf`,
+        { headers: { cookie } },
+      );
+      expect(response.status).toBe(404);
+    });
   });
 });

@@ -635,6 +635,101 @@ export const KitchenSummaryResponseSchema = z.object({
   totalUnits: z.number().int(),
 });
 
+export const ProductionActualEntrySchema = z.object({
+  familyName: z.string().trim().min(1).max(120),
+  quantityUnits: z.number().int().nonnegative(),
+  variantName: z.string().trim().min(1).max(40),
+});
+
+export const ProductionActualSchema = z.object({
+  familyName: z.string(),
+  quantityUnits: z.number().int(),
+  reportedAt: IsoDateTimeSchema,
+  reportedByUserId: UuidSchema.nullable(),
+  variantName: z.string(),
+});
+
+export const ProductionReportRequestSchema = z.object({
+  entries: z.array(ProductionActualEntrySchema).min(1).max(200),
+});
+
+export const ProductionActualListResponseSchema = z.object({
+  items: z.array(ProductionActualSchema),
+});
+
+export const ProductionSnapshotKindSchema = z.enum(['partial', 'final']);
+
+export const ProductionSnapshotRequestSchema = z.object({
+  kind: ProductionSnapshotKindSchema,
+});
+
+const ProductionDeltaLineSchema = z.object({
+  deltaUnits: z.number().int(),
+  familyName: z.string(),
+  quantityUnits: z.number().int(),
+  variantName: z.string(),
+});
+
+export const ProductionSnapshotSchema = z.object({
+  generatedAt: IsoDateTimeSchema,
+  generatedByUserId: UuidSchema.nullable(),
+  id: UuidSchema,
+  kind: ProductionSnapshotKindSchema,
+  payload: z.object({
+    actuals: z.array(ProductionActualSchema),
+    base: KitchenSummaryResponseSchema.shape.base,
+    custom: KitchenSummaryResponseSchema.shape.custom,
+    cycle: KitchenSummaryResponseSchema.shape.cycle,
+    delta: z.array(ProductionDeltaLineSchema).nullable(),
+    totalUnits: z.number().int(),
+  }),
+  salesCycleId: UuidSchema,
+});
+
+export const ProductionSnapshotListResponseSchema = z.object({
+  items: z.array(ProductionSnapshotSchema),
+});
+
+export const SurplusItemSchema = z.object({
+  bajaMerma: z.number().int(),
+  demandaConfirmada: z.number().int(),
+  disponible: z.number().int(),
+  excedenteEfectivo: z.number().int(),
+  familyName: z.string(),
+  produccionPlanificada: z.number().int(),
+  produccionReal: z.number().int().nullable(),
+  variantName: z.string(),
+  vendidoOportunidad: z.number().int(),
+});
+
+export const SurplusReportResponseSchema = z.object({
+  coefficientPercent: z.number(),
+  cycle: z.object({ alias: z.string(), id: UuidSchema }),
+  generatedAt: IsoDateTimeSchema,
+  items: z.array(SurplusItemSchema),
+});
+
+export const SurplusConfigSchema = z.object({
+  // A postgres numeric column round-trips as a string; coerced here so the API always answers with
+  // a number regardless of whether the value came straight from the DB row or was computed in JS.
+  coefficientPercent: z.coerce.number(),
+});
+
+export const SurplusConfigUpdateRequestSchema = z.object({
+  coefficientPercent: z.number().min(0).max(100),
+});
+
+export const SurplusWriteoffEntrySchema = z.object({
+  familyName: z.string().trim().min(1).max(120),
+  quantityUnits: z.number().int().positive(),
+  reason: z.string().trim().min(1).max(300),
+  variantName: z.string().trim().min(1).max(40),
+});
+
+export const SurplusWriteoffRequestSchema = z.object({
+  entries: z.array(SurplusWriteoffEntrySchema).min(1).max(200),
+});
+
 export type CustomerCreateRequest = z.infer<typeof CustomerCreateRequestSchema>;
 export type CustomerImportRequest = z.infer<typeof CustomerImportRequestSchema>;
 export type CustomerUpdateRequest = z.infer<typeof CustomerUpdateRequestSchema>;
@@ -666,3 +761,7 @@ export type OrderTransitionRequest = z.infer<typeof OrderTransitionRequestSchema
 export type OrderUpdateRequest = z.infer<typeof OrderUpdateRequestSchema>;
 export type OrderListQuery = z.infer<typeof OrderListQuerySchema>;
 export type KitchenSummaryResponse = z.infer<typeof KitchenSummaryResponseSchema>;
+export type ProductionReportRequest = z.infer<typeof ProductionReportRequestSchema>;
+export type ProductionSnapshotRequest = z.infer<typeof ProductionSnapshotRequestSchema>;
+export type SurplusConfigUpdateRequest = z.infer<typeof SurplusConfigUpdateRequestSchema>;
+export type SurplusWriteoffRequest = z.infer<typeof SurplusWriteoffRequestSchema>;

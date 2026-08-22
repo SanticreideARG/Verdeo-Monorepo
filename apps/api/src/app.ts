@@ -80,11 +80,20 @@ import {
   OrderTransitionRequestSchema,
   OrderUpdateRequestSchema,
   OAuthExchangeRequestSchema,
+  ProductionActualListResponseSchema,
+  ProductionReportRequestSchema,
+  ProductionSnapshotListResponseSchema,
+  ProductionSnapshotRequestSchema,
+  ProductionSnapshotSchema,
   PublicOperatingSiteListResponseSchema,
   PublicOrderCreateRequestSchema,
   ScopeResponseSchema,
   SessionIdParamSchema,
   SessionListResponseSchema,
+  SurplusConfigSchema,
+  SurplusConfigUpdateRequestSchema,
+  SurplusReportResponseSchema,
+  SurplusWriteoffRequestSchema,
   UserListQuerySchema,
   UserListResponseSchema,
   type ApiErrorCode,
@@ -118,11 +127,20 @@ import {
   type OrderListQuery,
   type OrderTransitionRequest,
   type OrderUpdateRequest,
+  type ProductionReportRequest,
+  type ProductionSnapshotRequest,
   type PublicOrderCreateRequest,
+  type SurplusWriteoffRequest,
 } from '@verdeo/contracts';
 import { createRequestId, type Logger } from '@verdeo/observability';
 
 import { ContactImportError, parseContactImport } from './integrations/contact-import.js';
+import {
+  buildProductionExcel,
+  buildProductionPrintHtml,
+  buildProductionWhatsAppText,
+  productionSnapshotFilenameBase,
+} from './production-export.js';
 import { requirePermission } from './middleware/authorization.js';
 
 interface AppVariables {
@@ -361,6 +379,27 @@ interface OperationsEngine {
   ): Promise<unknown>;
   upsertMessageTemplate(
     input: MessageTemplateUpsertRequest,
+    context: OperationsContext,
+  ): Promise<unknown>;
+  generateProductionSnapshot(
+    cycleId: string,
+    kind: ProductionSnapshotRequest['kind'],
+    operatingSiteId: string | null | undefined,
+    context: OperationsContext,
+  ): Promise<unknown>;
+  getSurplusConfig(): Promise<unknown>;
+  listProductionActuals(cycleId: string): Promise<unknown>;
+  listProductionSnapshots(cycleId: string): Promise<unknown>;
+  reportProduction(
+    cycleId: string,
+    entries: ProductionReportRequest['entries'],
+    context: OperationsContext,
+  ): Promise<unknown>;
+  setSurplusConfig(coefficientPercent: number, context: OperationsContext): Promise<unknown>;
+  surplusReport(cycleId: string): Promise<unknown>;
+  writeOffSurplus(
+    cycleId: string,
+    entries: SurplusWriteoffRequest['entries'],
     context: OperationsContext,
   ): Promise<unknown>;
 }
@@ -790,6 +829,7 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/orders', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/orders/*', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/production/*', requireAuthentication, resolveScopeSelection);
+  app.use('/api/v1/surplus/*', requireAuthentication);
   app.use('/api/v1/ai/providers', requireAuthentication);
 
   app.get('/api/v1/me', async (context) => {
@@ -1884,6 +1924,167 @@ export function createApp(options: CreateAppOptions) {
       context.get('scope')?.operatingSiteId ?? null,
     );
     return context.json(KitchenSummaryResponseSchema.parse(contractValue(summary)));
+  });
+
+  app.get('/api/v1/production/:cycleId/actuals', async (context) => {
+    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El ciclo indicado no es válido.');
+    const items = await requireOperations().listProductionActuals(params.data.cycleId);
+    return context.json(ProductionActualListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.post('/api/v1/production/:cycleId/actuals', async (context) => {
+    if (!context.get('session').permissions.includes('production.report'))
+      return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    const input = ProductionReportRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá las cantidades informadas.',
+        input.success ? undefined : input.error.issues,
+      );
+    const items = await requireOperations().reportProduction(
+      params.data.cycleId,
+      input.data.entries,
+      operationsContext(context),
+    );
+    return context.json(ProductionActualListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.get('/api/v1/production/:cycleId/snapshots', async (context) => {
+    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El ciclo indicado no es válido.');
+    const items = await requireOperations().listProductionSnapshots(params.data.cycleId);
+    return context.json(
+      ProductionSnapshotListResponseSchema.parse({ items: contractValue(items) }),
+    );
+  });
+
+  app.post('/api/v1/production/:cycleId/snapshots', async (context) => {
+    if (!context.get('session').permissions.includes('production.generate'))
+      return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    const input = ProductionSnapshotRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Indicá si el snapshot es parcial o final.',
+        input.success ? undefined : input.error.issues,
+      );
+    const snapshot = await requireOperations().generateProductionSnapshot(
+      params.data.cycleId,
+      input.data.kind,
+      context.get('scope')?.operatingSiteId ?? null,
+      operationsContext(context),
+    );
+    return context.json(ProductionSnapshotSchema.parse(contractValue(snapshot)), 201);
+  });
+
+  // "PDF" is the print-ready HTML page; the browser's own print dialog is the PDF adapter here
+  // rather than a rendering library in the function bundle (see production-export.ts).
+  app.get('/api/v1/production/:cycleId/snapshots/export', async (context) => {
+    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El ciclo indicado no es válido.');
+    const kind = context.req.query('kind');
+    const format = context.req.query('format');
+    if (kind !== 'partial' && kind !== 'final')
+      return badRequest(context, 'Indicá kind=partial o kind=final.');
+    if (format !== 'xlsx' && format !== 'whatsapp' && format !== 'pdf')
+      return badRequest(context, 'El formato debe ser xlsx, whatsapp o pdf.');
+
+    const snapshots = await requireOperations().listProductionSnapshots(params.data.cycleId);
+    const parsed = ProductionSnapshotListResponseSchema.parse({ items: contractValue(snapshots) });
+    const snapshot = parsed.items.find((item) => item.kind === kind);
+    if (!snapshot) {
+      const code: ApiErrorCode = 'NOT_FOUND';
+      return context.json(
+        {
+          error: {
+            code,
+            message: 'Todavía no se generó ese snapshot.',
+            requestId: context.get('requestId'),
+          },
+        },
+        statusForCode(code),
+      );
+    }
+
+    context.header('cache-control', 'private, no-store');
+    if (format === 'xlsx') {
+      context.header(
+        'content-disposition',
+        `attachment; filename="${productionSnapshotFilenameBase(snapshot)}.xlsx"`,
+      );
+      context.header(
+        'content-type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      return context.body(buildProductionExcel(snapshot).buffer as ArrayBuffer, 200);
+    }
+    if (format === 'whatsapp') {
+      context.header('content-type', 'text/plain; charset=utf-8');
+      return context.body(buildProductionWhatsAppText(snapshot));
+    }
+    context.header('content-type', 'text/html; charset=utf-8');
+    return context.html(buildProductionPrintHtml(snapshot));
+  });
+
+  app.get('/api/v1/production/:cycleId/surplus', async (context) => {
+    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El ciclo indicado no es válido.');
+    const report = await requireOperations().surplusReport(params.data.cycleId);
+    return context.json(SurplusReportResponseSchema.parse(contractValue(report)));
+  });
+
+  app.post('/api/v1/production/:cycleId/surplus/writeoffs', async (context) => {
+    if (!context.get('session').permissions.includes('production.adjust_surplus'))
+      return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    const input = SurplusWriteoffRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá las bajas informadas.',
+        input.success ? undefined : input.error.issues,
+      );
+    const items = await requireOperations().writeOffSurplus(
+      params.data.cycleId,
+      input.data.entries,
+      operationsContext(context),
+    );
+    return context.json(SurplusReportResponseSchema.shape.items.parse(contractValue(items)));
+  });
+
+  app.get('/api/v1/surplus/config', async (context) => {
+    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    const config = await requireOperations().getSurplusConfig();
+    return context.json(SurplusConfigSchema.parse(contractValue(config)));
+  });
+
+  app.patch('/api/v1/surplus/config', async (context) => {
+    if (!context.get('session').permissions.includes('production.adjust_surplus'))
+      return forbidden(context);
+    const input = SurplusConfigUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'El coeficiente debe estar entre 0 y 100.', input.error.issues);
+    const config = await requireOperations().setSurplusConfig(
+      input.data.coefficientPercent,
+      operationsContext(context),
+    );
+    return context.json(SurplusConfigSchema.parse(contractValue(config)));
   });
 
   app.get('/api/v1/ai/providers', async (context) => {

@@ -46,7 +46,11 @@ import {
   productFamilies,
   productSizes,
   productVariants,
+  productionActuals,
+  productionSnapshots,
   salesCycles,
+  surplusConfigs,
+  surplusWriteoffs,
   weeklyMenuItems,
   weeklyMenuOfferings,
   weeklyMenuPrices,
@@ -297,6 +301,55 @@ function auditActor(context: OperationsContext) {
   return context.actorUserId
     ? ({ type: 'user' as const, userId: context.actorUserId } as const)
     : ({ type: 'system' as const } as const);
+}
+
+interface SurplusRow {
+  bajaMerma: number;
+  disponible: number;
+  excedenteEfectivo: number;
+  demandaConfirmada: number;
+  familyName: string;
+  produccionPlanificada: number;
+  produccionReal: number | null;
+  variantName: string;
+  vendidoOportunidad: number;
+}
+
+// A JSON tuple is a safe map key regardless of what characters a family or variant name contains,
+// unlike a joined string that would need to guess a separator that never collides.
+function surplusKey(familyName: string, variantName: string): string {
+  return JSON.stringify([familyName, variantName]);
+}
+
+function parseSurplusKey(key: string): [string, string] {
+  return JSON.parse(key) as [string, string];
+}
+
+// A 'final' snapshot carries the delta against the 'partial' one taken earlier in the same cycle
+// (Martes 20:00 vs Miércoles 19:00). Compared by (family, variant) so a variety that only appeared
+// in one of the two snapshots still shows up, with the missing side treated as zero.
+function computeProductionDelta(
+  previousBase: readonly { familyName: string; quantityUnits: number; variantName: string }[],
+  currentBase: readonly { familyName: string; quantityUnits: number; variantName: string }[],
+): { deltaUnits: number; familyName: string; quantityUnits: number; variantName: string }[] {
+  const previousMap = new Map(
+    previousBase.map((line) => [surplusKey(line.familyName, line.variantName), line.quantityUnits]),
+  );
+  const currentMap = new Map(
+    currentBase.map((line) => [surplusKey(line.familyName, line.variantName), line.quantityUnits]),
+  );
+  const keys = new Set([...previousMap.keys(), ...currentMap.keys()]);
+  return [...keys]
+    .map((key) => {
+      const [familyName, variantName] = parseSurplusKey(key);
+      const before = previousMap.get(key) ?? 0;
+      const after = currentMap.get(key) ?? 0;
+      return { deltaUnits: after - before, familyName, quantityUnits: after, variantName };
+    })
+    .sort(
+      (a, b) =>
+        a.familyName.localeCompare(b.familyName) || a.variantName.localeCompare(b.variantName),
+    );
 }
 
 function translateDatabaseConflict(error: unknown): never {
@@ -2532,6 +2585,9 @@ export class PostgresOperationsService {
     const resolvedItems = await this.resolveOrderItems(transaction, input.menuId, input.items);
     const currency = resolvedItems[0]?.currency;
     if (!currency) throw new OperationsConflictError('An order requires at least one item');
+    if (input.source === 'opportunity_sale') {
+      await this.assertOpportunitySaleAvailability(transaction, menu.salesCycleId, resolvedItems);
+    }
     const initialStatus = input.initialStatus ?? 'DRAFT';
     const [createdOrder] = await transaction
       .insert(orders)
@@ -3218,5 +3274,438 @@ export class PostgresOperationsService {
       cycle,
       generatedAt: new Date(),
     };
+  }
+
+  // --- Production: "informar producción real" and snapshots -------------------------------------
+
+  private async listProductionActualsRows(
+    database: Database | DatabaseTransaction,
+    cycleId: string,
+  ) {
+    return database
+      .select({
+        familyName: productionActuals.familyName,
+        quantityUnits: productionActuals.quantityUnits,
+        reportedAt: productionActuals.reportedAt,
+        reportedByUserId: productionActuals.reportedByUserId,
+        variantName: productionActuals.variantName,
+      })
+      .from(productionActuals)
+      .where(eq(productionActuals.salesCycleId, cycleId))
+      .orderBy(asc(productionActuals.familyName), asc(productionActuals.variantName));
+  }
+
+  public async listProductionActuals(cycleId: string) {
+    return this.listProductionActualsRows(this.database, cycleId);
+  }
+
+  // Kitchen reports one (family, variant) count at a time or in a batch; either way the current
+  // count is what matters, not a history of corrections, so each entry upserts rather than appends.
+  public async reportProduction(
+    cycleId: string,
+    entries: readonly { familyName: string; quantityUnits: number; variantName: string }[],
+    context: OperationsContext,
+  ) {
+    if (entries.length === 0)
+      throw new OperationsConflictError('Informá al menos una cantidad producida.');
+    return this.database
+      .transaction(async (transaction) => {
+        const [cycle] = await transaction
+          .select({ id: salesCycles.id })
+          .from(salesCycles)
+          .where(eq(salesCycles.id, cycleId))
+          .limit(1);
+        if (!cycle) throw new OperationsNotFoundError('Sales cycle not found');
+
+        const reportedAt = new Date();
+        for (const entry of entries) {
+          await transaction
+            .insert(productionActuals)
+            .values({
+              familyName: entry.familyName,
+              quantityUnits: entry.quantityUnits,
+              reportedAt,
+              reportedByUserId: context.actorUserId ?? null,
+              salesCycleId: cycleId,
+              variantName: entry.variantName,
+            })
+            .onConflictDoUpdate({
+              set: {
+                quantityUnits: entry.quantityUnits,
+                reportedAt,
+                reportedByUserId: context.actorUserId ?? null,
+                updatedAt: reportedAt,
+              },
+              target: [
+                productionActuals.salesCycleId,
+                productionActuals.familyName,
+                productionActuals.variantName,
+              ],
+            });
+        }
+
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        await audit.record({
+          action: 'production.reported',
+          actor: auditActor(context),
+          after: { entries: [...entries] },
+          correlationId: context.correlationId,
+          entityId: cycleId,
+          entityType: 'sales_cycle',
+          requestId: context.requestId,
+          source: context.source,
+        });
+
+        return this.listProductionActualsRows(transaction, cycleId);
+      })
+      .catch(translateDatabaseConflict);
+  }
+
+  public async listProductionSnapshots(cycleId: string) {
+    return this.database
+      .select()
+      .from(productionSnapshots)
+      .where(eq(productionSnapshots.salesCycleId, cycleId))
+      .orderBy(asc(productionSnapshots.kind));
+  }
+
+  // Regenerating a snapshot overwrites the row for that (cycle, kind): the payload is a cache of a
+  // computed view (kitchen summary + actuals so far), never a second source of truth for the orders
+  // and actuals it summarizes, which stay independently queryable regardless of whether a snapshot
+  // was ever taken.
+  public async generateProductionSnapshot(
+    cycleId: string,
+    kind: 'final' | 'partial',
+    operatingSiteId: string | null | undefined,
+    context: OperationsContext,
+  ) {
+    const summary = await this.kitchenSummary(cycleId, operatingSiteId);
+    const actuals = await this.listProductionActuals(cycleId);
+
+    let delta: ReturnType<typeof computeProductionDelta> | null = null;
+    if (kind === 'final') {
+      const [partial] = await this.database
+        .select({ payload: productionSnapshots.payload })
+        .from(productionSnapshots)
+        .where(
+          and(
+            eq(productionSnapshots.salesCycleId, cycleId),
+            eq(productionSnapshots.kind, 'partial'),
+          ),
+        )
+        .limit(1);
+      if (partial) {
+        const previousBase = (
+          partial.payload as {
+            base?: { familyName: string; quantityUnits: number; variantName: string }[];
+          }
+        ).base;
+        if (previousBase) delta = computeProductionDelta(previousBase, summary.base);
+      }
+    }
+
+    const payload = {
+      actuals,
+      base: summary.base,
+      custom: summary.custom,
+      cycle: summary.cycle,
+      delta,
+      totalUnits: summary.totalUnits,
+    };
+
+    return this.database
+      .transaction(async (transaction) => {
+        const [row] = await transaction
+          .insert(productionSnapshots)
+          .values({
+            generatedByUserId: context.actorUserId ?? null,
+            kind,
+            payload,
+            salesCycleId: cycleId,
+          })
+          .onConflictDoUpdate({
+            set: {
+              generatedAt: new Date(),
+              generatedByUserId: context.actorUserId ?? null,
+              payload,
+            },
+            target: [productionSnapshots.salesCycleId, productionSnapshots.kind],
+          })
+          .returning();
+        if (!row) throw new Error('Snapshot upsert did not return a row');
+
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        await audit.record({
+          action: 'production.snapshot_generated',
+          actor: auditActor(context),
+          after: { kind, totalUnits: summary.totalUnits },
+          correlationId: context.correlationId,
+          entityId: row.id,
+          entityType: 'production_snapshot',
+          requestId: context.requestId,
+          source: context.source,
+        });
+        return row;
+      })
+      .catch(translateDatabaseConflict);
+  }
+
+  // --- Excedente: coefficient, tracking, write-offs, and opportunity-sale stock ------------------
+
+  private async surplusCoefficientPercent(database: Database | DatabaseTransaction) {
+    const [config] = await database
+      .select({ coefficientPercent: surplusConfigs.coefficientPercent })
+      .from(surplusConfigs)
+      .orderBy(desc(surplusConfigs.updatedAt))
+      .limit(1);
+    return config ? Number(config.coefficientPercent) : 0;
+  }
+
+  public async getSurplusConfig() {
+    const [config] = await this.database
+      .select()
+      .from(surplusConfigs)
+      .orderBy(desc(surplusConfigs.updatedAt))
+      .limit(1);
+    return config ?? { coefficientPercent: '0', id: null, updatedAt: null, updatedByUserId: null };
+  }
+
+  public async setSurplusConfig(coefficientPercent: number, context: OperationsContext) {
+    return this.database
+      .transaction(async (transaction) => {
+        const [existing] = await transaction
+          .select()
+          .from(surplusConfigs)
+          .orderBy(desc(surplusConfigs.updatedAt))
+          .limit(1);
+        const value = coefficientPercent.toFixed(2);
+        let row: typeof surplusConfigs.$inferSelect | undefined;
+        if (existing) {
+          [row] = await transaction
+            .update(surplusConfigs)
+            .set({
+              coefficientPercent: value,
+              updatedAt: new Date(),
+              updatedByUserId: context.actorUserId ?? null,
+            })
+            .where(eq(surplusConfigs.id, existing.id))
+            .returning();
+        } else {
+          [row] = await transaction
+            .insert(surplusConfigs)
+            .values({ coefficientPercent: value, updatedByUserId: context.actorUserId ?? null })
+            .returning();
+        }
+        if (!row) throw new Error('Surplus config upsert did not return a row');
+
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        await audit.record({
+          action: 'surplus.config_updated',
+          actor: auditActor(context),
+          after: { coefficientPercent: row.coefficientPercent },
+          ...(existing ? { before: { coefficientPercent: existing.coefficientPercent } } : {}),
+          correlationId: context.correlationId,
+          entityId: row.id,
+          entityType: 'surplus_config',
+          requestId: context.requestId,
+          source: context.source,
+        });
+        return row;
+      })
+      .catch(translateDatabaseConflict);
+  }
+
+  // Demanda confirmada excludes opportunity sales (they consume excedente, they do not create
+  // demand). Producción planificada is a display-only suggestion (demand × (1 + coefficient)); what
+  // kitchen actually makes is `producción real`, reported separately. Excedente efectivo is what's
+  // left after confirmed demand is covered; disponible subtracts what has already been sold as an
+  // opportunity sale or written off, so it never double-counts.
+  private async surplusRows(
+    database: Database | DatabaseTransaction,
+    cycleId: string,
+  ): Promise<Map<string, SurplusRow>> {
+    const coefficientPercent = await this.surplusCoefficientPercent(database);
+
+    const lines = await database
+      .select({
+        familyName: orderItems.productNameSnapshot,
+        quantityUnits: orderItems.quantityUnits,
+        source: orders.source,
+        variantName: orderItems.variantSnapshot,
+      })
+      .from(orderItems)
+      .innerJoin(orders, eq(orders.id, orderItems.orderId))
+      .where(
+        and(
+          eq(orders.salesCycleId, cycleId),
+          inArray(orders.status, ['CONFIRMED', 'READY', 'DELIVERED']),
+        ),
+      );
+    const actuals = await this.listProductionActualsRows(database, cycleId);
+    const writeoffs = await database
+      .select({
+        familyName: surplusWriteoffs.familyName,
+        quantityUnits: surplusWriteoffs.quantityUnits,
+        variantName: surplusWriteoffs.variantName,
+      })
+      .from(surplusWriteoffs)
+      .where(eq(surplusWriteoffs.salesCycleId, cycleId));
+
+    const rows = new Map<string, SurplusRow>();
+    const ensure = (familyName: string, variantName: string) => {
+      const key = surplusKey(familyName, variantName);
+      let row = rows.get(key);
+      if (!row) {
+        row = {
+          bajaMerma: 0,
+          demandaConfirmada: 0,
+          disponible: 0,
+          excedenteEfectivo: 0,
+          familyName,
+          produccionPlanificada: 0,
+          produccionReal: null,
+          variantName,
+          vendidoOportunidad: 0,
+        };
+        rows.set(key, row);
+      }
+      return row;
+    };
+
+    for (const line of lines) {
+      const row = ensure(line.familyName, line.variantName);
+      if (line.source === 'opportunity_sale') row.vendidoOportunidad += line.quantityUnits;
+      else row.demandaConfirmada += line.quantityUnits;
+    }
+    for (const actual of actuals) {
+      const row = ensure(actual.familyName, actual.variantName);
+      row.produccionReal = (row.produccionReal ?? 0) + actual.quantityUnits;
+    }
+    for (const writeoff of writeoffs) {
+      const row = ensure(writeoff.familyName, writeoff.variantName);
+      row.bajaMerma += writeoff.quantityUnits;
+    }
+
+    for (const row of rows.values()) {
+      row.produccionPlanificada = Math.ceil(row.demandaConfirmada * (1 + coefficientPercent / 100));
+      const real = row.produccionReal ?? 0;
+      row.excedenteEfectivo = Math.max(0, real - row.demandaConfirmada);
+      row.disponible = Math.max(0, row.excedenteEfectivo - row.vendidoOportunidad - row.bajaMerma);
+    }
+    return rows;
+  }
+
+  public async surplusReport(cycleId: string) {
+    const [cycle] = await this.database
+      .select({ alias: salesCycles.alias, id: salesCycles.id })
+      .from(salesCycles)
+      .where(eq(salesCycles.id, cycleId))
+      .limit(1);
+    if (!cycle) throw new OperationsNotFoundError('Sales cycle not found');
+    const coefficientPercent = await this.surplusCoefficientPercent(this.database);
+    const rows = await this.surplusRows(this.database, cycleId);
+    return {
+      coefficientPercent,
+      cycle,
+      generatedAt: new Date(),
+      items: [...rows.values()].sort(
+        (a, b) =>
+          a.familyName.localeCompare(b.familyName) || a.variantName.localeCompare(b.variantName),
+      ),
+    };
+  }
+
+  // Called from order creation when `source === 'opportunity_sale'`: the same computation the
+  // surplus report shows, so the operator cannot sell more than the report says is available.
+  private async assertOpportunitySaleAvailability(
+    transaction: DatabaseTransaction,
+    cycleId: string,
+    items: readonly ResolvedOrderItem[],
+  ) {
+    const requested = new Map<string, number>();
+    for (const item of items) {
+      const key = surplusKey(item.productNameSnapshot, item.variantSnapshot);
+      requested.set(key, (requested.get(key) ?? 0) + item.quantityUnits);
+    }
+    const rows = await this.surplusRows(transaction, cycleId);
+    for (const [key, quantity] of requested) {
+      const [familyName, variantName] = parseSurplusKey(key);
+      const available = rows.get(key)?.disponible ?? 0;
+      if (quantity > available) {
+        throw new OperationsConflictError(
+          `No hay excedente disponible de ${familyName} ${variantName} para una venta de ` +
+            `oportunidad (disponible: ${available}, pedido: ${quantity}).`,
+        );
+      }
+    }
+  }
+
+  // "Dar de baja remanente": excedente that will not sell, removed from what future opportunity
+  // sales can draw from. Never carried to the next cycle — nothing here reads across `salesCycleId`.
+  public async writeOffSurplus(
+    cycleId: string,
+    entries: readonly {
+      familyName: string;
+      quantityUnits: number;
+      reason: string;
+      variantName: string;
+    }[],
+    context: OperationsContext,
+  ) {
+    if (entries.length === 0) throw new OperationsConflictError('Informá al menos una baja.');
+    return this.database
+      .transaction(async (transaction) => {
+        const [cycle] = await transaction
+          .select({ id: salesCycles.id })
+          .from(salesCycles)
+          .where(eq(salesCycles.id, cycleId))
+          .limit(1);
+        if (!cycle) throw new OperationsNotFoundError('Sales cycle not found');
+
+        const rows = await this.surplusRows(transaction, cycleId);
+        for (const entry of entries) {
+          const key = surplusKey(entry.familyName, entry.variantName);
+          const row = rows.get(key);
+          const available = row?.disponible ?? 0;
+          if (entry.quantityUnits > available) {
+            throw new OperationsConflictError(
+              `No hay suficiente excedente disponible de ${entry.familyName} ${entry.variantName} ` +
+                `(disponible: ${available}).`,
+            );
+          }
+          // Reflected locally so a second entry for the same pair in this call cannot double-spend it.
+          if (row) row.disponible -= entry.quantityUnits;
+        }
+
+        await transaction.insert(surplusWriteoffs).values(
+          entries.map((entry) => ({
+            actorUserId: context.actorUserId ?? null,
+            familyName: entry.familyName,
+            quantityUnits: entry.quantityUnits,
+            reason: entry.reason,
+            salesCycleId: cycleId,
+            variantName: entry.variantName,
+          })),
+        );
+
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        await audit.record({
+          action: 'surplus.written_off',
+          actor: auditActor(context),
+          after: { entries: [...entries] },
+          correlationId: context.correlationId,
+          entityId: cycleId,
+          entityType: 'sales_cycle',
+          requestId: context.requestId,
+          source: context.source,
+        });
+
+        const refreshed = await this.surplusRows(transaction, cycleId);
+        return [...refreshed.values()].sort(
+          (a, b) =>
+            a.familyName.localeCompare(b.familyName) || a.variantName.localeCompare(b.variantName),
+        );
+      })
+      .catch(translateDatabaseConflict);
   }
 }
