@@ -170,6 +170,15 @@ customer update event. Do not include more PII in event payloads than consumers 
 - merge preview and high-friction confirmation;
 - clear sensitive-data visibility based on permissions.
 
+### Spreadsheet contact import
+
+Staff members with `customers.create` may import up to 500 contacts from the first sheet of a CSV UTF-8
+or Excel `.xlsx` file. Required column: `nombre_completo`. Optional columns are `whatsapp`, `telefono`,
+`email`, `direccion`, and `enlace_ubicacion`; the latter two create an address in `NEEDS_LOCATION` state.
+The API parses and validates the file server-side, then creates all customer records, identities, addresses,
+audits, and events in one database transaction. A malformed row or a duplicate active identity rolls the
+whole import back; no partial upload is retained.
+
 Zustand may store filters and local drafts, not the authoritative customer cache.
 
 ## Test matrix

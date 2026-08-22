@@ -133,6 +133,15 @@ export const CustomerCreateRequestSchema = z.object({
     .optional(),
 });
 
+/** A normalized row received from the contact spreadsheet importer. */
+export const CustomerImportRequestSchema = z.object({
+  customers: z.array(CustomerCreateRequestSchema).min(1).max(500),
+});
+
+export const CustomerImportResponseSchema = z.object({
+  imported: z.number().int().nonnegative(),
+});
+
 export const CustomerUpdateRequestSchema = z
   .object({
     displayName: RequiredTextSchema.optional(),
@@ -550,6 +559,7 @@ export const KitchenSummaryResponseSchema = z.object({
 });
 
 export type CustomerCreateRequest = z.infer<typeof CustomerCreateRequestSchema>;
+export type CustomerImportRequest = z.infer<typeof CustomerImportRequestSchema>;
 export type CustomerUpdateRequest = z.infer<typeof CustomerUpdateRequestSchema>;
 export type CustomerIdentityCreateRequest = z.infer<typeof CustomerIdentityCreateRequestSchema>;
 export type CustomerIdentityUpdateRequest = z.infer<typeof CustomerIdentityUpdateRequestSchema>;

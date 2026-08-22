@@ -53,6 +53,9 @@ export function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
   const [message, setMessage] = useState('');
   const [geocoding, setGeocoding] = useState<Record<string, AddressGeocodingRequest>>({});
 
@@ -166,6 +169,33 @@ export function CustomersPage() {
       setMessage('Cliente registrado. Ya podés completar sus contactos y domicilios.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos registrar el cliente.');
+    }
+  }
+
+  async function importContacts(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!importFile) {
+      setMessage('Elegí un archivo CSV o Excel (.xlsx) para continuar.');
+      return;
+    }
+    setImporting(true);
+    try {
+      const body = new FormData();
+      body.set('file', importFile);
+      const result = await responseJson<{ imported: number }>(
+        await apiRequest('/api/v1/customers/import', { body, method: 'POST' }),
+      );
+      setShowImport(false);
+      setImportFile(null);
+      setSearch('');
+      await loadDirectory('');
+      setMessage(
+        `${result.imported} contacto${result.imported === 1 ? '' : 's'} importado${result.imported === 1 ? '' : 's'} correctamente.`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'No pudimos importar los contactos.');
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -839,6 +869,101 @@ export function CustomersPage() {
             )}
           </section>
         </div>
+
+        {canCreate ? (
+          <section className="crm-import-section">
+            <div>
+              <p className="eyebrow">Carga masiva</p>
+              <h2>Importar contactos</h2>
+              <p>
+                Sumá hasta 500 clientes desde una planilla. La carga se valida completa antes de
+                guardar cualquier ficha.
+              </p>
+            </div>
+            <button className="button button-secondary" onClick={() => setShowImport(true)}>
+              Importar archivo
+            </button>
+          </section>
+        ) : null}
+
+        {showImport ? (
+          <div
+            aria-labelledby="contact-import-title"
+            className="crm-import-backdrop"
+            onMouseDown={(event) => {
+              if (event.currentTarget === event.target && !importing) setShowImport(false);
+            }}
+            role="presentation"
+          >
+            <section aria-modal="true" className="crm-import-dialog" role="dialog">
+              <div className="crm-panel-heading">
+                <div>
+                  <small>Carga masiva de CRM</small>
+                  <h2 id="contact-import-title">Importar contactos</h2>
+                </div>
+                <button disabled={importing} onClick={() => setShowImport(false)} type="button">
+                  Cerrar
+                </button>
+              </div>
+              <p className="crm-import-intro">
+                Aceptamos CSV UTF-8 o Excel <code>.xlsx</code>. No se aceptan archivos XML. La
+                primera hoja y hasta 500 filas se procesan en una única operación.
+              </p>
+              <div className="crm-import-columns">
+                <div>
+                  <strong>Columna</strong>
+                  <strong>Uso</strong>
+                </div>
+                <div>
+                  <code>nombre_completo</code>
+                  <span>Obligatoria. Nombre visible del cliente.</span>
+                </div>
+                <div>
+                  <code>whatsapp</code>
+                  <span>Opcional. Se registra como contacto WhatsApp sin verificar.</span>
+                </div>
+                <div>
+                  <code>telefono</code>
+                  <span>Opcional. Teléfono alternativo.</span>
+                </div>
+                <div>
+                  <code>email</code>
+                  <span>Opcional. Correo electrónico.</span>
+                </div>
+                <div>
+                  <code>direccion</code>
+                  <span>Opcional. Crea un domicilio pendiente de validar.</span>
+                </div>
+                <div>
+                  <code>enlace_ubicacion</code>
+                  <span>Opcional. URL de mapa del domicilio.</span>
+                </div>
+              </div>
+              <p className="crm-import-note">
+                Podés usar también <code>nombre_visible</code>, <code>correo</code>,{' '}
+                <code>phone</code> o <code>domicilio</code>. Un contacto repetido o una fila con
+                formato inválido detiene la importación sin crear registros parciales.
+              </p>
+              <form className="crm-import-form" onSubmit={(event) => void importContacts(event)}>
+                <label className="field field-wide">
+                  Archivo de contactos
+                  <input
+                    accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
+                    required
+                    type="file"
+                  />
+                </label>
+                {importFile ? (
+                  <span className="crm-import-file">Seleccionado: {importFile.name}</span>
+                ) : null}
+                <button className="button button-primary" disabled={importing} type="submit">
+                  {importing ? 'Importando…' : 'Validar e importar'}
+                </button>
+              </form>
+            </section>
+          </div>
+        ) : null}
       </div>
     </DashboardShell>
   );

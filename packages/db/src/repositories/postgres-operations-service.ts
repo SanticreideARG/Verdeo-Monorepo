@@ -526,6 +526,22 @@ export class PostgresOperationsService {
       .catch(translateDatabaseConflict);
   }
 
+  /**
+   * Imports are deliberately one database transaction: either every contact is
+   * persisted (with its audit trail) or the operator can correct the sheet and retry.
+   */
+  public async importCustomers(inputs: readonly CustomerInput[], context: OperationsContext) {
+    return this.database
+      .transaction(async (transaction) => {
+        const created = [];
+        for (const input of inputs) {
+          created.push(await this.createCustomerInTransaction(transaction, input, context));
+        }
+        return created;
+      })
+      .catch(translateDatabaseConflict);
+  }
+
   private async createCustomerInTransaction(
     transaction: DatabaseTransaction,
     input: CustomerInput,

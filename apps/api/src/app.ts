@@ -20,6 +20,7 @@ import {
   CustomerIdentityCreateRequestSchema,
   CustomerIdentitySchema,
   CustomerIdentityUpdateRequestSchema,
+  CustomerImportResponseSchema,
   CustomerListResponseSchema,
   CustomerListQuerySchema,
   CustomerPreferenceCreateRequestSchema,
@@ -81,6 +82,7 @@ import {
 } from '@verdeo/contracts';
 import { createRequestId, type Logger } from '@verdeo/observability';
 
+import { ContactImportError, parseContactImport } from './integrations/contact-import.js';
 import { requirePermission } from './middleware/authorization.js';
 
 interface AppVariables {
@@ -141,6 +143,10 @@ interface OperationsEngine {
     context: OperationsContext,
   ): Promise<unknown>;
   createCustomer(input: CustomerCreateRequest, context: OperationsContext): Promise<unknown>;
+  importCustomers?(
+    inputs: readonly CustomerCreateRequest[],
+    context: OperationsContext,
+  ): Promise<readonly unknown[]>;
   createMenu(input: MenuCreateRequest, context: OperationsContext): Promise<unknown>;
   createOrder(input: OrderCreateRequest, context: OperationsContext): Promise<unknown>;
   createPublicOrder(input: PublicOrderCreateRequest, context: OperationsContext): Promise<unknown>;
@@ -734,6 +740,30 @@ export function createApp(options: CreateAppOptions) {
         .items[0],
       201,
     );
+  });
+
+  app.post('/api/v1/customers/import', async (context) => {
+    if (!context.get('session').permissions.includes('customers.create')) return forbidden(context);
+    const body = await context.req.parseBody().catch(() => null);
+    const file = body?.file;
+    if (!(file instanceof File)) {
+      return badRequest(context, 'Adjuntá un archivo CSV o Excel (.xlsx) en el campo file.');
+    }
+    try {
+      const customers = await parseContactImport(file);
+      const operations = requireOperations();
+      if (!operations.importCustomers) throw new Error('Customer import is not configured');
+      await operations.importCustomers(customers, {
+        ...operationsContext(context),
+        source: 'spreadsheet_import',
+      });
+      return context.json(CustomerImportResponseSchema.parse({ imported: customers.length }), 201);
+    } catch (error) {
+      if (error instanceof ContactImportError) {
+        return badRequest(context, error.message, error.details);
+      }
+      throw error;
+    }
   });
 
   app.get('/api/v1/customers/:id', async (context) => {

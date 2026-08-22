@@ -1922,6 +1922,93 @@ a {
   color: var(--db-muted);
   font-size: 0.75rem;
 }
+.crm-import-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  border: 1px dashed color-mix(in srgb, var(--db-accent) 35%, var(--db-border));
+  border-radius: 0.65rem;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--db-accent) 5%, var(--db-surface));
+}
+.crm-import-section h2 {
+  margin: 0.24rem 0 0;
+  color: var(--db-text);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.5rem;
+}
+.crm-import-section p:last-child,
+.crm-import-intro,
+.crm-import-note {
+  margin: 0.35rem 0 0;
+  color: var(--db-muted);
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+.crm-import-backdrop {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(13 25 26 / 58%);
+}
+.crm-import-dialog {
+  width: min(100%, 680px);
+  max-height: min(760px, calc(100vh - 2rem));
+  overflow-y: auto;
+  border: 1px solid var(--db-border);
+  border-radius: 0.75rem;
+  padding: 1.1rem;
+  background: var(--db-surface-solid);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 28%);
+}
+.crm-import-columns {
+  display: grid;
+  grid-template-columns: minmax(155px, 0.65fr) minmax(0, 1.35fr);
+  margin-top: 1rem;
+  border: 1px solid var(--db-border-soft);
+  border-radius: 0.55rem;
+  overflow: hidden;
+  font-size: 0.72rem;
+}
+.crm-import-columns > div {
+  display: contents;
+}
+.crm-import-columns strong,
+.crm-import-columns code,
+.crm-import-columns span {
+  min-width: 0;
+  border-bottom: 1px solid var(--db-border-soft);
+  padding: 0.55rem 0.65rem;
+}
+.crm-import-columns > div:last-child > code,
+.crm-import-columns > div:last-child > span {
+  border-bottom: 0;
+}
+.crm-import-columns strong {
+  background: var(--db-bg-2);
+  color: var(--db-text-soft);
+}
+.crm-import-columns code {
+  color: var(--db-accent);
+  font-weight: 800;
+}
+.crm-import-columns span {
+  color: var(--db-muted);
+}
+.crm-import-form {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.crm-import-file {
+  color: var(--db-text-soft);
+  font-size: 0.74rem;
+}
 
 @media (max-width: 1100px) {
   .crm-layout {
@@ -1963,6 +2050,13 @@ a {
   }
   .crm-orders article {
     grid-template-columns: 1fr auto;
+  }
+  .crm-import-section {
+    align-items: start;
+    flex-direction: column;
+  }
+  .crm-import-columns {
+    grid-template-columns: minmax(130px, 0.7fr) minmax(0, 1.3fr);
   }
   .crm-orders article > span:nth-of-type(2) {
     display: none;
