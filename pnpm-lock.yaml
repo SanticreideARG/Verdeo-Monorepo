@@ -53,6 +53,9 @@ importers:
       '@verdeo/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@verdeo/chat':
+        specifier: workspace:*
+        version: link:../../packages/chat
       '@verdeo/config':
         specifier: workspace:*
         version: link:../../packages/config

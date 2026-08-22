@@ -1,6 +1,7 @@
 const runtimePackages = [
   '@verdeo/ai',
   '@verdeo/audit',
+  '@verdeo/chat',
   '@verdeo/auth',
   '@verdeo/config',
   '@verdeo/contracts',
