@@ -25,8 +25,9 @@
     "db:migrate": "tsx src/migrate.ts",
     "db:seed": "tsx src/seed.ts",
     "db:studio": "drizzle-kit studio",
-    "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "db:verify-scope": "tsx src/verify-regional-scope.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@verdeo/ai": "workspace:*",

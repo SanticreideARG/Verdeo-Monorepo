@@ -1,11 +1,11 @@
 -- Verification for migrations 0008 and 0009. Read-only: it inspects, it never writes.
 --
+--   pnpm db:verify-scope                       (recomendado: no necesita psql)
 --   psql "$DATABASE_URL" -f packages/db/scripts/verify-regional-scope.sql
+--   o pegá este archivo en el SQL Editor de Neon
 --
 -- Every row must report PASS. A FAIL means the backfill left data the new model cannot represent,
 -- and neither migration has a down script, so the response is to restore the snapshot.
-
-\echo '== Mandatory columns =='
 
 select 'variants without size' as check,
        count(*) as found,
@@ -42,9 +42,6 @@ from users u
 where u.status = 'active'
   and not exists (select 1 from user_operating_sites m where m.user_id = u.id);
 
-\echo ''
-\echo '== Price model: every surviving row here is a deliberate per-variety exception =='
-
 select f.display_name as variety,
        s.code as size,
        o.unit_price_minor as override_minor,
@@ -58,22 +55,13 @@ left join weekly_menu_prices p
 where o.unit_price_minor is not null
 order by f.display_name, s.code;
 
-\echo ''
-\echo '== Composable variety: exactly one COMPOSABLE family is expected =='
-
 select code, display_name, kind from product_families order by kind desc, code;
-
-\echo ''
-\echo '== Regional numbering: the initial operation must resume above its historical series =='
 
 select s.display_name, s.order_prefix, c.last_order_number,
        (select count(*) from orders o where o.operating_site_id = s.id) as orders_held
 from operating_site_order_counters c
 join operating_sites s on s.id = c.operating_site_id
 order by s.sort_order, s.display_name;
-
-\echo ''
-\echo '== Operator follow-up: addresses still parked in the migration zone =='
 
 select z.display_name as zone,
        s.display_name as operation,
