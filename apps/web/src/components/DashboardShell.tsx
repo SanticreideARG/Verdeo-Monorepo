@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import { Link, useLocation } from 'react-router-dom';
 
 import { apiRequest, storeOperatingSiteId, storedOperatingSiteId } from '../lib/api.js';
+import { RequestProgressBar } from './RequestProgressBar.js';
 
 export interface DashboardProfile {
   permissions: string[];
@@ -234,6 +235,17 @@ export function DashboardShell({
 
   useEffect(() => setMenuOpen(false), [location.pathname, location.hash]);
 
+  // Client-side navigation does not scroll to an anchor on its own, which the browser used to do
+  // for us. Retried on the next frame so the target exists even when the screen just mounted.
+  useEffect(() => {
+    if (!location.hash) return;
+    const target = location.hash.slice(1);
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.hash, location.pathname]);
+
   useEffect(() => {
     window.localStorage.setItem('verdeo-dashboard-theme', theme);
   }, [theme]);
@@ -332,16 +344,16 @@ export function DashboardShell({
               {cluster.items.map((item) => {
                 const active = isNavigationActive(location.pathname, location.hash, item.href);
                 return (
-                  <a
+                  <Link
                     className={active ? 'is-active' : ''}
-                    href={item.href}
                     key={item.label}
                     title={item.label}
+                    to={item.href}
                   >
                     <NavIcon name={item.icon} />
                     <span>{item.label}</span>
                     {active ? <i aria-hidden="true" /> : null}
-                  </a>
+                  </Link>
                 );
               })}
             </section>
@@ -469,6 +481,7 @@ export function DashboardShell({
             <div className="dashboard-topbar-avatar">{initial}</div>
           </div>
         </header>
+        <RequestProgressBar />
         <main className="dashboard-content">{children}</main>
       </div>
     </div>

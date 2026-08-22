@@ -27,6 +27,7 @@
 - `docs/07-operations/OPEN_QUESTIONS.md`
 - `docs/08-delivery/BACKLOG.md`
 - `docs/08-delivery/IMPLEMENTATION_ROADMAP.md`
+- `docs/08-delivery/PERFORMANCE_ROADMAP.md`
 - `docs/09-quality/TEST_STRATEGY.md`
 - `docs/10-decisions/ADR_INDEX.md`
 - `docs/11-reference/API_BLUEPRINT.md`

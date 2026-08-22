@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
@@ -70,8 +70,11 @@ export function OperationsPage() {
   const [distributionMode, setDistributionMode] = useState<DistributionMode>('CREATE_MISSING');
   const [selectedMenuId, setSelectedMenuId] = useState('');
 
+  // Only the first load blanks the screen. A refresh after a mutation keeps the current content
+  // and lets the progress bar carry the feedback.
+  const loadedOnce = useRef(false);
   const loadData = useCallback(async () => {
-    setLoading(true);
+    if (!loadedOnce.current) setLoading(true);
     setMessage('');
     const profileResponse = await apiRequest('/api/v1/me');
     if (profileResponse.status === 401) {
@@ -134,6 +137,7 @@ export function OperationsPage() {
       ).items;
       setSites(loadedSites.filter((site) => site.active));
     }
+    loadedOnce.current = true;
     setLoading(false);
   }, [navigate]);
 

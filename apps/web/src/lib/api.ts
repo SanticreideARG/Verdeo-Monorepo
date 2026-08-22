@@ -15,17 +15,44 @@ export function storeOperatingSiteId(operatingSiteId: string | null): void {
   else window.localStorage.removeItem(SCOPE_STORAGE_KEY);
 }
 
-export function apiRequest(path: string, init?: RequestInit): Promise<Response> {
+/**
+ * Every request is counted so the shell can show a non-blocking progress bar instead of replacing
+ * the screen with a loader. Screens keep their previous content while new data is on its way.
+ */
+let inFlight = 0;
+const activityListeners = new Set<() => void>();
+
+function notifyActivity(): void {
+  for (const listener of activityListeners) listener();
+}
+
+export function subscribeToRequestActivity(listener: () => void): () => void {
+  activityListeners.add(listener);
+  return () => activityListeners.delete(listener);
+}
+
+export function requestsInFlight(): number {
+  return inFlight;
+}
+
+export async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
   const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData;
   const operatingSiteId = storedOperatingSiteId();
 
-  return fetch(`${apiUrl}${path}`, {
-    ...init,
-    credentials: 'include',
-    headers: {
-      ...(init?.body && !isFormData ? { 'content-type': 'application/json' } : {}),
-      ...(operatingSiteId ? { [SITE_SCOPE_HEADER]: operatingSiteId } : {}),
-      ...init?.headers,
-    },
-  });
+  inFlight += 1;
+  notifyActivity();
+  try {
+    return await fetch(`${apiUrl}${path}`, {
+      ...init,
+      credentials: 'include',
+      headers: {
+        ...(init?.body && !isFormData ? { 'content-type': 'application/json' } : {}),
+        ...(operatingSiteId ? { [SITE_SCOPE_HEADER]: operatingSiteId } : {}),
+        ...init?.headers,
+      },
+    });
+  } finally {
+    inFlight -= 1;
+    notifyActivity();
+  }
 }
