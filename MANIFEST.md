@@ -40,4 +40,8 @@
 - `docs/12-development/CRM_IMPLEMENTATION.md`
 - `docs/12-development/VERCEL_DEPLOYMENT.md`
 - `docs/12-development/SUPABASE_OAUTH_SETUP.md`
+- `docs/12-development/REGIONAL_SCOPE_MIGRATION.md`
+- `docs/02-domain/OPERATING_SITES_AND_ZONES.md`
+- `docs/03-features/OPERATIONAL_MODULES.md`
+- `docs/12-development/CRM_ORDER_CYCLE_IMPLEMENTATION.md`
 - `project.config.seed.json`

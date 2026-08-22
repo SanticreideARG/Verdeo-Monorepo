@@ -240,6 +240,21 @@ export class PostgresGeographyService {
     };
   }
 
+  // Active zones for the current scope. Any staff session that can attach an address needs these,
+  // so it is not gated behind the site administration permission; zones carry no PII.
+  public async listActiveZones(operatingSiteId: string | null) {
+    return this.database
+      .select(zoneColumns)
+      .from(geographicZones)
+      .where(
+        and(
+          eq(geographicZones.active, true),
+          ...(operatingSiteId ? [eq(geographicZones.operatingSiteId, operatingSiteId)] : []),
+        ),
+      )
+      .orderBy(asc(geographicZones.sortOrder), asc(geographicZones.displayName));
+  }
+
   public async listZones(operatingSiteId: string) {
     const [site] = await this.database
       .select({ id: operatingSites.id })

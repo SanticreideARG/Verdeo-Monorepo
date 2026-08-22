@@ -60,6 +60,7 @@ import {
   OrderTransitionRequestSchema,
   OrderUpdateRequestSchema,
   OAuthExchangeRequestSchema,
+  PublicOperatingSiteListResponseSchema,
   PublicOrderCreateRequestSchema,
   ScopeResponseSchema,
   SessionIdParamSchema,
@@ -126,6 +127,8 @@ interface UserDirectory {
   list(afterId: string | undefined, limit: number): Promise<UserDirectoryPage>;
 }
 
+type ScopedInput<T> = T & { operatingSiteId: string | null };
+
 interface ResolvedScope {
   canSelectGlobal: boolean;
   defaultSiteId: string | null;
@@ -136,6 +139,7 @@ interface GeographyEngine {
   createSite(input: OperatingSiteCreateRequest, context: GeographyContext): Promise<unknown>;
   createZone(input: GeographicZoneCreateRequest, context: GeographyContext): Promise<unknown>;
   listSites(): Promise<unknown>;
+  listActiveZones(operatingSiteId: string | null): Promise<unknown>;
   listZones(operatingSiteId: string): Promise<unknown>;
   resolveScope(userId: string, canAccessAllSites: boolean): Promise<ResolvedScope>;
   updateSite(
@@ -192,13 +196,16 @@ interface OperationsEngine {
     input: CustomerRestrictionCreateRequest,
     context: OperationsContext,
   ): Promise<unknown>;
-  createCustomer(input: CustomerCreateRequest, context: OperationsContext): Promise<unknown>;
+  createCustomer(
+    input: ScopedInput<CustomerCreateRequest>,
+    context: OperationsContext,
+  ): Promise<unknown>;
   importCustomers?(
-    inputs: readonly CustomerCreateRequest[],
+    inputs: readonly ScopedInput<CustomerCreateRequest>[],
     context: OperationsContext,
   ): Promise<readonly unknown[]>;
   createMenu(input: MenuCreateRequest, context: OperationsContext): Promise<unknown>;
-  createOrder(input: OrderCreateRequest, context: OperationsContext): Promise<unknown>;
+  createOrder(input: ScopedInput<OrderCreateRequest>, context: OperationsContext): Promise<unknown>;
   createPublicOrder(input: PublicOrderCreateRequest, context: OperationsContext): Promise<unknown>;
   confirmAddressGeocoding(
     customerId: string,
@@ -209,7 +216,7 @@ interface OperationsEngine {
   ): Promise<unknown>;
   currentPublishedMenu(): Promise<unknown>;
   exportOrdersCsv(
-    input: Omit<OrderListQuery, 'cursor' | 'limit'>,
+    input: ScopedInput<Omit<OrderListQuery, 'cursor' | 'limit'>>,
     context: OperationsContext,
   ): Promise<string>;
   getCustomer(customerId: string, includeSensitive: boolean): Promise<unknown>;
@@ -219,11 +226,11 @@ interface OperationsEngine {
     requestId: string,
   ): Promise<unknown>;
   getOrder(orderId: string): Promise<unknown>;
-  kitchenSummary(cycleId: string): Promise<unknown>;
-  listCustomers(input: CustomerListQuery, includeSensitive: boolean): Promise<unknown>;
+  kitchenSummary(cycleId: string, operatingSiteId: string | null): Promise<unknown>;
+  listCustomers(input: ScopedInput<CustomerListQuery>, includeSensitive: boolean): Promise<unknown>;
   listMessageTemplates(): Promise<unknown>;
   listMenus(onlyPublished?: boolean): Promise<unknown>;
-  listOrders(input: OrderListQuery): Promise<unknown>;
+  listOrders(input: ScopedInput<OrderListQuery>): Promise<unknown>;
   orderHistory(orderId: string): Promise<unknown>;
   orderRevisionHistory(orderId: string): Promise<unknown>;
   publishMenu(menuId: string, context: OperationsContext): Promise<unknown>;
@@ -386,6 +393,11 @@ export function createApp(options: CreateAppOptions) {
     await next();
   };
 
+  const scoped = <T>(context: Context<{ Variables: AppVariables }>, input: T): ScopedInput<T> => ({
+    ...input,
+    operatingSiteId: context.get('scope')?.operatingSiteId ?? null,
+  });
+
   const geographyContext = (context: Context<{ Variables: AppVariables }>): GeographyContext => ({
     actorUserId: context.get('session')?.userId,
     correlationId: context.get('requestId'),
@@ -504,6 +516,16 @@ export function createApp(options: CreateAppOptions) {
   app.get('/api/v1/config/public', (context) =>
     context.json({ locale: 'es-AR', productName: 'Verdeo SCA' }),
   );
+
+  // Public site directory for the guest city selector. Names and slugs only: no contact data,
+  // no counts, nothing an operator configured as internal.
+  app.get('/api/v1/public/operating-sites', async (context) => {
+    const sites = await requireGeography().listSites();
+    const items = (sites as readonly { active: boolean; displayName: string; slug: string }[])
+      .filter((site) => site.active)
+      .map((site) => ({ displayName: site.displayName, slug: site.slug }));
+    return context.json(PublicOperatingSiteListResponseSchema.parse({ items }));
+  });
 
   app.get('/api/v1/public/menu/current', async (context) => {
     const menu = await requireOperations().currentPublishedMenu();
@@ -659,6 +681,7 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/scope', requireAuthentication);
   app.use('/api/v1/operating-sites', requireAuthentication);
   app.use('/api/v1/operating-sites/*', requireAuthentication);
+  app.use('/api/v1/zones', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/zones/*', requireAuthentication);
   app.use('/api/v1/customers', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/customers/*', requireAuthentication, resolveScopeSelection);
@@ -809,6 +832,14 @@ export function createApp(options: CreateAppOptions) {
     return context.json(ScopeResponseSchema.parse(contractValue(scope)));
   });
 
+  // Zones of the active scope, for any screen that must attach an address to one.
+  app.get('/api/v1/zones', async (context) => {
+    const items = await requireGeography().listActiveZones(
+      context.get('scope')?.operatingSiteId ?? null,
+    );
+    return context.json(GeographicZoneListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
   app.get('/api/v1/operating-sites', requirePermission('sites.read'), async (context) => {
     const items = await requireGeography().listSites();
     return context.json(OperatingSiteListResponseSchema.parse({ items: contractValue(items) }));
@@ -888,7 +919,7 @@ export function createApp(options: CreateAppOptions) {
     if (!query.success)
       return badRequest(context, 'Los filtros de clientes no son válidos.', query.error.issues);
     const page = await requireOperations().listCustomers(
-      query.data,
+      scoped(context, query.data),
       session.permissions.includes('customers.view_sensitive'),
     );
     return context.json(CustomerListResponseSchema.parse(contractValue(page)));
@@ -912,7 +943,7 @@ export function createApp(options: CreateAppOptions) {
       );
     }
     const customer = await requireOperations().createCustomer(
-      input.data,
+      scoped(context, input.data),
       operationsContext(context),
     );
     return context.json(
@@ -930,13 +961,20 @@ export function createApp(options: CreateAppOptions) {
       return badRequest(context, 'Adjuntá un archivo CSV o Excel (.xlsx) en el campo file.');
     }
     try {
-      const customers = await parseContactImport(file);
+      const zoneField = body?.geographicZoneId;
+      const customers = await parseContactImport(
+        file,
+        typeof zoneField === 'string' && zoneField ? zoneField : undefined,
+      );
       const operations = requireOperations();
       if (!operations.importCustomers) throw new Error('Customer import is not configured');
-      await operations.importCustomers(customers, {
-        ...operationsContext(context),
-        source: 'spreadsheet_import',
-      });
+      await operations.importCustomers(
+        customers.map((customer) => scoped(context, customer)),
+        {
+          ...operationsContext(context),
+          source: 'spreadsheet_import',
+        },
+      );
       return context.json(CustomerImportResponseSchema.parse({ imported: customers.length }), 201);
     } catch (error) {
       if (error instanceof ContactImportError) {
@@ -1375,7 +1413,7 @@ export function createApp(options: CreateAppOptions) {
     const query = OrderListQuerySchema.safeParse(context.req.query());
     if (!query.success)
       return badRequest(context, 'Los filtros de pedidos no son válidos.', query.error.issues);
-    const page = await requireOperations().listOrders(query.data);
+    const page = await requireOperations().listOrders(scoped(context, query.data));
     return context.json(OrderPageResponseSchema.parse(contractValue(page)));
   });
 
@@ -1393,7 +1431,10 @@ export function createApp(options: CreateAppOptions) {
       ...(query.data.to ? { to: query.data.to } : {}),
       ...(query.data.zone ? { zone: query.data.zone } : {}),
     };
-    const csv = await requireOperations().exportOrdersCsv(filters, operationsContext(context));
+    const csv = await requireOperations().exportOrdersCsv(
+      scoped(context, filters),
+      operationsContext(context),
+    );
     context.header('cache-control', 'private, no-store');
     context.header('content-disposition', 'attachment; filename="verdeo-pedidos.csv"');
     context.header('content-type', 'text/csv; charset=utf-8');
@@ -1417,7 +1458,10 @@ export function createApp(options: CreateAppOptions) {
         statusForCode(code),
       );
     }
-    const order = await requireOperations().createOrder(input.data, operationsContext(context));
+    const order = await requireOperations().createOrder(
+      scoped(context, input.data),
+      operationsContext(context),
+    );
     return context.json(OrderSchema.parse(contractValue(order)), 201);
   });
 
@@ -1524,7 +1568,10 @@ export function createApp(options: CreateAppOptions) {
         statusForCode(code),
       );
     }
-    const summary = await requireOperations().kitchenSummary(params.data.cycleId);
+    const summary = await requireOperations().kitchenSummary(
+      params.data.cycleId,
+      context.get('scope')?.operatingSiteId ?? null,
+    );
     return context.json(KitchenSummaryResponseSchema.parse(contractValue(summary)));
   });
 

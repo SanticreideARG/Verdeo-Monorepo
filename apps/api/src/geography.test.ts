@@ -84,6 +84,7 @@ function geographyStubs() {
         defaultSiteId: scopeSite.id,
         sites: [scopeSite],
       }),
+    listActiveZones: vi.fn(() => Promise.resolve([])),
     listZones: vi
       .fn<(operatingSiteId: string) => Promise<unknown>>()
       .mockResolvedValue([sampleZone]),

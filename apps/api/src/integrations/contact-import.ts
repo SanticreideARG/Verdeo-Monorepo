@@ -51,7 +51,10 @@ export class ContactImportError extends Error {
   }
 }
 
-export async function parseContactImport(file: File): Promise<CustomerCreateRequest[]> {
+export async function parseContactImport(
+  file: File,
+  geographicZoneId?: string,
+): Promise<CustomerCreateRequest[]> {
   if (file.size === 0) throw new ContactImportError('El archivo está vacío.');
   if (file.size > MAX_FILE_BYTES) {
     throw new ContactImportError('El archivo supera el límite de 5 MB.');
@@ -89,6 +92,15 @@ export async function parseContactImport(file: File): Promise<CustomerCreateRequ
     });
   }
 
+  const addressColumnPresent = Object.keys(rows[0] ?? {}).some((header) =>
+    columnAliases.writtenAddress.some((alias) => alias === cleanHeader(header)),
+  );
+  if (addressColumnPresent && !geographicZoneId) {
+    throw new ContactImportError(
+      'La planilla trae domicilios: elegí la zona de operaciones a la que pertenecen.',
+    );
+  }
+
   const customers = rows.map((row, index) => {
     const displayName = valueFor(row, columnAliases.displayName);
     const whatsapp = valueFor(row, columnAliases.whatsapp);
@@ -97,11 +109,14 @@ export async function parseContactImport(file: File): Promise<CustomerCreateRequ
     const writtenAddress = valueFor(row, columnAliases.writtenAddress);
     const locationUrl = valueFor(row, columnAliases.locationUrl);
     const parsed = CustomerCreateRequestSchema.safeParse({
-      ...(writtenAddress
+      // A sheet carries no zone, so the operator picks one for the whole import. Without it an
+      // address cannot be persisted, and the row would silently lose its address.
+      ...(writtenAddress && geographicZoneId
         ? {
             addresses: [
               {
                 geocodingStatus: 'NEEDS_LOCATION',
+                geographicZoneId,
                 label: 'Domicilio importado',
                 locationUrl,
                 primary: true,

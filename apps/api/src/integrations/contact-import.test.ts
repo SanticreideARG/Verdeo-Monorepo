@@ -15,6 +15,7 @@ describe('parseContactImport', () => {
           'María Pérez,+54 299 555 0101,maria@example.com,Av. Siempre Viva 123,https://maps.example.com/punto',
         ].join('\n'),
       ),
+      '90000000-0000-4000-8000-0000000000aa',
     );
 
     expect(rows).toEqual([
@@ -25,10 +26,19 @@ describe('parseContactImport', () => {
     ]);
     expect(rows[0]?.addresses).toEqual([
       expect.objectContaining({
+        geographicZoneId: '90000000-0000-4000-8000-0000000000aa',
         locationUrl: 'https://maps.example.com/punto',
         writtenAddress: 'Av. Siempre Viva 123',
       }),
     ]);
+  });
+
+  it('refuses to drop addresses when the operator picked no zone', async () => {
+    await expect(
+      parseContactImport(
+        csvFile(['nombre_completo,direccion', 'María Pérez,Av. Siempre Viva 123'].join('\n')),
+      ),
+    ).rejects.toThrowError(/zona de operaciones/);
   });
 
   it('rejects a sheet without the required name column', async () => {

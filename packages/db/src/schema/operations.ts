@@ -103,8 +103,14 @@ export const customerAddresses = pgTable(
       .references(() => customers.id, { onDelete: 'cascade' }),
     label: text('label').notNull(),
     writtenAddress: text('written_address').notNull(),
+    // Written locality. Descriptive only: an operation covers an area that may include neighbouring
+    // localities, and the zone is what anchors the address operationally (ADR-031).
     city: text('city'),
     sector: text('sector'),
+    geographicZoneId: uuid('geographic_zone_id')
+      .notNull()
+      .references(() => geographicZones.id, { onDelete: 'restrict' }),
+    // Pre-regional free text, kept as migration evidence until every address is reclassified.
     operationalZone: text('operational_zone'),
     propertyType: text('property_type'),
     unit: text('unit'),
@@ -429,13 +435,16 @@ export const orders = pgTable(
   'orders',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    publicNumber: text('public_number')
-      .default(sql`'N' || lpad(nextval('order_public_number_seq')::text, 5, '0')`)
-      .notNull()
-      .unique(),
+    // Assigned transactionally from the operation's counter and prefix; no global default (ADR-028).
+    publicNumber: text('public_number').notNull().unique(),
     customerId: uuid('customer_id')
       .notNull()
       .references(() => customers.id, { onDelete: 'restrict' }),
+    // Derived from the delivery zone, never chosen by the operator (ADR-031).
+    operatingSiteId: uuid('operating_site_id')
+      .notNull()
+      .references(() => operatingSites.id, { onDelete: 'restrict' }),
+    geographicZoneId: uuid('geographic_zone_id'),
     salesCycleId: uuid('sales_cycle_id')
       .notNull()
       .references(() => salesCycles.id, { onDelete: 'restrict' }),
@@ -460,6 +469,15 @@ export const orders = pgTable(
     index('orders_cycle_status_idx').on(table.salesCycleId, table.status),
     index('orders_customer_idx').on(table.customerId),
     index('orders_created_at_idx').on(table.createdAt),
+    index('orders_site_status_idx').on(table.operatingSiteId, table.status),
+    index('orders_site_created_at_idx').on(table.operatingSiteId, table.createdAt),
+    // Zone and operation cannot disagree: the pair must exist in geographic_zones. A null zone
+    // leaves the constraint unenforced, which is what an order without a stored address needs.
+    foreignKey({
+      columns: [table.geographicZoneId, table.operatingSiteId],
+      foreignColumns: [geographicZones.id, geographicZones.operatingSiteId],
+      name: 'orders_zone_site_fk',
+    }).onDelete('restrict'),
     check('orders_total_check', sql`${table.totalMinor} >= 0`),
   ],
 );

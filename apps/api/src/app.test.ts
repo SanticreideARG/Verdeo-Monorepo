@@ -33,6 +33,7 @@ const singleSiteGeography = {
   createSite: vi.fn(),
   createZone: vi.fn(),
   listSites: vi.fn(() => Promise.resolve([])),
+  listActiveZones: vi.fn(() => Promise.resolve([])),
   listZones: vi.fn(() => Promise.resolve([])),
   resolveScope: vi.fn(() =>
     Promise.resolve({
@@ -665,6 +666,7 @@ describe('API foundation', () => {
       body: JSON.stringify({
         addresses: [
           {
+            geographicZoneId: '90000000-0000-4000-8000-0000000000aa',
             label: 'Casa',
             locationUrl: 'https://maps.google.com/?q=-34.6037,-58.3816',
             primary: true,
@@ -885,7 +887,7 @@ describe('API foundation', () => {
     expect(exportResponse.headers.get('content-type')).toContain('text/csv');
     expect(exportResponse.headers.get('content-disposition')).toContain('verdeo-pedidos.csv');
     expect(exportOrdersCsv).toHaveBeenCalledWith(
-      { status: 'CONFIRMED', zone: 'Centro' },
+      expect.objectContaining({ status: 'CONFIRMED', zone: 'Centro' }),
       expect.objectContaining({ actorUserId: '55276601-ec66-4f63-9f2f-edf73904ede0' }),
     );
   });

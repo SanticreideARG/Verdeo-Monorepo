@@ -26,6 +26,22 @@ export function PublicOrderPage() {
   const [message, setMessage] = useState('');
   const [createdOrder, setCreatedOrder] = useState<OrderSummary | null>(null);
   const [offeringId, setOfferingId] = useState('');
+  const [sites, setSites] = useState<{ displayName: string; slug: string }[]>([]);
+  const [siteSlug, setSiteSlug] = useState('');
+
+  // The visitor chooses the city; it is never inferred from IP or domain.
+  useEffect(() => {
+    void apiRequest('/api/v1/public/operating-sites')
+      .then(async (response) => {
+        if (!response.ok) return;
+        const body = (await response.json()) as {
+          items: { displayName: string; slug: string }[];
+        };
+        setSites(body.items);
+        setSiteSlug((current) => current || (body.items[0]?.slug ?? ''));
+      })
+      .catch(() => setSites([]));
+  }, []);
 
   useEffect(() => {
     void apiRequest('/api/v1/public/menu/current')
@@ -59,6 +75,11 @@ export function PublicOrderPage() {
       return;
     }
 
+    if (!siteSlug) {
+      setMessage('Elegí la ciudad donde querés recibir el pedido.');
+      return;
+    }
+
     const payload = {
       customer: {
         displayName: formText(form, 'displayName'),
@@ -80,6 +101,7 @@ export function PublicOrderPage() {
       ],
       menuId: menu?.id,
       notes: formText(form, 'notes') || undefined,
+      operatingSiteSlug: siteSlug,
       paymentExpectation: formText(form, 'paymentExpectation'),
       source: 'web',
     };
@@ -202,6 +224,21 @@ export function PublicOrderPage() {
               <label className="field">
                 Teléfono
                 <input name="phone" autoComplete="tel" />
+              </label>
+              <label className="field">
+                Ciudad
+                <select
+                  onChange={(event) => setSiteSlug(event.target.value)}
+                  required
+                  value={siteSlug}
+                >
+                  <option value="">Elegí tu ciudad</option>
+                  {sites.map((site) => (
+                    <option key={site.slug} value={site.slug}>
+                      {site.displayName}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="field field-wide">
                 Dirección de entrega

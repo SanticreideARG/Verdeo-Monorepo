@@ -26,13 +26,17 @@ import type { Database } from '../index.js';
 import {
   customerAddresses,
   customerIdentities,
+  customerOperatingSites,
   customerPreferences,
   customerRestrictions,
   customers,
   domainEvents,
   geocodingCandidates,
+  geographicZones,
   geocodingRequests,
   messageTemplates,
+  operatingSiteOrderCounters,
+  operatingSites,
   orderDietaryInstructions,
   orderItemSelections,
   orderItems,
@@ -60,6 +64,8 @@ export interface OperationsContext {
 }
 
 export interface CustomerInput {
+  // Active scope. A customer is always created inside one operation (ADR-031).
+  operatingSiteId?: string | null | undefined;
   addresses?: readonly CustomerAddressInput[] | undefined;
   displayName: string;
   email?: string | undefined;
@@ -87,6 +93,8 @@ export interface CustomerIdentityUpdateInput {
 
 export interface CustomerAddressInput {
   accessNotes?: string | undefined;
+  // Mandatory operational anchor. The written locality may differ from the operation name.
+  geographicZoneId: string;
   city?: string | undefined;
   geocodingStatus: string;
   label: string;
@@ -140,6 +148,7 @@ export interface CustomerUpdateInput {
 
 export interface CustomerListInput {
   cursor?: string | undefined;
+  operatingSiteId?: string | null | undefined;
   limit: number;
   search?: string | undefined;
   status?: string | undefined;
@@ -181,6 +190,8 @@ export interface MenuInput {
 
 export interface OrderInput {
   customerId: string;
+  // Active scope. Used only when no stored address supplies the zone; the zone always wins.
+  operatingSiteId?: string | null | undefined;
   deliveryAddressId?: string | undefined;
   deliveryAddress: string;
   deliveryDate: string;
@@ -218,6 +229,8 @@ export interface OrderUpdateInput {
 
 export interface OrderListInput {
   cursor?: string | undefined;
+  // Null means the consolidated global view; a value restricts to one operation (ADR-028).
+  operatingSiteId?: string | null | undefined;
   customerId?: string | undefined;
   cycleId?: string | undefined;
   from?: string | undefined;
@@ -303,7 +316,26 @@ export class PostgresOperationsService {
   ) {}
 
   public async listCustomers(input: CustomerListInput, includeSensitive: boolean) {
+    // A customer keeps one global CRM identity and belongs to an operation through an explicit
+    // membership, so scoping filters by membership rather than by a column on the customer.
+    const scopeConditions = input.operatingSiteId
+      ? [
+          inArray(
+            customers.id,
+            this.database
+              .select({ id: customerOperatingSites.customerId })
+              .from(customerOperatingSites)
+              .where(
+                and(
+                  eq(customerOperatingSites.operatingSiteId, input.operatingSiteId),
+                  eq(customerOperatingSites.status, 'active'),
+                ),
+              ),
+          ),
+        ]
+      : [];
     const conditions = [
+      ...scopeConditions,
       ...(input.cursor ? [gt(customers.id, input.cursor)] : []),
       ...(input.status ? [eq(customers.status, input.status)] : []),
       ...(input.search ? [ilike(customers.displayName, `%${input.search}%`)] : []),
@@ -344,6 +376,8 @@ export class PostgresOperationsService {
           .where(
             and(
               inArray(customers.id, identityCustomerIds),
+              // Contact search must respect the same scope as the name search above.
+              ...scopeConditions,
               ...(input.cursor ? [gt(customers.id, input.cursor)] : []),
               ...(input.status ? [eq(customers.status, input.status)] : []),
             ),
@@ -571,6 +605,17 @@ export class PostgresOperationsService {
         status: customers.status,
       });
     if (!created) throw new Error('Customer creation did not return a row');
+
+    // A customer becomes visible in an operation through an explicit membership, created in the
+    // same transaction as the customer itself.
+    if (!input.operatingSiteId)
+      throw new OperationsConflictError(
+        'Un cliente necesita una operación: elegí una ciudad antes de darlo de alta',
+      );
+    await transaction
+      .insert(customerOperatingSites)
+      .values({ customerId: created.id, operatingSiteId: input.operatingSiteId })
+      .onConflictDoNothing();
 
     const suppliedIdentities: CustomerIdentityInput[] = [
       input.email
@@ -2028,11 +2073,24 @@ export class PostgresOperationsService {
   }
 
   public async createPublicOrder(
-    input: Omit<OrderInput, 'customerId'> & { customer: CustomerInput },
+    input: Omit<OrderInput, 'customerId' | 'operatingSiteId'> & {
+      customer: CustomerInput;
+      operatingSiteSlug: string;
+    },
     context: OperationsContext,
   ) {
     return this.database
       .transaction(async (transaction) => {
+        // A visitor picks the operation explicitly; it is never inferred from IP or domain (ADR-031).
+        const [site] = await transaction
+          .select({ id: operatingSites.id })
+          .from(operatingSites)
+          .where(
+            and(eq(operatingSites.slug, input.operatingSiteSlug), eq(operatingSites.active, true)),
+          )
+          .limit(1);
+        if (!site) throw new OperationsNotFoundError('La ciudad elegida no está disponible');
+
         const identityCandidates = [
           input.customer.email
             ? { type: 'email', value: normalizeCustomerIdentity('email', input.customer.email) }
@@ -2070,11 +2128,29 @@ export class PostgresOperationsService {
         const existingCustomerId = [...resolvedIds][0];
         const customer = existingCustomerId
           ? { id: existingCustomerId }
-          : await this.createCustomerInTransaction(transaction, input.customer, context);
+          : await this.createCustomerInTransaction(
+              transaction,
+              { ...input.customer, operatingSiteId: site.id },
+              context,
+            );
+
+        // A returning customer ordering in a new city gains a membership there without losing the
+        // one it already had: the CRM identity stays single and global.
+        if (existingCustomerId) {
+          await transaction
+            .insert(customerOperatingSites)
+            .values({ customerId: existingCustomerId, operatingSiteId: site.id })
+            .onConflictDoNothing();
+        }
 
         return this.createOrderInTransaction(
           transaction,
-          { ...input, customerId: customer.id, initialStatus: 'CONFIRMED' },
+          {
+            ...input,
+            customerId: customer.id,
+            initialStatus: 'CONFIRMED',
+            operatingSiteId: site.id,
+          },
           context,
         );
       })
@@ -2104,13 +2180,18 @@ export class PostgresOperationsService {
 
     let deliveryAddress = input.deliveryAddress;
     let deliveryLocationUrl = input.deliveryLocationUrl;
+    let geographicZoneId: string | null = null;
+    let operatingSiteId: string | null = null;
     if (input.deliveryAddressId) {
       const [address] = await transaction
         .select({
+          geographicZoneId: customerAddresses.geographicZoneId,
           locationUrl: customerAddresses.locationUrl,
+          operatingSiteId: geographicZones.operatingSiteId,
           writtenAddress: customerAddresses.writtenAddress,
         })
         .from(customerAddresses)
+        .innerJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
         .where(
           and(
             eq(customerAddresses.id, input.deliveryAddressId),
@@ -2122,7 +2203,18 @@ export class PostgresOperationsService {
       if (!address) throw new OperationsNotFoundError('Active customer address not found');
       deliveryAddress = address.writtenAddress;
       deliveryLocationUrl = address.locationUrl ?? deliveryLocationUrl;
+      // The operation is derived from the delivery zone; it is never chosen by the operator.
+      geographicZoneId = address.geographicZoneId;
+      operatingSiteId = address.operatingSiteId;
     }
+
+    // Without a stored address the order still needs an operation, so the caller's active scope
+    // supplies it. A global scope cannot create: mutations always require a concrete operation.
+    operatingSiteId ??= input.operatingSiteId ?? null;
+    if (!operatingSiteId)
+      throw new OperationsConflictError(
+        'Un pedido necesita una operación: elegí una ciudad o un domicilio con zona asignada',
+      );
 
     const resolvedItems = await this.resolveOrderItems(transaction, input.menuId, input.items);
     const currency = resolvedItems[0]?.currency;
@@ -2137,8 +2229,11 @@ export class PostgresOperationsService {
         deliveryAddressSnapshot: deliveryAddress,
         deliveryDate: input.deliveryDate,
         deliveryLocationUrlSnapshot: deliveryLocationUrl,
+        geographicZoneId,
         notes: input.notes,
+        operatingSiteId,
         paymentExpectation: input.paymentExpectation,
+        publicNumber: await this.nextPublicNumber(transaction, operatingSiteId),
         salesCycleId: menu.salesCycleId,
         source: input.source,
         status: initialStatus,
@@ -2335,6 +2430,8 @@ export class PostgresOperationsService {
     if (input.cursor && !cursor) throw new OperationsNotFoundError('Order cursor not found');
 
     const conditions = [
+      // A concrete operation restricts the page; the global view leaves it unfiltered.
+      ...(input.operatingSiteId ? [eq(orders.operatingSiteId, input.operatingSiteId)] : []),
       ...(input.status ? [eq(orders.status, input.status)] : []),
       ...(input.customerId ? [eq(orders.customerId, input.customerId)] : []),
       ...(input.cycleId ? [eq(orders.salesCycleId, input.cycleId)] : []),
@@ -2476,6 +2573,36 @@ export class PostgresOperationsService {
       .from(orderRevisions)
       .where(eq(orderRevisions.orderId, orderId))
       .orderBy(desc(orderRevisions.revision));
+  }
+
+  // Regional public number. The counter row is updated and returned in one statement so two
+  // concurrent orders in the same operation cannot claim the same number; the exact format is
+  // administrable data (the operation's prefix) and never a hardcoded condition (ADR-028).
+  private async nextPublicNumber(
+    transaction: DatabaseTransaction,
+    operatingSiteId: string,
+  ): Promise<string> {
+    const [site] = await transaction
+      .select({ orderPrefix: operatingSites.orderPrefix })
+      .from(operatingSites)
+      .where(eq(operatingSites.id, operatingSiteId))
+      .limit(1);
+    if (!site) throw new OperationsNotFoundError('Operating site not found');
+
+    const [counter] = await transaction
+      .insert(operatingSiteOrderCounters)
+      .values({ lastOrderNumber: 1, operatingSiteId })
+      .onConflictDoUpdate({
+        set: {
+          lastOrderNumber: sql`${operatingSiteOrderCounters.lastOrderNumber} + 1`,
+          updatedAt: new Date(),
+        },
+        target: operatingSiteOrderCounters.operatingSiteId,
+      })
+      .returning({ lastOrderNumber: operatingSiteOrderCounters.lastOrderNumber });
+    if (!counter) throw new Error('Order counter update did not return a row');
+
+    return `${site.orderPrefix}-${String(counter.lastOrderNumber).padStart(5, '0')}`;
   }
 
   // The composable variety is found by kind, never by name. Its display name is only used as the
@@ -2642,7 +2769,9 @@ export class PostgresOperationsService {
     return order;
   }
 
-  public async kitchenSummary(cycleId: string) {
+  // Production is bounded by the operation (ADR-028): a global scope consolidates every operation,
+  // a concrete one cooks only its own demand.
+  public async kitchenSummary(cycleId: string, operatingSiteId?: string | null) {
     const [cycle] = await this.database
       .select({ alias: salesCycles.alias, id: salesCycles.id })
       .from(salesCycles)
@@ -2671,6 +2800,7 @@ export class PostgresOperationsService {
       .where(
         and(
           eq(orders.salesCycleId, cycleId),
+          ...(operatingSiteId ? [eq(orders.operatingSiteId, operatingSiteId)] : []),
           inArray(orders.status, ['CONFIRMED', 'READY', 'DELIVERED']),
         ),
       )

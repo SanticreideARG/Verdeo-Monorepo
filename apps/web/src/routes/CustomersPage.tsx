@@ -49,6 +49,7 @@ export function CustomersPage() {
   const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
+  const [zones, setZones] = useState<{ displayName: string; id: string }[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -88,6 +89,24 @@ export function CustomersPage() {
     },
     [loadCustomer],
   );
+
+  useEffect(() => {
+    let active = true;
+    void apiRequest('/api/v1/zones')
+      .then(async (response) => {
+        if (!response.ok) throw new Error('zones');
+        const body = (await response.json()) as {
+          items: { displayName: string; id: string }[];
+        };
+        if (active) setZones(body.items);
+      })
+      .catch(() => {
+        if (active) setZones([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -260,6 +279,7 @@ export function CustomersPage() {
           body: JSON.stringify({
             accessNotes: optional(formText(form, 'accessNotes')),
             city: optional(formText(form, 'city')),
+            geographicZoneId: formText(form, 'geographicZoneId'),
             label: formText(form, 'label'),
             locationUrl: optional(formText(form, 'locationUrl')),
             operationalZone: optional(formText(form, 'operationalZone')),
@@ -809,8 +829,15 @@ export function CustomersPage() {
                           <input name="sector" />
                         </label>
                         <label className="field">
-                          Zona operativa
-                          <input name="operationalZone" />
+                          Zona de operaciones
+                          <select name="geographicZoneId" required>
+                            <option value="">Elegí una zona</option>
+                            {zones.map((zone) => (
+                              <option key={zone.id} value={zone.id}>
+                                {zone.displayName}
+                              </option>
+                            ))}
+                          </select>
                         </label>
                         <label className="field">
                           Tipo de propiedad

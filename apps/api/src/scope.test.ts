@@ -44,11 +44,17 @@ interface ResolvedScope {
   sites: readonly { id: string }[];
 }
 
-function scopedApp(permissions: string[], scope: ResolvedScope, listCustomers = vi.fn()) {
+function scopedApp(
+  permissions: string[],
+  scope: ResolvedScope,
+  listCustomers = vi.fn(),
+  extraOperations: Record<string, unknown> = {},
+) {
   const geography = {
     createSite: vi.fn<(input: unknown, context: unknown) => Promise<unknown>>(),
     createZone: vi.fn<(input: unknown, context: unknown) => Promise<unknown>>(),
     listSites: vi.fn<() => Promise<unknown>>().mockResolvedValue([]),
+    listActiveZones: vi.fn(() => Promise.resolve([])),
     listZones: vi.fn<(operatingSiteId: string) => Promise<unknown>>().mockResolvedValue([]),
     resolveScope: vi
       .fn<(userId: string, canAccessAllSites: boolean) => Promise<ResolvedScope>>()
@@ -65,6 +71,7 @@ function scopedApp(permissions: string[], scope: ResolvedScope, listCustomers = 
     logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
     operations: {
       listCustomers,
+      ...extraOperations,
     } as unknown as NonNullable<Parameters<typeof createApp>[0]['operations']>,
     sessions: {
       ...emptySessions,
@@ -188,5 +195,78 @@ describe('Operating scope selection', () => {
     // The keyword falls back to the session's own default rather than granting the global view.
     expect(response.status).toBe(200);
     expect(listCustomers).toHaveBeenCalled();
+  });
+});
+
+describe('Scope reaches the data layer', () => {
+  it('passes the selected operation down to the customer query', async () => {
+    const listCustomers = vi.fn().mockResolvedValue({ items: [], nextCursor: null });
+    const { app } = scopedApp(
+      ['customers.read'],
+      { canSelectGlobal: false, defaultSiteId: neuquen.id, sites: [neuquen] },
+      listCustomers,
+    );
+
+    await app.request('/api/v1/customers', {
+      headers: { ...sessionCookie, [SITE_SCOPE_HEADER]: neuquen.id },
+    });
+
+    expect(listCustomers.mock.calls[0]?.[0]).toMatchObject({ operatingSiteId: neuquen.id });
+  });
+
+  it('passes a null operation for the consolidated global view', async () => {
+    const listCustomers = vi.fn().mockResolvedValue({ items: [], nextCursor: null });
+    const { app } = scopedApp(
+      ['customers.read', 'sites.access_all'],
+      { canSelectGlobal: true, defaultSiteId: neuquen.id, sites: [neuquen, bariloche] },
+      listCustomers,
+    );
+
+    await app.request('/api/v1/customers', {
+      headers: { ...sessionCookie, [SITE_SCOPE_HEADER]: 'global' },
+    });
+
+    // Null is the consolidated view; it is never a persisted operation (ADR-028).
+    expect(listCustomers.mock.calls[0]?.[0]).toMatchObject({ operatingSiteId: null });
+  });
+
+  it('bounds the kitchen summary by the selected operation', async () => {
+    const kitchenSummary = vi.fn().mockResolvedValue({
+      base: [],
+      custom: [],
+      cycle: { alias: 'Semana 34', id: '10000000-0000-4000-8000-000000000001' },
+      generatedAt: new Date('2026-08-21T12:00:00.000Z'),
+      totalUnits: 0,
+    });
+    const { app } = scopedApp(
+      ['production.read'],
+      { canSelectGlobal: false, defaultSiteId: neuquen.id, sites: [neuquen] },
+      vi.fn(),
+      { kitchenSummary },
+    );
+
+    await app.request('/api/v1/production/10000000-0000-4000-8000-000000000001', {
+      headers: { ...sessionCookie, [SITE_SCOPE_HEADER]: neuquen.id },
+    });
+
+    // Production is bounded by the operation: one kitchen must not cook another city's demand.
+    expect(kitchenSummary).toHaveBeenCalledWith('10000000-0000-4000-8000-000000000001', neuquen.id);
+  });
+
+  it('does not let an unauthorized operation reach the kitchen query', async () => {
+    const kitchenSummary = vi.fn();
+    const { app } = scopedApp(
+      ['production.read'],
+      { canSelectGlobal: false, defaultSiteId: neuquen.id, sites: [neuquen] },
+      vi.fn(),
+      { kitchenSummary },
+    );
+
+    const response = await app.request('/api/v1/production/10000000-0000-4000-8000-000000000001', {
+      headers: { ...sessionCookie, [SITE_SCOPE_HEADER]: bariloche.id },
+    });
+
+    expect(response.status).toBe(403);
+    expect(kitchenSummary).not.toHaveBeenCalled();
   });
 });

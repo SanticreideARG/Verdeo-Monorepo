@@ -42,8 +42,11 @@ export const CustomerIdentityUpdateRequestSchema = z
 
 const CustomerAddressFieldsSchema = z.object({
   accessNotes: z.string().trim().max(1_000).optional(),
+  // Written locality: descriptive, and may name a town other than the operation itself.
   city: z.string().trim().max(120).optional(),
   geocodingStatus: ConfigurableKeySchema.default('NEEDS_LOCATION'),
+  // Mandatory operational anchor (ADR-031).
+  geographicZoneId: UuidSchema,
   label: RequiredTextSchema,
   latitude: z.number().min(-90).max(90).optional(),
   locationUrl: z.url().max(2_000).optional(),
@@ -191,6 +194,7 @@ export const CustomerAddressSchema = z.object({
   city: z.string().nullable(),
   createdAt: IsoDateTimeSchema,
   geocodingStatus: z.string(),
+  geographicZoneId: UuidSchema,
   id: UuidSchema,
   label: z.string(),
   latitude: z.number().nullable(),
@@ -424,6 +428,22 @@ export const PublicOrderCreateRequestSchema = OrderCreateRequestSchema.omit({
   customerId: true,
 }).extend({
   customer: CustomerCreateRequestSchema,
+  // The visitor chooses the operation explicitly (ADR-031).
+  operatingSiteSlug: z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+});
+
+export const PublicOperatingSiteListResponseSchema = z.object({
+  items: z.array(
+    z.object({
+      displayName: z.string(),
+      slug: z.string(),
+    }),
+  ),
 });
 
 export const OrderTransitionRequestSchema = z.object({
