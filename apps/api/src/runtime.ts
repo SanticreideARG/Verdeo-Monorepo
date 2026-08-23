@@ -14,6 +14,8 @@ import {
   PostgresAuditSink,
   PostgresChatService,
   PostgresAIConfigurationService,
+  PostgresAIPromptService,
+  PostgresAITaskService,
   PostgresDeliveryService,
   PostgresGeographyService,
   PostgresPasswordCredentialRepository,
@@ -31,6 +33,7 @@ import { createLogger } from '@verdeo/observability';
 import { NearestNeighborRouteOptimizer } from '@verdeo/routing';
 
 import { createApp } from './app.js';
+import { OpenAICompatibleProvider } from './integrations/ai-providers.js';
 import { VercelBlobAvatarStorage } from './integrations/avatar-storage.js';
 import { SupabaseAuthClient } from './integrations/supabase-auth.js';
 import { MetaWhatsAppProvider } from './integrations/whatsapp-provider.js';
@@ -108,6 +111,14 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
   const chat = new PostgresChatService(database.db);
   const aiConfiguration = new PostgresAIConfigurationService(
     database.db,
+    env.AI_CONFIG_ENCRYPTION_KEY,
+  );
+  const aiPrompts = new PostgresAIPromptService(database.db);
+  const aiTasks = new PostgresAITaskService(
+    database.db,
+    aiPrompts,
+    ({ apiKey, baseUrl, adapterType }) =>
+      new OpenAICompatibleProvider(adapterType, apiKey, baseUrl),
     env.AI_CONFIG_ENCRYPTION_KEY,
   );
   const avatarStorage = env.VERDEO_READ_WRITE_TOKEN
@@ -290,6 +301,8 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     : undefined;
   const app = createApp({
     aiConfiguration,
+    aiPrompts,
+    aiTasks,
     appOrigin: env.APP_URL,
     accessTokens,
     cms,

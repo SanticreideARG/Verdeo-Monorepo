@@ -4,6 +4,7 @@ import { Link, Route, Routes } from 'react-router-dom';
 import { CmsSection, type PageSection } from '../components/CmsSections.js';
 import { apiRequest } from '../lib/api.js';
 import { AIProvidersPage } from './AIProvidersPage.js';
+import { AIWorkbenchPage } from './AIWorkbenchPage.js';
 import { CmsPagesAdminPage } from './CmsPagesAdminPage.js';
 import { DashboardPage } from './DashboardPage.js';
 import { ChatLinksPage } from './ChatLinksPage.js';
@@ -180,6 +181,7 @@ export function App() {
       <Route path="/app/menus" element={<MenusPage />} />
       <Route path="/app/cocina" element={<KitchenPage />} />
       <Route path="/app/ia" element={<AIProvidersPage />} />
+      <Route path="/app/ia/workbench" element={<AIWorkbenchPage />} />
       <Route path="/app/chat" element={<ChatPage />} />
       <Route path="/app/mensajes" element={<MessagingInboxPage />} />
       <Route path="/app/ajustes/mensajes" element={<MessagingAccountsPage />} />

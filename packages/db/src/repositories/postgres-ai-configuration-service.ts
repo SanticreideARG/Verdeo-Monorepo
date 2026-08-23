@@ -64,7 +64,7 @@ export class PostgresAIConfigurationService {
   }
 
   public async upsert(input: AIProviderConfigInput, context: AIConfigurationContext) {
-    return this.database.transaction(async (transaction) => {
+    await this.database.transaction(async (transaction) => {
       const [existing] = await transaction
         .select({
           apiKeyLastFour: aiProviderConfigs.apiKeyLastFour,

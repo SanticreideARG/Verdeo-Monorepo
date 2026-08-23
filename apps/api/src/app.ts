@@ -4,8 +4,15 @@ import { Hono, type Context } from 'hono';
 
 import type { AuthenticatedSession, SessionSummary, UserDirectoryPage } from '@verdeo/auth';
 import {
+  AIExecutionListResponseSchema,
   AIProviderConfigListResponseSchema,
   AIProviderConfigUpsertRequestSchema,
+  AIPromptSummaryListResponseSchema,
+  AIPromptDetailSchema,
+  AIPromptVersionActivateRequestSchema,
+  AIPromptVersionCreateRequestSchema,
+  AITaskRunRequestSchema,
+  AITaskRunResponseSchema,
   AddressGeocodingConfirmRequestSchema,
   AddressGeocodingCreateRequestSchema,
   AddressGeocodingParamSchema,
@@ -489,6 +496,41 @@ interface AIConfigurationContext {
   source: string;
 }
 
+interface AIPromptEngine {
+  activateVersion(
+    taskKey: string,
+    versionId: string,
+    context: AIConfigurationContext,
+  ): Promise<unknown>;
+  createVersion(
+    taskKey: string,
+    input: {
+      maxTokens: number;
+      preferredProviderKey?: string | undefined;
+      systemPrompt: string;
+      temperature: number;
+    },
+    context: AIConfigurationContext,
+  ): Promise<unknown>;
+  getPromptDetail(taskKey: string): Promise<unknown>;
+  listPrompts(): Promise<unknown>;
+}
+
+interface AITaskEngine {
+  listExecutions(taskKey?: string): Promise<unknown>;
+  runTask(
+    taskKey: string,
+    variables: Record<string, string>,
+    context: AIConfigurationContext,
+  ): Promise<{
+    model: string;
+    output: unknown;
+    promptVersion: number;
+    providerKey: string;
+    usage: unknown;
+  }>;
+}
+
 // Doubles as the CMS media upload adapter: same Blob store, same trust boundary (staff-only,
 // content-type/size checked before this is ever called), just a different path prefix.
 interface AvatarStorageEngine {
@@ -646,6 +688,8 @@ interface PaymentsEngine {
 
 interface CreateAppOptions {
   aiConfiguration?: AIConfigurationEngine;
+  aiPrompts?: AIPromptEngine;
+  aiTasks?: AITaskEngine;
   appOrigin: string;
   accessTokens?: AccessTokenEngine;
   avatarStorage?: AvatarStorageEngine;
@@ -783,6 +827,29 @@ export function createApp(options: CreateAppOptions) {
 
   const paymentsContext = (context: Context<{ Variables: AppVariables }>): PaymentsContext => ({
     actorUserId: context.get('session')?.userId,
+    correlationId: context.get('requestId'),
+    requestId: context.get('requestId'),
+    source: 'api',
+  });
+
+  const aiPrompts = options.aiPrompts;
+
+  const requireAiPrompts = () => {
+    if (!aiPrompts) throw new Error('AI prompt engine is not configured');
+    return aiPrompts;
+  };
+
+  const aiTasks = options.aiTasks;
+
+  const requireAiTasks = () => {
+    if (!aiTasks) throw new Error('AI task engine is not configured');
+    return aiTasks;
+  };
+
+  const aiEngineContext = (
+    context: Context<{ Variables: AppVariables }>,
+  ): AIConfigurationContext => ({
+    actorUserId: context.get('session').userId,
     correlationId: context.get('requestId'),
     requestId: context.get('requestId'),
     source: 'api',
@@ -1263,6 +1330,9 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/production/*', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/surplus/*', requireAuthentication);
   app.use('/api/v1/ai/providers', requireAuthentication);
+  app.use('/api/v1/ai/prompts', requireAuthentication);
+  app.use('/api/v1/ai/prompts/*', requireAuthentication);
+  app.use('/api/v1/ai/tasks/*', requireAuthentication);
 
   app.get('/api/v1/me', async (context) => {
     const session = context.get('session');
@@ -3120,6 +3190,71 @@ export function createApp(options: CreateAppOptions) {
     return context.json(AIProviderConfigListResponseSchema.parse(contractValue(result)));
   });
 
+  app.get('/api/v1/ai/prompts', async (context) => {
+    if (!context.get('session').permissions.includes('ai.prompts.manage'))
+      return forbidden(context);
+    const items = await requireAiPrompts().listPrompts();
+    return context.json(AIPromptSummaryListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.get('/api/v1/ai/prompts/:taskKey', async (context) => {
+    if (!context.get('session').permissions.includes('ai.prompts.manage'))
+      return forbidden(context);
+    const detail = await requireAiPrompts().getPromptDetail(context.req.param('taskKey'));
+    return context.json(AIPromptDetailSchema.parse(contractValue(detail)));
+  });
+
+  app.post('/api/v1/ai/prompts/:taskKey/versions', async (context) => {
+    if (!context.get('session').permissions.includes('ai.prompts.manage'))
+      return forbidden(context);
+    const input = AIPromptVersionCreateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) return badRequest(context, 'Revisá el prompt.', input.error.issues);
+    const detail = await requireAiPrompts().createVersion(
+      context.req.param('taskKey'),
+      input.data,
+      aiEngineContext(context),
+    );
+    return context.json(AIPromptDetailSchema.parse(contractValue(detail)), 201);
+  });
+
+  app.post('/api/v1/ai/prompts/:taskKey/activate', async (context) => {
+    if (!context.get('session').permissions.includes('ai.prompts.manage'))
+      return forbidden(context);
+    const input = AIPromptVersionActivateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'Revisá la versión a activar.', input.error.issues);
+    const detail = await requireAiPrompts().activateVersion(
+      context.req.param('taskKey'),
+      input.data.versionId,
+      aiEngineContext(context),
+    );
+    return context.json(AIPromptDetailSchema.parse(contractValue(detail)));
+  });
+
+  app.get('/api/v1/ai/executions', async (context) => {
+    if (!context.get('session').permissions.includes('ai.prompts.manage'))
+      return forbidden(context);
+    const items = await requireAiTasks().listExecutions(context.req.query('taskKey'));
+    return context.json(AIExecutionListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.post('/api/v1/ai/tasks/:taskKey/run', async (context) => {
+    if (!context.get('session').permissions.includes('ai.use')) return forbidden(context);
+    const input = AITaskRunRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success)
+      return badRequest(context, 'Revisá los datos de la tarea.', input.error.issues);
+    const result = await requireAiTasks().runTask(
+      context.req.param('taskKey'),
+      input.data.variables,
+      aiEngineContext(context),
+    );
+    return context.json(AITaskRunResponseSchema.parse(contractValue(result)));
+  });
+
   app.notFound((context) => {
     const code: ApiErrorCode = 'NOT_FOUND';
     return context.json(
@@ -3141,7 +3276,9 @@ export function createApp(options: CreateAppOptions) {
       error.name === 'ChatNotFoundError' ||
       error.name === 'GeographicZoneNotFoundError' ||
       error.name === 'DeliveryNotFoundError' ||
-      error.name === 'PaymentsNotFoundError'
+      error.name === 'PaymentsNotFoundError' ||
+      error.name === 'AIPromptNotFoundError' ||
+      error.name === 'AITaskNotFoundError'
     ) {
       const code: ApiErrorCode = 'NOT_FOUND';
       return context.json(
@@ -3164,7 +3301,10 @@ export function createApp(options: CreateAppOptions) {
       error.name === 'CustomerRuleError' ||
       error.name === 'AIConfigurationUnavailableError' ||
       error.name === 'DeliveryConflictError' ||
-      error.name === 'PaymentsConflictError'
+      error.name === 'PaymentsConflictError' ||
+      error.name === 'AITaskNotConfiguredError' ||
+      error.name === 'AITaskValidationError' ||
+      error.name === 'NoProviderAvailableError'
     ) {
       const code: ApiErrorCode = 'CONFLICT';
       return context.json(

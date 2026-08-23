@@ -2411,4 +2411,143 @@ describe('API foundation', () => {
       expect(response.status).toBe(409);
     });
   });
+
+  describe('ai prompts and tasks', () => {
+    function buildAIApp(
+      overrides: { aiPrompts?: Record<string, unknown>; aiTasks?: Record<string, unknown> },
+      permissions: string[],
+    ) {
+      return createApp({
+        appOrigin: 'http://localhost:5173',
+        ...overrides,
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            Promise.resolve({
+              expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+              permissions,
+              sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+            }),
+        },
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      } as never);
+    }
+
+    const cookie = 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars';
+
+    it('lists prompts with ai.prompts.manage and denies without it', async () => {
+      const listPrompts = vi.fn(() => Promise.resolve([]));
+      const app = buildAIApp({ aiPrompts: { listPrompts } }, ['ai.prompts.manage']);
+
+      const response = await app.request('/api/v1/ai/prompts', { headers: { cookie } });
+      expect(response.status).toBe(200);
+
+      const denied = buildAIApp({ aiPrompts: { listPrompts: vi.fn() } }, []);
+      const deniedResponse = await denied.request('/api/v1/ai/prompts', { headers: { cookie } });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('creates a prompt version with ai.prompts.manage and denies without it', async () => {
+      const createVersion = vi.fn(() =>
+        Promise.resolve({ activeVersionId: null, taskKey: 'rewrite_message', versions: [] }),
+      );
+      const app = buildAIApp({ aiPrompts: { createVersion } }, ['ai.prompts.manage']);
+
+      const response = await app.request('/api/v1/ai/prompts/rewrite_message/versions', {
+        body: JSON.stringify({
+          maxTokens: 500,
+          systemPrompt: 'Sos un asistente.',
+          temperature: 0.5,
+        }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(201);
+
+      const denied = buildAIApp({ aiPrompts: { createVersion: vi.fn() } }, []);
+      const deniedResponse = await denied.request('/api/v1/ai/prompts/rewrite_message/versions', {
+        body: JSON.stringify({ maxTokens: 500, systemPrompt: 'x', temperature: 0.5 }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('runs a task with ai.use and denies without it', async () => {
+      const runTask = vi.fn(() =>
+        Promise.resolve({
+          model: 'gpt-test',
+          output: 'texto reescrito',
+          promptVersion: 1,
+          providerKey: 'openai',
+          usage: { inputTokens: 10, outputTokens: 20 },
+        }),
+      );
+      const app = buildAIApp({ aiTasks: { runTask } }, ['ai.use']);
+
+      const response = await app.request('/api/v1/ai/tasks/rewrite_message/run', {
+        body: JSON.stringify({ variables: { style: 'cordial', text: 'hola' } }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ output: 'texto reescrito' });
+
+      const denied = buildAIApp({ aiTasks: { runTask: vi.fn() } }, []);
+      const deniedResponse = await denied.request('/api/v1/ai/tasks/rewrite_message/run', {
+        body: JSON.stringify({ variables: { style: 'cordial', text: 'hola' } }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('turns AITaskNotConfiguredError into a 409, not a 500', async () => {
+      class AITaskNotConfiguredError extends Error {
+        public constructor(message: string) {
+          super(message);
+          this.name = 'AITaskNotConfiguredError';
+        }
+      }
+      const runTask = vi.fn(() =>
+        Promise.reject(
+          new AITaskNotConfiguredError('Esta tarea todavía no tiene un prompt activo.'),
+        ),
+      );
+      const app = buildAIApp({ aiTasks: { runTask } }, ['ai.use']);
+
+      const response = await app.request('/api/v1/ai/tasks/rewrite_message/run', {
+        body: JSON.stringify({ variables: { style: 'cordial', text: 'hola' } }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(409);
+    });
+
+    it('turns AITaskValidationError into a 409', async () => {
+      class AITaskValidationError extends Error {
+        public constructor(message: string) {
+          super(message);
+          this.name = 'AITaskValidationError';
+        }
+      }
+      const runTask = vi.fn(() =>
+        Promise.reject(new AITaskValidationError('La respuesta no cumple el esquema.')),
+      );
+      const app = buildAIApp({ aiTasks: { runTask } }, ['ai.use']);
+
+      const response = await app.request('/api/v1/ai/tasks/extract_order/run', {
+        body: JSON.stringify({ variables: { message: 'hola' } }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(409);
+    });
+  });
 });

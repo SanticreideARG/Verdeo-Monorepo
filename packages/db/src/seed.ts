@@ -160,6 +160,22 @@ try {
         .onConflictDoNothing();
     }
 
+    // Fase 6 default: only staff can run AI tasks (`ai.use`), and only for the operational
+    // drafting the V1 catalog covers — rewriting a message, extracting a candidate order,
+    // summarizing kitchen data. `ai.prompts.manage`/`ai.providers.manage`/`ai.budgets.manage`
+    // stay superadmin-only (Gisela's controls per AI_CORE.md), not granted here.
+    const [aiUsePermission] = await transaction
+      .select({ id: permissions.id })
+      .from(permissions)
+      .where(eq(permissions.key, 'ai.use'))
+      .limit(1);
+    if (aiUsePermission && operadorRoleForDelivery) {
+      await transaction
+        .insert(rolePermissions)
+        .values({ permissionId: aiUsePermission.id, roleId: operadorRoleForDelivery.id })
+        .onConflictDoNothing();
+    }
+
     const [neuquenSite] = await transaction
       .insert(operatingSites)
       .values({
