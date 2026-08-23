@@ -2171,4 +2171,244 @@ describe('API foundation', () => {
       expect(handleInboundEvent).toHaveBeenCalledWith({ entry: [] });
     });
   });
+
+  describe('delivery', () => {
+    function buildDeliveryApp(delivery: Record<string, unknown>, permissions: string[]) {
+      return createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        delivery: delivery as never,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            Promise.resolve({
+              expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+              permissions,
+              sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+            }),
+        },
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+    }
+
+    const cookie = 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars';
+    const routeId = '90000000-0000-4000-8000-000000000001';
+
+    it('creates a route with routes.manage and denies without it', async () => {
+      const createRoute = vi.fn(() =>
+        Promise.resolve({
+          createdByUserId: null,
+          deliveryDate: '2026-08-26',
+          id: routeId,
+          label: null,
+          operatingSiteId: '80000000-0000-4000-8000-000000000001',
+          publishedAt: null,
+          status: 'draft',
+          stops: [],
+        }),
+      );
+      const app = buildDeliveryApp({ createRoute }, ['routes.manage']);
+
+      const response = await app.request('/api/v1/delivery/routes', {
+        body: JSON.stringify({
+          deliveryDate: '2026-08-26',
+          operatingSiteId: '80000000-0000-4000-8000-000000000001',
+        }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(201);
+
+      const denied = buildDeliveryApp({ createRoute: vi.fn() }, ['routes.read']);
+      const deniedResponse = await denied.request('/api/v1/delivery/routes', {
+        body: JSON.stringify({
+          deliveryDate: '2026-08-26',
+          operatingSiteId: '80000000-0000-4000-8000-000000000001',
+        }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('turns a route-not-found error into a 404', async () => {
+      class DeliveryNotFoundError extends Error {
+        public constructor(message: string) {
+          super(message);
+          this.name = 'DeliveryNotFoundError';
+        }
+      }
+      const getRouteDetail = vi.fn(() =>
+        Promise.reject(new DeliveryNotFoundError('Route not found')),
+      );
+      const app = buildDeliveryApp({ getRouteDetail }, ['routes.read']);
+
+      const response = await app.request(`/api/v1/delivery/routes/${routeId}`, {
+        headers: { cookie },
+      });
+      expect(response.status).toBe(404);
+    });
+
+    it('turns a publish conflict into a 409', async () => {
+      class DeliveryConflictError extends Error {
+        public constructor(message: string) {
+          super(message);
+          this.name = 'DeliveryConflictError';
+        }
+      }
+      const publishRoute = vi.fn(() =>
+        Promise.reject(new DeliveryConflictError('Solo una ruta en borrador puede publicarse.')),
+      );
+      const app = buildDeliveryApp({ publishRoute }, ['routes.publish']);
+
+      const response = await app.request(`/api/v1/delivery/routes/${routeId}/publish`, {
+        headers: { cookie },
+        method: 'POST',
+      });
+      expect(response.status).toBe(409);
+    });
+
+    it('lists my-stops with delivery.execute and denies without it', async () => {
+      const listStopsForUser = vi.fn(() => Promise.resolve([]));
+      const app = buildDeliveryApp({ listStopsForUser }, ['delivery.execute']);
+
+      const response = await app.request('/api/v1/delivery/my-stops', { headers: { cookie } });
+      expect(response.status).toBe(200);
+
+      const denied = buildDeliveryApp({ listStopsForUser: vi.fn() }, []);
+      const deniedResponse = await denied.request('/api/v1/delivery/my-stops', {
+        headers: { cookie },
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('triggers a delivery message with delivery.trigger_messages and denies without it', async () => {
+      const triggerMessage = vi.fn(() => Promise.resolve({ sent: true }));
+      const app = buildDeliveryApp({ triggerMessage }, ['delivery.trigger_messages']);
+      const stopId = '90000000-0000-4000-8000-000000000002';
+
+      const response = await app.request(`/api/v1/delivery/stops/${stopId}/trigger`, {
+        body: JSON.stringify({ action: 'ON_MY_WAY' }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ sent: true });
+
+      const denied = buildDeliveryApp({ triggerMessage: vi.fn() }, []);
+      const deniedResponse = await denied.request(`/api/v1/delivery/stops/${stopId}/trigger`, {
+        body: JSON.stringify({ action: 'ON_MY_WAY' }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+  });
+
+  describe('payments', () => {
+    function buildPaymentsApp(payments: Record<string, unknown>, permissions: string[]) {
+      return createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        payments: payments as never,
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            Promise.resolve({
+              expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+              permissions,
+              sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+            }),
+        },
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+    }
+
+    const cookie = 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars';
+
+    it('reads the dashboard with payments.read and denies without it', async () => {
+      const dashboard = vi.fn(() =>
+        Promise.resolve({
+          cashByRepartidor: [],
+          paidTotalMinor: 0,
+          pendingTotalMinor: 0,
+          toSettleTotalMinor: 0,
+        }),
+      );
+      const app = buildPaymentsApp({ dashboard }, ['payments.read']);
+
+      const response = await app.request('/api/v1/payments/dashboard', { headers: { cookie } });
+      expect(response.status).toBe(200);
+
+      const denied = buildPaymentsApp({ dashboard: vi.fn() }, []);
+      const deniedResponse = await denied.request('/api/v1/payments/dashboard', {
+        headers: { cookie },
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('records a collection with payments.record and denies without it', async () => {
+      const recordCollection = vi.fn(() =>
+        Promise.resolve({
+          amountMinor: 25000,
+          collectedAt: new Date(),
+          collectedByUserId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+          id: '90000000-0000-4000-8000-000000000003',
+          method: 'efectivo',
+          orderId: '90000000-0000-4000-8000-000000000004',
+        }),
+      );
+      const app = buildPaymentsApp({ recordCollection }, ['payments.record']);
+      const orderId = '90000000-0000-4000-8000-000000000004';
+
+      const response = await app.request(`/api/v1/payments/orders/${orderId}/collections`, {
+        body: JSON.stringify({ amountMinor: 25000, method: 'efectivo' }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(201);
+
+      const denied = buildPaymentsApp({ recordCollection: vi.fn() }, []);
+      const deniedResponse = await denied.request(
+        `/api/v1/payments/orders/${orderId}/collections`,
+        {
+          body: JSON.stringify({ amountMinor: 25000, method: 'efectivo' }),
+          headers: { cookie, 'content-type': 'application/json' },
+          method: 'POST',
+        },
+      );
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('turns a settlement conflict into a 409', async () => {
+      class PaymentsConflictError extends Error {
+        public constructor(message: string) {
+          super(message);
+          this.name = 'PaymentsConflictError';
+        }
+      }
+      const settleCollection = vi.fn(() =>
+        Promise.reject(new PaymentsConflictError('Esta cobranza ya fue rendida.')),
+      );
+      const app = buildPaymentsApp({ settleCollection }, ['payments.settle']);
+      const collectionId = '90000000-0000-4000-8000-000000000005';
+
+      const response = await app.request(`/api/v1/payments/collections/${collectionId}/settle`, {
+        body: JSON.stringify({ receivedByUserId: '55276601-ec66-4f63-9f2f-edf73904ede0' }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(409);
+    });
+  });
 });

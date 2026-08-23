@@ -49,6 +49,19 @@ import {
   CustomerRestrictionSchema,
   CustomerRestrictionUpdateRequestSchema,
   CustomerUpdateRequestSchema,
+  CashCollectionListResponseSchema,
+  CashCollectionRequestSchema,
+  CashCollectionSchema,
+  CashSettlementRequestSchema,
+  DeliveryMyStopListResponseSchema,
+  DeliveryRouteCreateRequestSchema,
+  DeliveryRouteDetailSchema,
+  DeliveryRouteListResponseSchema,
+  DeliveryStopAssignRequestSchema,
+  DeliveryStopReorderRequestSchema,
+  DeliveryStopStatusUpdateRequestSchema,
+  DeliveryTriggerRequestSchema,
+  DeliveryTriggerResponseSchema,
   HealthResponseSchema,
   CycleIdParamSchema,
   GeographicZoneCreateRequestSchema,
@@ -97,6 +110,8 @@ import {
   PublicOrderCreateRequestSchema,
   PublicOrderTrackRequestSchema,
   PublicOrderTrackResponseSchema,
+  PaymentListResponseSchema,
+  PaymentsDashboardSchema,
   ScopeResponseSchema,
   SessionIdParamSchema,
   SessionListResponseSchema,
@@ -568,6 +583,67 @@ interface MessagingEngine {
   verifySignature(rawBody: string, signatureHeader: string | null): boolean;
 }
 
+interface DeliveryContext {
+  actorUserId?: string | undefined;
+  correlationId: string;
+  requestId: string;
+  source: string;
+}
+
+interface DeliveryEngine {
+  assignStop(
+    stopId: string,
+    assignedUserId: string | null,
+    context: DeliveryContext,
+  ): Promise<unknown>;
+  createRoute(
+    operatingSiteId: string,
+    deliveryDate: string,
+    label: string | undefined,
+    context: DeliveryContext,
+  ): Promise<unknown>;
+  getRouteDetail(routeId: string): Promise<unknown>;
+  listRoutes(operatingSiteId?: string): Promise<unknown>;
+  listStopsForUser(userId: string): Promise<unknown>;
+  publishRoute(routeId: string, context: DeliveryContext): Promise<unknown>;
+  reorderStops(routeId: string, orderedStopIds: readonly string[]): Promise<unknown>;
+  triggerMessage(
+    stopId: string,
+    action: 'ON_MY_WAY' | 'AT_ADDRESS' | 'DELIVERED_THANKS',
+    context: DeliveryContext,
+  ): Promise<{ reason?: string; sent: boolean }>;
+  updateStopStatus(
+    stopId: string,
+    status: 'pending' | 'en_route' | 'at_address' | 'delivered' | 'skipped',
+    actorUserId: string | undefined,
+    context: DeliveryContext,
+  ): Promise<unknown>;
+}
+
+interface PaymentsContext {
+  actorUserId?: string | undefined;
+  correlationId: string;
+  requestId: string;
+  source: string;
+}
+
+interface PaymentsEngine {
+  dashboard(operatingSiteId?: string): Promise<unknown>;
+  listByStatus(status?: string): Promise<unknown>;
+  listUnsettledCollections(collectedByUserId?: string): Promise<unknown>;
+  recordCollection(
+    orderId: string,
+    amountMinor: number,
+    method: string,
+    context: PaymentsContext,
+  ): Promise<unknown>;
+  settleCollection(
+    collectionId: string,
+    receivedByUserId: string,
+    context: PaymentsContext,
+  ): Promise<unknown>;
+}
+
 interface CreateAppOptions {
   aiConfiguration?: AIConfigurationEngine;
   appOrigin: string;
@@ -579,11 +655,13 @@ interface CreateAppOptions {
   cms?: CmsEngine;
   cronSecret?: string | undefined;
   credentials: CredentialLogin;
+  delivery?: DeliveryEngine;
   geography?: GeographyEngine;
   logger: Logger;
   messaging?: MessagingEngine;
   oauth?: OAuthLogin;
   operations?: OperationsEngine;
+  payments?: PaymentsEngine;
   sessions: SessionAuthenticator;
   secureCookies: boolean;
   userAdmin?: UserAdminEngine;
@@ -676,6 +754,34 @@ export function createApp(options: CreateAppOptions) {
   };
 
   const messagingContext = (context: Context<{ Variables: AppVariables }>): MessagingContext => ({
+    actorUserId: context.get('session')?.userId,
+    correlationId: context.get('requestId'),
+    requestId: context.get('requestId'),
+    source: 'api',
+  });
+
+  const delivery = options.delivery;
+
+  const requireDelivery = () => {
+    if (!delivery) throw new Error('Delivery engine is not configured');
+    return delivery;
+  };
+
+  const deliveryContext = (context: Context<{ Variables: AppVariables }>): DeliveryContext => ({
+    actorUserId: context.get('session')?.userId,
+    correlationId: context.get('requestId'),
+    requestId: context.get('requestId'),
+    source: 'api',
+  });
+
+  const payments = options.payments;
+
+  const requirePayments = () => {
+    if (!payments) throw new Error('Payments engine is not configured');
+    return payments;
+  };
+
+  const paymentsContext = (context: Context<{ Variables: AppVariables }>): PaymentsContext => ({
     actorUserId: context.get('session')?.userId,
     correlationId: context.get('requestId'),
     requestId: context.get('requestId'),
@@ -1137,6 +1243,8 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/access-tokens', requireAuthentication);
   app.use('/api/v1/cms/*', requireAuthentication);
   app.use('/api/v1/messaging/*', requireAuthentication);
+  app.use('/api/v1/delivery/*', requireAuthentication);
+  app.use('/api/v1/payments/*', requireAuthentication);
   app.use('/api/v1/access-tokens/*', requireAuthentication);
   app.use('/api/v1/scope', requireAuthentication);
   app.use('/api/v1/operating-sites', requireAuthentication);
@@ -2383,6 +2491,193 @@ export function createApp(options: CreateAppOptions) {
     return context.text('OK', 200);
   });
 
+  app.get('/api/v1/delivery/routes', async (context) => {
+    if (!context.get('session').permissions.includes('routes.read')) return forbidden(context);
+    const items = await requireDelivery().listRoutes(context.req.query('operatingSiteId'));
+    return context.json(DeliveryRouteListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.post('/api/v1/delivery/routes', async (context) => {
+    if (!context.get('session').permissions.includes('routes.manage')) return forbidden(context);
+    const input = DeliveryRouteCreateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'Revisá los datos de la ruta.', input.error.issues);
+    const route = await requireDelivery().createRoute(
+      input.data.operatingSiteId,
+      input.data.deliveryDate,
+      input.data.label,
+      deliveryContext(context),
+    );
+    return context.json(DeliveryRouteDetailSchema.parse(contractValue(route)), 201);
+  });
+
+  app.get('/api/v1/delivery/routes/:id', async (context) => {
+    if (!context.get('session').permissions.includes('routes.read')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    if (!params.success) return badRequest(context, 'Ruta inválida.', params.error.issues);
+    const route = await requireDelivery().getRouteDetail(params.data.id);
+    return context.json(DeliveryRouteDetailSchema.parse(contractValue(route)));
+  });
+
+  app.post('/api/v1/delivery/routes/:id/publish', async (context) => {
+    if (!context.get('session').permissions.includes('routes.publish')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    if (!params.success) return badRequest(context, 'Ruta inválida.', params.error.issues);
+    const route = await requireDelivery().publishRoute(params.data.id, deliveryContext(context));
+    return context.json(DeliveryRouteDetailSchema.parse(contractValue(route)));
+  });
+
+  app.put('/api/v1/delivery/routes/:id/stops', async (context) => {
+    if (!context.get('session').permissions.includes('routes.manage')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = DeliveryStopReorderRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá el orden de las paradas.',
+        (!params.success ? params.error.issues : undefined) ??
+          (!input.success ? input.error.issues : undefined),
+      );
+    const route = await requireDelivery().reorderStops(params.data.id, input.data.stopIds);
+    return context.json(DeliveryRouteDetailSchema.parse(contractValue(route)));
+  });
+
+  app.patch('/api/v1/delivery/stops/:id/assign', async (context) => {
+    if (!context.get('session').permissions.includes('routes.manage')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = DeliveryStopAssignRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá la asignación.',
+        (!params.success ? params.error.issues : undefined) ??
+          (!input.success ? input.error.issues : undefined),
+      );
+    const stop = await requireDelivery().assignStop(
+      params.data.id,
+      input.data.assignedUserId,
+      deliveryContext(context),
+    );
+    return context.json(contractValue(stop));
+  });
+
+  app.patch('/api/v1/delivery/stops/:id/status', async (context) => {
+    if (!context.get('session').permissions.includes('delivery.execute')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = DeliveryStopStatusUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá el estado de la parada.',
+        (!params.success ? params.error.issues : undefined) ??
+          (!input.success ? input.error.issues : undefined),
+      );
+    const session = context.get('session');
+    const stop = await requireDelivery().updateStopStatus(
+      params.data.id,
+      input.data.status,
+      session.userId,
+      deliveryContext(context),
+    );
+    return context.json(contractValue(stop));
+  });
+
+  app.post('/api/v1/delivery/stops/:id/trigger', async (context) => {
+    if (!context.get('session').permissions.includes('delivery.trigger_messages'))
+      return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = DeliveryTriggerRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá la acción a disparar.',
+        (!params.success ? params.error.issues : undefined) ??
+          (!input.success ? input.error.issues : undefined),
+      );
+    const result = await requireDelivery().triggerMessage(
+      params.data.id,
+      input.data.action,
+      deliveryContext(context),
+    );
+    return context.json(DeliveryTriggerResponseSchema.parse(result));
+  });
+
+  app.get('/api/v1/delivery/my-stops', async (context) => {
+    if (!context.get('session').permissions.includes('delivery.execute')) return forbidden(context);
+    const session = context.get('session');
+    const items = await requireDelivery().listStopsForUser(session.userId);
+    return context.json(DeliveryMyStopListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.get('/api/v1/payments', async (context) => {
+    if (!context.get('session').permissions.includes('payments.read')) return forbidden(context);
+    const items = await requirePayments().listByStatus(context.req.query('status'));
+    return context.json(PaymentListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.get('/api/v1/payments/dashboard', async (context) => {
+    if (!context.get('session').permissions.includes('payments.read')) return forbidden(context);
+    const dashboard = await requirePayments().dashboard(context.req.query('operatingSiteId'));
+    return context.json(PaymentsDashboardSchema.parse(contractValue(dashboard)));
+  });
+
+  app.get('/api/v1/payments/collections', async (context) => {
+    if (!context.get('session').permissions.includes('payments.read')) return forbidden(context);
+    const items = await requirePayments().listUnsettledCollections(
+      context.req.query('collectedByUserId'),
+    );
+    return context.json(CashCollectionListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.post('/api/v1/payments/orders/:id/collections', async (context) => {
+    if (!context.get('session').permissions.includes('payments.record')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = CashCollectionRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá el cobro.',
+        (!params.success ? params.error.issues : undefined) ??
+          (!input.success ? input.error.issues : undefined),
+      );
+    const collection = await requirePayments().recordCollection(
+      params.data.id,
+      input.data.amountMinor,
+      input.data.method,
+      paymentsContext(context),
+    );
+    return context.json(CashCollectionSchema.parse(contractValue(collection)), 201);
+  });
+
+  app.post('/api/v1/payments/collections/:id/settle', async (context) => {
+    if (!context.get('session').permissions.includes('payments.settle')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = CashSettlementRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá la rendición.',
+        (!params.success ? params.error.issues : undefined) ??
+          (!input.success ? input.error.issues : undefined),
+      );
+    const settlement = await requirePayments().settleCollection(
+      params.data.id,
+      input.data.receivedByUserId,
+      paymentsContext(context),
+    );
+    return context.json(contractValue(settlement), 201);
+  });
+
   app.get('/api/v1/menus', async (context) => {
     const permissions = context.get('session').permissions;
     if (!permissions.includes('orders.read') && !permissions.includes('production.read')) {
@@ -2844,7 +3139,9 @@ export function createApp(options: CreateAppOptions) {
       error.name === 'OperationsNotFoundError' ||
       error.name === 'OperatingSiteNotFoundError' ||
       error.name === 'ChatNotFoundError' ||
-      error.name === 'GeographicZoneNotFoundError'
+      error.name === 'GeographicZoneNotFoundError' ||
+      error.name === 'DeliveryNotFoundError' ||
+      error.name === 'PaymentsNotFoundError'
     ) {
       const code: ApiErrorCode = 'NOT_FOUND';
       return context.json(
@@ -2865,7 +3162,9 @@ export function createApp(options: CreateAppOptions) {
       error.name === 'ChatConflictError' ||
       error.name === 'OrderRuleError' ||
       error.name === 'CustomerRuleError' ||
-      error.name === 'AIConfigurationUnavailableError'
+      error.name === 'AIConfigurationUnavailableError' ||
+      error.name === 'DeliveryConflictError' ||
+      error.name === 'PaymentsConflictError'
     ) {
       const code: ApiErrorCode = 'CONFLICT';
       return context.json(

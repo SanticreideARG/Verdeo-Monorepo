@@ -4,6 +4,7 @@ import {
   check,
   index,
   integer,
+  numeric,
   pgTable,
   primaryKey,
   text,
@@ -31,6 +32,10 @@ export const operatingSites = pgTable(
     publicPhone: text('public_phone'),
     publicWhatsapp: text('public_whatsapp'),
     publicEmail: text('public_email'),
+    // Depot/kitchen coordinates the route optimizer walks routes out from (DELIVERY_AND_ROUTES.md
+    // "Optimización"). Nullable: a site without them just sequences from its first stop instead.
+    originLatitude: numeric('origin_latitude', { precision: 9, scale: 6 }),
+    originLongitude: numeric('origin_longitude', { precision: 9, scale: 6 }),
     active: boolean('active').default(true).notNull(),
     sortOrder: integer('sort_order').default(0).notNull(),
     ...timestamps,
@@ -39,6 +44,10 @@ export const operatingSites = pgTable(
     index('operating_sites_active_order_idx').on(table.active, table.sortOrder),
     check('operating_sites_slug_check', sql`${table.slug} ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'`),
     check('operating_sites_order_prefix_check', sql`${table.orderPrefix} ~ '^[A-Z0-9]{1,8}$'`),
+    check(
+      'operating_sites_origin_coordinates_check',
+      sql`(${table.originLatitude} is null and ${table.originLongitude} is null) or (${table.originLatitude} between -90 and 90 and ${table.originLongitude} between -180 and 180)`,
+    ),
     check('operating_sites_sort_order_check', sql`${table.sortOrder} >= 0`),
   ],
 );

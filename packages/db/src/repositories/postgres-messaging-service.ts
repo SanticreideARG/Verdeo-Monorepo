@@ -313,6 +313,104 @@ export class PostgresMessagingService {
   }
 
   /**
+   * Outbound-initiated send for a customer who may never have messaged in (delivery triggers:
+   * DELIVERY_AND_ROUTES.md "Mensajes"). Delivery-agnostic on purpose — it knows nothing about
+   * routes, stops, or templates; the caller (PostgresDeliveryService) decides *what* to say, this
+   * only knows *how* to reach the customer. Prefers the account scoped to `preferredSiteId`, falls
+   * back to any active account. Returns a reason rather than throwing when it can't send — a
+   * missing WhatsApp identity or unconfigured account is an expected, non-exceptional outcome here.
+   */
+  public async sendToCustomer(
+    customerId: string,
+    preferredSiteId: string | null,
+    body: string,
+    context: MessagingContext,
+  ): Promise<{ reason?: string; sent: boolean }> {
+    const [identity] = await this.database
+      .select({ id: customerIdentities.id, valueNormalized: customerIdentities.valueNormalized })
+      .from(customerIdentities)
+      .where(
+        and(
+          eq(customerIdentities.customerId, customerId),
+          eq(customerIdentities.type, 'whatsapp'),
+          eq(customerIdentities.active, true),
+        ),
+      )
+      .orderBy(desc(customerIdentities.primary))
+      .limit(1);
+    if (!identity) return { reason: 'no_whatsapp_identity', sent: false };
+
+    const candidateAccounts = await this.database
+      .select({
+        accessToken: messagingAccounts.accessToken,
+        id: messagingAccounts.id,
+        operatingSiteId: messagingAccounts.operatingSiteId,
+        phoneNumberId: messagingAccounts.phoneNumberId,
+      })
+      .from(messagingAccounts)
+      .where(eq(messagingAccounts.active, true));
+    const account =
+      candidateAccounts.find((row) => row.operatingSiteId === preferredSiteId) ??
+      candidateAccounts[0];
+    if (!account) return { reason: 'no_account', sent: false };
+    if (!account.accessToken) return { reason: 'no_token', sent: false };
+
+    return this.database.transaction(async (transaction) => {
+      let [conversation] = await transaction
+        .select({ id: messagingConversations.id })
+        .from(messagingConversations)
+        .where(
+          and(
+            eq(messagingConversations.messagingAccountId, account.id),
+            eq(messagingConversations.customerIdentityId, identity.id),
+            eq(messagingConversations.status, 'open'),
+          ),
+        )
+        .limit(1);
+      if (!conversation) {
+        const [created] = await transaction
+          .insert(messagingConversations)
+          .values({
+            customerId,
+            customerIdentityId: identity.id,
+            messagingAccountId: account.id,
+          })
+          .returning({ id: messagingConversations.id });
+        conversation = created;
+      }
+      if (!conversation) throw new Error('Conversation resolution failed');
+
+      let externalId: string;
+      try {
+        const result = await this.provider.sendText({
+          accessToken: account.accessToken as string,
+          body,
+          phoneNumberId: account.phoneNumberId,
+          to: identity.valueNormalized,
+        });
+        externalId = result.externalId;
+      } catch {
+        return { reason: 'send_failed', sent: false };
+      }
+
+      await transaction.insert(messagingMessages).values({
+        body,
+        conversationId: conversation.id,
+        direction: 'outbound',
+        externalId,
+        senderUserId: context.actorUserId ?? null,
+        status: 'sent',
+      });
+      await transaction
+        .update(messagingConversations)
+        .set({ lastMessageAt: new Date(), updatedAt: new Date() })
+        .where(eq(messagingConversations.id, conversation.id));
+
+      return { sent: true };
+    });
+  }
+
+  /**
    * Routing order matches MESSAGING_WHATSAPP.md's "Routing" section: idempotency first, then
    * resolve account → identity (create an incomplete customer if new) → conversation → persist.
    * Delivery-status callbacks (Meta's `statuses[]` array) update the matching outbound message's

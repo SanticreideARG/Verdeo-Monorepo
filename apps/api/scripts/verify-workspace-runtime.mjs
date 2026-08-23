@@ -10,6 +10,7 @@ const runtimePackages = [
   '@verdeo/db',
   '@verdeo/observability',
   '@verdeo/orders',
+  '@verdeo/routing',
 ];
 
 for (const packageName of runtimePackages) {

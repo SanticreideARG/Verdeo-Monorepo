@@ -105,6 +105,61 @@ try {
       }
     }
 
+    // Fase 8 defaults: operators build/publish routes and handle the money side; drivers only
+    // execute their own assigned stops and trigger the semantic delivery messages — never
+    // routes.manage/payments.*, so a driver can't reassign stops or touch payment records.
+    const operadorPermissions = await transaction
+      .select({ id: permissions.id })
+      .from(permissions)
+      .where(
+        inArray(permissions.key, [
+          'routes.read',
+          'routes.manage',
+          'routes.publish',
+          'payments.read',
+          'payments.record',
+          'payments.settle',
+        ]),
+      );
+    const repartidorPermissions = await transaction
+      .select({ id: permissions.id })
+      .from(permissions)
+      .where(
+        inArray(permissions.key, ['routes.read', 'delivery.execute', 'delivery.trigger_messages']),
+      );
+    const [operadorRoleForDelivery] = await transaction
+      .select({ id: roles.id })
+      .from(roles)
+      .where(eq(roles.key, 'operador'))
+      .limit(1);
+    const [repartidorRole] = await transaction
+      .select({ id: roles.id })
+      .from(roles)
+      .where(eq(roles.key, 'repartidor'))
+      .limit(1);
+    if (operadorRoleForDelivery && operadorPermissions.length > 0) {
+      await transaction
+        .insert(rolePermissions)
+        .values(
+          operadorPermissions.map((permission) => ({
+            permissionId: permission.id,
+            roleId: operadorRoleForDelivery.id,
+          })),
+        )
+        .onConflictDoNothing();
+    }
+    if (repartidorRole && repartidorPermissions.length > 0) {
+      await transaction
+        .insert(rolePermissions)
+        .values(
+          repartidorPermissions.map((permission) => ({
+            permissionId: permission.id,
+            roleId: repartidorRole.id,
+          })),
+        )
+        .onConflictDoNothing();
+    }
+
     const [neuquenSite] = await transaction
       .insert(operatingSites)
       .values({

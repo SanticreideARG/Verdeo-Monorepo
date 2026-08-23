@@ -9,6 +9,7 @@ import { DashboardPage } from './DashboardPage.js';
 import { ChatLinksPage } from './ChatLinksPage.js';
 import { ChatPage } from './ChatPage.js';
 import { CustomersPage } from './CustomersPage.js';
+import { DeliveryAppPage } from './DeliveryAppPage.js';
 import { GeographySettingsPage } from './GeographySettingsPage.js';
 import { KitchenPage } from './KitchenPage.js';
 import { LoginPage } from './LoginPage.js';
@@ -20,8 +21,10 @@ import { OAuthCallbackPage } from './OAuthCallbackPage.js';
 import { OrderDetailPage } from './OrderDetailPage.js';
 import { OrderIntakePage } from './OrderIntakePage.js';
 import { OrdersPage } from './OrdersPage.js';
+import { PaymentsPage } from './PaymentsPage.js';
 import { ProfilePage } from './ProfilePage.js';
 import { PublicOrderPage } from './PublicOrderPage.js';
+import { RoutesPage } from './RoutesPage.js';
 import { TrackOrderPage } from './TrackOrderPage.js';
 import { UsersAdminPage } from './UsersAdminPage.js';
 
@@ -180,6 +183,9 @@ export function App() {
       <Route path="/app/chat" element={<ChatPage />} />
       <Route path="/app/mensajes" element={<MessagingInboxPage />} />
       <Route path="/app/ajustes/mensajes" element={<MessagingAccountsPage />} />
+      <Route path="/app/reparto/rutas" element={<RoutesPage />} />
+      <Route path="/app/pagos" element={<PaymentsPage />} />
+      <Route path="/delivery" element={<DeliveryAppPage />} />
       <Route path="/app/perfil" element={<ProfilePage />} />
       <Route path="/app/usuarios" element={<UsersAdminPage />} />
       <Route path="/app/contenidos" element={<CmsPagesAdminPage />} />

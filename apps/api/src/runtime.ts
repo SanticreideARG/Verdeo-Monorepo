@@ -14,10 +14,12 @@ import {
   PostgresAuditSink,
   PostgresChatService,
   PostgresAIConfigurationService,
+  PostgresDeliveryService,
   PostgresGeographyService,
   PostgresPasswordCredentialRepository,
   PostgresOperationsService,
   PostgresOAuthIdentityRepository,
+  PostgresPaymentsService,
   PostgresSessionRepository,
   PostgresCmsService,
   PostgresMessagingService,
@@ -26,6 +28,7 @@ import {
 } from '@verdeo/db';
 import { LocationLinkGeocodingProvider } from '@verdeo/geocoding';
 import { createLogger } from '@verdeo/observability';
+import { NearestNeighborRouteOptimizer } from '@verdeo/routing';
 
 import { createApp } from './app.js';
 import { VercelBlobAvatarStorage } from './integrations/avatar-storage.js';
@@ -61,6 +64,12 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
   );
   const messaging = new PostgresMessagingService(database.db, whatsappProvider);
+  const delivery = new PostgresDeliveryService(
+    database.db,
+    new NearestNeighborRouteOptimizer(),
+    messaging,
+  );
+  const payments = new PostgresPaymentsService(database.db);
   const accessTokenService = new AccessTokenService(
     new PostgresAccessTokenRepository(database.db),
     sessionService,
@@ -290,11 +299,13 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     ...(env.CRON_SECRET ? { cronSecret: env.CRON_SECRET } : {}),
     cookieSameSite: env.SESSION_COOKIE_SAME_SITE,
     credentials,
+    delivery,
     geography,
     logger,
     messaging,
     ...(oauth ? { oauth } : {}),
     operations,
+    payments,
     sessions,
     secureCookies: env.NODE_ENV === 'production',
     userAdmin,

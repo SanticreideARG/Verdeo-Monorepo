@@ -80,6 +80,9 @@ importers:
       '@verdeo/orders':
         specifier: workspace:*
         version: link:../../packages/orders
+      '@verdeo/routing':
+        specifier: workspace:*
+        version: link:../../packages/routing
       hono:
         specifier: 4.13.2
         version: 4.13.2
@@ -181,6 +184,9 @@ importers:
       '@verdeo/rbac':
         specifier: workspace:*
         version: link:../rbac
+      '@verdeo/routing':
+        specifier: workspace:*
+        version: link:../routing
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@electric-sql/pglite@0.5.5)(postgres@3.4.9)
@@ -212,6 +218,8 @@ importers:
   packages/orders: {}
 
   packages/rbac: {}
+
+  packages/routing: {}
 
 packages:
 

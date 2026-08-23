@@ -28,6 +28,7 @@
     "@verdeo/geocoding": "workspace:*",
     "@verdeo/observability": "workspace:*",
     "@verdeo/orders": "workspace:*",
+    "@verdeo/routing": "workspace:*",
     "hono": "4.13.2",
     "pino": "10.3.1",
     "pino-pretty": "13.1.3",
