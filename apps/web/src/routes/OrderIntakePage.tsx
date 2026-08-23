@@ -30,12 +30,19 @@ function formText(form: FormData, key: string): string {
 export function OrderIntakePage() {
   const { failed, logout, profile } = useDashboardProfile();
   const [permissions, setPermissions] = useState<string[]>([]);
-  const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [menus, setMenus] = useState<WeeklyMenu[]>([]);
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [message, setMessage] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [selectedMenuId, setSelectedMenuId] = useState('');
+
+  // "Nuevo cliente" (quick alta) vs "Buscar cliente" (by name/number) — a client is picked before
+  // the rest of the order form matters, so this drives what `customerId` ends up as on submit.
+  const [customerMode, setCustomerMode] = useState<'new' | 'search'>('search');
+  const [customerQuery, setCustomerQuery] = useState('');
+  const [customerResults, setCustomerResults] = useState<CustomerSummary[]>([]);
+  const [customerSearching, setCustomerSearching] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerSummary | null>(null);
 
   const loadedOnce = useRef(false);
   const [loading, setLoading] = useState(true);
@@ -45,8 +52,7 @@ export function OrderIntakePage() {
     if (!loadedOnce.current) setLoading(true);
     setPermissions(profile.permissions);
 
-    const [customerResponse, menuResponse, orderResponse] = await Promise.all([
-      profile.permissions.includes('customers.read') ? apiRequest('/api/v1/customers') : null,
+    const [menuResponse, orderResponse] = await Promise.all([
       profile.permissions.some((permission) =>
         ['orders.read', 'production.read'].includes(permission),
       )
@@ -54,9 +60,6 @@ export function OrderIntakePage() {
         : null,
       profile.permissions.includes('orders.read') ? apiRequest('/api/v1/orders') : null,
     ]);
-    if (customerResponse?.ok) {
-      setCustomers(((await customerResponse.json()) as { items: CustomerSummary[] }).items);
-    }
     if (menuResponse?.ok) {
       const loadedMenus = ((await menuResponse.json()) as { items: WeeklyMenu[] }).items;
       setMenus(loadedMenus);
@@ -99,6 +102,25 @@ export function OrderIntakePage() {
     return response;
   }
 
+  async function searchCustomers(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!customerQuery.trim()) {
+      setCustomerResults([]);
+      return;
+    }
+    setCustomerSearching(true);
+    try {
+      const response = await apiRequest(
+        `/api/v1/customers?search=${encodeURIComponent(customerQuery.trim())}&limit=10`,
+      );
+      if (response.ok) {
+        setCustomerResults(((await response.json()) as { items: CustomerSummary[] }).items);
+      }
+    } finally {
+      setCustomerSearching(false);
+    }
+  }
+
   async function createOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -110,9 +132,27 @@ export function OrderIntakePage() {
       setMessage('Para un Intuitivo cargá exactamente cinco platos, uno por línea.');
       return;
     }
+
+    let customerId = selectedCustomer?.id ?? '';
     try {
+      if (customerMode === 'new') {
+        const newDisplayName = formText(form, 'newCustomerDisplayName').trim();
+        if (!newDisplayName) {
+          setMessage('Ingresá el nombre del cliente nuevo.');
+          return;
+        }
+        const createdCustomer = await mutate('/api/v1/customers', {
+          displayName: newDisplayName,
+          phone: formText(form, 'newCustomerPhone').trim() || undefined,
+        });
+        customerId = ((await createdCustomer.json()) as CustomerSummary).id;
+      } else if (!customerId) {
+        setMessage('Buscá y elegí un cliente antes de continuar.');
+        return;
+      }
+
       await mutate('/api/v1/orders', {
-        customerId: formText(form, 'customerId'),
+        customerId,
         deliveryAddress: formText(form, 'deliveryAddress'),
         deliveryDate: formText(form, 'deliveryDate'),
         dietaryInstructions: formText(form, 'dietaryInstructions')
@@ -131,6 +171,9 @@ export function OrderIntakePage() {
         source: formText(form, 'source'),
       });
       event.currentTarget.reset();
+      setSelectedCustomer(null);
+      setCustomerResults([]);
+      setCustomerQuery('');
       setMessage('Pedido registrado como borrador.');
       setFormOpen(false);
       await loadData();
@@ -190,18 +233,93 @@ export function OrderIntakePage() {
             className="operation-card mt-6 max-w-xl"
             onSubmit={(event) => void createOrder(event)}
           >
+            <fieldset className="mb-5 rounded-2xl border border-forest/10 p-4">
+              <legend className="px-2 text-sm font-bold text-forest">Cliente</legend>
+              <div className="flex gap-2">
+                <button
+                  className={`button ${customerMode === 'search' ? 'button-primary' : 'button-secondary'}`}
+                  onClick={() => setCustomerMode('search')}
+                  type="button"
+                >
+                  Buscar cliente
+                </button>
+                <button
+                  className={`button ${customerMode === 'new' ? 'button-primary' : 'button-secondary'}`}
+                  onClick={() => {
+                    setCustomerMode('new');
+                    setSelectedCustomer(null);
+                  }}
+                  type="button"
+                >
+                  Nuevo cliente
+                </button>
+              </div>
+
+              {customerMode === 'search' ? (
+                <div className="mt-3">
+                  {selectedCustomer ? (
+                    <p className="flex items-center gap-2 text-sm">
+                      <span className="status-chip">{selectedCustomer.displayName}</span>
+                      <button
+                        className="button button-secondary"
+                        onClick={() => setSelectedCustomer(null)}
+                        type="button"
+                      >
+                        Cambiar
+                      </button>
+                    </p>
+                  ) : (
+                    <>
+                      <form
+                        className="flex gap-2"
+                        onSubmit={(event) => void searchCustomers(event)}
+                      >
+                        <input
+                          onChange={(event) => setCustomerQuery(event.target.value)}
+                          placeholder="Nombre o número de teléfono"
+                          value={customerQuery}
+                        />
+                        <button className="button button-secondary" type="submit">
+                          {customerSearching ? 'Buscando…' : 'Buscar'}
+                        </button>
+                      </form>
+                      {customerResults.length > 0 ? (
+                        <ul className="mt-2 grid gap-1">
+                          {customerResults.map((customer) => (
+                            <li key={customer.id}>
+                              <button
+                                className="w-full rounded-lg border border-forest/10 px-3 py-2 text-left text-sm hover:bg-forest/5"
+                                onClick={() => {
+                                  setSelectedCustomer(customer);
+                                  setCustomerResults([]);
+                                }}
+                                type="button"
+                              >
+                                {customer.displayName}
+                                {customer.phone ? ` · ${customer.phone}` : ''}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="form-grid mt-3">
+                  <label className="field">
+                    Nombre
+                    <input name="newCustomerDisplayName" required />
+                  </label>
+                  <label className="field">
+                    Teléfono
+                    <input name="newCustomerPhone" />
+                  </label>
+                </div>
+              )}
+            </fieldset>
+
             <div className="form-grid">
-              <label className="field">
-                Cliente
-                <select name="customerId" required>
-                  <option value="">Seleccionar</option>
-                  {customers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.displayName}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <label className="field">
                 Menú
                 <select
@@ -247,9 +365,10 @@ export function OrderIntakePage() {
                 <select defaultValue="manual" name="source">
                   <option value="manual">Manual</option>
                   <option value="whatsapp">WhatsApp</option>
-                  <option value="phone">Teléfono</option>
+                  <option value="facebook">Facebook</option>
                   <option value="instagram">Instagram</option>
                   <option value="email">Email</option>
+                  <option value="referral">Recomendación</option>
                   <option value="opportunity_sale">Venta de oportunidad (excedente)</option>
                 </select>
               </label>

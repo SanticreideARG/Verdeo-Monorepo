@@ -17,6 +17,7 @@ import { KitchenPage } from './KitchenPage.js';
 import { LoginPage } from './LoginPage.js';
 import { MenuBuilderPage } from './MenuBuilderPage.js';
 import { MenusPage } from './MenusPage.js';
+import { PriceByLocationPage } from './PriceByLocationPage.js';
 import { MessagingAccountsPage } from './MessagingAccountsPage.js';
 import { MessagingInboxPage } from './MessagingInboxPage.js';
 import { OAuthCallbackPage } from './OAuthCallbackPage.js';
@@ -180,6 +181,7 @@ export function App() {
       <Route path="/app/pedidos" element={<OrdersPage />} />
       <Route path="/app/menus/nuevo" element={<MenuBuilderPage />} />
       <Route path="/app/menus" element={<MenusPage />} />
+      <Route path="/app/menus/precios" element={<PriceByLocationPage />} />
       <Route path="/app/cocina" element={<KitchenPage />} />
       <Route path="/app/ia" element={<AIProvidersPage />} />
       <Route path="/app/ia/workbench" element={<AIWorkbenchPage />} />

@@ -21,6 +21,9 @@ export const OrderSourceSchema = z.enum([
   'phone',
   'manual',
   'opportunity_sale',
+  // Referral ("recomendación") — a distinct origin from opportunity_sale, which stays load-bearing
+  // for surplus stock validation and the "vendido por oportunidad" report metric.
+  'referral',
 ]);
 
 export const CustomerIdentityCreateRequestSchema = z.object({
@@ -134,6 +137,9 @@ export const CustomerCreateRequestSchema = z.object({
       message: 'El teléfono debe contener al menos seis dígitos.',
     })
     .optional(),
+  // Dietary restrictions checked at intake time (e.g. "sin ajo"/"sin semillas") — the type is free
+  // text like every other configurable key in this domain, never a hardcoded enum.
+  restrictions: z.array(CustomerRestrictionCreateRequestSchema).max(20).default([]),
 });
 
 /** A normalized row received from the contact spreadsheet importer. */
@@ -758,6 +764,12 @@ export const SurplusConfigUpdateRequestSchema = z.object({
 
 export const MenuCatalogSettingsSchema = z.object({
   intuitivoEnabled: z.boolean(),
+  operatingSiteId: UuidSchema,
+  operatingSiteName: z.string(),
+});
+
+export const MenuCatalogSettingsListResponseSchema = z.object({
+  items: z.array(MenuCatalogSettingsSchema),
 });
 
 export const MenuCatalogSettingsUpdateRequestSchema = z.object({

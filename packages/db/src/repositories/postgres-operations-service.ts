@@ -79,6 +79,7 @@ export interface CustomerInput {
   internalNotes?: string | undefined;
   lastName?: string | undefined;
   phone?: string | undefined;
+  restrictions?: readonly { reason: string; type: string }[] | undefined;
 }
 
 export interface CustomerIdentityInput {
@@ -751,6 +752,17 @@ export class PostgresOperationsService {
       throw new OperationsConflictError('Only one primary address is allowed');
     }
     if (addressValues.length > 0) await transaction.insert(customerAddresses).values(addressValues);
+
+    if (input.restrictions && input.restrictions.length > 0) {
+      await transaction.insert(customerRestrictions).values(
+        input.restrictions.map((restriction) => ({
+          createdByUserId: context.actorUserId,
+          customerId: created.id,
+          reason: restriction.reason,
+          type: restriction.type,
+        })),
+      );
+    }
 
     const audit = new AuditService(new PostgresAuditSink(transaction));
     await audit.record({
@@ -1804,18 +1816,9 @@ export class PostgresOperationsService {
   public async createMenu(input: MenuInput, context: OperationsContext) {
     return this.database
       .transaction(async (transaction) => {
-        const hasComposableOffering = input.offerings.some((offering) => offering.composable);
-        if (hasComposableOffering) {
-          const [settings] = await transaction
-            .select({ intuitivoEnabled: menuCatalogSettings.intuitivoEnabled })
-            .from(menuCatalogSettings)
-            .orderBy(desc(menuCatalogSettings.updatedAt))
-            .limit(1);
-          if (settings && !settings.intuitivoEnabled)
-            throw new OperationsConflictError(
-              'El menú personalizado (Intuitivo) está deshabilitado en Ajustes.',
-            );
-        }
+        // Whether Intuitivo can be offered is decided per operating site at distribution time
+        // (see distributeMenu), not here — the master menu is global and never belongs to one
+        // operation (WEEKLY_MENU_AND_PRODUCTION.md), so there is no single site to check yet.
         // The composable offering's identity is the system's to set, not the operator's to type —
         // "Ningún branch del motor identifica la variedad componible por su nombre" already holds
         // for the engine (it matches by product_families.kind), but the display name still reached
@@ -2057,15 +2060,27 @@ export class PostgresOperationsService {
           })
           .from(weeklyMenuPrices)
           .where(eq(weeklyMenuPrices.weeklyMenuId, master.id));
-        const masterOfferings = await transaction
+        const masterOfferingsWithKind = await transaction
           .select({
+            composable: sql<boolean>`${productFamilies.kind} = 'COMPOSABLE'`,
             currency: weeklyMenuOfferings.currency,
             id: weeklyMenuOfferings.id,
             productVariantId: weeklyMenuOfferings.productVariantId,
             unitPriceMinor: weeklyMenuOfferings.unitPriceMinor,
           })
           .from(weeklyMenuOfferings)
+          .innerJoin(productVariants, eq(productVariants.id, weeklyMenuOfferings.productVariantId))
+          .innerJoin(productFamilies, eq(productFamilies.id, productVariants.productFamilyId))
           .where(eq(weeklyMenuOfferings.weeklyMenuId, master.id));
+        const masterOfferings = masterOfferingsWithKind.map((row) => ({
+          currency: row.currency,
+          id: row.id,
+          productVariantId: row.productVariantId,
+          unitPriceMinor: row.unitPriceMinor,
+        }));
+        const composableOfferingIds = new Set(
+          masterOfferingsWithKind.filter((row) => row.composable).map((row) => row.id),
+        );
         const masterItems = await transaction
           .select({
             dishName: weeklyMenuItems.dishName,
@@ -2137,10 +2152,22 @@ export class PostgresOperationsService {
             )[0]?.id;
           if (!regionalId) throw new Error('Regional menu creation did not return a row');
 
+          // Intuitivo availability is per site: a city with it switched off in Ajustes never gets
+          // the composable offering copied in, regardless of what the master week includes.
+          const siteAllowsIntuitivo =
+            composableOfferingIds.size === 0 ||
+            (await this.isIntuitivoEnabledForSite(transaction, operatingSiteId));
+          const siteOfferings = siteAllowsIntuitivo
+            ? masterOfferings
+            : masterOfferings.filter((offering) => !composableOfferingIds.has(offering.id));
+          const siteItems = siteAllowsIntuitivo
+            ? masterItems
+            : masterItems.filter((item) => !composableOfferingIds.has(item.offeringId));
+
           const replacing = input.mode === 'REPLACE';
           const refreshed = await this.copyMenuContent(transaction, {
-            items: masterItems,
-            offerings: masterOfferings,
+            items: siteItems,
+            offerings: siteOfferings,
             prices: masterPrices,
             replacing,
             targetMenuId: regionalId,
@@ -3593,20 +3620,67 @@ export class PostgresOperationsService {
       .catch(translateDatabaseConflict);
   }
 
-  public async getMenuCatalogSettings() {
-    const [settings] = await this.database
-      .select()
+  /** One row per active operating site, its own latest Intuitivo toggle (default enabled when no
+   * row exists yet for that site). For the settings screen, not the distribution path — that path
+   * calls `isIntuitivoEnabledForSite` directly instead of listing everything. */
+  public async listMenuCatalogSettings() {
+    const sites = await this.database
+      .select({ displayName: operatingSites.displayName, id: operatingSites.id })
+      .from(operatingSites)
+      .where(eq(operatingSites.active, true))
+      .orderBy(asc(operatingSites.displayName));
+
+    const rows = await this.database
+      .select({
+        intuitivoEnabled: menuCatalogSettings.intuitivoEnabled,
+        operatingSiteId: menuCatalogSettings.operatingSiteId,
+        updatedAt: menuCatalogSettings.updatedAt,
+      })
       .from(menuCatalogSettings)
-      .orderBy(desc(menuCatalogSettings.updatedAt))
-      .limit(1);
-    return settings ?? { id: null, intuitivoEnabled: true, updatedAt: null, updatedByUserId: null };
+      .orderBy(desc(menuCatalogSettings.updatedAt));
+    const latestBySite = new Map<string, boolean>();
+    for (const row of rows) {
+      if (row.operatingSiteId && !latestBySite.has(row.operatingSiteId))
+        latestBySite.set(row.operatingSiteId, row.intuitivoEnabled);
+    }
+
+    return sites.map((site) => ({
+      intuitivoEnabled: latestBySite.get(site.id) ?? true,
+      operatingSiteId: site.id,
+      operatingSiteName: site.displayName,
+    }));
   }
 
-  public async setIntuitivoEnabled(intuitivoEnabled: boolean, context: OperationsContext) {
+  private async isIntuitivoEnabledForSite(
+    database: Database | DatabaseTransaction,
+    operatingSiteId: string,
+  ): Promise<boolean> {
+    const [row] = await database
+      .select({ intuitivoEnabled: menuCatalogSettings.intuitivoEnabled })
+      .from(menuCatalogSettings)
+      .where(eq(menuCatalogSettings.operatingSiteId, operatingSiteId))
+      .orderBy(desc(menuCatalogSettings.updatedAt))
+      .limit(1);
+    return row?.intuitivoEnabled ?? true;
+  }
+
+  public async setIntuitivoEnabled(
+    operatingSiteId: string,
+    intuitivoEnabled: boolean,
+    context: OperationsContext,
+  ) {
     return this.database.transaction(async (transaction) => {
+      const [site] = await transaction
+        .select({ id: operatingSites.id })
+        .from(operatingSites)
+        .where(eq(operatingSites.id, operatingSiteId))
+        .limit(1);
+      if (!site) throw new OperationsNotFoundError('Operating site not found');
+
       const [existing] = await transaction
         .select()
         .from(menuCatalogSettings)
+        .where(eq(menuCatalogSettings.operatingSiteId, operatingSiteId))
         .orderBy(desc(menuCatalogSettings.updatedAt))
         .limit(1);
 
@@ -3624,7 +3698,11 @@ export class PostgresOperationsService {
       } else {
         [row] = await transaction
           .insert(menuCatalogSettings)
-          .values({ intuitivoEnabled, updatedByUserId: context.actorUserId ?? null })
+          .values({
+            intuitivoEnabled,
+            operatingSiteId,
+            updatedByUserId: context.actorUserId ?? null,
+          })
           .returning();
       }
       if (!row) throw new Error('Menu catalog settings upsert did not return a row');
@@ -3638,6 +3716,7 @@ export class PostgresOperationsService {
         correlationId: context.correlationId,
         entityId: row.id,
         entityType: 'menu_catalog_settings',
+        metadata: { operatingSiteId },
         requestId: context.requestId,
         source: context.source,
       });

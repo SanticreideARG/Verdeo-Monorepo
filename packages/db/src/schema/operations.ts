@@ -299,15 +299,28 @@ export const productFamilies = pgTable(
   (table) => [check('product_families_kind_check', sql`${table.kind} in ('FIXED', 'COMPOSABLE')`)],
 );
 
-// Whether the weekly menu builder may include a composable ("Intuitivo") offering at all — a
-// system-wide switch, not a per-week choice. "Latest row wins" (same pattern as surplus_configs):
-// never updated in place, just appended to, so the setting's own history stays inspectable.
-export const menuCatalogSettings = pgTable('menu_catalog_settings', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  intuitivoEnabled: boolean('intuitivo_enabled').default(true).notNull(),
-  updatedByUserId: uuid('updated_by_user_id').references(() => users.id, { onDelete: 'set null' }),
-  ...timestamps,
-});
+// Whether a given operation may offer the composable ("Intuitivo") variety at all — decided per
+// operating site, not globally, since it's enforced at distribution time (see
+// PostgresOperationsService.distributeMenu), not at master-menu creation. `operatingSiteId` is
+// nullable only so a stale pre-per-site row (this table shipped as a global singleton for one
+// commit before this) never gets mistaken for a real per-site setting — it's simply never matched
+// by the per-site lookup. "Latest row wins" per site, same pattern as surplus_configs: never
+// updated in place, just appended to, so each site's own history stays inspectable.
+export const menuCatalogSettings = pgTable(
+  'menu_catalog_settings',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    operatingSiteId: uuid('operating_site_id').references(() => operatingSites.id, {
+      onDelete: 'cascade',
+    }),
+    intuitivoEnabled: boolean('intuitivo_enabled').default(true).notNull(),
+    updatedByUserId: uuid('updated_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    ...timestamps,
+  },
+  (table) => [index('menu_catalog_settings_site_idx').on(table.operatingSiteId, table.updatedAt)],
+);
 
 // Commercial size. '250' and '400' are commercial names and never express a unit of measure.
 export const productSizes = pgTable(

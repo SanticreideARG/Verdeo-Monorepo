@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
@@ -37,28 +37,17 @@ function formText(form: FormData, key: string): string {
  * an existing menu happens in "Ver menús" instead.
  *
  * The composable variety ("Intuitivo") is deliberately not just another typed row here: its name
- * is fixed by the system (never what an operator happens to type — see
- * PostgresOperationsService.createMenu, which coerces it server-side too as defense in depth) and
- * whether it's offered at all is a standing setting from Ajustes → Menú personalizado, not a
- * per-week choice. This form only decides whether to *include* it this week. */
+ * is fixed by the system (never what an operator happens to type -- see
+ * PostgresOperationsService.createMenu, which coerces it server-side too as defense in depth).
+ * This form only decides whether the master week carries the offering at all -- whether a given
+ * operation actually gets it is a separate, per-site call made at distribution time (Ajustes ->
+ * Menu personalizado, per ciudad), since the master menu itself belongs to no operation. */
 export function MenuBuilderPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const [offerings, setOfferings] = useState<OfferingDraft[]>([emptyOffering()]);
   const [sizePrices, setSizePrices] = useState<SizePriceDraft[]>(defaultSizePrices);
   const [message, setMessage] = useState('');
-  const [intuitivoEnabled, setIntuitivoEnabled] = useState<boolean | null>(null);
   const [includeIntuitivo, setIncludeIntuitivo] = useState(true);
-
-  useEffect(() => {
-    void apiRequest('/api/v1/menu-catalog/settings')
-      .then(async (response) => {
-        if (!response.ok) return;
-        const body = (await response.json()) as { intuitivoEnabled: boolean };
-        setIntuitivoEnabled(body.intuitivoEnabled);
-        setIncludeIntuitivo(body.intuitivoEnabled);
-      })
-      .catch(() => setIntuitivoEnabled(false));
-  }, []);
 
   async function createMenu(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -88,7 +77,7 @@ export function MenuBuilderPage() {
       setMessage('Cada variedad necesita exactamente cinco platos.');
       return;
     }
-    if (intuitivoEnabled && includeIntuitivo) {
+    if (includeIntuitivo) {
       varieties.push({ composable: true, dishes: [], familyName: 'Intuitivo' });
     }
     // Size and variety are unrelated axes: every variety comes in every size defined above, so one
@@ -112,7 +101,7 @@ export function MenuBuilderPage() {
       if (!response.ok) throw new Error(await errorMessage(response));
       setOfferings([emptyOffering()]);
       setSizePrices(defaultSizePrices());
-      setIncludeIntuitivo(Boolean(intuitivoEnabled));
+      setIncludeIntuitivo(true);
       event.currentTarget.reset();
       setMessage('Menú guardado como borrador. Publicalo desde "Ver menús".');
     } catch (error) {
@@ -250,27 +239,20 @@ export function MenuBuilderPage() {
 
           <fieldset className="mt-5 rounded-2xl border border-forest/10 p-4">
             <legend className="px-2 text-sm font-bold text-forest">Menú personalizado</legend>
-            {intuitivoEnabled === null ? (
-              <p className="text-sm text-ink-muted">Cargando…</p>
-            ) : intuitivoEnabled ? (
-              <label className="flex items-center gap-2 text-sm text-ink-muted">
-                <input
-                  checked={includeIntuitivo}
-                  onChange={(event) => setIncludeIntuitivo(event.target.checked)}
-                  type="checkbox"
-                />
-                Incluir Intuitivo esta semana (el cliente elige cinco platos del universo publicado
-                para su tamaño; el nombre y la existencia de esta variedad no se editan acá).
-              </label>
-            ) : (
-              <p className="text-sm text-ink-muted">
-                El menú personalizado (Intuitivo) está deshabilitado. Activalo desde{' '}
-                <Link className="underline" to="/app/ajustes/menu">
-                  Ajustes → Menú personalizado
-                </Link>
-                .
-              </p>
-            )}
+            <label className="flex items-center gap-2 text-sm text-ink-muted">
+              <input
+                checked={includeIntuitivo}
+                onChange={(event) => setIncludeIntuitivo(event.target.checked)}
+                type="checkbox"
+              />
+              Incluir Intuitivo esta semana (el cliente elige cinco platos del universo publicado
+              para su tamaño; el nombre y la existencia de esta variedad no se editan acá). Qué
+              operaciones lo ofrecen se decide por ciudad en{' '}
+              <Link className="underline" to="/app/ajustes/menu">
+                Ajustes → Menú personalizado
+              </Link>
+              .
+            </label>
           </fieldset>
 
           <div className="mt-5 flex flex-wrap gap-3">

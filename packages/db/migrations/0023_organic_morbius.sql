@@ -1,0 +1,3 @@
+ALTER TABLE "menu_catalog_settings" ADD COLUMN "operating_site_id" uuid;--> statement-breakpoint
+ALTER TABLE "menu_catalog_settings" ADD CONSTRAINT "menu_catalog_settings_operating_site_id_operating_sites_id_fk" FOREIGN KEY ("operating_site_id") REFERENCES "public"."operating_sites"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "menu_catalog_settings_site_idx" ON "menu_catalog_settings" USING btree ("operating_site_id","updated_at");

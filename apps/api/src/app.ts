@@ -83,7 +83,7 @@ import {
   KitchenSummaryResponseSchema,
   LoginRequestSchema,
   LoginResponseSchema,
-  MenuCatalogSettingsSchema,
+  MenuCatalogSettingsListResponseSchema,
   MenuCatalogSettingsUpdateRequestSchema,
   MenuCreateRequestSchema,
   MenuDistributeRequestSchema,
@@ -462,8 +462,8 @@ interface OperationsEngine {
     operatingSiteId: string | null | undefined,
     context: OperationsContext,
   ): Promise<unknown>;
-  getMenuCatalogSettings(): Promise<unknown>;
   getSurplusConfig(): Promise<unknown>;
+  listMenuCatalogSettings(): Promise<unknown>;
   listProductionActuals(cycleId: string): Promise<unknown>;
   listProductionSnapshots(cycleId: string): Promise<unknown>;
   reportProduction(
@@ -471,7 +471,11 @@ interface OperationsEngine {
     entries: ProductionReportRequest['entries'],
     context: OperationsContext,
   ): Promise<unknown>;
-  setIntuitivoEnabled(intuitivoEnabled: boolean, context: OperationsContext): Promise<unknown>;
+  setIntuitivoEnabled(
+    operatingSiteId: string,
+    intuitivoEnabled: boolean,
+    context: OperationsContext,
+  ): Promise<unknown>;
   setSurplusConfig(coefficientPercent: number, context: OperationsContext): Promise<unknown>;
   surplusReport(cycleId: string): Promise<unknown>;
   writeOffSurplus(
@@ -3157,23 +3161,35 @@ export function createApp(options: CreateAppOptions) {
 
   app.get('/api/v1/menu-catalog/settings', async (context) => {
     if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
-    const settings = await requireOperations().getMenuCatalogSettings();
-    return context.json(MenuCatalogSettingsSchema.parse(contractValue(settings)));
+    const items = await requireOperations().listMenuCatalogSettings();
+    return context.json(
+      MenuCatalogSettingsListResponseSchema.parse({ items: contractValue(items) }),
+    );
   });
 
-  app.patch('/api/v1/menu-catalog/settings', async (context) => {
+  app.patch('/api/v1/menu-catalog/settings/:operatingSiteId', async (context) => {
     if (!context.get('session').permissions.includes('production.generate'))
       return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('operatingSiteId') });
     const input = MenuCatalogSettingsUpdateRequestSchema.safeParse(
       await context.req.json().catch(() => null),
     );
-    if (!input.success)
-      return badRequest(context, 'Revisá la configuración del menú.', input.error.issues);
-    const settings = await requireOperations().setIntuitivoEnabled(
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá la configuración del menú.',
+        (!params.success ? params.error.issues : undefined) ??
+          (!input.success ? input.error.issues : undefined),
+      );
+    await requireOperations().setIntuitivoEnabled(
+      params.data.id,
       input.data.intuitivoEnabled,
       operationsContext(context),
     );
-    return context.json(MenuCatalogSettingsSchema.parse(contractValue(settings)));
+    const items = await requireOperations().listMenuCatalogSettings();
+    return context.json(
+      MenuCatalogSettingsListResponseSchema.parse({ items: contractValue(items) }),
+    );
   });
 
   app.get('/api/v1/ai/providers', async (context) => {

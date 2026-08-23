@@ -112,6 +112,14 @@ export function MenusPage() {
           ) : null}
         </header>
 
+        {permissions.includes('production.generate') ? (
+          <p className="mt-3">
+            <Link className="text-sm underline" to="/app/menus/precios">
+              Precios por ubicación →
+            </Link>
+          </p>
+        ) : null}
+
         {message ? (
           <p className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
             {message}

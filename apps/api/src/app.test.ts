@@ -60,7 +60,7 @@ const customerOperationsStubs = {
   getAddressGeocodingRequest: vi.fn(),
   getCustomer: vi.fn(),
   getOrder: vi.fn(),
-  getMenuCatalogSettings: vi.fn(),
+  listMenuCatalogSettings: vi.fn(),
   getSurplusConfig: vi.fn(),
   listMessageTemplates: vi.fn(),
   listProductionActuals: vi.fn(),
@@ -1380,35 +1380,46 @@ describe('API foundation', () => {
       expect(deniedResponse.status).toBe(403);
     });
 
-    it('reads the Intuitivo toggle with production.read and denies without it', async () => {
-      const getMenuCatalogSettings = vi.fn(() => Promise.resolve({ intuitivoEnabled: true }));
-      const app = buildApp({ getMenuCatalogSettings }, ['production.read']);
+    const SITE = '20000000-0000-4000-8000-000000000099';
+
+    it('lists the per-site Intuitivo toggle with production.read and denies without it', async () => {
+      const listMenuCatalogSettings = vi.fn(() =>
+        Promise.resolve([
+          { intuitivoEnabled: true, operatingSiteId: SITE, operatingSiteName: 'Neuquén' },
+        ]),
+      );
+      const app = buildApp({ listMenuCatalogSettings }, ['production.read']);
 
       const response = await app.request('/api/v1/menu-catalog/settings', { headers: { cookie } });
       expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({ intuitivoEnabled: true });
+      expect(await response.json()).toEqual({
+        items: [{ intuitivoEnabled: true, operatingSiteId: SITE, operatingSiteName: 'Neuquén' }],
+      });
 
-      const denied = buildApp({ getMenuCatalogSettings: vi.fn() }, []);
+      const denied = buildApp({ listMenuCatalogSettings: vi.fn() }, []);
       const deniedResponse = await denied.request('/api/v1/menu-catalog/settings', {
         headers: { cookie },
       });
       expect(deniedResponse.status).toBe(403);
     });
 
-    it('flips the Intuitivo toggle with production.generate and denies without it', async () => {
-      const setIntuitivoEnabled = vi.fn(() => Promise.resolve({ intuitivoEnabled: false }));
-      const app = buildApp({ setIntuitivoEnabled }, ['production.generate']);
+    it("flips one site's Intuitivo toggle with production.generate and denies without it", async () => {
+      const setIntuitivoEnabled = vi.fn(() => Promise.resolve(undefined));
+      const listMenuCatalogSettings = vi.fn(() => Promise.resolve([]));
+      const app = buildApp({ listMenuCatalogSettings, setIntuitivoEnabled }, [
+        'production.generate',
+      ]);
 
-      const response = await app.request('/api/v1/menu-catalog/settings', {
+      const response = await app.request(`/api/v1/menu-catalog/settings/${SITE}`, {
         body: JSON.stringify({ intuitivoEnabled: false }),
         headers: { cookie, 'content-type': 'application/json' },
         method: 'PATCH',
       });
       expect(response.status).toBe(200);
-      expect(setIntuitivoEnabled).toHaveBeenCalledWith(false, expect.anything());
+      expect(setIntuitivoEnabled).toHaveBeenCalledWith(SITE, false, expect.anything());
 
       const denied = buildApp({ setIntuitivoEnabled: vi.fn() }, ['production.read']);
-      const deniedResponse = await denied.request('/api/v1/menu-catalog/settings', {
+      const deniedResponse = await denied.request(`/api/v1/menu-catalog/settings/${SITE}`, {
         body: JSON.stringify({ intuitivoEnabled: false }),
         headers: { cookie, 'content-type': 'application/json' },
         method: 'PATCH',

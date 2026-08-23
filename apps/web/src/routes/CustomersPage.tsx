@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
-import { apiRequest } from '../lib/api.js';
+import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import {
   errorMessage,
   formatMoney,
@@ -176,16 +176,47 @@ export function CustomersPage() {
     event.preventDefault();
     const target = event.currentTarget;
     const form = new FormData(target);
+    const writtenAddress = formText(form, 'writtenAddress');
+    const geographicZoneId = formText(form, 'geographicZoneId');
+    // An address is entirely optional at intake, but a written address needs a zone to anchor it
+    // to (ADR-031) — asking for one without the other would create a half-usable row.
+    if (writtenAddress && !geographicZoneId) {
+      setMessage('Elegí una zona para el domicilio, o dejá la dirección en blanco.');
+      return;
+    }
+    const restrictions = [
+      form.get('noGarlic') === 'on'
+        ? { reason: 'Preferencia informada al alta.', type: 'sin_ajo' }
+        : null,
+      form.get('noSeeds') === 'on'
+        ? { reason: 'Preferencia informada al alta.', type: 'sin_semillas' }
+        : null,
+    ].filter((value) => value !== null);
     try {
       const created = await responseJson<CustomerSummary>(
         await apiRequest('/api/v1/customers', {
           body: JSON.stringify({
+            ...(writtenAddress
+              ? {
+                  addresses: [
+                    {
+                      geographicZoneId,
+                      label: 'Casa',
+                      locationUrl: optional(formText(form, 'locationUrl')),
+                      primary: true,
+                      source: 'manual',
+                      writtenAddress,
+                    },
+                  ],
+                }
+              : {}),
             displayName: formText(form, 'displayName'),
             email: optional(formText(form, 'email')),
             firstName: optional(formText(form, 'firstName')),
             internalNotes: optional(formText(form, 'internalNotes')),
             lastName: optional(formText(form, 'lastName')),
             phone: optional(formText(form, 'phone')),
+            restrictions,
           }),
           method: 'POST',
         }),
@@ -515,6 +546,12 @@ export function CustomersPage() {
                     Cancelar
                   </button>
                 </div>
+                {!storedOperatingSiteId() ? (
+                  <p className="mb-4 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest">
+                    Elegí una ciudad en la barra superior antes de cargar un cliente: todo cliente
+                    pertenece a una operación.
+                  </p>
+                ) : null}
                 <div className="form-grid">
                   <label className="field field-wide">
                     Nombre visible
@@ -537,11 +574,44 @@ export function CustomersPage() {
                     <input name="phone" />
                   </label>
                   <label className="field field-wide">
+                    Dirección
+                    <input name="writtenAddress" placeholder="Calle y número" />
+                  </label>
+                  <label className="field">
+                    Zona
+                    <select defaultValue="" name="geographicZoneId">
+                      <option value="">Sin definir</option>
+                      {zones.map((zone) => (
+                        <option key={zone.id} value={zone.id}>
+                          {zone.displayName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    Ubicación (link de GPS/Maps)
+                    <input name="locationUrl" placeholder="https://maps.google.com/…" type="url" />
+                  </label>
+                  <label className="field field-wide">
                     Notas internas
                     <textarea name="internalNotes" rows={4} />
                   </label>
                 </div>
-                <button className="button button-primary" type="submit">
+                <fieldset className="mt-4 flex flex-wrap gap-6">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input name="noGarlic" type="checkbox" />
+                    Sin ajo
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input name="noSeeds" type="checkbox" />
+                    Sin semillas
+                  </label>
+                </fieldset>
+                <button
+                  className="button button-primary mt-4"
+                  disabled={!storedOperatingSiteId()}
+                  type="submit"
+                >
                   Crear ficha
                 </button>
               </form>

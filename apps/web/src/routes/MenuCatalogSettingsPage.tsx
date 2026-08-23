@@ -6,15 +6,22 @@ import { apiRequest } from '../lib/api.js';
 import { errorMessage } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
-/** "Ajustes → Menú personalizado": a single standing switch for whether Intuitivo can be offered
- * at all. Turning it off doesn't touch any menu already created — "Configurar la semana" simply
- * stops letting an operator include it in a new week, and rejects the attempt server-side too if
- * it somehow reaches the API with the toggle off. */
+interface SiteSetting {
+  intuitivoEnabled: boolean;
+  operatingSiteId: string;
+  operatingSiteName: string;
+}
+
+/** "Ajustes → Menú personalizado": whether Intuitivo can be offered, decided per operation, not
+ * globally -- a city that turns it off simply never receives the composable offering when a menu
+ * is distributed to it (PostgresOperationsService.distributeMenu), regardless of what the master
+ * week includes. Turning it off doesn't touch any menu already distributed. */
 export function MenuCatalogSettingsPage() {
   const { failed, logout, profile } = useDashboardProfile();
-  const [intuitivoEnabled, setIntuitivoEnabled] = useState<boolean | null>(null);
+  const [sites, setSites] = useState<SiteSetting[]>([]);
   const [message, setMessage] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [savingSiteId, setSavingSiteId] = useState<string | null>(null);
 
   const canManage = profile?.permissions.includes('production.generate') ?? false;
   const canRead = canManage || (profile?.permissions.includes('production.read') ?? false);
@@ -22,30 +29,28 @@ export function MenuCatalogSettingsPage() {
   const load = useCallback(async () => {
     const response = await apiRequest('/api/v1/menu-catalog/settings');
     if (response.ok) {
-      const body = (await response.json()) as { intuitivoEnabled: boolean };
-      setIntuitivoEnabled(body.intuitivoEnabled);
+      setSites(((await response.json()) as { items: SiteSetting[] }).items);
     }
   }, []);
 
   useEffect(() => {
-    if (canRead) void load();
+    if (canRead) void load().finally(() => setLoading(false));
+    else setLoading(false);
   }, [canRead, load]);
 
-  async function toggle() {
-    if (intuitivoEnabled === null) return;
-    setSaving(true);
+  async function toggle(site: SiteSetting) {
+    setSavingSiteId(site.operatingSiteId);
     setMessage('');
-    const response = await apiRequest('/api/v1/menu-catalog/settings', {
-      body: JSON.stringify({ intuitivoEnabled: !intuitivoEnabled }),
+    const response = await apiRequest(`/api/v1/menu-catalog/settings/${site.operatingSiteId}`, {
+      body: JSON.stringify({ intuitivoEnabled: !site.intuitivoEnabled }),
       method: 'PATCH',
     });
-    setSaving(false);
+    setSavingSiteId(null);
     if (!response.ok) {
       setMessage(await errorMessage(response));
       return;
     }
-    const body = (await response.json()) as { intuitivoEnabled: boolean };
-    setIntuitivoEnabled(body.intuitivoEnabled);
+    setSites(((await response.json()) as { items: SiteSetting[] }).items);
   }
 
   if (failed) return <DashboardFailed label="el menú personalizado" />;
@@ -71,36 +76,49 @@ export function MenuCatalogSettingsPage() {
         </header>
 
         <p className="mt-3 max-w-xl text-sm text-ink-muted">
-          Controla si Intuitivo — la variedad donde el cliente elige cinco platos del universo
-          publicado esa semana — puede ofrecerse. Es un interruptor único para todo el catálogo, no
-          una elección semana a semana: cuando está apagado, &quot;Configurar la semana&quot; no
-          deja incluirlo.
+          Controlá por ciudad si Intuitivo -- la variedad donde el cliente elige cinco platos del
+          universo publicado esa semana -- puede ofrecerse. No es un interruptor único para todo el
+          catálogo: cada operación tiene el suyo, y se aplica cuando se distribuye el menú a esa
+          ciudad.
         </p>
 
         {message ? <p className="mt-4 text-sm text-red-600">{message}</p> : null}
 
-        <div className="mt-6 flex items-center justify-between rounded-2xl border border-forest/10 bg-[var(--db-surface)] p-6">
-          <div>
-            <p className="font-semibold text-forest">Intuitivo</p>
-            <p className="text-sm text-ink-muted">
-              {intuitivoEnabled === null
-                ? 'Cargando…'
-                : intuitivoEnabled
-                  ? 'Habilitado'
-                  : 'Deshabilitado'}
-            </p>
-          </div>
-          {canManage ? (
-            <button
-              className="button button-primary"
-              disabled={intuitivoEnabled === null || saving}
-              onClick={() => void toggle()}
-              type="button"
-            >
-              {saving ? 'Guardando…' : intuitivoEnabled ? 'Deshabilitar' : 'Habilitar'}
-            </button>
-          ) : null}
-        </div>
+        {loading ? (
+          <p className="mt-6 text-ink-muted">Cargando…</p>
+        ) : sites.length === 0 ? (
+          <p className="mt-6 text-ink-muted">No hay operaciones activas.</p>
+        ) : (
+          <ul className="mt-6 grid gap-3">
+            {sites.map((site) => (
+              <li
+                key={site.operatingSiteId}
+                className="flex items-center justify-between rounded-2xl border border-forest/10 bg-[var(--db-surface)] p-6"
+              >
+                <div>
+                  <p className="font-semibold text-forest">{site.operatingSiteName}</p>
+                  <p className="text-sm text-ink-muted">
+                    {site.intuitivoEnabled ? 'Habilitado' : 'Deshabilitado'}
+                  </p>
+                </div>
+                {canManage ? (
+                  <button
+                    className="button button-primary"
+                    disabled={savingSiteId === site.operatingSiteId}
+                    onClick={() => void toggle(site)}
+                    type="button"
+                  >
+                    {savingSiteId === site.operatingSiteId
+                      ? 'Guardando…'
+                      : site.intuitivoEnabled
+                        ? 'Deshabilitar'
+                        : 'Habilitar'}
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </DashboardShell>
   );
