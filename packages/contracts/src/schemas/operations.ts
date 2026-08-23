@@ -533,6 +533,29 @@ export const OrderSchema = z.object({
   updatedAt: IsoDateTimeSchema,
 });
 
+export const PublicOrderTrackRequestSchema = z.object({
+  contact: z.string().trim().min(3).max(200),
+  publicNumber: z.string().trim().min(1).max(40),
+});
+
+export const PublicOrderTrackResponseSchema = z.object({
+  currency: z.string(),
+  deliveryAddress: z.string(),
+  deliveryDate: z.iso.date(),
+  history: z.array(z.object({ at: IsoDateTimeSchema, status: OrderStatusSchema })),
+  items: z.array(
+    z.object({
+      productName: z.string(),
+      quantityUnits: z.number().int(),
+      variantName: z.string(),
+    }),
+  ),
+  notes: z.string().nullable(),
+  publicNumber: z.string(),
+  status: OrderStatusSchema,
+  totalMinor: z.number().int(),
+});
+
 export const OrderListResponseSchema = z.object({ items: z.array(OrderSchema) });
 
 export const OrderListQuerySchema = z
@@ -756,6 +779,8 @@ export type MenuDistributeRequest = z.infer<typeof MenuDistributeRequestSchema>;
 export type WeeklyMenu = z.infer<typeof WeeklyMenuSchema>;
 export type OrderCreateRequest = z.infer<typeof OrderCreateRequestSchema>;
 export type PublicOrderCreateRequest = z.infer<typeof PublicOrderCreateRequestSchema>;
+export type PublicOrderTrackRequest = z.infer<typeof PublicOrderTrackRequestSchema>;
+export type PublicOrderTrackResponse = z.infer<typeof PublicOrderTrackResponseSchema>;
 export type Order = z.infer<typeof OrderSchema>;
 export type OrderTransitionRequest = z.infer<typeof OrderTransitionRequestSchema>;
 export type OrderUpdateRequest = z.infer<typeof OrderUpdateRequestSchema>;

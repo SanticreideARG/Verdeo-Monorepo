@@ -88,6 +88,8 @@ import {
   ProductionSnapshotSchema,
   PublicOperatingSiteListResponseSchema,
   PublicOrderCreateRequestSchema,
+  PublicOrderTrackRequestSchema,
+  PublicOrderTrackResponseSchema,
   ScopeResponseSchema,
   SessionIdParamSchema,
   SessionListResponseSchema,
@@ -334,6 +336,7 @@ interface OperationsEngine {
   ): Promise<unknown>;
   createOrder(input: ScopedInput<OrderCreateRequest>, context: OperationsContext): Promise<unknown>;
   createPublicOrder(input: PublicOrderCreateRequest, context: OperationsContext): Promise<unknown>;
+  trackPublicOrder(publicNumber: string, contact: string): Promise<unknown>;
   confirmAddressGeocoding(
     customerId: string,
     addressId: string,
@@ -861,6 +864,62 @@ export function createApp(options: CreateAppOptions) {
       source: 'public-web',
     });
     return context.json(OrderSchema.parse(contractValue(order)), 201);
+  });
+
+  // Public order tracking ("seguimiento" — CMS_AND_PUBLIC_WEB.md). A generic 404 covers both "no
+  // such order" and "contact doesn't match", same anti-enumeration posture as the login endpoints.
+  app.post('/api/v1/public/orders/track', async (context) => {
+    const input = PublicOrderTrackRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) {
+      const code: ApiErrorCode = 'BAD_REQUEST';
+      return context.json(
+        {
+          error: {
+            code,
+            details: input.error.issues,
+            message: 'Ingresá el número de pedido y el contacto usado al pedir.',
+            requestId: context.get('requestId'),
+          },
+        },
+        statusForCode(code),
+      );
+    }
+    const found = (await requireOperations().trackPublicOrder(
+      input.data.publicNumber,
+      input.data.contact,
+    )) as {
+      history: { createdAt: Date; toStatus: string }[];
+      order: Record<string, unknown>;
+    } | null;
+    if (!found) {
+      const code: ApiErrorCode = 'NOT_FOUND';
+      return context.json(
+        {
+          error: {
+            code,
+            message: 'No encontramos un pedido con esos datos.',
+            requestId: context.get('requestId'),
+          },
+        },
+        statusForCode(code),
+      );
+    }
+    const payload = PublicOrderTrackResponseSchema.parse(
+      contractValue({
+        currency: found.order.currency,
+        deliveryAddress: found.order.deliveryAddress,
+        deliveryDate: found.order.deliveryDate,
+        history: found.history.map((entry) => ({ at: entry.createdAt, status: entry.toStatus })),
+        items: found.order.items,
+        notes: found.order.notes,
+        publicNumber: found.order.publicNumber,
+        status: found.order.status,
+        totalMinor: found.order.totalMinor,
+      }),
+    );
+    return context.json(payload);
   });
 
   app.post('/api/v1/auth/login', async (context) => {

@@ -71,6 +71,7 @@ const customerOperationsStubs = {
   requestAddressGeocoding: vi.fn(),
   setSurplusConfig: vi.fn(),
   surplusReport: vi.fn(),
+  trackPublicOrder: vi.fn(),
   updateCustomer: vi.fn(),
   updateCustomerAddress: vi.fn(),
   updateCustomerIdentity: vi.fn(),
@@ -764,6 +765,100 @@ describe('API foundation', () => {
 
     expect(response.status).toBe(400);
     expect(createPublicOrder).not.toHaveBeenCalled();
+  });
+
+  it('tracks a public order by number and contact', async () => {
+    const trackPublicOrder = vi.fn(() =>
+      Promise.resolve({
+        history: [{ createdAt: new Date('2026-08-20T10:00:00.000Z'), toStatus: 'CONFIRMED' }],
+        order: {
+          currency: 'ARS',
+          deliveryAddress: 'Calle Falsa 123',
+          deliveryDate: '2026-08-25',
+          items: [{ productName: 'Real', quantityUnits: 1, variantName: 'Grande' }],
+          notes: null,
+          publicNumber: 'NQN-00001',
+          status: 'CONFIRMED',
+          totalMinor: 12000,
+        },
+      }),
+    );
+    const trackApp = createApp({
+      appOrigin: 'http://localhost:5173',
+      cookieSameSite: 'Lax',
+      credentials: emptyCredentials,
+      logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      geography: singleSiteGeography,
+      operations: {
+        ...customerOperationsStubs,
+        createCustomer: vi.fn(),
+        createMenu: vi.fn(),
+        distributeMenu: vi.fn(),
+        createOrder: vi.fn(),
+        createPublicOrder: vi.fn(),
+        currentPublishedMenu: vi.fn(),
+        kitchenSummary: vi.fn(),
+        listCustomers: vi.fn(),
+        listMenus: vi.fn(),
+        listOrders: vi.fn(),
+        publishMenu: vi.fn(),
+        trackPublicOrder,
+        transitionOrder: vi.fn(),
+      },
+      sessions: emptySessions,
+      secureCookies: false,
+      users: emptyUsers,
+      version: 'test',
+    });
+
+    const response = await trackApp.request('/api/v1/public/orders/track', {
+      body: JSON.stringify({ contact: 'cliente@example.com', publicNumber: 'nqn-00001' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    const body: unknown = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(trackPublicOrder).toHaveBeenCalledWith('nqn-00001', 'cliente@example.com');
+    expect(body).toMatchObject({ publicNumber: 'NQN-00001', status: 'CONFIRMED' });
+  });
+
+  it('returns a generic 404 when the order number or contact does not match', async () => {
+    const trackApp = createApp({
+      appOrigin: 'http://localhost:5173',
+      cookieSameSite: 'Lax',
+      credentials: emptyCredentials,
+      logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      geography: singleSiteGeography,
+      operations: {
+        ...customerOperationsStubs,
+        createCustomer: vi.fn(),
+        createMenu: vi.fn(),
+        distributeMenu: vi.fn(),
+        createOrder: vi.fn(),
+        createPublicOrder: vi.fn(),
+        currentPublishedMenu: vi.fn(),
+        kitchenSummary: vi.fn(),
+        listCustomers: vi.fn(),
+        listMenus: vi.fn(),
+        listOrders: vi.fn(),
+        publishMenu: vi.fn(),
+        trackPublicOrder: () => Promise.resolve(null),
+        transitionOrder: vi.fn(),
+      },
+      sessions: emptySessions,
+      secureCookies: false,
+      users: emptyUsers,
+      version: 'test',
+    });
+
+    const response = await trackApp.request('/api/v1/public/orders/track', {
+      body: JSON.stringify({ contact: 'nadie@example.com', publicNumber: 'XXX-99999' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(404);
   });
 
   it('checks dynamic permissions before listing orders', async () => {

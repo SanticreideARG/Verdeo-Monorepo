@@ -20,6 +20,7 @@ import { OrderIntakePage } from './OrderIntakePage.js';
 import { OrdersPage } from './OrdersPage.js';
 import { ProfilePage } from './ProfilePage.js';
 import { PublicOrderPage } from './PublicOrderPage.js';
+import { TrackOrderPage } from './TrackOrderPage.js';
 import { UsersAdminPage } from './UsersAdminPage.js';
 
 function BrandMark() {
@@ -37,6 +38,9 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-5 sm:px-8">
         <BrandMark />
         <nav className="flex items-center gap-2" aria-label="Navegación principal">
+          <Link className="nav-link hidden sm:inline-flex" to="/seguimiento">
+            Seguir mi pedido
+          </Link>
           <Link className="nav-link hidden sm:inline-flex" to="/login">
             Ingresar
           </Link>
@@ -159,6 +163,7 @@ export function App() {
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/pedido" element={<PublicOrderPage />} />
+      <Route path="/seguimiento" element={<TrackOrderPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/auth/callback" element={<OAuthCallbackPage />} />
       <Route path="/app" element={<DashboardPage />} />

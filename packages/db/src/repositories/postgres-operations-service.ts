@@ -2907,6 +2907,58 @@ export class PostgresOperationsService {
     return order;
   }
 
+  // Public "seguimiento" (CMS_AND_PUBLIC_WEB.md's "obtener seguimiento por token/enlace"): a
+  // visitor proves they placed the order by supplying the same contact they checked out with,
+  // not by knowing the publicNumber alone — publicNumber is sequential and guessable, so pairing
+  // it with a contact match is what keeps this from being an enumeration hole. Returns null (never
+  // throws) on any mismatch so a wrong guess looks identical to a nonexistent order.
+  public async trackPublicOrder(publicNumber: string, contact: string) {
+    const [row] = await this.database
+      .select({ customerId: orders.customerId, id: orders.id })
+      .from(orders)
+      .where(eq(orders.publicNumber, publicNumber.trim().toUpperCase()))
+      .limit(1);
+    if (!row) return null;
+
+    // The contact might be an email or a phone number and normalization for the wrong shape
+    // throws (e.g. "not enough digits" for an email passed as a phone) rather than returning
+    // null, so each candidate is normalized independently and a bad shape just drops that
+    // candidate instead of failing the whole lookup.
+    const normalizedEmail = normalizeCustomerIdentity('email', contact);
+    let normalizedPhone: string | null;
+    try {
+      normalizedPhone = normalizeCustomerIdentity('phone', contact);
+    } catch {
+      normalizedPhone = null;
+    }
+    const [identity] = await this.database
+      .select({ id: customerIdentities.id })
+      .from(customerIdentities)
+      .where(
+        and(
+          eq(customerIdentities.customerId, row.customerId),
+          eq(customerIdentities.active, true),
+          or(
+            eq(customerIdentities.valueNormalized, normalizedEmail),
+            ...(normalizedPhone ? [eq(customerIdentities.valueNormalized, normalizedPhone)] : []),
+          ),
+        ),
+      )
+      .limit(1);
+    if (!identity) return null;
+
+    const order = await this.loadOrder(this.database, row.id);
+    if (!order) return null;
+
+    const history = await this.database
+      .select({ createdAt: orderStatusHistory.createdAt, toStatus: orderStatusHistory.toStatus })
+      .from(orderStatusHistory)
+      .where(eq(orderStatusHistory.orderId, row.id))
+      .orderBy(asc(orderStatusHistory.createdAt));
+
+    return { history, order };
+  }
+
   public async orderHistory(orderId: string) {
     const [order] = await this.database
       .select({ id: orders.id })

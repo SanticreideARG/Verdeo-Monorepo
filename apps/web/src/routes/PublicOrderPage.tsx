@@ -138,11 +138,18 @@ export function PublicOrderPage() {
           </h1>
           <p className="mt-4 leading-7 text-ink-muted">
             Recibimos tu pedido por {formatMoney(createdOrder.totalMinor, createdOrder.currency)}.
-            El equipo de Verdeo coordinará la disponibilidad y la entrega.
+            El equipo de Verdeo coordinará la disponibilidad y la entrega. Guardá el número de
+            pedido: podés consultar su estado en cualquier momento desde &quot;Seguir mi
+            pedido&quot;.
           </p>
-          <Link className="button button-primary mt-8" to="/">
-            Volver al inicio
-          </Link>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link className="button button-primary" to="/">
+              Volver al inicio
+            </Link>
+            <Link className="button button-secondary" to="/seguimiento">
+              Seguir mi pedido
+            </Link>
+          </div>
         </section>
       </main>
     );
