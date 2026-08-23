@@ -20,6 +20,7 @@ import {
   PostgresOAuthIdentityRepository,
   PostgresSessionRepository,
   PostgresCmsService,
+  PostgresMessagingService,
   PostgresUserAdminRepository,
   PostgresUserDirectoryRepository,
 } from '@verdeo/db';
@@ -29,6 +30,7 @@ import { createLogger } from '@verdeo/observability';
 import { createApp } from './app.js';
 import { VercelBlobAvatarStorage } from './integrations/avatar-storage.js';
 import { SupabaseAuthClient } from './integrations/supabase-auth.js';
+import { MetaWhatsAppProvider } from './integrations/whatsapp-provider.js';
 
 interface CreateApiRuntimeOptions {
   environment?: NodeJS.ProcessEnv;
@@ -54,6 +56,11 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
   const userDirectory = new UserDirectoryService(new PostgresUserDirectoryRepository(database.db));
   const userAdmin = new UserAdminService(new PostgresUserAdminRepository(database.db));
   const cms = new PostgresCmsService(database.db);
+  const whatsappProvider = new MetaWhatsAppProvider(
+    env.WHATSAPP_APP_SECRET,
+    env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+  );
+  const messaging = new PostgresMessagingService(database.db, whatsappProvider);
   const accessTokenService = new AccessTokenService(
     new PostgresAccessTokenRepository(database.db),
     sessionService,
@@ -285,6 +292,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     credentials,
     geography,
     logger,
+    messaging,
     ...(oauth ? { oauth } : {}),
     operations,
     sessions,

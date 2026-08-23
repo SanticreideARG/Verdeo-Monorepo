@@ -14,6 +14,8 @@ import { KitchenPage } from './KitchenPage.js';
 import { LoginPage } from './LoginPage.js';
 import { MenuBuilderPage } from './MenuBuilderPage.js';
 import { MenusPage } from './MenusPage.js';
+import { MessagingAccountsPage } from './MessagingAccountsPage.js';
+import { MessagingInboxPage } from './MessagingInboxPage.js';
 import { OAuthCallbackPage } from './OAuthCallbackPage.js';
 import { OrderDetailPage } from './OrderDetailPage.js';
 import { OrderIntakePage } from './OrderIntakePage.js';
@@ -176,6 +178,8 @@ export function App() {
       <Route path="/app/cocina" element={<KitchenPage />} />
       <Route path="/app/ia" element={<AIProvidersPage />} />
       <Route path="/app/chat" element={<ChatPage />} />
+      <Route path="/app/mensajes" element={<MessagingInboxPage />} />
+      <Route path="/app/ajustes/mensajes" element={<MessagingAccountsPage />} />
       <Route path="/app/perfil" element={<ProfilePage />} />
       <Route path="/app/usuarios" element={<UsersAdminPage />} />
       <Route path="/app/contenidos" element={<CmsPagesAdminPage />} />

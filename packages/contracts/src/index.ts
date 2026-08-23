@@ -7,6 +7,7 @@ export * from './schemas/common.js';
 export * from './schemas/errors.js';
 export * from './schemas/geography.js';
 export * from './schemas/health.js';
+export * from './schemas/messaging.js';
 export * from './schemas/operations.js';
 export * from './schemas/sessions.js';
 export * from './schemas/users.js';

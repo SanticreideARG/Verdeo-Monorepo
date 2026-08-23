@@ -94,6 +94,7 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
       },
       { href: '/app#reparto', icon: 'delivery', label: 'Reparto', permission: 'routes.read' },
       { href: '/app/chat', icon: 'chat', label: 'Chat', permission: 'chat.use' },
+      { href: '/app/mensajes', icon: 'chat', label: 'Mensajes', permission: 'messages.read' },
     ],
   },
   {
@@ -117,6 +118,12 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         icon: 'chat',
         label: 'Enlaces de chat',
         permission: 'chat.links.manage',
+      },
+      {
+        href: '/app/ajustes/mensajes',
+        icon: 'chat',
+        label: 'Cuentas de WhatsApp',
+        permission: 'messaging.accounts.manage',
       },
       {
         href: '/app/ajustes/zonas',

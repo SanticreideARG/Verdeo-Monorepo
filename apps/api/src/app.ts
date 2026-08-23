@@ -70,6 +70,13 @@ import {
   MessageTemplateListResponseSchema,
   MessageTemplateSchema,
   MessageTemplateUpsertRequestSchema,
+  MessagingAccountCreateRequestSchema,
+  MessagingAccountListResponseSchema,
+  MessagingAccountSchema,
+  MessagingAccountUpdateRequestSchema,
+  MessagingConversationListResponseSchema,
+  MessagingMessageListResponseSchema,
+  MessagingSendRequestSchema,
   MeResponseSchema,
   OrderCreateRequestSchema,
   OrderListQuerySchema,
@@ -529,6 +536,38 @@ interface CmsEngine {
   saveDraft(slug: string, sections: PageSection[], context: CmsContext): Promise<unknown>;
 }
 
+interface MessagingContext {
+  actorUserId?: string | undefined;
+  correlationId: string;
+  requestId: string;
+  source: string;
+}
+
+interface MessagingEngine {
+  createAccount(
+    input: { label: string; phoneNumberId: string; [key: string]: unknown },
+    context: MessagingContext,
+  ): Promise<unknown>;
+  getConversationMessages(conversationId: string): Promise<unknown>;
+  handleInboundEvent(
+    payload: Record<string, unknown>,
+  ): Promise<{ deduped: boolean; routed?: boolean }>;
+  listAccounts(): Promise<unknown>;
+  listConversations(): Promise<unknown>;
+  sendMessage(conversationId: string, body: string, context: MessagingContext): Promise<unknown>;
+  updateAccount(
+    id: string,
+    input: Record<string, unknown>,
+    context: MessagingContext,
+  ): Promise<unknown>;
+  verifyChallenge(
+    mode: string | null,
+    token: string | null,
+    challenge: string | null,
+  ): string | null;
+  verifySignature(rawBody: string, signatureHeader: string | null): boolean;
+}
+
 interface CreateAppOptions {
   aiConfiguration?: AIConfigurationEngine;
   appOrigin: string;
@@ -542,6 +581,7 @@ interface CreateAppOptions {
   credentials: CredentialLogin;
   geography?: GeographyEngine;
   logger: Logger;
+  messaging?: MessagingEngine;
   oauth?: OAuthLogin;
   operations?: OperationsEngine;
   sessions: SessionAuthenticator;
@@ -627,6 +667,20 @@ export function createApp(options: CreateAppOptions) {
     if (!cms) throw new Error('CMS engine is not configured');
     return cms;
   };
+
+  const messaging = options.messaging;
+
+  const requireMessaging = () => {
+    if (!messaging) throw new Error('Messaging engine is not configured');
+    return messaging;
+  };
+
+  const messagingContext = (context: Context<{ Variables: AppVariables }>): MessagingContext => ({
+    actorUserId: context.get('session')?.userId,
+    correlationId: context.get('requestId'),
+    requestId: context.get('requestId'),
+    source: 'api',
+  });
 
   // The client sends its selected operation, but membership is resolved server-side and intersected
   // with it. An operation the session cannot reach answers 403, never an empty list (ADR-031).
@@ -1082,6 +1136,7 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/permissions', requireAuthentication);
   app.use('/api/v1/access-tokens', requireAuthentication);
   app.use('/api/v1/cms/*', requireAuthentication);
+  app.use('/api/v1/messaging/*', requireAuthentication);
   app.use('/api/v1/access-tokens/*', requireAuthentication);
   app.use('/api/v1/scope', requireAuthentication);
   app.use('/api/v1/operating-sites', requireAuthentication);
@@ -2194,6 +2249,138 @@ export function createApp(options: CreateAppOptions) {
       operationsContext(context),
     );
     return context.json(MessageTemplateSchema.parse(contractValue(template)));
+  });
+
+  app.get('/api/v1/messaging/accounts', async (context) => {
+    if (!context.get('session').permissions.includes('messaging.accounts.manage'))
+      return forbidden(context);
+    const items = await requireMessaging().listAccounts();
+    return context.json(MessagingAccountListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.post('/api/v1/messaging/accounts', async (context) => {
+    if (!context.get('session').permissions.includes('messaging.accounts.manage'))
+      return forbidden(context);
+    const input = MessagingAccountCreateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'Revisá los datos de la cuenta.', input.error.issues);
+    const account = await requireMessaging().createAccount(input.data, messagingContext(context));
+    return context.json(MessagingAccountSchema.parse(contractValue(account)), 201);
+  });
+
+  app.patch('/api/v1/messaging/accounts/:id', async (context) => {
+    if (!context.get('session').permissions.includes('messaging.accounts.manage'))
+      return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = MessagingAccountUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá los cambios de la cuenta.',
+        (!params.success ? params.error.issues : undefined) ??
+          (!input.success ? input.error.issues : undefined),
+      );
+    const account = await requireMessaging().updateAccount(
+      params.data.id,
+      input.data,
+      messagingContext(context),
+    );
+    return context.json(MessagingAccountSchema.parse(contractValue(account)));
+  });
+
+  app.get('/api/v1/messaging/conversations', async (context) => {
+    if (!context.get('session').permissions.includes('messages.read')) return forbidden(context);
+    const items = await requireMessaging().listConversations();
+    return context.json(
+      MessagingConversationListResponseSchema.parse({ items: contractValue(items) }),
+    );
+  });
+
+  app.get('/api/v1/messaging/conversations/:id/messages', async (context) => {
+    if (!context.get('session').permissions.includes('messages.read')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    if (!params.success) return badRequest(context, 'Conversación inválida.', params.error.issues);
+    const items = await requireMessaging().getConversationMessages(params.data.id);
+    return context.json(MessagingMessageListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.post('/api/v1/messaging/conversations/:id/messages', async (context) => {
+    if (!context.get('session').permissions.includes('messages.send')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = MessagingSendRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá el mensaje.',
+        (!params.success ? params.error.issues : undefined) ??
+          (!input.success ? input.error.issues : undefined),
+      );
+    try {
+      const message = await requireMessaging().sendMessage(
+        params.data.id,
+        input.data.body,
+        messagingContext(context),
+      );
+      return context.json(contractValue(message), 201);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'MessagingNotFoundError') {
+        const code: ApiErrorCode = 'NOT_FOUND';
+        return context.json(
+          { error: { code, message: error.message, requestId: context.get('requestId') } },
+          statusForCode(code),
+        );
+      }
+      if (error instanceof Error && error.name === 'MessagingProviderError') {
+        const code: ApiErrorCode = 'CONFLICT';
+        return context.json(
+          { error: { code, message: error.message, requestId: context.get('requestId') } },
+          statusForCode(code),
+        );
+      }
+      throw error;
+    }
+  });
+
+  // Meta's subscription handshake: GET with hub.mode/hub.verify_token/hub.challenge, answered by
+  // echoing the challenge back verbatim once the verify token matches. No auth — Meta calls this
+  // directly — and no engine-configured guard either: an unconfigured deployment should answer
+  // "verification failed" (403), not a generic 500, since this route existing-but-inert is the
+  // expected steady state until a superadmin adds credentials.
+  app.get('/api/v1/webhooks/whatsapp', (context) => {
+    const challenge = messaging?.verifyChallenge(
+      context.req.query('hub.mode') ?? null,
+      context.req.query('hub.verify_token') ?? null,
+      context.req.query('hub.challenge') ?? null,
+    );
+    if (!challenge) return context.text('Verification failed', 403);
+    return context.text(challenge, 200);
+  });
+
+  // Inbound messages/delivery statuses. Meta retries on anything but a 200, so every branch
+  // (unconfigured, bad signature, unroutable payload) still answers 200 once the signature check
+  // passes — a webhook that 500s on a payload shape it doesn't understand yet just gets hammered
+  // with retries for something that will never succeed.
+  app.post('/api/v1/webhooks/whatsapp', async (context) => {
+    const rawBody = await context.req.text();
+    if (!messaging?.verifySignature(rawBody, context.req.header('x-hub-signature-256') ?? null)) {
+      return context.text('Invalid signature', 403);
+    }
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(rawBody) as Record<string, unknown>;
+    } catch {
+      return context.text('OK', 200);
+    }
+    await messaging
+      .handleInboundEvent(payload)
+      .catch((error: unknown) =>
+        context.get('logger').error({ error }, 'whatsapp webhook processing failed'),
+      );
+    return context.text('OK', 200);
   });
 
   app.get('/api/v1/menus', async (context) => {

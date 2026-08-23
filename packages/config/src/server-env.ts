@@ -33,6 +33,12 @@ const ServerEnvSchema = z
     // connected with the "VERDEO" env var prefix; without it, avatar upload just answers 503.
     VERDEO_READ_WRITE_TOKEN: optionalString(z.string().min(20)),
     VERDEO_STORE_ID: optionalString(z.string().min(1)),
+    // Meta App-level webhook secrets shared across every WhatsApp Business account (each account's
+    // own access token is administrable data in messaging_accounts, not env — see
+    // packages/db/src/schema/messaging.ts). Without these the webhook still exists but refuses
+    // every verification/signature check, the same deny-by-default posture as CRON_SECRET above.
+    WHATSAPP_APP_SECRET: optionalString(z.string().min(16)),
+    WHATSAPP_WEBHOOK_VERIFY_TOKEN: optionalString(z.string().min(8)),
   })
   .superRefine((value, context) => {
     if (Boolean(value.SUPABASE_URL) === Boolean(value.SUPABASE_PUBLISHABLE_KEY)) return;

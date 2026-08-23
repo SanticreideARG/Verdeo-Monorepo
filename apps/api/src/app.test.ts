@@ -1946,4 +1946,229 @@ describe('API foundation', () => {
       expect(recordMediaAsset).not.toHaveBeenCalled();
     });
   });
+
+  describe('messaging', () => {
+    function buildMessagingApp(messaging: Record<string, unknown>, permissions: string[]) {
+      return createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        messaging: messaging as never,
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            Promise.resolve({
+              expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+              permissions,
+              sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+            }),
+        },
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+    }
+
+    const cookie = 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars';
+
+    it('lists accounts with messaging.accounts.manage and denies without it', async () => {
+      const listAccounts = vi.fn(() => Promise.resolve([]));
+      const app = buildMessagingApp({ listAccounts }, ['messaging.accounts.manage']);
+
+      const response = await app.request('/api/v1/messaging/accounts', {
+        headers: { cookie },
+      });
+      expect(response.status).toBe(200);
+
+      const denied = buildMessagingApp({ listAccounts: vi.fn() }, []);
+      const deniedResponse = await denied.request('/api/v1/messaging/accounts', {
+        headers: { cookie },
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('creates an account with valid input', async () => {
+      const createAccount = vi.fn(() =>
+        Promise.resolve({
+          active: true,
+          createdAt: new Date(),
+          displayPhoneNumber: null,
+          hasAccessToken: false,
+          id: '90000000-0000-4000-8000-000000000001',
+          label: 'A',
+          operatingSiteId: null,
+          phoneNumberId: 'PNID1',
+          provider: 'whatsapp',
+          wabaId: null,
+        }),
+      );
+      const app = buildMessagingApp({ createAccount }, ['messaging.accounts.manage']);
+
+      const response = await app.request('/api/v1/messaging/accounts', {
+        body: JSON.stringify({ label: 'A', phoneNumberId: 'PNID1' }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+
+      expect(response.status).toBe(201);
+      expect(createAccount).toHaveBeenCalled();
+    });
+
+    it('lists conversations with messages.read and denies without it', async () => {
+      const listConversations = vi.fn(() => Promise.resolve([]));
+      const app = buildMessagingApp({ listConversations }, ['messages.read']);
+
+      const response = await app.request('/api/v1/messaging/conversations', {
+        headers: { cookie },
+      });
+      expect(response.status).toBe(200);
+
+      const denied = buildMessagingApp({ listConversations: vi.fn() }, []);
+      const deniedResponse = await denied.request('/api/v1/messaging/conversations', {
+        headers: { cookie },
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('sends a message with messages.send and denies without it', async () => {
+      const sendMessage = vi.fn(() => Promise.resolve({ id: 'm1' }));
+      const app = buildMessagingApp({ sendMessage }, ['messages.send']);
+
+      const response = await app.request(
+        '/api/v1/messaging/conversations/90000000-0000-4000-8000-000000000001/messages',
+        {
+          body: JSON.stringify({ body: 'Hola' }),
+          headers: { cookie, 'content-type': 'application/json' },
+          method: 'POST',
+        },
+      );
+      expect(response.status).toBe(201);
+
+      const denied = buildMessagingApp({ sendMessage: vi.fn() }, []);
+      const deniedResponse = await denied.request(
+        '/api/v1/messaging/conversations/90000000-0000-4000-8000-000000000001/messages',
+        {
+          body: JSON.stringify({ body: 'Hola' }),
+          headers: { cookie, 'content-type': 'application/json' },
+          method: 'POST',
+        },
+      );
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('turns a provider error into a 409 rather than a 500', async () => {
+      class MessagingProviderError extends Error {
+        public constructor(message: string) {
+          super(message);
+          this.name = 'MessagingProviderError';
+        }
+      }
+      const sendMessage = vi.fn(() =>
+        Promise.reject(new MessagingProviderError('sin token configurado')),
+      );
+      const app = buildMessagingApp({ sendMessage }, ['messages.send']);
+
+      const response = await app.request(
+        '/api/v1/messaging/conversations/90000000-0000-4000-8000-000000000001/messages',
+        {
+          body: JSON.stringify({ body: 'Hola' }),
+          headers: { cookie, 'content-type': 'application/json' },
+          method: 'POST',
+        },
+      );
+      expect(response.status).toBe(409);
+    });
+
+    it('answers the Meta webhook verification challenge when configured', async () => {
+      const app = createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        messaging: {
+          verifyChallenge: () => 'the-challenge',
+        } as never,
+        sessions: emptySessions,
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+
+      const response = await app.request(
+        '/api/v1/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=x&hub.challenge=the-challenge',
+      );
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe('the-challenge');
+    });
+
+    it('rejects the webhook verification challenge when unconfigured', async () => {
+      const app = createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        sessions: emptySessions,
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+
+      const response = await app.request('/api/v1/webhooks/whatsapp?hub.mode=subscribe');
+      expect(response.status).toBe(403);
+    });
+
+    it('rejects an inbound webhook post with a bad signature', async () => {
+      const handleInboundEvent = vi.fn();
+      const app = createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        messaging: {
+          handleInboundEvent,
+          verifySignature: () => false,
+        } as never,
+        sessions: emptySessions,
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+
+      const response = await app.request('/api/v1/webhooks/whatsapp', {
+        body: JSON.stringify({ entry: [] }),
+        headers: { 'content-type': 'application/json', 'x-hub-signature-256': 'sha256=bad' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(403);
+      expect(handleInboundEvent).not.toHaveBeenCalled();
+    });
+
+    it('routes an inbound webhook post once the signature passes', async () => {
+      const handleInboundEvent = vi.fn(() => Promise.resolve({ deduped: false, routed: true }));
+      const app = createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        messaging: {
+          handleInboundEvent,
+          verifySignature: () => true,
+        } as never,
+        sessions: emptySessions,
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+
+      const response = await app.request('/api/v1/webhooks/whatsapp', {
+        body: JSON.stringify({ entry: [] }),
+        headers: { 'content-type': 'application/json', 'x-hub-signature-256': 'sha256=ok' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(200);
+      expect(handleInboundEvent).toHaveBeenCalledWith({ entry: [] });
+    });
+  });
 });
