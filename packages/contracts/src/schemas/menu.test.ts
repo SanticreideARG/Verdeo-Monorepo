@@ -54,7 +54,7 @@ describe('weekly menu contract', () => {
       offerings: [
         { dishes, familyName: 'Keto', sizeName: '250' },
         { dishes, familyName: 'Real', sizeName: '250' },
-        { composable: true, dishes, familyName: 'Intuitivo', sizeName: '250' },
+        { composable: true, dishes: [], familyName: 'Intuitivo', sizeName: '250' },
       ],
       prices: [{ sizeName: '250', unitPriceMinor: 25_000 }],
     });
@@ -72,5 +72,38 @@ describe('weekly menu contract', () => {
     });
 
     expect(result.offerings[0]?.overridePriceMinor).toBe(28_000);
+  });
+
+  it('rejects a composable offering that submits its own five dishes', () => {
+    const result = MenuCreateRequestSchema.safeParse({
+      ...cycle,
+      offerings: [{ composable: true, dishes, familyName: 'Intuitivo', sizeName: '250' }],
+      prices: [{ sizeName: '250', unitPriceMinor: 25_000 }],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a fixed offering with fewer than five dishes', () => {
+    const result = MenuCreateRequestSchema.safeParse({
+      ...cycle,
+      offerings: [{ dishes: dishes.slice(0, 3), familyName: 'Keto', sizeName: '250' }],
+      prices: [{ sizeName: '250', unitPriceMinor: 25_000 }],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects more than one composable offering in the same week', () => {
+    const result = MenuCreateRequestSchema.safeParse({
+      ...cycle,
+      offerings: [
+        { composable: true, dishes: [], familyName: 'Intuitivo', sizeName: '250' },
+        { composable: true, dishes: [], familyName: 'Otro', sizeName: '250' },
+      ],
+      prices: [{ sizeName: '250', unitPriceMinor: 25_000 }],
+    });
+
+    expect(result.success).toBe(false);
   });
 });

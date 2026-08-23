@@ -230,7 +230,7 @@ export function KitchenPage() {
       <section className="dashboard-panel">
         <header>
           <p className="dashboard-kicker">Cocina</p>
-          <h1 className="text-2xl font-semibold text-forest">Consolidado determinista</h1>
+          <h1 className="text-2xl font-semibold text-forest">Cierre de pedidos</h1>
         </header>
 
         {message ? (

@@ -41,6 +41,7 @@ import {
   orderItemSelections,
   orderItems,
   orderRevisions,
+  menuCatalogSettings,
   orders,
   orderStatusHistory,
   productFamilies,
@@ -1803,6 +1804,27 @@ export class PostgresOperationsService {
   public async createMenu(input: MenuInput, context: OperationsContext) {
     return this.database
       .transaction(async (transaction) => {
+        const hasComposableOffering = input.offerings.some((offering) => offering.composable);
+        if (hasComposableOffering) {
+          const [settings] = await transaction
+            .select({ intuitivoEnabled: menuCatalogSettings.intuitivoEnabled })
+            .from(menuCatalogSettings)
+            .orderBy(desc(menuCatalogSettings.updatedAt))
+            .limit(1);
+          if (settings && !settings.intuitivoEnabled)
+            throw new OperationsConflictError(
+              'El menú personalizado (Intuitivo) está deshabilitado en Ajustes.',
+            );
+        }
+        // The composable offering's identity is the system's to set, not the operator's to type —
+        // "Ningún branch del motor identifica la variedad componible por su nombre" already holds
+        // for the engine (it matches by product_families.kind), but the display name still reached
+        // the catalog verbatim from whatever the weekly form typed. Coercing it here keeps every
+        // week's composable family under the one name customers and staff both expect.
+        const offerings = input.offerings.map((offering) =>
+          offering.composable ? { ...offering, familyName: 'Intuitivo' } : offering,
+        );
+
         const [cycle] = await transaction
           .insert(salesCycles)
           .values({
@@ -1853,7 +1875,7 @@ export class PostgresOperationsService {
           });
         }
 
-        for (const offering of input.offerings) {
+        for (const offering of offerings) {
           const sizeId = sizeIdsByName.get(offering.sizeName);
           if (!sizeId)
             throw new OperationsConflictError(
@@ -1915,13 +1937,17 @@ export class PostgresOperationsService {
             .returning({ id: weeklyMenuOfferings.id });
           if (!createdOffering) throw new Error('Menu offering creation did not return a row');
 
-          await transaction.insert(weeklyMenuItems).values(
-            offering.dishes.map((dishName, index) => ({
-              dishName,
-              offeringId: createdOffering.id,
-              slot: index + 1,
-            })),
-          );
+          // A composable offering submits no dishes of its own (its universe is every dish
+          // published this week for the same size), so there's nothing to insert for it.
+          if (offering.dishes.length > 0) {
+            await transaction.insert(weeklyMenuItems).values(
+              offering.dishes.map((dishName, index) => ({
+                dishName,
+                offeringId: createdOffering.id,
+                slot: index + 1,
+              })),
+            );
+          }
         }
 
         const audit = new AuditService(new PostgresAuditSink(transaction));
@@ -3565,6 +3591,58 @@ export class PostgresOperationsService {
         return row;
       })
       .catch(translateDatabaseConflict);
+  }
+
+  public async getMenuCatalogSettings() {
+    const [settings] = await this.database
+      .select()
+      .from(menuCatalogSettings)
+      .orderBy(desc(menuCatalogSettings.updatedAt))
+      .limit(1);
+    return settings ?? { id: null, intuitivoEnabled: true, updatedAt: null, updatedByUserId: null };
+  }
+
+  public async setIntuitivoEnabled(intuitivoEnabled: boolean, context: OperationsContext) {
+    return this.database.transaction(async (transaction) => {
+      const [existing] = await transaction
+        .select()
+        .from(menuCatalogSettings)
+        .orderBy(desc(menuCatalogSettings.updatedAt))
+        .limit(1);
+
+      let row: typeof menuCatalogSettings.$inferSelect | undefined;
+      if (existing) {
+        [row] = await transaction
+          .update(menuCatalogSettings)
+          .set({
+            intuitivoEnabled,
+            updatedAt: new Date(),
+            updatedByUserId: context.actorUserId ?? null,
+          })
+          .where(eq(menuCatalogSettings.id, existing.id))
+          .returning();
+      } else {
+        [row] = await transaction
+          .insert(menuCatalogSettings)
+          .values({ intuitivoEnabled, updatedByUserId: context.actorUserId ?? null })
+          .returning();
+      }
+      if (!row) throw new Error('Menu catalog settings upsert did not return a row');
+
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: 'menu_catalog.intuitivo_toggled',
+        actor: auditActor(context),
+        after: { intuitivoEnabled: row.intuitivoEnabled },
+        ...(existing ? { before: { intuitivoEnabled: existing.intuitivoEnabled } } : {}),
+        correlationId: context.correlationId,
+        entityId: row.id,
+        entityType: 'menu_catalog_settings',
+        requestId: context.requestId,
+        source: context.source,
+      });
+      return row;
+    });
   }
 
   // Demanda confirmada excludes opportunity sales (they consume excedente, they do not create

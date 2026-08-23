@@ -17,6 +17,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
+import { users } from './auth.js';
 import { geographicZones, operatingSites } from './geography.js';
 
 const timestamps = {
@@ -297,6 +298,16 @@ export const productFamilies = pgTable(
   },
   (table) => [check('product_families_kind_check', sql`${table.kind} in ('FIXED', 'COMPOSABLE')`)],
 );
+
+// Whether the weekly menu builder may include a composable ("Intuitivo") offering at all — a
+// system-wide switch, not a per-week choice. "Latest row wins" (same pattern as surplus_configs):
+// never updated in place, just appended to, so the setting's own history stays inspectable.
+export const menuCatalogSettings = pgTable('menu_catalog_settings', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  intuitivoEnabled: boolean('intuitivo_enabled').default(true).notNull(),
+  updatedByUserId: uuid('updated_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  ...timestamps,
+});
 
 // Commercial size. '250' and '400' are commercial names and never express a unit of measure.
 export const productSizes = pgTable(

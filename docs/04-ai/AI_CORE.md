@@ -167,3 +167,35 @@ Medir coste además de tokens.
 - nunca mostrar secreto completo;
 - minimizar PII enviada a modelos;
 - logging con redacción cuando corresponda.
+
+## As built (Fase 6 — esqueleto)
+
+Paquete `@verdeo/ai` extendido (ya tenía el cifrado de claves de `ai_provider_configs`, sin usar
+hasta ahora): `AIProvider` (adapter), `ModelCapability`, `selectProvider` (router puro
+task→capacidad→proveedor habilitado→preferencia opcional). Tablas `ai_prompts`,
+`ai_prompt_versions`, `ai_executions` (migración 0021, additiva). Servicios
+`PostgresAIPromptService`, `PostgresAITaskService`.
+
+- **Un solo adapter real cubre varios proveedores**: `OpenAICompatibleProvider`
+  (`apps/api/src/integrations/ai-providers.ts`) habla Chat Completions, que sirve para OpenAI,
+  DeepSeek y cualquier host autoalojado compatible — solo cambia `baseUrl` por fila configurada.
+  Este es el "adaptador OpenAI-compatible genérico" que pide este documento.
+- **Prompt Registry con versionado real**: cada guardado crea una fila nueva en
+  `ai_prompt_versions`, nunca edita una existente; `ai_prompts.active_version_id` apunta a la
+  versión viva. Activar una versión anterior (rollback) es solo mover ese puntero — mismo patrón
+  que página/revisión en el CMS.
+- **`AIExecution`** registra actor, tarea, versión de prompt, proveedor/modelo, hash del input,
+  output, latencia, tokens y si terminó en `completed` o `error` — incluso un fallo de validación
+  de output estructurado queda auditado antes de propagar el error.
+- **Tres tareas del catálogo funcionando de punta a punta** (ver AI_TASK_CATALOG.md más abajo):
+  `rewrite_message` (texto plano), `extract_order` (output estructurado validado con Zod),
+  `kitchen_summary` (alimentada por el resumen de cocina ya determinista de `@verdeo/orders` — la
+  IA nunca recalcula cantidades).
+- Workbench en `/app/ia/workbench`: elegir tarea, guardar versión de prompt, rollback con un clic,
+  ejecutar contra variables libres e inspeccionar output/proveedor/modelo/tokens.
+- Permisos `ai.use`/`ai.prompts.manage` en uso (ya reservados); `ai.providers.manage`/
+  `ai.budgets.manage`/`ai.models.select`/`ai.images.generate` siguen reservados sin usar.
+
+**Diferido**: `IMAGE_GENERATION`, presupuestos/cuotas en costo real (por ahora solo
+habilitado/deshabilitado), niveles de acción 2+ con confirmación explícita, tool calling ("Tools
+internos"), el resto del catálogo (~15 tareas).

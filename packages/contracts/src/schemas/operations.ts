@@ -321,9 +321,10 @@ export const MenuSizePriceInputSchema = z.object({
 });
 
 export const MenuOfferingInputSchema = z.object({
-  // A composable variety has no fixed five dishes; the customer picks from the published universe.
+  // A composable variety has no fixed five dishes; the customer picks from the published universe
+  // (every dish published this week for the same size), so it submits none of its own.
   composable: z.boolean().default(false),
-  dishes: z.array(RequiredTextSchema).length(5),
+  dishes: z.array(RequiredTextSchema).max(5),
   familyName: RequiredTextSchema,
   // Deliberate per-variety exception; omitted means the size price applies.
   overridePriceMinor: z.number().int().nonnegative().optional(),
@@ -355,7 +356,20 @@ export const MenuCreateRequestSchema = z
       return value.offerings.every((offering) => priced.has(offering.sizeName));
     },
     { message: 'Cada variedad debe usar un tamaño con precio definido.' },
-  );
+  )
+  .refine(
+    (value) =>
+      value.offerings.every((offering) =>
+        offering.composable ? offering.dishes.length === 0 : offering.dishes.length === 5,
+      ),
+    {
+      message:
+        'Las variedades fijas necesitan exactamente cinco platos; el menú personalizado no define platos propios.',
+    },
+  )
+  .refine((value) => value.offerings.filter((offering) => offering.composable).length <= 1, {
+    message: 'Solo puede haber un menú personalizado (Intuitivo) por semana.',
+  });
 
 export const MenuOfferingSchema = z.object({
   composable: z.boolean(),
@@ -740,6 +754,14 @@ export const SurplusConfigSchema = z.object({
 
 export const SurplusConfigUpdateRequestSchema = z.object({
   coefficientPercent: z.number().min(0).max(100),
+});
+
+export const MenuCatalogSettingsSchema = z.object({
+  intuitivoEnabled: z.boolean(),
+});
+
+export const MenuCatalogSettingsUpdateRequestSchema = z.object({
+  intuitivoEnabled: z.boolean(),
 });
 
 export const SurplusWriteoffEntrySchema = z.object({

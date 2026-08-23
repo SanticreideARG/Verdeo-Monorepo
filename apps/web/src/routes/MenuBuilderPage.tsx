@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
@@ -8,7 +8,6 @@ import { errorMessage } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 interface OfferingDraft {
-  composable: boolean;
   dishes: string;
   familyName: string;
 }
@@ -19,7 +18,6 @@ interface SizePriceDraft {
 }
 
 const emptyOffering = (): OfferingDraft => ({
-  composable: false,
   dishes: '',
   familyName: '',
 });
@@ -36,12 +34,31 @@ function formText(form: FormData, key: string): string {
 }
 
 /** "Configurar la semana": create the master menu for a sales cycle. Publishing and distributing
- * an existing menu happens in "Ver menús" instead. */
+ * an existing menu happens in "Ver menús" instead.
+ *
+ * The composable variety ("Intuitivo") is deliberately not just another typed row here: its name
+ * is fixed by the system (never what an operator happens to type — see
+ * PostgresOperationsService.createMenu, which coerces it server-side too as defense in depth) and
+ * whether it's offered at all is a standing setting from Ajustes → Menú personalizado, not a
+ * per-week choice. This form only decides whether to *include* it this week. */
 export function MenuBuilderPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const [offerings, setOfferings] = useState<OfferingDraft[]>([emptyOffering()]);
   const [sizePrices, setSizePrices] = useState<SizePriceDraft[]>(defaultSizePrices);
   const [message, setMessage] = useState('');
+  const [intuitivoEnabled, setIntuitivoEnabled] = useState<boolean | null>(null);
+  const [includeIntuitivo, setIncludeIntuitivo] = useState(true);
+
+  useEffect(() => {
+    void apiRequest('/api/v1/menu-catalog/settings')
+      .then(async (response) => {
+        if (!response.ok) return;
+        const body = (await response.json()) as { intuitivoEnabled: boolean };
+        setIntuitivoEnabled(body.intuitivoEnabled);
+        setIncludeIntuitivo(body.intuitivoEnabled);
+      })
+      .catch(() => setIntuitivoEnabled(false));
+  }, []);
 
   async function createMenu(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,7 +77,7 @@ export function MenuBuilderPage() {
     }
 
     const varieties = offerings.map((offering) => ({
-      composable: offering.composable,
+      composable: false,
       dishes: offering.dishes
         .split('\n')
         .map((dish) => dish.trim())
@@ -70,6 +87,9 @@ export function MenuBuilderPage() {
     if (varieties.some((offering) => offering.dishes.length !== 5)) {
       setMessage('Cada variedad necesita exactamente cinco platos.');
       return;
+    }
+    if (intuitivoEnabled && includeIntuitivo) {
+      varieties.push({ composable: true, dishes: [], familyName: 'Intuitivo' });
     }
     // Size and variety are unrelated axes: every variety comes in every size defined above, so one
     // offering per (variety, size) pair is generated here instead of asked for per option.
@@ -92,6 +112,7 @@ export function MenuBuilderPage() {
       if (!response.ok) throw new Error(await errorMessage(response));
       setOfferings([emptyOffering()]);
       setSizePrices(defaultSizePrices());
+      setIncludeIntuitivo(Boolean(intuitivoEnabled));
       event.currentTarget.reset();
       setMessage('Menú guardado como borrador. Publicalo desde "Ver menús".');
     } catch (error) {
@@ -207,24 +228,6 @@ export function MenuBuilderPage() {
                       value={offering.familyName}
                     />
                   </label>
-                  <label className="field">
-                    Composición
-                    <select
-                      onChange={(event) =>
-                        setOfferings((current) =>
-                          current.map((item, itemIndex) =>
-                            itemIndex === index
-                              ? { ...item, composable: event.target.value === 'composable' }
-                              : item,
-                          ),
-                        )
-                      }
-                      value={offering.composable ? 'composable' : 'fixed'}
-                    >
-                      <option value="fixed">Fija (cinco platos definidos)</option>
-                      <option value="composable">Elegida por el cliente</option>
-                    </select>
-                  </label>
                   <label className="field field-wide">
                     Cinco platos, uno por línea
                     <textarea
@@ -244,6 +247,31 @@ export function MenuBuilderPage() {
               </fieldset>
             ))}
           </div>
+
+          <fieldset className="mt-5 rounded-2xl border border-forest/10 p-4">
+            <legend className="px-2 text-sm font-bold text-forest">Menú personalizado</legend>
+            {intuitivoEnabled === null ? (
+              <p className="text-sm text-ink-muted">Cargando…</p>
+            ) : intuitivoEnabled ? (
+              <label className="flex items-center gap-2 text-sm text-ink-muted">
+                <input
+                  checked={includeIntuitivo}
+                  onChange={(event) => setIncludeIntuitivo(event.target.checked)}
+                  type="checkbox"
+                />
+                Incluir Intuitivo esta semana (el cliente elige cinco platos del universo publicado
+                para su tamaño; el nombre y la existencia de esta variedad no se editan acá).
+              </label>
+            ) : (
+              <p className="text-sm text-ink-muted">
+                El menú personalizado (Intuitivo) está deshabilitado. Activalo desde{' '}
+                <Link className="underline" to="/app/ajustes/menu">
+                  Ajustes → Menú personalizado
+                </Link>
+                .
+              </p>
+            )}
+          </fieldset>
 
           <div className="mt-5 flex flex-wrap gap-3">
             <button

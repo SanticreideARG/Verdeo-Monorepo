@@ -26,6 +26,22 @@ Cada una:
 - 400 usa universo 400;
 - cualquier modificación de una variedad base convierte la unidad en Intuitivo.
 
+**As built**: Intuitivo es la única familia `COMPOSABLE` del catálogo — el motor la identifica por
+`kind`, nunca por nombre (ADR-030), pero el nombre que ve el cliente lo fija el sistema, no quien
+carga la semana. `PostgresOperationsService.createMenu` coerciona el `familyName` a `"Intuitivo"`
+para cualquier oferta marcada `composable: true`, sin importar qué haya tipeado el operador — es
+"inalterable" en ese sentido. Una oferta componible no carga sus propios cinco platos (su universo
+es todo lo publicado esa semana para el mismo tamaño), así que `dishes` va vacío.
+
+Si Intuitivo puede ofrecerse en absoluto es un interruptor único de sistema, no una elección semana
+a semana: tabla `menu_catalog_settings` (una fila, "gana la última"), servicio
+`getMenuCatalogSettings`/`setIntuitivoEnabled`, endpoints `GET`/`PATCH /api/v1/menu-catalog/settings`
+(lectura con `production.read`, escritura con `production.generate`), pantalla
+`/app/ajustes/menu`. Con el interruptor apagado, "Configurar la semana" no deja tildar su inclusión
+y el backend rechaza igual cualquier intento que llegue con una oferta `composable: true`
+(`OperationsConflictError`, no un 500). Apagarlo no toca ningún menú ya creado — composición y
+precios quedan congelados como snapshot en el pedido, como siempre.
+
 ## Precios
 
 El precio depende del tamaño y del alcance comercial, nunca de la variedad: Keto 250 y Real 250

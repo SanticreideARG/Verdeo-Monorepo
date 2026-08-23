@@ -83,6 +83,8 @@ import {
   KitchenSummaryResponseSchema,
   LoginRequestSchema,
   LoginResponseSchema,
+  MenuCatalogSettingsSchema,
+  MenuCatalogSettingsUpdateRequestSchema,
   MenuCreateRequestSchema,
   MenuDistributeRequestSchema,
   MenuDistributionResponseSchema,
@@ -460,6 +462,7 @@ interface OperationsEngine {
     operatingSiteId: string | null | undefined,
     context: OperationsContext,
   ): Promise<unknown>;
+  getMenuCatalogSettings(): Promise<unknown>;
   getSurplusConfig(): Promise<unknown>;
   listProductionActuals(cycleId: string): Promise<unknown>;
   listProductionSnapshots(cycleId: string): Promise<unknown>;
@@ -468,6 +471,7 @@ interface OperationsEngine {
     entries: ProductionReportRequest['entries'],
     context: OperationsContext,
   ): Promise<unknown>;
+  setIntuitivoEnabled(intuitivoEnabled: boolean, context: OperationsContext): Promise<unknown>;
   setSurplusConfig(coefficientPercent: number, context: OperationsContext): Promise<unknown>;
   surplusReport(cycleId: string): Promise<unknown>;
   writeOffSurplus(
@@ -1329,6 +1333,7 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/orders/*', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/production/*', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/surplus/*', requireAuthentication);
+  app.use('/api/v1/menu-catalog/*', requireAuthentication);
   app.use('/api/v1/ai/providers', requireAuthentication);
   app.use('/api/v1/ai/prompts', requireAuthentication);
   app.use('/api/v1/ai/prompts/*', requireAuthentication);
@@ -3148,6 +3153,27 @@ export function createApp(options: CreateAppOptions) {
       operationsContext(context),
     );
     return context.json(SurplusConfigSchema.parse(contractValue(config)));
+  });
+
+  app.get('/api/v1/menu-catalog/settings', async (context) => {
+    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    const settings = await requireOperations().getMenuCatalogSettings();
+    return context.json(MenuCatalogSettingsSchema.parse(contractValue(settings)));
+  });
+
+  app.patch('/api/v1/menu-catalog/settings', async (context) => {
+    if (!context.get('session').permissions.includes('production.generate'))
+      return forbidden(context);
+    const input = MenuCatalogSettingsUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'Revisá la configuración del menú.', input.error.issues);
+    const settings = await requireOperations().setIntuitivoEnabled(
+      input.data.intuitivoEnabled,
+      operationsContext(context),
+    );
+    return context.json(MenuCatalogSettingsSchema.parse(contractValue(settings)));
   });
 
   app.get('/api/v1/ai/providers', async (context) => {

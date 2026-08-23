@@ -2,7 +2,7 @@
 
 ## Comunicación
 
-### `rewrite_message`
+### `rewrite_message` ✅ implementada (Fase 6)
 
 Input: texto.
 Acciones: mejorar, acortar, cordial, corregir, tono.
@@ -33,7 +33,7 @@ Output: borrador.
 
 Mensaje -> datos candidatos.
 
-### `extract_order`
+### `extract_order` ✅ implementada (Fase 6)
 
 Mensaje -> productos/cantidad/tamaño.
 
@@ -71,7 +71,7 @@ Generación/edición de imagen por provider con capability IMAGE_GENERATION.
 
 ## Producción
 
-### `kitchen_summary`
+### `kitchen_summary` ✅ implementada (Fase 6)
 
 Datos estructurados -> texto legible.
 

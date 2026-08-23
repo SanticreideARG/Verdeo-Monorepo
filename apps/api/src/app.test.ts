@@ -60,6 +60,7 @@ const customerOperationsStubs = {
   getAddressGeocodingRequest: vi.fn(),
   getCustomer: vi.fn(),
   getOrder: vi.fn(),
+  getMenuCatalogSettings: vi.fn(),
   getSurplusConfig: vi.fn(),
   listMessageTemplates: vi.fn(),
   listProductionActuals: vi.fn(),
@@ -69,6 +70,7 @@ const customerOperationsStubs = {
   rejectAddressGeocoding: vi.fn(),
   reportProduction: vi.fn(),
   requestAddressGeocoding: vi.fn(),
+  setIntuitivoEnabled: vi.fn(),
   setSurplusConfig: vi.fn(),
   surplusReport: vi.fn(),
   trackPublicOrder: vi.fn(),
@@ -1372,6 +1374,42 @@ describe('API foundation', () => {
       const denied = buildApp({ setSurplusConfig: vi.fn() }, ['production.read']);
       const deniedResponse = await denied.request('/api/v1/surplus/config', {
         body: JSON.stringify({ coefficientPercent: 15 }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'PATCH',
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('reads the Intuitivo toggle with production.read and denies without it', async () => {
+      const getMenuCatalogSettings = vi.fn(() => Promise.resolve({ intuitivoEnabled: true }));
+      const app = buildApp({ getMenuCatalogSettings }, ['production.read']);
+
+      const response = await app.request('/api/v1/menu-catalog/settings', { headers: { cookie } });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ intuitivoEnabled: true });
+
+      const denied = buildApp({ getMenuCatalogSettings: vi.fn() }, []);
+      const deniedResponse = await denied.request('/api/v1/menu-catalog/settings', {
+        headers: { cookie },
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('flips the Intuitivo toggle with production.generate and denies without it', async () => {
+      const setIntuitivoEnabled = vi.fn(() => Promise.resolve({ intuitivoEnabled: false }));
+      const app = buildApp({ setIntuitivoEnabled }, ['production.generate']);
+
+      const response = await app.request('/api/v1/menu-catalog/settings', {
+        body: JSON.stringify({ intuitivoEnabled: false }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'PATCH',
+      });
+      expect(response.status).toBe(200);
+      expect(setIntuitivoEnabled).toHaveBeenCalledWith(false, expect.anything());
+
+      const denied = buildApp({ setIntuitivoEnabled: vi.fn() }, ['production.read']);
+      const deniedResponse = await denied.request('/api/v1/menu-catalog/settings', {
+        body: JSON.stringify({ intuitivoEnabled: false }),
         headers: { cookie, 'content-type': 'application/json' },
         method: 'PATCH',
       });

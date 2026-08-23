@@ -101,3 +101,30 @@ Agregar adaptadores:
 - Email
 
 El dominio no debe usar nombres `WhatsAppMessage`; usar `Message`.
+
+## As built (Fase 5 — esqueleto)
+
+Tablas `messaging_accounts`, `messaging_conversations`, `messaging_messages`,
+`messaging_webhook_events` (migración 0019, additiva). Servicio `PostgresMessagingService`; adapter
+real `MetaWhatsAppProvider` (`apps/api/src/integrations/whatsapp-provider.ts`).
+
+- **Funciona sin credenciales reales**, mismo patrón que geocoding/IA/avatar storage: sin
+  `WHATSAPP_APP_SECRET`/`WHATSAPP_WEBHOOK_VERIFY_TOKEN` configurados, el webhook existe pero rechaza
+  toda verificación — _deny by default_, no un 500.
+- **Múltiples cuentas** (`messaging_accounts`) es dato administrable — cada fila tiene su propio
+  `phoneNumberId`/`accessToken`, no un único secreto global. Los dos secretos que sí son a nivel de
+  la App de Meta (firma del webhook, verify token) sí viven en env.
+- **Routing** sigue el orden documentado arriba: idempotencia (por `messaging_webhook_events` ↔
+  external id de Meta) → resolver cuenta por `phone_number_id` → resolver/crear identidad
+  `whatsapp` (crea un Customer incompleto si es contacto nuevo, mismo patrón que el guest checkout)
+  → resolver/crear conversación abierta → persistir mensaje. Un evento `statuses[]` de Meta
+  actualiza el mensaje saliente por external id, sin tocar conversaciones.
+- **Outbound siempre pasa por el mismo servicio**, nunca directo desde la UI — `sendMessage` para
+  responder dentro de una conversación existente, `sendToCustomer` para un envío iniciado por el
+  sistema (usado por los triggers de reparto en Fase 8) que resuelve o crea la conversación.
+- Inbox en `/app/mensajes`, cuentas en `/app/ajustes/mensajes`. Permisos `messages.read`/
+  `messages.send`/`messaging.accounts.manage` (ya reservados).
+
+**Diferido**: adaptadores de media/mensajes interactivos, IA para redactar/extraer sobre estos
+mensajes, plantillas oficiales Meta, disparadores automáticos por evento más allá de los tres de
+reparto.

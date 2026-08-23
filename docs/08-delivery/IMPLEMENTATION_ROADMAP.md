@@ -4,6 +4,26 @@
 
 Llegar a V1 de pruebas reales rápidamente sin construir primero integraciones secundarias.
 
+## Estado (as built)
+
+Fases 0-3 y 7 completas. Fases 4, 5, 6 y 8 completas como V1/esqueleto funcional — cada una con su
+propia sección "As built" en el documento de feature correspondiente, con lo diferido explícito ahí.
+Fase 9 (QA/Pilot) es la única que queda: es mayormente trabajo humano (piloto real, migración de
+datos, backups) más que código nuevo.
+
+| Fase                             | Estado                                                                        |
+| -------------------------------- | ----------------------------------------------------------------------------- |
+| 0 - Foundation                   | ✅ completa                                                                   |
+| 1 - Auth, RBAC, Audit            | ✅ completa                                                                   |
+| 2 - CRM / Customer Identity      | ✅ completa                                                                   |
+| 3 - Weekly Menu / Catalog        | ✅ completa                                                                   |
+| 4 - Landing CMS + Web Orders     | ✅ completa — ver `CMS_AND_PUBLIC_WEB.md` "As built"                          |
+| 5 - Messaging Core / WhatsApp    | ◐ esqueleto funcional — ver `MESSAGING_WHATSAPP.md` "As built"                |
+| 6 - AI Core                      | ◐ esqueleto funcional — ver `AI_CORE.md` "As built"                           |
+| 7 - Production                   | ✅ completa                                                                   |
+| 8 - Routes / Delivery / Payments | ◐ esqueleto funcional — ver `DELIVERY_AND_ROUTES.md`/`PAYMENTS.md` "As built" |
+| 9 - QA / Pilot                   | ⏳ pendiente                                                                  |
+
 ## Fase 0 - Foundation (1-2 días)
 
 - monorepo;

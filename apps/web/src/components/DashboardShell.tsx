@@ -138,6 +138,12 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         label: 'Zonas geográficas',
         permission: 'sites.read',
       },
+      {
+        href: '/app/ajustes/menu',
+        icon: 'settings',
+        label: 'Menú personalizado',
+        permission: 'production.read',
+      },
       { href: '/app#ajustes', icon: 'settings', label: 'Ajustes', permission: 'roles.read' },
     ],
   },
