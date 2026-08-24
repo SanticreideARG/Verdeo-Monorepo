@@ -11,3 +11,4 @@ export * from './messaging.js';
 export * from './operations.js';
 export * from './payments.js';
 export * from './production.js';
+export * from './surveys.js';

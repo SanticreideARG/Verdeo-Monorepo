@@ -13,4 +13,5 @@ export * from './schemas/messaging.js';
 export * from './schemas/operations.js';
 export * from './schemas/payments.js';
 export * from './schemas/sessions.js';
+export * from './schemas/surveys.js';
 export * from './schemas/users.js';

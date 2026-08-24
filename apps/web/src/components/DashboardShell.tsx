@@ -87,6 +87,12 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         permission: 'customers.read',
       },
       {
+        href: '/app/encuestas',
+        icon: 'customers',
+        label: 'Encuestas',
+        permission: 'surveys.read',
+      },
+      {
         href: '/app/cocina',
         icon: 'kitchen',
         label: 'Cocina',

@@ -26,6 +26,7 @@ import {
   PostgresSessionRepository,
   PostgresCmsService,
   PostgresMessagingService,
+  PostgresSurveyService,
   PostgresUserAdminRepository,
   PostgresUserDirectoryRepository,
 } from '@verdeo/db';
@@ -116,6 +117,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
   );
   const aiPrompts = new PostgresAIPromptService(database.db);
   const auditQuery = new PostgresAuditQueryService(database.db);
+  const surveys = new PostgresSurveyService(database.db);
   const aiTasks = new PostgresAITaskService(
     database.db,
     aiPrompts,
@@ -308,6 +310,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     appOrigin: env.APP_URL,
     accessTokens,
     auditQuery,
+    surveys,
     cms,
     ...(avatarStorage ? { avatarStorage } : {}),
     chat,

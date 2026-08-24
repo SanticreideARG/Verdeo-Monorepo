@@ -134,6 +134,15 @@ import {
   SurplusConfigUpdateRequestSchema,
   SurplusReportResponseSchema,
   SurplusWriteoffRequestSchema,
+  SurveyCreateRequestSchema,
+  SurveyListResponseSchema,
+  SurveyPublicSchema,
+  SurveyResultsSchema,
+  SurveySchema,
+  SurveySendRequestSchema,
+  SurveySendResponseSchema,
+  SurveySubmitRequestSchema,
+  SurveyUpdateRequestSchema,
   AccessTokenIssueRequestSchema,
   AccessTokenIssuedResponseSchema,
   AccessTokenListResponseSchema,
@@ -195,6 +204,9 @@ import {
   type ProductionSnapshotRequest,
   type PublicOrderCreateRequest,
   type SurplusWriteoffRequest,
+  type SurveyCreateRequest,
+  type SurveySubmitRequest,
+  type SurveyUpdateRequest,
   type UserPermissionOverridesUpdateRequest,
 } from '@verdeo/contracts';
 import { createRequestId, type Logger } from '@verdeo/observability';
@@ -528,6 +540,28 @@ interface AuditQueryEngine {
   listFacets(): Promise<unknown>;
 }
 
+interface SurveyEngine {
+  createSurvey(input: SurveyCreateRequest, context: SurveyContext): Promise<unknown>;
+  getPublicSurvey(token: string): Promise<unknown>;
+  getSurvey(surveyId: string): Promise<unknown>;
+  getSurveyResults(surveyId: string): Promise<unknown>;
+  listSurveys(): Promise<unknown>;
+  sendSurvey(surveyId: string, customerId: string, context: SurveyContext): Promise<unknown>;
+  submitSurveyResponse(token: string, answers: SurveySubmitRequest['answers']): Promise<unknown>;
+  updateSurvey(
+    surveyId: string,
+    input: SurveyUpdateRequest,
+    context: SurveyContext,
+  ): Promise<unknown>;
+}
+
+interface SurveyContext {
+  actorUserId?: string | undefined;
+  correlationId: string;
+  requestId: string;
+  source: string;
+}
+
 interface AIPromptEngine {
   activateVersion(
     taskKey: string,
@@ -725,6 +759,7 @@ interface CreateAppOptions {
   appOrigin: string;
   accessTokens?: AccessTokenEngine;
   auditQuery?: AuditQueryEngine;
+  surveys?: SurveyEngine;
   avatarStorage?: AvatarStorageEngine;
   cookieSameSite: 'Lax' | 'None';
   chat?: ChatEngine;
@@ -871,6 +906,20 @@ export function createApp(options: CreateAppOptions) {
     if (!auditQuery) throw new Error('Audit query engine is not configured');
     return auditQuery;
   };
+
+  const surveys = options.surveys;
+
+  const requireSurveys = () => {
+    if (!surveys) throw new Error('Survey engine is not configured');
+    return surveys;
+  };
+
+  const surveyContext = (context: Context<{ Variables: AppVariables }>): SurveyContext => ({
+    actorUserId: context.get('session')?.userId,
+    correlationId: context.get('requestId'),
+    requestId: context.get('requestId'),
+    source: 'api',
+  });
 
   const aiPrompts = options.aiPrompts;
 
@@ -1189,6 +1238,22 @@ export function createApp(options: CreateAppOptions) {
     return context.json(payload);
   });
 
+  // Public survey, token-gated — an unknown token 404s, an already-used or deactivated one 409s
+  // (SurveyNotFoundError / SurveyConflictError, translated by the shared error handler below).
+  app.get('/api/v1/public/surveys/:token', async (context) => {
+    const token = context.req.param('token');
+    const survey = await requireSurveys().getPublicSurvey(token);
+    return context.json(SurveyPublicSchema.parse(contractValue(survey)));
+  });
+
+  app.post('/api/v1/public/surveys/:token/submit', async (context) => {
+    const token = context.req.param('token');
+    const input = SurveySubmitRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success) return badRequest(context, 'Revisá las respuestas.', input.error.issues);
+    const response = await requireSurveys().submitSurveyResponse(token, input.data.answers);
+    return context.json({ ok: Boolean(response) }, 201);
+  });
+
   app.post('/api/v1/auth/login', async (context) => {
     const input = LoginRequestSchema.safeParse(await context.req.json().catch(() => null));
     if (!input.success) {
@@ -1377,6 +1442,8 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/audit/*', requireAuthentication);
   app.use('/api/v1/label-settings', requireAuthentication);
   app.use('/api/v1/label-settings/*', requireAuthentication);
+  app.use('/api/v1/surveys', requireAuthentication);
+  app.use('/api/v1/surveys/*', requireAuthentication);
   app.use('/api/v1/ai/tasks/*', requireAuthentication);
 
   app.get('/api/v1/me', async (context) => {
@@ -3326,6 +3393,76 @@ export function createApp(options: CreateAppOptions) {
     return context.json({ url }, 201);
   });
 
+  // --- Customer surveys: 1:1 token per customer, single-use ---------------------------------
+
+  app.get('/api/v1/surveys', async (context) => {
+    if (!context.get('session').permissions.includes('surveys.read')) return forbidden(context);
+    const items = await requireSurveys().listSurveys();
+    return context.json(SurveyListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.post('/api/v1/surveys', async (context) => {
+    if (!context.get('session').permissions.includes('surveys.manage')) return forbidden(context);
+    const input = SurveyCreateRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success) return badRequest(context, 'Revisá la encuesta.', input.error.issues);
+    const survey = await requireSurveys().createSurvey(input.data, surveyContext(context));
+    return context.json(SurveySchema.parse(contractValue(survey)), 201);
+  });
+
+  app.get('/api/v1/surveys/:id', async (context) => {
+    if (!context.get('session').permissions.includes('surveys.read')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'La encuesta indicada no es válida.');
+    const survey = await requireSurveys().getSurvey(params.data.id);
+    return context.json(SurveySchema.parse(contractValue(survey)));
+  });
+
+  app.patch('/api/v1/surveys/:id', async (context) => {
+    if (!context.get('session').permissions.includes('surveys.manage')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    const input = SurveyUpdateRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá la encuesta.',
+        input.success ? undefined : input.error.issues,
+      );
+    const survey = await requireSurveys().updateSurvey(
+      params.data.id,
+      input.data,
+      surveyContext(context),
+    );
+    return context.json(SurveySchema.parse(contractValue(survey)));
+  });
+
+  app.post('/api/v1/surveys/:id/send', async (context) => {
+    if (!context.get('session').permissions.includes('surveys.manage')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    const input = SurveySendRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success)
+      return badRequest(context, 'Elegí un cliente para enviar la encuesta.');
+    const sent = (await requireSurveys().sendSurvey(
+      params.data.id,
+      input.data.customerId,
+      surveyContext(context),
+    )) as { token: string };
+    return context.json(
+      SurveySendResponseSchema.parse({
+        publicUrl: `${options.appOrigin}/public/survey/${sent.token}`,
+        token: sent.token,
+      }),
+      201,
+    );
+  });
+
+  app.get('/api/v1/surveys/:id/results', async (context) => {
+    if (!context.get('session').permissions.includes('surveys.read')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'La encuesta indicada no es válida.');
+    const results = await requireSurveys().getSurveyResults(params.data.id);
+    return context.json(SurveyResultsSchema.parse(contractValue(results)));
+  });
+
   app.get('/api/v1/ai/providers', async (context) => {
     if (!context.get('session').permissions.includes('ai.providers.manage'))
       return forbidden(context);
@@ -3468,7 +3605,8 @@ export function createApp(options: CreateAppOptions) {
       error.name === 'DeliveryNotFoundError' ||
       error.name === 'PaymentsNotFoundError' ||
       error.name === 'AIPromptNotFoundError' ||
-      error.name === 'AITaskNotFoundError'
+      error.name === 'AITaskNotFoundError' ||
+      error.name === 'SurveyNotFoundError'
     ) {
       const code: ApiErrorCode = 'NOT_FOUND';
       return context.json(
@@ -3494,7 +3632,8 @@ export function createApp(options: CreateAppOptions) {
       error.name === 'PaymentsConflictError' ||
       error.name === 'AITaskNotConfiguredError' ||
       error.name === 'AITaskValidationError' ||
-      error.name === 'NoProviderAvailableError'
+      error.name === 'NoProviderAvailableError' ||
+      error.name === 'SurveyConflictError'
     ) {
       const code: ApiErrorCode = 'CONFLICT';
       return context.json(

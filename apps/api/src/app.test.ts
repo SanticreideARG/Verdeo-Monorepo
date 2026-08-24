@@ -2774,4 +2774,154 @@ describe('API foundation', () => {
       expect(deniedResponse.status).toBe(403);
     });
   });
+
+  describe('surveys', () => {
+    function buildSurveyApp(surveys: Record<string, unknown>, permissions: string[]) {
+      return createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            Promise.resolve({
+              expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+              permissions,
+              sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+            }),
+        },
+        secureCookies: false,
+        surveys: surveys as never,
+        users: emptyUsers,
+        version: 'test',
+      });
+    }
+
+    const cookie = 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars';
+    const sampleSurvey = {
+      active: true,
+      createdAt: new Date('2026-08-20T12:00:00.000Z'),
+      description: null,
+      id: '40000000-0000-4000-8000-000000000001',
+      questions: [
+        {
+          allowMultiple: false,
+          id: '40000000-0000-4000-8000-000000000002',
+          options: [],
+          ordinal: 1,
+          prompt: '¿Cómo estuvo?',
+          required: true,
+        },
+      ],
+      title: 'V1',
+      updatedAt: new Date('2026-08-20T12:00:00.000Z'),
+    };
+
+    it('lists surveys with surveys.read and denies without it', async () => {
+      const listSurveys = vi.fn(() => Promise.resolve([]));
+      const app = buildSurveyApp({ listSurveys }, ['surveys.read']);
+      const response = await app.request('/api/v1/surveys', { headers: { cookie } });
+      expect(response.status).toBe(200);
+
+      const denied = buildSurveyApp({ listSurveys: vi.fn() }, []);
+      const deniedResponse = await denied.request('/api/v1/surveys', { headers: { cookie } });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('creates a survey with surveys.manage and denies without it', async () => {
+      const createSurvey = vi.fn(() => Promise.resolve(sampleSurvey));
+      const app = buildSurveyApp({ createSurvey }, ['surveys.manage']);
+
+      const response = await app.request('/api/v1/surveys', {
+        body: JSON.stringify({
+          questions: [{ options: [], prompt: '¿Cómo estuvo?' }],
+          title: 'V1',
+        }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(201);
+
+      const denied = buildSurveyApp({ createSurvey: vi.fn() }, ['surveys.read']);
+      const deniedResponse = await denied.request('/api/v1/surveys', {
+        body: JSON.stringify({ questions: [{ options: [], prompt: 'x' }], title: 'V1' }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('sends a survey to a customer and returns a public link', async () => {
+      const sendSurvey = vi.fn(() => Promise.resolve({ token: 'abc123' }));
+      const app = buildSurveyApp({ sendSurvey }, ['surveys.manage']);
+      const CUSTOMER = '50000000-0000-4000-8000-000000000001';
+
+      const response = await app.request(`/api/v1/surveys/${sampleSurvey.id}/send`, {
+        body: JSON.stringify({ customerId: CUSTOMER }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(201);
+      const body = (await response.json()) as { publicUrl: string; token: string };
+      expect(body.token).toBe('abc123');
+      expect(body.publicUrl).toContain('/public/survey/abc123');
+      expect(sendSurvey).toHaveBeenCalledWith(sampleSurvey.id, CUSTOMER, expect.anything());
+    });
+
+    it('gets survey results with surveys.read', async () => {
+      const getSurveyResults = vi.fn(() =>
+        Promise.resolve({
+          questions: [],
+          responseCount: 0,
+          sentCount: 0,
+          surveyId: sampleSurvey.id,
+          title: 'V1',
+        }),
+      );
+      const app = buildSurveyApp({ getSurveyResults }, ['surveys.read']);
+      const response = await app.request(`/api/v1/surveys/${sampleSurvey.id}/results`, {
+        headers: { cookie },
+      });
+      expect(response.status).toBe(200);
+    });
+
+    it('reads and submits a public survey by token, no authentication required', async () => {
+      const getPublicSurvey = vi.fn(() =>
+        Promise.resolve({ description: null, questions: sampleSurvey.questions, title: 'V1' }),
+      );
+      const submitSurveyResponse = vi.fn(() => Promise.resolve({ id: 'resp-1' }));
+      const app = buildSurveyApp({ getPublicSurvey, submitSurveyResponse }, []);
+
+      const read = await app.request('/api/v1/public/surveys/tok-1');
+      expect(read.status).toBe(200);
+
+      const submit = await app.request('/api/v1/public/surveys/tok-1/submit', {
+        body: JSON.stringify({
+          answers: [{ questionId: sampleSurvey.questions[0]!.id, value: 'Bien' }],
+        }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(submit.status).toBe(201);
+      expect(submitSurveyResponse).toHaveBeenCalledWith('tok-1', [
+        { questionId: sampleSurvey.questions[0]!.id, value: 'Bien' },
+      ]);
+    });
+
+    it('404s a public survey lookup for an unknown token', async () => {
+      class SurveyNotFoundError extends Error {
+        public constructor(message: string) {
+          super(message);
+          this.name = 'SurveyNotFoundError';
+        }
+      }
+      const getPublicSurvey = vi.fn(() => Promise.reject(new SurveyNotFoundError('not found')));
+      const app = buildSurveyApp({ getPublicSurvey }, []);
+
+      const response = await app.request('/api/v1/public/surveys/does-not-exist');
+      expect(response.status).toBe(404);
+    });
+  });
 });

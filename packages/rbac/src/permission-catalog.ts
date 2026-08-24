@@ -92,4 +92,6 @@ export const initialPermissionCatalog: readonly PermissionDefinition[] = [
   { key: 'ai.images.generate', group: 'ai', description: 'Generar imágenes' },
   { key: 'audit.read', group: 'audit', description: 'Ver auditoría' },
   { key: 'audit.export', group: 'audit', description: 'Exportar auditoría' },
+  { key: 'surveys.read', group: 'surveys', description: 'Ver encuestas y resultados' },
+  { key: 'surveys.manage', group: 'surveys', description: 'Crear encuestas y enviarlas' },
 ];

@@ -30,7 +30,10 @@ import { OrdersPage } from './OrdersPage.js';
 import { PaymentsPage } from './PaymentsPage.js';
 import { ProfilePage } from './ProfilePage.js';
 import { PublicOrderPage } from './PublicOrderPage.js';
+import { PublicSurveyPage } from './PublicSurveyPage.js';
 import { RoutesPage } from './RoutesPage.js';
+import { SurveyResultsPage } from './SurveyResultsPage.js';
+import { SurveysPage } from './SurveysPage.js';
 import { TrackOrderPage } from './TrackOrderPage.js';
 import { UsersAdminPage } from './UsersAdminPage.js';
 
@@ -175,10 +178,13 @@ export function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/pedido" element={<PublicOrderPage />} />
       <Route path="/seguimiento" element={<TrackOrderPage />} />
+      <Route path="/public/survey/:token" element={<PublicSurveyPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/auth/callback" element={<OAuthCallbackPage />} />
       <Route path="/app" element={<DashboardPage />} />
       <Route path="/app/clientes" element={<CustomersPage />} />
+      <Route path="/app/encuestas" element={<SurveysPage />} />
+      <Route path="/app/encuestas/:id/resultados" element={<SurveyResultsPage />} />
       <Route path="/app/pedidos/nuevo" element={<OrderIntakePage />} />
       <Route path="/app/pedidos/:id" element={<OrderDetailPage />} />
       <Route path="/app/pedidos" element={<OrdersPage />} />
