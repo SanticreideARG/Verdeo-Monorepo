@@ -9,6 +9,7 @@ export * from './postgres-payments-service.js';
 export * from './postgres-ai-configuration-service.js';
 export * from './postgres-ai-prompt-service.js';
 export * from './postgres-ai-task-service.js';
+export * from './postgres-audit-query-service.js';
 export * from './postgres-password-credential-repository.js';
 export * from './postgres-password-user-provisioner.js';
 export * from './postgres-operations-service.js';

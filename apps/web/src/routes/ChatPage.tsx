@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { apiRequest } from '../lib/api.js';
-import { errorMessage, formatMoney } from '../lib/operations.js';
+import { errorMessage, formatMoney, orderStatusLabel } from '../lib/operations.js';
 
 interface ChatContact {
   displayName: string;
@@ -124,7 +124,7 @@ function ReferenceCard({ reference }: { reference: ChatReference }) {
         };
         setSummary({
           href: `/app/pedidos?search=${encodeURIComponent(order.publicNumber)}`,
-          subtitle: `${order.status} · ${formatMoney(order.totalMinor, order.currency)}`,
+          subtitle: `${orderStatusLabel(order.status)} · ${formatMoney(order.totalMinor, order.currency)}`,
           title: order.publicNumber,
         });
       }

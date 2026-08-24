@@ -2599,4 +2599,76 @@ describe('API foundation', () => {
       expect(response.status).toBe(409);
     });
   });
+
+  describe('audit', () => {
+    function buildAuditApp(auditQuery: Record<string, unknown>, permissions: string[]) {
+      return createApp({
+        appOrigin: 'http://localhost:5173',
+        auditQuery: auditQuery as never,
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            Promise.resolve({
+              expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+              permissions,
+              sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+            }),
+        },
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+    }
+
+    const cookie = 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars';
+
+    it('lists events with audit.read and denies without it', async () => {
+      const listEvents = vi.fn(() => Promise.resolve({ items: [], nextBefore: null }));
+      const app = buildAuditApp({ listEvents }, ['audit.read']);
+
+      const response = await app.request('/api/v1/audit', { headers: { cookie } });
+      expect(response.status).toBe(200);
+
+      const denied = buildAuditApp({ listEvents: vi.fn() }, []);
+      const deniedResponse = await denied.request('/api/v1/audit', { headers: { cookie } });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('passes query filters through to the service', async () => {
+      const listEvents = vi.fn(() => Promise.resolve({ items: [], nextBefore: null }));
+      const app = buildAuditApp({ listEvents }, ['audit.read']);
+
+      await app.request('/api/v1/audit?entityType=order&entityId=order-1&limit=10', {
+        headers: { cookie },
+      });
+
+      expect(listEvents).toHaveBeenCalledWith(
+        expect.objectContaining({ entityId: 'order-1', entityType: 'order', limit: 10 }),
+      );
+    });
+
+    it('rejects an invalid query', async () => {
+      const app = buildAuditApp({ listEvents: vi.fn() }, ['audit.read']);
+
+      const response = await app.request('/api/v1/audit?limit=abc', { headers: { cookie } });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('lists facets with audit.read and denies without it', async () => {
+      const listFacets = vi.fn(() => Promise.resolve({ actions: [], entityTypes: [] }));
+      const app = buildAuditApp({ listFacets }, ['audit.read']);
+
+      const response = await app.request('/api/v1/audit/facets', { headers: { cookie } });
+      expect(response.status).toBe(200);
+
+      const denied = buildAuditApp({ listFacets: vi.fn() }, []);
+      const deniedResponse = await denied.request('/api/v1/audit/facets', { headers: { cookie } });
+      expect(deniedResponse.status).toBe(403);
+    });
+  });
 });

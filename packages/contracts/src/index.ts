@@ -1,4 +1,5 @@
 export * from './schemas/access-tokens.js';
+export * from './schemas/audit.js';
 export * from './schemas/auth.js';
 export * from './schemas/cms.js';
 export * from './schemas/ai.js';

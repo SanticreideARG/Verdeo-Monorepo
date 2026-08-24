@@ -7,6 +7,7 @@ import { apiRequest } from '../lib/api.js';
 import {
   errorMessage,
   formatMoney,
+  orderStatusLabel,
   type OrderRevision,
   type OrderStatusHistoryEntry,
   type OrderSummary,
@@ -19,7 +20,7 @@ function formText(form: FormData, key: string): string {
 }
 
 function statusLabel(status: OrderSummary['status'] | null): string {
-  return status ?? '—';
+  return status ? orderStatusLabel(status) : '—';
 }
 
 function timeLabel(value: string): string {
@@ -168,7 +169,7 @@ export function OrderDetailPage() {
             <p className="dashboard-kicker">Pedidos</p>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-semibold text-forest">{order.publicNumber}</h1>
-              <span className="status-chip">{order.status}</span>
+              <span className="status-chip">{orderStatusLabel(order.status)}</span>
             </div>
             <p className="mt-2 text-sm text-ink-muted">{order.customer.displayName}</p>
           </div>
@@ -291,7 +292,8 @@ export function OrderDetailPage() {
           <h2 className="text-sm font-bold text-forest">Historial de estado</h2>
           {history.map((entry) => (
             <p className="text-sm text-ink-muted" key={entry.id}>
-              {timeLabel(entry.createdAt)} · {statusLabel(entry.fromStatus)} → {entry.toStatus}
+              {timeLabel(entry.createdAt)} · {statusLabel(entry.fromStatus)} →{' '}
+              {orderStatusLabel(entry.toStatus)}
               {entry.reason ? ` · ${entry.reason}` : ''}
             </p>
           ))}

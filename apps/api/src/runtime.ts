@@ -16,6 +16,7 @@ import {
   PostgresAIConfigurationService,
   PostgresAIPromptService,
   PostgresAITaskService,
+  PostgresAuditQueryService,
   PostgresDeliveryService,
   PostgresGeographyService,
   PostgresPasswordCredentialRepository,
@@ -114,6 +115,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     env.AI_CONFIG_ENCRYPTION_KEY,
   );
   const aiPrompts = new PostgresAIPromptService(database.db);
+  const auditQuery = new PostgresAuditQueryService(database.db);
   const aiTasks = new PostgresAITaskService(
     database.db,
     aiPrompts,
@@ -305,6 +307,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     aiTasks,
     appOrigin: env.APP_URL,
     accessTokens,
+    auditQuery,
     cms,
     ...(avatarStorage ? { avatarStorage } : {}),
     chat,

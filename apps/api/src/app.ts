@@ -5,6 +5,9 @@ import { Hono, type Context } from 'hono';
 import type { AuthenticatedSession, SessionSummary, UserDirectoryPage } from '@verdeo/auth';
 import {
   AIExecutionListResponseSchema,
+  AuditEventListResponseSchema,
+  AuditEventQuerySchema,
+  AuditFacetsResponseSchema,
   AIProviderConfigListResponseSchema,
   AIProviderConfigUpsertRequestSchema,
   AIPromptSummaryListResponseSchema,
@@ -504,6 +507,18 @@ interface AIConfigurationContext {
   source: string;
 }
 
+interface AuditQueryEngine {
+  listEvents(query: {
+    action?: string | undefined;
+    actorUserId?: string | undefined;
+    before?: string | undefined;
+    entityId?: string | undefined;
+    entityType?: string | undefined;
+    limit: number;
+  }): Promise<unknown>;
+  listFacets(): Promise<unknown>;
+}
+
 interface AIPromptEngine {
   activateVersion(
     taskKey: string,
@@ -700,6 +715,7 @@ interface CreateAppOptions {
   aiTasks?: AITaskEngine;
   appOrigin: string;
   accessTokens?: AccessTokenEngine;
+  auditQuery?: AuditQueryEngine;
   avatarStorage?: AvatarStorageEngine;
   cookieSameSite: 'Lax' | 'None';
   chat?: ChatEngine;
@@ -839,6 +855,13 @@ export function createApp(options: CreateAppOptions) {
     requestId: context.get('requestId'),
     source: 'api',
   });
+
+  const auditQuery = options.auditQuery;
+
+  const requireAuditQuery = () => {
+    if (!auditQuery) throw new Error('Audit query engine is not configured');
+    return auditQuery;
+  };
 
   const aiPrompts = options.aiPrompts;
 
@@ -1341,6 +1364,8 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/ai/providers', requireAuthentication);
   app.use('/api/v1/ai/prompts', requireAuthentication);
   app.use('/api/v1/ai/prompts/*', requireAuthentication);
+  app.use('/api/v1/audit', requireAuthentication);
+  app.use('/api/v1/audit/*', requireAuthentication);
   app.use('/api/v1/ai/tasks/*', requireAuthentication);
 
   app.get('/api/v1/me', async (context) => {
@@ -3282,6 +3307,20 @@ export function createApp(options: CreateAppOptions) {
       return forbidden(context);
     const items = await requireAiTasks().listExecutions(context.req.query('taskKey'));
     return context.json(AIExecutionListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.get('/api/v1/audit', async (context) => {
+    if (!context.get('session').permissions.includes('audit.read')) return forbidden(context);
+    const query = AuditEventQuerySchema.safeParse(context.req.query());
+    if (!query.success) return badRequest(context, 'Revisá los filtros.', query.error.issues);
+    const result = await requireAuditQuery().listEvents(query.data);
+    return context.json(AuditEventListResponseSchema.parse(contractValue(result)));
+  });
+
+  app.get('/api/v1/audit/facets', async (context) => {
+    if (!context.get('session').permissions.includes('audit.read')) return forbidden(context);
+    const facets = await requireAuditQuery().listFacets();
+    return context.json(AuditFacetsResponseSchema.parse(contractValue(facets)));
   });
 
   app.post('/api/v1/ai/tasks/:taskKey/run', async (context) => {

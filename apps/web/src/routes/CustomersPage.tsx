@@ -6,6 +6,7 @@ import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import {
   errorMessage,
   formatMoney,
+  orderStatusLabel,
   type AddressGeocodingRequest,
   type CustomerAddress,
   type CustomerDetail,
@@ -953,7 +954,7 @@ export function CustomersPage() {
                     {detail.orders.map((order) => (
                       <article key={order.id}>
                         <strong>{order.publicNumber}</strong>
-                        <span className="status-chip">{order.status}</span>
+                        <span className="status-chip">{orderStatusLabel(order.status)}</span>
                         <span>
                           {new Intl.DateTimeFormat('es-AR').format(
                             new Date(`${order.deliveryDate}T12:00:00`),

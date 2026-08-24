@@ -7,6 +7,7 @@ import { apiRequest } from '../lib/api.js';
 import {
   errorMessage,
   formatMoney,
+  orderStatusLabel,
   type CustomerSummary,
   type OrderSummary,
   type WeeklyMenu,
@@ -405,7 +406,7 @@ export function OrderIntakePage() {
                   >
                     {order.publicNumber}
                   </Link>
-                  <span className="status-chip">{order.status}</span>
+                  <span className="status-chip">{orderStatusLabel(order.status)}</span>
                 </div>
                 <p className="mt-2 text-sm text-ink-muted">
                   {order.customer.displayName} ·{' '}

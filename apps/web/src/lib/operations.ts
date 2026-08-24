@@ -269,3 +269,20 @@ export async function errorMessage(response: Response): Promise<string> {
 export function formatMoney(amountMinor: number, currency: string): string {
   return new Intl.NumberFormat('es-AR', { currency, style: 'currency' }).format(amountMinor / 100);
 }
+
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  CANCELLED: 'Cancelado',
+  CONFIRMED: 'Confirmado',
+  DELIVERED: 'Entregado',
+  DRAFT: 'Borrador',
+  READY: 'Listo',
+};
+
+/** Staff-facing order status label — the only place this mapping lives, so every screen (Ver
+ * pedidos, Tomar pedido, el detalle, el historial dentro de un cliente) reads the same word for
+ * the same status instead of each one showing the raw enum. TrackOrderPage keeps its own
+ * customer-facing wording (e.g. "Recibido" instead of "Borrador") since it's a different
+ * audience, not an inconsistency to fix. */
+export function orderStatusLabel(status: string): string {
+  return ORDER_STATUS_LABELS[status] ?? status;
+}

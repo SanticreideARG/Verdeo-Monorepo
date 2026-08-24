@@ -11,8 +11,10 @@ import { ChatLinksPage } from './ChatLinksPage.js';
 import { ChatPage } from './ChatPage.js';
 import { CustomersPage } from './CustomersPage.js';
 import { DeliveryAppPage } from './DeliveryAppPage.js';
+import { AuditLogPage } from './AuditLogPage.js';
 import { GeographySettingsPage } from './GeographySettingsPage.js';
 import { MenuCatalogSettingsPage } from './MenuCatalogSettingsPage.js';
+import { SettingsHubPage } from './SettingsHubPage.js';
 import { KitchenPage } from './KitchenPage.js';
 import { LoginPage } from './LoginPage.js';
 import { MenuBuilderPage } from './MenuBuilderPage.js';
@@ -194,8 +196,10 @@ export function App() {
       <Route path="/app/perfil" element={<ProfilePage />} />
       <Route path="/app/usuarios" element={<UsersAdminPage />} />
       <Route path="/app/contenidos" element={<CmsPagesAdminPage />} />
+      <Route path="/app/ajustes" element={<SettingsHubPage />} />
       <Route path="/app/ajustes/zonas" element={<GeographySettingsPage />} />
       <Route path="/app/ajustes/menu" element={<MenuCatalogSettingsPage />} />
+      <Route path="/app/auditoria" element={<AuditLogPage />} />
       <Route path="/app/ajustes/chat" element={<ChatLinksPage />} />
       <Route
         path="*"

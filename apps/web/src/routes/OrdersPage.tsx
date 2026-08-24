@@ -4,7 +4,12 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
-import { errorMessage, formatMoney, type OrderSummary } from '../lib/operations.js';
+import {
+  errorMessage,
+  formatMoney,
+  orderStatusLabel,
+  type OrderSummary,
+} from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 const STATUS_OPTIONS = ['DRAFT', 'CONFIRMED', 'READY', 'DELIVERED', 'CANCELLED'] as const;
@@ -104,7 +109,7 @@ export function OrdersPage() {
                 <option value="">Todos</option>
                 {STATUS_OPTIONS.map((option) => (
                   <option key={option} value={option}>
-                    {option}
+                    {orderStatusLabel(option)}
                   </option>
                 ))}
               </select>
@@ -134,7 +139,7 @@ export function OrdersPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <strong className="text-xl text-forest">{order.publicNumber}</strong>
-                    <span className="status-chip">{order.status}</span>
+                    <span className="status-chip">{orderStatusLabel(order.status)}</span>
                   </div>
                   <p className="font-semibold">{formatMoney(order.totalMinor, order.currency)}</p>
                 </div>

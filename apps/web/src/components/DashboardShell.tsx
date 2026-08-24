@@ -144,7 +144,8 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         label: 'Menú personalizado',
         permission: 'production.read',
       },
-      { href: '/app#ajustes', icon: 'settings', label: 'Ajustes', permission: 'roles.read' },
+      { href: '/app/auditoria', icon: 'settings', label: 'Auditoría', permission: 'audit.read' },
+      { href: '/app/ajustes', icon: 'settings', label: 'Ajustes', permission: 'roles.read' },
     ],
   },
 ];
