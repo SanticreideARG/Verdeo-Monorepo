@@ -29,6 +29,16 @@ function timeLabel(value: string): string {
   );
 }
 
+async function printLabels(orderId: string): Promise<string | null> {
+  const response = await apiRequest(`/api/v1/orders/${orderId}/labels/export`);
+  if (!response.ok) return errorMessage(response);
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank', 'noopener,noreferrer');
+  URL.revokeObjectURL(url);
+  return null;
+}
+
 /** "Ver pedidos" drills into here for a single order: full detail, status history, revision
  * history, and an edit form for everything a PATCH can change short of the line composition —
  * reprogramming date/address/payment/notes requires a reason, mirroring the audit-first design of
@@ -212,6 +222,13 @@ export function OrderDetailPage() {
               {editing ? 'Cerrar edición' : 'Editar pedido'}
             </button>
           ) : null}
+          <button
+            className="button button-secondary"
+            onClick={() => void printLabels(order.id).then((error) => error && setMessage(error))}
+            type="button"
+          >
+            Generar etiquetas
+          </button>
         </div>
 
         {editing && canEdit ? (

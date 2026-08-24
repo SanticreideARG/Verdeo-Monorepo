@@ -114,3 +114,26 @@ export const surplusWriteoffs = pgTable(
   },
   (table) => [check('surplus_writeoffs_quantity_positive_check', sql`${table.quantityUnits} > 0`)],
 );
+
+// Singleton, same pattern as surplusConfigs: one global row for the kitchen label generator
+// (labels per printed page + optional background image), editable from Ajustes by
+// superusers/operators. Not per-site — a single operation-wide label format was the request, not a
+// per-zone one like Intuitivo.
+export const labelSettings = pgTable(
+  'label_settings',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    labelsPerPage: integer('labels_per_page').default(8).notNull(),
+    backgroundImageUrl: text('background_image_url'),
+    updatedByUserId: uuid('updated_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    ...timestamps,
+  },
+  (table) => [
+    check(
+      'label_settings_labels_per_page_check',
+      sql`${table.labelsPerPage} >= 4 and ${table.labelsPerPage} <= 12`,
+    ),
+  ],
+);

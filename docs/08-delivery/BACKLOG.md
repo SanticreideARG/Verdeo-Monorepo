@@ -132,6 +132,13 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [ ] Image generation provider.
 - [ ] AI Workbench.
 
+## P2 - Customer surveys
+
+- [ ] Survey editor/engine (secciones de administración, preguntas configurables).
+- [ ] Token público por encuesta + ruta `public/survey/:token`.
+- [ ] Enlace y QR de distribución por encuesta.
+- [ ] Pantalla de resultados/estadísticas por encuesta (staff, gateada por permiso).
+
 ## P2
 
 - [ ] Instagram adapter.

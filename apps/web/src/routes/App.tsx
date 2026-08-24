@@ -16,6 +16,7 @@ import { GeographySettingsPage } from './GeographySettingsPage.js';
 import { MenuCatalogSettingsPage } from './MenuCatalogSettingsPage.js';
 import { SettingsHubPage } from './SettingsHubPage.js';
 import { KitchenPage } from './KitchenPage.js';
+import { LabelSettingsPage } from './LabelSettingsPage.js';
 import { LoginPage } from './LoginPage.js';
 import { MenuBuilderPage } from './MenuBuilderPage.js';
 import { MenusPage } from './MenusPage.js';
@@ -199,6 +200,7 @@ export function App() {
       <Route path="/app/ajustes" element={<SettingsHubPage />} />
       <Route path="/app/ajustes/zonas" element={<GeographySettingsPage />} />
       <Route path="/app/ajustes/menu" element={<MenuCatalogSettingsPage />} />
+      <Route path="/app/ajustes/etiquetas" element={<LabelSettingsPage />} />
       <Route path="/app/auditoria" element={<AuditLogPage />} />
       <Route path="/app/ajustes/chat" element={<ChatLinksPage />} />
       <Route

@@ -261,6 +261,21 @@ export interface SurplusReport {
   items: SurplusItem[];
 }
 
+export interface Label {
+  customerDisplayName: string | null;
+  familyName: string;
+  orderPublicNumber: string;
+  variantName: string;
+}
+
+export interface LabelSettings {
+  backgroundImageUrl: string | null;
+  id: string | null;
+  labelsPerPage: number;
+  updatedAt: string | null;
+  updatedByUserId: string | null;
+}
+
 export async function errorMessage(response: Response): Promise<string> {
   const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
   return body?.error?.message ?? 'No pudimos completar la operación.';

@@ -678,6 +678,32 @@ export const KitchenSummaryResponseSchema = z.object({
   totalUnits: z.number().int(),
 });
 
+// One entry per physical unit (a line's quantityUnits expands into that many identical entries),
+// never one entry per order line — that's the "una etiqueta por unidad física" decision.
+// customerDisplayName is set only for composable (Intuitivo) units; a fixed variety's label never
+// carries a name, per the "solo nombre + variedad/tamaño" decision.
+export const LabelSchema = z.object({
+  customerDisplayName: z.string().nullable(),
+  familyName: z.string(),
+  orderPublicNumber: z.string(),
+  variantName: z.string(),
+});
+
+export const LabelListResponseSchema = z.object({ items: z.array(LabelSchema) });
+
+export const LabelSettingsSchema = z.object({
+  backgroundImageUrl: z.string().nullable(),
+  id: UuidSchema.nullable(),
+  labelsPerPage: z.number().int().min(4).max(12),
+  updatedAt: IsoDateTimeSchema.nullable(),
+  updatedByUserId: UuidSchema.nullable(),
+});
+
+export const LabelSettingsUpdateRequestSchema = z.object({
+  backgroundImageUrl: z.string().url().nullable().optional(),
+  labelsPerPage: z.number().int().min(4).max(12),
+});
+
 export const ProductionActualEntrySchema = z.object({
   familyName: z.string().trim().min(1).max(120),
   quantityUnits: z.number().int().nonnegative(),
@@ -820,6 +846,10 @@ export type OrderTransitionRequest = z.infer<typeof OrderTransitionRequestSchema
 export type OrderUpdateRequest = z.infer<typeof OrderUpdateRequestSchema>;
 export type OrderListQuery = z.infer<typeof OrderListQuerySchema>;
 export type KitchenSummaryResponse = z.infer<typeof KitchenSummaryResponseSchema>;
+export type Label = z.infer<typeof LabelSchema>;
+export type LabelListResponse = z.infer<typeof LabelListResponseSchema>;
+export type LabelSettings = z.infer<typeof LabelSettingsSchema>;
+export type LabelSettingsUpdateRequest = z.infer<typeof LabelSettingsUpdateRequestSchema>;
 export type ProductionReportRequest = z.infer<typeof ProductionReportRequestSchema>;
 export type ProductionSnapshotRequest = z.infer<typeof ProductionSnapshotRequestSchema>;
 export type SurplusConfigUpdateRequest = z.infer<typeof SurplusConfigUpdateRequestSchema>;

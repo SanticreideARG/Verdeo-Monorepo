@@ -31,6 +31,12 @@ const GROUPS: SettingsGroup[] = [
         permission: 'production.read',
         title: 'Menú personalizado',
       },
+      {
+        description: 'Etiquetas por hoja y fondo de las etiquetas de cocina.',
+        href: '/app/ajustes/etiquetas',
+        permission: 'production.read',
+        title: 'Etiquetas',
+      },
     ],
     title: 'Identidad del negocio',
   },

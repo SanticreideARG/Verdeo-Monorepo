@@ -84,6 +84,9 @@ import {
   OperatingSiteSchema,
   OperatingSiteUpdateRequestSchema,
   KitchenSummaryResponseSchema,
+  LabelListResponseSchema,
+  LabelSettingsSchema,
+  LabelSettingsUpdateRequestSchema,
   LoginRequestSchema,
   LoginResponseSchema,
   MenuCatalogSettingsListResponseSchema,
@@ -175,6 +178,7 @@ import {
   type CustomerUpdateRequest,
   type GeographicZoneCreateRequest,
   type GeographicZoneUpdateRequest,
+  type LabelSettingsUpdateRequest,
   type MessageTemplateUpsertRequest,
   type OperatingSiteCreateRequest,
   type OperatingSiteUpdateRequest,
@@ -196,6 +200,7 @@ import {
 import { createRequestId, type Logger } from '@verdeo/observability';
 
 import { ContactImportError, parseContactImport } from './integrations/contact-import.js';
+import { buildLabelsPrintHtml } from './labels-export.js';
 import {
   buildProductionExcel,
   buildProductionPrintHtml,
@@ -390,12 +395,15 @@ interface OperationsEngine {
     requestId: string,
   ): Promise<unknown>;
   getOrder(orderId: string): Promise<unknown>;
+  cycleLabels(cycleId: string, operatingSiteId: string | null): Promise<unknown>;
+  getLabelSettings(): Promise<unknown>;
   kitchenSummary(cycleId: string, operatingSiteId: string | null): Promise<unknown>;
   listCustomers(input: ScopedInput<CustomerListQuery>, includeSensitive: boolean): Promise<unknown>;
   listMessageTemplates(): Promise<unknown>;
   listMenus(onlyPublished?: boolean): Promise<unknown>;
   listOrders(input: ScopedInput<OrderListQuery>): Promise<unknown>;
   orderHistory(orderId: string): Promise<unknown>;
+  orderLabels(orderId: string): Promise<unknown>;
   orderRevisionHistory(orderId: string): Promise<unknown>;
   publishMenu(menuId: string, context: OperationsContext): Promise<unknown>;
   rejectAddressGeocoding(
@@ -479,6 +487,7 @@ interface OperationsEngine {
     intuitivoEnabled: boolean,
     context: OperationsContext,
   ): Promise<unknown>;
+  setLabelSettings(input: LabelSettingsUpdateRequest, context: OperationsContext): Promise<unknown>;
   setSurplusConfig(coefficientPercent: number, context: OperationsContext): Promise<unknown>;
   surplusReport(cycleId: string): Promise<unknown>;
   writeOffSurplus(
@@ -1366,6 +1375,8 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/ai/prompts/*', requireAuthentication);
   app.use('/api/v1/audit', requireAuthentication);
   app.use('/api/v1/audit/*', requireAuthentication);
+  app.use('/api/v1/label-settings', requireAuthentication);
+  app.use('/api/v1/label-settings/*', requireAuthentication);
   app.use('/api/v1/ai/tasks/*', requireAuthentication);
 
   app.get('/api/v1/me', async (context) => {
@@ -3215,6 +3226,104 @@ export function createApp(options: CreateAppOptions) {
     return context.json(
       MenuCatalogSettingsListResponseSchema.parse({ items: contractValue(items) }),
     );
+  });
+
+  // --- Kitchen labels: on-demand only, never generated automatically on order confirm --------
+
+  app.get('/api/v1/production/:cycleId/labels', async (context) => {
+    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El ciclo indicado no es válido.');
+    const items = await requireOperations().cycleLabels(
+      params.data.cycleId,
+      context.get('scope')?.operatingSiteId ?? null,
+    );
+    return context.json(LabelListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.get('/api/v1/production/:cycleId/labels/export', async (context) => {
+    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El ciclo indicado no es válido.');
+    const [items, settings] = await Promise.all([
+      requireOperations().cycleLabels(
+        params.data.cycleId,
+        context.get('scope')?.operatingSiteId ?? null,
+      ),
+      requireOperations().getLabelSettings(),
+    ]);
+    context.header('content-type', 'text/html; charset=utf-8');
+    return context.html(
+      buildLabelsPrintHtml(
+        LabelListResponseSchema.shape.items.parse(contractValue(items)),
+        LabelSettingsSchema.parse(contractValue(settings)),
+        'Etiquetas de cocina',
+      ),
+    );
+  });
+
+  app.get('/api/v1/orders/:id/labels', async (context) => {
+    if (!context.get('session').permissions.includes('orders.read')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El pedido indicado no es válido.');
+    const items = await requireOperations().orderLabels(params.data.id);
+    return context.json(LabelListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.get('/api/v1/orders/:id/labels/export', async (context) => {
+    if (!context.get('session').permissions.includes('orders.read')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El pedido indicado no es válido.');
+    const [items, settings] = await Promise.all([
+      requireOperations().orderLabels(params.data.id),
+      requireOperations().getLabelSettings(),
+    ]);
+    context.header('content-type', 'text/html; charset=utf-8');
+    return context.html(
+      buildLabelsPrintHtml(
+        LabelListResponseSchema.shape.items.parse(contractValue(items)),
+        LabelSettingsSchema.parse(contractValue(settings)),
+        'Etiquetas de pedido',
+      ),
+    );
+  });
+
+  app.get('/api/v1/label-settings', async (context) => {
+    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    const settings = await requireOperations().getLabelSettings();
+    return context.json(LabelSettingsSchema.parse(contractValue(settings)));
+  });
+
+  app.patch('/api/v1/label-settings', async (context) => {
+    if (!context.get('session').permissions.includes('production.generate'))
+      return forbidden(context);
+    const input = LabelSettingsUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'Revisá la configuración de etiquetas.', input.error.issues);
+    const settings = await requireOperations().setLabelSettings(
+      input.data,
+      operationsContext(context),
+    );
+    return context.json(LabelSettingsSchema.parse(contractValue(settings)));
+  });
+
+  const LABEL_BACKGROUND_ALLOWED_CONTENT_TYPES = new Set(['image/jpeg', 'image/png']);
+  const LABEL_BACKGROUND_MAX_BYTES = 8 * 1024 * 1024;
+
+  app.post('/api/v1/label-settings/background', async (context) => {
+    if (!context.get('session').permissions.includes('production.generate'))
+      return forbidden(context);
+    const contentType = context.req.header('content-type') ?? '';
+    if (!LABEL_BACKGROUND_ALLOWED_CONTENT_TYPES.has(contentType))
+      return badRequest(context, 'El fondo debe ser una imagen JPEG o PNG.');
+    const bytes = new Uint8Array(await context.req.arrayBuffer());
+    if (bytes.byteLength === 0) return badRequest(context, 'El archivo está vacío.');
+    if (bytes.byteLength > LABEL_BACKGROUND_MAX_BYTES)
+      return badRequest(context, 'La imagen no puede superar los 8 MB.');
+    const { url } = await requireAvatarStorage().uploadMedia(bytes, contentType);
+    return context.json({ url }, 201);
   });
 
   app.get('/api/v1/ai/providers', async (context) => {

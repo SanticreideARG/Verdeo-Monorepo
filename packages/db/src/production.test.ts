@@ -265,6 +265,45 @@ describe('excedente', () => {
   });
 });
 
+describe('kitchen labels', () => {
+  it('expands the seeded order into one label per physical unit', async () => {
+    const service = await seededService();
+    const labels = await service.cycleLabels(CYCLE, null);
+    expect(labels).toHaveLength(4);
+    expect(
+      labels.every((label) => label.familyName === 'Keto' && label.variantName === '250'),
+    ).toBe(true);
+    expect(labels.every((label) => label.customerDisplayName === null)).toBe(true);
+  });
+
+  it('labels a single order the same way, scoped to just that order', async () => {
+    const service = await seededService();
+    const labels = await service.orderLabels('0a000000-0000-4000-8000-000000000001');
+    expect(labels).toHaveLength(4);
+  });
+
+  it('defaults label settings to 8 per page with no background, then upserts on save', async () => {
+    const service = await seededService();
+    expect(await service.getLabelSettings()).toMatchObject({
+      backgroundImageUrl: null,
+      labelsPerPage: 8,
+    });
+
+    await service.setLabelSettings({ labelsPerPage: 6 }, context);
+    expect(await service.getLabelSettings()).toMatchObject({ labelsPerPage: 6 });
+
+    await service.setLabelSettings(
+      { backgroundImageUrl: 'https://blob.example/bg.png', labelsPerPage: 4 },
+      context,
+    );
+    const settings = await service.getLabelSettings();
+    expect(settings).toMatchObject({
+      backgroundImageUrl: 'https://blob.example/bg.png',
+      labelsPerPage: 4,
+    });
+  });
+});
+
 describe('opportunity sale stock', () => {
   it('rejects an opportunity-sale order requesting more than disponible', async () => {
     const service = await seededService();

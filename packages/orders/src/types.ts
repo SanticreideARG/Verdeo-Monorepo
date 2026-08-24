@@ -33,3 +33,11 @@ export interface KitchenSummary {
   custom: KitchenCustomRequirement[];
   totalUnits: number;
 }
+
+export interface Label {
+  // Only set for a composable (Intuitivo) unit — a fixed variety's label never carries a name.
+  customerDisplayName: string | null;
+  familyName: string;
+  orderPublicNumber: string;
+  variantName: string;
+}

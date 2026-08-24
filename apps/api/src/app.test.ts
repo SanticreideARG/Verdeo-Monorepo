@@ -55,10 +55,12 @@ const customerOperationsStubs = {
   addCustomerPreference: vi.fn(),
   addCustomerRestriction: vi.fn(),
   confirmAddressGeocoding: vi.fn(),
+  cycleLabels: vi.fn(),
   exportOrdersCsv: vi.fn(),
   generateProductionSnapshot: vi.fn(),
   getAddressGeocodingRequest: vi.fn(),
   getCustomer: vi.fn(),
+  getLabelSettings: vi.fn(),
   getOrder: vi.fn(),
   listMenuCatalogSettings: vi.fn(),
   getSurplusConfig: vi.fn(),
@@ -66,11 +68,13 @@ const customerOperationsStubs = {
   listProductionActuals: vi.fn(),
   listProductionSnapshots: vi.fn(),
   orderHistory: vi.fn(),
+  orderLabels: vi.fn(),
   orderRevisionHistory: vi.fn(),
   rejectAddressGeocoding: vi.fn(),
   reportProduction: vi.fn(),
   requestAddressGeocoding: vi.fn(),
   setIntuitivoEnabled: vi.fn(),
+  setLabelSettings: vi.fn(),
   setSurplusConfig: vi.fn(),
   surplusReport: vi.fn(),
   trackPublicOrder: vi.fn(),
@@ -1478,6 +1482,105 @@ describe('API foundation', () => {
         { headers: { cookie } },
       );
       expect(response.status).toBe(404);
+    });
+
+    const sampleLabels = [
+      {
+        customerDisplayName: null,
+        familyName: 'Keto',
+        orderPublicNumber: 'N00453',
+        variantName: '250',
+      },
+      {
+        customerDisplayName: 'Lola',
+        familyName: 'Intuitivo',
+        orderPublicNumber: 'N00455',
+        variantName: '400',
+      },
+    ];
+    const sampleLabelSettings = {
+      backgroundImageUrl: null,
+      id: null,
+      labelsPerPage: 8,
+      updatedAt: null,
+      updatedByUserId: null,
+    };
+
+    it('lists and exports kitchen labels for a cycle', async () => {
+      const cycleLabels = vi.fn(() => Promise.resolve(sampleLabels));
+      const getLabelSettings = vi.fn(() => Promise.resolve(sampleLabelSettings));
+      const app = buildApp({ cycleLabels, getLabelSettings }, ['production.read']);
+
+      const json = await app.request(`/api/v1/production/${CYCLE}/labels`, { headers: { cookie } });
+      expect(json.status).toBe(200);
+      const body = (await json.json()) as { items: unknown[] };
+      expect(body.items).toHaveLength(2);
+
+      const html = await app.request(`/api/v1/production/${CYCLE}/labels/export`, {
+        headers: { cookie },
+      });
+      expect(html.status).toBe(200);
+      expect(html.headers.get('content-type')).toContain('text/html');
+      expect(await html.text()).toContain('Lola');
+    });
+
+    it('denies kitchen labels without production.read', async () => {
+      const app = buildApp({}, []);
+      const response = await app.request(`/api/v1/production/${CYCLE}/labels`, {
+        headers: { cookie },
+      });
+      expect(response.status).toBe(403);
+    });
+
+    it('lists and exports labels for a single order', async () => {
+      const orderLabels = vi.fn(() => Promise.resolve(sampleLabels));
+      const getLabelSettings = vi.fn(() => Promise.resolve(sampleLabelSettings));
+      const app = buildApp({ orderLabels, getLabelSettings }, ['orders.read']);
+      const ORDER = '30000000-0000-4000-8000-000000000001';
+
+      const json = await app.request(`/api/v1/orders/${ORDER}/labels`, { headers: { cookie } });
+      expect(json.status).toBe(200);
+
+      const html = await app.request(`/api/v1/orders/${ORDER}/labels/export`, {
+        headers: { cookie },
+      });
+      expect(html.status).toBe(200);
+      expect(html.headers.get('content-type')).toContain('text/html');
+    });
+
+    it('gets and updates label settings, gated by production.generate to write', async () => {
+      const getLabelSettings = vi.fn(() => Promise.resolve(sampleLabelSettings));
+      const setLabelSettings = vi.fn(() =>
+        Promise.resolve({ ...sampleLabelSettings, labelsPerPage: 6 }),
+      );
+      const app = buildApp({ getLabelSettings, setLabelSettings }, [
+        'production.read',
+        'production.generate',
+      ]);
+
+      const get = await app.request('/api/v1/label-settings', { headers: { cookie } });
+      expect(get.status).toBe(200);
+
+      const patch = await app.request('/api/v1/label-settings', {
+        body: JSON.stringify({ labelsPerPage: 6 }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'PATCH',
+      });
+      expect(patch.status).toBe(200);
+      expect(setLabelSettings).toHaveBeenCalledWith(
+        { labelsPerPage: 6 },
+        expect.objectContaining({ actorUserId: '55276601-ec66-4f63-9f2f-edf73904ede0' }),
+      );
+
+      const readOnly = buildApp({ getLabelSettings, setLabelSettings: vi.fn() }, [
+        'production.read',
+      ]);
+      const denied = await readOnly.request('/api/v1/label-settings', {
+        body: JSON.stringify({ labelsPerPage: 6 }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'PATCH',
+      });
+      expect(denied.status).toBe(403);
     });
   });
 

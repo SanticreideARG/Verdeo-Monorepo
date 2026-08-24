@@ -16,9 +16,11 @@ import {
   assertOrderTransitionPolicy,
   buildOrdersCsv,
   buildKitchenSummary,
+  buildLabels,
   calculateLineTotal,
   calculateOrderTotal,
   resolveOrderComposition,
+  type KitchenSourceLine,
   type OrderStatus,
 } from '@verdeo/orders';
 
@@ -34,6 +36,7 @@ import {
   geocodingCandidates,
   geographicZones,
   geocodingRequests,
+  labelSettings,
   messageTemplates,
   operatingSiteOrderCounters,
   operatingSites,
@@ -3296,16 +3299,13 @@ export class PostgresOperationsService {
     return order;
   }
 
-  // Production is bounded by the operation (ADR-028): a global scope consolidates every operation,
-  // a concrete one cooks only its own demand.
-  public async kitchenSummary(cycleId: string, operatingSiteId?: string | null) {
-    const [cycle] = await this.database
-      .select({ alias: salesCycles.alias, id: salesCycles.id })
-      .from(salesCycles)
-      .where(eq(salesCycles.id, cycleId))
-      .limit(1);
-    if (!cycle) throw new OperationsNotFoundError('Sales cycle not found');
-
+  // Shared by kitchenSummary (aggregated by variety) and the label generator (expanded one entry
+  // per physical unit) — same source lines, two different shapes built from them. `orderId` narrows
+  // to a single order for the per-order "reimprimir etiquetas" flow; `cycleId`/`operatingSiteId`
+  // narrow to a whole production run, same bounding as ADR-028.
+  private async loadKitchenLines(
+    filter: { cycleId: string; operatingSiteId?: string | null | undefined } | { orderId: string },
+  ): Promise<readonly KitchenSourceLine[]> {
     const lines = await this.database
       .select({
         // Derived from the catalog rather than compared against a variety name. A line whose variant
@@ -3325,11 +3325,15 @@ export class PostgresOperationsService {
       .leftJoin(productVariants, eq(productVariants.id, orderItems.productVariantId))
       .leftJoin(productFamilies, eq(productFamilies.id, productVariants.productFamilyId))
       .where(
-        and(
-          eq(orders.salesCycleId, cycleId),
-          ...(operatingSiteId ? [eq(orders.operatingSiteId, operatingSiteId)] : []),
-          inArray(orders.status, ['CONFIRMED', 'READY', 'DELIVERED']),
-        ),
+        'orderId' in filter
+          ? eq(orders.id, filter.orderId)
+          : and(
+              eq(orders.salesCycleId, filter.cycleId),
+              ...(filter.operatingSiteId
+                ? [eq(orders.operatingSiteId, filter.operatingSiteId)]
+                : []),
+              inArray(orders.status, ['CONFIRMED', 'READY', 'DELIVERED']),
+            ),
       )
       .orderBy(asc(orders.publicNumber));
     const selections =
@@ -3364,21 +3368,119 @@ export class PostgresOperationsService {
               ]),
             );
 
-    return {
-      ...buildKitchenSummary(
-        lines.map((line) => ({
-          ...line,
-          dietaryInstructions: instructions
-            .filter((instruction) => instruction.orderId === line.orderId)
-            .map((instruction) => instruction.instruction),
-          dishSelections: selections
-            .filter((selection) => selection.orderItemId === line.orderItemId)
-            .map((selection) => selection.dishName),
-        })),
-      ),
-      cycle,
-      generatedAt: new Date(),
-    };
+    return lines.map((line) => ({
+      ...line,
+      dietaryInstructions: instructions
+        .filter((instruction) => instruction.orderId === line.orderId)
+        .map((instruction) => instruction.instruction),
+      dishSelections: selections
+        .filter((selection) => selection.orderItemId === line.orderItemId)
+        .map((selection) => selection.dishName),
+    }));
+  }
+
+  // Production is bounded by the operation (ADR-028): a global scope consolidates every operation,
+  // a concrete one cooks only its own demand.
+  public async kitchenSummary(cycleId: string, operatingSiteId?: string | null) {
+    const [cycle] = await this.database
+      .select({ alias: salesCycles.alias, id: salesCycles.id })
+      .from(salesCycles)
+      .where(eq(salesCycles.id, cycleId))
+      .limit(1);
+    if (!cycle) throw new OperationsNotFoundError('Sales cycle not found');
+
+    const lines = await this.loadKitchenLines({ cycleId, operatingSiteId });
+    return { ...buildKitchenSummary(lines), cycle, generatedAt: new Date() };
+  }
+
+  // --- Kitchen labels: one entry per physical unit, one per order/cycle print run ----------------
+
+  public async cycleLabels(cycleId: string, operatingSiteId?: string | null) {
+    const [cycle] = await this.database
+      .select({ id: salesCycles.id })
+      .from(salesCycles)
+      .where(eq(salesCycles.id, cycleId))
+      .limit(1);
+    if (!cycle) throw new OperationsNotFoundError('Sales cycle not found');
+    return buildLabels(await this.loadKitchenLines({ cycleId, operatingSiteId }));
+  }
+
+  public async orderLabels(orderId: string) {
+    const order = await this.loadOrder(this.database, orderId);
+    if (!order) throw new OperationsNotFoundError('Order not found');
+    return buildLabels(await this.loadKitchenLines({ orderId }));
+  }
+
+  public async getLabelSettings() {
+    const [config] = await this.database
+      .select()
+      .from(labelSettings)
+      .orderBy(desc(labelSettings.updatedAt))
+      .limit(1);
+    return (
+      config ?? {
+        backgroundImageUrl: null,
+        id: null,
+        labelsPerPage: 8,
+        updatedAt: null,
+        updatedByUserId: null,
+      }
+    );
+  }
+
+  public async setLabelSettings(
+    input: { backgroundImageUrl?: string | null | undefined; labelsPerPage: number },
+    context: OperationsContext,
+  ) {
+    return this.database
+      .transaction(async (transaction) => {
+        const [existing] = await transaction
+          .select()
+          .from(labelSettings)
+          .orderBy(desc(labelSettings.updatedAt))
+          .limit(1);
+        const values = {
+          backgroundImageUrl:
+            input.backgroundImageUrl === undefined
+              ? (existing?.backgroundImageUrl ?? null)
+              : input.backgroundImageUrl,
+          labelsPerPage: input.labelsPerPage,
+          updatedByUserId: context.actorUserId ?? null,
+        };
+        let row: typeof labelSettings.$inferSelect | undefined;
+        if (existing) {
+          [row] = await transaction
+            .update(labelSettings)
+            .set({ ...values, updatedAt: new Date() })
+            .where(eq(labelSettings.id, existing.id))
+            .returning();
+        } else {
+          [row] = await transaction.insert(labelSettings).values(values).returning();
+        }
+        if (!row) throw new Error('Label settings upsert did not return a row');
+
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        await audit.record({
+          action: 'label_settings.updated',
+          actor: auditActor(context),
+          after: { backgroundImageUrl: row.backgroundImageUrl, labelsPerPage: row.labelsPerPage },
+          ...(existing
+            ? {
+                before: {
+                  backgroundImageUrl: existing.backgroundImageUrl,
+                  labelsPerPage: existing.labelsPerPage,
+                },
+              }
+            : {}),
+          correlationId: context.correlationId,
+          entityId: row.id,
+          entityType: 'label_settings',
+          requestId: context.requestId,
+          source: context.source,
+        });
+        return row;
+      })
+      .catch(translateDatabaseConflict);
   }
 
   // --- Production: "informar producción real" and snapshots -------------------------------------

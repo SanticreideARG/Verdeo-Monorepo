@@ -1,4 +1,4 @@
-import type { KitchenSourceLine, KitchenSummary, OrderStatus } from './types.js';
+import type { KitchenSourceLine, KitchenSummary, Label, OrderStatus } from './types.js';
 
 const transitions: Readonly<Record<OrderStatus, readonly OrderStatus[]>> = {
   CANCELLED: ['CONFIRMED'],
@@ -194,4 +194,24 @@ export function buildKitchenSummary(lines: readonly KitchenSourceLine[]): Kitche
     custom,
     totalUnits,
   };
+}
+
+// Kitchen groups by variety; a label is printed per physical unit instead, so this expands each
+// line's quantityUnits into that many identical labels rather than reusing buildKitchenSummary's
+// aggregation. Ordered by order number so a batch of labels comes off the page order-by-order.
+export function buildLabels(lines: readonly KitchenSourceLine[]): Label[] {
+  const labels: Label[] = [];
+  for (const line of [...lines].sort((left, right) =>
+    left.orderPublicNumber.localeCompare(right.orderPublicNumber),
+  )) {
+    for (let unit = 0; unit < line.quantityUnits; unit += 1) {
+      labels.push({
+        customerDisplayName: line.composable ? line.customerDisplayName : null,
+        familyName: line.familyName,
+        orderPublicNumber: line.orderPublicNumber,
+        variantName: line.variantName,
+      });
+    }
+  }
+  return labels;
 }

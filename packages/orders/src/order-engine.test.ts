@@ -4,6 +4,7 @@ import {
   assertOrderTransition,
   assertOrderTransitionPolicy,
   buildKitchenSummary,
+  buildLabels,
   calculateLineTotal,
   calculateOrderTotal,
   OrderRuleError,
@@ -144,5 +145,52 @@ describe('order engine', () => {
       },
     ]);
     expect(summary.custom[0]).toMatchObject({ orderPublicNumber: 'N00455', sequence: 1 });
+  });
+
+  it('expands each line into one label per physical unit, named only for composable units', () => {
+    const labels = buildLabels([
+      {
+        composable: false,
+        customerDisplayName: 'Rosa',
+        dietaryInstructions: [],
+        dishSelections: [],
+        familyName: 'Keto',
+        orderPublicNumber: 'N00453',
+        quantityUnits: 2,
+        variantName: '250',
+      },
+      {
+        composable: true,
+        customerDisplayName: 'Lola',
+        dietaryInstructions: [],
+        dishSelections: ['A', 'A', 'B', 'C', 'D'],
+        familyName: 'Intuitivo',
+        orderPublicNumber: 'N00455',
+        quantityUnits: 1,
+        variantName: '400',
+      },
+    ]);
+
+    expect(labels).toHaveLength(3);
+    expect(labels.filter((label) => label.orderPublicNumber === 'N00453')).toEqual([
+      {
+        customerDisplayName: null,
+        familyName: 'Keto',
+        orderPublicNumber: 'N00453',
+        variantName: '250',
+      },
+      {
+        customerDisplayName: null,
+        familyName: 'Keto',
+        orderPublicNumber: 'N00453',
+        variantName: '250',
+      },
+    ]);
+    expect(labels.find((label) => label.orderPublicNumber === 'N00455')).toEqual({
+      customerDisplayName: 'Lola',
+      familyName: 'Intuitivo',
+      orderPublicNumber: 'N00455',
+      variantName: '400',
+    });
   });
 });

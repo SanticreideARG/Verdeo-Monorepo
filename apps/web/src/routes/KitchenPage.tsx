@@ -35,6 +35,16 @@ async function downloadExport(cycleId: string, kind: 'final' | 'partial', format
   URL.revokeObjectURL(url);
 }
 
+async function printLabels(cycleId: string): Promise<string | null> {
+  const response = await apiRequest(`/api/v1/production/${cycleId}/labels/export`);
+  if (!response.ok) return errorMessage(response);
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank', 'noopener,noreferrer');
+  URL.revokeObjectURL(url);
+  return null;
+}
+
 async function copyWhatsAppText(cycleId: string, kind: 'final' | 'partial') {
   const response = await apiRequest(
     `/api/v1/production/${cycleId}/snapshots/export?kind=${kind}&format=whatsapp`,
@@ -264,6 +274,19 @@ export function KitchenPage() {
                 onClick={() => void generate()}
               >
                 Generar salida
+              </button>
+              <button
+                className="button button-secondary"
+                disabled={!selectedMenu}
+                onClick={() =>
+                  selectedMenu &&
+                  void printLabels(selectedMenu.cycle.id).then(
+                    (error) => error && setMessage(error),
+                  )
+                }
+                type="button"
+              >
+                Generar etiquetas
               </button>
             </div>
 

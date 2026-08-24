@@ -23,6 +23,7 @@ datos, backups) más que código nuevo.
 | 7 - Production                   | ✅ completa                                                                   |
 | 8 - Routes / Delivery / Payments | ◐ esqueleto funcional — ver `DELIVERY_AND_ROUTES.md`/`PAYMENTS.md` "As built" |
 | 9 - QA / Pilot                   | ⏳ pendiente                                                                  |
+| 10 - Encuestas de clientes       | ⏳ planificada (sin construir)                                                |
 
 ## Fase 0 - Foundation (1-2 días)
 
@@ -127,6 +128,27 @@ datos, backups) más que código nuevo.
 - load sanity;
 - operator pilot;
 - bug fixing.
+
+## Fase 10 - Encuestas de clientes (1-2 días, posterior a Fase 9)
+
+Encuestas personalizables enviadas a clientes, cada una accesible por token público — sin
+autenticación, mismo patrón que el tracking público de pedidos.
+
+- **Editor de encuestas**: sección de administración donde se arma cada encuesta con un motor/editor
+  simple (preguntas configurables, no un catálogo fijo — mismo criterio de "sin segunda fuente de
+  verdad" que el resto del sistema: los tipos de pregunta deben resolverse en tiempo de edición, no
+  hardcodearse por nombre).
+- **Distribución**: al crear una encuesta se genera un token de acceso único; la ruta pública es
+  `public/survey/:token` (sin login, análogo a `public/track/:token` de seguimiento de pedidos). El
+  token se entrega en dos formatos: enlace directo y QR — reusa el mismo patrón de "QR a token
+  público" ya documentado (sin resolver) en `DELIVERY_AND_ROUTES.md` y en `BACKLOG.md` ("P1 -
+  Labels").
+- **Resultados**: cada encuesta guardada expone un enlace a su propia pantalla de resultados/
+  estadísticas (respuestas por pregunta, tasa de respuesta) — solo para el staff, gateado por
+  permiso, no público.
+- **Pendiente de definir antes de implementar**: si el token se asocia a un cliente concreto
+  (encuesta 1:1, permite cruzar respuesta↔cliente) o es genérico por campaña (anónimo); si vence o
+  es de un solo uso; si vive dentro de CMS o es su propio dominio.
 
 ## Estimación
 
