@@ -180,6 +180,7 @@ export interface MenuInput {
   closeAt: string;
   offerings: readonly {
     composable?: boolean | undefined;
+    description?: string | null | undefined;
     dishes: readonly string[];
     familyName: string;
     // Deliberate per-variety exception; omitted means the size price applies.
@@ -1708,6 +1709,7 @@ export class PostgresOperationsService {
     const offeringRows = await this.database
       .select({
         composable: sql<boolean>`${productFamilies.kind} = 'COMPOSABLE'`,
+        description: weeklyMenuOfferings.description,
         familyName: productFamilies.displayName,
         id: weeklyMenuOfferings.id,
         mealsPerUnit: productVariants.mealsPerUnit,
@@ -1816,6 +1818,133 @@ export class PostgresOperationsService {
     return open.find((menu) => menu.operatingSiteId === null) ?? null;
   }
 
+  // Shared by createMenu (a brand-new menu row) and updateMenu (an existing one, offerings/prices
+  // wiped and rewritten wholesale — same "resubmit everything" pattern used elsewhere this session
+  // for label settings and survey questions, since a partial-field update of a nested list invites
+  // more bugs than it saves). `offerings` must already carry the Intuitivo name coercion.
+  private async writeMenuPricesAndOfferings(
+    transaction: DatabaseTransaction,
+    menuId: string,
+    offerings: MenuInput['offerings'],
+    prices: MenuInput['prices'],
+  ): Promise<void> {
+    // Sizes and their prices are established first: an offering only names the size it belongs to.
+    const sizeIdsByName = new Map<string, string>();
+    for (const [index, price] of prices.entries()) {
+      const sizeCode = catalogCode(price.sizeName);
+      const [size] = await transaction
+        .insert(productSizes)
+        .values({
+          code: sizeCode,
+          displayName: price.sizeName,
+          mealsPerUnit: price.mealsPerUnit,
+          sortOrder: index,
+        })
+        .onConflictDoUpdate({
+          set: {
+            displayName: price.sizeName,
+            mealsPerUnit: price.mealsPerUnit,
+            updatedAt: new Date(),
+          },
+          target: productSizes.code,
+        })
+        .returning({ id: productSizes.id });
+      if (!size) throw new Error('Product size upsert did not return a row');
+      sizeIdsByName.set(price.sizeName, size.id);
+
+      await transaction.insert(weeklyMenuPrices).values({
+        currency: price.currency.toUpperCase(),
+        productSizeId: size.id,
+        unitPriceMinor: price.unitPriceMinor,
+        weeklyMenuId: menuId,
+      });
+    }
+
+    for (const offering of offerings) {
+      const sizeId = sizeIdsByName.get(offering.sizeName);
+      if (!sizeId)
+        throw new OperationsConflictError(
+          `El tamaño "${offering.sizeName}" no tiene precio definido para esta semana`,
+        );
+
+      const familyCode = catalogCode(offering.familyName);
+      const [family] = await transaction
+        .insert(productFamilies)
+        .values({
+          code: familyCode,
+          displayName: offering.familyName,
+          kind: offering.composable ? 'COMPOSABLE' : 'FIXED',
+        })
+        .onConflictDoUpdate({
+          set: {
+            displayName: offering.familyName,
+            kind: offering.composable ? 'COMPOSABLE' : 'FIXED',
+            updatedAt: new Date(),
+          },
+          target: productFamilies.code,
+        })
+        .returning({ id: productFamilies.id });
+      if (!family) throw new Error('Product family upsert did not return a row');
+
+      const mealsPerUnit =
+        prices.find((price) => price.sizeName === offering.sizeName)?.mealsPerUnit ?? 5;
+      const variantCode = catalogCode(offering.sizeName);
+      const [variant] = await transaction
+        .insert(productVariants)
+        .values({
+          code: variantCode,
+          displayName: offering.sizeName,
+          mealsPerUnit,
+          productFamilyId: family.id,
+          productSizeId: sizeId,
+        })
+        .onConflictDoUpdate({
+          set: {
+            displayName: offering.sizeName,
+            mealsPerUnit,
+            productSizeId: sizeId,
+            updatedAt: new Date(),
+          },
+          target: [productVariants.productFamilyId, productVariants.code],
+        })
+        .returning({ id: productVariants.id });
+      if (!variant) throw new Error('Product variant upsert did not return a row');
+
+      const [createdOffering] = await transaction
+        .insert(weeklyMenuOfferings)
+        .values({
+          description: offering.description ?? null,
+          productVariantId: variant.id,
+          weeklyMenuId: menuId,
+          ...(offering.overridePriceMinor === undefined
+            ? {}
+            : { unitPriceMinor: offering.overridePriceMinor }),
+        })
+        .returning({ id: weeklyMenuOfferings.id });
+      if (!createdOffering) throw new Error('Menu offering creation did not return a row');
+
+      // A composable offering submits no dishes of its own (its universe is every dish
+      // published this week for the same size), so there's nothing to insert for it.
+      if (offering.dishes.length > 0) {
+        await transaction.insert(weeklyMenuItems).values(
+          offering.dishes.map((dishName, index) => ({
+            dishName,
+            offeringId: createdOffering.id,
+            slot: index + 1,
+          })),
+        );
+      }
+    }
+  }
+
+  // The Intuitivo-name coercion is identical in both callers, so it lives once here rather than
+  // duplicated between createMenu and updateMenu.
+  private coerceComposableNames(offerings: MenuInput['offerings']): MenuInput['offerings'] {
+    return offerings.map((offering) =>
+      offering.composable ? { ...offering, familyName: 'Intuitivo' } : offering,
+    );
+  }
+
   public async createMenu(input: MenuInput, context: OperationsContext) {
     return this.database
       .transaction(async (transaction) => {
@@ -1827,9 +1956,7 @@ export class PostgresOperationsService {
         // for the engine (it matches by product_families.kind), but the display name still reached
         // the catalog verbatim from whatever the weekly form typed. Coercing it here keeps every
         // week's composable family under the one name customers and staff both expect.
-        const offerings = input.offerings.map((offering) =>
-          offering.composable ? { ...offering, familyName: 'Intuitivo' } : offering,
-        );
+        const offerings = this.coerceComposableNames(input.offerings);
 
         const [cycle] = await transaction
           .insert(salesCycles)
@@ -1849,112 +1976,7 @@ export class PostgresOperationsService {
           .returning({ id: weeklyMenus.id });
         if (!menu) throw new Error('Menu creation did not return a row');
 
-        // Sizes and their prices are established first: an offering only names the size it belongs to.
-        const sizeIdsByName = new Map<string, string>();
-        for (const [index, price] of input.prices.entries()) {
-          const sizeCode = catalogCode(price.sizeName);
-          const [size] = await transaction
-            .insert(productSizes)
-            .values({
-              code: sizeCode,
-              displayName: price.sizeName,
-              mealsPerUnit: price.mealsPerUnit,
-              sortOrder: index,
-            })
-            .onConflictDoUpdate({
-              set: {
-                displayName: price.sizeName,
-                mealsPerUnit: price.mealsPerUnit,
-                updatedAt: new Date(),
-              },
-              target: productSizes.code,
-            })
-            .returning({ id: productSizes.id });
-          if (!size) throw new Error('Product size upsert did not return a row');
-          sizeIdsByName.set(price.sizeName, size.id);
-
-          await transaction.insert(weeklyMenuPrices).values({
-            currency: price.currency.toUpperCase(),
-            productSizeId: size.id,
-            unitPriceMinor: price.unitPriceMinor,
-            weeklyMenuId: menu.id,
-          });
-        }
-
-        for (const offering of offerings) {
-          const sizeId = sizeIdsByName.get(offering.sizeName);
-          if (!sizeId)
-            throw new OperationsConflictError(
-              `El tamaño "${offering.sizeName}" no tiene precio definido para esta semana`,
-            );
-
-          const familyCode = catalogCode(offering.familyName);
-          const [family] = await transaction
-            .insert(productFamilies)
-            .values({
-              code: familyCode,
-              displayName: offering.familyName,
-              kind: offering.composable ? 'COMPOSABLE' : 'FIXED',
-            })
-            .onConflictDoUpdate({
-              set: {
-                displayName: offering.familyName,
-                kind: offering.composable ? 'COMPOSABLE' : 'FIXED',
-                updatedAt: new Date(),
-              },
-              target: productFamilies.code,
-            })
-            .returning({ id: productFamilies.id });
-          if (!family) throw new Error('Product family upsert did not return a row');
-
-          const mealsPerUnit =
-            input.prices.find((price) => price.sizeName === offering.sizeName)?.mealsPerUnit ?? 5;
-          const variantCode = catalogCode(offering.sizeName);
-          const [variant] = await transaction
-            .insert(productVariants)
-            .values({
-              code: variantCode,
-              displayName: offering.sizeName,
-              mealsPerUnit,
-              productFamilyId: family.id,
-              productSizeId: sizeId,
-            })
-            .onConflictDoUpdate({
-              set: {
-                displayName: offering.sizeName,
-                mealsPerUnit,
-                productSizeId: sizeId,
-                updatedAt: new Date(),
-              },
-              target: [productVariants.productFamilyId, productVariants.code],
-            })
-            .returning({ id: productVariants.id });
-          if (!variant) throw new Error('Product variant upsert did not return a row');
-
-          const [createdOffering] = await transaction
-            .insert(weeklyMenuOfferings)
-            .values({
-              productVariantId: variant.id,
-              weeklyMenuId: menu.id,
-              ...(offering.overridePriceMinor === undefined
-                ? {}
-                : { unitPriceMinor: offering.overridePriceMinor }),
-            })
-            .returning({ id: weeklyMenuOfferings.id });
-          if (!createdOffering) throw new Error('Menu offering creation did not return a row');
-
-          // A composable offering submits no dishes of its own (its universe is every dish
-          // published this week for the same size), so there's nothing to insert for it.
-          if (offering.dishes.length > 0) {
-            await transaction.insert(weeklyMenuItems).values(
-              offering.dishes.map((dishName, index) => ({
-                dishName,
-                offeringId: createdOffering.id,
-                slot: index + 1,
-              })),
-            );
-          }
-        }
+        await this.writeMenuPricesAndOfferings(transaction, menu.id, offerings, input.prices);
 
         const audit = new AuditService(new PostgresAuditSink(transaction));
         await audit.record({
@@ -1974,6 +1996,62 @@ export class PostgresOperationsService {
       .then(async (menuId) => {
         const menu = (await this.listMenus()).find(({ id }) => id === menuId);
         if (!menu) throw new Error('Created menu could not be reloaded');
+        return menu;
+      })
+      .catch(translateDatabaseConflict);
+  }
+
+  // "Los menús se deben poder modificar. Pueden haber errores de carga." — offerings/items/prices
+  // are wiped and rewritten wholesale for this one menu id (master or regional; editing a regional
+  // row never touches its master or siblings). Safe to do even after publish or after orders exist
+  // against it: order_items.offeringId is `onDelete: 'set null'` and every order already carries
+  // its own name/price snapshot at order time, so deleting an offering row here never corrupts an
+  // existing order — the same snapshot-over-live-reference design used everywhere else.
+  public async updateMenu(menuId: string, input: MenuInput, context: OperationsContext) {
+    return this.database
+      .transaction(async (transaction) => {
+        const [existing] = await transaction
+          .select({ salesCycleId: weeklyMenus.salesCycleId })
+          .from(weeklyMenus)
+          .where(eq(weeklyMenus.id, menuId))
+          .limit(1);
+        if (!existing) throw new OperationsNotFoundError('Weekly menu not found');
+
+        await transaction
+          .update(salesCycles)
+          .set({
+            alias: input.alias,
+            closeAt: new Date(input.closeAt),
+            openAt: new Date(input.openAt),
+            partialKitchenCutoffAt: new Date(input.partialKitchenCutoffAt),
+          })
+          .where(eq(salesCycles.id, existing.salesCycleId));
+
+        await transaction
+          .delete(weeklyMenuOfferings)
+          .where(eq(weeklyMenuOfferings.weeklyMenuId, menuId));
+        await transaction.delete(weeklyMenuPrices).where(eq(weeklyMenuPrices.weeklyMenuId, menuId));
+
+        const offerings = this.coerceComposableNames(input.offerings);
+        await this.writeMenuPricesAndOfferings(transaction, menuId, offerings, input.prices);
+
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        await audit.record({
+          action: 'weekly_menu.updated',
+          actor: auditActor(context),
+          after: { offeringCount: offerings.length },
+          correlationId: context.correlationId,
+          entityId: menuId,
+          entityType: 'weekly_menu',
+          requestId: context.requestId,
+          source: context.source,
+        });
+
+        return menuId;
+      })
+      .then(async (updatedMenuId) => {
+        const menu = (await this.listMenus()).find(({ id }) => id === updatedMenuId);
+        if (!menu) throw new Error('Updated menu could not be reloaded');
         return menu;
       })
       .catch(translateDatabaseConflict);
@@ -2067,6 +2145,7 @@ export class PostgresOperationsService {
           .select({
             composable: sql<boolean>`${productFamilies.kind} = 'COMPOSABLE'`,
             currency: weeklyMenuOfferings.currency,
+            description: weeklyMenuOfferings.description,
             id: weeklyMenuOfferings.id,
             productVariantId: weeklyMenuOfferings.productVariantId,
             unitPriceMinor: weeklyMenuOfferings.unitPriceMinor,
@@ -2077,6 +2156,7 @@ export class PostgresOperationsService {
           .where(eq(weeklyMenuOfferings.weeklyMenuId, master.id));
         const masterOfferings = masterOfferingsWithKind.map((row) => ({
           currency: row.currency,
+          description: row.description,
           id: row.id,
           productVariantId: row.productVariantId,
           unitPriceMinor: row.unitPriceMinor,
@@ -2214,6 +2294,7 @@ export class PostgresOperationsService {
       items: readonly { dishName: string; offeringId: string; slot: number }[];
       offerings: readonly {
         currency: string;
+        description: string | null;
         id: string;
         productVariantId: string;
         unitPriceMinor: number | null;
@@ -2288,6 +2369,7 @@ export class PostgresOperationsService {
             .insert(weeklyMenuOfferings)
             .values({
               currency: offering.currency,
+              description: offering.description,
               productVariantId: offering.productVariantId,
               weeklyMenuId: input.targetMenuId,
               ...(offering.unitPriceMinor === null
@@ -2301,7 +2383,11 @@ export class PostgresOperationsService {
       if (current) {
         await transaction
           .update(weeklyMenuOfferings)
-          .set({ customized: false, unitPriceMinor: offering.unitPriceMinor })
+          .set({
+            customized: false,
+            description: offering.description,
+            unitPriceMinor: offering.unitPriceMinor,
+          })
           .where(eq(weeklyMenuOfferings.id, current.id));
       }
 

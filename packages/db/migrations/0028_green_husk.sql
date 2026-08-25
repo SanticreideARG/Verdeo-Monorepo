@@ -1,0 +1,1 @@
+ALTER TABLE "weekly_menu_offerings" ADD COLUMN "description" text;

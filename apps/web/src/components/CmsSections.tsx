@@ -39,6 +39,7 @@ function WeeklyMenuSection() {
               <h3>
                 {offering.familyName} {offering.variantName}
               </h3>
+              {offering.description ? <p>{offering.description}</p> : null}
               <p>{formatMoney(offering.unitPriceMinor, offering.currency)}</p>
             </article>
           ))}

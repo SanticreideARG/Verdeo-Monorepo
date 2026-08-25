@@ -384,6 +384,11 @@ interface OperationsEngine {
     context: OperationsContext,
   ): Promise<readonly unknown[]>;
   createMenu(input: MenuCreateRequest, context: OperationsContext): Promise<unknown>;
+  updateMenu(
+    menuId: string,
+    input: MenuCreateRequest,
+    context: OperationsContext,
+  ): Promise<unknown>;
   distributeMenu(
     menuId: string,
     input: MenuDistributeRequest,
@@ -3092,6 +3097,29 @@ export function createApp(options: CreateAppOptions) {
       MenuListResponseSchema.parse({ items: [contractValue(menu)] }).items[0],
       201,
     );
+  });
+
+  // "Los menús se deben poder modificar. Pueden haber errores de carga." — same body shape as
+  // create, works on master or regional rows alike, and never depends on the target menu's status
+  // (offering rows are snapshot-independent for any order already placed — see updateMenu's
+  // comment in postgres-operations-service.ts).
+  app.patch('/api/v1/menus/:id', async (context) => {
+    if (!context.get('session').permissions.includes('production.generate'))
+      return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    const input = MenuCreateRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá la semana y sus opciones.',
+        input.success ? undefined : input.error.issues,
+      );
+    const menu = await requireOperations().updateMenu(
+      params.data.id,
+      input.data,
+      operationsContext(context),
+    );
+    return context.json(MenuListResponseSchema.parse({ items: [contractValue(menu)] }).items[0]);
   });
 
   app.post('/api/v1/menus/:id/distribute', async (context) => {

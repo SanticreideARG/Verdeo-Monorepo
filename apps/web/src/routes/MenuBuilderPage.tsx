@@ -1,13 +1,14 @@
-import { useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Link, useParams } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
-import { errorMessage } from '../lib/operations.js';
+import { errorMessage, type WeeklyMenu } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 interface OfferingDraft {
+  description: string;
   dishes: string;
   familyName: string;
 }
@@ -18,6 +19,7 @@ interface SizePriceDraft {
 }
 
 const emptyOffering = (): OfferingDraft => ({
+  description: '',
   dishes: '',
   familyName: '',
 });
@@ -33,23 +35,103 @@ function formText(form: FormData, key: string): string {
   return typeof value === 'string' ? value : '';
 }
 
-/** "Configurar la semana": create the master menu for a sales cycle. Publishing and distributing
- * an existing menu happens in "Ver menús" instead.
- *
- * The composable variety ("Intuitivo") is deliberately not just another typed row here: its name
- * is fixed by the system (never what an operator happens to type -- see
- * PostgresOperationsService.createMenu, which coerces it server-side too as defense in depth).
- * This form only decides whether the master week carries the offering at all -- whether a given
- * operation actually gets it is a separate, per-site call made at distribution time (Ajustes ->
- * Menu personalizado, per ciudad), since the master menu itself belongs to no operation. */
+function isoToLocalInput(iso: string): string {
+  // <input type="datetime-local"> wants "YYYY-MM-DDTHH:mm" in local time, not the UTC ISO string.
+  const date = new Date(iso);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+// Reconstructs the form's shape (one row per variety, one row per size) from a menu's flat,
+// one-row-per-(variety,size) offering list — the inverse of the flatMap createMenu/updateMenu send.
+function decomposeMenu(menu: WeeklyMenu): {
+  includeIntuitivo: boolean;
+  offerings: OfferingDraft[];
+  sizePrices: SizePriceDraft[];
+} {
+  const fixed = menu.offerings.filter((offering) => !offering.composable);
+  const includeIntuitivo = menu.offerings.some((offering) => offering.composable);
+
+  const byFamily = new Map<string, (typeof fixed)[number][]>();
+  for (const offering of fixed) {
+    const rows = byFamily.get(offering.familyName) ?? [];
+    rows.push(offering);
+    byFamily.set(offering.familyName, rows);
+  }
+  const offerings = [...byFamily.entries()].map(([familyName, rows]) => ({
+    description: rows[0]?.description ?? '',
+    dishes: rows[0]?.dishes.join('\n') ?? '',
+    familyName,
+  }));
+
+  const bySize = new Map<string, (typeof fixed)[number][]>();
+  for (const offering of fixed) {
+    const rows = bySize.get(offering.sizeName) ?? [];
+    rows.push(offering);
+    bySize.set(offering.sizeName, rows);
+  }
+  const sizePrices = [...bySize.entries()].map(([sizeName, rows]) => {
+    // A per-variety price override shouldn't be mistaken for the size's own price — prefer a row
+    // that isn't overridden; every offering of a size overriding it in different ways is the one
+    // case this can't recover exactly, same limitation the create form already has.
+    const reference = rows.find((row) => !row.priceOverridden) ?? rows[0];
+    return { sizeName, unitPrice: reference ? String(reference.unitPriceMinor / 100) : '' };
+  });
+
+  return {
+    includeIntuitivo,
+    offerings: offerings.length > 0 ? offerings : [emptyOffering()],
+    sizePrices: sizePrices.length > 0 ? sizePrices : defaultSizePrices(),
+  };
+}
+
+/** "Configurar la semana" doubles as the editor: with no `:id` it creates a new master menu: with
+ * one (reached from "Ver menús" → Editar) it loads that menu — master or regional — and PATCHes it
+ * instead. Same form either way; only the submit target and the initial values differ. */
 export function MenuBuilderPage() {
   const { failed, logout, profile } = useDashboardProfile();
+  const { id: editingMenuId } = useParams<{ id?: string }>();
   const [offerings, setOfferings] = useState<OfferingDraft[]>([emptyOffering()]);
   const [sizePrices, setSizePrices] = useState<SizePriceDraft[]>(defaultSizePrices);
   const [message, setMessage] = useState('');
   const [includeIntuitivo, setIncludeIntuitivo] = useState(true);
+  const [editingMenu, setEditingMenu] = useState<WeeklyMenu | null>(null);
+  const [loading, setLoading] = useState(Boolean(editingMenuId));
 
-  async function createMenu(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    if (!editingMenuId) return;
+    let active = true;
+    void apiRequest('/api/v1/menus')
+      .then(async (response) => {
+        if (!response.ok || !active) return;
+        const found = ((await response.json()) as { items: WeeklyMenu[] }).items.find(
+          (menu) => menu.id === editingMenuId,
+        );
+        if (!active) return;
+        if (!found) {
+          setMessage('No encontramos ese menú.');
+          setLoading(false);
+          return;
+        }
+        setEditingMenu(found);
+        const decomposed = decomposeMenu(found);
+        setOfferings(decomposed.offerings);
+        setSizePrices(decomposed.sizePrices);
+        setIncludeIntuitivo(decomposed.includeIntuitivo);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (active) {
+          setMessage('No pudimos cargar el menú.');
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [editingMenuId]);
+
+  async function submitMenu(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const parsedPrices = sizePrices
@@ -67,6 +149,7 @@ export function MenuBuilderPage() {
 
     const varieties = offerings.map((offering) => ({
       composable: false,
+      description: offering.description.trim() ? offering.description.trim() : null,
       dishes: offering.dishes
         .split('\n')
         .map((dish) => dish.trim())
@@ -78,7 +161,7 @@ export function MenuBuilderPage() {
       return;
     }
     if (includeIntuitivo) {
-      varieties.push({ composable: true, dishes: [], familyName: 'Intuitivo' });
+      varieties.push({ composable: true, description: null, dishes: [], familyName: 'Intuitivo' });
     }
     // Size and variety are unrelated axes: every variety comes in every size defined above, so one
     // offering per (variety, size) pair is generated here instead of asked for per option.
@@ -86,31 +169,40 @@ export function MenuBuilderPage() {
       parsedPrices.map((price) => ({ ...variety, sizeName: price.sizeName })),
     );
 
+    const payload = {
+      alias: formText(form, 'alias'),
+      closeAt: new Date(formText(form, 'closeAt')).toISOString(),
+      offerings: parsedOfferings,
+      openAt: new Date(formText(form, 'openAt')).toISOString(),
+      partialKitchenCutoffAt: new Date(formText(form, 'partialKitchenCutoffAt')).toISOString(),
+      prices: parsedPrices,
+    };
+
     try {
-      const response = await apiRequest('/api/v1/menus', {
-        body: JSON.stringify({
-          alias: formText(form, 'alias'),
-          closeAt: new Date(formText(form, 'closeAt')).toISOString(),
-          offerings: parsedOfferings,
-          openAt: new Date(formText(form, 'openAt')).toISOString(),
-          partialKitchenCutoffAt: new Date(formText(form, 'partialKitchenCutoffAt')).toISOString(),
-          prices: parsedPrices,
-        }),
-        method: 'POST',
-      });
+      const response = editingMenu
+        ? await apiRequest(`/api/v1/menus/${editingMenu.id}`, {
+            body: JSON.stringify(payload),
+            method: 'PATCH',
+          })
+        : await apiRequest('/api/v1/menus', { body: JSON.stringify(payload), method: 'POST' });
       if (!response.ok) throw new Error(await errorMessage(response));
-      setOfferings([emptyOffering()]);
-      setSizePrices(defaultSizePrices());
-      setIncludeIntuitivo(true);
-      event.currentTarget.reset();
-      setMessage('Menú guardado como borrador. Publicalo desde "Ver menús".');
+      if (editingMenu) {
+        setMessage('Cambios guardados.');
+      } else {
+        setOfferings([emptyOffering()]);
+        setSizePrices(defaultSizePrices());
+        setIncludeIntuitivo(true);
+        event.currentTarget.reset();
+        setMessage('Menú guardado como borrador. Publicalo desde "Ver menús".');
+      }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'No pudimos crear el menú.');
+      setMessage(error instanceof Error ? error.message : 'No pudimos guardar el menú.');
     }
   }
 
   if (failed) return <DashboardFailed label="el menú" />;
   if (!profile) return <DashboardLoading />;
+  if (loading) return <DashboardLoading />;
 
   if (!profile.permissions.includes('production.generate')) {
     return (
@@ -129,7 +221,11 @@ export function MenuBuilderPage() {
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="dashboard-kicker">Menús</p>
-            <h1 className="text-2xl font-semibold text-forest">Configurar la semana</h1>
+            <h1 className="text-2xl font-semibold text-forest">
+              {editingMenu
+                ? `Editar ${editingMenu.cycle.alias}${editingMenu.operatingSiteName ? ` · ${editingMenu.operatingSiteName}` : ''}`
+                : 'Configurar la semana'}
+            </h1>
           </div>
           <Link className="button button-secondary" to="/app/menus">
             Ver menús
@@ -144,24 +240,48 @@ export function MenuBuilderPage() {
 
         <form
           className="operation-card mt-6 max-w-2xl"
-          onSubmit={(event) => void createMenu(event)}
+          onSubmit={(event) => void submitMenu(event)}
         >
           <div className="form-grid">
             <label className="field field-wide">
               Alias de la semana
-              <input name="alias" placeholder="Ej. Semana 34 · 24 al 28 de agosto" required />
+              <input
+                defaultValue={editingMenu?.cycle.alias}
+                name="alias"
+                placeholder="Ej. Semana 34 · 24 al 28 de agosto"
+                required
+              />
             </label>
             <label className="field">
               Apertura
-              <input name="openAt" required type="datetime-local" />
+              <input
+                defaultValue={editingMenu ? isoToLocalInput(editingMenu.cycle.openAt) : undefined}
+                name="openAt"
+                required
+                type="datetime-local"
+              />
             </label>
             <label className="field">
               Parcial de cocina
-              <input name="partialKitchenCutoffAt" required type="datetime-local" />
+              <input
+                defaultValue={
+                  editingMenu
+                    ? isoToLocalInput(editingMenu.cycle.partialKitchenCutoffAt)
+                    : undefined
+                }
+                name="partialKitchenCutoffAt"
+                required
+                type="datetime-local"
+              />
             </label>
             <label className="field">
               Cierre
-              <input name="closeAt" required type="datetime-local" />
+              <input
+                defaultValue={editingMenu ? isoToLocalInput(editingMenu.cycle.closeAt) : undefined}
+                name="closeAt"
+                required
+                type="datetime-local"
+              />
             </label>
           </div>
 
@@ -232,6 +352,22 @@ export function MenuBuilderPage() {
                       value={offering.dishes}
                     />
                   </label>
+                  <label className="field field-wide">
+                    Descripción (opcional, se muestra al cliente)
+                    <textarea
+                      onChange={(event) =>
+                        setOfferings((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? { ...item, description: event.target.value }
+                              : item,
+                          ),
+                        )
+                      }
+                      rows={2}
+                      value={offering.description}
+                    />
+                  </label>
                 </div>
               </fieldset>
             ))}
@@ -273,7 +409,7 @@ export function MenuBuilderPage() {
               </button>
             ) : null}
             <button className="button button-primary" type="submit">
-              Guardar borrador
+              {editingMenu ? 'Guardar cambios' : 'Guardar borrador'}
             </button>
           </div>
         </form>

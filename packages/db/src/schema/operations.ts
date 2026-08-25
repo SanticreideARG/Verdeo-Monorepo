@@ -466,6 +466,9 @@ export const weeklyMenuOfferings = pgTable(
     // the normal case; a value here is an explicit override an operator chose.
     unitPriceMinor: integer('unit_price_minor'),
     currency: text('currency').default('ARS').notNull(),
+    // Free text shown to the customer on the public menu for this variety, this week — null means
+    // no blurb, not "same as last week" (nothing carries over between weeks, same as prices).
+    description: text('description'),
     active: boolean('active').default(true).notNull(),
     customized: boolean('customized').default(false).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

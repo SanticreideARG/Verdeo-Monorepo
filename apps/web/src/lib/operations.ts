@@ -110,6 +110,7 @@ export interface AddressGeocodingRequest {
 export interface MenuOffering {
   composable: boolean;
   currency: string;
+  description: string | null;
   dishes: string[];
   familyName: string;
   id: string;
@@ -139,6 +140,35 @@ export interface WeeklyMenu {
   revision: number;
   sourceMenuId: string | null;
   status: string;
+}
+
+// `GET /api/v1/menus` returns every distributed row for every cycle (master + one per site) — the
+// right shape for "Ver menús", which manages distribution across cities, but not for a screen that
+// operates against one city at a time: unfiltered, a dropdown there shows the same cycle name once
+// per city, indistinguishable from each other. This picks the one row relevant to the ambient
+// scope per cycle — the site's own distributed revision if it has one, the global master otherwise
+// (same fallback `currentPublishedMenu` uses server-side) — collapsing five identical-looking
+// options down to the one that's actually this city's menu.
+export function menusForAmbientScope(
+  menus: WeeklyMenu[],
+  operatingSiteId: string | null,
+): WeeklyMenu[] {
+  const byCycle = new Map<string, WeeklyMenu[]>();
+  for (const menu of menus) {
+    const rows = byCycle.get(menu.cycle.id) ?? [];
+    rows.push(menu);
+    byCycle.set(menu.cycle.id, rows);
+  }
+  const relevant: WeeklyMenu[] = [];
+  for (const rows of byCycle.values()) {
+    const master = rows.find((menu) => menu.operatingSiteId === null);
+    const site = operatingSiteId
+      ? rows.find((menu) => menu.operatingSiteId === operatingSiteId)
+      : undefined;
+    const chosen = site ?? master;
+    if (chosen) relevant.push(chosen);
+  }
+  return relevant;
 }
 
 export interface OrderSummary {

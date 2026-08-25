@@ -182,6 +182,73 @@ describe('createMenu (master, global — no per-site gate)', () => {
     const items = await db.select().from(weeklyMenuItems);
     expect(items).toHaveLength(5);
   });
+
+  it('stores an offering description, and leaves it null when omitted', async () => {
+    const { db, service } = await seededService();
+
+    await service.createMenu(
+      {
+        ...menuInputBase,
+        offerings: [
+          { ...fixedOffering('Con descripción'), description: 'Bajo en carbohidratos' },
+          fixedOffering('Sin descripción'),
+        ],
+      },
+      CONTEXT,
+    );
+
+    const offerings = await db.select().from(weeklyMenuOfferings);
+    const withDescription = offerings.find((row) => row.description !== null);
+    const withoutDescription = offerings.find((row) => row.description === null);
+    expect(withDescription?.description).toBe('Bajo en carbohidratos');
+    expect(withoutDescription?.description).toBeNull();
+  });
+});
+
+describe('updateMenu', () => {
+  it('replaces offerings, prices and cycle fields wholesale, keeping the same menu id', async () => {
+    const { db, service } = await seededService();
+    const created = await service.createMenu(
+      { ...menuInputBase, offerings: [fixedOffering('Original')] },
+      CONTEXT,
+    );
+
+    const updated = await service.updateMenu(
+      created.id,
+      {
+        ...menuInputBase,
+        alias: 'Semana 34 (corregida)',
+        offerings: [{ ...fixedOffering('Corregida'), description: 'Ahora sí' }],
+      },
+      CONTEXT,
+    );
+
+    expect(updated.id).toBe(created.id);
+    expect(updated.cycle.alias).toBe('Semana 34 (corregida)');
+    expect(updated.offerings).toHaveLength(1);
+    expect(updated.offerings[0]?.familyName).toBe('Corregida');
+    expect(updated.offerings[0]?.description).toBe('Ahora sí');
+
+    // The old "Original" offering (and its 5 dishes) is gone, not left behind alongside the new one.
+    const offerings = await db
+      .select()
+      .from(weeklyMenuOfferings)
+      .where(eq(weeklyMenuOfferings.weeklyMenuId, created.id));
+    expect(offerings).toHaveLength(1);
+    const items = await db.select().from(weeklyMenuItems);
+    expect(items).toHaveLength(5);
+  });
+
+  it('rejects updating a menu that does not exist', async () => {
+    const { service } = await seededService();
+    await expect(
+      service.updateMenu(
+        '00000000-0000-4000-8000-000000000000',
+        { ...menuInputBase, offerings: [fixedOffering('Real')] },
+        CONTEXT,
+      ),
+    ).rejects.toThrow();
+  });
 });
 
 describe('distributeMenu and the per-site Intuitivo toggle', () => {
@@ -218,5 +285,32 @@ describe('distributeMenu and the per-site Intuitivo toggle', () => {
 
     expect(offeringsA).toHaveLength(1); // only "Real" — Intuitivo excluded for site A
     expect(offeringsB).toHaveLength(2); // "Real" + Intuitivo — enabled by default for site B
+  });
+
+  it('copies the offering description from master onto a newly distributed regional menu', async () => {
+    const { db, service } = await seededServiceWithSites();
+
+    const master = await service.createMenu(
+      {
+        ...menuInputBase,
+        offerings: [{ ...fixedOffering('Real'), description: 'Bajo en carbohidratos' }],
+      },
+      CONTEXT,
+    );
+    await service.distributeMenu(
+      master.id,
+      { mode: 'CREATE_MISSING', operatingSiteIds: [SITE_A] },
+      CONTEXT,
+    );
+
+    const regional = await db
+      .select({ id: weeklyMenus.id })
+      .from(weeklyMenus)
+      .where(eq(weeklyMenus.operatingSiteId, SITE_A));
+    const regionalOfferings = await db
+      .select()
+      .from(weeklyMenuOfferings)
+      .where(eq(weeklyMenuOfferings.weeklyMenuId, regional[0]!.id));
+    expect(regionalOfferings[0]?.description).toBe('Bajo en carbohidratos');
   });
 });

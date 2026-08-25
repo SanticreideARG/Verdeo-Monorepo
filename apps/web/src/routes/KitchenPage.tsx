@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
-import { apiRequest } from '../lib/api.js';
+import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import {
   errorMessage,
+  menusForAmbientScope,
   type KitchenSummary,
   type ProductionSnapshot,
   type SurplusReport,
@@ -77,7 +78,10 @@ export function KitchenPage() {
     }
     const response = await apiRequest('/api/v1/menus');
     if (response.ok) {
-      const loadedMenus = ((await response.json()) as { items: WeeklyMenu[] }).items;
+      const loadedMenus = menusForAmbientScope(
+        ((await response.json()) as { items: WeeklyMenu[] }).items,
+        storedOperatingSiteId(),
+      );
       setMenus(loadedMenus);
       setSelectedMenuId((current) => current || loadedMenus[0]?.id || '');
     }

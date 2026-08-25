@@ -194,6 +194,7 @@ export function App() {
       <Route path="/app/pedidos/:id" element={<OrderDetailPage />} />
       <Route path="/app/pedidos" element={<OrdersPage />} />
       <Route path="/app/menus/nuevo" element={<MenuBuilderPage />} />
+      <Route path="/app/menus/:id/editar" element={<MenuBuilderPage />} />
       <Route path="/app/menus" element={<MenusPage />} />
       <Route path="/app/menus/precios" element={<PriceByLocationPage />} />
       <Route path="/app/cocina" element={<KitchenPage />} />

@@ -83,6 +83,7 @@ const customerOperationsStubs = {
   updateCustomerIdentity: vi.fn(),
   updateCustomerPreference: vi.fn(),
   updateCustomerRestriction: vi.fn(),
+  updateMenu: vi.fn(),
   updateOrder: vi.fn(),
   upsertMessageTemplate: vi.fn(),
   writeOffSurplus: vi.fn(),
@@ -101,6 +102,7 @@ const sampleMenu = {
     {
       composable: false,
       currency: 'ARS',
+      description: null,
       dishes: ['A', 'B', 'C', 'D', 'E'],
       familyName: 'Real',
       id: '30000000-0000-4000-8000-000000000001',

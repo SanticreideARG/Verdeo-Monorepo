@@ -142,6 +142,14 @@ export function MenusPage() {
                   </div>
                   <span className="status-chip">{menu.status}</span>
                 </div>
+                {permissions.includes('production.generate') ? (
+                  <Link
+                    className="button button-secondary mt-5"
+                    to={`/app/menus/${menu.id}/editar`}
+                  >
+                    Editar
+                  </Link>
+                ) : null}
                 {menu.status === 'DRAFT' && permissions.includes('production.generate') ? (
                   <button
                     className="button button-primary mt-5"

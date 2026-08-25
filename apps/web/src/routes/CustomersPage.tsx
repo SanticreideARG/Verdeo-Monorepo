@@ -53,7 +53,9 @@ export function CustomersPage() {
   const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
-  const [zones, setZones] = useState<{ displayName: string; id: string }[]>([]);
+  const [zones, setZones] = useState<
+    { displayName: string; id: string; operatingSiteId: string }[]
+  >([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -96,11 +98,13 @@ export function CustomersPage() {
 
   useEffect(() => {
     let active = true;
-    void apiRequest('/api/v1/zones')
+    // Always every zone, regardless of the ambient city selected up top — a domicilio can belong
+    // to any operation, so the picker has to offer all of them, not just the one currently in scope.
+    void apiRequest('/api/v1/zones', { headers: { 'x-verdeo-site': 'global' } })
       .then(async (response) => {
         if (!response.ok) throw new Error('zones');
         const body = (await response.json()) as {
-          items: { displayName: string; id: string }[];
+          items: { displayName: string; id: string; operatingSiteId: string }[];
         };
         if (active) setZones(body.items);
       })
@@ -111,6 +115,12 @@ export function CustomersPage() {
       active = false;
     };
   }, []);
+
+  // The ciudad picker defaults to whatever the top bar has selected — asking again would be
+  // redundant for the common case — but still lists every zone so a domicilio in another city
+  // doesn't require switching the ambient scope first.
+  const defaultZoneId =
+    zones.find((zone) => zone.operatingSiteId === storedOperatingSiteId())?.id ?? '';
 
   useEffect(() => {
     let active = true;
@@ -319,7 +329,6 @@ export function CustomersPage() {
         await apiRequest(`/api/v1/customers/${detail.id}/addresses`, {
           body: JSON.stringify({
             accessNotes: optional(formText(form, 'accessNotes')),
-            city: optional(formText(form, 'city')),
             geographicZoneId: formText(form, 'geographicZoneId'),
             label: formText(form, 'label'),
             locationUrl: optional(formText(form, 'locationUrl')),
@@ -579,8 +588,8 @@ export function CustomersPage() {
                     <input name="writtenAddress" placeholder="Calle y número" />
                   </label>
                   <label className="field">
-                    Zona
-                    <select defaultValue="" name="geographicZoneId">
+                    Ciudad
+                    <select defaultValue={defaultZoneId} name="geographicZoneId">
                       <option value="">Sin definir</option>
                       {zones.map((zone) => (
                         <option key={zone.id} value={zone.id}>
@@ -901,17 +910,13 @@ export function CustomersPage() {
                           />
                         </label>
                         <label className="field">
-                          Ciudad
-                          <input name="city" />
-                        </label>
-                        <label className="field">
                           Sector
                           <input name="sector" />
                         </label>
                         <label className="field">
-                          Zona de operaciones
-                          <select name="geographicZoneId" required>
-                            <option value="">Elegí una zona</option>
+                          Ciudad
+                          <select defaultValue={defaultZoneId} name="geographicZoneId" required>
+                            <option value="">Elegí una ciudad</option>
                             {zones.map((zone) => (
                               <option key={zone.id} value={zone.id}>
                                 {zone.displayName}
@@ -932,7 +937,8 @@ export function CustomersPage() {
                           <textarea name="accessNotes" rows={2} />
                         </label>
                         <label className="crm-check">
-                          <input name="primary" type="checkbox" /> Domicilio principal
+                          <input defaultChecked name="primary" type="checkbox" /> Domicilio
+                          principal
                         </label>
                         <button className="button button-primary" type="submit">
                           Agregar domicilio

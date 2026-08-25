@@ -181,6 +181,9 @@ export function PublicOrderPage() {
               <h2 className="mt-3 text-3xl font-semibold">
                 {offering.familyName} {offering.variantName}
               </h2>
+              {offering.description ? (
+                <p className="mt-2 text-white/80">{offering.description}</p>
+              ) : null}
               <p className="mt-2 font-semibold text-lime">
                 {formatMoney(offering.unitPriceMinor, offering.currency)}
               </p>

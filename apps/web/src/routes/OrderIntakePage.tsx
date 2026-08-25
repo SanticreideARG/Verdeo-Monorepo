@@ -3,10 +3,11 @@ import { Link } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
-import { apiRequest } from '../lib/api.js';
+import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import {
   errorMessage,
   formatMoney,
+  menusForAmbientScope,
   orderStatusLabel,
   type CustomerSummary,
   type OrderSummary,
@@ -36,6 +37,7 @@ export function OrderIntakePage() {
   const [message, setMessage] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [selectedMenuId, setSelectedMenuId] = useState('');
+  const [selectedOfferingId, setSelectedOfferingId] = useState('');
 
   // "Nuevo cliente" (quick alta) vs "Buscar cliente" (by name/number) — a client is picked before
   // the rest of the order form matters, so this drives what `customerId` ends up as on submit.
@@ -62,7 +64,10 @@ export function OrderIntakePage() {
       profile.permissions.includes('orders.read') ? apiRequest('/api/v1/orders') : null,
     ]);
     if (menuResponse?.ok) {
-      const loadedMenus = ((await menuResponse.json()) as { items: WeeklyMenu[] }).items;
+      const loadedMenus = menusForAmbientScope(
+        ((await menuResponse.json()) as { items: WeeklyMenu[] }).items,
+        storedOperatingSiteId(),
+      );
       setMenus(loadedMenus);
       setSelectedMenuId(
         (current) =>
@@ -92,6 +97,8 @@ export function OrderIntakePage() {
 
   const publishedMenus = menus.filter((menu) => menu.status === 'PUBLISHED');
   const selectedMenu = menus.find((menu) => menu.id === selectedMenuId) ?? null;
+  const selectedOffering =
+    selectedMenu?.offerings.find((offering) => offering.id === selectedOfferingId) ?? null;
 
   async function mutate(path: string, payload?: unknown) {
     setMessage('');
@@ -175,6 +182,7 @@ export function OrderIntakePage() {
       setSelectedCustomer(null);
       setCustomerResults([]);
       setCustomerQuery('');
+      setSelectedOfferingId('');
       setMessage('Pedido registrado como borrador.');
       setFormOpen(false);
       await loadData();
@@ -322,10 +330,13 @@ export function OrderIntakePage() {
 
             <div className="form-grid">
               <label className="field">
-                Menú
+                Período
                 <select
                   name="menuId"
-                  onChange={(event) => setSelectedMenuId(event.target.value)}
+                  onChange={(event) => {
+                    setSelectedMenuId(event.target.value);
+                    setSelectedOfferingId('');
+                  }}
                   required
                   value={selectedMenuId}
                 >
@@ -339,7 +350,12 @@ export function OrderIntakePage() {
               </label>
               <label className="field field-wide">
                 Variedad
-                <select name="offeringId" required>
+                <select
+                  name="offeringId"
+                  onChange={(event) => setSelectedOfferingId(event.target.value)}
+                  required
+                  value={selectedOfferingId}
+                >
                   <option value="">Seleccionar</option>
                   {selectedMenu?.offerings.map((offering) => (
                     <option key={offering.id} value={offering.id}>
@@ -381,11 +397,13 @@ export function OrderIntakePage() {
                 Indicaciones para cocina
                 <textarea name="dietaryInstructions" placeholder="Una por línea" rows={2} />
               </label>
-              <label className="field field-wide">
-                Intuitivo: cinco platos, uno por línea
-                <textarea name="customDishes" rows={3} />
-              </label>
             </div>
+            {selectedOffering?.composable ? (
+              <label className="field field-wide mt-4">
+                Platos de Intuitivo: cinco, uno por línea
+                <textarea name="customDishes" rows={5} />
+              </label>
+            ) : null}
             <button className="button button-primary mt-4" type="submit">
               Registrar borrador
             </button>

@@ -330,6 +330,9 @@ export const MenuOfferingInputSchema = z.object({
   // A composable variety has no fixed five dishes; the customer picks from the published universe
   // (every dish published this week for the same size), so it submits none of its own.
   composable: z.boolean().default(false),
+  // Free text shown to the customer on the public menu for this variety, this week only — nothing
+  // carries over between weeks, same as prices.
+  description: z.string().trim().max(500).nullable().optional(),
   dishes: z.array(RequiredTextSchema).max(5),
   familyName: RequiredTextSchema,
   // Deliberate per-variety exception; omitted means the size price applies.
@@ -380,6 +383,7 @@ export const MenuCreateRequestSchema = z
 export const MenuOfferingSchema = z.object({
   composable: z.boolean(),
   currency: z.string(),
+  description: z.string().nullable(),
   dishes: z.array(z.string()),
   familyName: z.string(),
   id: UuidSchema,
