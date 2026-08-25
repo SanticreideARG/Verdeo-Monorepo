@@ -16,7 +16,6 @@ import { DeliveryAppPage } from './DeliveryAppPage.js';
 import { AuditLogPage } from './AuditLogPage.js';
 import { GeographySettingsPage } from './GeographySettingsPage.js';
 import { MenuCatalogSettingsPage } from './MenuCatalogSettingsPage.js';
-import { SettingsHubPage } from './SettingsHubPage.js';
 import { HelpPage } from './HelpPage.js';
 import { KitchenPage } from './KitchenPage.js';
 import { LabelSettingsPage } from './LabelSettingsPage.js';
@@ -209,7 +208,6 @@ export function App() {
       <Route path="/app/perfil" element={<ProfilePage />} />
       <Route path="/app/usuarios" element={<UsersAdminPage />} />
       <Route path="/app/contenidos" element={<CmsPagesAdminPage />} />
-      <Route path="/app/ajustes" element={<SettingsHubPage />} />
       <Route path="/app/ajustes/zonas" element={<GeographySettingsPage />} />
       <Route path="/app/ajustes/menu" element={<MenuCatalogSettingsPage />} />
       <Route path="/app/ajustes/etiquetas" element={<LabelSettingsPage />} />

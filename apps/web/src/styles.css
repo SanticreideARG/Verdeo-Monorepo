@@ -537,15 +537,35 @@ a {
   padding-top: 1rem;
   border-top: 1px solid var(--db-border-soft);
 }
-.dashboard-nav-cluster > p {
+.dashboard-nav-cluster > button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
   margin: 0 0 0.45rem;
-  padding: 0 0.7rem;
+  padding: 0.15rem 0.7rem;
+  border: none;
+  background: none;
+  cursor: pointer;
   color: var(--db-muted-2);
   font-family: 'Barlow Condensed', sans-serif;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.17em;
   text-transform: uppercase;
+}
+.dashboard-nav-cluster > button:hover {
+  color: var(--db-text);
+}
+.dashboard-nav-cluster > button svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  transition: transform 160ms ease;
+}
+.dashboard-nav-cluster.is-collapsed > button svg {
+  transform: rotate(-90deg);
 }
 .dashboard-nav-cluster > a {
   position: relative;
@@ -1375,7 +1395,7 @@ a {
   margin-top: 0.65rem;
   padding-top: 0.65rem;
 }
-.dashboard-nav-cluster > p {
+.dashboard-nav-cluster > button {
   margin-bottom: 0.25rem;
   padding-inline: 0.55rem;
   font-size: 0.61rem;
@@ -2170,7 +2190,7 @@ a {
 }
 .dashboard-shell.has-collapsed-sidebar .dashboard-brand > span,
 .dashboard-shell.has-collapsed-sidebar .dashboard-brand > small,
-.dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > p,
+.dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > button,
 .dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > a > span,
 .dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > a > i,
 .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar-collapse > span,
@@ -2208,11 +2228,13 @@ a {
   }
   .dashboard-shell.has-collapsed-sidebar .dashboard-brand > span,
   .dashboard-shell.has-collapsed-sidebar .dashboard-brand > small,
-  .dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > p,
   .dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > a > span,
   .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar-collapse > span,
   .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar-user > div {
     display: initial;
+  }
+  .dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > button {
+    display: flex;
   }
   .dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > a,
   .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar-collapse {

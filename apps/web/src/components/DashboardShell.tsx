@@ -153,8 +153,13 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         label: 'Menú personalizado',
         permission: 'production.read',
       },
+      {
+        href: '/app/ajustes/etiquetas',
+        icon: 'settings',
+        label: 'Etiquetas',
+        permission: 'production.read',
+      },
       { href: '/app/auditoria', icon: 'settings', label: 'Auditoría', permission: 'audit.read' },
-      { href: '/app/ajustes', icon: 'settings', label: 'Ajustes', permission: 'roles.read' },
     ],
   },
 ];
@@ -285,6 +290,14 @@ export function DashboardShell({
     const saved = window.localStorage.getItem('verdeo-dashboard-theme');
     return themes.some((item) => item.value === saved) ? (saved as ThemeName) : 'natural';
   });
+  const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(() => {
+    try {
+      const saved = window.localStorage.getItem('verdeo-nav-collapsed-clusters');
+      return new Set(saved ? (JSON.parse(saved) as string[]) : []);
+    } catch {
+      return new Set();
+    }
+  });
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1_000);
@@ -311,6 +324,22 @@ export function DashboardShell({
   useEffect(() => {
     window.localStorage.setItem('verdeo-sidebar-collapsed', String(sidebarCollapsed));
   }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      'verdeo-nav-collapsed-clusters',
+      JSON.stringify([...collapsedClusters]),
+    );
+  }, [collapsedClusters]);
+
+  function toggleCluster(label: string) {
+    setCollapsedClusters((current) => {
+      const next = new Set(current);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  }
 
   // The stored selection is validated against the server on every mount: a user who lost access to
   // an operation falls back to their default instead of sending a header that would answer 403.
@@ -402,26 +431,53 @@ export function DashboardShell({
         </Link>
 
         <nav className="dashboard-navigation" aria-label="Navegación del dashboard">
-          {visibleClusters.map((cluster) => (
-            <section className="dashboard-nav-cluster" key={cluster.label}>
-              <p>{cluster.label}</p>
-              {cluster.items.map((item) => {
-                const active = isNavigationActive(location.pathname, location.hash, item.href);
-                return (
-                  <Link
-                    className={active ? 'is-active' : ''}
-                    key={item.label}
-                    title={item.label}
-                    to={item.href}
+          {visibleClusters.map((cluster) => {
+            const collapsed = collapsedClusters.has(cluster.label);
+            return (
+              <section
+                className={`dashboard-nav-cluster ${collapsed ? 'is-collapsed' : ''}`}
+                key={cluster.label}
+              >
+                <button
+                  aria-expanded={!collapsed}
+                  onClick={() => toggleCluster(cluster.label)}
+                  type="button"
+                >
+                  <span>{cluster.label}</span>
+                  <svg
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
                   >
-                    <NavIcon name={item.icon} />
-                    <span>{item.label}</span>
-                    {active ? <i aria-hidden="true" /> : null}
-                  </Link>
-                );
-              })}
-            </section>
-          ))}
+                    <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                {!collapsed
+                  ? cluster.items.map((item) => {
+                      const active = isNavigationActive(
+                        location.pathname,
+                        location.hash,
+                        item.href,
+                      );
+                      return (
+                        <Link
+                          className={active ? 'is-active' : ''}
+                          key={item.label}
+                          title={item.label}
+                          to={item.href}
+                        >
+                          <NavIcon name={item.icon} />
+                          <span>{item.label}</span>
+                          {active ? <i aria-hidden="true" /> : null}
+                        </Link>
+                      );
+                    })
+                  : null}
+              </section>
+            );
+          })}
         </nav>
 
         <button
