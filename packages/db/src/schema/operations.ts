@@ -95,6 +95,29 @@ export const customerIdentities = pgTable(
   ],
 );
 
+// The link between a customer *account* (a Google-login identity via customer OAuth) and the
+// existing CRM `customers` record their orders belong to. Deliberately its own table rather than
+// a column on `users` (auth.ts) — `users` never needs to know about the customer domain, and a
+// column here would need `users` to import `operations.ts` while `operations.ts` already imports
+// `users` from `auth.ts`, a real circular import. One user ↔ one customer, both directions unique:
+// a customer account never spans two CRM records, and a CRM record is claimed by at most one login.
+export const customerLogins = pgTable(
+  'customer_logins',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .unique()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    customerId: uuid('customer_id')
+      .notNull()
+      .unique()
+      .references(() => customers.id, { onDelete: 'cascade' }),
+    ...timestamps,
+  },
+  (table) => [index('customer_logins_customer_idx').on(table.customerId)],
+);
+
 export const customerAddresses = pgTable(
   'customer_addresses',
   {

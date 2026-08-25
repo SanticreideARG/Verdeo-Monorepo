@@ -1,19 +1,29 @@
 import { apiRequest } from './api.js';
 import { getSupabaseClient } from './supabase.js';
 
+export type OAuthFlow = 'colaborador' | 'cliente';
+
+const EXCHANGE_PATH_BY_FLOW: Record<OAuthFlow, string> = {
+  cliente: '/api/v1/public/auth/oauth/exchange',
+  colaborador: '/api/v1/auth/oauth/exchange',
+};
+
 let pendingCallback: { code: string; promise: Promise<void> } | undefined;
 
-export async function startGoogleOAuth(): Promise<void> {
+// Same Supabase project, same `/auth/callback` redirect for both audiences — `flow` rides along
+// as a query param Supabase appends its own `code=` onto, so the callback page can tell which
+// exchange endpoint to call without a second callback route.
+export async function startGoogleOAuth(flow: OAuthFlow): Promise<void> {
   const client = getSupabaseClient();
   const { error } = await client.auth.signInWithOAuth({
-    options: { redirectTo: `${window.location.origin}/auth/callback` },
+    options: { redirectTo: `${window.location.origin}/auth/callback?flow=${flow}` },
     provider: 'google',
   });
 
   if (error) throw error;
 }
 
-export function completeOAuthCallback(code: string): Promise<void> {
+export function completeOAuthCallback(code: string, flow: OAuthFlow): Promise<void> {
   if (pendingCallback?.code === code) return pendingCallback.promise;
 
   const promise = (async () => {
@@ -26,7 +36,7 @@ export function completeOAuthCallback(code: string): Promise<void> {
     }
 
     try {
-      const response = await apiRequest('/api/v1/auth/oauth/exchange', {
+      const response = await apiRequest(EXCHANGE_PATH_BY_FLOW[flow], {
         body: JSON.stringify({ accessToken: data.session.access_token }),
         method: 'POST',
       });

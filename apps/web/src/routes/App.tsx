@@ -3,9 +3,11 @@ import { Link, Route, Routes } from 'react-router-dom';
 
 import { CmsSection, type PageSection } from '../components/CmsSections.js';
 import { apiRequest } from '../lib/api.js';
+import { AccessTokenLoginPage } from './AccessTokenLoginPage.js';
 import { AIProvidersPage } from './AIProvidersPage.js';
 import { AIWorkbenchPage } from './AIWorkbenchPage.js';
 import { CmsPagesAdminPage } from './CmsPagesAdminPage.js';
+import { CustomerAccountPage } from './CustomerAccountPage.js';
 import { DashboardPage } from './DashboardPage.js';
 import { ChatLinksPage } from './ChatLinksPage.js';
 import { ChatPage } from './ChatPage.js';
@@ -56,8 +58,8 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
           <Link className="nav-link hidden sm:inline-flex" to="/seguimiento">
             Seguir mi pedido
           </Link>
-          <Link className="nav-link hidden sm:inline-flex" to="/login">
-            Ingresar
+          <Link className="nav-link hidden sm:inline-flex" to="/mi-cuenta">
+            Mi cuenta
           </Link>
           <Link className="button button-primary" to="/pedido">
             Hacer un pedido
@@ -181,6 +183,8 @@ export function App() {
       <Route path="/seguimiento" element={<TrackOrderPage />} />
       <Route path="/public/survey/:token" element={<PublicSurveyPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/acceso" element={<AccessTokenLoginPage />} />
+      <Route path="/mi-cuenta" element={<CustomerAccountPage />} />
       <Route path="/auth/callback" element={<OAuthCallbackPage />} />
       <Route path="/app" element={<DashboardPage />} />
       <Route path="/app/clientes" element={<CustomersPage />} />

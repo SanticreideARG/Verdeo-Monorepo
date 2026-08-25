@@ -5,6 +5,9 @@ import { apiRequest } from '../lib/api.js';
 import { startGoogleOAuth } from '../lib/oauth.js';
 import { isSupabaseOAuthConfigured } from '../lib/supabase.js';
 
+/** Acceso de colaboradores — Google OAuth o contraseña, ambos exigen un usuario que un admin ya
+ * dio de alta (ver UsersAdminPage). Los otros dos accesos, clientes y tokens temporales, viven en
+ * sus propias pantallas (`/mi-cuenta`, `/acceso`) — no son variantes de esta. */
 export function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
@@ -12,10 +15,6 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [oauthSubmitting, setOAuthSubmitting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [tokenMode, setTokenMode] = useState(false);
-  const [accessToken, setAccessToken] = useState('');
-  const [tokenDisplayName, setTokenDisplayName] = useState('');
-  const [tokenSubmitting, setTokenSubmitting] = useState(false);
   const oauthAvailable = isSupabaseOAuthConfigured();
 
   async function continueWithGoogle() {
@@ -23,7 +22,7 @@ export function LoginPage() {
     setOAuthSubmitting(true);
 
     try {
-      await startGoogleOAuth();
+      await startGoogleOAuth('colaborador');
     } catch {
       setError('No pudimos iniciar el acceso con Google. Intentá nuevamente.');
       setOAuthSubmitting(false);
@@ -58,36 +57,6 @@ export function LoginPage() {
     }
   }
 
-  async function submitToken(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    setTokenSubmitting(true);
-
-    try {
-      const response = await apiRequest('/api/v1/auth/token-login', {
-        body: JSON.stringify({
-          displayName: tokenDisplayName.trim() ? tokenDisplayName.trim() : undefined,
-          token: accessToken.trim(),
-        }),
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as {
-          error?: { message?: string };
-        } | null;
-        setError(body?.error?.message ?? 'No pudimos validar el token.');
-        return;
-      }
-
-      await navigate('/app', { replace: true });
-    } catch {
-      setError('No pudimos conectarnos con Verdeo. Revisá la conexión e intentá nuevamente.');
-    } finally {
-      setTokenSubmitting(false);
-    }
-  }
-
   return (
     <main className="grid min-h-screen bg-cream lg:grid-cols-[0.85fr_1.15fr]">
       <section className="flex items-center px-5 py-10 sm:px-10 lg:px-16">
@@ -110,7 +79,7 @@ export function LoginPage() {
             Usá la cuenta que te asignó un administrador de Verdeo.
           </p>
 
-          {!tokenMode && oauthAvailable ? (
+          {oauthAvailable ? (
             <>
               <button
                 className="button button-secondary button-large mt-10 w-full disabled:cursor-wait disabled:opacity-60"
@@ -134,108 +103,60 @@ export function LoginPage() {
             </>
           ) : null}
 
-          {!tokenMode ? (
-            <form
-              className={oauthAvailable ? 'space-y-5' : 'mt-10 space-y-5'}
-              onSubmit={(event) => void submit(event)}
-            >
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-forest">Email</span>
-                <input
-                  autoComplete="username"
-                  className="min-h-12 w-full rounded-2xl border border-forest/20 bg-white px-4 text-base outline-none transition focus:border-forest focus:ring-4 focus:ring-forest/10"
-                  name="email"
-                  onChange={(event) => setEmail(event.target.value)}
-                  required
-                  type="email"
-                  value={email}
-                />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-forest">Contraseña</span>
-                <input
-                  autoComplete="current-password"
-                  className="min-h-12 w-full rounded-2xl border border-forest/20 bg-white px-4 text-base outline-none transition focus:border-forest focus:ring-4 focus:ring-forest/10"
-                  minLength={12}
-                  name="password"
-                  onChange={(event) => setPassword(event.target.value)}
-                  required
-                  type="password"
-                  value={password}
-                />
-              </label>
-
-              {error ? (
-                <p
-                  className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
-                  role="alert"
-                >
-                  {error}
-                </p>
-              ) : null}
-
-              <button
-                className="button button-primary button-large w-full disabled:cursor-wait disabled:opacity-60"
-                disabled={submitting || oauthSubmitting}
-                type="submit"
-              >
-                {submitting ? 'Ingresando…' : 'Ingresar'}
-              </button>
-            </form>
-          ) : null}
-
-          {tokenMode ? (
-            <form className="mt-6 space-y-4" onSubmit={(event) => void submitToken(event)}>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-forest">
-                  Token de acceso
-                </span>
-                <input
-                  className="min-h-12 w-full rounded-2xl border border-forest/20 bg-white px-4 text-base outline-none transition focus:border-forest focus:ring-4 focus:ring-forest/10"
-                  onChange={(event) => setAccessToken(event.target.value)}
-                  placeholder="vrd_…"
-                  required
-                  value={accessToken}
-                />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-forest">
-                  Tu nombre (solo si es una invitación nueva)
-                </span>
-                <input
-                  className="min-h-12 w-full rounded-2xl border border-forest/20 bg-white px-4 text-base outline-none transition focus:border-forest focus:ring-4 focus:ring-forest/10"
-                  onChange={(event) => setTokenDisplayName(event.target.value)}
-                  value={tokenDisplayName}
-                />
-              </label>
-              {error ? (
-                <p
-                  className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
-                  role="alert"
-                >
-                  {error}
-                </p>
-              ) : null}
-              <button
-                className="button button-primary button-large w-full disabled:cursor-wait disabled:opacity-60"
-                disabled={tokenSubmitting}
-                type="submit"
-              >
-                {tokenSubmitting ? 'Validando…' : 'Acceder'}
-              </button>
-            </form>
-          ) : null}
-
-          <button
-            className="mt-6 text-xs font-semibold uppercase tracking-[0.1em] text-ink-muted underline underline-offset-4"
-            onClick={() => {
-              setError(null);
-              setTokenMode((current) => !current);
-            }}
-            type="button"
+          <form
+            className={oauthAvailable ? 'space-y-5' : 'mt-10 space-y-5'}
+            onSubmit={(event) => void submit(event)}
           >
-            {tokenMode ? 'Volver a email y contraseña' : 'Acceder con token'}
-          </button>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-forest">Email</span>
+              <input
+                autoComplete="username"
+                className="min-h-12 w-full rounded-2xl border border-forest/20 bg-white px-4 text-base outline-none transition focus:border-forest focus:ring-4 focus:ring-forest/10"
+                name="email"
+                onChange={(event) => setEmail(event.target.value)}
+                required
+                type="email"
+                value={email}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold text-forest">Contraseña</span>
+              <input
+                autoComplete="current-password"
+                className="min-h-12 w-full rounded-2xl border border-forest/20 bg-white px-4 text-base outline-none transition focus:border-forest focus:ring-4 focus:ring-forest/10"
+                minLength={12}
+                name="password"
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                type="password"
+                value={password}
+              />
+            </label>
+
+            {error ? (
+              <p
+                className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+                role="alert"
+              >
+                {error}
+              </p>
+            ) : null}
+
+            <button
+              className="button button-primary button-large w-full disabled:cursor-wait disabled:opacity-60"
+              disabled={submitting || oauthSubmitting}
+              type="submit"
+            >
+              {submitting ? 'Ingresando…' : 'Ingresar'}
+            </button>
+          </form>
+
+          <Link
+            className="mt-6 inline-block text-xs font-semibold uppercase tracking-[0.1em] text-ink-muted underline underline-offset-4"
+            to="/acceso"
+          >
+            Acceder con token
+          </Link>
         </div>
       </section>
 

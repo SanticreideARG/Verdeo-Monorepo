@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
-import { completeOAuthCallback } from '../lib/oauth.js';
+import { completeOAuthCallback, type OAuthFlow } from '../lib/oauth.js';
 
-function callbackErrorMessage(error: unknown): string {
+function callbackErrorMessage(error: unknown, flow: OAuthFlow): string {
   if (error instanceof Error && error.message === 'ACCOUNT_NOT_PROVISIONED') {
-    return 'Tu cuenta de Google es válida, pero todavía no tiene acceso asignado en Verdeo.';
+    return flow === 'cliente'
+      ? 'No pudimos verificar tu cuenta de Google. Intentá nuevamente.'
+      : 'Tu cuenta de Google es válida, pero todavía no tiene acceso asignado en Verdeo.';
   }
 
   return 'No pudimos completar el acceso con Google. Intentá nuevamente.';
@@ -16,7 +18,8 @@ export function OAuthCallbackPage() {
   const [error, setError] = useState<string | null>(null);
   const [callback] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return { code: params.get('code'), providerError: params.get('error') };
+    const flow: OAuthFlow = params.get('flow') === 'cliente' ? 'cliente' : 'colaborador';
+    return { code: params.get('code'), flow, providerError: params.get('error') };
   });
 
   useEffect(() => {
@@ -27,12 +30,13 @@ export function OAuthCallbackPage() {
     }
 
     let active = true;
-    void completeOAuthCallback(callback.code)
+    void completeOAuthCallback(callback.code, callback.flow)
       .then(async () => {
-        if (active) await navigate('/app', { replace: true });
+        if (active)
+          await navigate(callback.flow === 'cliente' ? '/mi-cuenta' : '/app', { replace: true });
       })
       .catch((callbackError: unknown) => {
-        if (active) setError(callbackErrorMessage(callbackError));
+        if (active) setError(callbackErrorMessage(callbackError, callback.flow));
       });
 
     return () => {
@@ -57,7 +61,10 @@ export function OAuthCallbackPage() {
             <p className="mt-4 leading-7 text-ink-muted" role="alert">
               {error}
             </p>
-            <Link className="button button-primary button-large mt-8 w-full" to="/login">
+            <Link
+              className="button button-primary button-large mt-8 w-full"
+              to={callback.flow === 'cliente' ? '/mi-cuenta' : '/login'}
+            >
               Volver al acceso
             </Link>
           </>

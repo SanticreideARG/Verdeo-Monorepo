@@ -796,6 +796,7 @@ interface CreateAppOptions {
   logger: Logger;
   messaging?: MessagingEngine;
   oauth?: OAuthLogin;
+  customerOAuth?: OAuthLogin;
   operations?: OperationsEngine;
   payments?: PaymentsEngine;
   sessions: SessionAuthenticator;
@@ -1152,6 +1153,38 @@ export function createApp(options: CreateAppOptions) {
     return context.json(PublicOperatingSiteListResponseSchema.parse({ items }));
   });
 
+  // Zone picker for the "mi cuenta" saved-address form — a customer needs to name the same
+  // mandatory operational anchor (ADR-031) staff addresses carry, without ever seeing the
+  // staff-only fields (manager name, WhatsApp/phone overrides) a zone otherwise carries.
+  app.get('/api/v1/public/operating-sites/:slug/zones', async (context) => {
+    const slug = context.req.param('slug');
+    const sites = (await requireGeography().listSites()) as readonly {
+      active: boolean;
+      id: string;
+      slug: string;
+    }[];
+    const site = sites.find((candidate) => candidate.active && candidate.slug === slug);
+    if (!site) {
+      const code: ApiErrorCode = 'NOT_FOUND';
+      return context.json(
+        {
+          error: { code, message: 'Operación no encontrada.', requestId: context.get('requestId') },
+        },
+        statusForCode(code),
+      );
+    }
+    const zones = (await requireGeography().listZones(site.id)) as readonly {
+      active: boolean;
+      displayName: string;
+      id: string;
+    }[];
+    return context.json({
+      items: zones
+        .filter((zone) => zone.active)
+        .map((zone) => ({ displayName: zone.displayName, id: zone.id })),
+    });
+  });
+
   app.get('/api/v1/public/menu/current', async (context) => {
     // A visitor's city selects which published revision they see; without one, the global master.
     const requestedSlug = context.req.query('site')?.trim();
@@ -1290,6 +1323,69 @@ export function createApp(options: CreateAppOptions) {
     if (!input.success) return badRequest(context, 'Revisá las respuestas.', input.error.issues);
     const response = await requireSurveys().submitSurveyResponse(token, input.data.answers);
     return context.json({ ok: Boolean(response) }, 201);
+  });
+
+  // Public customer OAuth: never shares a handler with the staff exchange below — this one
+  // auto-provisions a customer account + CRM record on a first-time identity, the staff one
+  // requires a pre-existing user and rejects everyone else.
+  app.post('/api/v1/public/auth/oauth/exchange', async (context) => {
+    const input = OAuthExchangeRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success) {
+      const code: ApiErrorCode = 'BAD_REQUEST';
+      return context.json(
+        {
+          error: {
+            code,
+            details: input.error.issues,
+            message: 'La respuesta de autenticación no es válida.',
+            requestId: context.get('requestId'),
+          },
+        },
+        statusForCode(code),
+      );
+    }
+
+    if (!options.customerOAuth) {
+      const code: ApiErrorCode = 'SERVICE_UNAVAILABLE';
+      return context.json(
+        {
+          error: {
+            code,
+            message: 'El acceso con Google todavía no está disponible.',
+            requestId: context.get('requestId'),
+          },
+        },
+        statusForCode(code),
+      );
+    }
+
+    const login = await options.customerOAuth.exchange(
+      input.data.accessToken,
+      context.get('requestId'),
+    );
+    if (!login) {
+      const code: ApiErrorCode = 'UNAUTHENTICATED';
+      return context.json(
+        {
+          error: {
+            code,
+            message: 'No pudimos verificar tu cuenta de Google.',
+            requestId: context.get('requestId'),
+          },
+        },
+        statusForCode(code),
+      );
+    }
+
+    setSessionCookie(context, login);
+    context.header('cache-control', 'no-store');
+
+    return context.json(
+      LoginResponseSchema.parse({
+        expiresAt: login.expiresAt.toISOString(),
+        sessionId: login.sessionId,
+      }),
+    );
   });
 
   app.post('/api/v1/auth/login', async (context) => {
@@ -1546,6 +1642,70 @@ export function createApp(options: CreateAppOptions) {
       id: user.id,
     });
     return context.json(payload);
+  });
+
+  // Customer self-service ("mi cuenta"): gated by holding a customer-linked session
+  // (session.customerId), never by an RBAC permission — a colaborador session has no
+  // customerId and 403s here regardless of what staff permissions it holds, and a customer
+  // session's `cliente` role permissions (if any) are irrelevant to these routes.
+  const requireCustomerSession = (context: Context<{ Variables: AppVariables }>) => {
+    const customerId = context.get('session').customerId;
+    if (!customerId) return null;
+    return customerId;
+  };
+
+  app.get('/api/v1/me/customer', async (context) => {
+    const customerId = requireCustomerSession(context);
+    if (!customerId) return forbidden(context);
+    const customer = await requireOperations().getCustomer(customerId, true);
+    return context.json(CustomerDetailSchema.parse(contractValue(customer)));
+  });
+
+  app.get('/api/v1/me/orders', async (context) => {
+    const customerId = requireCustomerSession(context);
+    if (!customerId) return forbidden(context);
+    const query = OrderListQuerySchema.safeParse(context.req.query());
+    if (!query.success)
+      return badRequest(context, 'Los filtros de pedidos no son válidos.', query.error.issues);
+    const page = await requireOperations().listOrders({
+      ...query.data,
+      customerId,
+      operatingSiteId: null,
+    });
+    return context.json(OrderPageResponseSchema.parse(contractValue(page)));
+  });
+
+  app.post('/api/v1/me/addresses', async (context) => {
+    const customerId = requireCustomerSession(context);
+    if (!customerId) return forbidden(context);
+    const input = CustomerAddressCreateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) return badRequest(context, 'Revisá el domicilio.', input.error.issues);
+    const address = await requireOperations().addCustomerAddress(
+      customerId,
+      input.data,
+      operationsContext(context),
+    );
+    return context.json(CustomerAddressSchema.parse(contractValue(address)), 201);
+  });
+
+  app.patch('/api/v1/me/addresses/:addressId', async (context) => {
+    const customerId = requireCustomerSession(context);
+    if (!customerId) return forbidden(context);
+    const addressId = context.req.param('addressId');
+    const input = CustomerAddressUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'Revisá los cambios del domicilio.', input.error.issues);
+    const address = await requireOperations().updateCustomerAddress(
+      customerId,
+      addressId,
+      input.data,
+      operationsContext(context),
+    );
+    return context.json(CustomerAddressSchema.parse(contractValue(address)));
   });
 
   app.post('/api/v1/auth/logout', async (context) => {

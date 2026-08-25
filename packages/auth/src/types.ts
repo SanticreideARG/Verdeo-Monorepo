@@ -1,4 +1,9 @@
 export interface AuthenticatedSession {
+  // Set only for a customer-account session (see `customer_logins` in packages/db) — undefined/null
+  // for every staff/colaborador session. Optional (not required) so every existing session-mock
+  // literal across the test suite keeps compiling; production sessions always resolve it via the
+  // repository join, never omit it.
+  customerId?: string | null | undefined;
   expiresAt: Date;
   permissions: readonly string[];
   sessionId: string;

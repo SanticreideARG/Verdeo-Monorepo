@@ -5,6 +5,7 @@ import { resolvePermissions } from '@verdeo/rbac';
 
 import type { Database } from '../index.js';
 import {
+  customerLogins,
   permissions,
   rolePermissions,
   roles,
@@ -20,6 +21,7 @@ export class PostgresSessionRepository implements SessionRepository {
   public async findByTokenHash(tokenHash: string): Promise<SessionRecord | null> {
     const [session] = await this.database
       .select({
+        customerId: customerLogins.customerId,
         expiresAt: sessions.expiresAt,
         revokedAt: sessions.revokedAt,
         sessionId: sessions.id,
@@ -28,6 +30,7 @@ export class PostgresSessionRepository implements SessionRepository {
       })
       .from(sessions)
       .innerJoin(users, and(eq(users.id, sessions.userId), eq(users.status, 'active')))
+      .leftJoin(customerLogins, eq(customerLogins.userId, users.id))
       .where(eq(sessions.tokenHash, tokenHash))
       .limit(1);
 

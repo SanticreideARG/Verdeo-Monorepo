@@ -3033,4 +3033,166 @@ describe('API foundation', () => {
       expect(response.status).toBe(403);
     });
   });
+
+  describe('customer account', () => {
+    function buildCustomerApp(
+      operationsOverrides: Record<string, unknown>,
+      session: { customerId?: string | null } | null,
+    ) {
+      return createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        operations: {
+          ...customerOperationsStubs,
+          listOrders: vi.fn(),
+          ...operationsOverrides,
+        } as never,
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            session
+              ? Promise.resolve({
+                  customerId: session.customerId ?? null,
+                  expiresAt: new Date('2026-08-20T12:00:00.000Z'),
+                  permissions: [],
+                  sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+                  userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+                })
+              : Promise.resolve(null),
+        },
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+    }
+
+    const cookie = 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars';
+    const CUSTOMER = '70000000-0000-4000-8000-000000000001';
+
+    it('403s every /api/v1/me/* data route for a session with no linked customer', async () => {
+      const app = buildCustomerApp({}, { customerId: null });
+
+      const customer = await app.request('/api/v1/me/customer', { headers: { cookie } });
+      expect(customer.status).toBe(403);
+      const orders = await app.request('/api/v1/me/orders', { headers: { cookie } });
+      expect(orders.status).toBe(403);
+      const address = await app.request('/api/v1/me/addresses', {
+        body: JSON.stringify({ geographicZoneId: '00000000-0000-4000-8000-000000000000' }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(address.status).toBe(403);
+    });
+
+    it('401s every /api/v1/me/* route with no session at all', async () => {
+      const app = buildCustomerApp({}, null);
+      const response = await app.request('/api/v1/me/customer');
+      expect(response.status).toBe(401);
+    });
+
+    it('returns the linked customer profile and forces the session customerId on order/address calls', async () => {
+      const getCustomer = vi.fn(() =>
+        Promise.resolve({
+          createdAt: new Date('2026-08-20T12:00:00.000Z'),
+          displayName: 'Cliente de prueba',
+          firstName: null,
+          id: CUSTOMER,
+          lastName: null,
+          orders: [],
+          status: 'active',
+          updatedAt: new Date('2026-08-20T12:00:00.000Z'),
+        }),
+      );
+      const listOrders = vi.fn(() => Promise.resolve({ items: [], nextCursor: null }));
+      const addCustomerAddress = vi.fn(() =>
+        Promise.resolve({
+          accessNotes: null,
+          active: true,
+          city: null,
+          createdAt: new Date(),
+          geocodingStatus: 'NEEDS_LOCATION',
+          geographicZoneId: '00000000-0000-4000-8000-000000000000',
+          id: 'a0000000-0000-4000-8000-000000000001',
+          label: 'Casa',
+          latitude: null,
+          locationUrl: null,
+          longitude: null,
+          operationalZone: null,
+          primary: false,
+          propertyType: null,
+          sector: null,
+          source: 'manual',
+          unit: null,
+          writtenAddress: 'Calle 1',
+        }),
+      );
+      const app = buildCustomerApp(
+        { addCustomerAddress, getCustomer, listOrders },
+        {
+          customerId: CUSTOMER,
+        },
+      );
+
+      const customer = await app.request('/api/v1/me/customer', { headers: { cookie } });
+      expect(customer.status).toBe(200);
+      expect(getCustomer).toHaveBeenCalledWith(CUSTOMER, true);
+
+      const orders = await app.request(
+        '/api/v1/me/orders?customerId=90000000-0000-4000-8000-000000000001',
+        { headers: { cookie } },
+      );
+      expect(orders.status).toBe(200);
+      expect(listOrders).toHaveBeenCalledWith(
+        expect.objectContaining({ customerId: CUSTOMER, operatingSiteId: null }),
+      );
+
+      const address = await app.request('/api/v1/me/addresses', {
+        body: JSON.stringify({
+          geographicZoneId: '00000000-0000-4000-8000-000000000000',
+          label: 'Casa',
+          writtenAddress: 'Calle 1',
+        }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(address.status).toBe(201);
+      expect(addCustomerAddress).toHaveBeenCalledWith(
+        CUSTOMER,
+        expect.objectContaining({ writtenAddress: 'Calle 1' }),
+        expect.anything(),
+      );
+    });
+
+    it('public customer OAuth exchange sets a session cookie, unauthenticated request', async () => {
+      const exchange = vi.fn(() =>
+        Promise.resolve({
+          expiresAt: new Date('2026-08-20T13:00:00.000Z'),
+          sessionId: '80000000-0000-4000-8000-000000000001',
+          token: 'a-valid-opaque-session-token-longer-than-32-chars',
+        }),
+      );
+      const app = createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        customerOAuth: { exchange },
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        secureCookies: false,
+        sessions: { ...emptySessions, authenticate: () => Promise.resolve(null) },
+        users: emptyUsers,
+        version: 'test',
+      });
+
+      const response = await app.request('/api/v1/public/auth/oauth/exchange', {
+        body: JSON.stringify({ accessToken: 'supabase-access-token' }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(200);
+      expect(response.headers.get('set-cookie')).toContain('verdeo_session=');
+      expect(exchange).toHaveBeenCalledWith('supabase-access-token', expect.any(String));
+    });
+  });
 });

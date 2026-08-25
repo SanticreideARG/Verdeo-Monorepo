@@ -305,6 +305,75 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
         },
       }
     : undefined;
+  // Public customer OAuth — deliberately a separate engine from `oauth` above, never sharing a
+  // code path with it: this one always provisions on a new identity (resolveOrProvisionCustomer),
+  // the staff one always rejects one (resolveOrLink). Same Supabase project (it supports many
+  // audiences fine), same session/cookie mechanism, different provisioning rule.
+  const customerOAuth = supabaseAuth
+    ? {
+        exchange: async (accessToken: string, requestId: string) => {
+          const identity = await supabaseAuth.verifyAccessToken(accessToken);
+
+          if (!identity) {
+            const audit = new AuditService(new PostgresAuditSink(database.db));
+            await audit.record({
+              action: 'auth.customer_oauth_failed',
+              actor: { type: 'system' },
+              correlationId: requestId,
+              entityId: 'supabase',
+              entityType: 'authentication',
+              metadata: { reason: 'invalid_or_unverified_identity' },
+              requestId,
+              source: 'api',
+            });
+            return null;
+          }
+
+          return database.db.transaction(async (transaction) => {
+            const identities = new PostgresOAuthIdentityRepository(transaction);
+            const resolved = await identities.resolveOrProvisionCustomer({
+              email: identity.email,
+              provider: 'supabase',
+              providerSubject: identity.providerSubject,
+            });
+            const audit = new AuditService(new PostgresAuditSink(transaction));
+
+            if (resolved.linked) {
+              await audit.record({
+                action: 'auth.customer_identity_linked',
+                actor: { type: 'user', userId: resolved.userId },
+                after: { customerId: resolved.customerId, provider: 'supabase' },
+                correlationId: requestId,
+                entityId: identity.providerSubject,
+                entityType: 'auth_identity',
+                requestId,
+                source: 'api',
+              });
+            }
+
+            const transactionalSessions = new SessionService(
+              new PostgresSessionRepository(transaction),
+            );
+            const createdSession = await transactionalSessions.create(
+              resolved.userId,
+              env.SESSION_TTL_HOURS * 60 * 60 * 1000,
+            );
+            await audit.record({
+              action: 'auth.customer_login_succeeded',
+              actor: { type: 'user', userId: resolved.userId },
+              correlationId: requestId,
+              entityId: createdSession.sessionId,
+              entityType: 'session',
+              metadata: { authenticationProvider: 'supabase', customerId: resolved.customerId },
+              requestId,
+              source: 'api',
+            });
+
+            return createdSession;
+          });
+        },
+      }
+    : undefined;
   const app = createApp({
     aiConfiguration,
     aiPrompts,
@@ -326,6 +395,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     logger,
     messaging,
     ...(oauth ? { oauth } : {}),
+    ...(customerOAuth ? { customerOAuth } : {}),
     operations,
     payments,
     sessions,
