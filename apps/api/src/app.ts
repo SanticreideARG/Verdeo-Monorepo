@@ -83,6 +83,9 @@ import {
   OperatingSiteListResponseSchema,
   OperatingSiteSchema,
   OperatingSiteUpdateRequestSchema,
+  HelpArticleListResponseSchema,
+  HelpArticleSchema,
+  HelpArticleUpsertRequestSchema,
   KitchenSummaryResponseSchema,
   LabelListResponseSchema,
   LabelSettingsSchema,
@@ -187,6 +190,7 @@ import {
   type CustomerUpdateRequest,
   type GeographicZoneCreateRequest,
   type GeographicZoneUpdateRequest,
+  type HelpArticleUpsertRequest,
   type LabelSettingsUpdateRequest,
   type MessageTemplateUpsertRequest,
   type OperatingSiteCreateRequest,
@@ -562,6 +566,25 @@ interface SurveyContext {
   source: string;
 }
 
+interface HelpEngine {
+  createArticle(input: HelpArticleUpsertRequest, context: HelpContext): Promise<unknown>;
+  deleteArticle(id: string, context: HelpContext): Promise<unknown>;
+  listAll(): Promise<unknown>;
+  listVisible(permissions: readonly string[]): Promise<unknown>;
+  updateArticle(
+    id: string,
+    input: HelpArticleUpsertRequest,
+    context: HelpContext,
+  ): Promise<unknown>;
+}
+
+interface HelpContext {
+  actorUserId?: string | undefined;
+  correlationId: string;
+  requestId: string;
+  source: string;
+}
+
 interface AIPromptEngine {
   activateVersion(
     taskKey: string,
@@ -760,6 +783,7 @@ interface CreateAppOptions {
   accessTokens?: AccessTokenEngine;
   auditQuery?: AuditQueryEngine;
   surveys?: SurveyEngine;
+  help?: HelpEngine;
   avatarStorage?: AvatarStorageEngine;
   cookieSameSite: 'Lax' | 'None';
   chat?: ChatEngine;
@@ -915,6 +939,20 @@ export function createApp(options: CreateAppOptions) {
   };
 
   const surveyContext = (context: Context<{ Variables: AppVariables }>): SurveyContext => ({
+    actorUserId: context.get('session')?.userId,
+    correlationId: context.get('requestId'),
+    requestId: context.get('requestId'),
+    source: 'api',
+  });
+
+  const help = options.help;
+
+  const requireHelp = () => {
+    if (!help) throw new Error('Help engine is not configured');
+    return help;
+  };
+
+  const helpContext = (context: Context<{ Variables: AppVariables }>): HelpContext => ({
     actorUserId: context.get('session')?.userId,
     correlationId: context.get('requestId'),
     requestId: context.get('requestId'),
@@ -1444,6 +1482,8 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/label-settings/*', requireAuthentication);
   app.use('/api/v1/surveys', requireAuthentication);
   app.use('/api/v1/surveys/*', requireAuthentication);
+  app.use('/api/v1/help', requireAuthentication);
+  app.use('/api/v1/help/*', requireAuthentication);
   app.use('/api/v1/ai/tasks/*', requireAuthentication);
 
   app.get('/api/v1/me', async (context) => {
@@ -3463,6 +3503,58 @@ export function createApp(options: CreateAppOptions) {
     return context.json(SurveyResultsSchema.parse(contractValue(results)));
   });
 
+  // --- Ayuda modularizada: every signed-in user sees only articles with no permission gate or
+  // one they actually hold; the editor (help.manage) sees and edits everything. ---------------
+
+  app.get('/api/v1/help', async (context) => {
+    const items = await requireHelp().listVisible(context.get('session').permissions);
+    return context.json(HelpArticleListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.get('/api/v1/help/all', async (context) => {
+    if (!context.get('session').permissions.includes('help.manage')) return forbidden(context);
+    const items = await requireHelp().listAll();
+    return context.json(HelpArticleListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.post('/api/v1/help', async (context) => {
+    if (!context.get('session').permissions.includes('help.manage')) return forbidden(context);
+    const input = HelpArticleUpsertRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) return badRequest(context, 'Revisá el artículo.', input.error.issues);
+    const article = await requireHelp().createArticle(input.data, helpContext(context));
+    return context.json(HelpArticleSchema.parse(contractValue(article)), 201);
+  });
+
+  app.patch('/api/v1/help/:id', async (context) => {
+    if (!context.get('session').permissions.includes('help.manage')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    const input = HelpArticleUpsertRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá el artículo.',
+        input.success ? undefined : input.error.issues,
+      );
+    const article = await requireHelp().updateArticle(
+      params.data.id,
+      input.data,
+      helpContext(context),
+    );
+    return context.json(HelpArticleSchema.parse(contractValue(article)));
+  });
+
+  app.delete('/api/v1/help/:id', async (context) => {
+    if (!context.get('session').permissions.includes('help.manage')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El artículo indicado no es válido.');
+    await requireHelp().deleteArticle(params.data.id, helpContext(context));
+    return context.body(null, 204);
+  });
+
   app.get('/api/v1/ai/providers', async (context) => {
     if (!context.get('session').permissions.includes('ai.providers.manage'))
       return forbidden(context);
@@ -3606,7 +3698,8 @@ export function createApp(options: CreateAppOptions) {
       error.name === 'PaymentsNotFoundError' ||
       error.name === 'AIPromptNotFoundError' ||
       error.name === 'AITaskNotFoundError' ||
-      error.name === 'SurveyNotFoundError'
+      error.name === 'SurveyNotFoundError' ||
+      error.name === 'HelpArticleNotFoundError'
     ) {
       const code: ApiErrorCode = 'NOT_FOUND';
       return context.json(

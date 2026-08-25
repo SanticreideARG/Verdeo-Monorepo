@@ -15,6 +15,7 @@ import { AuditLogPage } from './AuditLogPage.js';
 import { GeographySettingsPage } from './GeographySettingsPage.js';
 import { MenuCatalogSettingsPage } from './MenuCatalogSettingsPage.js';
 import { SettingsHubPage } from './SettingsHubPage.js';
+import { HelpPage } from './HelpPage.js';
 import { KitchenPage } from './KitchenPage.js';
 import { LabelSettingsPage } from './LabelSettingsPage.js';
 import { LoginPage } from './LoginPage.js';
@@ -209,6 +210,7 @@ export function App() {
       <Route path="/app/ajustes/etiquetas" element={<LabelSettingsPage />} />
       <Route path="/app/auditoria" element={<AuditLogPage />} />
       <Route path="/app/ajustes/chat" element={<ChatLinksPage />} />
+      <Route path="/app/ayuda" element={<HelpPage />} />
       <Route
         path="*"
         element={

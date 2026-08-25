@@ -4,6 +4,7 @@ export * from './postgres-cms-service.js';
 export * from './postgres-chat-service.js';
 export * from './postgres-delivery-service.js';
 export * from './postgres-geography-service.js';
+export * from './postgres-help-service.js';
 export * from './postgres-messaging-service.js';
 export * from './postgres-payments-service.js';
 export * from './postgres-ai-configuration-service.js';

@@ -51,7 +51,10 @@ interface NavigationItem {
 const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
   {
     label: 'General',
-    items: [{ href: '/app', icon: 'dashboard', label: 'Dashboard' }],
+    items: [
+      { href: '/app', icon: 'dashboard', label: 'Dashboard' },
+      { href: '/app/ayuda', icon: 'settings', label: 'Ayuda' },
+    ],
   },
   {
     label: 'Pedidos',

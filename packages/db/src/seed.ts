@@ -7,6 +7,7 @@ import {
   customerOperatingSites,
   customers,
   geographicZones,
+  helpArticles,
   operatingSiteOrderCounters,
   operatingSites,
   permissions,
@@ -272,6 +273,93 @@ try {
       .limit(1);
     if (!existingSurplusConfig) {
       await transaction.insert(surplusConfigs).values({ coefficientPercent: '0' });
+    }
+
+    // Default "ayuda modularizada" content — one article per major section, gated by the same
+    // permission that already gates the screen it's about. `onConflictDoUpdate` on `key` keeps the
+    // text current on every reseed instead of accumulating stale duplicates.
+    const defaultHelpArticles = [
+      {
+        body: 'Verdeo se organiza por secciones en el menú lateral: cada una corresponde a una parte de la operación (pedidos, cocina, clientes, etc.). Solo ves las secciones para las que tenés permiso — si te falta acceso a algo, pedíselo a un administrador.',
+        category: 'General',
+        key: 'general-bienvenida',
+        ordinal: 0,
+        requiredPermission: null,
+        title: 'Cómo está organizado Verdeo',
+      },
+      {
+        body: '"Tomar y confirmar pedidos" ofrece dos formas de elegir cliente: "Buscar cliente" (por nombre o número, para clientes existentes) y "Nuevo cliente" (alta rápida con nombre y teléfono). Elegí el origen del pedido con cuidado — algunos orígenes (como "Venta de oportunidad") activan validaciones extra contra el excedente disponible.',
+        category: 'Pedidos',
+        key: 'pedidos-tomar-pedido',
+        ordinal: 0,
+        requiredPermission: 'orders.read',
+        title: 'Tomar un pedido nuevo',
+      },
+      {
+        body: 'En "Ver pedidos" podés filtrar por estado, buscar por número o cliente, y exportar a CSV. Cada pedido tiene su propio historial de estados y de ediciones (con motivo), visible desde su detalle.',
+        category: 'Pedidos',
+        key: 'pedidos-ver-pedidos',
+        ordinal: 1,
+        requiredPermission: 'orders.read',
+        title: 'Buscar y filtrar pedidos',
+      },
+      {
+        body: '"Cierre de pedidos" consolida la demanda confirmada del ciclo por variedad y tamaño, separando las unidades base de las Intuitivo (que llevan su propia composición). Desde ahí podés informar producción real, tomar snapshots parcial/final, y generar las etiquetas de cocina bajo demanda.',
+        category: 'Cocina',
+        key: 'cocina-cierre-pedidos',
+        ordinal: 0,
+        requiredPermission: 'production.read',
+        title: 'Cierre de pedidos y producción',
+      },
+      {
+        body: 'El botón "Generar etiquetas" abre una página imprimible con una etiqueta por unidad física del ciclo (o de un pedido puntual, desde su detalle). El formato de hoja (etiquetas por página) y el fondo se configuran una sola vez en Ajustes → Etiquetas.',
+        category: 'Cocina',
+        key: 'cocina-etiquetas',
+        ordinal: 1,
+        requiredPermission: 'production.read',
+        title: 'Generar etiquetas de cocina',
+      },
+      {
+        body: 'La ficha de cada cliente guarda direcciones, restricciones alimentarias, e historial de pedidos. Al dar de alta un cliente nuevo elegí siempre una ciudad — es lo que determina en qué operación queda el cliente.',
+        category: 'Clientes',
+        key: 'clientes-ficha',
+        ordinal: 0,
+        requiredPermission: 'customers.read',
+        title: 'Ficha de cliente',
+      },
+      {
+        body: 'Desde "Encuestas" armás un cuestionario con preguntas de texto libre o de opciones, y lo enviás a un cliente puntual: se genera un enlace y un QR de un solo uso. Los resultados agregados (sin identificar quién respondió qué) se ven en "Resultados" de cada encuesta.',
+        category: 'Clientes',
+        key: 'clientes-encuestas',
+        ordinal: 1,
+        requiredPermission: 'surveys.read',
+        title: 'Encuestas a clientes',
+      },
+      {
+        body: 'Auditoría muestra cada mutación relevante del sistema (quién, qué, cuándo) con filtros por entidad, acción y fecha. Es de solo lectura — registra lo que otros servicios ya escriben, no permite modificar nada.',
+        category: 'Administración',
+        key: 'admin-auditoria',
+        ordinal: 0,
+        requiredPermission: 'audit.read',
+        title: 'Auditoría del sistema',
+      },
+    ];
+    for (const article of defaultHelpArticles) {
+      await transaction
+        .insert(helpArticles)
+        .values(article)
+        .onConflictDoUpdate({
+          set: {
+            active: true,
+            body: article.body,
+            category: article.category,
+            ordinal: article.ordinal,
+            requiredPermission: article.requiredPermission,
+            title: article.title,
+            updatedAt: new Date(),
+          },
+          target: helpArticles.key,
+        });
     }
   });
 } finally {

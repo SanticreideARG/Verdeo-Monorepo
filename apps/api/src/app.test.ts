@@ -2924,4 +2924,113 @@ describe('API foundation', () => {
       expect(response.status).toBe(404);
     });
   });
+
+  describe('help articles', () => {
+    function buildHelpApp(help: Record<string, unknown>, permissions: string[]) {
+      return createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        help: help as never,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            Promise.resolve({
+              expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+              permissions,
+              sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+            }),
+        },
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+    }
+
+    const cookie = 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars';
+    const sampleArticle = {
+      active: true,
+      body: 'Contenido',
+      category: 'General',
+      createdAt: new Date('2026-08-20T12:00:00.000Z'),
+      id: '60000000-0000-4000-8000-000000000001',
+      key: 'general-1',
+      ordinal: 0,
+      requiredPermission: null,
+      title: 'Artículo',
+      updatedAt: new Date('2026-08-20T12:00:00.000Z'),
+    };
+
+    it('lists only the articles relevant to the caller — any authenticated session, no extra gate', async () => {
+      const listVisible = vi.fn(() => Promise.resolve([sampleArticle]));
+      const app = buildHelpApp({ listVisible }, []);
+
+      const response = await app.request('/api/v1/help', { headers: { cookie } });
+      expect(response.status).toBe(200);
+      expect(listVisible).toHaveBeenCalledWith([]);
+
+      const unauthenticated = await app.request('/api/v1/help');
+      expect(unauthenticated.status).toBe(401);
+    });
+
+    it('lists everything with help.manage and denies without it', async () => {
+      const listAll = vi.fn(() => Promise.resolve([sampleArticle]));
+      const app = buildHelpApp({ listAll }, ['help.manage']);
+      const response = await app.request('/api/v1/help/all', { headers: { cookie } });
+      expect(response.status).toBe(200);
+
+      const denied = buildHelpApp({ listAll: vi.fn() }, []);
+      const deniedResponse = await denied.request('/api/v1/help/all', { headers: { cookie } });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('creates, updates and deletes an article with help.manage', async () => {
+      const createArticle = vi.fn(() => Promise.resolve(sampleArticle));
+      const updateArticle = vi.fn(() => Promise.resolve({ ...sampleArticle, title: 'Editado' }));
+      const deleteArticle = vi.fn(() => Promise.resolve());
+      const app = buildHelpApp({ createArticle, deleteArticle, updateArticle }, ['help.manage']);
+
+      const created = await app.request('/api/v1/help', {
+        body: JSON.stringify({
+          body: 'Contenido',
+          category: 'General',
+          key: 'general-1',
+          title: 'Artículo',
+        }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(created.status).toBe(201);
+
+      const updated = await app.request(`/api/v1/help/${sampleArticle.id}`, {
+        body: JSON.stringify({
+          body: 'Contenido',
+          category: 'General',
+          key: 'general-1',
+          title: 'Editado',
+        }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'PATCH',
+      });
+      expect(updated.status).toBe(200);
+
+      const deleted = await app.request(`/api/v1/help/${sampleArticle.id}`, {
+        headers: { cookie },
+        method: 'DELETE',
+      });
+      expect(deleted.status).toBe(204);
+    });
+
+    it('denies writes without help.manage', async () => {
+      const app = buildHelpApp({ createArticle: vi.fn() }, ['help.read']);
+      const response = await app.request('/api/v1/help', {
+        body: JSON.stringify({ body: 'x', category: 'x', key: 'x', title: 'x' }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(403);
+    });
+  });
 });

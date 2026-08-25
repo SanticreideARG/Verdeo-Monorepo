@@ -183,6 +183,13 @@
       "when": 1787569893929,
       "tag": "0025_boring_eternity",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1787617246427,
+      "tag": "0026_aromatic_longshot",
+      "breakpoints": true
     }
   ]
 }

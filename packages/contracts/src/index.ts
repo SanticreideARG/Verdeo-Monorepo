@@ -9,6 +9,7 @@ export * from './schemas/delivery.js';
 export * from './schemas/errors.js';
 export * from './schemas/geography.js';
 export * from './schemas/health.js';
+export * from './schemas/help.js';
 export * from './schemas/messaging.js';
 export * from './schemas/operations.js';
 export * from './schemas/payments.js';
