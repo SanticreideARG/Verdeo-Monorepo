@@ -39,6 +39,7 @@ import { SurveyResultsPage } from './SurveyResultsPage.js';
 import { SurveysPage } from './SurveysPage.js';
 import { TrackOrderPage } from './TrackOrderPage.js';
 import { UsersAdminPage } from './UsersAdminPage.js';
+import { StatsPage } from './StatsPage.js';
 
 function BrandMark() {
   return (
@@ -208,6 +209,7 @@ export function App() {
       <Route path="/delivery" element={<DeliveryAppPage />} />
       <Route path="/app/perfil" element={<ProfilePage />} />
       <Route path="/app/usuarios" element={<UsersAdminPage />} />
+      <Route path="/app/estadisticas" element={<StatsPage />} />
       <Route path="/app/contenidos" element={<CmsPagesAdminPage />} />
       <Route path="/app/ajustes/zonas" element={<GeographySettingsPage />} />
       <Route path="/app/ajustes/menu" element={<MenuCatalogSettingsPage />} />

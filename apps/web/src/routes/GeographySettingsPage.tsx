@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { useNavigate } from 'react-router-dom';
 
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
+import { SettingsTabs } from '../components/SettingsTabs.js';
 import { apiRequest } from '../lib/api.js';
 
 export interface OperatingSite {
@@ -372,6 +373,7 @@ export function GeographySettingsPage() {
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
+      <SettingsTabs permissions={profile.permissions} />
       <section className="dashboard-panel">
         <header>
           <p className="dashboard-kicker">Ajustes</p>

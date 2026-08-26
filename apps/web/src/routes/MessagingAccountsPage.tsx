@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
+import { SettingsTabs } from '../components/SettingsTabs.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
@@ -102,6 +103,7 @@ export function MessagingAccountsPage() {
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
+      <SettingsTabs permissions={profile.permissions} />
       <section className="dashboard-panel">
         <header className="flex items-center justify-between">
           <div>

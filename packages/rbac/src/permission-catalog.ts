@@ -95,4 +95,5 @@ export const initialPermissionCatalog: readonly PermissionDefinition[] = [
   { key: 'surveys.read', group: 'surveys', description: 'Ver encuestas y resultados' },
   { key: 'surveys.manage', group: 'surveys', description: 'Crear encuestas y enviarlas' },
   { key: 'help.manage', group: 'help', description: 'Editar artículos de ayuda' },
+  { key: 'stats.read', group: 'stats', description: 'Ver estadísticas' },
 ];

@@ -316,6 +316,25 @@ export interface PaymentMethod {
   sortOrder: number;
 }
 
+// "Estadísticas": decision-making rollups over orders (never CANCELLED).
+export interface StatsOverview {
+  byCycle: { cycleAlias: string; orderCount: number; revenueMinor: number; salesCycleId: string }[];
+  bySize: { revenueMinor: number; sizeName: string; units: number }[];
+  byZone: {
+    operatingSiteId: string;
+    operatingSiteName: string;
+    orderCount: number;
+    revenueMinor: number;
+  }[];
+  global: {
+    averageOrderValueMinor: number;
+    currency: string;
+    orderCount: number;
+    revenueMinor: number;
+    statusBreakdown: { count: number; status: string }[];
+  };
+}
+
 export async function errorMessage(response: Response): Promise<string> {
   const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
   return body?.error?.message ?? 'No pudimos completar la operación.';

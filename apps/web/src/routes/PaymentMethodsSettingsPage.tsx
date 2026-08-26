@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
+import { SettingsTabs } from '../components/SettingsTabs.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage, type PaymentMethod } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
@@ -115,6 +116,7 @@ export function PaymentMethodsSettingsPage() {
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
+      <SettingsTabs permissions={profile.permissions} />
       <section className="dashboard-panel">
         <header>
           <p className="dashboard-kicker">Ajustes</p>

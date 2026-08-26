@@ -4226,4 +4226,103 @@ export class PostgresOperationsService {
       })
       .catch(translateDatabaseConflict);
   }
+
+  // "Estadísticas": decision-making rollups over orders. A cancelled order was never real demand,
+  // so it's excluded everywhere here — the same posture the rest of the app takes (e.g. it's
+  // filtered out of "Tomar y confirmar pedidos"'s in-motion list). Grouped by sales cycle rather
+  // than by the individual weeklyMenu row, since a cycle's regional distributions are separate
+  // weeklyMenu rows sharing one alias — "por semana" is the meaningful decision-making unit, not
+  // "por copia regional del menú".
+  public async getStatsOverview(filters: {
+    from?: string | undefined;
+    operatingSiteId?: string | undefined;
+    to?: string | undefined;
+  }) {
+    const scope = and(
+      ne(orders.status, 'CANCELLED'),
+      filters.from ? gte(orders.deliveryDate, filters.from) : undefined,
+      filters.to ? lte(orders.deliveryDate, filters.to) : undefined,
+      filters.operatingSiteId ? eq(orders.operatingSiteId, filters.operatingSiteId) : undefined,
+    );
+
+    const [globalTotals] = await this.database
+      .select({
+        orderCount: sql<number>`count(*)`,
+        revenueMinor: sql<number>`coalesce(sum(${orders.totalMinor}), 0)`,
+      })
+      .from(orders)
+      .where(scope);
+
+    const statusBreakdown = await this.database
+      .select({ count: sql<number>`count(*)`, status: orders.status })
+      .from(orders)
+      .where(scope)
+      .groupBy(orders.status);
+
+    const byZone = await this.database
+      .select({
+        operatingSiteId: orders.operatingSiteId,
+        operatingSiteName: operatingSites.displayName,
+        orderCount: sql<number>`count(*)`,
+        revenueMinor: sql<number>`coalesce(sum(${orders.totalMinor}), 0)`,
+      })
+      .from(orders)
+      .innerJoin(operatingSites, eq(operatingSites.id, orders.operatingSiteId))
+      .where(scope)
+      .groupBy(orders.operatingSiteId, operatingSites.displayName)
+      .orderBy(desc(sql`sum(${orders.totalMinor})`));
+
+    const byCycle = await this.database
+      .select({
+        cycleAlias: salesCycles.alias,
+        orderCount: sql<number>`count(*)`,
+        revenueMinor: sql<number>`coalesce(sum(${orders.totalMinor}), 0)`,
+        salesCycleId: orders.salesCycleId,
+      })
+      .from(orders)
+      .innerJoin(salesCycles, eq(salesCycles.id, orders.salesCycleId))
+      .where(scope)
+      .groupBy(orders.salesCycleId, salesCycles.alias)
+      .orderBy(desc(sql`sum(${orders.totalMinor})`));
+
+    const bySize = await this.database
+      .select({
+        revenueMinor: sql<number>`coalesce(sum(${orderItems.totalMinor}), 0)`,
+        sizeName: orderItems.variantSnapshot,
+        units: sql<number>`coalesce(sum(${orderItems.quantityUnits}), 0)`,
+      })
+      .from(orderItems)
+      .innerJoin(orders, eq(orders.id, orderItems.orderId))
+      .where(scope)
+      .groupBy(orderItems.variantSnapshot)
+      .orderBy(desc(sql`sum(${orderItems.totalMinor})`));
+
+    const orderCount = Number(globalTotals?.orderCount ?? 0);
+    const revenueMinor = Number(globalTotals?.revenueMinor ?? 0);
+
+    return {
+      byCycle: byCycle.map((row) => ({
+        ...row,
+        orderCount: Number(row.orderCount),
+        revenueMinor: Number(row.revenueMinor),
+      })),
+      bySize: bySize.map((row) => ({
+        ...row,
+        revenueMinor: Number(row.revenueMinor),
+        units: Number(row.units),
+      })),
+      byZone: byZone.map((row) => ({
+        ...row,
+        orderCount: Number(row.orderCount),
+        revenueMinor: Number(row.revenueMinor),
+      })),
+      global: {
+        averageOrderValueMinor: orderCount > 0 ? Math.round(revenueMinor / orderCount) : 0,
+        currency: 'ARS',
+        orderCount,
+        revenueMinor,
+        statusBreakdown: statusBreakdown.map((row) => ({ ...row, count: Number(row.count) })),
+      },
+    };
+  }
 }

@@ -896,6 +896,34 @@ a {
   letter-spacing: 0.17em;
   text-transform: uppercase;
 }
+
+/* Tab strip shared by the six consolidated "Ajustes" screens (see SettingsTabs.tsx) — sits above
+   the dashboard-panel on each one, a real route link per tab rather than a soft SPA switch. */
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+}
+.settings-tabs a {
+  border-radius: 999px;
+  padding: 0.45rem 0.95rem;
+  color: var(--db-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+.settings-tabs a:hover {
+  background: color-mix(in srgb, var(--db-accent) 10%, transparent);
+  color: var(--db-text);
+}
+.settings-tabs a.is-active {
+  background: var(--db-accent);
+  color: var(--db-accent-contrast, #fff);
+}
 .dashboard-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.7fr);

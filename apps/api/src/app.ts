@@ -166,6 +166,8 @@ import {
   PageRevisionSchema,
   PermissionCatalogResponseSchema,
   RoleListResponseSchema,
+  StatsOverviewSchema,
+  StatsQuerySchema,
   UserAdminDetailSchema,
   UserListQuerySchema,
   UserListResponseSchema,
@@ -427,6 +429,11 @@ interface OperationsEngine {
     requestId: string,
   ): Promise<unknown>;
   getOrder(orderId: string): Promise<unknown>;
+  getStatsOverview(filters: {
+    from?: string | undefined;
+    operatingSiteId?: string | undefined;
+    to?: string | undefined;
+  }): Promise<unknown>;
   cycleLabels(cycleId: string, operatingSiteId: string | null): Promise<unknown>;
   getLabelSettings(): Promise<unknown>;
   kitchenSummary(cycleId: string, operatingSiteId: string | null): Promise<unknown>;
@@ -1572,6 +1579,7 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/messaging/*', requireAuthentication);
   app.use('/api/v1/delivery/*', requireAuthentication);
   app.use('/api/v1/payments/*', requireAuthentication);
+  app.use('/api/v1/stats', requireAuthentication);
   app.use('/api/v1/access-tokens/*', requireAuthentication);
   app.use('/api/v1/scope', requireAuthentication);
   app.use('/api/v1/operating-sites', requireAuthentication);
@@ -3020,6 +3028,14 @@ export function createApp(options: CreateAppOptions) {
     const session = context.get('session');
     const items = await requireDelivery().listStopsForUser(session.userId);
     return context.json(DeliveryMyStopListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.get('/api/v1/stats', async (context) => {
+    if (!context.get('session').permissions.includes('stats.read')) return forbidden(context);
+    const query = StatsQuerySchema.safeParse(context.req.query());
+    if (!query.success) return badRequest(context, 'Revisá el filtro.', query.error.issues);
+    const overview = await requireOperations().getStatsOverview(query.data);
+    return context.json(StatsOverviewSchema.parse(contractValue(overview)));
   });
 
   app.get('/api/v1/payments', async (context) => {

@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 
 import { apiRequest, storeOperatingSiteId, storedOperatingSiteId } from '../lib/api.js';
 import { PresenceControl } from './PresenceControl.js';
+import { SETTINGS_TAB_PERMISSIONS } from './SettingsTabs.js';
 import { RequestProgressBar } from './RequestProgressBar.js';
 import { WeatherWidget } from './WeatherWidget.js';
 
@@ -46,6 +47,10 @@ interface NavigationItem {
   icon: IconName;
   label: string;
   permission?: string;
+  // Any-of: for an item that fans out to several permission-gated sub-pages (e.g. the "Ajustes"
+  // tab strip) rather than a single one. Mutually exclusive with `permission` in practice, but
+  // both are checked if both are set.
+  permissions?: readonly string[];
 }
 
 const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
@@ -53,6 +58,12 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
     label: 'General',
     items: [
       { href: '/app', icon: 'dashboard', label: 'Dashboard' },
+      {
+        href: '/app/estadisticas',
+        icon: 'dashboard',
+        label: 'Estadísticas',
+        permission: 'stats.read',
+      },
       { href: '/app/ayuda', icon: 'settings', label: 'Ayuda' },
     ],
   },
@@ -129,41 +140,13 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
     label: 'Administración',
     items: [
       { href: '/app/usuarios', icon: 'users', label: 'Usuarios', permission: 'users.read' },
-      {
-        href: '/app/ajustes/chat',
-        icon: 'chat',
-        label: 'Enlaces de chat',
-        permission: 'chat.links.manage',
-      },
-      {
-        href: '/app/ajustes/mensajes',
-        icon: 'chat',
-        label: 'Cuentas de WhatsApp',
-        permission: 'messaging.accounts.manage',
-      },
+      // The six settings screens that used to each have their own entry here now live as tabs of
+      // one another — see SettingsTabs.tsx. One entry, gated on being able to reach any of them.
       {
         href: '/app/ajustes/zonas',
         icon: 'settings',
-        label: 'Zonas geográficas',
-        permission: 'sites.read',
-      },
-      {
-        href: '/app/ajustes/menu',
-        icon: 'settings',
-        label: 'Menú personalizado',
-        permission: 'production.read',
-      },
-      {
-        href: '/app/ajustes/etiquetas',
-        icon: 'settings',
-        label: 'Etiquetas',
-        permission: 'production.read',
-      },
-      {
-        href: '/app/ajustes/pagos',
-        icon: 'settings',
-        label: 'Métodos de pago',
-        permission: 'payments.read',
+        label: 'Ajustes',
+        permissions: SETTINGS_TAB_PERMISSIONS,
       },
       { href: '/app/auditoria', icon: 'settings', label: 'Auditoría', permission: 'audit.read' },
     ],
@@ -390,9 +373,12 @@ export function DashboardShell({
       navigationClusters
         .map((cluster) => ({
           ...cluster,
-          items: cluster.items.filter(
-            (item) => !item.permission || profile.permissions.includes(item.permission),
-          ),
+          items: cluster.items.filter((item) => {
+            if (item.permission && !profile.permissions.includes(item.permission)) return false;
+            if (item.permissions && !item.permissions.some((p) => profile.permissions.includes(p)))
+              return false;
+            return true;
+          }),
         }))
         .filter((cluster) => cluster.items.length > 0),
     [profile.permissions],

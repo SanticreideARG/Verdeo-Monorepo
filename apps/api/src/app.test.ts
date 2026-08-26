@@ -62,6 +62,7 @@ const customerOperationsStubs = {
   getCustomer: vi.fn(),
   getLabelSettings: vi.fn(),
   getOrder: vi.fn(),
+  getStatsOverview: vi.fn(),
   listMenuCatalogSettings: vi.fn(),
   getSurplusConfig: vi.fn(),
   listMessageTemplates: vi.fn(),
@@ -2463,6 +2464,96 @@ describe('API foundation', () => {
         method: 'POST',
       });
       expect(deniedResponse.status).toBe(403);
+    });
+  });
+
+  describe('stats', () => {
+    function buildStatsApp(operations: Record<string, unknown>, permissions: string[]) {
+      return createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        operations: operations as never,
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            Promise.resolve({
+              expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+              permissions,
+              sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+            }),
+        },
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+    }
+
+    const cookie = 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars';
+
+    it('reads the overview with stats.read and denies without it', async () => {
+      const getStatsOverview = vi.fn(() =>
+        Promise.resolve({
+          byCycle: [],
+          bySize: [],
+          byZone: [],
+          global: {
+            averageOrderValueMinor: 0,
+            currency: 'ARS',
+            orderCount: 0,
+            revenueMinor: 0,
+            statusBreakdown: [],
+          },
+        }),
+      );
+      const app = buildStatsApp({ getStatsOverview }, ['stats.read']);
+
+      const response = await app.request('/api/v1/stats', { headers: { cookie } });
+      expect(response.status).toBe(200);
+      expect(getStatsOverview).toHaveBeenCalledWith({});
+
+      const denied = buildStatsApp({ getStatsOverview: vi.fn() }, []);
+      const deniedResponse = await denied.request('/api/v1/stats', { headers: { cookie } });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('rejects a malformed date filter with 400', async () => {
+      const app = buildStatsApp({ getStatsOverview: vi.fn() }, ['stats.read']);
+
+      const response = await app.request('/api/v1/stats?from=not-a-date', { headers: { cookie } });
+      expect(response.status).toBe(400);
+    });
+
+    it('passes through valid from/to/operatingSiteId filters', async () => {
+      const getStatsOverview = vi.fn(() =>
+        Promise.resolve({
+          byCycle: [],
+          bySize: [],
+          byZone: [],
+          global: {
+            averageOrderValueMinor: 0,
+            currency: 'ARS',
+            orderCount: 0,
+            revenueMinor: 0,
+            statusBreakdown: [],
+          },
+        }),
+      );
+      const app = buildStatsApp({ getStatsOverview }, ['stats.read']);
+      const siteId = '90000000-0000-4000-8000-000000000001';
+
+      const response = await app.request(
+        `/api/v1/stats?from=2026-01-01&to=2026-01-31&operatingSiteId=${siteId}`,
+        { headers: { cookie } },
+      );
+      expect(response.status).toBe(200);
+      expect(getStatsOverview).toHaveBeenCalledWith({
+        from: '2026-01-01',
+        operatingSiteId: siteId,
+        to: '2026-01-31',
+      });
     });
   });
 
