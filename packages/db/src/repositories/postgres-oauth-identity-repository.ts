@@ -161,6 +161,10 @@ export class PostgresOAuthIdentityRepository {
     if (linked) return linked;
 
     const normalizedIdentity = normalizeCustomerIdentity('email', email);
+    // Only a verified identity proves the CRM record's email is actually this person's — a
+    // manually-entered one (source: 'manual', verified: false by default; a phone-intake typo or
+    // placeholder address) must never auto-link a stranger who happens to prove ownership of that
+    // same address later, or they'd inherit someone else's order history and addresses.
     const [existingIdentity] = await this.database
       .select({ customerId: customerIdentities.customerId })
       .from(customerIdentities)
@@ -169,6 +173,7 @@ export class PostgresOAuthIdentityRepository {
           eq(customerIdentities.type, 'email'),
           eq(customerIdentities.valueNormalized, normalizedIdentity),
           eq(customerIdentities.active, true),
+          eq(customerIdentities.verified, true),
         ),
       )
       .limit(1);
@@ -194,15 +199,27 @@ export class PostgresOAuthIdentityRepository {
       .returning({ id: customers.id });
     if (!customer) throw new Error('Customer insert did not return a row');
 
-    await this.database.insert(customerIdentities).values({
-      customerId: customer.id,
-      primary: true,
-      source: 'customer_oauth',
-      type: 'email',
-      valueDisplay: email,
-      valueNormalized: normalizedEmail,
-      verified: true,
-    });
+    // onConflictDoNothing because the fix above (only auto-link a *verified* identity) means this
+    // insert can now legitimately collide: an unverified, active identity for this same email may
+    // already sit on a different, unrelated customer (the exact staff-typo/placeholder case that
+    // fix routes around). `customer_identities_active_value_unique` only allows one active row per
+    // (type, valueNormalized) — losing this race just means the new customer goes without an email
+    // identity row; customerLogins still ties the login to it either way.
+    await this.database
+      .insert(customerIdentities)
+      .values({
+        customerId: customer.id,
+        primary: true,
+        source: 'customer_oauth',
+        type: 'email',
+        valueDisplay: email,
+        valueNormalized: normalizedEmail,
+        verified: true,
+      })
+      .onConflictDoNothing({
+        target: [customerIdentities.type, customerIdentities.valueNormalized],
+        where: eq(customerIdentities.active, true),
+      });
 
     return customer.id;
   }

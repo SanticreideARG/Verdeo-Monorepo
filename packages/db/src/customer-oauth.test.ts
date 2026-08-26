@@ -103,13 +103,13 @@ describe('PostgresOAuthIdentityRepository.resolveOrProvisionCustomer', () => {
     expect(customers).toHaveLength(1);
   });
 
-  it('links to an existing CRM customer matched by email instead of creating a duplicate', async () => {
+  it('links to an existing CRM customer matched by a *verified* email instead of creating a duplicate', async () => {
     const { client, repository } = await seeded();
     await client.exec(
       `insert into customers (id, display_name)
        values ('b0000000-0000-4000-8000-000000000001', 'Cliente Existente');
-       insert into customer_identities (customer_id, type, value_normalized, value_display, active, "primary")
-       values ('b0000000-0000-4000-8000-000000000001', 'email', 'ya@example.com', 'ya@example.com', true, true);`,
+       insert into customer_identities (customer_id, type, value_normalized, value_display, active, "primary", verified)
+       values ('b0000000-0000-4000-8000-000000000001', 'email', 'ya@example.com', 'ya@example.com', true, true, true);`,
     );
 
     const resolved = await repository.resolveOrProvisionCustomer({
@@ -119,6 +119,30 @@ describe('PostgresOAuthIdentityRepository.resolveOrProvisionCustomer', () => {
     });
 
     expect(resolved.customerId).toBe('b0000000-0000-4000-8000-000000000001');
+  });
+
+  // Security regression: an *unverified* identity (the default for staff-typed phone-intake
+  // emails — a typo or a shared/placeholder address) must never let a stranger who later proves
+  // ownership of that same address via OAuth inherit an unrelated customer's order history,
+  // addresses, and account access.
+  it('does NOT link to an existing CRM customer whose matching email identity is unverified', async () => {
+    const { client, db, repository } = await seeded();
+    await client.exec(
+      `insert into customers (id, display_name)
+       values ('b0000000-0000-4000-8000-000000000002', 'Cliente Con Email Sin Verificar');
+       insert into customer_identities (customer_id, type, value_normalized, value_display, active, "primary", verified)
+       values ('b0000000-0000-4000-8000-000000000002', 'email', 'noverificado@example.com', 'noverificado@example.com', true, true, false);`,
+    );
+
+    const resolved = await repository.resolveOrProvisionCustomer({
+      email: 'noverificado@example.com',
+      provider: 'supabase',
+      providerSubject: 'sub-5',
+    });
+
+    expect(resolved.customerId).not.toBe('b0000000-0000-4000-8000-000000000002');
+    const customers = await db.select({ id: schema.customers.id }).from(schema.customers);
+    expect(customers).toHaveLength(2);
   });
 
   it('reuses an existing (e.g. staff) user matched by email instead of creating a second account', async () => {

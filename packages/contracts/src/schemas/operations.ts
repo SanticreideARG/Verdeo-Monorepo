@@ -318,6 +318,12 @@ export const CustomerDetailSchema = CustomerSummarySchema.extend({
   updatedAt: IsoDateTimeSchema,
 });
 
+// "Mi cuenta" self-service: everything in CustomerDetailSchema is the customer's own data (their
+// addresses, identities, dietary restrictions) except `internalNotes`, which is free-text staff
+// annotation about the customer (gated behind customers.view_sensitive for staff) and was never
+// meant for the subject to read.
+export const CustomerSelfServiceSchema = CustomerDetailSchema.omit({ internalNotes: true });
+
 // One price per size for the whole week. The variety never changes the price (ADR-030).
 export const MenuSizePriceInputSchema = z.object({
   currency: z.string().trim().length(3).default('ARS'),

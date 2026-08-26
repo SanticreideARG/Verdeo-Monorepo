@@ -50,6 +50,7 @@ import {
   CustomerIdentityUpdateRequestSchema,
   CustomerImportResponseSchema,
   CustomerListResponseSchema,
+  CustomerSelfServiceSchema,
   CustomerListQuerySchema,
   CustomerPreferenceCreateRequestSchema,
   CustomerPreferenceSchema,
@@ -1678,7 +1679,7 @@ export function createApp(options: CreateAppOptions) {
     const customerId = requireCustomerSession(context);
     if (!customerId) return forbidden(context);
     const customer = await requireOperations().getCustomer(customerId, true);
-    return context.json(CustomerDetailSchema.parse(contractValue(customer)));
+    return context.json(CustomerSelfServiceSchema.parse(contractValue(customer)));
   });
 
   app.get('/api/v1/me/orders', async (context) => {

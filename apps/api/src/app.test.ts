@@ -3163,6 +3163,8 @@ describe('API foundation', () => {
           displayName: 'Cliente de prueba',
           firstName: null,
           id: CUSTOMER,
+          // Staff-only annotation — must never reach the customer's own "mi cuenta" response.
+          internalNotes: 'Cliente conflictivo, revisar antes de despachar.',
           lastName: null,
           orders: [],
           status: 'active',
@@ -3202,6 +3204,10 @@ describe('API foundation', () => {
       const customer = await app.request('/api/v1/me/customer', { headers: { cookie } });
       expect(customer.status).toBe(200);
       expect(getCustomer).toHaveBeenCalledWith(CUSTOMER, true);
+      // Security regression: getCustomer(id, true) includes internalNotes for staff, but this is
+      // the customer's own self-service view — that field must be stripped before it reaches them.
+      const customerBody = (await customer.json()) as Record<string, unknown>;
+      expect(customerBody.internalNotes).toBeUndefined();
 
       const orders = await app.request(
         '/api/v1/me/orders?customerId=90000000-0000-4000-8000-000000000001',
