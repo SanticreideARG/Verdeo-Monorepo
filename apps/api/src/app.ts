@@ -130,6 +130,8 @@ import {
   PublicOrderTrackRequestSchema,
   PublicOrderTrackResponseSchema,
   PaymentListResponseSchema,
+  PaymentMethodListResponseSchema,
+  PaymentMethodsUpdateRequestSchema,
   PaymentsDashboardSchema,
   ScopeResponseSchema,
   SessionIdParamSchema,
@@ -774,7 +776,12 @@ interface PaymentsContext {
 interface PaymentsEngine {
   dashboard(operatingSiteId?: string): Promise<unknown>;
   listByStatus(status?: string): Promise<unknown>;
+  listPaymentMethods(): Promise<unknown>;
   listUnsettledCollections(collectedByUserId?: string): Promise<unknown>;
+  updatePaymentMethods(
+    methods: readonly { active: boolean; code: string; displayName: string; isCash: boolean }[],
+    context: PaymentsContext,
+  ): Promise<unknown>;
   recordCollection(
     orderId: string,
     amountMinor: number,
@@ -3052,6 +3059,27 @@ export function createApp(options: CreateAppOptions) {
       paymentsContext(context),
     );
     return context.json(CashCollectionSchema.parse(contractValue(collection)), 201);
+  });
+
+  app.get('/api/v1/payments/methods', async (context) => {
+    if (!context.get('session').permissions.includes('payments.read')) return forbidden(context);
+    const items = await requirePayments().listPaymentMethods();
+    return context.json(PaymentMethodListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.patch('/api/v1/payments/methods', async (context) => {
+    if (!context.get('session').permissions.includes('payments.override'))
+      return forbidden(context);
+    const input = PaymentMethodsUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'Revisá los métodos de pago.', input.error.issues);
+    const items = await requirePayments().updatePaymentMethods(
+      input.data.methods,
+      paymentsContext(context),
+    );
+    return context.json(PaymentMethodListResponseSchema.parse({ items: contractValue(items) }));
   });
 
   app.post('/api/v1/payments/collections/:id/settle', async (context) => {

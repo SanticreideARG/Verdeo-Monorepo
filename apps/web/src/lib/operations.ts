@@ -306,6 +306,16 @@ export interface LabelSettings {
   updatedByUserId: string | null;
 }
 
+// The admin-editable catalog behind "Método" pickers (order intake, cobro manual).
+export interface PaymentMethod {
+  active: boolean;
+  code: string;
+  displayName: string;
+  id: string;
+  isCash: boolean;
+  sortOrder: number;
+}
+
 export async function errorMessage(response: Response): Promise<string> {
   const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
   return body?.error?.message ?? 'No pudimos completar la operación.';

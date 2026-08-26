@@ -364,11 +364,14 @@ export function UsersAdminPage() {
                           <p className="text-xs font-semibold uppercase text-ink-muted">{group}</p>
                           {entries.map((entry) => (
                             <div
-                              className="mt-1 flex items-center justify-between gap-3 text-sm"
+                              className="mt-1 flex flex-wrap items-center justify-between gap-3 text-sm"
                               key={entry.id}
                             >
-                              <span>{entry.description}</span>
+                              <span className="min-w-0 flex-1 break-words">
+                                {entry.description}
+                              </span>
                               <select
+                                className="shrink-0"
                                 disabled={!canOverride}
                                 onChange={(event) =>
                                   setOverrideEffects((current) => {

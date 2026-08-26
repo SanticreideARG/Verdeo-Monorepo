@@ -2566,6 +2566,66 @@ describe('API foundation', () => {
       });
       expect(response.status).toBe(409);
     });
+
+    it('lists payment methods with payments.read and denies without it', async () => {
+      const listPaymentMethods = vi.fn(() =>
+        Promise.resolve([
+          {
+            active: true,
+            code: 'efectivo',
+            displayName: 'Efectivo',
+            id: '90000000-0000-4000-8000-000000000006',
+            isCash: true,
+            sortOrder: 0,
+          },
+        ]),
+      );
+      const app = buildPaymentsApp({ listPaymentMethods }, ['payments.read']);
+
+      const response = await app.request('/api/v1/payments/methods', { headers: { cookie } });
+      expect(response.status).toBe(200);
+
+      const denied = buildPaymentsApp({ listPaymentMethods: vi.fn() }, []);
+      const deniedResponse = await denied.request('/api/v1/payments/methods', {
+        headers: { cookie },
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('updates payment methods with payments.override and denies without it', async () => {
+      const updatePaymentMethods = vi.fn(() =>
+        Promise.resolve([
+          {
+            active: true,
+            code: 'efectivo',
+            displayName: 'Efectivo',
+            id: '90000000-0000-4000-8000-000000000006',
+            isCash: true,
+            sortOrder: 0,
+          },
+        ]),
+      );
+      const app = buildPaymentsApp({ updatePaymentMethods }, ['payments.override']);
+
+      const response = await app.request('/api/v1/payments/methods', {
+        body: JSON.stringify({
+          methods: [{ active: true, code: 'efectivo', displayName: 'Efectivo', isCash: true }],
+        }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'PATCH',
+      });
+      expect(response.status).toBe(200);
+
+      const denied = buildPaymentsApp({ updatePaymentMethods: vi.fn() }, []);
+      const deniedResponse = await denied.request('/api/v1/payments/methods', {
+        body: JSON.stringify({
+          methods: [{ active: true, code: 'efectivo', displayName: 'Efectivo', isCash: true }],
+        }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'PATCH',
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
   });
 
   describe('ai prompts and tasks', () => {

@@ -345,6 +345,14 @@ a {
   }
 }
 
+/* Wider variant for forms with room to breathe (e.g. order intake) — three columns instead of
+   two once there's space, so short fields like "Unidades" or "Entrega" stop eating a whole row. */
+@media (min-width: 900px) {
+  .form-grid-wide {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -2047,6 +2055,18 @@ a {
   border-radius: 0.65rem;
   padding: 1rem;
   background: color-mix(in srgb, var(--db-accent) 5%, var(--db-surface));
+}
+/* Pinned to the bottom of the viewport on desktop so "Importar archivo" stays reachable while
+   scrolling a long client list, instead of scrolling away below the fold. Opaque background
+   (unlike the tinted-transparent one above) since it now floats over whatever scrolls beneath it. */
+@media (min-width: 900px) {
+  .crm-import-section {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    background: var(--db-surface-solid);
+    box-shadow: 0 -10px 24px rgb(0 0 0 / 14%);
+  }
 }
 .crm-import-section h2 {
   margin: 0.24rem 0 0;

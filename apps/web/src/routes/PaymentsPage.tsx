@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
-import { errorMessage, formatMoney } from '../lib/operations.js';
+import { errorMessage, formatMoney, type PaymentMethod } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 interface Dashboard {
@@ -47,6 +47,7 @@ export function PaymentsPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [pending, setPending] = useState<CashCollectionRow[]>([]);
+  const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [collectOrderId, setCollectOrderId] = useState('');
@@ -56,13 +57,20 @@ export function PaymentsPage() {
   const canSettle = profile?.permissions.includes('payments.settle') ?? false;
 
   const load = useCallback(async () => {
-    const [dashboardResponse, collectionsResponse] = await Promise.all([
+    const [dashboardResponse, collectionsResponse, methodsResponse] = await Promise.all([
       apiRequest('/api/v1/payments/dashboard'),
       apiRequest('/api/v1/payments/collections'),
+      apiRequest('/api/v1/payments/methods'),
     ]);
     if (dashboardResponse.ok) setDashboard((await dashboardResponse.json()) as Dashboard);
     if (collectionsResponse.ok) {
       setPending(((await collectionsResponse.json()) as { items: CashCollectionRow[] }).items);
+    }
+    if (methodsResponse.ok) {
+      const active = ((await methodsResponse.json()) as { items: PaymentMethod[] }).items.filter(
+        (method) => method.active,
+      );
+      setMethods(active);
     }
   }, []);
 
@@ -192,7 +200,16 @@ export function PaymentsPage() {
                 </label>
                 <label className="field">
                   Método
-                  <input name="method" placeholder="efectivo, transferencia…" required />
+                  <select defaultValue="" name="method" required>
+                    <option disabled value="">
+                      Seleccionar
+                    </option>
+                    {methods.map((method) => (
+                      <option key={method.code} value={method.code}>
+                        {method.displayName}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <button className="button button-primary self-end" type="submit">
                   Registrar cobro

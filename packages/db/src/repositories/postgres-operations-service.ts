@@ -575,6 +575,7 @@ export class PostgresOperationsService {
           city: customerAddresses.city,
           createdAt: customerAddresses.createdAt,
           geocodingStatus: customerAddresses.geocodingStatus,
+          geographicZoneId: customerAddresses.geographicZoneId,
           id: customerAddresses.id,
           label: customerAddresses.label,
           latitude: customerAddresses.latitude,

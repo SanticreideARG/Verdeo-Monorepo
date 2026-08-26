@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { check, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { users } from './auth.js';
 import { orders } from './operations.js';
@@ -54,6 +63,26 @@ export const cashCollections = pgTable(
     collectedAt: timestamp('collected_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [check('cash_collections_amount_check', sql`${table.amountMinor} > 0`)],
+);
+
+/**
+ * The admin-editable catalog behind "Método" pickers (order intake, cobro manual). `isCash`
+ * decides settlement routing — recordCollection consults this by code before falling back to a
+ * hardcoded heuristic, so an operator adding a new method here also decides whether it goes
+ * TO_SETTLE (cash-in-hand, needs a later rendición) or straight to PAID.
+ */
+export const paymentMethods = pgTable(
+  'payment_methods',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    code: text('code').notNull(),
+    displayName: text('display_name').notNull(),
+    isCash: boolean('is_cash').default(false).notNull(),
+    active: boolean('active').default(true).notNull(),
+    sortOrder: integer('sort_order').default(0).notNull(),
+    ...timestamps,
+  },
+  (table) => [uniqueIndex('payment_methods_code_unique').on(table.code)],
 );
 
 export const cashSettlements = pgTable(

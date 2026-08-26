@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, notInArray, sql } from 'drizzle-orm';
 
 import { AuditService } from '@verdeo/audit';
 
@@ -8,6 +8,7 @@ import {
   cashSettlements,
   customers,
   orders,
+  paymentMethods,
   payments,
   users,
 } from '../schema/index.js';
@@ -96,6 +97,113 @@ export class PostgresPaymentsService {
     return row;
   }
 
+  // The catalog is the source of truth once a code is registered in it; an unrecognized or
+  // not-yet-migrated code (e.g. free text typed before this catalog existed) falls back to the
+  // original hardcoded heuristic so existing behavior never regresses.
+  private async resolveIsCash(
+    database: Database | DatabaseTransaction,
+    method: string,
+  ): Promise<boolean> {
+    const normalized = method.trim().toLowerCase();
+    const [catalogEntry] = await database
+      .select({ isCash: paymentMethods.isCash })
+      .from(paymentMethods)
+      .where(sql`lower(${paymentMethods.code}) = ${normalized}`)
+      .limit(1);
+    if (catalogEntry) return catalogEntry.isCash;
+    return CASH_METHODS.has(normalized);
+  }
+
+  public async listPaymentMethods() {
+    return this.database
+      .select({
+        active: paymentMethods.active,
+        code: paymentMethods.code,
+        displayName: paymentMethods.displayName,
+        id: paymentMethods.id,
+        isCash: paymentMethods.isCash,
+        sortOrder: paymentMethods.sortOrder,
+      })
+      .from(paymentMethods)
+      .orderBy(asc(paymentMethods.sortOrder), asc(paymentMethods.displayName));
+  }
+
+  public async updatePaymentMethods(
+    methods: readonly {
+      active: boolean;
+      code: string;
+      displayName: string;
+      isCash: boolean;
+    }[],
+    context: PaymentsContext,
+  ) {
+    const actorUserId = context.actorUserId;
+    const codes = methods.map((method) => method.code.trim().toLowerCase());
+
+    return this.database.transaction(async (transaction) => {
+      const before = await transaction
+        .select({
+          active: paymentMethods.active,
+          code: paymentMethods.code,
+          displayName: paymentMethods.displayName,
+          isCash: paymentMethods.isCash,
+        })
+        .from(paymentMethods);
+
+      if (codes.length > 0) {
+        await transaction.delete(paymentMethods).where(notInArray(paymentMethods.code, codes));
+      }
+
+      for (const [index, method] of methods.entries()) {
+        const code = method.code.trim().toLowerCase();
+        await transaction
+          .insert(paymentMethods)
+          .values({
+            active: method.active,
+            code,
+            displayName: method.displayName.trim(),
+            isCash: method.isCash,
+            sortOrder: index,
+          })
+          .onConflictDoUpdate({
+            set: {
+              active: method.active,
+              displayName: method.displayName.trim(),
+              isCash: method.isCash,
+              sortOrder: index,
+              updatedAt: new Date(),
+            },
+            target: paymentMethods.code,
+          });
+      }
+
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: 'payment_methods.updated',
+        actor: actorUserId ? { type: 'user', userId: actorUserId } : { type: 'system' },
+        after: { methods: [...methods] },
+        before: { methods: [...before] },
+        correlationId: context.correlationId,
+        entityId: 'payment-methods',
+        entityType: 'payment_methods',
+        requestId: context.requestId,
+        source: context.source,
+      });
+
+      return transaction
+        .select({
+          active: paymentMethods.active,
+          code: paymentMethods.code,
+          displayName: paymentMethods.displayName,
+          id: paymentMethods.id,
+          isCash: paymentMethods.isCash,
+          sortOrder: paymentMethods.sortOrder,
+        })
+        .from(paymentMethods)
+        .orderBy(asc(paymentMethods.sortOrder), asc(paymentMethods.displayName));
+    });
+  }
+
   public async getOrCreateForOrder(orderId: string) {
     return this.ensurePayment(this.database, orderId);
   }
@@ -137,7 +245,7 @@ export class PostgresPaymentsService {
         .returning();
       if (!collection) throw new Error('Collection creation did not return a row');
 
-      const nextStatus = CASH_METHODS.has(method.trim().toLowerCase()) ? 'TO_SETTLE' : 'PAID';
+      const nextStatus = (await this.resolveIsCash(transaction, method)) ? 'TO_SETTLE' : 'PAID';
       await transaction
         .update(payments)
         .set({ status: nextStatus, updatedAt: new Date() })

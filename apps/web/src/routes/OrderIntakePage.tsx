@@ -249,7 +249,7 @@ export function OrderIntakePage() {
 
         {formOpen && permissions.includes('orders.create') ? (
           <form
-            className="operation-card mt-6 max-w-xl"
+            className="operation-card mt-6 max-w-3xl"
             onSubmit={(event) => void createOrder(event)}
           >
             <fieldset className="mb-5 rounded-2xl border border-forest/10 p-4">
@@ -289,19 +289,26 @@ export function OrderIntakePage() {
                     </p>
                   ) : (
                     <>
-                      <form
-                        className="flex gap-2"
-                        onSubmit={(event) => void searchCustomers(event)}
-                      >
+                      <div className="relative">
                         <input
+                          autoComplete="off"
                           onChange={(event) => setCustomerQuery(event.target.value)}
-                          placeholder="Nombre o número de teléfono"
+                          placeholder="Empezá a escribir un nombre o teléfono…"
                           value={customerQuery}
                         />
-                        <button className="button button-secondary" type="submit">
-                          {customerSearching ? 'Buscando…' : 'Buscar'}
-                        </button>
-                      </form>
+                        {customerSearching ? (
+                          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-muted">
+                            Buscando…
+                          </span>
+                        ) : null}
+                      </div>
+                      {customerQuery.trim().length >= 2 &&
+                      !customerSearching &&
+                      customerResults.length === 0 ? (
+                        <p className="mt-2 text-sm text-ink-muted">
+                          Sin resultados para “{customerQuery.trim()}”.
+                        </p>
+                      ) : null}
                       {customerResults.length > 0 ? (
                         <ul className="mt-2 grid gap-1">
                           {customerResults.map((customer) => (
@@ -338,7 +345,7 @@ export function OrderIntakePage() {
               )}
             </fieldset>
 
-            <div className="form-grid">
+            <div className="form-grid form-grid-wide">
               <label className="field">
                 Período
                 <select

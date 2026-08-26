@@ -159,6 +159,12 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         label: 'Etiquetas',
         permission: 'production.read',
       },
+      {
+        href: '/app/ajustes/pagos',
+        icon: 'settings',
+        label: 'Métodos de pago',
+        permission: 'payments.read',
+      },
       { href: '/app/auditoria', icon: 'settings', label: 'Auditoría', permission: 'audit.read' },
     ],
   },
