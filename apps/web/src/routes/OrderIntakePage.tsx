@@ -11,6 +11,7 @@ import {
   orderStatusLabel,
   type CustomerSummary,
   type OrderSummary,
+  type PaymentMethod,
   type WeeklyMenu,
 } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
@@ -34,6 +35,7 @@ export function OrderIntakePage() {
   const [permissions, setPermissions] = useState<string[]>([]);
   const [menus, setMenus] = useState<WeeklyMenu[]>([]);
   const [orders, setOrders] = useState<OrderSummary[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [message, setMessage] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [selectedMenuId, setSelectedMenuId] = useState('');
@@ -55,13 +57,16 @@ export function OrderIntakePage() {
     if (!loadedOnce.current) setLoading(true);
     setPermissions(profile.permissions);
 
-    const [menuResponse, orderResponse] = await Promise.all([
+    const [menuResponse, orderResponse, methodsResponse] = await Promise.all([
       profile.permissions.some((permission) =>
         ['orders.read', 'production.read'].includes(permission),
       )
         ? apiRequest('/api/v1/menus')
         : null,
       profile.permissions.includes('orders.read') ? apiRequest('/api/v1/orders') : null,
+      // Optional: staff without payments.read (e.g. cocina) still create orders fine — "Pago
+      // esperado" just falls back to free text for them instead of the method picker.
+      profile.permissions.includes('payments.read') ? apiRequest('/api/v1/payments/methods') : null,
     ]);
     if (menuResponse?.ok) {
       const loadedMenus = menusForAmbientScope(
@@ -83,6 +88,12 @@ export function OrderIntakePage() {
       setOrders(
         items.filter((order) => order.status !== 'DELIVERED' && order.status !== 'CANCELLED'),
       );
+    }
+    if (methodsResponse?.ok) {
+      const active = ((await methodsResponse.json()) as { items: PaymentMethod[] }).items.filter(
+        (method) => method.active,
+      );
+      setPaymentMethods(active);
     }
     loadedOnce.current = true;
     setLoading(false);
@@ -408,7 +419,20 @@ export function OrderIntakePage() {
               </label>
               <label className="field">
                 Pago esperado
-                <input name="paymentExpectation" placeholder="Transferencia" required />
+                {paymentMethods.length > 0 ? (
+                  <select defaultValue="" name="paymentExpectation" required>
+                    <option disabled value="">
+                      Seleccionar
+                    </option>
+                    {paymentMethods.map((method) => (
+                      <option key={method.code} value={method.code}>
+                        {method.displayName}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input name="paymentExpectation" placeholder="Transferencia" required />
+                )}
               </label>
               <label className="field field-wide">
                 Indicaciones para cocina
