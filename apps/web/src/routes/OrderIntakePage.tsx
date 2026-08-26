@@ -110,24 +110,34 @@ export function OrderIntakePage() {
     return response;
   }
 
-  async function searchCustomers(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!customerQuery.trim()) {
+  // Live search: fires ~300ms after typing stops, no "Buscar" click needed. Two characters is
+  // the floor — searching on one letter would hammer the endpoint for a result set too broad to
+  // be useful anyway.
+  useEffect(() => {
+    if (customerMode !== 'search' || selectedCustomer) return;
+    const trimmed = customerQuery.trim();
+    if (trimmed.length < 2) {
       setCustomerResults([]);
+      setCustomerSearching(false);
       return;
     }
+    let active = true;
     setCustomerSearching(true);
-    try {
-      const response = await apiRequest(
-        `/api/v1/customers?search=${encodeURIComponent(customerQuery.trim())}&limit=10`,
-      );
-      if (response.ok) {
-        setCustomerResults(((await response.json()) as { items: CustomerSummary[] }).items);
-      }
-    } finally {
-      setCustomerSearching(false);
-    }
-  }
+    const timer = window.setTimeout(() => {
+      void apiRequest(`/api/v1/customers?search=${encodeURIComponent(trimmed)}&limit=10`)
+        .then(async (response) => {
+          if (!active || !response.ok) return;
+          setCustomerResults(((await response.json()) as { items: CustomerSummary[] }).items);
+        })
+        .finally(() => {
+          if (active) setCustomerSearching(false);
+        });
+    }, 300);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [customerQuery, customerMode, selectedCustomer]);
 
   async function createOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

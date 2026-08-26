@@ -14,6 +14,7 @@ import {
   productFamilies,
   weeklyMenuItems,
   weeklyMenuOfferings,
+  weeklyMenuPrices,
   weeklyMenus,
 } from './schema/index.js';
 import * as schema from './schema/index.js';
@@ -312,5 +313,99 @@ describe('distributeMenu and the per-site Intuitivo toggle', () => {
       .from(weeklyMenuOfferings)
       .where(eq(weeklyMenuOfferings.weeklyMenuId, regional[0]!.id));
     expect(regionalOfferings[0]?.description).toBe('Bajo en carbohidratos');
+  });
+});
+
+describe('updateMenuPrices', () => {
+  it('updates an existing size price and marks the row customized', async () => {
+    const { db, service } = await seededService();
+    const created = await service.createMenu(
+      { ...menuInputBase, offerings: [fixedOffering('Real')] },
+      CONTEXT,
+    );
+
+    const updated = await service.updateMenuPrices(
+      created.id,
+      [{ sizeName: '250', unitPriceMinor: 30_000 }],
+      CONTEXT,
+    );
+
+    expect(updated.offerings.find((o) => o.sizeName === '250')?.unitPriceMinor).toBe(30_000);
+    const [price] = await db
+      .select()
+      .from(weeklyMenuPrices)
+      .where(eq(weeklyMenuPrices.weeklyMenuId, created.id));
+    expect(price?.customized).toBe(true);
+    expect(price?.unitPriceMinor).toBe(30_000);
+  });
+
+  it('rejects a size that does not exist in the catalog', async () => {
+    const { service } = await seededService();
+    const created = await service.createMenu(
+      { ...menuInputBase, offerings: [fixedOffering('Real')] },
+      CONTEXT,
+    );
+    await expect(
+      service.updateMenuPrices(
+        created.id,
+        [{ sizeName: 'no existe', unitPriceMinor: 1_000 }],
+        CONTEXT,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('404s updating prices on an unknown menu', async () => {
+    const { service } = await seededService();
+    await expect(
+      service.updateMenuPrices(
+        '00000000-0000-4000-8000-000000000000',
+        [{ sizeName: '250', unitPriceMinor: 1_000 }],
+        CONTEXT,
+      ),
+    ).rejects.toThrow();
+  });
+});
+
+describe('deleteMenu', () => {
+  it('deletes a menu with no orders against it', async () => {
+    const { db, service } = await seededService();
+    const created = await service.createMenu(
+      { ...menuInputBase, offerings: [fixedOffering('Real')] },
+      CONTEXT,
+    );
+
+    await service.deleteMenu(created.id, CONTEXT);
+
+    const remaining = await db.select().from(weeklyMenus).where(eq(weeklyMenus.id, created.id));
+    expect(remaining).toHaveLength(0);
+  });
+
+  it('refuses to delete a menu that already has an order against it', async () => {
+    const { client, service } = await seededService();
+    const created = await service.createMenu(
+      { ...menuInputBase, offerings: [fixedOffering('Real')] },
+      CONTEXT,
+    );
+    await client.exec(`
+      insert into operating_sites (id, slug, display_name, order_prefix)
+      values ('d0000000-0000-4000-8000-000000000003', 'test-site-d', 'Sitio D', 'TSD');
+      insert into customers (id, display_name) values ('d0000000-0000-4000-8000-000000000001', 'Cliente');
+      insert into orders (id, public_number, customer_id, sales_cycle_id, weekly_menu_id, source,
+                          status, delivery_date, delivery_address_snapshot, payment_expectation,
+                          total_minor, operating_site_id, created_at)
+      values ('d0000000-0000-4000-8000-000000000002', 'N00001', 'd0000000-0000-4000-8000-000000000001',
+              (select sales_cycle_id from weekly_menus where id = '${created.id}'),
+              '${created.id}', 'manual', 'DRAFT', '2026-08-26', 'Calle 1', 'efectivo', 25000,
+              'd0000000-0000-4000-8000-000000000003', '2026-08-20T10:00:00Z');
+    `);
+
+    await expect(service.deleteMenu(created.id, CONTEXT)).rejects.toThrow();
+  });
+
+  it('404s deleting an unknown menu', async () => {
+    const { service } = await seededService();
+    await expect(
+      service.deleteMenu('00000000-0000-4000-8000-000000000000', CONTEXT),
+    ).rejects.toThrow();
   });
 });

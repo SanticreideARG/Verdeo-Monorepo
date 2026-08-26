@@ -326,6 +326,20 @@ export const MenuSizePriceInputSchema = z.object({
   unitPriceMinor: z.number().int().nonnegative(),
 });
 
+// "Precios por ubicación": editing just the price for a size on one already-distributed menu — a
+// narrower, lighter-weight sibling of MenuCreateRequestSchema (no offerings/dishes/dates involved).
+export const MenuPricesUpdateRequestSchema = z.object({
+  prices: z
+    .array(
+      z.object({
+        sizeName: z.string().trim().min(1).max(40),
+        unitPriceMinor: z.number().int().nonnegative(),
+      }),
+    )
+    .min(1)
+    .max(20),
+});
+
 export const MenuOfferingInputSchema = z.object({
   // A composable variety has no fixed five dishes; the customer picks from the published universe
   // (every dish published this week for the same size), so it submits none of its own.
@@ -840,6 +854,7 @@ export type CustomerSummary = z.infer<typeof CustomerSummarySchema>;
 export type MessageTemplateUpsertRequest = z.infer<typeof MessageTemplateUpsertRequestSchema>;
 export type MenuCreateRequest = z.infer<typeof MenuCreateRequestSchema>;
 export type MenuDistributeRequest = z.infer<typeof MenuDistributeRequestSchema>;
+export type MenuPricesUpdateRequest = z.infer<typeof MenuPricesUpdateRequestSchema>;
 export type WeeklyMenu = z.infer<typeof WeeklyMenuSchema>;
 export type OrderCreateRequest = z.infer<typeof OrderCreateRequestSchema>;
 export type PublicOrderCreateRequest = z.infer<typeof PublicOrderCreateRequestSchema>;

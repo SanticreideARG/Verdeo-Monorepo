@@ -2057,6 +2057,126 @@ export class PostgresOperationsService {
       .catch(translateDatabaseConflict);
   }
 
+  // "Precios por ubicación": editing just the price for a size on one already-distributed menu,
+  // without resubmitting its whole offering list the way updateMenu requires. Marks each touched
+  // row `customized` — the same flag copyMenuContent already respects (a later non-REPLACE
+  // distribution from master never overwrites a price an operator edited here).
+  public async updateMenuPrices(
+    menuId: string,
+    prices: readonly { sizeName: string; unitPriceMinor: number }[],
+    context: OperationsContext,
+  ) {
+    return this.database
+      .transaction(async (transaction) => {
+        const [menu] = await transaction
+          .select({ id: weeklyMenus.id })
+          .from(weeklyMenus)
+          .where(eq(weeklyMenus.id, menuId))
+          .limit(1);
+        if (!menu) throw new OperationsNotFoundError('Weekly menu not found');
+
+        const before: Record<string, number> = {};
+        const after: Record<string, number> = {};
+        for (const price of prices) {
+          const [size] = await transaction
+            .select({ id: productSizes.id })
+            .from(productSizes)
+            .where(eq(productSizes.code, catalogCode(price.sizeName)))
+            .limit(1);
+          if (!size) throw new OperationsConflictError(`El tamaño "${price.sizeName}" no existe`);
+
+          const [existing] = await transaction
+            .select({ id: weeklyMenuPrices.id, unitPriceMinor: weeklyMenuPrices.unitPriceMinor })
+            .from(weeklyMenuPrices)
+            .where(
+              and(
+                eq(weeklyMenuPrices.weeklyMenuId, menuId),
+                eq(weeklyMenuPrices.productSizeId, size.id),
+              ),
+            )
+            .limit(1);
+
+          if (existing) {
+            before[price.sizeName] = existing.unitPriceMinor;
+            await transaction
+              .update(weeklyMenuPrices)
+              .set({ customized: true, unitPriceMinor: price.unitPriceMinor })
+              .where(eq(weeklyMenuPrices.id, existing.id));
+          } else {
+            await transaction.insert(weeklyMenuPrices).values({
+              customized: true,
+              productSizeId: size.id,
+              unitPriceMinor: price.unitPriceMinor,
+              weeklyMenuId: menuId,
+            });
+          }
+          after[price.sizeName] = price.unitPriceMinor;
+        }
+
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        await audit.record({
+          action: 'weekly_menu.prices_updated',
+          actor: auditActor(context),
+          after,
+          before,
+          correlationId: context.correlationId,
+          entityId: menuId,
+          entityType: 'weekly_menu',
+          requestId: context.requestId,
+          source: context.source,
+        });
+
+        return menuId;
+      })
+      .then(async (updatedMenuId) => {
+        const menu = (await this.listMenus()).find(({ id }) => id === updatedMenuId);
+        if (!menu) throw new Error('Updated menu could not be reloaded');
+        return menu;
+      })
+      .catch(translateDatabaseConflict);
+  }
+
+  // "Debemos permitir borrar los menús sin pedidos cargados." Orders.weeklyMenuId is already
+  // `onDelete: 'restrict'` at the database level, so a menu with orders against it can't actually
+  // be deleted regardless — this check exists to give that a clear message instead of a raw
+  // foreign-key error. Deleting a master cascades its own offerings/prices, never a regional
+  // distributed copy (those are independent rows, deleted the same way one at a time).
+  public async deleteMenu(menuId: string, context: OperationsContext): Promise<void> {
+    await this.database
+      .transaction(async (transaction) => {
+        const [menu] = await transaction
+          .select({ id: weeklyMenus.id })
+          .from(weeklyMenus)
+          .where(eq(weeklyMenus.id, menuId))
+          .limit(1);
+        if (!menu) throw new OperationsNotFoundError('Weekly menu not found');
+
+        const [orderCountRow] = await transaction
+          .select({ count: sql<number>`count(*)` })
+          .from(orders)
+          .where(eq(orders.weeklyMenuId, menuId));
+        if (Number(orderCountRow?.count ?? 0) > 0) {
+          throw new OperationsConflictError(
+            'Este menú ya tiene pedidos cargados — no se puede eliminar.',
+          );
+        }
+
+        await transaction.delete(weeklyMenus).where(eq(weeklyMenus.id, menuId));
+
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        await audit.record({
+          action: 'weekly_menu.deleted',
+          actor: auditActor(context),
+          correlationId: context.correlationId,
+          entityId: menuId,
+          entityType: 'weekly_menu',
+          requestId: context.requestId,
+          source: context.source,
+        });
+      })
+      .catch(translateDatabaseConflict);
+  }
+
   public async publishMenu(menuId: string, context: OperationsContext) {
     await this.database.transaction(async (transaction) => {
       const [current] = await transaction

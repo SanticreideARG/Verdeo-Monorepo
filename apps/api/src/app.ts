@@ -98,6 +98,7 @@ import {
   MenuDistributeRequestSchema,
   MenuDistributionResponseSchema,
   MenuListResponseSchema,
+  MenuPricesUpdateRequestSchema,
   MessageTemplateListResponseSchema,
   MessageTemplateSchema,
   MessageTemplateUpsertRequestSchema,
@@ -197,6 +198,7 @@ import {
   type OperatingSiteUpdateRequest,
   type MenuCreateRequest,
   type MenuDistributeRequest,
+  type MenuPricesUpdateRequest,
   type OrderCreateRequest,
   type OrderListQuery,
   type OrderTransitionRequest,
@@ -389,6 +391,12 @@ interface OperationsEngine {
     input: MenuCreateRequest,
     context: OperationsContext,
   ): Promise<unknown>;
+  updateMenuPrices(
+    menuId: string,
+    prices: MenuPricesUpdateRequest['prices'],
+    context: OperationsContext,
+  ): Promise<unknown>;
+  deleteMenu(menuId: string, context: OperationsContext): Promise<void>;
   distributeMenu(
     menuId: string,
     input: MenuDistributeRequest,
@@ -3120,6 +3128,41 @@ export function createApp(options: CreateAppOptions) {
       operationsContext(context),
     );
     return context.json(MenuListResponseSchema.parse({ items: [contractValue(menu)] }).items[0]);
+  });
+
+  // "Precios por ubicación" editing: lighter than PATCH /api/v1/menus/:id — just the price for a
+  // size on one already-distributed menu, without resubmitting its offerings/dishes.
+  app.patch('/api/v1/menus/:id/prices', async (context) => {
+    if (!context.get('session').permissions.includes('production.generate'))
+      return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    const input = MenuPricesUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá los precios.',
+        input.success ? undefined : input.error.issues,
+      );
+    const menu = await requireOperations().updateMenuPrices(
+      params.data.id,
+      input.data.prices,
+      operationsContext(context),
+    );
+    return context.json(MenuListResponseSchema.parse({ items: [contractValue(menu)] }).items[0]);
+  });
+
+  // "Debemos permitir borrar los menús sin pedidos cargados" — deleteMenu itself checks for
+  // existing orders and 409s with a clear message rather than surfacing the underlying
+  // foreign-key restriction.
+  app.delete('/api/v1/menus/:id', async (context) => {
+    if (!context.get('session').permissions.includes('production.generate'))
+      return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El menú indicado no es válido.');
+    await requireOperations().deleteMenu(params.data.id, operationsContext(context));
+    return context.body(null, 204);
   });
 
   app.post('/api/v1/menus/:id/distribute', async (context) => {

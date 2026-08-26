@@ -84,6 +84,8 @@ const customerOperationsStubs = {
   updateCustomerPreference: vi.fn(),
   updateCustomerRestriction: vi.fn(),
   updateMenu: vi.fn(),
+  updateMenuPrices: vi.fn(),
+  deleteMenu: vi.fn(),
   updateOrder: vi.fn(),
   upsertMessageTemplate: vi.fn(),
   writeOffSurplus: vi.fn(),

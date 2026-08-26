@@ -4,19 +4,24 @@ import { Link } from 'react-router-dom';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
-import { formatMoney, type WeeklyMenu } from '../lib/operations.js';
+import { errorMessage, formatMoney, type WeeklyMenu } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
-/** "Precios por ubicación": read-only overview of the price each operation is currently charging
- * per tamaño, for the week that operation has distributed. Prices are already stored per site
- * (each city's distributed menu carries its own `weekly_menu_prices`, customizable via
- * `distributeMenu`'s REPLACE mode) — this screen surfaces that, it doesn't add a new pricing
- * model. Editing controls are a deliberate placeholder for now; ver qué necesita ese flujo antes
- * de construirlo (por tamaño global vs. por variedad vs. por zona dentro de una ciudad). */
+/** "Precios por ubicación": cada ciudad ya tiene su propio precio por tamaño desde la distribución
+ * del menú (`weekly_menu_prices`, per site) — esta pantalla junta esa información y permite
+ * editarla directamente. Un precio editado acá queda marcado `customized`, así que una futura
+ * distribución sin "Reemplazar" nunca lo pisa (mismo criterio que ya protege los platos
+ * personalizados de un menú regional). */
 export function PriceByLocationPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const [menus, setMenus] = useState<WeeklyMenu[]>([]);
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
+  const [editingMenuId, setEditingMenuId] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  const canManage = profile?.permissions.includes('production.generate') ?? false;
 
   useEffect(() => {
     if (!profile?.permissions.includes('production.read')) {
@@ -31,6 +36,47 @@ export function PriceByLocationPage() {
       })
       .finally(() => setLoading(false));
   }, [profile]);
+
+  function startEdit(
+    menuId: string,
+    sizes: [string, { currency: string; unitPriceMinor: number }][],
+  ) {
+    setEditingMenuId(menuId);
+    setMessage('');
+    const next: Record<string, string> = {};
+    for (const [sizeName, price] of sizes) {
+      next[`${menuId}:${sizeName}`] = String(price.unitPriceMinor / 100);
+    }
+    setDrafts((current) => ({ ...current, ...next }));
+  }
+
+  async function saveMenu(menuId: string, sizeNames: string[]) {
+    const prices = sizeNames.map((sizeName) => ({
+      sizeName,
+      unitPriceMinor: Math.round(Number(drafts[`${menuId}:${sizeName}`] ?? '0') * 100),
+    }));
+    if (
+      prices.some((price) => !Number.isFinite(price.unitPriceMinor) || price.unitPriceMinor < 0)
+    ) {
+      setMessage('Revisá los precios cargados.');
+      return;
+    }
+    setSaving(true);
+    setMessage('');
+    const response = await apiRequest(`/api/v1/menus/${menuId}/prices`, {
+      body: JSON.stringify({ prices }),
+      method: 'PATCH',
+    });
+    setSaving(false);
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    const updated = (await response.json()) as WeeklyMenu;
+    setMenus((current) => current.map((menu) => (menu.id === updated.id ? updated : menu)));
+    setEditingMenuId(null);
+    setMessage('Precios actualizados.');
+  }
 
   if (failed) return <DashboardFailed label="los precios por ubicación" />;
   if (!profile) return <DashboardLoading />;
@@ -76,10 +122,15 @@ export function PriceByLocationPage() {
         </header>
 
         <p className="mt-3 max-w-xl text-sm text-ink-muted">
-          Vista inicial, solo lectura. Cada ciudad ya puede tener su propio precio por tamaño desde
-          la distribución del menú — acá se junta esa información en un solo lugar. La edición
-          directa desde esta pantalla queda para una siguiente vuelta.
+          Cada ciudad tiene su propio precio por tamaño desde la distribución del menú.
+          {canManage ? ' Editalo directamente desde acá.' : ''}
         </p>
+
+        {message ? (
+          <p className="mt-4 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
+            {message}
+          </p>
+        ) : null}
 
         {loading ? (
           <p className="mt-6 text-ink-muted">Cargando…</p>
@@ -89,25 +140,91 @@ export function PriceByLocationPage() {
           </p>
         ) : (
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            {sizesBySite.map(({ menu, sizes }) => (
-              <article
-                className="rounded-2xl border border-forest/10 bg-[var(--db-surface)] p-6"
-                key={menu.id}
-              >
-                <p className="font-semibold text-forest">{menu.operatingSiteName}</p>
-                <p className="text-xs text-ink-muted">{menu.cycle.alias}</p>
-                <ul className="mt-3 grid gap-1 text-sm">
-                  {sizes.map(([sizeName, price]) => (
-                    <li className="flex justify-between" key={sizeName}>
-                      <span>{sizeName}</span>
-                      <span className="font-semibold">
-                        {formatMoney(price.unitPriceMinor, price.currency)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </article>
-            ))}
+            {sizesBySite.map(({ menu, sizes }) => {
+              const isEditing = editingMenuId === menu.id;
+              return (
+                <article
+                  className="rounded-2xl border border-forest/10 bg-[var(--db-surface)] p-6"
+                  key={menu.id}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-forest">{menu.operatingSiteName}</p>
+                      <p className="text-xs text-ink-muted">{menu.cycle.alias}</p>
+                    </div>
+                    {canManage && !isEditing ? (
+                      <button
+                        className="button button-secondary"
+                        onClick={() => startEdit(menu.id, sizes)}
+                        type="button"
+                      >
+                        Editar
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {isEditing ? (
+                    <div className="mt-3 grid gap-2">
+                      {sizes.map(([sizeName]) => (
+                        <label
+                          className="flex items-center justify-between gap-3 text-sm"
+                          key={sizeName}
+                        >
+                          <span>{sizeName}</span>
+                          <input
+                            className="w-32 text-right"
+                            min="0"
+                            onChange={(event) =>
+                              setDrafts((current) => ({
+                                ...current,
+                                [`${menu.id}:${sizeName}`]: event.target.value,
+                              }))
+                            }
+                            step="0.01"
+                            type="number"
+                            value={drafts[`${menu.id}:${sizeName}`] ?? ''}
+                          />
+                        </label>
+                      ))}
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          className="button button-primary"
+                          disabled={saving}
+                          onClick={() =>
+                            void saveMenu(
+                              menu.id,
+                              sizes.map(([sizeName]) => sizeName),
+                            )
+                          }
+                          type="button"
+                        >
+                          {saving ? 'Guardando…' : 'Guardar'}
+                        </button>
+                        <button
+                          className="button button-secondary"
+                          disabled={saving}
+                          onClick={() => setEditingMenuId(null)}
+                          type="button"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <ul className="mt-3 grid gap-1 text-sm">
+                      {sizes.map(([sizeName, price]) => (
+                        <li className="flex justify-between" key={sizeName}>
+                          <span>{sizeName}</span>
+                          <span className="font-semibold">
+                            {formatMoney(price.unitPriceMinor, price.currency)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </article>
+              );
+            })}
           </div>
         )}
       </section>

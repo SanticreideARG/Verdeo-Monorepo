@@ -62,6 +62,17 @@ export function MenusPage() {
     await loadData();
   }
 
+  async function deleteMenu(menuId: string) {
+    if (!window.confirm('¿Eliminar este menú? Solo funciona si no tiene pedidos cargados.')) return;
+    setMessage('');
+    const response = await apiRequest(`/api/v1/menus/${menuId}`, { method: 'DELETE' });
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    await loadData();
+  }
+
   async function distributeMenu(menuId: string) {
     if (
       distributionMode === 'REPLACE' &&
@@ -143,12 +154,18 @@ export function MenusPage() {
                   <span className="status-chip">{menu.status}</span>
                 </div>
                 {permissions.includes('production.generate') ? (
-                  <Link
-                    className="button button-secondary mt-5"
-                    to={`/app/menus/${menu.id}/editar`}
-                  >
-                    Editar
-                  </Link>
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    <Link className="button button-secondary" to={`/app/menus/${menu.id}/editar`}>
+                      Editar
+                    </Link>
+                    <button
+                      className="button button-secondary"
+                      onClick={() => void deleteMenu(menu.id)}
+                      type="button"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
                 ) : null}
                 {menu.status === 'DRAFT' && permissions.includes('production.generate') ? (
                   <button
