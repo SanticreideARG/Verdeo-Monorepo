@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
@@ -90,6 +90,7 @@ function decomposeMenu(menu: WeeklyMenu): {
  * instead. Same form either way; only the submit target and the initial values differ. */
 export function MenuBuilderPage() {
   const { failed, logout, profile } = useDashboardProfile();
+  const navigate = useNavigate();
   const { id: editingMenuId } = useParams<{ id?: string }>();
   const [offerings, setOfferings] = useState<OfferingDraft[]>([emptyOffering()]);
   const [sizePrices, setSizePrices] = useState<SizePriceDraft[]>(defaultSizePrices);
@@ -189,11 +190,13 @@ export function MenuBuilderPage() {
       if (editingMenu) {
         setMessage('Cambios guardados.');
       } else {
-        setOfferings([emptyOffering()]);
-        setSizePrices(defaultSizePrices());
-        setIncludeIntuitivo(true);
-        event.currentTarget.reset();
-        setMessage('Menú guardado como borrador. Publicalo desde "Ver menús".');
+        // Redirect to "Ver menús" instead of just clearing the form in place and showing a message
+        // above the fold — on a long form, that message goes unseen while every field blanks out,
+        // which reads as "perdí lo que cargué" even though the draft did save. Landing on the list
+        // with the new DRAFT menu visible there is confirmation nobody can miss.
+        await navigate('/app/menus', {
+          state: { message: `Menú "${payload.alias}" guardado como borrador.` },
+        });
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos guardar el menú.');

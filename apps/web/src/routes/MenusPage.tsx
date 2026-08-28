@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
@@ -13,13 +13,18 @@ type DistributionMode = 'CREATE_MISSING' | 'UPDATE_UNCUSTOMIZED' | 'REPLACE';
  * master menu happens in "Configurar la semana" instead. */
 export function MenusPage() {
   const { failed, logout, profile } = useDashboardProfile();
+  const location = useLocation();
   const permissions = profile?.permissions ?? [];
   const [menus, setMenus] = useState<WeeklyMenu[]>([]);
   const [sites, setSites] = useState<{ displayName: string; id: string }[]>([]);
   const [distributionSites, setDistributionSites] = useState<string[]>([]);
   const [distributionMode, setDistributionMode] = useState<DistributionMode>('CREATE_MISSING');
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState('');
+  // A flash message handed off by MenuBuilderPage after creating a draft (state.message), since
+  // that confirmation needs to survive the redirect to actually be seen.
+  const [message, setMessage] = useState(
+    (location.state as { message?: string } | null)?.message ?? '',
+  );
 
   const loadData = useCallback(async () => {
     if (!profile) return;
