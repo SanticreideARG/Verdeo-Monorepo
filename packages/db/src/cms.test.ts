@@ -153,6 +153,53 @@ describe('cms: drafts and publishing', () => {
     const publicPage = await cms.getPublicPage('home');
     expect(publicPage?.sections).toEqual([heroSection]);
   });
+
+  // Regression for the "clonar verdeo.com.ar" home-page seed (seed-home-page.ts): HERO_ROTATOR
+  // and CAROUSEL are new section types, and CONTACT/DELIVERY_ZONES gained new optional fields —
+  // this proves the jsonb round-trip (write → publish → read back) preserves every field intact,
+  // not just that the contract schema accepts the shape in isolation.
+  it('round-trips HERO_ROTATOR, CAROUSEL, and the anchorId/regions/subheading additions', async () => {
+    const cms = await service();
+    await cms.createPage({ slug: 'home', title: 'Inicio' }, context);
+    const clonedSections = [
+      {
+        anchorId: 'top',
+        ctaHref: '/pedido',
+        ctaLabel: 'Hacé tu pedido online',
+        id: 'sec-hero-rotator',
+        kicker: 'Bienvenido a nuestro mundo',
+        type: 'HERO_ROTATOR',
+        words: ['cuida tu salud', 'desde la alimentación', 'comidas saludables'],
+      },
+      {
+        anchorId: 'section-nosotros',
+        heading: 'Nosotros',
+        id: 'sec-carousel',
+        slides: [{ caption: 'Materia prima fresca y seleccionada', imageUrl: '' }],
+        type: 'CAROUSEL',
+      },
+      {
+        anchorId: 'section-precios',
+        heading: 'Precios y pedido online',
+        id: 'sec-zones',
+        subheading: 'Elegí tu ciudad para ver los precios.',
+        type: 'DELIVERY_ZONES',
+      },
+      {
+        anchorId: 'section-contact',
+        email: 'info@verdeo.com.ar',
+        id: 'sec-contact',
+        regions: [{ label: 'Ciudad de Neuquén y Plottier', whatsapp: '5492995493102' }],
+        type: 'CONTACT',
+      },
+    ];
+
+    const draft = await cms.saveDraft('home', clonedSections, context);
+    await cms.publish('home', draft.id, context);
+
+    const publicPage = await cms.getPublicPage('home');
+    expect(publicPage?.sections).toEqual(clonedSections);
+  });
 });
 
 describe('cms: media', () => {

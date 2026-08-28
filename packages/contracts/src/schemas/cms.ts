@@ -2,11 +2,17 @@ import { z } from 'zod';
 
 import { IsoDateTimeSchema, UuidSchema } from './common.js';
 
-// Every section carries a stable client-generated id (for React keys and reordering) and a type
-// discriminant. WEEKLY_MENU and DELIVERY_ZONES are placement markers only — no content fields —
-// because rendering them from stored copy would be a second source of truth for the actual menu
-// and geography systems; the landing page resolves them live against the real endpoints instead.
-const SectionBaseSchema = z.object({ id: z.string().min(1) });
+// Every section carries a stable client-generated id (for React keys and reordering), a type
+// discriminant, and an optional anchorId — an editor-chosen DOM id (e.g. "section-menu") a public
+// nav link can point at with a plain #fragment, generic across every section type rather than
+// wired to any specific one. WEEKLY_MENU and DELIVERY_ZONES are placement markers only — no
+// content fields — because rendering them from stored copy would be a second source of truth for
+// the actual menu and geography systems; the landing page resolves them live against the real
+// endpoints instead.
+const SectionBaseSchema = z.object({
+  anchorId: z.string().trim().max(80).optional(),
+  id: z.string().min(1),
+});
 
 const HeroSectionSchema = SectionBaseSchema.extend({
   ctaHref: z.string().trim().max(300).optional(),
@@ -15,6 +21,36 @@ const HeroSectionSchema = SectionBaseSchema.extend({
   imageUrl: z.string().trim().max(2_000).optional(),
   subheadline: z.string().trim().max(500).optional(),
   type: z.literal('HERO'),
+});
+
+// Rotating-word hero (e.g. "cuida tu salud" / "desde la alimentación" / "comidas saludables"
+// cycling on a fade) — cloned from verdeo.com.ar's word-rotator hero, rebuilt without the external
+// plugin it used.
+const HeroRotatorSectionSchema = SectionBaseSchema.extend({
+  ctaHref: z.string().trim().max(300).optional(),
+  ctaLabel: z.string().trim().max(80).optional(),
+  fallback: z.string().trim().max(200).optional(),
+  kicker: z.string().trim().max(200).optional(),
+  secondaryHref: z.string().trim().max(300).optional(),
+  secondaryLabel: z.string().trim().max(80).optional(),
+  type: z.literal('HERO_ROTATOR'),
+  words: z.array(z.string().trim().min(1).max(120)).min(1).max(12),
+});
+
+// Image+caption slider, one slide visible at a time — cloned from the "Nosotros" carousel on
+// verdeo.com.ar.
+const CarouselSectionSchema = SectionBaseSchema.extend({
+  heading: z.string().trim().max(200).optional(),
+  slides: z
+    .array(
+      z.object({
+        caption: z.string().trim().max(500).optional(),
+        imageUrl: z.string().trim().max(2_000).optional(),
+      }),
+    )
+    .min(1)
+    .max(20),
+  type: z.literal('CAROUSEL'),
 });
 
 const TextSectionSchema = SectionBaseSchema.extend({
@@ -72,6 +108,7 @@ const FaqSectionSchema = SectionBaseSchema.extend({
 
 const DeliveryZonesSectionSchema = SectionBaseSchema.extend({
   heading: z.string().trim().max(200).optional(),
+  subheading: z.string().trim().max(500).optional(),
   type: z.literal('DELIVERY_ZONES'),
 });
 
@@ -80,6 +117,12 @@ const ContactSectionSchema = SectionBaseSchema.extend({
   email: z.string().trim().max(320).optional(),
   heading: z.string().trim().max(200).optional(),
   phone: z.string().trim().max(60).optional(),
+  // One WhatsApp number per zona — cloned from verdeo.com.ar's per-city "atención al cliente"
+  // list, alongside (not instead of) the single-contact fields above.
+  regions: z
+    .array(z.object({ label: z.string().trim().max(200), whatsapp: z.string().trim().max(60) }))
+    .max(20)
+    .optional(),
   type: z.literal('CONTACT'),
   whatsapp: z.string().trim().max(60).optional(),
 });
@@ -104,9 +147,11 @@ const CustomSectionSchema = SectionBaseSchema.extend({
 
 export const PageSectionSchema = z.discriminatedUnion('type', [
   HeroSectionSchema,
+  HeroRotatorSectionSchema,
   TextSectionSchema,
   ImageTextSectionSchema,
   StepsSectionSchema,
+  CarouselSectionSchema,
   WeeklyMenuSectionSchema,
   CtaSectionSchema,
   FaqSectionSchema,

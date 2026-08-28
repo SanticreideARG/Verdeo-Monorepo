@@ -50,22 +50,42 @@ function BrandMark() {
   );
 }
 
+// Anchor links to whichever CMS section on "/" set that anchorId (see SectionFields' "Ancla para
+// el navbar" field) — same pattern as verdeo.com.ar's single-page nav (INICIO/MENÚS/NOSOTROS/
+// PRECIOS/CONTACTO scrolling within one page), generalized instead of hardcoded to those four so
+// any published section can opt into a nav slot.
+const PUBLIC_ANCHOR_LINKS = [
+  { href: '/#section-menu', label: 'Menús' },
+  { href: '/#section-nosotros', label: 'Nosotros' },
+  { href: '/#section-precios', label: 'Precios y pedido' },
+  { href: '/#section-contact', label: 'Contacto' },
+] as const;
+
 function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-cream text-ink">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-5 sm:px-8">
-        <BrandMark />
-        <nav className="flex items-center gap-2" aria-label="Navegación principal">
-          <Link className="nav-link hidden sm:inline-flex" to="/seguimiento">
-            Seguir mi pedido
-          </Link>
-          <Link className="nav-link hidden sm:inline-flex" to="/mi-cuenta">
-            Mi cuenta
-          </Link>
-          <Link className="button button-primary" to="/pedido">
-            Hacer un pedido
-          </Link>
-        </nav>
+      <header className="public-header">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-5 sm:px-8">
+          <BrandMark />
+          <nav className="flex flex-wrap items-center gap-1" aria-label="Secciones">
+            {PUBLIC_ANCHOR_LINKS.map((link) => (
+              <a className="nav-link hidden lg:inline-flex" href={link.href} key={link.href}>
+                {link.label}
+              </a>
+            ))}
+          </nav>
+          <nav className="flex items-center gap-2" aria-label="Cuenta">
+            <Link className="nav-link hidden sm:inline-flex" to="/seguimiento">
+              Seguir mi pedido
+            </Link>
+            <Link className="nav-link hidden sm:inline-flex" to="/mi-cuenta">
+              Mi cuenta
+            </Link>
+            <Link className="button button-primary" to="/pedido">
+              Hacer un pedido
+            </Link>
+          </nav>
+        </div>
       </header>
       {children}
     </div>

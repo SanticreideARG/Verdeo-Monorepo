@@ -73,6 +73,15 @@ a {
   text-decoration: none;
 }
 
+.public-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: color-mix(in srgb, var(--color-cream) 92%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgb(23 76 60 / 8%);
+}
+
 .button {
   display: inline-flex;
   min-height: 44px;
@@ -230,6 +239,41 @@ a {
   margin-top: 0.55rem;
   color: var(--color-ink-muted);
   line-height: 1.65;
+}
+
+/* HERO_ROTATOR and CAROUSEL — CMS section types, public site (see CmsSections.tsx). */
+.hero-rotator-word {
+  display: inline-block;
+  color: var(--color-forest);
+  transition: opacity 0.4s ease;
+}
+.cms-carousel {
+  display: grid;
+  gap: 1.25rem;
+  justify-items: center;
+}
+.cms-carousel-image {
+  width: 100%;
+  max-width: 22rem;
+  border-radius: 1.5rem;
+  object-fit: cover;
+  aspect-ratio: 1;
+}
+.cms-carousel-caption {
+  max-width: 34rem;
+  color: var(--color-ink-muted);
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+.cms-carousel-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgb(23 76 60 / 20%);
+  transition: background-color 0.2s ease;
+}
+.cms-carousel-dot.is-active {
+  background: var(--color-forest);
 }
 
 .operation-section {

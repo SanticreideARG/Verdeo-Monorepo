@@ -42,9 +42,11 @@ interface PageDetail {
 
 const SECTION_TYPES = [
   'HERO',
+  'HERO_ROTATOR',
   'TEXT',
   'IMAGE_TEXT',
   'STEPS',
+  'CAROUSEL',
   'WEEKLY_MENU',
   'CTA',
   'FAQ',
@@ -59,18 +61,22 @@ function newSection(type: string): Section {
   switch (type) {
     case 'HERO':
       return { headline: 'Título', id, type };
+    case 'HERO_ROTATOR':
+      return { id, kicker: '', type, words: ['cuida tu salud'] };
     case 'TEXT':
       return { body: 'Texto', id, type };
     case 'IMAGE_TEXT':
       return { body: 'Texto', id, imagePosition: 'right', imageUrl: '', type };
     case 'STEPS':
       return { id, steps: [{ body: '', number: '01', title: '' }], type };
+    case 'CAROUSEL':
+      return { id, slides: [{ caption: '', imageUrl: '' }], type };
     case 'CTA':
       return { buttonHref: '/pedido', buttonLabel: 'Hacer un pedido', heading: 'Título', id, type };
     case 'FAQ':
       return { id, items: [{ answer: '', question: '' }], type };
     case 'CONTACT':
-      return { id, type };
+      return { id, regions: [], type };
     case 'GALLERY':
       return { id, images: [{ url: '' }], type };
     case 'CUSTOM':
@@ -472,6 +478,17 @@ export function CmsPagesAdminPage() {
                             </div>
                           ) : null}
                         </div>
+                        <label className="field mt-3 text-xs">
+                          Ancla para el navbar (opcional — p.ej. section-menu)
+                          <input
+                            disabled={!canEdit}
+                            onChange={(event) =>
+                              updateSection(section.id, { anchorId: event.target.value.trim() })
+                            }
+                            placeholder="section-nosotros"
+                            value={typeof section.anchorId === 'string' ? section.anchorId : ''}
+                          />
+                        </label>
                         <SectionFields
                           disabled={!canEdit}
                           onChange={(patch) => updateSection(section.id, patch)}
@@ -675,16 +692,125 @@ function SectionFields({
           </div>
         </div>
       );
-    case 'DELIVERY_ZONES':
     case 'WEEKLY_MENU':
       return (
         <p className="mt-2 text-sm text-ink-muted">
-          {section.type === 'WEEKLY_MENU'
-            ? 'Sin campos: muestra el menú publicado de la semana en vivo.'
-            : 'Sin campos: muestra las ciudades activas en vivo.'}
+          Sin campos: muestra el menú publicado de la semana en vivo.
         </p>
       );
-    case 'CONTACT':
+    case 'DELIVERY_ZONES':
+      return (
+        <div className="mt-3 grid gap-2">
+          <p className="text-xs text-ink-muted">
+            Las ciudades en sí se muestran en vivo (activas en Ajustes → Zonas geográficas) — acá
+            solo se edita el título y bajada.
+          </p>
+          <input
+            disabled={disabled}
+            onChange={(event) => onChange({ heading: event.target.value })}
+            placeholder="Título (opcional, por defecto “Dónde entregamos”)"
+            value={field('heading')}
+          />
+          <textarea
+            disabled={disabled}
+            onChange={(event) => onChange({ subheading: event.target.value })}
+            placeholder="Bajada (opcional)"
+            rows={2}
+            value={field('subheading')}
+          />
+        </div>
+      );
+    case 'HERO_ROTATOR': {
+      const words = Array.isArray(section.words) ? (section.words as string[]) : [];
+      return (
+        <div className="mt-3 grid gap-2">
+          <input
+            disabled={disabled}
+            onChange={(event) => onChange({ kicker: event.target.value })}
+            placeholder="Texto pequeño arriba (opcional, ej. “Bienvenido a nuestro mundo”)"
+            value={field('kicker')}
+          />
+          <textarea
+            disabled={disabled}
+            onChange={(event) =>
+              onChange({ words: event.target.value.split('\n').map((w) => w.trim()) })
+            }
+            placeholder={
+              'Una frase por línea — rota cada 3,5s\ncuida tu salud\ndesde la alimentación'
+            }
+            rows={4}
+            value={words.join('\n')}
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              disabled={disabled}
+              onChange={(event) => onChange({ ctaLabel: event.target.value })}
+              placeholder="Texto del botón principal"
+              value={field('ctaLabel')}
+            />
+            <input
+              disabled={disabled}
+              onChange={(event) => onChange({ ctaHref: event.target.value })}
+              placeholder="Enlace (ej. /pedido)"
+              value={field('ctaHref')}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              disabled={disabled}
+              onChange={(event) => onChange({ secondaryLabel: event.target.value })}
+              placeholder="Texto del botón secundario (opcional)"
+              value={field('secondaryLabel')}
+            />
+            <input
+              disabled={disabled}
+              onChange={(event) => onChange({ secondaryHref: event.target.value })}
+              placeholder="Enlace secundario"
+              value={field('secondaryHref')}
+            />
+          </div>
+        </div>
+      );
+    }
+    case 'CAROUSEL': {
+      const slides = Array.isArray(section.slides)
+        ? (section.slides as { caption?: string; imageUrl?: string }[])
+        : [];
+      return (
+        <div className="mt-3 grid gap-2">
+          <input
+            disabled={disabled}
+            onChange={(event) => onChange({ heading: event.target.value })}
+            placeholder="Título (opcional)"
+            value={field('heading')}
+          />
+          <textarea
+            className="w-full font-mono text-xs"
+            disabled={disabled}
+            onChange={(event) =>
+              onChange({
+                slides: event.target.value
+                  .split('\n')
+                  .filter(Boolean)
+                  .map((line) => {
+                    const [imageUrl, caption] = line.split('|');
+                    return { caption: caption ?? '', imageUrl: imageUrl ?? '' };
+                  }),
+              })
+            }
+            placeholder="https://imagen…|Texto de la diapositiva"
+            rows={5}
+            value={slides
+              .map((slide) => `${slide.imageUrl ?? ''}|${slide.caption ?? ''}`)
+              .join('\n')}
+          />
+        </div>
+      );
+    }
+    case 'CONTACT': {
+      const regions = Array.isArray(section.regions)
+        ? (section.regions as { label?: string; whatsapp?: string }[])
+        : [];
       return (
         <div className="mt-3 grid gap-2">
           <input
@@ -711,8 +837,32 @@ function SectionFields({
             placeholder="Dirección"
             value={field('address')}
           />
+          <label className="mt-1 text-xs font-semibold text-forest">
+            WhatsApp por ciudad (opcional)
+          </label>
+          <textarea
+            className="w-full font-mono text-xs"
+            disabled={disabled}
+            onChange={(event) =>
+              onChange({
+                regions: event.target.value
+                  .split('\n')
+                  .filter(Boolean)
+                  .map((line) => {
+                    const [label, whatsapp] = line.split('|');
+                    return { label: label ?? '', whatsapp: whatsapp ?? '' };
+                  }),
+              })
+            }
+            placeholder="Ciudad de Neuquén|5492995493102"
+            rows={4}
+            value={regions
+              .map((region) => `${region.label ?? ''}|${region.whatsapp ?? ''}`)
+              .join('\n')}
+          />
         </div>
       );
+    }
     case 'CUSTOM':
       return (
         <textarea
