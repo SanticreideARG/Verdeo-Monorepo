@@ -1,5 +1,14 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type FormEvent,
+} from 'react';
 
+import { CmsSection } from '../components/CmsSections.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
@@ -97,6 +106,8 @@ export function CmsPagesAdminPage() {
   const [addingType, setAddingType] = useState<string>('HERO');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadedUrl, setUploadedUrl] = useState('');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
 
   const canEdit = profile?.permissions.includes('cms.edit') ?? false;
   const canPublish = profile?.permissions.includes('cms.publish') ?? false;
@@ -210,6 +221,23 @@ export function CmsPagesAdminPage() {
       const [moved] = next.splice(index, 1);
       if (!moved) return current;
       next.splice(target, 0, moved);
+      return next;
+    });
+  }
+
+  // Native HTML5 drag-and-drop — no library, matching how the rest of this app avoids extra
+  // dependencies. The ↑/↓ buttons stay as the keyboard-accessible way to reorder; dragging is
+  // additive, not a replacement.
+  function reorderSection(draggedSectionId: string, overSectionId: string) {
+    if (draggedSectionId === overSectionId) return;
+    setSections((current) => {
+      const from = current.findIndex((section) => section.id === draggedSectionId);
+      const to = current.findIndex((section) => section.id === overSectionId);
+      if (from === -1 || to === -1) return current;
+      const next = [...current];
+      const [moved] = next.splice(from, 1);
+      if (!moved) return current;
+      next.splice(to, 0, moved);
       return next;
     });
   }
@@ -350,22 +378,72 @@ export function CmsPagesAdminPage() {
                         {detail.published ? `revisión #${detail.published.revision}` : 'nunca'}
                       </p>
                     </div>
-                    {canEdit ? (
+                    <div className="flex gap-2">
                       <button
                         className="button button-secondary"
-                        onClick={() => void saveDraft()}
+                        onClick={() => setPreviewOpen((current) => !current)}
                         type="button"
                       >
-                        Guardar borrador
+                        {previewOpen ? 'Ocultar vista previa' : 'Vista previa'}
                       </button>
-                    ) : null}
+                      {canEdit ? (
+                        <button
+                          className="button button-secondary"
+                          onClick={() => void saveDraft()}
+                          type="button"
+                        >
+                          Guardar borrador
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
+
+                  {previewOpen ? (
+                    <div className="cms-preview mt-4">
+                      <p className="cms-preview-label">
+                        Vista previa del borrador — así se ve con lo guardado hasta ahora en cada
+                        sección, sin publicar.
+                      </p>
+                      <div className="cms-preview-frame">
+                        {sections.map((section) => (
+                          <CmsSection key={section.id} section={section} />
+                        ))}
+                        {sections.length === 0 ? (
+                          <p className="p-8 text-center text-ink-muted">Sin secciones todavía.</p>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div className="mt-4 grid gap-3">
                     {sections.map((section, index) => (
-                      <article className="operation-card" key={section.id}>
+                      <article
+                        className={`operation-card ${draggedId === section.id ? 'is-dragging' : ''}`}
+                        draggable={canEdit}
+                        key={section.id}
+                        onDragEnd={() => setDraggedId(null)}
+                        onDragOver={(event: DragEvent<HTMLElement>) => {
+                          if (canEdit) event.preventDefault();
+                        }}
+                        onDragStart={() => setDraggedId(section.id)}
+                        onDrop={(event: DragEvent<HTMLElement>) => {
+                          event.preventDefault();
+                          if (draggedId) reorderSection(draggedId, section.id);
+                        }}
+                      >
                         <div className="flex items-center justify-between gap-3">
-                          <strong>{section.type}</strong>
+                          <span className="flex items-center gap-2">
+                            {canEdit ? (
+                              <span
+                                aria-hidden="true"
+                                className="cms-drag-handle"
+                                title="Arrastrar"
+                              >
+                                ⠿
+                              </span>
+                            ) : null}
+                            <strong>{section.type}</strong>
+                          </span>
                           {canEdit ? (
                             <div className="flex gap-2">
                               <button
