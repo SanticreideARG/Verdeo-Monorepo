@@ -91,8 +91,13 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
       { href: '/app/menus', icon: 'menus', label: 'Ver menús', permission: 'production.read' },
     ],
   },
+  // "Operación" used to be one seven-item cluster — everything from Clientes to Mensajes.
+  // Unlike the Ajustes settings pages (small, rarely visited, safe to hide behind a tab click),
+  // these are the tools staff live in during a shift and need one click away at all times, so
+  // splitting into three smaller, independently-collapsible clusters by workflow — instead of
+  // consolidating into tabs — is what actually reduces clutter without hiding daily-use pages.
   {
-    label: 'Operación',
+    label: 'Clientes',
     items: [
       {
         href: '/app/clientes',
@@ -106,6 +111,11 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         label: 'Encuestas',
         permission: 'surveys.read',
       },
+    ],
+  },
+  {
+    label: 'Producción y reparto',
+    items: [
       {
         href: '/app/cocina',
         icon: 'kitchen',
@@ -114,6 +124,11 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
       },
       { href: '/app/reparto/rutas', icon: 'delivery', label: 'Rutas', permission: 'routes.read' },
       { href: '/app/pagos', icon: 'delivery', label: 'Pagos', permission: 'payments.read' },
+    ],
+  },
+  {
+    label: 'Mensajería',
+    items: [
       { href: '/app/chat', icon: 'chat', label: 'Chat', permission: 'chat.use' },
       { href: '/app/mensajes', icon: 'chat', label: 'Mensajes', permission: 'messages.read' },
     ],
