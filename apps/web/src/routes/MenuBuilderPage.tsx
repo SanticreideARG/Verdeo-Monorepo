@@ -132,9 +132,28 @@ export function MenuBuilderPage() {
     };
   }, [editingMenuId]);
 
+  function toIsoOrNull(value: string): string | null {
+    if (!value.trim()) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+
   async function submitMenu(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+
+    // Parsed and validated up front, before anything else — new Date(x).toISOString() throws on
+    // an empty/invalid string, and that exception used to escape the try/catch below entirely
+    // (it happened while building the payload, not inside the try), so a blank or malformed date
+    // field crashed the handler silently: no error message, no redirect, nothing visibly happened.
+    const openAt = toIsoOrNull(formText(form, 'openAt'));
+    const partialKitchenCutoffAt = toIsoOrNull(formText(form, 'partialKitchenCutoffAt'));
+    const closeAt = toIsoOrNull(formText(form, 'closeAt'));
+    if (!openAt || !partialKitchenCutoffAt || !closeAt) {
+      setMessage('Completá apertura, parcial de cocina y cierre con fechas válidas.');
+      return;
+    }
+
     const parsedPrices = sizePrices
       .filter((price) => price.sizeName.trim() && price.unitPrice.trim())
       .map((price) => ({
@@ -172,10 +191,10 @@ export function MenuBuilderPage() {
 
     const payload = {
       alias: formText(form, 'alias'),
-      closeAt: new Date(formText(form, 'closeAt')).toISOString(),
+      closeAt,
       offerings: parsedOfferings,
-      openAt: new Date(formText(form, 'openAt')).toISOString(),
-      partialKitchenCutoffAt: new Date(formText(form, 'partialKitchenCutoffAt')).toISOString(),
+      openAt,
+      partialKitchenCutoffAt,
       prices: parsedPrices,
     };
 
