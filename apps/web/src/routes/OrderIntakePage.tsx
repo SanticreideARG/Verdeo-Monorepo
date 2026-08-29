@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
+import { showToast } from '../lib/toast.js';
 import {
   errorMessage,
   formatMoney,
@@ -204,8 +205,9 @@ export function OrderIntakePage() {
       setCustomerResults([]);
       setCustomerQuery('');
       setSelectedOfferingId('');
-      setMessage('Pedido registrado como borrador.');
+      setMessage('');
       setFormOpen(false);
+      showToast('Pedido registrado como borrador.');
       await loadData();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos crear el pedido.');
@@ -222,7 +224,7 @@ export function OrderIntakePage() {
         reason,
         status,
       });
-      setMessage(`${order.publicNumber} actualizado a ${status}.`);
+      showToast(`${order.publicNumber} actualizado a ${status}.`);
       await loadData();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos actualizar el pedido.');

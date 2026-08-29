@@ -5,6 +5,7 @@ import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage, type WeeklyMenu } from '../lib/operations.js';
+import { showToast } from '../lib/toast.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 interface OfferingDraft {
@@ -194,14 +195,24 @@ export function MenuBuilderPage() {
       setMessage('Ponele un alias a la semana.');
       return null;
     }
-    if (includeIntuitivo) {
-      varieties.push({ composable: true, description: null, dishes: [], familyName: 'Intuitivo' });
-    }
-    // Size and variety are unrelated axes: every variety comes in every size defined above, so one
-    // offering per (variety, size) pair is generated here instead of asked for per option.
+    // Size and variety are unrelated axes for a *fixed* offering, so one row per (variety, size)
+    // pair is generated here instead of asked for per option. Intuitivo is different — it's priced
+    // by whatever size the customer actually picks at order time (via weeklyMenuPrices, not its
+    // own offering row), so the API allows at most one composable offering per menu, period. Push
+    // it after the flatMap, as a single row, or the request 400s with "Solo puede haber un menú
+    // personalizado (Intuitivo) por semana" — exactly the silent-looking failure this was.
     const parsedOfferings = varieties.flatMap((variety) =>
       parsedPrices.map((price) => ({ ...variety, sizeName: price.sizeName })),
     );
+    if (includeIntuitivo) {
+      parsedOfferings.push({
+        composable: true,
+        description: null,
+        dishes: [],
+        familyName: 'Intuitivo',
+        sizeName: parsedPrices[0]?.sizeName ?? '',
+      });
+    }
 
     return {
       alias: formText(form, 'alias'),
@@ -227,7 +238,7 @@ export function MenuBuilderPage() {
       if (!response.ok) throw new Error(await errorMessage(response));
 
       if (editingMenu) {
-        setMessage('Cambios guardados.');
+        showToast('Cambios guardados.');
         return;
       }
 
@@ -245,17 +256,17 @@ export function MenuBuilderPage() {
         }
       }
 
-      // Redirect to "Ver menús" instead of just clearing the form in place and showing a message
-      // above the fold — on a long form, that message goes unseen while every field blanks out,
-      // which reads as "perdí lo que cargué" even though the draft did save. Landing on the list
-      // with the new menu visible there is confirmation nobody can miss.
-      await navigate('/app/menus', {
-        state: {
-          message: options.alsoPublish
-            ? `Menú "${payload.alias}" guardado y publicado.`
-            : `Menú "${payload.alias}" guardado como borrador.`,
-        },
-      });
+      // Redirect to "Ver menús" instead of just clearing the form in place — on a long form, an
+      // inline message above the fold goes unseen while every field blanks out, which reads as
+      // "perdí lo que cargué" even though the draft did save. Landing on the list with the new
+      // menu visible there is confirmation nobody can miss; the toast survives the navigation
+      // (it's a module-level store, not this page's state) so it still shows up on arrival.
+      showToast(
+        options.alsoPublish
+          ? `Menú "${payload.alias}" guardado y publicado.`
+          : `Menú "${payload.alias}" guardado como borrador.`,
+      );
+      await navigate('/app/menus');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos guardar el menú.');
     }

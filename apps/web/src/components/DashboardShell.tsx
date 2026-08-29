@@ -5,6 +5,7 @@ import { apiRequest, storeOperatingSiteId, storedOperatingSiteId } from '../lib/
 import { PresenceControl } from './PresenceControl.js';
 import { SETTINGS_TAB_PERMISSIONS } from './SettingsTabs.js';
 import { RequestProgressBar } from './RequestProgressBar.js';
+import { ToastHost } from './ToastHost.js';
 import { WeatherWidget } from './WeatherWidget.js';
 
 export interface DashboardProfile {
@@ -608,6 +609,7 @@ export function DashboardShell({
         <RequestProgressBar />
         <main className="dashboard-content">{children}</main>
       </div>
+      <ToastHost />
     </div>
   );
 }

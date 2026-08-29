@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
+import { showToast } from '../lib/toast.js';
 import {
   errorMessage,
   formatMoney,
@@ -236,7 +237,7 @@ export function CustomersPage() {
       setShowCreate(false);
       setSearch('');
       await loadDirectory('', created.id);
-      setMessage('Cliente registrado. Ya podés completar sus contactos y domicilios.');
+      showToast('Cliente registrado. Ya podés completar sus contactos y domicilios.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos registrar el cliente.');
     }
@@ -259,7 +260,7 @@ export function CustomersPage() {
       setImportFile(null);
       setSearch('');
       await loadDirectory('');
-      setMessage(
+      showToast(
         `${result.imported} contacto${result.imported === 1 ? '' : 's'} importado${result.imported === 1 ? '' : 's'} correctamente.`,
       );
     } catch (error) {
@@ -287,7 +288,7 @@ export function CustomersPage() {
         }),
       );
       await loadDirectory(search, detail.id);
-      setMessage('Ficha del cliente actualizada.');
+      showToast('Ficha del cliente actualizada.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos actualizar el cliente.');
     }
@@ -313,7 +314,7 @@ export function CustomersPage() {
       );
       target.reset();
       await loadCustomer(detail.id);
-      setMessage('Contacto agregado.');
+      showToast('Contacto agregado.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos agregar el contacto.');
     }
@@ -345,7 +346,7 @@ export function CustomersPage() {
       );
       target.reset();
       await loadCustomer(detail.id);
-      setMessage('Domicilio agregado. Confirmá su ubicación antes de usarlo operativamente.');
+      showToast('Domicilio agregado. Confirmá su ubicación antes de usarlo operativamente.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos agregar el domicilio.');
     }
@@ -389,7 +390,7 @@ export function CustomersPage() {
         return next;
       });
       await loadCustomer(detail.id);
-      setMessage('Ubicación confirmada.');
+      showToast('Ubicación confirmada.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos confirmar la ubicación.');
     }
@@ -426,7 +427,7 @@ export function CustomersPage() {
         return next;
       });
       await loadCustomer(detail.id);
-      setMessage('Coordenadas corregidas y confirmadas.');
+      showToast('Coordenadas corregidas y confirmadas.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos confirmar las coordenadas.');
     }
@@ -450,7 +451,7 @@ export function CustomersPage() {
         return next;
       });
       await loadCustomer(detail.id);
-      setMessage('Ubicación descartada; el domicilio continúa pendiente.');
+      showToast('Ubicación descartada; el domicilio continúa pendiente.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos descartar la ubicación.');
     }

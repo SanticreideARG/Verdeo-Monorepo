@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage, type WeeklyMenu } from '../lib/operations.js';
+import { showToast } from '../lib/toast.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 type DistributionMode = 'CREATE_MISSING' | 'UPDATE_UNCUSTOMIZED' | 'REPLACE';
@@ -13,18 +14,13 @@ type DistributionMode = 'CREATE_MISSING' | 'UPDATE_UNCUSTOMIZED' | 'REPLACE';
  * master menu happens in "Configurar la semana" instead. */
 export function MenusPage() {
   const { failed, logout, profile } = useDashboardProfile();
-  const location = useLocation();
   const permissions = profile?.permissions ?? [];
   const [menus, setMenus] = useState<WeeklyMenu[]>([]);
   const [sites, setSites] = useState<{ displayName: string; id: string }[]>([]);
   const [distributionSites, setDistributionSites] = useState<string[]>([]);
   const [distributionMode, setDistributionMode] = useState<DistributionMode>('CREATE_MISSING');
   const [loading, setLoading] = useState(true);
-  // A flash message handed off by MenuBuilderPage after creating a draft (state.message), since
-  // that confirmation needs to survive the redirect to actually be seen.
-  const [message, setMessage] = useState(
-    (location.state as { message?: string } | null)?.message ?? '',
-  );
+  const [message, setMessage] = useState('');
 
   const loadData = useCallback(async () => {
     if (!profile) return;
@@ -64,6 +60,7 @@ export function MenusPage() {
       setMessage(await errorMessage(response));
       return;
     }
+    showToast('Menú publicado.');
     await loadData();
   }
 
@@ -75,6 +72,7 @@ export function MenusPage() {
       setMessage(await errorMessage(response));
       return;
     }
+    showToast('Menú eliminado.');
     await loadData();
   }
 
@@ -103,7 +101,7 @@ export function MenusPage() {
     const results = (await response.json()) as { results: { outcome: string }[] };
     const created = results.results.filter((r) => r.outcome === 'CREATED').length;
     const skipped = results.results.filter((r) => r.outcome.startsWith('SKIPPED')).length;
-    setMessage(
+    showToast(
       `Distribución lista: ${created} creada(s), ${results.results.length - created - skipped} actualizada(s), ${skipped} omitida(s).`,
     );
     setDistributionSites([]);
