@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
@@ -98,6 +98,16 @@ export function MenuBuilderPage() {
   const [includeIntuitivo, setIncludeIntuitivo] = useState(true);
   const [editingMenu, setEditingMenu] = useState<WeeklyMenu | null>(null);
   const [loading, setLoading] = useState(Boolean(editingMenuId));
+  const [publishing, setPublishing] = useState(false);
+  const messageRef = useRef<HTMLParagraphElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // A validation error or a caught failure sets `message`, but on a long form the message renders
+  // above the fold — easy to miss while scrolled down filling in the last variety, which reads as
+  // "no pasó nada" even though it did. Force it into view every time it changes.
+  useEffect(() => {
+    if (message) messageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [message]);
 
   useEffect(() => {
     if (!editingMenuId) return;
@@ -138,20 +148,20 @@ export function MenuBuilderPage() {
     return Number.isNaN(date.getTime()) ? null : date.toISOString();
   }
 
-  async function submitMenu(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-
+  // Shared by both actions ("Guardar borrador" and "Guardar y publicar") — returns null and sets
+  // the validation message itself when the form isn't ready to submit, so a caller just checks for
+  // null and stops.
+  function buildPayload(form: FormData) {
     // Parsed and validated up front, before anything else — new Date(x).toISOString() throws on
-    // an empty/invalid string, and that exception used to escape the try/catch below entirely
-    // (it happened while building the payload, not inside the try), so a blank or malformed date
-    // field crashed the handler silently: no error message, no redirect, nothing visibly happened.
+    // an empty/invalid string, and letting that happen while building the payload (rather than
+    // inside a try/catch) used to crash the handler silently: no error message, no redirect,
+    // nothing visibly happened.
     const openAt = toIsoOrNull(formText(form, 'openAt'));
     const partialKitchenCutoffAt = toIsoOrNull(formText(form, 'partialKitchenCutoffAt'));
     const closeAt = toIsoOrNull(formText(form, 'closeAt'));
     if (!openAt || !partialKitchenCutoffAt || !closeAt) {
       setMessage('Completá apertura, parcial de cocina y cierre con fechas válidas.');
-      return;
+      return null;
     }
 
     const parsedPrices = sizePrices
@@ -164,7 +174,7 @@ export function MenuBuilderPage() {
       }));
     if (parsedPrices.length === 0) {
       setMessage('Definí al menos un tamaño con su precio.');
-      return;
+      return null;
     }
 
     const varieties = offerings.map((offering) => ({
@@ -178,7 +188,11 @@ export function MenuBuilderPage() {
     }));
     if (varieties.some((offering) => offering.dishes.length !== 5)) {
       setMessage('Cada variedad necesita exactamente cinco platos.');
-      return;
+      return null;
+    }
+    if (!formText(form, 'alias').trim()) {
+      setMessage('Ponele un alias a la semana.');
+      return null;
     }
     if (includeIntuitivo) {
       varieties.push({ composable: true, description: null, dishes: [], familyName: 'Intuitivo' });
@@ -189,7 +203,7 @@ export function MenuBuilderPage() {
       parsedPrices.map((price) => ({ ...variety, sizeName: price.sizeName })),
     );
 
-    const payload = {
+    return {
       alias: formText(form, 'alias'),
       closeAt,
       offerings: parsedOfferings,
@@ -197,6 +211,11 @@ export function MenuBuilderPage() {
       partialKitchenCutoffAt,
       prices: parsedPrices,
     };
+  }
+
+  async function saveMenu(form: FormData, options: { alsoPublish: boolean }) {
+    const payload = buildPayload(form);
+    if (!payload) return;
 
     try {
       const response = editingMenu
@@ -206,19 +225,53 @@ export function MenuBuilderPage() {
           })
         : await apiRequest('/api/v1/menus', { body: JSON.stringify(payload), method: 'POST' });
       if (!response.ok) throw new Error(await errorMessage(response));
+
       if (editingMenu) {
         setMessage('Cambios guardados.');
-      } else {
-        // Redirect to "Ver menús" instead of just clearing the form in place and showing a message
-        // above the fold — on a long form, that message goes unseen while every field blanks out,
-        // which reads as "perdí lo que cargué" even though the draft did save. Landing on the list
-        // with the new DRAFT menu visible there is confirmation nobody can miss.
-        await navigate('/app/menus', {
-          state: { message: `Menú "${payload.alias}" guardado como borrador.` },
-        });
+        return;
       }
+
+      const created = (await response.json()) as WeeklyMenu;
+      if (options.alsoPublish) {
+        const publishResponse = await apiRequest(`/api/v1/menus/${created.id}/publish`, {
+          method: 'POST',
+        });
+        if (!publishResponse.ok) {
+          // The draft did save — say so plainly instead of only reporting the publish failure,
+          // so a retry doesn't look like it needs to redo the whole form.
+          throw new Error(
+            `El borrador se guardó, pero no pudimos publicarlo: ${await errorMessage(publishResponse)} Podés publicarlo desde "Ver menús".`,
+          );
+        }
+      }
+
+      // Redirect to "Ver menús" instead of just clearing the form in place and showing a message
+      // above the fold — on a long form, that message goes unseen while every field blanks out,
+      // which reads as "perdí lo que cargué" even though the draft did save. Landing on the list
+      // with the new menu visible there is confirmation nobody can miss.
+      await navigate('/app/menus', {
+        state: {
+          message: options.alsoPublish
+            ? `Menú "${payload.alias}" guardado y publicado.`
+            : `Menú "${payload.alias}" guardado como borrador.`,
+        },
+      });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos guardar el menú.');
+    }
+  }
+
+  async function submitMenu(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await saveMenu(new FormData(event.currentTarget), { alsoPublish: false });
+  }
+
+  async function saveAndPublish(formElement: HTMLFormElement) {
+    setPublishing(true);
+    try {
+      await saveMenu(new FormData(formElement), { alsoPublish: true });
+    } finally {
+      setPublishing(false);
     }
   }
 
@@ -255,13 +308,18 @@ export function MenuBuilderPage() {
         </header>
 
         {message ? (
-          <p className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
+          <p
+            className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest"
+            ref={messageRef}
+            role="status"
+          >
             {message}
           </p>
         ) : null}
 
         <form
           className="operation-card mt-6 max-w-2xl"
+          ref={formRef}
           onSubmit={(event) => void submitMenu(event)}
         >
           <div className="form-grid">
@@ -430,9 +488,21 @@ export function MenuBuilderPage() {
                 Quitar última
               </button>
             ) : null}
-            <button className="button button-primary" type="submit">
+            <button className="button button-primary" disabled={publishing} type="submit">
               {editingMenu ? 'Guardar cambios' : 'Guardar borrador'}
             </button>
+            {!editingMenu ? (
+              <button
+                className="button button-primary"
+                disabled={publishing}
+                onClick={() => {
+                  if (formRef.current) void saveAndPublish(formRef.current);
+                }}
+                type="button"
+              >
+                {publishing ? 'Publicando…' : 'Guardar y publicar'}
+              </button>
+            ) : null}
           </div>
         </form>
       </section>
