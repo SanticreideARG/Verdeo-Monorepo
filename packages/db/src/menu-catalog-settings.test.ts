@@ -220,6 +220,10 @@ describe('createMenu conflicts', () => {
         { ...menuInputBase, offerings: [fixedOffering('Otra variedad')] },
         CONTEXT,
       ),
+      // Not asserting the specific per-constraint message here: PGlite's error object doesn't
+      // surface `constraint_name` the way the real `postgres` driver does in production (confirmed
+      // directly against prod logs), so translateDatabaseConflict falls back to the generic message
+      // under this test harness even though production returns the constraint-specific one.
     ).rejects.toMatchObject({ name: 'OperationsConflictError' });
   });
 });

@@ -363,16 +363,32 @@ function computeProductionDelta(
 // checked only the top-level `.code`, so it never actually matched a real unique-violation and
 // every duplicate (e.g. two menus with the same alias — sales_cycles_alias_unique) fell through to
 // an unhandled exception and a generic 500, instead of the friendly conflict message below.
-function postgresErrorCode(error: unknown): string | undefined {
+interface PgConflictInfo {
+  code?: string;
+  constraint_name?: string;
+}
+
+function postgresConflictInfo(error: unknown): PgConflictInfo | undefined {
   if (typeof error !== 'object' || error === null) return undefined;
-  if ('code' in error && typeof error.code === 'string') return error.code;
-  if ('cause' in error) return postgresErrorCode(error.cause);
+  if ('code' in error && typeof error.code === 'string') return error as PgConflictInfo;
+  if ('cause' in error) return postgresConflictInfo(error.cause);
   return undefined;
 }
 
+// Named per-constraint messages for the conflicts an operator can actually act on by changing one
+// field — a generic "algo ya existe" doesn't say what to change. Anything not listed here still
+// gets the safe generic fallback rather than leaking the raw constraint name.
+const CONFLICT_MESSAGES_BY_CONSTRAINT: Record<string, string> = {
+  sales_cycles_alias_unique: 'Ya existe una semana con ese alias — elegí uno distinto.',
+};
+
 function translateDatabaseConflict(error: unknown): never {
-  if (postgresErrorCode(error) === '23505') {
-    throw new OperationsConflictError('Ya existe un registro con esos datos únicos.');
+  const pg = postgresConflictInfo(error);
+  if (pg?.code === '23505') {
+    throw new OperationsConflictError(
+      (pg.constraint_name && CONFLICT_MESSAGES_BY_CONSTRAINT[pg.constraint_name]) ??
+        'Ya existe un registro con esos datos únicos.',
+    );
   }
   throw error;
 }

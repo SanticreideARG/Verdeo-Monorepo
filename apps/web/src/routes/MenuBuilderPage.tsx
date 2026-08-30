@@ -143,6 +143,32 @@ export function MenuBuilderPage() {
     };
   }, [editingMenuId]);
 
+  // "Cada vez que vamos a crear un menú, un borrador cargado con los nombres y descripciones" —
+  // the varieties (Keto, Real, Vegetariano, ...) repeat week to week; only the five dishes and the
+  // prices actually change. Pre-fills a fresh "Configurar la semana" from the most recent master
+  // menu's variety names + descriptions (never its dishes, prices, or alias — those are what
+  // change and must be entered fresh each week; alias in particular has to be unique, so
+  // pre-filling it would just walk straight into the "ya existe una semana con ese alias" conflict).
+  useEffect(() => {
+    if (editingMenuId) return;
+    let active = true;
+    void apiRequest('/api/v1/menus')
+      .then(async (response) => {
+        if (!response.ok || !active) return;
+        const mostRecentMaster = ((await response.json()) as { items: WeeklyMenu[] }).items.find(
+          (menu) => menu.operatingSiteId === null,
+        );
+        if (!mostRecentMaster || !active) return;
+        const decomposed = decomposeMenu(mostRecentMaster);
+        setOfferings(decomposed.offerings.map((offering) => ({ ...offering, dishes: '' })));
+        setIncludeIntuitivo(decomposed.includeIntuitivo);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [editingMenuId]);
+
   function toIsoOrNull(value: string): string | null {
     if (!value.trim()) return null;
     const date = new Date(value);
