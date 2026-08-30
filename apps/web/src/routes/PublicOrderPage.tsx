@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
+import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
 import { apiRequest } from '../lib/api.js';
 import {
   errorMessage,
@@ -28,6 +29,7 @@ export function PublicOrderPage() {
   const [offeringId, setOfferingId] = useState('');
   const [sites, setSites] = useState<{ displayName: string; slug: string }[]>([]);
   const [siteSlug, setSiteSlug] = useState('');
+  const [selectedDishes, setSelectedDishes] = useState<string[]>([]);
 
   // The visitor chooses the city; it is never inferred from IP or domain.
   useEffect(() => {
@@ -68,12 +70,8 @@ export function PublicOrderPage() {
     event.preventDefault();
     setMessage('');
     const form = new FormData(event.currentTarget);
-    const customDishes = formText(form, 'customDishes')
-      .split('\n')
-      .map((dish) => dish.trim())
-      .filter(Boolean);
-    if (customDishes.length > 0 && customDishes.length !== 5) {
-      setMessage('Para personalizar, elegí exactamente cinco platos (uno por línea).');
+    if (offering?.composable && selectedDishes.length !== 5) {
+      setMessage('Elegí exactamente cinco platos para tu Intuitivo.');
       return;
     }
 
@@ -98,7 +96,7 @@ export function PublicOrderPage() {
         {
           offeringId,
           quantityUnits: Number(form.get('quantityUnits')),
-          ...(customDishes.length === 5 ? { selectedDishNames: customDishes } : {}),
+          ...(selectedDishes.length === 5 ? { selectedDishNames: selectedDishes } : {}),
         },
       ],
       menuId: menu?.id,
@@ -206,7 +204,10 @@ export function PublicOrderPage() {
                 Variedad y tamaño
                 <select
                   value={offeringId}
-                  onChange={(event) => setOfferingId(event.target.value)}
+                  onChange={(event) => {
+                    setOfferingId(event.target.value);
+                    setSelectedDishes([]);
+                  }}
                   required
                 >
                   {menu.offerings.map((item) => (
@@ -269,10 +270,16 @@ export function PublicOrderPage() {
                   required
                 />
               </label>
-              <label className="field field-wide">
-                Personalizar: cinco platos, uno por línea
-                <textarea name="customDishes" rows={5} placeholder={offering?.dishes.join('\n')} />
-              </label>
+              {offering?.composable ? (
+                <div className="field field-wide">
+                  Elegí tus cinco platos
+                  <IntuitivoDishPicker
+                    offerings={menu.offerings}
+                    onChange={setSelectedDishes}
+                    selected={selectedDishes}
+                  />
+                </div>
+              ) : null}
               <label className="field field-wide">
                 Indicaciones alimentarias
                 <textarea name="dietaryInstructions" rows={2} placeholder="Ej. sin cebolla" />

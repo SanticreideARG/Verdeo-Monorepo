@@ -367,6 +367,53 @@ a {
   letter-spacing: 0.06em;
 }
 
+/* IntuitivoDishPicker — every dish this week, grouped by variety, checkable up to five. Shared
+   between the public order form and "Tomar y confirmar pedidos". */
+.intuitivo-picker {
+  display: grid;
+  gap: 0.9rem;
+  border: 1px solid rgb(23 76 60 / 15%);
+  border-radius: 1.1rem;
+  padding: 1rem;
+}
+.intuitivo-picker-count {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-forest);
+}
+.intuitivo-picker-group-label {
+  margin-bottom: 0.4rem;
+  color: var(--color-forest);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.intuitivo-picker-dishes {
+  display: grid;
+  gap: 0.4rem;
+}
+.intuitivo-picker-dish {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  border-radius: 0.65rem;
+  padding: 0.45rem 0.6rem;
+  background: rgb(23 76 60 / 4%);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+.intuitivo-picker-dish.is-selected {
+  background: rgb(23 76 60 / 12%);
+  font-weight: 650;
+}
+.intuitivo-picker-dish input {
+  margin-top: 0.2rem;
+}
+.intuitivo-picker-dish input:disabled {
+  cursor: not-allowed;
+}
+
 .empty-state {
   border: 1px dashed rgb(23 76 60 / 25%);
   border-radius: 1.5rem;

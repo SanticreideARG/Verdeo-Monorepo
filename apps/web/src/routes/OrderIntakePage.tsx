@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
+import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { showToast } from '../lib/toast.js';
 import {
@@ -41,6 +42,7 @@ export function OrderIntakePage() {
   const [formOpen, setFormOpen] = useState(false);
   const [selectedMenuId, setSelectedMenuId] = useState('');
   const [selectedOfferingId, setSelectedOfferingId] = useState('');
+  const [selectedDishes, setSelectedDishes] = useState<string[]>([]);
 
   // "Nuevo cliente" (quick alta) vs "Buscar cliente" (by name/number) — a client is picked before
   // the rest of the order form matters, so this drives what `customerId` ends up as on submit.
@@ -154,12 +156,8 @@ export function OrderIntakePage() {
   async function createOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const selectedDishNames = formText(form, 'customDishes')
-      .split('\n')
-      .map((dish) => dish.trim())
-      .filter(Boolean);
-    if (selectedDishNames.length > 0 && selectedDishNames.length !== 5) {
-      setMessage('Para un Intuitivo cargá exactamente cinco platos, uno por línea.');
+    if (selectedOffering?.composable && selectedDishes.length !== 5) {
+      setMessage('Elegí exactamente cinco platos para el Intuitivo.');
       return;
     }
 
@@ -193,7 +191,7 @@ export function OrderIntakePage() {
           {
             offeringId: formText(form, 'offeringId'),
             quantityUnits: Number(form.get('quantityUnits')),
-            ...(selectedDishNames.length === 5 ? { selectedDishNames } : {}),
+            ...(selectedDishes.length === 5 ? { selectedDishNames: selectedDishes } : {}),
           },
         ],
         menuId: formText(form, 'menuId'),
@@ -205,6 +203,7 @@ export function OrderIntakePage() {
       setCustomerResults([]);
       setCustomerQuery('');
       setSelectedOfferingId('');
+      setSelectedDishes([]);
       setMessage('');
       setFormOpen(false);
       showToast('Pedido registrado como borrador.');
@@ -382,7 +381,10 @@ export function OrderIntakePage() {
                 Variedad
                 <select
                   name="offeringId"
-                  onChange={(event) => setSelectedOfferingId(event.target.value)}
+                  onChange={(event) => {
+                    setSelectedOfferingId(event.target.value);
+                    setSelectedDishes([]);
+                  }}
                   required
                   value={selectedOfferingId}
                 >
@@ -442,10 +444,14 @@ export function OrderIntakePage() {
               </label>
             </div>
             {selectedOffering?.composable ? (
-              <label className="field field-wide mt-4">
-                Platos de Intuitivo: cinco, uno por línea
-                <textarea name="customDishes" rows={5} />
-              </label>
+              <div className="field field-wide mt-4">
+                Platos de Intuitivo
+                <IntuitivoDishPicker
+                  offerings={selectedMenu?.offerings ?? []}
+                  onChange={setSelectedDishes}
+                  selected={selectedDishes}
+                />
+              </div>
             ) : null}
             <button className="button button-primary mt-4" type="submit">
               Registrar borrador
