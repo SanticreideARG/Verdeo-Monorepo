@@ -206,6 +206,24 @@ describe('createMenu (master, global — no per-site gate)', () => {
   });
 });
 
+describe('createMenu conflicts', () => {
+  // Regression: Drizzle wraps a failed query in its own DrizzleQueryError, with the actual
+  // Postgres error (the one carrying `.code`) nested under `.cause` — translateDatabaseConflict
+  // used to check only the top-level `.code`, which never matched, so a duplicate alias fell
+  // through as an unhandled exception (a raw 500 in production) instead of this friendly conflict.
+  it('turns a duplicate sales-cycle alias into a friendly conflict, not an unhandled exception', async () => {
+    const { service } = await seededService();
+    await service.createMenu({ ...menuInputBase, offerings: [fixedOffering('Real')] }, CONTEXT);
+
+    await expect(
+      service.createMenu(
+        { ...menuInputBase, offerings: [fixedOffering('Otra variedad')] },
+        CONTEXT,
+      ),
+    ).rejects.toMatchObject({ name: 'OperationsConflictError' });
+  });
+});
+
 describe('updateMenu', () => {
   it('replaces offerings, prices and cycle fields wholesale, keeping the same menu id', async () => {
     const { db, service } = await seededService();

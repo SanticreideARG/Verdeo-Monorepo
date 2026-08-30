@@ -10,8 +10,8 @@ import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 type DistributionMode = 'CREATE_MISSING' | 'UPDATE_UNCUSTOMIZED' | 'REPLACE';
 
-/** "Ver menús": the list of weekly menus with publish and per-city distribution. Creating a new
- * master menu happens in "Configurar la semana" instead. */
+/** "Periodos" (formerly "Ver menús"): the list of weekly menus with publish and per-city
+ * distribution. Creating a new master menu happens in "Configurar la semana" instead. */
 export function MenusPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const permissions = profile?.permissions ?? [];
@@ -117,7 +117,7 @@ export function MenusPage() {
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="dashboard-kicker">Menús</p>
-            <h1 className="text-2xl font-semibold text-forest">Ver menús</h1>
+            <h1 className="text-2xl font-semibold text-forest">Periodos</h1>
           </div>
           {permissions.includes('production.generate') ? (
             <Link className="button button-primary" to="/app/menus/nuevo">

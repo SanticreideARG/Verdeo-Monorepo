@@ -355,6 +355,21 @@ a {
   resize: vertical;
 }
 
+/* A field displayed but not editable — e.g. the delivery date, fixed to the período's own close
+   date rather than freely picked. Same box as a real input, just not interactive. */
+.field-static {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  box-sizing: border-box;
+  border: 1px solid rgb(23 76 60 / 12%);
+  border-radius: 0.9rem;
+  padding: 0.7rem 0.85rem;
+  background: rgb(23 76 60 / 4%);
+  color: var(--color-ink);
+  font-weight: 500;
+}
+
 .status-chip {
   width: fit-content;
   height: fit-content;

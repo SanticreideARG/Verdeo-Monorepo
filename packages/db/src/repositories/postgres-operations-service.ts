@@ -358,8 +358,20 @@ function computeProductionDelta(
     );
 }
 
+// Drizzle wraps a failed query in its own DrizzleQueryError, with the actual driver error (the one
+// carrying the Postgres error code) nested under `.cause` — not on the thrown error itself. This
+// checked only the top-level `.code`, so it never actually matched a real unique-violation and
+// every duplicate (e.g. two menus with the same alias — sales_cycles_alias_unique) fell through to
+// an unhandled exception and a generic 500, instead of the friendly conflict message below.
+function postgresErrorCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null) return undefined;
+  if ('code' in error && typeof error.code === 'string') return error.code;
+  if ('cause' in error) return postgresErrorCode(error.cause);
+  return undefined;
+}
+
 function translateDatabaseConflict(error: unknown): never {
-  if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') {
+  if (postgresErrorCode(error) === '23505') {
     throw new OperationsConflictError('Ya existe un registro con esos datos únicos.');
   }
   throw error;

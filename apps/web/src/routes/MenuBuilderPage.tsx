@@ -251,7 +251,7 @@ export function MenuBuilderPage() {
           // The draft did save — say so plainly instead of only reporting the publish failure,
           // so a retry doesn't look like it needs to redo the whole form.
           throw new Error(
-            `El borrador se guardó, pero no pudimos publicarlo: ${await errorMessage(publishResponse)} Podés publicarlo desde "Ver menús".`,
+            `El borrador se guardó, pero no pudimos publicarlo: ${await errorMessage(publishResponse)} Podés publicarlo desde "Periodos".`,
           );
         }
       }
@@ -314,7 +314,7 @@ export function MenuBuilderPage() {
             </h1>
           </div>
           <Link className="button button-secondary" to="/app/menus">
-            Ver menús
+            Periodos
           </Link>
         </header>
 

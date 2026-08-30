@@ -89,7 +89,7 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         label: 'Configurar la semana',
         permission: 'production.generate',
       },
-      { href: '/app/menus', icon: 'menus', label: 'Ver menús', permission: 'production.read' },
+      { href: '/app/menus', icon: 'menus', label: 'Periodos', permission: 'production.read' },
     ],
   },
   // "Operación" used to be one seven-item cluster — everything from Clientes to Mensajes.

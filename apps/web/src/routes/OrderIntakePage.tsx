@@ -18,10 +18,14 @@ import {
 } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
-function localDate(daysFromToday = 0): string {
-  const date = new Date();
-  date.setDate(date.getDate() + daysFromToday);
-  return date.toISOString().slice(0, 10);
+// The delivery date is fixed to the período's own close date — not a free pick — so it lives here,
+// not as an editable form field.
+function dateOnly(iso: string): string {
+  return iso.slice(0, 10);
+}
+
+function dateLabel(iso: string): string {
+  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'long' }).format(new Date(dateOnly(iso)));
 }
 
 function formText(form: FormData, key: string): string {
@@ -182,7 +186,7 @@ export function OrderIntakePage() {
       await mutate('/api/v1/orders', {
         customerId,
         deliveryAddress: formText(form, 'deliveryAddress'),
-        deliveryDate: formText(form, 'deliveryDate'),
+        deliveryDate: selectedMenu ? dateOnly(selectedMenu.cycle.closeAt) : '',
         dietaryInstructions: formText(form, 'dietaryInstructions')
           .split('\n')
           .map((value) => value.trim())
@@ -401,10 +405,12 @@ export function OrderIntakePage() {
                 Unidades
                 <input defaultValue="1" min="1" name="quantityUnits" required type="number" />
               </label>
-              <label className="field">
+              <div className="field">
                 Entrega
-                <input defaultValue={localDate(1)} name="deliveryDate" required type="date" />
-              </label>
+                <p className="field-static">
+                  {selectedMenu ? dateLabel(selectedMenu.cycle.closeAt) : '—'}
+                </p>
+              </div>
               <label className="field field-wide">
                 Dirección
                 <input minLength={4} name="deliveryAddress" required />

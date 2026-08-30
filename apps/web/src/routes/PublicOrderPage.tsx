@@ -10,10 +10,14 @@ import {
   type WeeklyMenu,
 } from '../lib/operations.js';
 
-function tomorrow(): string {
-  const date = new Date();
-  date.setDate(date.getDate() + 1);
-  return date.toISOString().slice(0, 10);
+// The delivery date is fixed to the período's own close date — not a free pick — so it lives here,
+// not as an editable form field.
+function dateOnly(iso: string): string {
+  return iso.slice(0, 10);
+}
+
+function dateLabel(iso: string): string {
+  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'long' }).format(new Date(dateOnly(iso)));
 }
 
 function formText(form: FormData, key: string): string {
@@ -87,7 +91,7 @@ export function PublicOrderPage() {
         phone: formText(form, 'phone') || undefined,
       },
       deliveryAddress: formText(form, 'deliveryAddress'),
-      deliveryDate: formText(form, 'deliveryDate'),
+      deliveryDate: menu ? dateOnly(menu.cycle.closeAt) : '',
       dietaryInstructions: formText(form, 'dietaryInstructions')
         .split('\n')
         .map((instruction) => instruction.trim())
@@ -222,10 +226,10 @@ export function PublicOrderPage() {
                 Cantidad de unidades
                 <input name="quantityUnits" type="number" min="1" defaultValue="1" required />
               </label>
-              <label className="field">
+              <div className="field">
                 Fecha de entrega
-                <input name="deliveryDate" type="date" defaultValue={tomorrow()} required />
-              </label>
+                <p className="field-static">{menu ? dateLabel(menu.cycle.closeAt) : ''}</p>
+              </div>
               <label className="field field-wide">
                 Nombre y apellido
                 <input name="displayName" autoComplete="name" required />
