@@ -24,6 +24,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/migrate.ts",
     "db:seed": "tsx src/seed.ts",
+    "db:seed-e2e-test-data": "tsx src/seed-e2e-test-data.ts",
     "db:seed-home": "tsx src/seed-home-page.ts",
     "db:studio": "drizzle-kit studio",
     "db:verify-scope": "tsx src/verify-regional-scope.ts",
