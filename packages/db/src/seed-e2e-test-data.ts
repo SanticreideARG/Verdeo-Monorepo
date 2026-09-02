@@ -331,7 +331,7 @@ async function main() {
 
         const useIntuitivo = intuitivoIndexes.has(globalIndex) && composableOffering;
         const chosenOffering = useIntuitivo
-          ? composableOffering!
+          ? composableOffering
           : fixedOfferings[globalIndex % fixedOfferings.length]!;
         const selectedDishes = useIntuitivo
           ? [...allDishes].sort(() => 0.5 - Math.random()).slice(0, 5)

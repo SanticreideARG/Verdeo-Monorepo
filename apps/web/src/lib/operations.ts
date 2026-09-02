@@ -319,7 +319,10 @@ export interface PaymentMethod {
 // "Estadísticas": decision-making rollups over orders (never CANCELLED).
 export interface StatsOverview {
   byCycle: { cycleAlias: string; orderCount: number; revenueMinor: number; salesCycleId: string }[];
+  /** Daily series keyed by delivery date — the same date the window filters on. */
+  byDay: { day: string; orderCount: number; revenueMinor: number }[];
   bySize: { revenueMinor: number; sizeName: string; units: number }[];
+  byVariety: { familyName: string; revenueMinor: number; units: number }[];
   byZone: {
     operatingSiteId: string;
     operatingSiteName: string;
@@ -329,7 +332,10 @@ export interface StatsOverview {
   global: {
     averageOrderValueMinor: number;
     currency: string;
+    customerCount: number;
     orderCount: number;
+    /** Repeat-rate proxy; fractional on purpose (1.4, not 1). */
+    ordersPerCustomer: number;
     revenueMinor: number;
     statusBreakdown: { count: number; status: string }[];
   };

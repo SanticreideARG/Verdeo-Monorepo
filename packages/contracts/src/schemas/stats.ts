@@ -18,9 +18,24 @@ export const StatsStatusCountSchema = z.object({
 export const StatsGlobalSchema = z.object({
   averageOrderValueMinor: z.number().int(),
   currency: z.string(),
+  customerCount: z.number().int(),
   orderCount: z.number().int(),
+  // Not an integer: 1.4 orders per customer is the meaningful value, 1 would hide the repeat rate.
+  ordersPerCustomer: z.number(),
   revenueMinor: z.number().int(),
   statusBreakdown: z.array(StatsStatusCountSchema),
+});
+
+export const StatsByDayRowSchema = z.object({
+  day: z.string(),
+  orderCount: z.number().int(),
+  revenueMinor: z.number().int(),
+});
+
+export const StatsByVarietyRowSchema = z.object({
+  familyName: z.string(),
+  revenueMinor: z.number().int(),
+  units: z.number().int(),
 });
 
 export const StatsByZoneRowSchema = z.object({
@@ -45,7 +60,9 @@ export const StatsBySizeRowSchema = z.object({
 
 export const StatsOverviewSchema = z.object({
   byCycle: z.array(StatsByCycleRowSchema),
+  byDay: z.array(StatsByDayRowSchema),
   bySize: z.array(StatsBySizeRowSchema),
+  byVariety: z.array(StatsByVarietyRowSchema),
   byZone: z.array(StatsByZoneRowSchema),
   global: StatsGlobalSchema,
 });

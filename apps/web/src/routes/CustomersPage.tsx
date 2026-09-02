@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
+import { AddressMap } from '../components/AddressMap.js';
+import { CustomerExportDialog } from '../components/CustomerExportDialog.js';
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { showToast } from '../lib/toast.js';
@@ -62,6 +64,7 @@ export function CustomersPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [message, setMessage] = useState('');
@@ -494,11 +497,16 @@ export function CustomersPage() {
             <h1>Clientes</h1>
             <p>Contactos, domicilios y pedidos en una única ficha trazable.</p>
           </div>
-          {canCreate ? (
-            <button className="button button-primary" onClick={() => setShowCreate(true)}>
-              Nuevo cliente
+          <div className="crm-heading-actions">
+            <button className="button button-secondary" onClick={() => setShowExport(true)}>
+              Exportar a Excel
             </button>
-          ) : null}
+            {canCreate ? (
+              <button className="button button-primary" onClick={() => setShowCreate(true)}>
+                Nuevo cliente
+              </button>
+            ) : null}
+          </div>
         </header>
 
         {message ? (
@@ -781,9 +789,16 @@ export function CustomersPage() {
                             <p className="crm-address-note">Acceso: {address.accessNotes}</p>
                           ) : null}
                           {address.latitude !== null && address.longitude !== null ? (
-                            <code>
-                              {address.latitude.toFixed(6)}, {address.longitude.toFixed(6)}
-                            </code>
+                            <>
+                              <code>
+                                {address.latitude.toFixed(6)}, {address.longitude.toFixed(6)}
+                              </code>
+                              <AddressMap
+                                label={address.writtenAddress}
+                                latitude={address.latitude}
+                                longitude={address.longitude}
+                              />
+                            </>
                           ) : null}
                           <div className="crm-address-actions">
                             {address.locationUrl ? (
@@ -812,6 +827,14 @@ export function CustomersPage() {
                                       {candidate.latitude.toFixed(6)},{' '}
                                       {candidate.longitude.toFixed(6)}
                                     </code>
+                                    {/* Seeing the candidate on a map is the whole point of this
+                                        screen: two candidates for the same street differ by digits
+                                        nobody can eyeball, but they are obvious on a map. */}
+                                    <AddressMap
+                                      label={candidate.formattedAddress}
+                                      latitude={candidate.latitude}
+                                      longitude={candidate.longitude}
+                                    />
                                   </div>
                                   <button
                                     onClick={() => void confirmCandidate(address, candidate.id)}
@@ -998,6 +1021,10 @@ export function CustomersPage() {
               Importar archivo
             </button>
           </section>
+        ) : null}
+
+        {showExport ? (
+          <CustomerExportDialog onClose={() => setShowExport(false)} search={search} />
         ) : null}
 
         {showImport ? (

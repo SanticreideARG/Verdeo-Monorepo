@@ -2229,6 +2229,26 @@ a {
   color: var(--db-text-soft);
   font-size: 0.65rem;
 }
+/* Map preview beside an address or a geocoding candidate. The iframe carries the OSM embed, so it
+   needs an explicit height — an iframe has no intrinsic size to lay out against. */
+.address-map {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+}
+.address-map iframe {
+  width: 100%;
+  height: 150px;
+  border: 1px solid var(--db-border);
+  border-radius: 0.5rem;
+  background: var(--db-surface-solid);
+}
+.address-map a {
+  justify-self: start;
+  color: var(--db-text-soft);
+  font-size: 0.65rem;
+  text-decoration: underline;
+}
 .crm-reject {
   margin-top: 0.55rem;
   color: #a24335;
@@ -2310,6 +2330,47 @@ a {
   padding: 1.1rem;
   background: var(--db-surface-solid);
   box-shadow: 0 24px 60px rgb(0 0 0 / 28%);
+}
+/* Column picker in the customer export dialog: grouped short lists rather than one long column of
+   checkboxes, so the whole catalog is scannable without scrolling. */
+.export-columns {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.export-columns fieldset {
+  border: 1px solid var(--db-border-soft);
+  border-radius: 0.55rem;
+  padding: 0.6rem 0.7rem;
+}
+.export-columns legend {
+  padding: 0 0.3rem;
+  color: var(--db-text);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.export-columns label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.2rem 0;
+  color: var(--db-text-soft);
+  font-size: 0.78rem;
+}
+.export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.1rem;
+}
+.crm-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 .crm-import-columns {
   display: grid;
@@ -2687,4 +2748,111 @@ a {
 }
 .chat-presence-dot.is-away {
   background: #c8a030;
+}
+
+/* Estadísticas charts. Hand-drawn inline SVG rather than a charting library, so everything here
+   inherits the dashboard's own theme tokens and works in light and dark without a second palette. */
+.stats-chart svg {
+  width: 100%;
+  height: 200px;
+}
+.stats-chart-area {
+  fill: color-mix(in srgb, var(--db-accent) 18%, transparent);
+}
+.stats-chart-line {
+  fill: none;
+  stroke: var(--db-accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.stats-chart-dot {
+  fill: var(--db-accent);
+}
+.stats-chart-axis {
+  fill: var(--db-text-soft);
+  font-size: 11px;
+}
+.stats-donut {
+  display: grid;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  grid-template-columns: 140px minmax(0, 1fr);
+}
+.stats-donut svg {
+  width: 140px;
+  height: 140px;
+}
+.stats-donut-legend {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+}
+.stats-donut-legend li {
+  display: grid;
+  align-items: center;
+  gap: 0.5rem;
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
+}
+.stats-donut-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.stats-donut-legend span {
+  overflow: hidden;
+  color: var(--db-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stats-donut-legend strong {
+  color: var(--db-text);
+}
+.stats-donut-legend em {
+  color: var(--db-text-soft);
+  font-style: normal;
+}
+/* Five tints of the accent, so neighbouring slices stay distinguishable without needing a palette
+   as long as the (unbounded) number of varieties. */
+.stats-donut-slice-1 {
+  stroke: var(--db-accent);
+}
+.stats-donut-slice-2 {
+  stroke: color-mix(in srgb, var(--db-accent) 72%, white);
+}
+.stats-donut-slice-3 {
+  stroke: color-mix(in srgb, var(--db-accent) 48%, white);
+}
+.stats-donut-slice-4 {
+  stroke: color-mix(in srgb, var(--db-accent) 60%, black);
+}
+.stats-donut-slice-5 {
+  stroke: color-mix(in srgb, var(--db-accent) 30%, white);
+}
+.stats-donut-key-1 {
+  background: var(--db-accent);
+}
+.stats-donut-key-2 {
+  background: color-mix(in srgb, var(--db-accent) 72%, white);
+}
+.stats-donut-key-3 {
+  background: color-mix(in srgb, var(--db-accent) 48%, white);
+}
+.stats-donut-key-4 {
+  background: color-mix(in srgb, var(--db-accent) 60%, black);
+}
+.stats-donut-key-5 {
+  background: color-mix(in srgb, var(--db-accent) 30%, white);
+}
+.stats-delta {
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.stats-delta.is-up {
+  color: #2f7a4d;
+}
+.stats-delta.is-down {
+  color: #a24335;
 }

@@ -211,6 +211,13 @@
       "when": 1787708538786,
       "tag": "0029_small_human_torch",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1788349273569,
+      "tag": "0030_woozy_sabretooth",
+      "breakpoints": true
     }
   ]
 }

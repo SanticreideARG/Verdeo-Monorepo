@@ -168,6 +168,15 @@ export const CustomerListQuerySchema = z.object({
   status: ConfigurableKeySchema.optional(),
 });
 
+/** Same filters as the list, minus paging (an export walks every page) plus the column choice. */
+export const CustomerExportQuerySchema = z.object({
+  // Comma-separated column keys, validated against the server's catalog rather than here: the
+  // catalog is what knows how to render each one, so it owns which keys are real.
+  columns: z.string().trim().max(2_000).optional(),
+  search: z.string().trim().max(200).optional(),
+  status: ConfigurableKeySchema.optional(),
+});
+
 export const CustomerSummarySchema = z.object({
   createdAt: IsoDateTimeSchema,
   displayName: z.string(),

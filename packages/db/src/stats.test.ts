@@ -185,4 +185,30 @@ describe('getStatsOverview', () => {
     expect(outsideWindow.global.orderCount).toBe(0);
     expect(outsideWindow.byZone).toHaveLength(0);
   });
+
+  it('rolls up a daily series, variety demand and distinct customers', async () => {
+    const service = await seededService();
+
+    const overview = await service.getStatsOverview({});
+
+    // Every non-cancelled order in the fixture delivers on the same date, so the series is one
+    // point carrying the full total — the grouping key is the delivery date, not created-at.
+    expect(overview.byDay).toHaveLength(1);
+    expect(overview.byDay[0]).toMatchObject({
+      day: '2026-08-26',
+      orderCount: 3,
+      revenueMinor: 25000 + 50000 + 12000,
+    });
+
+    // Variety demand comes off the order-item snapshots, so it survives a menu being edited later.
+    expect(overview.byVariety.length).toBeGreaterThan(0);
+    expect(overview.byVariety.every((row) => row.units > 0)).toBe(true);
+
+    // Distinct customers, not order count: the repeat rate is the whole point of this pair.
+    expect(overview.global.customerCount).toBeGreaterThan(0);
+    expect(overview.global.ordersPerCustomer).toBeCloseTo(
+      overview.global.orderCount / overview.global.customerCount,
+      2,
+    );
+  });
 });

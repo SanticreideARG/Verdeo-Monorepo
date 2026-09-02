@@ -9,6 +9,8 @@ import {
   AuditEventQuerySchema,
   AuditFacetsResponseSchema,
   AIProviderConfigListResponseSchema,
+  IntegrationCredentialListResponseSchema,
+  IntegrationCredentialUpsertRequestSchema,
   AIProviderConfigUpsertRequestSchema,
   AIPromptSummaryListResponseSchema,
   AIPromptDetailSchema,
@@ -51,6 +53,7 @@ import {
   CustomerImportResponseSchema,
   CustomerListResponseSchema,
   CustomerSelfServiceSchema,
+  CustomerExportQuerySchema,
   CustomerListQuerySchema,
   CustomerPreferenceCreateRequestSchema,
   CustomerPreferenceSchema,
@@ -176,6 +179,7 @@ import {
   UserStatusUpdateRequestSchema,
   type ApiErrorCode,
   type AIProviderConfigUpsertRequest,
+  type IntegrationCredentialUpsertRequest,
   type AddressGeocodingConfirmRequest,
   type AddressGeocodingCreateRequest,
   type ChatLocationCreateRequest,
@@ -222,6 +226,12 @@ import {
 } from '@verdeo/contracts';
 import { createRequestId, type Logger } from '@verdeo/observability';
 
+import {
+  buildCustomersExcel,
+  CUSTOMER_EXPORT_COLUMN_CATALOG,
+  DEFAULT_CUSTOMER_EXPORT_COLUMNS,
+  type CustomerExportRow,
+} from './customer-export.js';
 import { ContactImportError, parseContactImport } from './integrations/contact-import.js';
 import { buildLabelsPrintHtml } from './labels-export.js';
 import {
@@ -418,6 +428,10 @@ interface OperationsEngine {
     context: OperationsContext,
   ): Promise<unknown>;
   currentPublishedMenu(operatingSiteId: string | null): Promise<unknown>;
+  exportCustomers(
+    input: ScopedInput<Omit<CustomerListQuery, 'cursor' | 'limit'>>,
+    context: OperationsContext,
+  ): Promise<CustomerExportRow[]>;
   exportOrdersCsv(
     input: ScopedInput<Omit<OrderListQuery, 'cursor' | 'limit'>>,
     context: OperationsContext,
@@ -553,6 +567,15 @@ interface AIConfigurationContext {
   correlationId: string;
   requestId: string;
   source: string;
+}
+
+/** Non-AI third-party keys (maps/geocoding). Same shape as AIConfigurationEngine by design. */
+interface IntegrationCredentialsEngine {
+  list(): Promise<unknown>;
+  upsert(
+    input: IntegrationCredentialUpsertRequest,
+    context: AIConfigurationContext,
+  ): Promise<unknown>;
 }
 
 interface AuditQueryEngine {
@@ -821,6 +844,7 @@ interface CreateAppOptions {
   credentials: CredentialLogin;
   delivery?: DeliveryEngine;
   geography?: GeographyEngine;
+  integrationCredentials?: IntegrationCredentialsEngine;
   logger: Logger;
   messaging?: MessagingEngine;
   oauth?: OAuthLogin;
@@ -1599,6 +1623,7 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/surplus/*', requireAuthentication);
   app.use('/api/v1/menu-catalog/*', requireAuthentication);
   app.use('/api/v1/ai/providers', requireAuthentication);
+  app.use('/api/v1/integrations/credentials', requireAuthentication);
   app.use('/api/v1/ai/prompts', requireAuthentication);
   app.use('/api/v1/ai/prompts/*', requireAuthentication);
   app.use('/api/v1/audit', requireAuthentication);
@@ -2340,6 +2365,48 @@ export function createApp(options: CreateAppOptions) {
       session.permissions.includes('customers.view_sensitive'),
     );
     return context.json(CustomerListResponseSchema.parse(contractValue(page)));
+  });
+
+  /** The column catalog the export picker renders from — never a hardcoded list in the dashboard. */
+  app.get('/api/v1/customers/export/columns', (context) => {
+    if (!context.get('session').permissions.includes('customers.read')) return forbidden(context);
+    return context.json({
+      defaults: DEFAULT_CUSTOMER_EXPORT_COLUMNS,
+      items: CUSTOMER_EXPORT_COLUMN_CATALOG,
+    });
+  });
+
+  app.get('/api/v1/customers/export', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('customers.read')) return forbidden(context);
+    const query = CustomerExportQuerySchema.safeParse(context.req.query());
+    if (!query.success)
+      return badRequest(context, 'Los filtros de exportación no son válidos.', query.error.issues);
+
+    // Internal notes are staff annotation about the customer, so exporting them needs the same
+    // gate that shows them on screen.
+    const requested = query.data.columns
+      ? query.data.columns.split(',').map((value) => value.trim())
+      : DEFAULT_CUSTOMER_EXPORT_COLUMNS;
+    const columns = session.permissions.includes('customers.view_sensitive')
+      ? requested
+      : requested.filter((key) => key !== 'internalNotes');
+
+    const rows = await requireOperations().exportCustomers(
+      scoped(context, {
+        ...(query.data.search ? { search: query.data.search } : {}),
+        ...(query.data.status ? { status: query.data.status } : {}),
+      }),
+      operationsContext(context),
+    );
+    const workbook = buildCustomersExcel(rows, columns);
+    context.header('cache-control', 'private, no-store');
+    context.header('content-disposition', 'attachment; filename="verdeo-clientes.xlsx"');
+    context.header(
+      'content-type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    return context.body(workbook as unknown as ArrayBuffer);
   });
 
   app.post('/api/v1/customers', async (context) => {
@@ -3869,6 +3936,52 @@ export function createApp(options: CreateAppOptions) {
       source: 'api',
     });
     return context.json(AIProviderConfigListResponseSchema.parse(contractValue(result)));
+  });
+
+  // Integration keys live under the same "ai.providers.manage" permission as the AI ones: they are
+  // the same class of secret, administered from the same Ajustes screen by the same person.
+  app.get('/api/v1/integrations/credentials', async (context) => {
+    if (!context.get('session').permissions.includes('ai.providers.manage'))
+      return forbidden(context);
+    if (!options.integrationCredentials)
+      throw new Error('Integration credentials engine is not configured');
+    return context.json(
+      IntegrationCredentialListResponseSchema.parse(
+        contractValue(await options.integrationCredentials.list()),
+      ),
+    );
+  });
+
+  app.put('/api/v1/integrations/credentials', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('ai.providers.manage')) return forbidden(context);
+    if (!options.integrationCredentials)
+      throw new Error('Integration credentials engine is not configured');
+    const input = IntegrationCredentialUpsertRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) {
+      const code: ApiErrorCode = 'BAD_REQUEST';
+      return context.json(
+        {
+          error: {
+            code,
+            details: input.error.issues,
+            message: 'Revisá la configuración de la integración.',
+            requestId: context.get('requestId'),
+          },
+        },
+        statusForCode(code),
+      );
+    }
+    const requestId = context.get('requestId');
+    const result = await options.integrationCredentials.upsert(input.data, {
+      actorUserId: session.userId,
+      correlationId: requestId,
+      requestId,
+      source: 'api',
+    });
+    return context.json(IntegrationCredentialListResponseSchema.parse(contractValue(result)));
   });
 
   app.get('/api/v1/ai/prompts', async (context) => {

@@ -56,6 +56,7 @@ const customerOperationsStubs = {
   addCustomerRestriction: vi.fn(),
   confirmAddressGeocoding: vi.fn(),
   cycleLabels: vi.fn(),
+  exportCustomers: vi.fn(),
   exportOrdersCsv: vi.fn(),
   generateProductionSnapshot: vi.fn(),
   getAddressGeocodingRequest: vi.fn(),
@@ -2497,12 +2498,16 @@ describe('API foundation', () => {
       const getStatsOverview = vi.fn(() =>
         Promise.resolve({
           byCycle: [],
+          byDay: [],
           bySize: [],
+          byVariety: [],
           byZone: [],
           global: {
             averageOrderValueMinor: 0,
             currency: 'ARS',
+            customerCount: 0,
             orderCount: 0,
+            ordersPerCustomer: 0,
             revenueMinor: 0,
             statusBreakdown: [],
           },
@@ -2530,12 +2535,16 @@ describe('API foundation', () => {
       const getStatsOverview = vi.fn(() =>
         Promise.resolve({
           byCycle: [],
+          byDay: [],
           bySize: [],
+          byVariety: [],
           byZone: [],
           global: {
             averageOrderValueMinor: 0,
             currency: 'ARS',
+            customerCount: 0,
             orderCount: 0,
+            ordersPerCustomer: 0,
             revenueMinor: 0,
             statusBreakdown: [],
           },

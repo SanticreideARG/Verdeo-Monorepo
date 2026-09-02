@@ -26,12 +26,13 @@ import {
   PostgresSessionRepository,
   PostgresCmsService,
   PostgresHelpService,
+  PostgresIntegrationCredentialsService,
   PostgresMessagingService,
   PostgresSurveyService,
   PostgresUserAdminRepository,
   PostgresUserDirectoryRepository,
 } from '@verdeo/db';
-import { LocationLinkGeocodingProvider } from '@verdeo/geocoding';
+import { ConfigurableGeocodingProvider } from '@verdeo/geocoding';
 import { createLogger } from '@verdeo/observability';
 import { NearestNeighborRouteOptimizer } from '@verdeo/routing';
 
@@ -106,9 +107,15 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     },
     revoke: (id: string) => accessTokenService.revoke(id),
   };
+  const integrationCredentials = new PostgresIntegrationCredentialsService(
+    database.db,
+    env.AI_CONFIG_ENCRYPTION_KEY,
+  );
   const operations = new PostgresOperationsService(
     database.db,
-    new LocationLinkGeocodingProvider(),
+    // Resolves the maps key per call, so adding it in Ajustes takes effect without a redeploy and
+    // falls back to link-parsing when none is configured.
+    new ConfigurableGeocodingProvider(() => integrationCredentials.secretFor('maps')),
   );
   const geography = new PostgresGeographyService(database.db);
   const chat = new PostgresChatService(database.db);
@@ -392,6 +399,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     credentials,
     delivery,
     geography,
+    integrationCredentials,
     logger,
     messaging,
     ...(oauth ? { oauth } : {}),

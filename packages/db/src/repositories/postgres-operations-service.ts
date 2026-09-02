@@ -3192,6 +3192,135 @@ export class PostgresOperationsService {
     );
   }
 
+  /**
+   * Flat, one-row-per-customer data for the Excel export. Deliberately not built by calling
+   * `getCustomer` per row: that would be one round trip per customer, and this walks thousands.
+   * Instead it pages the same filtered list the screen shows, then does one bulk query each for
+   * identities and addresses.
+   *
+   * Returns every field; the caller picks which columns to keep, so the column choice lives with
+   * the presentation and this stays a single query shape.
+   */
+  public async exportCustomers(
+    input: Omit<CustomerListInput, 'cursor' | 'limit'>,
+    context: OperationsContext,
+  ) {
+    const collected: { createdAt: Date; displayName: string; id: string; status: string }[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await this.listCustomers({ ...input, cursor, limit: 200 }, false);
+      collected.push(...page.items);
+      if (collected.length >= 10_000 && page.nextCursor) {
+        throw new OperationsConflictError(
+          'La exportación supera los 10000 clientes; acotá los filtros antes de reintentar.',
+        );
+      }
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor);
+
+    const customerIds = collected.map(({ id }) => id);
+    const [profiles, identities, addresses] = await Promise.all([
+      customerIds.length === 0
+        ? []
+        : this.database
+            .select({
+              firstName: customers.firstName,
+              id: customers.id,
+              internalNotes: customers.internalNotes,
+              lastName: customers.lastName,
+              updatedAt: customers.updatedAt,
+            })
+            .from(customers)
+            .where(inArray(customers.id, customerIds)),
+      customerIds.length === 0
+        ? []
+        : this.database
+            .select({
+              customerId: customerIdentities.customerId,
+              primary: customerIdentities.primary,
+              type: customerIdentities.type,
+              value: customerIdentities.valueDisplay,
+            })
+            .from(customerIdentities)
+            .where(
+              and(
+                inArray(customerIdentities.customerId, customerIds),
+                eq(customerIdentities.active, true),
+              ),
+            ),
+      customerIds.length === 0
+        ? []
+        : this.database
+            .select({
+              city: customerAddresses.city,
+              customerId: customerAddresses.customerId,
+              geocodingStatus: customerAddresses.geocodingStatus,
+              latitude: customerAddresses.latitude,
+              longitude: customerAddresses.longitude,
+              primary: customerAddresses.primary,
+              writtenAddress: customerAddresses.writtenAddress,
+              zoneName: geographicZones.displayName,
+            })
+            .from(customerAddresses)
+            .innerJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
+            .where(
+              and(
+                inArray(customerAddresses.customerId, customerIds),
+                eq(customerAddresses.active, true),
+              ),
+            ),
+    ]);
+
+    const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
+    const identityValue = (customerId: string, type: string) =>
+      identities.find((identity) => identity.customerId === customerId && identity.type === type)
+        ?.value ?? null;
+
+    const rows = collected.map((customer) => {
+      const profile = profileById.get(customer.id);
+      const owned = addresses.filter((address) => address.customerId === customer.id);
+      // The primary address is the one an operator means by "the customer's address"; falling back
+      // to the first keeps a customer whose addresses predate the primary flag from exporting blank.
+      const address = owned.find((candidate) => candidate.primary) ?? owned[0];
+      return {
+        addressCity: address?.city ?? null,
+        addressCount: owned.length,
+        addressZone: address?.zoneName ?? null,
+        createdAt: customer.createdAt,
+        displayName: customer.displayName,
+        email: identityValue(customer.id, 'email'),
+        firstName: profile?.firstName ?? null,
+        geocodingStatus: address?.geocodingStatus ?? null,
+        id: customer.id,
+        internalNotes: profile?.internalNotes ?? null,
+        lastName: profile?.lastName ?? null,
+        latitude: address?.latitude ?? null,
+        longitude: address?.longitude ?? null,
+        phone: identityValue(customer.id, 'phone'),
+        status: customer.status,
+        updatedAt: profile?.updatedAt ?? customer.createdAt,
+        whatsapp: identityValue(customer.id, 'whatsapp'),
+        writtenAddress: address?.writtenAddress ?? null,
+      };
+    });
+
+    await this.database.transaction(async (transaction) => {
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: 'customers.exported',
+        actor: auditActor(context),
+        after: { count: rows.length, format: 'xlsx' },
+        correlationId: context.correlationId,
+        entityId: context.requestId,
+        entityType: 'customer_collection',
+        requestId: context.requestId,
+        source: context.source,
+      });
+    });
+
+    return rows;
+  }
+
   public async getOrder(orderId: string) {
     const order = await this.loadOrder(this.database, orderId);
     if (!order) throw new OperationsNotFoundError('Order not found');
@@ -4325,10 +4454,54 @@ export class PostgresOperationsService {
       .groupBy(orderItems.variantSnapshot)
       .orderBy(desc(sql`sum(${orderItems.totalMinor})`));
 
+    // Daily series, for a trend line rather than only totals: "cuánto vendimos" answers less than
+    // "cuándo". Grouped by delivery date, the same date the window filters on, so a point on the
+    // chart and the window boundary always mean the same thing.
+    const byDay = await this.database
+      .select({
+        day: orders.deliveryDate,
+        orderCount: sql<number>`count(*)`,
+        revenueMinor: sql<number>`coalesce(sum(${orders.totalMinor}), 0)`,
+      })
+      .from(orders)
+      .where(scope)
+      .groupBy(orders.deliveryDate)
+      .orderBy(asc(orders.deliveryDate));
+
+    // Variety demand, which drives what the kitchen actually plans — bySize alone says how much
+    // but not what.
+    const byVariety = await this.database
+      .select({
+        familyName: orderItems.productNameSnapshot,
+        revenueMinor: sql<number>`coalesce(sum(${orderItems.totalMinor}), 0)`,
+        units: sql<number>`coalesce(sum(${orderItems.quantityUnits}), 0)`,
+      })
+      .from(orderItems)
+      .innerJoin(orders, eq(orders.id, orderItems.orderId))
+      .where(scope)
+      .groupBy(orderItems.productNameSnapshot)
+      .orderBy(desc(sql`sum(${orderItems.totalMinor})`));
+
+    const [customerTotals] = await this.database
+      .select({ customerCount: sql<number>`count(distinct ${orders.customerId})` })
+      .from(orders)
+      .where(scope);
+
     const orderCount = Number(globalTotals?.orderCount ?? 0);
     const revenueMinor = Number(globalTotals?.revenueMinor ?? 0);
+    const customerCount = Number(customerTotals?.customerCount ?? 0);
 
     return {
+      byDay: byDay.map((row) => ({
+        ...row,
+        orderCount: Number(row.orderCount),
+        revenueMinor: Number(row.revenueMinor),
+      })),
+      byVariety: byVariety.map((row) => ({
+        ...row,
+        revenueMinor: Number(row.revenueMinor),
+        units: Number(row.units),
+      })),
       byCycle: byCycle.map((row) => ({
         ...row,
         orderCount: Number(row.orderCount),
@@ -4347,6 +4520,10 @@ export class PostgresOperationsService {
       global: {
         averageOrderValueMinor: orderCount > 0 ? Math.round(revenueMinor / orderCount) : 0,
         currency: 'ARS',
+        customerCount,
+        // Repeat rate proxy: more orders than distinct customers means someone ordered twice.
+        ordersPerCustomer:
+          customerCount > 0 ? Math.round((orderCount / customerCount) * 100) / 100 : 0,
         orderCount,
         revenueMinor,
         statusBreakdown: statusBreakdown.map((row) => ({ ...row, count: Number(row.count) })),
