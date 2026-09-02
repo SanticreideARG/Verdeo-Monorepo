@@ -354,7 +354,10 @@ async function main() {
             menuId: regionalMenu.id,
             operatingSiteId: site.id,
             paymentExpectation: paymentMethods[globalIndex % paymentMethods.length]!,
-            source: 'seed-e2e-test',
+            // `orders.source` is a closed enum the contracts validate on read (OrderSummarySchema),
+            // not a free-text provenance tag — writing anything else here makes GET /orders fail
+            // validation for the whole page, not just the offending row.
+            source: 'manual',
           },
           CONTEXT,
         );
