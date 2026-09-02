@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
+import { DraftNotice } from '../components/DraftNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
 import { apiRequest } from '../lib/api.js';
+import { useFormDraft } from '../lib/useFormDraft.js';
 import {
   errorMessage,
   formatMoney,
@@ -34,6 +36,10 @@ export function PublicOrderPage() {
   const [sites, setSites] = useState<{ displayName: string; slug: string }[]>([]);
   const [siteSlug, setSiteSlug] = useState('');
   const [selectedDishes, setSelectedDishes] = useState<string[]>([]);
+  const formRef = useRef<HTMLFormElement>(null);
+  // A visitor filling this in is not staff: a stray back button or a refresh on mobile costs them
+  // the whole order, and there is no dashboard to fall back on.
+  const draft = useFormDraft(formRef, 'public-order');
 
   // The visitor chooses the city; it is never inferred from IP or domain.
   useEffect(() => {
@@ -118,6 +124,9 @@ export function PublicOrderPage() {
       setMessage(await errorMessage(response));
       return;
     }
+    // The order exists now; keeping its draft would repopulate the form if they came back to
+    // place a second one.
+    draft.discard();
     setCreatedOrder((await response.json()) as OrderSummary);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -202,7 +211,9 @@ export function PublicOrderPage() {
           <form
             className="rounded-[2rem] border border-forest/10 bg-white p-6 shadow-sm sm:p-8"
             onSubmit={(event) => void submit(event)}
+            ref={formRef}
           >
+            {draft.restored ? <DraftNotice onDiscard={draft.dismissNotice} /> : null}
             <div className="form-grid">
               <label className="field field-wide">
                 Variedad y tamaño

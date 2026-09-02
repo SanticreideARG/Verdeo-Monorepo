@@ -51,6 +51,53 @@ function readForm(form: HTMLFormElement): Record<string, string | string[] | boo
   return draft;
 }
 
+/**
+ * Sets a field's value in a way React notices.
+ *
+ * Assigning `element.value` directly is invisible to a controlled component: React holds the value
+ * in state, sees no change event, and keeps rendering the old one — so the field would *look*
+ * restored while the state behind it stayed empty, and submitting would silently send the stale
+ * value. Going through the prototype's native setter and then dispatching a bubbling `input` event
+ * is what makes React's own onChange run and the state actually update. Uncontrolled fields are
+ * unaffected either way.
+ */
+/**
+ * Grabs a DOM prototype's own setter so it can be invoked against a specific element.
+ *
+ * `unbound-method` is disabled deliberately and only here: taking the setter off the prototype
+ * detached from any receiver is the entire technique, and it is immediately `.call()`ed with the
+ * element as `this`. Annotating it `this: void` would be a lie — the setter very much uses `this`.
+ */
+function nativeSetter(prototype: object, property: string) {
+  // eslint-disable-next-line @typescript-eslint/unbound-method
+  return Object.getOwnPropertyDescriptor(prototype, property)?.set;
+}
+
+function setFieldValue(
+  element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
+  value: string,
+): void {
+  const prototype =
+    element instanceof HTMLInputElement
+      ? HTMLInputElement.prototype
+      : element instanceof HTMLTextAreaElement
+        ? HTMLTextAreaElement.prototype
+        : HTMLSelectElement.prototype;
+  const setter = nativeSetter(prototype, 'value');
+  if (setter) setter.call(element, value);
+  else element.value = value;
+  element.dispatchEvent(new Event('input', { bubbles: true }));
+  element.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function setFieldChecked(element: HTMLInputElement, checked: boolean): void {
+  const setter = nativeSetter(HTMLInputElement.prototype, 'checked');
+  if (setter) setter.call(element, checked);
+  else element.checked = checked;
+  element.dispatchEvent(new Event('click', { bubbles: true }));
+  element.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 function writeForm(
   form: HTMLFormElement,
   draft: Record<string, string | string[] | boolean>,
@@ -63,15 +110,16 @@ function writeForm(
     // A radio group comes back as a RadioNodeList rather than a single element.
     if (field instanceof RadioNodeList) {
       for (const radio of Array.from(field)) {
-        if (radio instanceof HTMLInputElement) radio.checked = radio.value === value;
+        if (radio instanceof HTMLInputElement) setFieldChecked(radio, radio.value === value);
       }
       restoredAnything = true;
     } else if (field instanceof HTMLInputElement && field.type === 'checkbox') {
-      field.checked = value === true;
+      setFieldChecked(field, value === true);
       if (value === true) restoredAnything = true;
     } else if (field instanceof HTMLSelectElement && field.multiple && Array.isArray(value)) {
       for (const option of Array.from(field.options))
         option.selected = value.includes(option.value);
+      field.dispatchEvent(new Event('change', { bubbles: true }));
       restoredAnything = true;
     } else if (
       (field instanceof HTMLInputElement ||
@@ -79,7 +127,7 @@ function writeForm(
         field instanceof HTMLTextAreaElement) &&
       typeof value === 'string'
     ) {
-      field.value = value;
+      setFieldValue(field, value);
       restoredAnything = true;
     }
   }

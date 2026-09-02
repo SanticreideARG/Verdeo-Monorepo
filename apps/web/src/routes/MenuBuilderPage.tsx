@@ -3,10 +3,12 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
+import { DraftNotice } from '../components/DraftNotice.js';
 import { apiRequest } from '../lib/api.js';
 import { buildMenuPayload, type OfferingDraft, type SizePriceDraft } from '../lib/menuPayload.js';
 import { errorMessage, type WeeklyMenu } from '../lib/operations.js';
 import { showToast } from '../lib/toast.js';
+import { hasPersistedState, usePersistedState } from '../lib/usePersistedState.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 const emptyOffering = (): OfferingDraft => ({
@@ -83,13 +85,29 @@ export function MenuBuilderPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const navigate = useNavigate();
   const { id: editingMenuId } = useParams<{ id?: string }>();
-  const [offerings, setOfferings] = useState<OfferingDraft[]>([emptyOffering()]);
-  const [sizePrices, setSizePrices] = useState<SizePriceDraft[]>(defaultSizePrices);
+  // Only a new week keeps a draft. While editing, the loaded menu is the source of truth and a
+  // leftover draft from an unrelated week must never overwrite it.
+  const draftsEnabled = !editingMenuId;
+  const [offerings, setOfferings, clearOfferingsDraft] = usePersistedState<OfferingDraft[]>(
+    'menu-builder-offerings',
+    [emptyOffering()],
+    draftsEnabled,
+  );
+  const [sizePrices, setSizePrices, clearPricesDraft] = usePersistedState<SizePriceDraft[]>(
+    'menu-builder-prices',
+    defaultSizePrices(),
+    draftsEnabled,
+  );
   const [message, setMessage] = useState('');
-  const [includeIntuitivo, setIncludeIntuitivo] = useState(true);
+  const [includeIntuitivo, setIncludeIntuitivo, clearIntuitivoDraft] = usePersistedState(
+    'menu-builder-intuitivo',
+    true,
+    draftsEnabled,
+  );
   const [editingMenu, setEditingMenu] = useState<WeeklyMenu | null>(null);
   const [loading, setLoading] = useState(Boolean(editingMenuId));
   const [publishing, setPublishing] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
   const messageRef = useRef<HTMLParagraphElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -141,6 +159,12 @@ export function MenuBuilderPage() {
   // pre-filling it would just walk straight into the "ya existe una semana con ese alias" conflict).
   useEffect(() => {
     if (editingMenuId) return;
+    // A restored draft outranks the template: pre-filling here would wipe the dishes someone
+    // already typed with the previous week's empty ones — exactly the loss the draft prevents.
+    if (hasPersistedState('menu-builder-offerings')) {
+      setDraftRestored(true);
+      return;
+    }
     let active = true;
     void apiRequest('/api/v1/menus')
       .then(async (response) => {
@@ -157,7 +181,21 @@ export function MenuBuilderPage() {
     return () => {
       active = false;
     };
+    // Deliberately keyed on editingMenuId alone: setOfferings/setIncludeIntuitivo are stable
+    // setters, and re-running this on them would refetch the template on every keystroke.
   }, [editingMenuId]);
+
+  /** Drops the whole week draft and starts from the previous week's template again. */
+  function clearWeekDraft() {
+    clearOfferingsDraft();
+    clearPricesDraft();
+    clearIntuitivoDraft();
+    setDraftRestored(false);
+    setOfferings([emptyOffering()]);
+    setSizePrices(defaultSizePrices());
+    setIncludeIntuitivo(true);
+    formRef.current?.reset();
+  }
 
   // Thin adapter over the extracted, tested builder: the screen owns how an error is shown,
   // buildMenuPayload owns what counts as one.
@@ -213,6 +251,11 @@ export function MenuBuilderPage() {
       // "perdí lo que cargué" even though the draft did save. Landing on the list with the new
       // menu visible there is confirmation nobody can miss; the toast survives the navigation
       // (it's a module-level store, not this page's state) so it still shows up on arrival.
+      // Saved for real, so the local draft has done its job — dropping it here (rather than on
+      // unmount) is what keeps the next new week from starting on top of this one.
+      clearOfferingsDraft();
+      clearPricesDraft();
+      clearIntuitivoDraft();
       showToast(
         options.alsoPublish
           ? `Menú "${payload.alias}" guardado y publicado.`
@@ -285,6 +328,7 @@ export function MenuBuilderPage() {
           ref={formRef}
           onSubmit={(event) => void submitMenu(event)}
         >
+          {draftRestored ? <DraftNotice onDiscard={clearWeekDraft} /> : null}
           <div className="form-grid">
             <label className="field field-wide">
               Alias de la semana

@@ -1,5 +1,5 @@
 import { act, render, screen } from '@testing-library/react';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { useFormDraft } from './useFormDraft.js';
@@ -157,6 +157,56 @@ describe('useFormDraft', () => {
 
     expect(screen.getByLabelText<HTMLInputElement>('Nombre').value).toBe('');
     expect(storedDraft('pedidos')).toMatchObject({ displayName: 'Del formulario de pedidos' });
+    vi.useRealTimers();
+  });
+});
+
+/**
+ * A controlled form: React owns the value, so a naive `element.value = x` restore would fill the
+ * box visually while React's state stayed empty — and the stale state is what gets submitted.
+ */
+function ControlledHarness() {
+  const formRef = useRef<HTMLFormElement>(null);
+  // The harness only needs the hook mounted; its handle is exercised in the other suites.
+  useFormDraft(formRef, 'controlled');
+  const [name, setName] = useState('');
+  return (
+    <form ref={formRef}>
+      <input
+        aria-label="Nombre"
+        name="displayName"
+        onChange={(event) => setName(event.target.value)}
+        value={name}
+      />
+      {/* Renders React state, not the DOM node — the only honest way to assert state updated. */}
+      <p data-testid="state">{name}</p>
+    </form>
+  );
+}
+
+describe('useFormDraft with controlled inputs', () => {
+  it("restores into React's state, not just the DOM node", () => {
+    vi.useFakeTimers();
+    const first = render(<ControlledHarness />);
+    const field = screen.getByLabelText<HTMLInputElement>('Nombre');
+    act(() => {
+      // React tracks its own value on the node, so a plain assignment is swallowed as "no change";
+      // going through the native setter is what makes the synthetic onChange fire.
+      // eslint-disable-next-line @typescript-eslint/unbound-method -- see nativeSetter()
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(field, 'Camila Rojas');
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      vi.advanceTimersByTime(500);
+    });
+    expect(screen.getByTestId('state').textContent).toBe('Camila Rojas');
+    first.unmount();
+
+    render(<ControlledHarness />);
+
+    expect(screen.getByLabelText<HTMLInputElement>('Nombre').value).toBe('Camila Rojas');
+    // The assertion that matters: without the native-setter restore this reads empty, and the
+    // form would silently submit nothing while looking full.
+    expect(screen.getByTestId('state').textContent).toBe('Camila Rojas');
     vi.useRealTimers();
   });
 });

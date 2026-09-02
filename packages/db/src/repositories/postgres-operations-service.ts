@@ -4402,7 +4402,7 @@ export class PostgresOperationsService {
       filters.operatingSiteId ? eq(orders.operatingSiteId, filters.operatingSiteId) : undefined,
     );
 
-    const [globalTotals] = await this.database
+    const globalTotalsQuery = this.database
       .select({
         orderCount: sql<number>`count(*)`,
         revenueMinor: sql<number>`coalesce(sum(${orders.totalMinor}), 0)`,
@@ -4410,13 +4410,13 @@ export class PostgresOperationsService {
       .from(orders)
       .where(scope);
 
-    const statusBreakdown = await this.database
+    const statusBreakdownQuery = this.database
       .select({ count: sql<number>`count(*)`, status: orders.status })
       .from(orders)
       .where(scope)
       .groupBy(orders.status);
 
-    const byZone = await this.database
+    const byZoneQuery = this.database
       .select({
         operatingSiteId: orders.operatingSiteId,
         operatingSiteName: operatingSites.displayName,
@@ -4429,7 +4429,7 @@ export class PostgresOperationsService {
       .groupBy(orders.operatingSiteId, operatingSites.displayName)
       .orderBy(desc(sql`sum(${orders.totalMinor})`));
 
-    const byCycle = await this.database
+    const byCycleQuery = this.database
       .select({
         cycleAlias: salesCycles.alias,
         orderCount: sql<number>`count(*)`,
@@ -4442,7 +4442,7 @@ export class PostgresOperationsService {
       .groupBy(orders.salesCycleId, salesCycles.alias)
       .orderBy(desc(sql`sum(${orders.totalMinor})`));
 
-    const bySize = await this.database
+    const bySizeQuery = this.database
       .select({
         revenueMinor: sql<number>`coalesce(sum(${orderItems.totalMinor}), 0)`,
         sizeName: orderItems.variantSnapshot,
@@ -4457,7 +4457,7 @@ export class PostgresOperationsService {
     // Daily series, for a trend line rather than only totals: "cuánto vendimos" answers less than
     // "cuándo". Grouped by delivery date, the same date the window filters on, so a point on the
     // chart and the window boundary always mean the same thing.
-    const byDay = await this.database
+    const byDayQuery = this.database
       .select({
         day: orders.deliveryDate,
         orderCount: sql<number>`count(*)`,
@@ -4470,7 +4470,7 @@ export class PostgresOperationsService {
 
     // Variety demand, which drives what the kitchen actually plans — bySize alone says how much
     // but not what.
-    const byVariety = await this.database
+    const byVarietyQuery = this.database
       .select({
         familyName: orderItems.productNameSnapshot,
         revenueMinor: sql<number>`coalesce(sum(${orderItems.totalMinor}), 0)`,
@@ -4482,10 +4482,34 @@ export class PostgresOperationsService {
       .groupBy(orderItems.productNameSnapshot)
       .orderBy(desc(sql`sum(${orderItems.totalMinor})`));
 
-    const [customerTotals] = await this.database
+    const customerTotalsQuery = this.database
       .select({ customerCount: sql<number>`count(distinct ${orders.customerId})` })
       .from(orders)
       .where(scope);
+
+    // Eight independent reads over the same scope. Run sequentially they cost eight round trips;
+    // measured against Neon that was ~660ms of pure latency for ~1ms of actual query time.
+    const [
+      globalTotalsRows,
+      statusBreakdown,
+      byZone,
+      byCycle,
+      bySize,
+      byDay,
+      byVariety,
+      customerTotalsRows,
+    ] = await Promise.all([
+      globalTotalsQuery,
+      statusBreakdownQuery,
+      byZoneQuery,
+      byCycleQuery,
+      bySizeQuery,
+      byDayQuery,
+      byVarietyQuery,
+      customerTotalsQuery,
+    ]);
+    const globalTotals = globalTotalsRows[0];
+    const customerTotals = customerTotalsRows[0];
 
     const orderCount = Number(globalTotals?.orderCount ?? 0);
     const revenueMinor = Number(globalTotals?.revenueMinor ?? 0);
