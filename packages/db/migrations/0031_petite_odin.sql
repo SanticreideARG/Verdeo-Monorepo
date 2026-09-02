@@ -1,0 +1,2 @@
+CREATE INDEX "orders_site_delivery_date_idx" ON "orders" USING btree ("operating_site_id","delivery_date");--> statement-breakpoint
+CREATE INDEX "orders_delivery_date_idx" ON "orders" USING btree ("delivery_date");

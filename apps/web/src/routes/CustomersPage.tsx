@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { AddressMap } from '../components/AddressMap.js';
 import { CustomerExportDialog } from '../components/CustomerExportDialog.js';
+import { DraftNotice } from '../components/DraftNotice.js';
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { showToast } from '../lib/toast.js';
+import { useFormDraft } from '../lib/useFormDraft.js';
 import {
   errorMessage,
   formatMoney,
@@ -65,6 +67,10 @@ export function CustomersPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const createFormRef = useRef<HTMLFormElement>(null);
+  const createDraft = useFormDraft(createFormRef, 'customer-create', showCreate);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [message, setMessage] = useState('');
@@ -90,6 +96,7 @@ export function CustomersPage() {
         response,
       );
       setCustomers(page.items);
+      setNextCursor(page.nextCursor);
       const nextSelected = page.items.some(({ id }) => id === preferredId)
         ? preferredId
         : (page.items[0]?.id ?? '');
@@ -99,6 +106,30 @@ export function CustomersPage() {
     },
     [loadCustomer],
   );
+
+  /**
+   * Appends the next page. The directory used to request 100 rows and drop `nextCursor`, which
+   * silently made customer 101 unreachable by browsing — and now disagrees with the Excel export,
+   * which walks every page.
+   */
+  const loadMore = useCallback(async () => {
+    if (!nextCursor) return;
+    setLoadingMore(true);
+    try {
+      const params = new URLSearchParams({ cursor: nextCursor, limit: '100' });
+      if (search.trim()) params.set('search', search.trim());
+      const response = await apiRequest(`/api/v1/customers?${params.toString()}`);
+      const page = await responseJson<{ items: CustomerSummary[]; nextCursor: string | null }>(
+        response,
+      );
+      setCustomers((current) => [...current, ...page.items]);
+      setNextCursor(page.nextCursor);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'No pudimos cargar más clientes.');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [nextCursor, search]);
 
   useEffect(() => {
     let active = true;
@@ -125,6 +156,8 @@ export function CustomersPage() {
   // doesn't require switching the ambient scope first.
   const defaultZoneId =
     zones.find((zone) => zone.operatingSiteId === storedOperatingSiteId())?.id ?? '';
+  // Zones load asynchronously, so an empty list only means "no zones" once something has arrived.
+  const cityHasNoZones = zones.length > 0 && !defaultZoneId;
 
   useEffect(() => {
     let active = true;
@@ -237,6 +270,7 @@ export function CustomersPage() {
         }),
       );
       target.reset();
+      createDraft.discard();
       setShowCreate(false);
       setSearch('');
       await loadDirectory('', created.id);
@@ -528,7 +562,10 @@ export function CustomersPage() {
               <button type="submit">Buscar</button>
             </form>
             <div className="crm-directory-meta">
-              <span>{customers.length} clientes</span>
+              <span>
+                {customers.length} cliente{customers.length === 1 ? '' : 's'}
+                {nextCursor ? ' (hay más)' : ''}
+              </span>
               <button onClick={() => void loadDirectory(search, selectedId)} type="button">
                 Actualizar
               </button>
@@ -550,12 +587,26 @@ export function CustomersPage() {
                 </button>
               ))}
               {customers.length === 0 ? <p>No hay clientes para esta búsqueda.</p> : null}
+              {nextCursor ? (
+                <button
+                  className="crm-load-more"
+                  disabled={loadingMore}
+                  onClick={() => void loadMore()}
+                  type="button"
+                >
+                  {loadingMore ? 'Cargando…' : 'Cargar más clientes'}
+                </button>
+              ) : null}
             </div>
           </aside>
 
           <section className="crm-detail">
             {showCreate ? (
-              <form className="crm-panel" onSubmit={(event) => void createCustomer(event)}>
+              <form
+                className="crm-panel"
+                onSubmit={(event) => void createCustomer(event)}
+                ref={createFormRef}
+              >
                 <div className="crm-panel-heading">
                   <div>
                     <small>Alta de CRM</small>
@@ -565,10 +616,21 @@ export function CustomersPage() {
                     Cancelar
                   </button>
                 </div>
+                {createDraft.restored ? (
+                  <DraftNotice onDiscard={createDraft.dismissNotice} />
+                ) : null}
                 {!storedOperatingSiteId() ? (
                   <p className="mb-4 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest">
                     Elegí una ciudad en la barra superior antes de cargar un cliente: todo cliente
                     pertenece a una operación.
+                  </p>
+                ) : cityHasNoZones ? (
+                  // A city with no zones silently blocks the alta: a domicilio requires a zone, so
+                  // the form would fail on save with nothing explaining why. Say so up front and
+                  // point at where it gets fixed.
+                  <p className="mb-4 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest">
+                    Esta ciudad todavía no tiene zonas geográficas cargadas, así que no se le puede
+                    asignar un domicilio. Creá una en Ajustes → Zonas geográficas y volvé.
                   </p>
                 ) : null}
                 <div className="form-grid">
@@ -626,13 +688,22 @@ export function CustomersPage() {
                     Sin semillas
                   </label>
                 </fieldset>
-                <button
-                  className="button button-primary mt-4"
-                  disabled={!storedOperatingSiteId()}
-                  type="submit"
-                >
-                  Crear ficha
-                </button>
+                <div className="form-actions mt-4">
+                  <button
+                    className="button button-primary"
+                    disabled={!storedOperatingSiteId()}
+                    type="submit"
+                  >
+                    Crear ficha
+                  </button>
+                  <button
+                    className="button button-secondary"
+                    onClick={createDraft.clear}
+                    type="button"
+                  >
+                    Limpiar
+                  </button>
+                </div>
               </form>
             ) : detailLoading ? (
               <div className="crm-panel crm-panel-empty">Cargando ficha…</div>

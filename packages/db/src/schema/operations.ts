@@ -544,6 +544,11 @@ export const orders = pgTable(
     index('orders_created_at_idx').on(table.createdAt),
     index('orders_site_status_idx').on(table.operatingSiteId, table.status),
     index('orders_site_created_at_idx').on(table.operatingSiteId, table.createdAt),
+    // Estadísticas filters and groups on delivery_date in every one of its queries (the from/to
+    // window, the daily series, and the comparison window's second pass), and delivery/routes
+    // filters on it too. Site first, because a scoped query always pins the site.
+    index('orders_site_delivery_date_idx').on(table.operatingSiteId, table.deliveryDate),
+    index('orders_delivery_date_idx').on(table.deliveryDate),
     // Zone and operation cannot disagree: the pair must exist in geographic_zones. A null zone
     // leaves the constraint unenforced, which is what an order without a stored address needs.
     foreignKey({

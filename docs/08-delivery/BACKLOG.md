@@ -120,9 +120,10 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 
 ## P1 - Labels
 
-- [ ] Label templates.
+- [x] Label templates (`LabelSettingsPage` + `labels-export.ts`; impresión bajo demanda desde
+      producción, nunca automática al confirmar un pedido).
 - [ ] Multi-copy.
-- [ ] Order ID.
+- [x] Order ID.
 - [ ] QR token.
 
 ## P1 - Content/AI
@@ -134,10 +135,12 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 
 ## P2 - Customer surveys
 
-- [ ] Survey editor/engine (secciones de administración, preguntas configurables).
-- [ ] Token público por encuesta + ruta `public/survey/:token`.
-- [ ] Enlace y QR de distribución por encuesta.
-- [ ] Pantalla de resultados/estadísticas por encuesta (staff, gateada por permiso).
+- [x] Survey editor/engine (`SurveysPage`, preguntas configurables).
+- [x] Token público por encuesta + ruta `public/survey/:token` (`PublicSurveyPage`).
+- [ ] QR de distribución — el enlace directo ya se genera; falta el QR, igual que en Labels.
+- [x] Pantalla de resultados/estadísticas por encuesta (`SurveyResultsPage`, gateada por permiso).
+- [ ] **Sin decidir**, y bloquea cerrar la fase: si el token es 1:1 con un cliente o anónimo por
+      campaña, y si vence o es de un solo uso. Ver Fase 10 en `IMPLEMENTATION_ROADMAP.md`.
 
 ## P2
 

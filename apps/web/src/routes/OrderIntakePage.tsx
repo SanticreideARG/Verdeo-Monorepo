@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
+import { DraftNotice } from '../components/DraftNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { showToast } from '../lib/toast.js';
@@ -17,6 +18,7 @@ import {
   type WeeklyMenu,
 } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { useFormDraft } from '../lib/useFormDraft.js';
 
 // The delivery date is fixed to the período's own close date — not a free pick — so it lives here,
 // not as an editable form field.
@@ -44,6 +46,8 @@ export function OrderIntakePage() {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [message, setMessage] = useState('');
   const [formOpen, setFormOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const draft = useFormDraft(formRef, 'order-intake', formOpen);
   const [selectedMenuId, setSelectedMenuId] = useState('');
   const [selectedOfferingId, setSelectedOfferingId] = useState('');
   const [selectedDishes, setSelectedDishes] = useState<string[]>([]);
@@ -203,6 +207,9 @@ export function OrderIntakePage() {
         source: formText(form, 'source'),
       });
       event.currentTarget.reset();
+      // The draft is dropped on a successful save, not on unmount: that is what makes "I switched
+      // screens and came back" restore, while "I already saved this" does not come back as a ghost.
+      draft.discard();
       setSelectedCustomer(null);
       setCustomerResults([]);
       setCustomerQuery('');
@@ -267,7 +274,9 @@ export function OrderIntakePage() {
           <form
             className="operation-card mt-6 max-w-3xl"
             onSubmit={(event) => void createOrder(event)}
+            ref={formRef}
           >
+            {draft.restored ? <DraftNotice onDiscard={draft.dismissNotice} /> : null}
             <fieldset className="mb-5 rounded-2xl border border-forest/10 p-4">
               <legend className="px-2 text-sm font-bold text-forest">Cliente</legend>
               <div className="flex gap-2">
@@ -459,9 +468,25 @@ export function OrderIntakePage() {
                 />
               </div>
             ) : null}
-            <button className="button button-primary mt-4" type="submit">
-              Registrar borrador
-            </button>
+            <div className="form-actions mt-4">
+              <button className="button button-primary" type="submit">
+                Registrar borrador
+              </button>
+              <button
+                className="button button-secondary"
+                onClick={() => {
+                  draft.clear();
+                  setSelectedCustomer(null);
+                  setCustomerQuery('');
+                  setCustomerResults([]);
+                  setSelectedOfferingId('');
+                  setSelectedDishes([]);
+                }}
+                type="button"
+              >
+                Limpiar
+              </button>
+            </div>
           </form>
         ) : null}
 

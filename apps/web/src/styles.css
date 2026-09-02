@@ -2856,3 +2856,57 @@ a {
 .stats-delta.is-down {
   color: #a24335;
 }
+
+/* Draft restore notice. Deliberately quiet — it reports something that already happened, it isn't
+   an error and shouldn't read like one. */
+.draft-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+  border: 1px solid color-mix(in srgb, var(--db-accent) 30%, var(--db-border));
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  background: color-mix(in srgb, var(--db-accent) 8%, var(--db-surface-solid));
+  font-size: 0.78rem;
+  color: var(--db-text-soft);
+}
+.draft-notice button {
+  border: 0;
+  background: none;
+  color: var(--db-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+/* Sits inside .crm-customer-list, whose direct-child buttons are styled as customer rows — this
+   one is an action, so it deliberately resets that treatment rather than inheriting it. */
+.crm-customer-list button.crm-load-more {
+  display: block;
+  width: 100%;
+  margin-top: 0.4rem;
+  border: 1px dashed var(--db-border);
+  border-radius: 0.45rem;
+  padding: 0.55rem;
+  background: none;
+  color: var(--db-text-soft);
+  font: inherit;
+  font-size: 0.78rem;
+  text-align: center;
+  cursor: pointer;
+}
+.crm-customer-list button.crm-load-more:hover:not(:disabled) {
+  border-color: var(--db-accent);
+  color: var(--db-text);
+}
+.crm-customer-list button.crm-load-more:disabled {
+  cursor: default;
+  opacity: 0.6;
+}

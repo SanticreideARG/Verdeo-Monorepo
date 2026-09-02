@@ -4,20 +4,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
+import { buildMenuPayload, type OfferingDraft, type SizePriceDraft } from '../lib/menuPayload.js';
 import { errorMessage, type WeeklyMenu } from '../lib/operations.js';
 import { showToast } from '../lib/toast.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
-
-interface OfferingDraft {
-  description: string;
-  dishes: string;
-  familyName: string;
-}
-
-interface SizePriceDraft {
-  sizeName: string;
-  unitPrice: string;
-}
 
 const emptyOffering = (): OfferingDraft => ({
   description: '',
@@ -169,85 +159,21 @@ export function MenuBuilderPage() {
     };
   }, [editingMenuId]);
 
-  function toIsoOrNull(value: string): string | null {
-    if (!value.trim()) return null;
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date.toISOString();
-  }
-
-  // Shared by both actions ("Guardar borrador" and "Guardar y publicar") — returns null and sets
-  // the validation message itself when the form isn't ready to submit, so a caller just checks for
-  // null and stops.
+  // Thin adapter over the extracted, tested builder: the screen owns how an error is shown,
+  // buildMenuPayload owns what counts as one.
   function buildPayload(form: FormData) {
-    // Parsed and validated up front, before anything else — new Date(x).toISOString() throws on
-    // an empty/invalid string, and letting that happen while building the payload (rather than
-    // inside a try/catch) used to crash the handler silently: no error message, no redirect,
-    // nothing visibly happened.
-    const openAt = toIsoOrNull(formText(form, 'openAt'));
-    const partialKitchenCutoffAt = toIsoOrNull(formText(form, 'partialKitchenCutoffAt'));
-    const closeAt = toIsoOrNull(formText(form, 'closeAt'));
-    if (!openAt || !partialKitchenCutoffAt || !closeAt) {
-      setMessage('Completá apertura, parcial de cocina y cierre con fechas válidas.');
-      return null;
-    }
-
-    const parsedPrices = sizePrices
-      .filter((price) => price.sizeName.trim() && price.unitPrice.trim())
-      .map((price) => ({
-        currency: 'ARS',
-        mealsPerUnit: 5,
-        sizeName: price.sizeName.trim(),
-        unitPriceMinor: Math.round(Number(price.unitPrice) * 100),
-      }));
-    if (parsedPrices.length === 0) {
-      setMessage('Definí al menos un tamaño con su precio.');
-      return null;
-    }
-
-    const varieties = offerings.map((offering) => ({
-      composable: false,
-      description: offering.description.trim() ? offering.description.trim() : null,
-      dishes: offering.dishes
-        .split('\n')
-        .map((dish) => dish.trim())
-        .filter(Boolean),
-      familyName: offering.familyName,
-    }));
-    if (varieties.some((offering) => offering.dishes.length !== 5)) {
-      setMessage('Cada variedad necesita exactamente cinco platos.');
-      return null;
-    }
-    if (!formText(form, 'alias').trim()) {
-      setMessage('Ponele un alias a la semana.');
-      return null;
-    }
-    // Size and variety are unrelated axes for a *fixed* offering, so one row per (variety, size)
-    // pair is generated here instead of asked for per option. Intuitivo is different — it's priced
-    // by whatever size the customer actually picks at order time (via weeklyMenuPrices, not its
-    // own offering row), so the API allows at most one composable offering per menu, period. Push
-    // it after the flatMap, as a single row, or the request 400s with "Solo puede haber un menú
-    // personalizado (Intuitivo) por semana" — exactly the silent-looking failure this was.
-    const parsedOfferings = varieties.flatMap((variety) =>
-      parsedPrices.map((price) => ({ ...variety, sizeName: price.sizeName })),
-    );
-    if (includeIntuitivo) {
-      parsedOfferings.push({
-        composable: true,
-        description: null,
-        dishes: [],
-        familyName: 'Intuitivo',
-        sizeName: parsedPrices[0]?.sizeName ?? '',
-      });
-    }
-
-    return {
+    const result = buildMenuPayload({
       alias: formText(form, 'alias'),
-      closeAt,
-      offerings: parsedOfferings,
-      openAt,
-      partialKitchenCutoffAt,
-      prices: parsedPrices,
-    };
+      closeAt: formText(form, 'closeAt'),
+      includeIntuitivo,
+      offerings,
+      openAt: formText(form, 'openAt'),
+      partialKitchenCutoffAt: formText(form, 'partialKitchenCutoffAt'),
+      sizePrices,
+    });
+    if (result.payload) return result.payload;
+    setMessage(result.error);
+    return null;
   }
 
   async function saveMenu(form: FormData, options: { alsoPublish: boolean }) {
