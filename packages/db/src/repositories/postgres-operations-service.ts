@@ -1,4 +1,19 @@
-import { and, asc, desc, eq, gt, gte, ilike, inArray, lt, lte, ne, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  gte,
+  ilike,
+  inArray,
+  lt,
+  lte,
+  ne,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import { AuditService, type JsonValue } from '@verdeo/audit';
 import {
@@ -26,6 +41,7 @@ import {
 
 import type { Database } from '../index.js';
 import {
+  cancellationReasons,
   customerAddresses,
   customerIdentities,
   customerOperatingSites,
@@ -2839,6 +2855,34 @@ export class PostgresOperationsService {
     let deliveryLocationUrl = input.deliveryLocationUrl;
     let geographicZoneId: string | null = null;
     let operatingSiteId: string | null = null;
+
+    /**
+     * An order with no `deliveryAddressId` is unroutable: `createRoute` joins stops through that
+     * column, so it silently never appears in a route — and nothing on any screen says why. No
+     * caller was ever sending it, which meant *every* order was in that state.
+     *
+     * Falling back to the customer's primary address is also the correct default by design: the
+     * operation is supposed to be derived from the delivery zone (ADR-031), and that derivation
+     * only happens when an address is linked. An explicit id still wins.
+     */
+    const explicitAddressId = input.deliveryAddressId;
+    let resolvedAddressId = explicitAddressId;
+    if (!resolvedAddressId) {
+      const [primary] = await transaction
+        .select({ id: customerAddresses.id })
+        .from(customerAddresses)
+        .where(
+          and(
+            eq(customerAddresses.customerId, input.customerId),
+            eq(customerAddresses.active, true),
+            eq(customerAddresses.primary, true),
+          ),
+        )
+        .limit(1);
+      resolvedAddressId = primary?.id;
+    }
+    input = { ...input, deliveryAddressId: resolvedAddressId };
+
     if (input.deliveryAddressId) {
       const [address] = await transaction
         .select({
@@ -2858,7 +2902,12 @@ export class PostgresOperationsService {
         )
         .limit(1);
       if (!address) throw new OperationsNotFoundError('Active customer address not found');
-      deliveryAddress = address.writtenAddress;
+      // Only an explicitly chosen address rewrites what the order says it is delivering to. When
+      // the id was inferred above, the operator may have typed a one-off address on purpose —
+      // linking it for routing must not silently replace their text with the stored one.
+      if (explicitAddressId || !deliveryAddress.trim()) {
+        deliveryAddress = address.writtenAddress;
+      }
       deliveryLocationUrl = address.locationUrl ?? deliveryLocationUrl;
       // The operation is derived from the delivery zone; it is never chosen by the operator.
       geographicZoneId = address.geographicZoneId;
@@ -3321,6 +3370,84 @@ export class PostgresOperationsService {
     return rows;
   }
 
+  /** The cancellation-reason catalog, in presentation order. */
+  public async listCancellationReasons(onlyActive = false) {
+    return this.database
+      .select({
+        active: cancellationReasons.active,
+        code: cancellationReasons.code,
+        countsAsFailedDelivery: cancellationReasons.countsAsFailedDelivery,
+        displayName: cancellationReasons.displayName,
+        id: cancellationReasons.id,
+        sortOrder: cancellationReasons.sortOrder,
+      })
+      .from(cancellationReasons)
+      .where(onlyActive ? eq(cancellationReasons.active, true) : undefined)
+      .orderBy(asc(cancellationReasons.sortOrder), asc(cancellationReasons.displayName));
+  }
+
+  /**
+   * Replaces the catalog wholesale, same shape as payment methods. A reason already referenced by a
+   * cancelled order survives deletion as a null on that order (`on delete set null`), so history is
+   * never rewritten by an admin tidying the list.
+   */
+  public async replaceCancellationReasons(
+    reasons: readonly {
+      active: boolean;
+      code: string;
+      countsAsFailedDelivery: boolean;
+      displayName: string;
+    }[],
+    context: OperationsContext,
+  ) {
+    const codes = reasons.map((reason) => reason.code.trim().toLowerCase());
+
+    await this.database.transaction(async (transaction) => {
+      if (codes.length > 0) {
+        await transaction
+          .delete(cancellationReasons)
+          .where(notInArray(cancellationReasons.code, codes));
+      }
+
+      for (const [index, reason] of reasons.entries()) {
+        const code = reason.code.trim().toLowerCase();
+        await transaction
+          .insert(cancellationReasons)
+          .values({
+            active: reason.active,
+            code,
+            countsAsFailedDelivery: reason.countsAsFailedDelivery,
+            displayName: reason.displayName.trim(),
+            sortOrder: index,
+          })
+          .onConflictDoUpdate({
+            set: {
+              active: reason.active,
+              countsAsFailedDelivery: reason.countsAsFailedDelivery,
+              displayName: reason.displayName.trim(),
+              sortOrder: index,
+              updatedAt: new Date(),
+            },
+            target: cancellationReasons.code,
+          });
+      }
+
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: 'cancellation_reasons.updated',
+        actor: auditActor(context),
+        after: { count: reasons.length },
+        correlationId: context.correlationId,
+        entityId: context.requestId,
+        entityType: 'cancellation_reason_catalog',
+        requestId: context.requestId,
+        source: context.source,
+      });
+    });
+
+    return this.listCancellationReasons();
+  }
+
   public async getOrder(orderId: string) {
     const order = await this.loadOrder(this.database, orderId);
     if (!order) throw new OperationsNotFoundError('Order not found');
@@ -3598,6 +3725,8 @@ export class PostgresOperationsService {
     confirmedReversal: boolean,
     allowCycleOverride: boolean,
     context: OperationsContext,
+    /** Only meaningful when cancelling: which category of cancellation this is. */
+    cancellation?: { notes?: string | undefined; reasonId?: string | undefined },
   ) {
     await this.database.transaction(async (transaction) => {
       const [current] = await transaction
@@ -3625,7 +3754,18 @@ export class PostgresOperationsService {
 
       await transaction
         .update(orders)
-        .set({ status: targetStatus, updatedAt: new Date() })
+        .set({
+          status: targetStatus,
+          updatedAt: new Date(),
+          // Cleared on any move away from CANCELLED, so a reinstated order doesn't keep claiming
+          // it was cancelled for a reason that no longer applies.
+          ...(targetStatus === 'CANCELLED'
+            ? {
+                cancellationNotes: cancellation?.notes ?? reason ?? null,
+                cancellationReasonId: cancellation?.reasonId ?? null,
+              }
+            : { cancellationNotes: null, cancellationReasonId: null }),
+        })
         .where(eq(orders.id, orderId));
       await transaction.insert(orderStatusHistory).values({
         actorUserId: context.actorUserId,

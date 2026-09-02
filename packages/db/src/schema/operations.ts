@@ -504,6 +504,32 @@ export const weeklyMenuItems = pgTable(
 
 export const orderPublicNumberSequence = pgSequence('order_public_number_seq', { startWith: 1 });
 
+/**
+ * Why an order was cancelled. A configurable catalog rather than a hardcoded enum, same criterion
+ * as payment methods: the reasons a business cancels change with the business, and no engine branch
+ * should identify one by name.
+ *
+ * `countsAsFailedDelivery` is the one flag the system reads: it marks the reasons that mean "we
+ * produced it and could not hand it over", which is operationally very different from a customer
+ * cancelling before the kitchen started — the food exists, and the money may already be collected.
+ */
+export const cancellationReasons = pgTable(
+  'cancellation_reasons',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    code: text('code').notNull(),
+    displayName: text('display_name').notNull(),
+    countsAsFailedDelivery: boolean('counts_as_failed_delivery').default(false).notNull(),
+    active: boolean('active').default(true).notNull(),
+    sortOrder: integer('sort_order').default(0).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('cancellation_reasons_code_unique').on(table.code),
+    check('cancellation_reasons_code_check', sql`${table.code} ~ '^[a-z0-9]+(?:_[a-z0-9]+)*$'`),
+  ],
+);
+
 export const orders = pgTable(
   'orders',
   {
@@ -534,6 +560,13 @@ export const orders = pgTable(
     deliveryLocationUrlSnapshot: text('delivery_location_url_snapshot'),
     paymentExpectation: text('payment_expectation').notNull(),
     notes: text('notes'),
+    // Why a cancelled order was cancelled. "Cancelado" alone doesn't distinguish a customer who
+    // changed their mind from a delivery that failed — and those need different follow-up.
+    // Null on any order that isn't cancelled.
+    cancellationReasonId: uuid('cancellation_reason_id').references(() => cancellationReasons.id, {
+      onDelete: 'set null',
+    }),
+    cancellationNotes: text('cancellation_notes'),
     currency: text('currency').default('ARS').notNull(),
     totalMinor: integer('total_minor').notNull(),
     ...timestamps,

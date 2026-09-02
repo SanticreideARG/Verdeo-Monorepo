@@ -10,6 +10,7 @@ import {
   orders,
   paymentMethods,
   payments,
+  transferReconciliations,
   users,
 } from '../schema/index.js';
 import { PostgresAuditSink } from './postgres-audit-sink.js';
@@ -265,6 +266,121 @@ export class PostgresPaymentsService {
 
       return collection;
     });
+  }
+
+  /**
+   * "Conciliar transferencias": records the evidence that a transfer arrived and settles the order
+   * in the same transaction.
+   *
+   * A transfer used to be marked paid on somebody's word. This keeps the same end state — the order
+   * becomes PAID through a normal collection, so nothing downstream changes — while attaching the
+   * operation code, amount and receipt that prove it. The unique operation code is what stops the
+   * same transfer paying two different orders.
+   */
+  public async reconcileTransfer(
+    input: {
+      amountMinor: number;
+      notes?: string | undefined;
+      operationCode: string;
+      orderId: string;
+      receiptExpiresAt?: Date | undefined;
+      receiptUrl?: string | undefined;
+    },
+    context: PaymentsContext,
+  ) {
+    const actorUserId = context.actorUserId;
+    if (!actorUserId) throw new PaymentsConflictError('Se requiere un usuario autenticado.');
+
+    return this.database
+      .transaction(async (transaction) => {
+        const [order] = await transaction
+          .select({ id: orders.id, totalMinor: orders.totalMinor })
+          .from(orders)
+          .where(eq(orders.id, input.orderId))
+          .limit(1);
+        if (!order) throw new PaymentsNotFoundError('No encontramos ese pedido.');
+
+        await this.ensurePayment(transaction, input.orderId);
+
+        const [reconciliation] = await transaction
+          .insert(transferReconciliations)
+          .values({
+            amountMinor: input.amountMinor,
+            notes: input.notes ?? null,
+            operationCode: input.operationCode,
+            orderId: input.orderId,
+            receiptExpiresAt: input.receiptExpiresAt ?? null,
+            receiptUrl: input.receiptUrl ?? null,
+            reconciledByUserId: actorUserId,
+          })
+          .returning();
+        if (!reconciliation) throw new Error('Transfer reconciliation did not return a row');
+
+        // Recorded as a real collection too, so the payment state is derived exactly the way every
+        // other method derives it — no second source of truth for "is this order paid".
+        await transaction.insert(cashCollections).values({
+          amountMinor: input.amountMinor,
+          collectedByUserId: actorUserId,
+          method: 'transferencia',
+          orderId: input.orderId,
+        });
+        // A transfer has no cash in hand to hand over, so there is nothing to settle.
+        await transaction
+          .update(payments)
+          .set({ status: 'PAID', updatedAt: new Date() })
+          .where(eq(payments.orderId, input.orderId));
+
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        await audit.record({
+          action: 'payments.transfer_reconciled',
+          actor: { type: 'user', userId: actorUserId },
+          after: {
+            amountMinor: input.amountMinor,
+            operationCode: input.operationCode,
+            receiptStored: Boolean(input.receiptUrl),
+          },
+          correlationId: context.correlationId,
+          entityId: reconciliation.id,
+          entityType: 'transfer_reconciliation',
+          requestId: context.requestId,
+          source: context.source,
+        });
+
+        return reconciliation;
+      })
+      .catch((error: unknown) => {
+        // A duplicate operation code means this transfer was already applied somewhere — say so,
+        // rather than surfacing a raw constraint violation.
+        if (
+          error instanceof Error &&
+          /transfer_reconciliations_operation_code_unique/.test(JSON.stringify(error))
+        ) {
+          throw new PaymentsConflictError(
+            'Ese código de operación ya fue conciliado en otro pedido.',
+          );
+        }
+        throw error;
+      });
+  }
+
+  /** Reconciliations for one order, newest first. Receipt may be null once purged. */
+  public async listTransferReconciliations(orderId: string) {
+    return this.database
+      .select({
+        amountMinor: transferReconciliations.amountMinor,
+        createdAt: transferReconciliations.createdAt,
+        currency: transferReconciliations.currency,
+        id: transferReconciliations.id,
+        notes: transferReconciliations.notes,
+        operationCode: transferReconciliations.operationCode,
+        receiptExpiresAt: transferReconciliations.receiptExpiresAt,
+        receiptUrl: transferReconciliations.receiptUrl,
+        reconciledByName: users.displayName,
+      })
+      .from(transferReconciliations)
+      .innerJoin(users, eq(users.id, transferReconciliations.reconciledByUserId))
+      .where(eq(transferReconciliations.orderId, orderId))
+      .orderBy(desc(transferReconciliations.createdAt));
   }
 
   public async listUnsettledCollections(collectedByUserId?: string) {

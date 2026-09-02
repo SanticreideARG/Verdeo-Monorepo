@@ -29,7 +29,6 @@ import {
   operatingSites,
   orderItems,
   orders,
-  salesCycles,
   weeklyMenus,
 } from './schema/index.js';
 
@@ -410,6 +409,19 @@ async function main() {
       return 'las confirmadas tienen lat/lng';
     });
 
+    await check('datos', 'Los pedidos están enlazados a un domicilio', async () => {
+      // The failure this exists for: createRoute joins stops through delivery_address_id, so an
+      // order without it can never appear in a route — silently, with nothing on screen saying so.
+      // Every order in the database was in that state until it was found by hand.
+      const [row] = await db.execute<{ n: number }>(sql`
+        select count(*)::int as n
+        from ${orders}
+        where delivery_address_id is null and status not in ('CANCELLED')
+      `);
+      assert(Number(row?.n ?? 0) === 0, `${row?.n} pedido(s) no se pueden rutear (sin domicilio)`);
+      return 'todos ruteables por domicilio';
+    });
+
     await check('datos', 'Ningún pedido referencia un menú de otra ciudad', async () => {
       // An order priced against another city's menu is a real money bug: it would charge that
       // city's prices while being produced and delivered here.
@@ -462,9 +474,11 @@ async function cleanup(db: Database, orderIds: string[], customerIds: string[]) 
     await db
       .delete(customerOperatingSites)
       .where(inArray(customerOperatingSites.customerId, customerIds));
+    await db.delete(customerAddresses).where(inArray(customerAddresses.customerId, customerIds));
+    // The customer row itself, last. Leaving it behind used to strand a customer with no active
+    // operation — which the consistency check then reported as a real failure, correctly.
+    await db.delete(customers).where(inArray(customers.id, customerIds));
   }
-  void salesCycles;
-  void weeklyMenus;
 }
 
 main().catch((error: unknown) => {

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, notInArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 
 import { AuditService } from '@verdeo/audit';
 import type { RouteOptimizer } from '@verdeo/routing';
@@ -13,6 +13,7 @@ import {
   operatingSites,
   orderStatusHistory,
   orders,
+  payments,
   users,
 } from '../schema/index.js';
 import { PostgresAuditSink } from './postgres-audit-sink.js';
@@ -355,6 +356,10 @@ export class PostgresDeliveryService {
         deliveryLocationUrl: orders.deliveryLocationUrlSnapshot,
         id: deliveryStops.id,
         paymentExpectation: orders.paymentExpectation,
+        // Whether the money is already in — nothing about how, when, or by whom. A repartidor needs
+        // to know not to ask for cash; the reconciliation detail is none of their business, and
+        // keeping it out preserves the PII-safe shape of this query.
+        prepaid: sql<boolean>`coalesce(${payments.status} = 'PAID', false)`,
         publicNumber: orders.publicNumber,
         routeId: deliveryStops.routeId,
         sequence: deliveryStops.sequence,
@@ -365,6 +370,7 @@ export class PostgresDeliveryService {
       .innerJoin(deliveryRoutes, eq(deliveryRoutes.id, deliveryStops.routeId))
       .innerJoin(orders, eq(orders.id, deliveryStops.orderId))
       .innerJoin(customers, eq(customers.id, orders.customerId))
+      .leftJoin(payments, eq(payments.orderId, orders.id))
       .where(
         and(
           eq(deliveryStops.assignedUserId, userId),

@@ -225,6 +225,13 @@
       "when": 1788354048070,
       "tag": "0031_petite_odin",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1788375376401,
+      "tag": "0032_amazing_kate_bishop",
+      "breakpoints": true
     }
   ]
 }

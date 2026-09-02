@@ -108,3 +108,41 @@ export const cashSettlements = pgTable(
     check('cash_settlements_amount_check', sql`${table.amountMinor} > 0`),
   ],
 );
+
+/**
+ * "Conciliar transferencias": proof that a transfer actually arrived, tied to the order it paid.
+ *
+ * A transfer today is marked paid on somebody's word — the system trusts whoever ticks the box and
+ * never sees the bank. This is the evidence trail that replaces that trust: the operation code, the
+ * amount, and the receipt image, recorded against one order.
+ *
+ * The receipt is stored as a blob URL rather than bytes; `receiptExpiresAt` records when it may be
+ * purged (40 days), so the row survives as a record of the reconciliation even after the image is
+ * gone. Deleting the image must never delete the fact that the payment was verified.
+ */
+export const transferReconciliations = pgTable(
+  'transfer_reconciliations',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'restrict' }),
+    // The provider's own reference for the movement — 10 digits for Mercado Pago. Unique, because
+    // reconciling the same transfer against two orders would double-count the money.
+    operationCode: text('operation_code').notNull(),
+    amountMinor: integer('amount_minor').notNull(),
+    currency: text('currency').default('ARS').notNull(),
+    receiptUrl: text('receipt_url'),
+    receiptExpiresAt: timestamp('receipt_expires_at', { withTimezone: true }),
+    notes: text('notes'),
+    reconciledByUserId: uuid('reconciled_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('transfer_reconciliations_operation_code_unique').on(table.operationCode),
+    check('transfer_reconciliations_amount_check', sql`${table.amountMinor} > 0`),
+    check('transfer_reconciliations_code_check', sql`${table.operationCode} ~ '^[0-9]{6,32}$'`),
+  ],
+);
