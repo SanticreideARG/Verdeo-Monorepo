@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
+import { Sparkline } from '../components/Sparkline.js';
 import { apiRequest } from '../lib/api.js';
 
 const modules = [
@@ -67,6 +68,23 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<DashboardProfile | null>(null);
   const [failed, setFailed] = useState(false);
+  const [demand, setDemand] = useState<{ day: string; orderCount: number }[]>([]);
+
+  useEffect(() => {
+    if (!profile?.permissions.includes('stats.read')) return;
+    let active = true;
+    void apiRequest('/api/v1/stats')
+      .then(async (response) => {
+        if (!response.ok || !active) return;
+        const body = (await response.json()) as { byDay: { day: string; orderCount: number }[] };
+        // Last two weeks: enough to show a shape, short enough that the line stays readable.
+        if (active) setDemand(body.byDay.slice(-14));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [profile?.permissions]);
 
   useEffect(() => {
     let active = true;
@@ -149,6 +167,22 @@ export function DashboardPage() {
           </Link>
         </div>
       </section>
+
+      {demand.length > 1 ? (
+        <section className="dashboard-trend" aria-label="Demanda reciente">
+          <article className="trend-card">
+            <Sparkline
+              label={`Pedidos por día en los últimos ${demand.length} días`}
+              values={demand.map((day) => day.orderCount)}
+            />
+            <div className="trend-card-body">
+              <small>Pedidos por día</small>
+              <strong>{demand.reduce((total, day) => total + day.orderCount, 0)}</strong>
+              <em>últimos {demand.length} días</em>
+            </div>
+          </article>
+        </section>
+      ) : null}
 
       <section className="dashboard-metrics" aria-label="Resumen de acceso">
         <article>
