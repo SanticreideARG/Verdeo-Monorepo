@@ -33,9 +33,17 @@ const GLOBAL_OPTION = 'global';
 
 type IconName =
   | 'ai'
+  | 'audit'
   | 'chat'
+  | 'content'
   | 'customers'
+  | 'help'
+  | 'ordersNew'
+  | 'menusNew'
+  | 'payments'
   | 'stats'
+  | 'survey'
+  | 'whatsapp'
   | 'dashboard'
   | 'delivery'
   | 'kitchen'
@@ -66,7 +74,7 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         label: 'Estadísticas',
         permission: 'stats.read',
       },
-      { href: '/app/ayuda', icon: 'settings', label: 'Ayuda' },
+      { href: '/app/ayuda', icon: 'help', label: 'Ayuda' },
     ],
   },
   {
@@ -74,7 +82,7 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
     items: [
       {
         href: '/app/pedidos/nuevo',
-        icon: 'orders',
+        icon: 'ordersNew',
         label: 'Tomar y confirmar pedidos',
         permission: 'orders.read',
       },
@@ -86,7 +94,7 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
     items: [
       {
         href: '/app/menus/nuevo',
-        icon: 'menus',
+        icon: 'menusNew',
         label: 'Configurar la semana',
         permission: 'production.generate',
       },
@@ -109,7 +117,7 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
       },
       {
         href: '/app/encuestas',
-        icon: 'customers',
+        icon: 'survey',
         label: 'Encuestas',
         permission: 'surveys.read',
       },
@@ -125,14 +133,14 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         permission: 'production.read',
       },
       { href: '/app/reparto/rutas', icon: 'delivery', label: 'Rutas', permission: 'routes.read' },
-      { href: '/app/pagos', icon: 'delivery', label: 'Pagos', permission: 'payments.read' },
+      { href: '/app/pagos', icon: 'payments', label: 'Pagos', permission: 'payments.read' },
     ],
   },
   {
     label: 'Mensajería',
     items: [
       { href: '/app/chat', icon: 'chat', label: 'Chat', permission: 'chat.use' },
-      { href: '/app/mensajes', icon: 'chat', label: 'Mensajes', permission: 'messages.read' },
+      { href: '/app/mensajes', icon: 'whatsapp', label: 'Mensajes', permission: 'messages.read' },
     ],
   },
   {
@@ -144,7 +152,7 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         label: 'Workbench de IA',
         permission: 'ai.prompts.manage',
       },
-      { href: '/app/contenidos', icon: 'menus', label: 'Contenidos', permission: 'cms.read' },
+      { href: '/app/contenidos', icon: 'content', label: 'Contenidos', permission: 'cms.read' },
     ],
   },
   {
@@ -159,7 +167,7 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         label: 'Ajustes',
         permissions: SETTINGS_TAB_PERMISSIONS,
       },
-      { href: '/app/auditoria', icon: 'settings', label: 'Auditoría', permission: 'audit.read' },
+      { href: '/app/auditoria', icon: 'audit', label: 'Auditoría', permission: 'audit.read' },
     ],
   },
 ];
@@ -210,6 +218,59 @@ function NavIcon({ name }: { name: IconName }) {
         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
         <circle cx="9" cy="7" r="4" />
         <path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" />
+      </>
+    ),
+    audit: (
+      <>
+        <path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H14l5 5v12.5a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 4 20.5Z" />
+        <path d="M14 3v5h5" />
+        <path d="m9 14 2 2 4-4" />
+      </>
+    ),
+    content: (
+      <>
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="M3 9h18M8 20V9" />
+      </>
+    ),
+    help: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M9.5 9.5a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.1-2.5 3.8" />
+        <path d="M12 17.6h.01" />
+      </>
+    ),
+    ordersNew: (
+      <>
+        <path d="M4 6h10M4 11h7M4 16h5" />
+        <path d="M17 12v7M13.5 15.5h7" />
+      </>
+    ),
+    menusNew: (
+      <>
+        <path d="M5 4h9l4 4v3" />
+        <path d="M14 4v4h4" />
+        <path d="M5 4v16h6" />
+        <path d="M17 14v7M13.5 17.5h7" />
+      </>
+    ),
+    payments: (
+      <>
+        <rect x="2.5" y="5.5" width="19" height="13" rx="2" />
+        <path d="M2.5 10h19" />
+        <path d="M6 14.5h3" />
+      </>
+    ),
+    survey: (
+      <>
+        <path d="M8 3.5h8a1.5 1.5 0 0 1 1.5 1.5v15A1.5 1.5 0 0 1 16 21.5H8A1.5 1.5 0 0 1 6.5 20V5A1.5 1.5 0 0 1 8 3.5Z" />
+        <path d="M9.5 9h5M9.5 12.5h5M9.5 16h3" />
+      </>
+    ),
+    whatsapp: (
+      <>
+        <path d="M20.5 11.7a8.4 8.4 0 0 1-12.2 7.5L3.5 20.5l1.4-4.7A8.4 8.4 0 1 1 20.5 11.7Z" />
+        <path d="M8.8 9.2c0 3.2 2.8 6 6 6" />
       </>
     ),
     stats: (

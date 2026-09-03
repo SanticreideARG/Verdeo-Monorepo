@@ -501,11 +501,17 @@ export function ChatPage() {
               <>
                 <h2 className="chat-panel-title">{conversationName(selected)}</h2>
                 <div className="chat-transcript" ref={transcriptRef}>
-                  {messages.map((entry) => (
+                  {messages.map((entry, index) => (
                     <article
-                      className={`chat-bubble ${
-                        entry.authorUserId === profile.user.id ? 'is-mine' : ''
-                      }`}
+                      className={[
+                        'chat-bubble',
+                        entry.authorUserId === profile.user.id ? 'is-mine' : '',
+                        messages[index - 1]?.authorUserId === entry.authorUserId
+                          ? 'is-continuation'
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
                       key={entry.id}
                     >
                       {entry.deletedAt ? (
