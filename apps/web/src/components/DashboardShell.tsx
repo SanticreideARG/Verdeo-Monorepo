@@ -35,6 +35,7 @@ type IconName =
   | 'ai'
   | 'chat'
   | 'customers'
+  | 'stats'
   | 'dashboard'
   | 'delivery'
   | 'kitchen'
@@ -61,7 +62,7 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
       { href: '/app', icon: 'dashboard', label: 'Dashboard' },
       {
         href: '/app/estadisticas',
-        icon: 'dashboard',
+        icon: 'stats',
         label: 'Estadísticas',
         permission: 'stats.read',
       },
@@ -191,6 +192,14 @@ function NavIcon({ name }: { name: IconName }) {
         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
         <circle cx="9" cy="7" r="4" />
         <path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" />
+      </>
+    ),
+    stats: (
+      <>
+        <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+        <rect x="7" y="12" width="3" height="5" rx="1" />
+        <rect x="12.5" y="8" width="3" height="9" rx="1" />
+        <rect x="18" y="4.5" width="3" height="12.5" rx="1" />
       </>
     ),
     dashboard: (
