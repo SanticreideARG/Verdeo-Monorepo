@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
-import { Sparkline } from '../components/Sparkline.js';
+import {
+  DEFAULT_LAYOUT,
+  resolveWidgets,
+  WIDGET_CATALOGUE,
+  type WidgetData,
+} from '../components/dashboard-widgets.js';
 import { BrandLoading } from '../components/BrandLoading.js';
 import { apiRequest } from '../lib/api.js';
 
@@ -70,6 +75,83 @@ export function DashboardPage() {
   const [profile, setProfile] = useState<DashboardProfile | null>(null);
   const [failed, setFailed] = useState(false);
   const [demand, setDemand] = useState<{ day: string; orderCount: number }[]>([]);
+  const [pendingOrders, setPendingOrders] = useState(0);
+  const [unreadChat, setUnreadChat] = useState(0);
+  const [reminders, setReminders] = useState<{ day: string; title: string }[]>([]);
+  const [layout, setLayout] = useState<string[]>([...DEFAULT_LAYOUT]);
+  const [editing, setEditing] = useState(false);
+
+  useEffect(() => {
+    if (!profile) return;
+    let active = true;
+
+    const load = async <T,>(path: string, allowed: boolean): Promise<T | null> => {
+      if (!allowed) return null;
+      const response = await apiRequest(path).catch(() => null);
+      if (!response?.ok) return null;
+      return (await response.json().catch(() => null)) as T | null;
+    };
+
+    void (async () => {
+      const permissions = profile.permissions;
+      const [stored, orders, chat, calendar] = await Promise.all([
+        load<{ widgets: string[] }>('/api/v1/dashboard/layout', true),
+        load<{ items: unknown[] }>(
+          '/api/v1/orders?status=DRAFT&limit=11',
+          permissions.includes('orders.confirm'),
+        ),
+        load<{ items: { unreadCount: number }[] }>(
+          '/api/v1/chat/conversations',
+          permissions.includes('chat.use'),
+        ),
+        load<{ items: { day: string; kind: string; title: string }[] }>(
+          `/api/v1/calendar?from=${new Date().toISOString().slice(0, 10)}&to=${new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10)}`,
+          permissions.includes('calendar.use'),
+        ),
+      ]);
+      if (!active) return;
+
+      // An empty stored array is a real choice — "I want nothing" — and must not be mistaken for
+      // "never customised", which is what the default is for.
+      if (stored) setLayout(stored.widgets.length > 0 ? stored.widgets : [...DEFAULT_LAYOUT]);
+      if (orders) setPendingOrders(orders.items.length);
+      if (chat) setUnreadChat(chat.items.reduce((total, item) => total + item.unreadCount, 0));
+      if (calendar) setReminders(calendar.items.filter((item) => item.kind === 'reminder'));
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [profile]);
+
+  async function persistLayout(next: string[]) {
+    setLayout(next);
+    await apiRequest('/api/v1/dashboard/layout', {
+      body: JSON.stringify({ widgets: next }),
+      method: 'PUT',
+    }).catch(() => undefined);
+  }
+
+  async function toggleWidget(key: string) {
+    await persistLayout(
+      layout.includes(key) ? layout.filter((item) => item !== key) : [...layout, key],
+    );
+  }
+
+  async function moveWidget(key: string, delta: number) {
+    const index = layout.indexOf(key);
+    const target = index + delta;
+    if (index === -1 || target < 0 || target >= layout.length) return;
+    const next = [...layout];
+    const [moved] = next.splice(index, 1);
+    if (moved) next.splice(target, 0, moved);
+    await persistLayout(next);
+  }
+
+  async function resetLayout() {
+    setLayout([...DEFAULT_LAYOUT]);
+    await apiRequest('/api/v1/dashboard/layout', { method: 'DELETE' }).catch(() => undefined);
+  }
 
   useEffect(() => {
     if (!profile?.permissions.includes('stats.read')) return;
@@ -142,6 +224,19 @@ export function DashboardPage() {
     minute: '2-digit',
   }).format(new Date(profile.session.expiresAt));
 
+  // Derived once and handed down, so a widget receives what it needs rather than reaching for it —
+  // which is what keeps the catalogue declarable as data.
+  const widgetData: WidgetData = {
+    demand,
+    moduleCount: availableModules.length,
+    permissionCount: profile.permissions.length,
+    pendingOrders,
+    reminders,
+    sessionExpiry,
+    unreadChat,
+  };
+  const visibleWidgets = resolveWidgets(layout, profile.permissions);
+
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
       <section className="dashboard-hero">
@@ -164,55 +259,79 @@ export function DashboardPage() {
         </div>
       </section>
 
-      {demand.length > 1 ? (
-        <section className="dashboard-trend" aria-label="Demanda reciente">
-          <article className="trend-card">
-            <Sparkline
-              label={`Pedidos por día en los últimos ${demand.length} días`}
-              values={demand.map((day) => day.orderCount)}
-            />
-            <div className="trend-card-body">
-              <small>Pedidos por día</small>
-              <strong>{demand.reduce((total, day) => total + day.orderCount, 0)}</strong>
-              <em>últimos {demand.length} días</em>
-            </div>
-          </article>
-        </section>
-      ) : null}
+      <section aria-label="Tu tablero" className="widget-board">
+        <header className="widget-board-head">
+          <h2>Tu tablero</h2>
+          <button onClick={() => setEditing((current) => !current)} type="button">
+            {editing ? 'Listo' : 'Personalizar'}
+          </button>
+        </header>
 
-      <section className="dashboard-metrics" aria-label="Resumen de acceso">
-        <article>
-          <span className="metric-dot metric-dot-green" />
-          <div>
-            <small>Estado del sistema</small>
-            <strong>En línea</strong>
+        {editing ? (
+          <div className="widget-picker">
+            <p>Elegí qué ver. El orden es el de la lista.</p>
+            <ul>
+              {WIDGET_CATALOGUE.filter(
+                (widget) => !widget.permission || profile.permissions.includes(widget.permission),
+              ).map((widget) => {
+                const position = layout.indexOf(widget.key);
+                return (
+                  <li key={widget.key}>
+                    <label>
+                      <input
+                        checked={position !== -1}
+                        onChange={() => void toggleWidget(widget.key)}
+                        type="checkbox"
+                      />
+                      {widget.label}
+                    </label>
+                    {position !== -1 ? (
+                      <span className="widget-picker-order">
+                        <button
+                          aria-label={`Subir ${widget.label}`}
+                          disabled={position === 0}
+                          onClick={() => void moveWidget(widget.key, -1)}
+                          type="button"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          aria-label={`Bajar ${widget.label}`}
+                          disabled={position === layout.length - 1}
+                          onClick={() => void moveWidget(widget.key, 1)}
+                          type="button"
+                        >
+                          ↓
+                        </button>
+                      </span>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+            <button
+              className="widget-picker-reset"
+              onClick={() => void resetLayout()}
+              type="button"
+            >
+              Volver al tablero por defecto
+            </button>
           </div>
-          <em>Operativo</em>
-        </article>
-        <article>
-          <span className="metric-symbol">◇</span>
-          <div>
-            <small>Módulos habilitados</small>
-            <strong>{availableModules.length}</strong>
+        ) : null}
+
+        {visibleWidgets.length === 0 ? (
+          <p className="empty-state">
+            Tu tablero está vacío. Tocá &quot;Personalizar&quot; para elegir qué ver.
+          </p>
+        ) : (
+          <div className="widget-grid">
+            {visibleWidgets.map((widget) => (
+              <article className={`widget ${widget.wide ? 'is-wide' : ''}`} key={widget.key}>
+                {widget.render(widgetData)}
+              </article>
+            ))}
           </div>
-          <em>por permisos</em>
-        </article>
-        <article>
-          <span className="metric-symbol">✓</span>
-          <div>
-            <small>Permisos activos</small>
-            <strong>{profile.permissions.length}</strong>
-          </div>
-          <em>RBAC</em>
-        </article>
-        <article>
-          <span className="metric-symbol">◷</span>
-          <div>
-            <small>Sesión segura</small>
-            <strong>Hasta {sessionExpiry}</strong>
-          </div>
-          <em>HttpOnly</em>
-        </article>
+        )}
       </section>
 
       <section className="dashboard-section-heading">

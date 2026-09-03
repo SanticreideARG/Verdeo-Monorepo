@@ -3821,3 +3821,151 @@ main .operation-card {
 .calendar-event-actions button:hover {
   color: var(--db-text);
 }
+
+/* --- Widget board -----------------------------------------------------------------------------
+   The dashboard's fixed metric row became a board each person arranges. Widgets keep the same
+   surface treatment as every other card so the board reads as part of the app rather than a
+   separate toy. */
+.widget-board {
+  margin-top: 1.25rem;
+}
+.widget-board-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+.widget-board-head h2 {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--db-text-soft);
+}
+.widget-board-head button {
+  border: 0;
+  background: none;
+  color: var(--db-accent);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.widget-grid {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+}
+.widget {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  gap: 0.15rem;
+  align-content: start;
+  min-height: 6rem;
+  border: 1px solid var(--db-border);
+  border-radius: 0.9rem;
+  padding: 1rem 1.15rem;
+  background: var(--db-surface);
+  box-shadow: 0 1px 0 0 rgb(255 255 255 / 6%) inset;
+}
+/* A widget with a chart or a list earns two columns — where there is only one column, it stays
+   full width like everything else. */
+@media (min-width: 640px) {
+  .widget.is-wide {
+    grid-column: span 2;
+  }
+}
+.widget small {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--db-text-soft);
+}
+.widget strong {
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.widget em {
+  font-size: 0.75rem;
+  font-style: normal;
+  color: var(--db-text-soft);
+}
+.widget-list ul {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.widget-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+}
+.widget-list li span {
+  color: var(--db-text-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.widget-picker {
+  margin-bottom: 0.85rem;
+  border: 1px dashed var(--db-border);
+  border-radius: 0.9rem;
+  padding: 1rem 1.15rem;
+}
+.widget-picker > p {
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  color: var(--db-text-soft);
+}
+.widget-picker ul {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.widget-picker li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.widget-picker label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.widget-picker-order {
+  display: flex;
+  gap: 0.25rem;
+}
+.widget-picker-order button,
+.widget-picker-reset {
+  border: 1px solid var(--db-border);
+  border-radius: 0.4rem;
+  padding: 0.1rem 0.45rem;
+  background: none;
+  color: var(--db-text-soft);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.widget-picker-order button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.widget-picker-reset {
+  margin-top: 0.75rem;
+  padding: 0.35rem 0.7rem;
+}

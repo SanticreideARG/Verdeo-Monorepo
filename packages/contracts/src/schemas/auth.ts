@@ -58,3 +58,11 @@ export const CustomerLoginRequestResponseSchema = z.object({
 export const CustomerLoginConsumeRequestSchema = z.object({
   token: z.string().trim().min(20).max(200),
 });
+
+/**
+ * A dashboard layout is an ordered list of widget keys. The server does not know what the keys
+ * mean — the frontend catalogue owns that — so this only constrains their shape.
+ */
+export const DashboardLayoutSchema = z.object({
+  widgets: z.array(z.string().trim().min(1).max(60)).max(24),
+});

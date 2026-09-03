@@ -128,6 +128,7 @@ import {
   OrderSchema,
   OrderStatusHistoryResponseSchema,
   CalendarEventListResponseSchema,
+  DashboardLayoutSchema,
   type CalendarReminderCreateRequest,
   CalendarReminderCreateRequestSchema,
   CalendarReminderDoneRequestSchema,
@@ -906,6 +907,11 @@ interface CreateAppOptions {
   logger: Logger;
   messaging?: MessagingEngine;
   oauth?: OAuthLogin;
+  dashboardLayout?: {
+    get(userId: string): Promise<string[] | null>;
+    reset(userId: string): Promise<void>;
+    save(userId: string, widgets: readonly string[]): Promise<string[]>;
+  };
   calendar?: {
     createReminder(
       input: CalendarReminderCreateRequest,
@@ -3440,6 +3446,31 @@ export function createApp(options: CreateAppOptions) {
       paymentsContext(context),
     );
     return context.json(PaymentMethodListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.get('/api/v1/dashboard/layout', async (context) => {
+    if (!options.dashboardLayout) throw new Error('Dashboard layout engine is not configured');
+    const widgets = await options.dashboardLayout.get(context.get('session').userId);
+    // Null means "never customised", which the client reads as "use the default" rather than "no
+    // widgets" — an empty array is a real, deliberate choice and must survive a reload.
+    return context.json(DashboardLayoutSchema.parse({ widgets: widgets ?? [] }));
+  });
+
+  app.put('/api/v1/dashboard/layout', async (context) => {
+    if (!options.dashboardLayout) throw new Error('Dashboard layout engine is not configured');
+    const input = DashboardLayoutSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success) return badRequest(context, 'Revisá el tablero.', input.error.issues);
+    const widgets = await options.dashboardLayout.save(
+      context.get('session').userId,
+      input.data.widgets,
+    );
+    return context.json(DashboardLayoutSchema.parse({ widgets }));
+  });
+
+  app.delete('/api/v1/dashboard/layout', async (context) => {
+    if (!options.dashboardLayout) throw new Error('Dashboard layout engine is not configured');
+    await options.dashboardLayout.reset(context.get('session').userId);
+    return context.body(null, 204);
   });
 
   app.get('/api/v1/calendar', async (context) => {

@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
+  jsonb,
   integer,
   pgTable,
   primaryKey,
@@ -178,3 +179,20 @@ export const customerLoginTokens = pgTable(
     index('customer_login_tokens_email_created_idx').on(table.emailNormalized, table.createdAt),
   ],
 );
+
+/**
+ * Which widgets a person keeps on their dashboard, and in what order.
+ *
+ * Just the keys and their order. What a widget *is* — its title, its permission, what it renders —
+ * lives in the frontend catalogue, because none of that is data the server needs to reason about:
+ * a layout naming a widget that no longer exists is filtered on render rather than migrated.
+ *
+ * One row per user; absence means "the default layout", which is why there is no seeding step.
+ */
+export const dashboardLayouts = pgTable('dashboard_layouts', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  widgets: jsonb('widgets').$type<string[]>().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});

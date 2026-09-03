@@ -22,6 +22,7 @@ import {
   PostgresPasswordCredentialRepository,
   PostgresOperationsService,
   PostgresCalendarService,
+  PostgresDashboardLayoutService,
   PostgresCustomerLoginService,
   PostgresOAuthIdentityRepository,
   PostgresPaymentsService,
@@ -123,6 +124,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
   // Same lazy resolution as the maps key: configuring email in Ajustes takes effect immediately.
   const emailSender = new ConfigurableEmailSender(() => integrationCredentials.configFor('email'));
   const calendar = new PostgresCalendarService(database.db);
+  const dashboardLayout = new PostgresDashboardLayoutService(database.db);
   const geography = new PostgresGeographyService(database.db);
   const chat = new PostgresChatService(database.db);
   const aiConfiguration = new PostgresAIConfigurationService(
@@ -451,6 +453,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     ...(oauth ? { oauth } : {}),
     ...(customerOAuth ? { customerOAuth } : {}),
     calendar,
+    dashboardLayout,
     customerEmailLogin,
     customerLogin,
     operations,
