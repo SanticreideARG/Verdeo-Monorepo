@@ -88,6 +88,49 @@ export function AIProvidersPage() {
     }
   }
 
+  /**
+   * Loads a key into a provider that already exists.
+   *
+   * The list used to be read-only cards, so a seeded provider — Gemini, Groq — had nowhere to
+   * receive its key: the only form was the create one, which meant retyping the base URL and model
+   * from memory and silently overwriting the row if you got them wrong.
+   *
+   * Everything but the key and the switch is carried over from the provider itself, so this cannot
+   * change a configuration by accident.
+   */
+  async function saveProviderKey(provider: AIProviderConfig, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const apiKey = formText(form, 'apiKey');
+    try {
+      const response = await apiRequest('/api/v1/ai/providers', {
+        body: JSON.stringify({
+          adapterType: provider.adapterType,
+          // Omitted rather than empty: an empty string fails the min-length rule, while leaving it
+          // out is what tells the server to keep the key already on file.
+          ...(apiKey ? { apiKey } : {}),
+          baseUrl: provider.baseUrl,
+          defaultModel: provider.defaultModel,
+          displayName: provider.displayName,
+          enabled: form.get('enabled') === 'on',
+          key: provider.key,
+        }),
+        method: 'PUT',
+      });
+      if (!response.ok) throw new Error(await errorMessage(response));
+      const result = (await response.json()) as {
+        encryptionConfigured: boolean;
+        items: AIProviderConfig[];
+      };
+      setEncryptionConfigured(result.encryptionConfigured);
+      setProviders(result.items);
+      showToast(`${provider.displayName} actualizado.`);
+      setMessage('');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'No pudimos guardar la clave.');
+    }
+  }
+
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -227,6 +270,43 @@ export function AIProvidersPage() {
                 <p className="mt-4 font-mono text-sm">
                   {provider.apiKeyMask ?? 'Sin clave configurada'}
                 </p>
+                <form
+                  className="mt-4 grid gap-2"
+                  onSubmit={(event) => void saveProviderKey(provider, event)}
+                >
+                  <label className="field">
+                    API key
+                    <input
+                      autoComplete="new-password"
+                      disabled={!encryptionConfigured}
+                      minLength={8}
+                      name="apiKey"
+                      placeholder={
+                        provider.keyConfigured
+                          ? 'Dejalo vacío para conservar la actual'
+                          : 'Pegá la clave acá'
+                      }
+                      type="password"
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 text-sm font-semibold text-forest">
+                    <input
+                      defaultChecked={provider.enabled}
+                      disabled={!encryptionConfigured}
+                      key={String(provider.enabled)}
+                      name="enabled"
+                      type="checkbox"
+                    />
+                    Habilitado
+                  </label>
+                  <button
+                    className="button button-secondary"
+                    disabled={!encryptionConfigured}
+                    type="submit"
+                  >
+                    Guardar
+                  </button>
+                </form>
               </article>
             ))}
           </div>

@@ -118,6 +118,7 @@ import {
   MessagingSendRequestSchema,
   MeResponseSchema,
   OrderCreateRequestSchema,
+  CustomerOrderCreateRequestSchema,
   OrderListQuerySchema,
   OrderPageResponseSchema,
   OrderRevisionListResponseSchema,
@@ -1866,6 +1867,50 @@ export function createApp(options: CreateAppOptions) {
     if (!customerId) return forbidden(context);
     const customer = await requireOperations().getCustomer(customerId, true);
     return context.json(CustomerSelfServiceSchema.parse(contractValue(customer)));
+  });
+
+  /**
+   * A signed-in customer placing an order.
+   *
+   * Enters as DRAFT — "pendientes de aprobación" — rather than CONFIRMED: production and the
+   * kitchen cutoff both key off what is confirmed, so an order nobody has looked at yet must not
+   * count as demand. An operator confirms it from Ver pedidos.
+   *
+   * The customer comes from the session, never from the body: accepting a customerId here would
+   * let anyone order in someone else's name.
+   */
+  app.post('/api/v1/me/orders', async (context) => {
+    const customerId = requireCustomerSession(context);
+    if (!customerId) return forbidden(context);
+    const input = CustomerOrderCreateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) return badRequest(context, 'Revisá tu pedido.', input.error.issues);
+
+    const order = await requireOperations().createOrder(
+      {
+        customerId,
+        deliveryAddress: input.data.deliveryAddress,
+        ...(input.data.deliveryAddressId
+          ? { deliveryAddressId: input.data.deliveryAddressId }
+          : {}),
+        deliveryDate: input.data.deliveryDate,
+        dietaryInstructions: input.data.dietaryInstructions,
+        // No initialStatus: the service defaults to DRAFT, which is what we want here and what
+        // the internal intake screen also gets.
+        items: input.data.items,
+        menuId: input.data.menuId,
+        ...(input.data.notes ? { notes: input.data.notes } : {}),
+        // Null on purpose: the operation is derived from the delivery address's zone, which is the
+        // rule everywhere else (ADR-031). A customer never picks a city directly — their address
+        // does it for them.
+        operatingSiteId: null,
+        paymentExpectation: input.data.paymentExpectation,
+        source: 'web',
+      },
+      operationsContext(context),
+    );
+    return context.json(OrderSchema.parse(contractValue(order)), 201);
   });
 
   app.get('/api/v1/me/orders', async (context) => {

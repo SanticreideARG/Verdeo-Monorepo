@@ -927,3 +927,28 @@ export type ProductionReportRequest = z.infer<typeof ProductionReportRequestSche
 export type ProductionSnapshotRequest = z.infer<typeof ProductionSnapshotRequestSchema>;
 export type SurplusConfigUpdateRequest = z.infer<typeof SurplusConfigUpdateRequestSchema>;
 export type SurplusWriteoffRequest = z.infer<typeof SurplusWriteoffRequestSchema>;
+
+/**
+ * A signed-in customer's own order. Deliberately has no customerId or initialStatus: the customer
+ * comes from the session, and the status is always DRAFT so an unreviewed order never counts as
+ * confirmed demand.
+ */
+export const CustomerOrderCreateRequestSchema = z.object({
+  deliveryAddress: z.string().trim().min(4).max(500),
+  deliveryAddressId: UuidSchema.optional(),
+  deliveryDate: z.iso.date(),
+  dietaryInstructions: z.array(z.string().trim().min(1).max(200)).max(20).default([]),
+  items: z
+    .array(
+      z.object({
+        offeringId: UuidSchema,
+        quantityUnits: z.number().int().positive().max(99),
+        selectedDishNames: z.array(z.string().trim().min(1).max(300)).max(5).optional(),
+      }),
+    )
+    .min(1)
+    .max(20),
+  menuId: UuidSchema,
+  notes: z.string().trim().max(1000).optional(),
+  paymentExpectation: z.string().trim().min(1).max(120),
+});

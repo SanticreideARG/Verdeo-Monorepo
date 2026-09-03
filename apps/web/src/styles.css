@@ -3315,3 +3315,19 @@ a {
 .user-status.is-off {
   color: var(--db-text-faint, var(--db-text-soft));
 }
+
+/* Count of orders waiting for someone to confirm them. Caps at "+10": past that the exact number
+   does not change what you do about it. */
+.nav-badge {
+  margin-left: auto;
+  min-width: 1.4rem;
+  border-radius: 999px;
+  padding: 0.1rem 0.4rem;
+  background: var(--db-accent);
+  color: var(--db-bg);
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  font-style: normal;
+}

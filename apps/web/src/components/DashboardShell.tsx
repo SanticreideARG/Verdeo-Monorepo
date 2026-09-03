@@ -286,6 +286,7 @@ export function DashboardShell({
 }) {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pendingOrders, setPendingOrders] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => window.localStorage.getItem('verdeo-sidebar-collapsed') === 'true',
   );
@@ -324,6 +325,21 @@ export function DashboardShell({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [location.hash, location.pathname]);
+
+  useEffect(() => {
+    if (!profile.permissions.includes('orders.confirm')) return;
+    let active = true;
+    void apiRequest('/api/v1/orders?status=DRAFT&limit=11')
+      .then(async (response) => {
+        if (!response.ok || !active) return;
+        const body = (await response.json()) as { items: unknown[] };
+        if (active) setPendingOrders(body.items.length);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [profile.permissions]);
 
   useEffect(() => {
     window.localStorage.setItem('verdeo-dashboard-theme', theme);
@@ -481,6 +497,11 @@ export function DashboardShell({
                         >
                           <NavIcon name={item.icon} />
                           <span>{item.label}</span>
+                          {item.href === '/app/pedidos/nuevo' && pendingOrders > 0 ? (
+                            <b className="nav-badge" title={`${pendingOrders} sin confirmar`}>
+                              {pendingOrders > 10 ? '+10' : pendingOrders}
+                            </b>
+                          ) : null}
                           {active ? <i aria-hidden="true" /> : null}
                         </Link>
                       );
