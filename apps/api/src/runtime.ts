@@ -39,6 +39,7 @@ import { NearestNeighborRouteOptimizer } from '@verdeo/routing';
 import { createApp } from './app.js';
 import { OpenAICompatibleProvider } from './integrations/ai-providers.js';
 import { VercelBlobAvatarStorage } from './integrations/avatar-storage.js';
+import { ConfigurableEmailSender } from './integrations/email-sender.js';
 import { SupabaseAuthClient } from './integrations/supabase-auth.js';
 import { MetaWhatsAppProvider } from './integrations/whatsapp-provider.js';
 
@@ -117,6 +118,8 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     // falls back to link-parsing when none is configured.
     new ConfigurableGeocodingProvider(() => integrationCredentials.secretFor('maps')),
   );
+  // Same lazy resolution as the maps key: configuring email in Ajustes takes effect immediately.
+  const emailSender = new ConfigurableEmailSender(() => integrationCredentials.configFor('email'));
   const geography = new PostgresGeographyService(database.db);
   const chat = new PostgresChatService(database.db);
   const aiConfiguration = new PostgresAIConfigurationService(
@@ -399,6 +402,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     credentials,
     delivery,
     geography,
+    emailSender,
     integrationCredentials,
     logger,
     messaging,

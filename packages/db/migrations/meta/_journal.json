@@ -232,6 +232,13 @@
       "when": 1788375376401,
       "tag": "0032_amazing_kate_bishop",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1788399608942,
+      "tag": "0033_nervous_firebrand",
+      "breakpoints": true
     }
   ]
 }

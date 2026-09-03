@@ -71,6 +71,9 @@ importers:
       '@verdeo/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@verdeo/email':
+        specifier: workspace:*
+        version: link:../../packages/email
       '@verdeo/geocoding':
         specifier: workspace:*
         version: link:../../packages/geocoding
@@ -219,6 +222,8 @@ importers:
       drizzle-kit:
         specifier: 0.31.10
         version: 0.31.10
+
+  packages/email: {}
 
   packages/events: {}
 

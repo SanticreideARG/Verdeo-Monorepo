@@ -1,0 +1,1 @@
+ALTER TABLE "integration_credentials" ADD COLUMN "settings" jsonb;

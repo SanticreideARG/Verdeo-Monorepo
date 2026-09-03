@@ -18,6 +18,8 @@ export const IntegrationCredentialUpsertRequestSchema = z.object({
     .trim()
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   provider: z.string().trim().min(1).max(80),
+  // Non-secret configuration (sender address, reply-to). Unlike the key, this round-trips.
+  settings: z.record(z.string().trim().max(60), z.string().trim().max(320)).optional(),
 });
 
 export const IntegrationCredentialSchema = z.object({
@@ -28,7 +30,17 @@ export const IntegrationCredentialSchema = z.object({
   key: z.string(),
   keyConfigured: z.boolean(),
   provider: z.string(),
+  settings: z.record(z.string(), z.string()),
   updatedAt: IsoDateTimeSchema,
+});
+
+export const EmailTestRequestSchema = z.object({
+  to: z.string().trim().email().max(320),
+});
+
+export const EmailTestResponseSchema = z.object({
+  reason: z.string().nullable(),
+  sent: z.boolean(),
 });
 
 export const IntegrationCredentialListResponseSchema = z.object({

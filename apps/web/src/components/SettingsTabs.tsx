@@ -21,6 +21,7 @@ const SETTINGS_TABS: readonly SettingsTab[] = [
     label: 'Cuentas de WhatsApp',
     permission: 'messaging.accounts.manage',
   },
+  { href: '/app/ajustes/correo', label: 'Correo', permission: 'ai.providers.manage' },
 ];
 
 // The single navbar "Ajustes" entry needs the OR of every tab's permission — a viewer who can

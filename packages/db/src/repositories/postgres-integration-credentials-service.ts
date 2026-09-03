@@ -14,6 +14,8 @@ export interface IntegrationCredentialInput {
   enabled: boolean;
   key: string;
   provider: string;
+  /** Non-secret configuration; unlike the key, this does round-trip to the dashboard. */
+  settings?: Record<string, string> | undefined;
 }
 
 export interface IntegrationCredentialContext {
@@ -53,6 +55,7 @@ export class PostgresIntegrationCredentialsService {
         id: integrationCredentials.id,
         key: integrationCredentials.key,
         provider: integrationCredentials.provider,
+        settings: integrationCredentials.settings,
         updatedAt: integrationCredentials.updatedAt,
       })
       .from(integrationCredentials)
@@ -60,10 +63,11 @@ export class PostgresIntegrationCredentialsService {
 
     return {
       encryptionConfigured: Boolean(this.encryptionKey),
-      items: rows.map(({ apiKeyLastFour, ...row }) => ({
+      items: rows.map(({ apiKeyLastFour, settings, ...row }) => ({
         ...row,
         apiKeyMask: maskSecret(apiKeyLastFour),
         keyConfigured: Boolean(apiKeyLastFour),
+        settings: settings ?? {},
       })),
     };
   }
@@ -83,6 +87,30 @@ export class PostgresIntegrationCredentialsService {
     return decryptSecret(row.encryptedApiKey, this.encryptionKey);
   }
 
+  /**
+   * Server-side only: key plus settings for an enabled integration, or null if it is unusable.
+   * The email sender needs both at once — a key with no sender address cannot send anything.
+   */
+  public async configFor(
+    key: string,
+  ): Promise<{ apiKey: string; settings: Record<string, string> } | null> {
+    if (!this.encryptionKey) return null;
+    const [row] = await this.database
+      .select({
+        enabled: integrationCredentials.enabled,
+        encryptedApiKey: integrationCredentials.encryptedApiKey,
+        settings: integrationCredentials.settings,
+      })
+      .from(integrationCredentials)
+      .where(eq(integrationCredentials.key, key))
+      .limit(1);
+    if (!row?.enabled || !row.encryptedApiKey) return null;
+    return {
+      apiKey: decryptSecret(row.encryptedApiKey, this.encryptionKey),
+      settings: row.settings ?? {},
+    };
+  }
+
   public async upsert(input: IntegrationCredentialInput, context: IntegrationCredentialContext) {
     await this.database.transaction(async (transaction) => {
       const [existing] = await transaction
@@ -90,6 +118,7 @@ export class PostgresIntegrationCredentialsService {
           apiKeyLastFour: integrationCredentials.apiKeyLastFour,
           encryptedApiKey: integrationCredentials.encryptedApiKey,
           id: integrationCredentials.id,
+          settings: integrationCredentials.settings,
         })
         .from(integrationCredentials)
         .where(eq(integrationCredentials.key, input.key))
@@ -113,6 +142,7 @@ export class PostgresIntegrationCredentialsService {
           encryptedApiKey,
           key: input.key,
           provider: input.provider,
+          settings: input.settings ?? existing?.settings ?? {},
         })
         .onConflictDoUpdate({
           set: {
@@ -121,6 +151,7 @@ export class PostgresIntegrationCredentialsService {
             enabled: input.enabled,
             encryptedApiKey,
             provider: input.provider,
+            settings: input.settings ?? existing?.settings ?? {},
             updatedAt: new Date(),
           },
           target: integrationCredentials.key,

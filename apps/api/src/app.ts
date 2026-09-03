@@ -9,6 +9,8 @@ import {
   AuditEventQuerySchema,
   AuditFacetsResponseSchema,
   AIProviderConfigListResponseSchema,
+  EmailTestRequestSchema,
+  EmailTestResponseSchema,
   IntegrationCredentialListResponseSchema,
   IntegrationCredentialUpsertRequestSchema,
   AIProviderConfigUpsertRequestSchema,
@@ -232,6 +234,8 @@ import {
   DEFAULT_CUSTOMER_EXPORT_COLUMNS,
   type CustomerExportRow,
 } from './customer-export.js';
+import { renderEmail, type EmailSender } from '@verdeo/email';
+
 import { ContactImportError, parseContactImport } from './integrations/contact-import.js';
 import { buildLabelsPrintHtml } from './labels-export.js';
 import {
@@ -844,6 +848,7 @@ interface CreateAppOptions {
   credentials: CredentialLogin;
   delivery?: DeliveryEngine;
   geography?: GeographyEngine;
+  emailSender?: EmailSender | undefined;
   integrationCredentials?: IntegrationCredentialsEngine;
   logger: Logger;
   messaging?: MessagingEngine;
@@ -3949,6 +3954,36 @@ export function createApp(options: CreateAppOptions) {
       IntegrationCredentialListResponseSchema.parse(
         contractValue(await options.integrationCredentials.list()),
       ),
+    );
+  });
+
+  /**
+   * Sends one real email to an address the operator names, so a misconfiguration surfaces here
+   * rather than the first time a customer waits for a login link that never arrives. The provider's
+   * own rejection is passed straight through — "domain not verified" is actionable, a 500 is not.
+   */
+  app.post('/api/v1/integrations/email/test', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('ai.providers.manage')) return forbidden(context);
+    if (!options.emailSender) throw new Error('Email sender is not configured');
+    const input = EmailTestRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success)
+      return badRequest(context, 'Ingresá una dirección válida.', input.error.issues);
+
+    const body = renderEmail({
+      bodyHtml: '<p>Si estás leyendo esto, el envío de correo de Verdeo quedó configurado.</p>',
+      bodyText: 'Si estás leyendo esto, el envío de correo de Verdeo quedó configurado.',
+      heading: 'Prueba de configuración',
+    });
+    const result = await options.emailSender.send({
+      html: body.html,
+      subject: 'Verdeo · prueba de configuración',
+      text: body.text,
+      to: input.data.to,
+    });
+
+    return context.json(
+      EmailTestResponseSchema.parse({ reason: result.reason ?? null, sent: result.sent }),
     );
   });
 

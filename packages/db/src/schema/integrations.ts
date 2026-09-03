@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 /**
  * Credentials for third-party integrations that are not AI providers — today the maps/geocoding
@@ -24,6 +24,11 @@ export const integrationCredentials = pgTable(
     provider: text('provider').notNull(),
     encryptedApiKey: text('encrypted_api_key'),
     apiKeyLastFour: text('api_key_last_four'),
+    // Non-secret configuration the integration needs alongside its key — the sender address and
+    // reply-to for email, whatever the next one needs. Kept beside the key rather than in env vars
+    // so an operator can change who mail comes from without a redeploy, and readable by the
+    // dashboard (unlike the key, which only ever leaves as a masked last-four).
+    settings: jsonb('settings').$type<Record<string, string>>(),
     enabled: boolean('enabled').default(false).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
