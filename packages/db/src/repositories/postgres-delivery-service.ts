@@ -5,6 +5,7 @@ import type { RouteOptimizer } from '@verdeo/routing';
 
 import type { Database } from '../index.js';
 import {
+  cancellationReasons,
   customerAddresses,
   customers,
   deliveryRoutes,
@@ -444,6 +445,84 @@ export class PostgresDeliveryService {
       });
 
       return { id: stopId, status };
+    });
+  }
+
+  /**
+   * The delivery that could not be handed over.
+   *
+   * Until now "delivered" was the only ending a repartidor could record, so a failed drop either
+   * got marked delivered or was left hanging on the route forever. This cancels the order with a
+   * category and closes the stop in one transaction.
+   *
+   * Deliberately its own method rather than letting the delivery app call the order-cancel
+   * endpoint: that one requires `orders.cancel`, which a repartidor has no business holding, and
+   * it would mean shipping order ids to a client that is otherwise kept PII-thin.
+   */
+  public async reportFailedDelivery(
+    stopId: string,
+    cancellationReasonId: string,
+    actorUserId: string | undefined,
+    context: DeliveryContext,
+  ) {
+    return this.database.transaction(async (transaction) => {
+      const [stop] = await transaction
+        .select({ orderId: deliveryStops.orderId, status: deliveryStops.status })
+        .from(deliveryStops)
+        .where(eq(deliveryStops.id, stopId))
+        .limit(1);
+      if (!stop) throw new DeliveryNotFoundError('Stop not found');
+
+      const [reason] = await transaction
+        .select({ displayName: cancellationReasons.displayName, id: cancellationReasons.id })
+        .from(cancellationReasons)
+        .where(eq(cancellationReasons.id, cancellationReasonId))
+        .limit(1);
+      if (!reason) throw new DeliveryNotFoundError('Cancellation reason not found');
+
+      await transaction
+        .update(deliveryStops)
+        .set({ deliveredAt: null, status: 'skipped', updatedAt: new Date() })
+        .where(eq(deliveryStops.id, stopId));
+
+      const [order] = await transaction
+        .select({ status: orders.status })
+        .from(orders)
+        .where(eq(orders.id, stop.orderId))
+        .limit(1);
+      if (order && order.status !== 'CANCELLED') {
+        await transaction
+          .update(orders)
+          .set({
+            cancellationNotes: 'Reportado desde la app de reparto',
+            cancellationReasonId: reason.id,
+            status: 'CANCELLED',
+            updatedAt: new Date(),
+          })
+          .where(eq(orders.id, stop.orderId));
+        await transaction.insert(orderStatusHistory).values({
+          actorUserId: actorUserId ?? null,
+          fromStatus: order.status,
+          orderId: stop.orderId,
+          reason: `Entrega fallida: ${reason.displayName}`,
+          toStatus: 'CANCELLED',
+        });
+      }
+
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: 'delivery.stop_failed',
+        actor: actorUserId ? { type: 'user', userId: actorUserId } : { type: 'system' },
+        after: { cancellationReason: reason.displayName, status: 'skipped' },
+        before: { status: stop.status },
+        correlationId: context.correlationId,
+        entityId: stopId,
+        entityType: 'delivery_stop',
+        requestId: context.requestId,
+        source: context.source,
+      });
+
+      return { id: stopId, status: 'skipped' as const };
     });
   }
 

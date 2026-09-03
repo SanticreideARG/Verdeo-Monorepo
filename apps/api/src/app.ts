@@ -75,6 +75,7 @@ import {
   DeliveryRouteListResponseSchema,
   DeliveryStopAssignRequestSchema,
   DeliveryStopReorderRequestSchema,
+  DeliveryStopFailedRequestSchema,
   DeliveryStopStatusUpdateRequestSchema,
   DeliveryTriggerRequestSchema,
   DeliveryTriggerResponseSchema,
@@ -809,6 +810,12 @@ interface DeliveryEngine {
     action: 'ON_MY_WAY' | 'AT_ADDRESS' | 'DELIVERED_THANKS',
     context: DeliveryContext,
   ): Promise<{ reason?: string; sent: boolean }>;
+  reportFailedDelivery(
+    stopId: string,
+    cancellationReasonId: string,
+    actorUserId: string | undefined,
+    context: DeliveryContext,
+  ): Promise<unknown>;
   updateStopStatus(
     stopId: string,
     status: 'pending' | 'en_route' | 'at_address' | 'delivered' | 'skipped',
@@ -3073,6 +3080,33 @@ export function createApp(options: CreateAppOptions) {
     const stop = await requireDelivery().assignStop(
       params.data.id,
       input.data.assignedUserId,
+      deliveryContext(context),
+    );
+    return context.json(contractValue(stop));
+  });
+
+  /**
+   * Gated on delivery.execute rather than orders.cancel: the repartidor is the one who knows the
+   * delivery failed, but has no business holding the permission to cancel arbitrary orders. The
+   * service resolves which order the stop belongs to, so no order id reaches this client.
+   */
+  app.post('/api/v1/delivery/stops/:id/failed', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('delivery.execute')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = DeliveryStopFailedRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(context, 'Revisá el motivo de la entrega fallida.', [
+        ...(params.error?.issues ?? []),
+        ...(input.error?.issues ?? []),
+      ]);
+
+    const stop = await requireDelivery().reportFailedDelivery(
+      params.data.id,
+      input.data.cancellationReasonId,
+      session.userId,
       deliveryContext(context),
     );
     return context.json(contractValue(stop));

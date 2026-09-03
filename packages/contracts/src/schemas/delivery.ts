@@ -103,3 +103,7 @@ export type DeliveryStopAssignRequest = z.infer<typeof DeliveryStopAssignRequest
 export type DeliveryStopReorderRequest = z.infer<typeof DeliveryStopReorderRequestSchema>;
 export type DeliveryStopStatusUpdateRequest = z.infer<typeof DeliveryStopStatusUpdateRequestSchema>;
 export type DeliveryTriggerRequest = z.infer<typeof DeliveryTriggerRequestSchema>;
+
+export const DeliveryStopFailedRequestSchema = z.object({
+  cancellationReasonId: UuidSchema,
+});

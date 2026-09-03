@@ -28,6 +28,8 @@ export function DeliveryAppPage() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [busyStopId, setBusyStopId] = useState<string | null>(null);
+  const [failingStop, setFailingStop] = useState<MyStop | null>(null);
+  const [reasons, setReasons] = useState<{ displayName: string; id: string }[]>([]);
 
   const canExecute = profile?.permissions.includes('delivery.execute') ?? false;
   const canTrigger = profile?.permissions.includes('delivery.trigger_messages') ?? false;
@@ -58,6 +60,38 @@ export function DeliveryAppPage() {
       setMessage(await errorMessage(response));
       return;
     }
+    await loadStops();
+  }
+
+  useEffect(() => {
+    let active = true;
+    void apiRequest('/api/v1/cancellation-reasons')
+      .then(async (response) => {
+        if (!response.ok || !active) return;
+        const body = (await response.json()) as {
+          items: { countsAsFailedDelivery: boolean; displayName: string; id: string }[];
+        };
+        // Only the failed-delivery ones — "cliente canceló" is not something a repartidor reports.
+        if (active) setReasons(body.items.filter((item) => item.countsAsFailedDelivery));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function reportFailure(stopId: string, reasonId: string) {
+    setBusyStopId(stopId);
+    const response = await apiRequest(`/api/v1/delivery/stops/${stopId}/failed`, {
+      body: JSON.stringify({ cancellationReasonId: reasonId }),
+      method: 'POST',
+    });
+    setBusyStopId(null);
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    setFailingStop(null);
     await loadStops();
   }
 
@@ -167,10 +201,55 @@ export function DeliveryAppPage() {
               >
                 {busyStopId === stop.id ? 'Confirmando…' : 'Confirmar entrega'}
               </button>
+              {/* Until now "entregado" was the only ending a repartidor could record, so a delivery
+                  that failed either got marked delivered or left hanging. */}
+              <button
+                className="button button-secondary mt-2 w-full"
+                disabled={busyStopId === stop.id}
+                onClick={() => setFailingStop(stop)}
+                type="button"
+              >
+                No se pudo entregar
+              </button>
             </li>
           ))}
         </ul>
       )}
+      {failingStop ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal-panel">
+            <h2 className="text-xl font-semibold text-forest">
+              {failingStop.publicNumber} — ¿qué pasó?
+            </h2>
+            <p className="mt-1 text-sm text-ink-muted">
+              El pedido se cancela con este motivo y queda registrado.
+            </p>
+            <div className="mt-4 grid gap-2">
+              {reasons.map((reason) => (
+                <button
+                  className="button button-secondary w-full"
+                  disabled={busyStopId === failingStop.id}
+                  key={reason.id}
+                  onClick={() => void reportFailure(failingStop.id, reason.id)}
+                  type="button"
+                >
+                  {reason.displayName}
+                </button>
+              ))}
+              {reasons.length === 0 ? (
+                <p className="text-sm text-ink-muted">No hay motivos configurados.</p>
+              ) : null}
+            </div>
+            <button
+              className="button button-secondary mt-4 w-full"
+              onClick={() => setFailingStop(null)}
+              type="button"
+            >
+              Volver
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
