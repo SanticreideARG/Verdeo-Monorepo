@@ -415,10 +415,27 @@ export function CustomerAccountPage() {
                   Dirección
                   <input name="writtenAddress" required />
                 </label>
-                <label className="field field-wide">
-                  Enlace de ubicación (opcional)
-                  <input name="locationUrl" placeholder="https://maps.google.com/…" />
-                </label>
+                <div className="field field-wide">
+                  <label htmlFor="locationUrl">Compartir tu ubicación exacta (opcional)</label>
+                  <input
+                    id="locationUrl"
+                    name="locationUrl"
+                    placeholder="Pegá acá el enlace de Google Maps"
+                    type="url"
+                  />
+                  <p className="mt-1 text-xs leading-5 text-ink-muted">
+                    Abrí Maps, mantené presionado sobre tu casa, tocá Compartir y pegá el enlace
+                    acá. Con eso el repartidor llega directo al punto en vez de buscar la altura.{' '}
+                    <a
+                      className="underline"
+                      href="https://www.google.com/maps"
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Abrir Google Maps
+                    </a>
+                  </p>
+                </div>
               </div>
               <button className="button button-primary justify-self-start" type="submit">
                 Guardar dirección

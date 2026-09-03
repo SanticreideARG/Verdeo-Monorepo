@@ -54,6 +54,9 @@ import {
   CustomerIdentityUpdateRequestSchema,
   CustomerImportResponseSchema,
   CustomerListResponseSchema,
+  CustomerSelfAddressSchema,
+  CustomerSelfAddressUpdateSchema,
+  CustomerSelfAddressWriteSchema,
   CustomerSelfServiceSchema,
   CustomerExportQuerySchema,
   CustomerListQuerySchema,
@@ -1930,23 +1933,39 @@ export function createApp(options: CreateAppOptions) {
   app.post('/api/v1/me/addresses', async (context) => {
     const customerId = requireCustomerSession(context);
     if (!customerId) return forbidden(context);
-    const input = CustomerAddressCreateRequestSchema.safeParse(
+    const input = CustomerSelfAddressWriteSchema.safeParse(
       await context.req.json().catch(() => null),
     );
     if (!input.success) return badRequest(context, 'Revisá el domicilio.', input.error.issues);
     const address = await requireOperations().addCustomerAddress(
       customerId,
-      input.data,
+      {
+        // Nulls mean "not provided" on the wire but the engine's create input only takes
+        // undefined, so they are dropped rather than passed through.
+        ...(input.data.city ? { city: input.data.city } : {}),
+        ...(input.data.locationUrl ? { locationUrl: input.data.locationUrl } : {}),
+        ...(input.data.unit ? { unit: input.data.unit } : {}),
+        geographicZoneId: input.data.geographicZoneId,
+        label: input.data.label,
+        writtenAddress: input.data.writtenAddress,
+        // Needs a starting state; a customer-typed address has not been located yet, and only an
+        // operator (or the geocoder) may move it past this.
+        geocodingStatus: 'NEEDS_LOCATION',
+        primary: input.data.primary ?? false,
+        // Marks who wrote it, so the dashboard can tell a customer's own address from one an
+        // operator typed on their behalf.
+        source: 'customer',
+      },
       operationsContext(context),
     );
-    return context.json(CustomerAddressSchema.parse(contractValue(address)), 201);
+    return context.json(CustomerSelfAddressSchema.parse(contractValue(address)), 201);
   });
 
   app.patch('/api/v1/me/addresses/:addressId', async (context) => {
     const customerId = requireCustomerSession(context);
     if (!customerId) return forbidden(context);
     const addressId = context.req.param('addressId');
-    const input = CustomerAddressUpdateRequestSchema.safeParse(
+    const input = CustomerSelfAddressUpdateSchema.safeParse(
       await context.req.json().catch(() => null),
     );
     if (!input.success)
@@ -1957,7 +1976,7 @@ export function createApp(options: CreateAppOptions) {
       input.data,
       operationsContext(context),
     );
-    return context.json(CustomerAddressSchema.parse(contractValue(address)));
+    return context.json(CustomerSelfAddressSchema.parse(contractValue(address)));
   });
 
   app.post('/api/v1/auth/logout', async (context) => {

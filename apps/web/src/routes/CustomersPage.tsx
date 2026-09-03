@@ -845,6 +845,11 @@ export function CustomersPage() {
                             <div>
                               <span>{address.label}</span>
                               {address.primary ? <small>Principal</small> : null}
+                              {/* Whether the customer wrote this address themselves changes how
+                                  much an operator should second-guess it before correcting. */}
+                              {address.source === 'customer' ? (
+                                <small>La cargó el cliente</small>
+                              ) : null}
                             </div>
                             <i data-status={address.geocodingStatus}>
                               {addressStatusLabel(address.geocodingStatus)}

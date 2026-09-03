@@ -331,7 +331,50 @@ export const CustomerDetailSchema = CustomerSummarySchema.extend({
 // addresses, identities, dietary restrictions) except `internalNotes`, which is free-text staff
 // annotation about the customer (gated behind customers.view_sensitive for staff) and was never
 // meant for the subject to read.
-export const CustomerSelfServiceSchema = CustomerDetailSchema.omit({ internalNotes: true });
+/**
+ * A domicilio as its owner sees it: what they wrote, and nothing an operator added on top.
+ *
+ * Access notes, operational zone, sector, geocoding status and confirmed coordinates are the
+ * operator's working annotations about the address — useful for routing, not the customer's
+ * business, and in the case of access notes ("portero no atiende", "tocar timbre del 3B") not
+ * something anyone wants read back to them.
+ */
+export const CustomerSelfAddressSchema = z.object({
+  city: z.string().nullable(),
+  geographicZoneId: UuidSchema,
+  id: UuidSchema,
+  label: z.string(),
+  // The customer's own shared pin, which is theirs to set and change.
+  locationUrl: z.string().nullable(),
+  primary: z.boolean(),
+  unit: z.string().nullable(),
+  writtenAddress: z.string(),
+});
+
+/**
+ * What a customer may write about their own address.
+ *
+ * Deliberately narrower than the operator's version: the update schema used by the dashboard
+ * accepts operationalZone, sector, accessNotes, geocodingStatus and coordinates, and a customer
+ * reaching those could overwrite an operator's routing work or mark their own address as
+ * confirmed-geocoded.
+ */
+export const CustomerSelfAddressWriteSchema = z.object({
+  city: z.string().trim().max(120).nullable().optional(),
+  geographicZoneId: UuidSchema,
+  label: RequiredTextSchema,
+  locationUrl: z.url().max(2_000).nullable().optional(),
+  primary: z.boolean().optional(),
+  unit: z.string().trim().max(80).nullable().optional(),
+  writtenAddress: z.string().trim().min(4).max(500),
+});
+
+export const CustomerSelfAddressUpdateSchema = CustomerSelfAddressWriteSchema.partial();
+
+export const CustomerSelfServiceSchema = CustomerDetailSchema.omit({
+  addresses: true,
+  internalNotes: true,
+}).extend({ addresses: z.array(CustomerSelfAddressSchema).optional() });
 
 // One price per size for the whole week. The variety never changes the price (ADR-030).
 export const MenuSizePriceInputSchema = z.object({
