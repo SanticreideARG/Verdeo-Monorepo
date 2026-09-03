@@ -19,6 +19,7 @@ import { MenuCatalogSettingsPage } from './MenuCatalogSettingsPage.js';
 import { HelpPage } from './HelpPage.js';
 import { KitchenPage } from './KitchenPage.js';
 import { LabelSettingsPage } from './LabelSettingsPage.js';
+import { BrandLoading } from '../components/BrandLoading.js';
 import { CalendarPage } from './CalendarPage.js';
 import { EmailSettingsPage } from './EmailSettingsPage.js';
 import { PaymentMethodsSettingsPage } from './PaymentMethodsSettingsPage.js';
@@ -192,11 +193,13 @@ function HomePage() {
     };
   }, []);
 
+  // Rendered outside PublicLayout: a header sitting above a blank page is the abrupt part, and the
+  // night ground underneath matches the hero that replaces it.
+  if (content.status === 'loading') return <BrandLoading />;
+
   return (
     <PublicLayout>
-      {/* Holds the viewport height while loading so the header does not sit on a collapsed page
-          and then jump when the content arrives. */}
-      <main className={content.status === 'loading' ? 'min-h-[70vh]' : undefined}>
+      <main>
         {content.status === 'published'
           ? content.sections.map((section) => <CmsSection key={section.id} section={section} />)
           : null}

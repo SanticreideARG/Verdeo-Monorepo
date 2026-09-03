@@ -5,6 +5,7 @@ import { AddressMap } from '../components/AddressMap.js';
 import { CustomerExportDialog } from '../components/CustomerExportDialog.js';
 import { DraftNotice } from '../components/DraftNotice.js';
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
+import { BrandLoading } from '../components/BrandLoading.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { showToast } from '../lib/toast.js';
 import { useFormDraft } from '../lib/useFormDraft.js';
@@ -509,12 +510,7 @@ export function CustomersPage() {
         </main>
       );
     }
-    return (
-      <main className="dashboard-loading" aria-live="polite">
-        <img src="/brand/verdeo-icon.png" alt="" width="54" height="54" />
-        <p>Cargando clientes…</p>
-      </main>
-    );
+    return <BrandLoading message="Cargando tu espacio…" />;
   }
 
   const canCreate = profile.permissions.includes('customers.create');

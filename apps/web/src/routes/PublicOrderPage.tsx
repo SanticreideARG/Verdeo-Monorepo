@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { DraftNotice } from '../components/DraftNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
+import { BrandLoading } from '../components/BrandLoading.js';
 import { apiRequest } from '../lib/api.js';
 import { useFormDraft } from '../lib/useFormDraft.js';
 import {
@@ -132,11 +133,7 @@ export function PublicOrderPage() {
   }
 
   if (loading) {
-    return (
-      <main className="grid min-h-screen place-items-center bg-cream text-forest">
-        Cargando menú…
-      </main>
-    );
+    return <BrandLoading message="Cargando el menú…" />;
   }
 
   if (createdOrder) {

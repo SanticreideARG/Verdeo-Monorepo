@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
+import { BrandLoading } from '../components/BrandLoading.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage, formatMoney, orderStatusLabel } from '../lib/operations.js';
 import { startGoogleOAuth } from '../lib/oauth.js';
@@ -219,11 +220,7 @@ export function CustomerAccountPage() {
   }
 
   if (checking) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-cream">
-        <p className="text-ink-muted">Cargando…</p>
-      </main>
-    );
+    return <BrandLoading message="Cargando tu cuenta…" />;
   }
 
   if (!loggedIn) {

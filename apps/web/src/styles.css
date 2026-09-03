@@ -1424,7 +1424,10 @@ a {
 .dashboard-empty-state p {
   color: var(--db-muted);
 }
-.dashboard-loading {
+/* One loading screen for the whole app. On the landing it is also continuous: the hero that
+   replaces it sits on the same night ground, so the transition is a change of content rather than
+   a change of surface. */
+.brand-loading {
   display: grid;
   min-height: 100vh;
   place-content: center;
@@ -1432,10 +1435,34 @@ a {
   gap: 1rem;
   background: #0b1828;
   color: #f2f6f1;
+  /* Fades in rather than appearing: a flash of loading screen for a fast response is worse than
+     no loading screen at all. */
+  animation: brand-loading-in 0.4s ease both;
 }
-.dashboard-loading img {
+.brand-loading img {
   border-radius: 50%;
   animation: dashboard-pulse 1.6s ease-in-out infinite;
+}
+.brand-loading p {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.75;
+}
+
+@keyframes brand-loading-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-loading,
+  .brand-loading img {
+    animation: none;
+  }
 }
 
 @keyframes dashboard-pulse {

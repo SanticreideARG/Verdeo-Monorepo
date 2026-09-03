@@ -1,12 +1,8 @@
 /** The loading/failed states every dashboard screen shows before its own content is ready. */
+import { BrandLoading } from './BrandLoading.js';
 
 export function DashboardLoading() {
-  return (
-    <main className="dashboard-loading" aria-live="polite">
-      <img src="/brand/verdeo-icon.png" alt="" width="54" height="54" />
-      <p>Cargando tu espacio…</p>
-    </main>
-  );
+  return <BrandLoading message="Cargando tu espacio…" />;
 }
 
 export function DashboardFailed({ label }: { label: string }) {

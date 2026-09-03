@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { Sparkline } from '../components/Sparkline.js';
+import { BrandLoading } from '../components/BrandLoading.js';
 import { apiRequest } from '../lib/api.js';
 
 const modules = [
@@ -133,12 +134,7 @@ export function DashboardPage() {
   }
 
   if (!profile) {
-    return (
-      <main className="dashboard-loading" aria-live="polite">
-        <img src="/brand/verdeo-icon.png" alt="" width="54" height="54" />
-        <p>Cargando tu espacio…</p>
-      </main>
-    );
+    return <BrandLoading message="Cargando tu espacio…" />;
   }
 
   const sessionExpiry = new Intl.DateTimeFormat('es-AR', {

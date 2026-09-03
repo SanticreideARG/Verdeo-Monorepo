@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { SettingsTabs } from '../components/SettingsTabs.js';
+import { BrandLoading } from '../components/BrandLoading.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage } from '../lib/operations.js';
 
@@ -163,12 +164,7 @@ export function ChatLinksPage() {
   }
 
   if (!profile) {
-    return (
-      <main className="dashboard-loading" aria-live="polite">
-        <img src="/brand/verdeo-icon.png" alt="" width="54" height="54" />
-        <p>Cargando tu espacio…</p>
-      </main>
-    );
+    return <BrandLoading message="Cargando tu espacio…" />;
   }
 
   if (!canManage) {
