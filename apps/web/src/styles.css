@@ -2286,18 +2286,9 @@ a {
   padding: 1rem;
   background: color-mix(in srgb, var(--db-accent) 5%, var(--db-surface));
 }
-/* Pinned to the bottom of the viewport on desktop so "Importar archivo" stays reachable while
-   scrolling a long client list, instead of scrolling away below the fold. Opaque background
-   (unlike the tinted-transparent one above) since it now floats over whatever scrolls beneath it. */
-@media (min-width: 900px) {
-  .crm-import-section {
-    position: sticky;
-    bottom: 0;
-    z-index: 20;
-    background: var(--db-surface-solid);
-    box-shadow: 0 -10px 24px rgb(0 0 0 / 14%);
-  }
-}
+/* Sits at the end of the page rather than floating above it. It was sticky to the viewport for a
+   while so it stayed reachable down a long list, but a panel hovering over the content it belongs
+   below reads as an overlay rather than as the end of the page. */
 .crm-import-section h2 {
   margin: 0.24rem 0 0;
   color: var(--db-text);
