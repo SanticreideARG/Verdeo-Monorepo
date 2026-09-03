@@ -533,9 +533,42 @@ export const PublicOperatingSiteListResponseSchema = z.object({
 });
 
 export const OrderTransitionRequestSchema = z.object({
+  // Only meaningful when cancelling; ignored otherwise, and cleared by the service on any move
+  // away from CANCELLED so a reinstated order stops claiming a reason that no longer applies.
+  cancellationNotes: z.string().trim().max(500).optional(),
+  cancellationReasonId: UuidSchema.optional(),
   confirmedReversal: z.boolean().default(false),
   reason: z.string().trim().min(1).max(500).optional(),
   status: OrderStatusSchema,
+});
+
+export const CancellationReasonSchema = z.object({
+  active: z.boolean(),
+  code: z.string(),
+  countsAsFailedDelivery: z.boolean(),
+  displayName: z.string(),
+  id: UuidSchema,
+  sortOrder: z.number().int(),
+});
+
+export const CancellationReasonListResponseSchema = z.object({
+  items: z.array(CancellationReasonSchema),
+});
+
+export const CancellationReasonsUpdateRequestSchema = z.object({
+  reasons: z
+    .array(
+      z.object({
+        active: z.boolean().default(true),
+        code: z
+          .string()
+          .trim()
+          .regex(/^[a-z0-9]+(?:_[a-z0-9]+)*$/),
+        countsAsFailedDelivery: z.boolean().default(false),
+        displayName: z.string().trim().min(1).max(120),
+      }),
+    )
+    .max(40),
 });
 
 export const OrderUpdateRequestSchema = z

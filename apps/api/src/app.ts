@@ -122,6 +122,8 @@ import {
   OrderRevisionListResponseSchema,
   OrderSchema,
   OrderStatusHistoryResponseSchema,
+  CancellationReasonListResponseSchema,
+  CancellationReasonsUpdateRequestSchema,
   OrderTransitionRequestSchema,
   OrderUpdateRequestSchema,
   OAuthExchangeRequestSchema,
@@ -139,6 +141,9 @@ import {
   PaymentMethodListResponseSchema,
   PaymentMethodsUpdateRequestSchema,
   PaymentsDashboardSchema,
+  TransferReconciliationListResponseSchema,
+  TransferReconciliationRequestSchema,
+  TransferReconciliationSchema,
   ScopeResponseSchema,
   SessionIdParamSchema,
   SessionListResponseSchema,
@@ -476,6 +481,16 @@ interface OperationsEngine {
     input: AddressGeocodingCreateRequest,
     context: OperationsContext,
   ): Promise<unknown>;
+  listCancellationReasons(onlyActive?: boolean): Promise<unknown>;
+  replaceCancellationReasons(
+    reasons: readonly {
+      active: boolean;
+      code: string;
+      countsAsFailedDelivery: boolean;
+      displayName: string;
+    }[],
+    context: OperationsContext,
+  ): Promise<unknown>;
   transitionOrder(
     orderId: string,
     status: OrderTransitionRequest['status'],
@@ -483,6 +498,7 @@ interface OperationsEngine {
     confirmedReversal: boolean,
     allowCycleOverride: boolean,
     context: OperationsContext,
+    cancellation?: { notes?: string | undefined; reasonId?: string | undefined },
   ): Promise<unknown>;
   updateCustomer(
     customerId: string,
@@ -815,6 +831,18 @@ interface PaymentsEngine {
   listUnsettledCollections(collectedByUserId?: string): Promise<unknown>;
   updatePaymentMethods(
     methods: readonly { active: boolean; code: string; displayName: string; isCash: boolean }[],
+    context: PaymentsContext,
+  ): Promise<unknown>;
+  listTransferReconciliations(orderId: string): Promise<unknown>;
+  reconcileTransfer(
+    input: {
+      amountMinor: number;
+      notes?: string | undefined;
+      operationCode: string;
+      orderId: string;
+      receiptExpiresAt?: Date | undefined;
+      receiptUrl?: string | undefined;
+    },
     context: PaymentsContext,
   ): Promise<unknown>;
   recordCollection(
@@ -3171,6 +3199,99 @@ export function createApp(options: CreateAppOptions) {
     return context.json(PaymentMethodListResponseSchema.parse({ items: contractValue(items) }));
   });
 
+  app.get('/api/v1/cancellation-reasons', async (context) => {
+    if (!context.get('session').permissions.includes('orders.read')) return forbidden(context);
+    // Only the active ones for the cancel picker; the settings screen asks for all of them.
+    const onlyActive = context.req.query('all') !== 'true';
+    const items = await requireOperations().listCancellationReasons(onlyActive);
+    return context.json(
+      CancellationReasonListResponseSchema.parse({ items: contractValue(items) }),
+    );
+  });
+
+  app.put('/api/v1/cancellation-reasons', async (context) => {
+    if (!context.get('session').permissions.includes('orders.cancel')) return forbidden(context);
+    const input = CancellationReasonsUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'Revisá los motivos de cancelación.', input.error.issues);
+    const items = await requireOperations().replaceCancellationReasons(
+      input.data.reasons,
+      operationsContext(context),
+    );
+    return context.json(
+      CancellationReasonListResponseSchema.parse({ items: contractValue(items) }),
+    );
+  });
+
+  app.get('/api/v1/payments/orders/:id/transfers', async (context) => {
+    if (!context.get('session').permissions.includes('payments.read')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    if (!params.success) return badRequest(context, 'El pedido no es válido.', params.error.issues);
+    const items = await requirePayments().listTransferReconciliations(params.data.id);
+    return context.json(
+      TransferReconciliationListResponseSchema.parse({ items: contractValue(items) }),
+    );
+  });
+
+  app.post('/api/v1/payments/orders/:id/transfers', async (context) => {
+    if (!context.get('session').permissions.includes('payments.record')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = TransferReconciliationRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success) {
+      return badRequest(context, 'Revisá los datos de la conciliación.', [
+        ...(params.error?.issues ?? []),
+        ...(input.error?.issues ?? []),
+      ]);
+    }
+    const requestId = context.get('requestId');
+    const reconciliation = await requirePayments().reconcileTransfer(
+      {
+        amountMinor: input.data.amountMinor,
+        notes: input.data.notes,
+        operationCode: input.data.operationCode,
+        orderId: params.data.id,
+        ...(input.data.receiptExpiresAt
+          ? { receiptExpiresAt: new Date(input.data.receiptExpiresAt) }
+          : {}),
+        receiptUrl: input.data.receiptUrl,
+      },
+      {
+        actorUserId: context.get('session').userId,
+        correlationId: requestId,
+        requestId,
+        source: 'api',
+      },
+    );
+    return context.json(TransferReconciliationSchema.parse(contractValue(reconciliation)), 201);
+  });
+
+  /**
+   * The receipt image. Stored in the same blob store as CMS media rather than a second one, and
+   * kept deliberately separate from the reconciliation record: the row must outlive the image, so
+   * the 40-day purge removes proof without erasing that the payment was verified.
+   */
+  app.post('/api/v1/payments/receipts', async (context) => {
+    if (!context.get('session').permissions.includes('payments.record')) return forbidden(context);
+    const contentType = context.req.header('content-type') ?? '';
+    if (!MEDIA_ALLOWED_CONTENT_TYPES.has(contentType))
+      return badRequest(context, 'El comprobante debe ser JPEG, PNG o WebP.');
+    const bytes = new Uint8Array(await context.req.arrayBuffer());
+    if (bytes.byteLength === 0) return badRequest(context, 'El archivo está vacío.');
+    if (bytes.byteLength > MEDIA_MAX_BYTES)
+      return badRequest(context, 'El comprobante no puede superar los 8 MB.');
+
+    const { url } = await requireAvatarStorage().uploadMedia(bytes, contentType);
+    return context.json({
+      // 40 days, as agreed: long enough to resolve a dispute, short enough not to hoard receipts.
+      expiresAt: new Date(Date.now() + 40 * 24 * 60 * 60 * 1000).toISOString(),
+      url,
+    });
+  });
+
   app.post('/api/v1/payments/collections/:id/settle', async (context) => {
     if (!context.get('session').permissions.includes('payments.settle')) return forbidden(context);
     const params = IdParamSchema.safeParse({ id: context.req.param('id') });
@@ -3462,6 +3583,10 @@ export function createApp(options: CreateAppOptions) {
       input.data.confirmedReversal,
       session.permissions.includes('orders.override_cycle_lock'),
       operationsContext(context),
+      {
+        notes: input.data.cancellationNotes,
+        reasonId: input.data.cancellationReasonId,
+      },
     );
     return context.json(OrderSchema.parse(contractValue(order)));
   });

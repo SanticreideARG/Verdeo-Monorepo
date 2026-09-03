@@ -3178,3 +3178,31 @@ a {
   font-size: 0.75rem;
   color: var(--db-danger, #b3261e);
 }
+
+/* --- Modal ------------------------------------------------------------------------------------
+   Used by the cancel dialog and anything else that needs a decision before continuing. Scrolls
+   inside the panel rather than the page, so a long body never pushes the actions out of reach. */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(9 20 16 / 55%);
+  backdrop-filter: blur(2px);
+}
+.modal-panel {
+  width: 100%;
+  max-width: 32rem;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  border: 1px solid var(--db-border);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  background: var(--db-surface-solid, #ffffff);
+  box-shadow: 0 24px 60px rgb(9 20 16 / 35%);
+}
+.modal-panel legend {
+  padding-bottom: 0.35rem;
+}

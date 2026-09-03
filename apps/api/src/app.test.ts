@@ -90,6 +90,8 @@ const customerOperationsStubs = {
   deleteMenu: vi.fn(),
   updateOrder: vi.fn(),
   upsertMessageTemplate: vi.fn(),
+  listCancellationReasons: vi.fn(),
+  replaceCancellationReasons: vi.fn(),
   writeOffSurplus: vi.fn(),
 };
 const sampleMenu = {

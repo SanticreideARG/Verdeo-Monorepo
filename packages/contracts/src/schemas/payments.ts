@@ -36,6 +36,35 @@ export const CashCollectionListResponseSchema = z.object({
   items: z.array(CashCollectionSchema),
 });
 
+export const TransferReconciliationRequestSchema = z.object({
+  amountMinor: z.number().int().positive(),
+  notes: z.string().trim().max(500).optional(),
+  // Mercado Pago's is 10 digits; the range accommodates other providers without letting a
+  // free-text reference through.
+  operationCode: z
+    .string()
+    .trim()
+    .regex(/^[0-9]{6,32}$/, 'El código de operación son sólo dígitos (6 a 32).'),
+  receiptExpiresAt: IsoDateTimeSchema.optional(),
+  receiptUrl: z.string().trim().max(500).optional(),
+});
+
+export const TransferReconciliationSchema = z.object({
+  amountMinor: z.number().int(),
+  createdAt: IsoDateTimeSchema,
+  currency: z.string(),
+  id: UuidSchema,
+  notes: z.string().nullable(),
+  operationCode: z.string(),
+  receiptExpiresAt: IsoDateTimeSchema.nullable(),
+  receiptUrl: z.string().nullable(),
+  reconciledByName: z.string(),
+});
+
+export const TransferReconciliationListResponseSchema = z.object({
+  items: z.array(TransferReconciliationSchema),
+});
+
 export const CashSettlementRequestSchema = z.object({
   receivedByUserId: UuidSchema,
 });
@@ -86,5 +115,6 @@ export const PaymentMethodsUpdateRequestSchema = z.object({
 
 export type CashCollectionRequest = z.infer<typeof CashCollectionRequestSchema>;
 export type CashSettlementRequest = z.infer<typeof CashSettlementRequestSchema>;
+export type TransferReconciliationRequest = z.infer<typeof TransferReconciliationRequestSchema>;
 export type PaymentMethod = z.infer<typeof PaymentMethodSchema>;
 export type PaymentMethodsUpdateRequest = z.infer<typeof PaymentMethodsUpdateRequestSchema>;

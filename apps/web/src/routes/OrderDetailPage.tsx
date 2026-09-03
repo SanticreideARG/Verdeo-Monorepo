@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
+import { CancelOrderDialog } from '../components/CancelOrderDialog.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
+import { TransferReconciliation } from '../components/TransferReconciliation.js';
 import { apiRequest } from '../lib/api.js';
 import {
   errorMessage,
@@ -12,6 +14,7 @@ import {
   type OrderStatusHistoryEntry,
   type OrderSummary,
 } from '../lib/operations.js';
+import { showToast } from '../lib/toast.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 function formText(form: FormData, key: string): string {
@@ -53,6 +56,7 @@ export function OrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [message, setMessage] = useState('');
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [editing, setEditing] = useState(false);
 
   const load = useCallback(async () => {
@@ -90,12 +94,13 @@ export function OrderDetailPage() {
 
   async function transition(status: OrderSummary['status']) {
     if (!order) return;
+    if (status === 'CANCELLED') {
+      setCancelOpen(true);
+      return;
+    }
     setMessage('');
-    const reason =
-      status === 'CANCELLED' ? window.prompt('Motivo de cancelación')?.trim() : undefined;
-    if (status === 'CANCELLED' && !reason) return;
     const response = await apiRequest(`/api/v1/orders/${order.id}/status`, {
-      body: JSON.stringify({ confirmedReversal: false, reason, status }),
+      body: JSON.stringify({ confirmedReversal: false, status }),
       method: 'POST',
     });
     if (!response.ok) {
@@ -103,6 +108,23 @@ export function OrderDetailPage() {
       return;
     }
     setMessage(`Pedido actualizado a ${status}.`);
+    await load();
+  }
+
+  async function cancelOrder({ notes, reasonId }: { notes: string; reasonId: string }) {
+    if (!order) return;
+    const response = await apiRequest(`/api/v1/orders/${order.id}/status`, {
+      body: JSON.stringify({
+        cancellationNotes: notes || undefined,
+        cancellationReasonId: reasonId,
+        confirmedReversal: false,
+        status: 'CANCELLED',
+      }),
+      method: 'POST',
+    });
+    if (!response.ok) throw new Error(await errorMessage(response));
+    setCancelOpen(false);
+    showToast('Pedido cancelado.');
     await load();
   }
 
@@ -304,6 +326,21 @@ export function OrderDetailPage() {
             {formatMoney(order.totalMinor, order.currency)}
           </p>
         </div>
+
+        {cancelOpen && order ? (
+          <CancelOrderDialog
+            onCancel={() => setCancelOpen(false)}
+            onConfirm={cancelOrder}
+            orderNumber={order.publicNumber}
+          />
+        ) : null}
+
+        {profile.permissions.includes('payments.read') ? (
+          <TransferReconciliation
+            canRecord={profile.permissions.includes('payments.record')}
+            orderId={order.id}
+          />
+        ) : null}
 
         <div className="mt-8 grid gap-2">
           <h2 className="text-sm font-bold text-forest">Historial de estado</h2>
