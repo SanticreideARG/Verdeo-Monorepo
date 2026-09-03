@@ -174,7 +174,13 @@ export function menusForAmbientScope(
 export interface OrderSummary {
   createdAt: string;
   currency: string;
-  customer: { displayName: string; id: string };
+  customer: {
+    displayName: string;
+    email: string | null;
+    id: string;
+    phone: string | null;
+    whatsapp: string | null;
+  };
   deliveryAddress: string;
   deliveryAddressId: string | null;
   deliveryDate: string;

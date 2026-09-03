@@ -1,4 +1,4 @@
-import { asc, eq, gt } from 'drizzle-orm';
+import { asc, eq, gt, inArray } from 'drizzle-orm';
 
 import type {
   UserDirectoryItem,
@@ -8,7 +8,7 @@ import type {
 } from '@verdeo/auth';
 
 import type { Database } from '../index.js';
-import { users } from '../schema/index.js';
+import { roles, userRoles, users } from '../schema/index.js';
 
 export class PostgresUserDirectoryRepository implements UserDirectoryRepository {
   public constructor(private readonly database: Pick<Database, 'select' | 'update'>) {}
@@ -26,7 +26,8 @@ export class PostgresUserDirectoryRepository implements UserDirectoryRepository 
       .where(eq(users.id, id))
       .limit(1);
 
-    return user ?? null;
+    if (!user) return null;
+    return (await this.withRoles([user]))[0] ?? null;
   }
 
   public async findProfileById(id: string): Promise<UserProfile | null> {
@@ -43,7 +44,9 @@ export class PostgresUserDirectoryRepository implements UserDirectoryRepository 
       .where(eq(users.id, id))
       .limit(1);
 
-    return user ?? null;
+    if (!user) return null;
+    const [withRoles] = await this.withRoles([user]);
+    return withRoles ? { ...withRoles, email: user.email } : null;
   }
 
   public async listAfter(
@@ -62,7 +65,39 @@ export class PostgresUserDirectoryRepository implements UserDirectoryRepository 
       .orderBy(asc(users.id))
       .limit(limit);
 
-    return afterId ? query.where(gt(users.id, afterId)) : query;
+    const rows = await (afterId ? query.where(gt(users.id, afterId)) : query);
+    return this.withRoles(rows);
+  }
+
+  /**
+   * Attaches each user's roles in one extra query rather than a join, so a user with three roles
+   * stays one row instead of three that the caller would have to collapse.
+   */
+  private async withRoles(
+    rows: readonly Omit<UserDirectoryItem, 'roles'>[],
+  ): Promise<readonly UserDirectoryItem[]> {
+    if (rows.length === 0) return [];
+    const assignments = await this.database
+      .select({
+        displayName: roles.name,
+        key: roles.key,
+        userId: userRoles.userId,
+      })
+      .from(userRoles)
+      .innerJoin(roles, eq(roles.id, userRoles.roleId))
+      .where(
+        inArray(
+          userRoles.userId,
+          rows.map((row) => row.id),
+        ),
+      );
+
+    return rows.map((row) => ({
+      ...row,
+      roles: assignments
+        .filter((assignment) => assignment.userId === row.id)
+        .map(({ displayName, key }) => ({ displayName, key })),
+    }));
   }
 
   public async updateProfile(id: string, input: UserProfileUpdateInput): Promise<UserProfile> {
@@ -83,6 +118,7 @@ export class PostgresUserDirectoryRepository implements UserDirectoryRepository 
         status: users.status,
       });
     if (!updated) throw new Error(`User not found: ${id}`);
-    return updated;
+    const [withRoles] = await this.withRoles([updated]);
+    return { ...updated, roles: withRoles?.roles ?? [] };
   }
 }

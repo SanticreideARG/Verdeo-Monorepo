@@ -3,6 +3,9 @@ export interface UserDirectoryItem {
   createdAt: Date;
   displayName: string;
   id: string;
+  // What the person is, so a directory can group by it rather than showing one flat list. Names
+  // only — the permissions behind a role are the admin detail view's business, not the list's.
+  roles: readonly { displayName: string; key: string }[];
   status: string;
 }
 

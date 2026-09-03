@@ -12,6 +12,7 @@ export const UserDirectoryItemSchema = z.object({
   createdAt: IsoDateTimeSchema,
   displayName: z.string().min(1),
   id: UuidSchema,
+  roles: z.array(z.object({ displayName: z.string(), key: z.string() })),
   status: z.string().min(1),
 });
 

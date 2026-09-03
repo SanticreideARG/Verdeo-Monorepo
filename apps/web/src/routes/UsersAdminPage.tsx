@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useMemo, useEffect, useState, type FormEvent } from 'react';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
@@ -8,9 +8,51 @@ import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 interface UserRow {
   avatarUrl?: string | null;
+  createdAt: string;
   displayName: string;
   id: string;
+  roles: { displayName: string; key: string }[];
   status: string;
+}
+
+const UNASSIGNED_GROUP = 'Sin rol asignado';
+
+function shortDate(iso: string): string {
+  return new Intl.DateTimeFormat('es-AR', { month: 'short', year: 'numeric' }).format(
+    new Date(iso),
+  );
+}
+
+/**
+ * Groups the directory by role, filtered by the search box.
+ *
+ * A user with several roles appears under each of them: the question this list answers is "who are
+ * the repartidores", and hiding someone from that group because they are also an admin would be
+ * the wrong answer. Users with no role at all get their own group rather than disappearing.
+ */
+function groupUsersByRole(users: readonly UserRow[], search: string): [string, UserRow[]][] {
+  const needle = search.trim().toLocaleLowerCase('es-AR');
+  const matching = needle
+    ? users.filter((user) => user.displayName.toLocaleLowerCase('es-AR').includes(needle))
+    : users;
+
+  const groups = new Map<string, UserRow[]>();
+  for (const user of matching) {
+    const names =
+      user.roles.length > 0 ? user.roles.map((role) => role.displayName) : [UNASSIGNED_GROUP];
+    for (const name of names) {
+      const bucket = groups.get(name);
+      if (bucket) bucket.push(user);
+      else groups.set(name, [user]);
+    }
+  }
+
+  return [...groups.entries()].sort(([a], [b]) => {
+    // "Sin rol asignado" last: it is a gap to fix, not a category to browse.
+    if (a === UNASSIGNED_GROUP) return 1;
+    if (b === UNASSIGNED_GROUP) return -1;
+    return a.localeCompare(b, 'es-AR');
+  });
 }
 
 interface RoleSummary {
@@ -81,6 +123,8 @@ export function UsersAdminPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [roles, setRoles] = useState<RoleSummary[]>([]);
+  const [search, setSearch] = useState('');
+  const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
   const [catalog, setCatalog] = useState<PermissionCatalogEntry[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [detail, setDetail] = useState<UserDetail | null>(null);
@@ -97,6 +141,7 @@ export function UsersAdminPage() {
   const [loading, setLoading] = useState(true);
 
   const canManage = profile?.permissions.includes('roles.manage') ?? false;
+  const groupedUsers = useMemo(() => groupUsersByRole(users, search), [search, users]);
   const canOverride = profile?.permissions.includes('permissions.override') ?? false;
   const canDisable = profile?.permissions.includes('users.disable') ?? false;
   const canIssueTokens = profile?.permissions.includes('access_tokens.manage') ?? false;
@@ -278,23 +323,69 @@ export function UsersAdminPage() {
           <p className="mt-6 text-ink-muted">Cargando…</p>
         ) : (
           <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-            <div className="grid gap-2">
-              {users.map((user) => (
-                <button
-                  className={`operation-card flex items-center justify-between gap-3 text-left ${
-                    user.id === selectedUserId ? 'border-forest' : ''
-                  }`}
-                  key={user.id}
-                  onClick={() => void selectUser(user.id)}
-                  type="button"
-                >
-                  <span>
-                    <strong className="block">{user.displayName}</strong>
-                    <small className="text-ink-muted">{user.status}</small>
-                  </span>
-                </button>
-              ))}
-              {users.length === 0 ? <p className="empty-state">Sin usuarios.</p> : null}
+            <div className="user-directory">
+              <input
+                aria-label="Buscar usuario"
+                className="user-directory-search"
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar por nombre"
+                type="search"
+                value={search}
+              />
+              <div className="user-directory-list">
+                {groupedUsers.map(([roleName, groupUsers]) => {
+                  const collapsed = collapsedGroups.includes(roleName);
+                  return (
+                    <section key={roleName}>
+                      <button
+                        aria-expanded={!collapsed}
+                        className="user-group-header"
+                        onClick={() =>
+                          setCollapsedGroups((current) =>
+                            current.includes(roleName)
+                              ? current.filter((name) => name !== roleName)
+                              : [...current, roleName],
+                          )
+                        }
+                        type="button"
+                      >
+                        <span aria-hidden="true">{collapsed ? '▸' : '▾'}</span>
+                        {roleName}
+                        <small>{groupUsers.length}</small>
+                      </button>
+                      {collapsed
+                        ? null
+                        : groupUsers.map((user) => (
+                            <button
+                              className={`user-row ${user.id === selectedUserId ? 'is-active' : ''}`}
+                              key={user.id}
+                              onClick={() => void selectUser(user.id)}
+                              type="button"
+                            >
+                              <strong>{user.displayName}</strong>
+                              <span>
+                                <i
+                                  className={
+                                    user.status === 'active'
+                                      ? 'user-status is-on'
+                                      : 'user-status is-off'
+                                  }
+                                >
+                                  {user.status === 'active' ? 'Activo' : user.status}
+                                </i>
+                                {' · desde '}
+                                {shortDate(user.createdAt)}
+                              </span>
+                            </button>
+                          ))}
+                    </section>
+                  );
+                })}
+                {users.length === 0 ? <p className="empty-state">Sin usuarios.</p> : null}
+                {groupedUsers.length === 0 && users.length > 0 ? (
+                  <p className="empty-state">Ningún usuario coincide con la búsqueda.</p>
+                ) : null}
+              </div>
             </div>
 
             <div className="grid gap-6">

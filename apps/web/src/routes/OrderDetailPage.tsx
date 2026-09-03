@@ -26,6 +26,13 @@ function statusLabel(status: OrderSummary['status'] | null): string {
   return status ? orderStatusLabel(status) : '—';
 }
 
+/** deliveryDate is a plain date; parsed as UTC so it never shifts a day by timezone. */
+function dateLabel(value: string): string {
+  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'long', timeZone: 'UTC' }).format(
+    new Date(`${value}T00:00:00Z`),
+  );
+}
+
 function timeLabel(value: string): string {
   return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(
     new Date(value),
@@ -306,6 +313,98 @@ export function OrderDetailPage() {
             </button>
           </form>
         ) : null}
+
+        {/* Everything the order already knew but never showed. Calling the customer or finding the
+            door is the usual next action after opening a pedido, and both used to mean a trip to
+            the ficha and back. */}
+        <dl className="order-facts mt-8">
+          <div>
+            <dt>Cliente</dt>
+            <dd>
+              <Link className="underline" to={`/app/clientes?customerId=${order.customer.id}`}>
+                {order.customer.displayName}
+              </Link>
+            </dd>
+          </div>
+          {order.customer.phone || order.customer.whatsapp ? (
+            <div>
+              <dt>Teléfono</dt>
+              <dd>
+                {/* tel: and wa.me so a click dials or opens the chat, rather than being text to
+                    copy by hand. */}
+                {order.customer.phone ? (
+                  <a href={`tel:${order.customer.phone.replace(/[^+d]/g, '')}`}>
+                    {order.customer.phone}
+                  </a>
+                ) : null}
+                {order.customer.whatsapp ? (
+                  <>
+                    {order.customer.phone ? ' · ' : ''}
+                    <a
+                      href={`https://wa.me/${order.customer.whatsapp.replace(/D/g, '')}`}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      WhatsApp
+                    </a>
+                  </>
+                ) : null}
+              </dd>
+            </div>
+          ) : null}
+          {order.customer.email ? (
+            <div>
+              <dt>Email</dt>
+              <dd>
+                <a href={`mailto:${order.customer.email}`}>{order.customer.email}</a>
+              </dd>
+            </div>
+          ) : null}
+          <div className="order-facts-wide">
+            <dt>Dirección de entrega</dt>
+            <dd>
+              {order.deliveryAddress}
+              {order.deliveryLocationUrl ? (
+                <>
+                  {' · '}
+                  <a href={order.deliveryLocationUrl} rel="noreferrer" target="_blank">
+                    Ver ubicación
+                  </a>
+                </>
+              ) : null}
+            </dd>
+          </div>
+          {order.deliveryZone ? (
+            <div>
+              <dt>Zona</dt>
+              <dd>{order.deliveryZone}</dd>
+            </div>
+          ) : null}
+          <div>
+            <dt>Entrega</dt>
+            <dd>{dateLabel(order.deliveryDate)}</dd>
+          </div>
+          <div>
+            <dt>Pago esperado</dt>
+            <dd>{order.paymentExpectation}</dd>
+          </div>
+          <div>
+            <dt>Origen</dt>
+            <dd>{order.source}</dd>
+          </div>
+          {order.dietaryInstructions.length > 0 ? (
+            <div className="order-facts-wide">
+              <dt>Indicaciones alimentarias</dt>
+              <dd>{order.dietaryInstructions.join(' · ')}</dd>
+            </div>
+          ) : null}
+          {order.notes ? (
+            <div className="order-facts-wide">
+              <dt>Notas</dt>
+              <dd>{order.notes}</dd>
+            </div>
+          ) : null}
+        </dl>
 
         <div className="mt-8 grid gap-3">
           <h2 className="text-sm font-bold text-forest">Ítems</h2>

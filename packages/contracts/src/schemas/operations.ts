@@ -590,7 +590,13 @@ export const OrderUpdateRequestSchema = z
 export const OrderSchema = z.object({
   createdAt: IsoDateTimeSchema,
   currency: z.string(),
-  customer: z.object({ displayName: z.string(), id: UuidSchema }),
+  customer: z.object({
+    displayName: z.string(),
+    email: z.string().nullable(),
+    id: UuidSchema,
+    phone: z.string().nullable(),
+    whatsapp: z.string().nullable(),
+  }),
   deliveryAddress: z.string(),
   deliveryAddressId: UuidSchema.nullable(),
   deliveryDate: z.iso.date(),

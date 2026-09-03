@@ -3689,12 +3689,40 @@ export class PostgresOperationsService {
       else instructionsByOrder.set(entry.orderId, [entry.instruction]);
     }
 
+    // An operator looking at an order almost always needs to reach the customer — calling about a
+    // delivery is the single most common next action — so the contact travels with the order
+    // rather than requiring a second trip to the customer's ficha.
+    const contactRows = await database
+      .select({
+        customerId: customerIdentities.customerId,
+        type: customerIdentities.type,
+        value: customerIdentities.valueDisplay,
+      })
+      .from(customerIdentities)
+      .where(
+        and(
+          inArray(
+            customerIdentities.customerId,
+            rows.map((row) => row.customerId),
+          ),
+          eq(customerIdentities.active, true),
+        ),
+      );
+    const contactFor = (customerId: string, type: string) =>
+      contactRows.find((row) => row.customerId === customerId && row.type === type)?.value ?? null;
+
     const byId = new Map(
       rows.map((row) => [
         row.id,
         {
           ...row,
-          customer: { displayName: row.customerDisplayName, id: row.customerId },
+          customer: {
+            displayName: row.customerDisplayName,
+            email: contactFor(row.customerId, 'email'),
+            id: row.customerId,
+            phone: contactFor(row.customerId, 'phone'),
+            whatsapp: contactFor(row.customerId, 'whatsapp'),
+          },
           dietaryInstructions: instructionsByOrder.get(row.id) ?? [],
           // orderId is the grouping key, not part of the item DTO.
           items: (itemsByOrder.get(row.id) ?? []).map((item) => ({

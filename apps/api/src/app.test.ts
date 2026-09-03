@@ -686,6 +686,7 @@ describe('API foundation', () => {
                 createdAt: new Date('2026-08-17T10:00:00.000Z'),
                 displayName: 'Operador',
                 id: '00000000-0000-4000-8000-000000000001',
+                roles: [{ displayName: 'Operador', key: 'operador' }],
                 status: 'active',
               },
             ],

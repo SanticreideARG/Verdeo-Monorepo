@@ -3206,3 +3206,121 @@ a {
 .modal-panel legend {
   padding-bottom: 0.35rem;
 }
+
+/* Order facts: a definition list rather than prose, so an operator scanning for a phone number or
+   an address finds it by position instead of reading. */
+.order-facts {
+  display: grid;
+  gap: 1rem 1.5rem;
+  margin: 0;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+}
+.order-facts > div {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.order-facts-wide {
+  grid-column: 1 / -1;
+}
+.order-facts dt {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--db-text-soft);
+}
+.order-facts dd {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.order-facts a {
+  color: var(--db-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* --- Users directory --------------------------------------------------------------------------
+   Was one oversized card per user showing a name and a status. At a dozen users that is a lot of
+   scrolling for very little, so this is compact rows grouped by role, with its own scroll. */
+.user-directory {
+  display: grid;
+  gap: 0.6rem;
+  align-content: start;
+}
+.user-directory-search {
+  width: 100%;
+}
+.user-directory-list {
+  display: grid;
+  gap: 0.15rem;
+  max-height: 34rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+.user-group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  margin-top: 0.5rem;
+  border: 0;
+  border-bottom: 1px solid var(--db-border);
+  padding: 0.4rem 0.2rem;
+  background: none;
+  color: var(--db-text-soft);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+}
+.user-group-header small {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--db-text-faint, var(--db-text-soft));
+}
+.user-row {
+  display: grid;
+  gap: 0.1rem;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 0.45rem;
+  padding: 0.5rem 0.6rem;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.user-row:hover {
+  background: var(--db-surface);
+}
+.user-row.is-active {
+  border-color: var(--db-accent);
+  background: var(--db-surface);
+}
+.user-row strong {
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.user-row span {
+  font-size: 0.75rem;
+  color: var(--db-text-soft);
+}
+.user-status {
+  font-style: normal;
+  font-weight: 600;
+}
+.user-status.is-on {
+  color: #2f7a4d;
+}
+.user-status.is-off {
+  color: var(--db-text-faint, var(--db-text-soft));
+}

@@ -18,6 +18,7 @@ describe('UserDirectoryService', () => {
     listAfter.mockResolvedValue([
       {
         avatarUrl: null,
+        roles: [],
         createdAt: new Date('2026-08-17T10:00:00Z'),
         displayName: 'Ada',
         id: '00000000-0000-4000-8000-000000000001',
@@ -25,6 +26,7 @@ describe('UserDirectoryService', () => {
       },
       {
         avatarUrl: null,
+        roles: [],
         createdAt: new Date('2026-08-17T11:00:00Z'),
         displayName: 'Grace',
         id: '00000000-0000-4000-8000-000000000002',
@@ -43,6 +45,7 @@ describe('UserDirectoryService', () => {
   it('returns the requested user', async () => {
     const user = {
       avatarUrl: null,
+      roles: [],
       createdAt: new Date('2026-08-17T10:00:00Z'),
       displayName: 'Santiago',
       id: '00000000-0000-4000-8000-000000000001',
@@ -57,6 +60,7 @@ describe('UserDirectoryService', () => {
   it('returns the requested user profile, including email', async () => {
     const profile = {
       avatarUrl: null,
+      roles: [],
       createdAt: new Date('2026-08-17T10:00:00Z'),
       displayName: 'Santiago',
       email: 'santiago@example.com',
@@ -74,6 +78,7 @@ describe('UserDirectoryService', () => {
   it('updates the display name', async () => {
     const updated = {
       avatarUrl: null,
+      roles: [],
       createdAt: new Date('2026-08-17T10:00:00Z'),
       displayName: 'Santi',
       email: 'santiago@example.com',
