@@ -63,7 +63,7 @@ const PUBLIC_ANCHOR_LINKS = [
 
 function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-cream text-ink">
+    <div className="public-night min-h-screen">
       <header className="public-header">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-5 sm:px-8">
           <BrandMark />

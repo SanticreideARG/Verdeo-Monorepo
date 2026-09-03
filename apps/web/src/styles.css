@@ -2910,3 +2910,62 @@ a {
   cursor: default;
   opacity: 0.6;
 }
+
+/* ---------------------------------------------------------------------------------------------
+   Landing on night ground.
+
+   The public site sits on a dark navy rather than cream. Rather than rewriting every section's
+   utility classes, the ground is set here and the handful of tokens that were picked for a light
+   background are reassigned inside this scope — text, muted text, and the translucent white panels
+   that read as "slightly raised" on cream and would glare on navy.
+
+   Deliberately NOT overriding --color-forest itself: it is also the primary button's background and
+   the border colour, so flipping it would turn white text on a white button. Only the places where
+   forest is used AS TEXT are remapped, by class.
+   --------------------------------------------------------------------------------------------- */
+.public-night {
+  --public-night-ground: #0b1828;
+  background: var(--public-night-ground);
+  color: #eef2f0;
+}
+
+.public-night .public-header {
+  background: color-mix(in srgb, var(--public-night-ground) 88%, transparent);
+  border-bottom-color: rgb(255 255 255 / 10%);
+}
+
+.public-night .nav-link {
+  color: #cdd8d4;
+}
+.public-night .nav-link:hover {
+  color: #ffffff;
+}
+
+/* Headings across the CMS sections use text-forest, which is a dark green meant for cream. */
+.public-night .text-forest {
+  color: #f2f6f1;
+}
+.public-night .text-ink-muted {
+  color: #a8bcb5;
+}
+.public-night .eyebrow {
+  color: var(--color-lime);
+}
+
+/* "Raised panel" sections: white at 60% is a subtle lift on cream and a glare on navy. */
+.public-night .bg-white\/60 {
+  background: rgb(255 255 255 / 4%);
+}
+.public-night .border-forest\/10 {
+  border-color: rgb(255 255 255 / 10%);
+}
+
+/* The secondary button is outlined in forest, which disappears against the dark ground. */
+.public-night .button-secondary {
+  border-color: rgb(255 255 255 / 35%);
+  color: #eef2f0;
+}
+.public-night .button-secondary:hover {
+  border-color: var(--color-lime);
+  color: var(--color-lime);
+}
