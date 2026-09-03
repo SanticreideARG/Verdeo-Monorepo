@@ -138,12 +138,6 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
     label: 'Inteligencia',
     items: [
       {
-        href: '/app/ia',
-        icon: 'ai',
-        label: 'IA y plantillas',
-        permission: 'ai.providers.manage',
-      },
-      {
         href: '/app/ia/workbench',
         icon: 'ai',
         label: 'Workbench de IA',

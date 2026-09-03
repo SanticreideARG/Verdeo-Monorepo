@@ -1,14 +1,7 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type DragEvent,
-  type FormEvent,
-} from 'react';
+import { useCallback, useEffect, useState, type DragEvent, type FormEvent } from 'react';
 
 import { CmsSection } from '../components/CmsSections.js';
+import { CmsImageField } from '../components/CmsImageField.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
@@ -110,8 +103,6 @@ export function CmsPagesAdminPage() {
   const [loading, setLoading] = useState(true);
   const [pageFormOpen, setPageFormOpen] = useState(false);
   const [addingType, setAddingType] = useState<string>('HERO');
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [uploadedUrl, setUploadedUrl] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [draggedId, setDraggedId] = useState<string | null>(null);
 
@@ -248,25 +239,6 @@ export function CmsPagesAdminPage() {
     });
   }
 
-  async function uploadImage(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    setMessage('');
-    const response = await apiRequest('/api/v1/cms/media', {
-      body: file,
-      headers: { 'content-type': file.type },
-      method: 'POST',
-    });
-    if (!response.ok) {
-      setMessage(await errorMessage(response));
-      return;
-    }
-    const asset = (await response.json()) as { url: string };
-    setUploadedUrl(asset.url);
-    setMessage('Imagen subida. Copiá la URL para usarla en una sección.');
-  }
-
   if (failed) return <DashboardFailed label="los contenidos" />;
   if (!profile) return <DashboardLoading />;
 
@@ -298,7 +270,13 @@ export function CmsPagesAdminPage() {
         {loading ? (
           <p className="mt-6 text-ink-muted">Cargando…</p>
         ) : (
-          <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.6fr)_minmax(0,1.4fr)]">
+          <div
+            className={
+              previewOpen
+                ? 'mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.6fr)_minmax(0,1.4fr)] xl:grid-cols-[minmax(0,0.5fr)_minmax(0,1fr)_minmax(0,1fr)]'
+                : 'mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.6fr)_minmax(0,1.4fr)]'
+            }
+          >
             <div>
               <div className="grid gap-2">
                 {pages.map((page) => (
@@ -346,29 +324,6 @@ export function CmsPagesAdminPage() {
                   ) : null}
                 </>
               ) : null}
-
-              {canEdit ? (
-                <div className="mt-6 rounded-xl border border-forest/15 p-4">
-                  <p className="text-sm font-semibold text-forest">Imágenes</p>
-                  <input
-                    accept="image/jpeg,image/png,image/webp"
-                    className="sr-only"
-                    onChange={(event) => void uploadImage(event)}
-                    ref={fileInputRef}
-                    type="file"
-                  />
-                  <button
-                    className="button button-secondary mt-2"
-                    onClick={() => fileInputRef.current?.click()}
-                    type="button"
-                  >
-                    Subir imagen
-                  </button>
-                  {uploadedUrl ? (
-                    <input className="mt-2 w-full text-xs" readOnly value={uploadedUrl} />
-                  ) : null}
-                </div>
-              ) : null}
             </div>
 
             <div>
@@ -403,23 +358,6 @@ export function CmsPagesAdminPage() {
                       ) : null}
                     </div>
                   </div>
-
-                  {previewOpen ? (
-                    <div className="cms-preview mt-4">
-                      <p className="cms-preview-label">
-                        Vista previa del borrador — así se ve con lo guardado hasta ahora en cada
-                        sección, sin publicar.
-                      </p>
-                      <div className="cms-preview-frame">
-                        {sections.map((section) => (
-                          <CmsSection key={section.id} section={section} />
-                        ))}
-                        {sections.length === 0 ? (
-                          <p className="p-8 text-center text-ink-muted">Sin secciones todavía.</p>
-                        ) : null}
-                      </div>
-                    </div>
-                  ) : null}
 
                   <div className="mt-4 grid gap-3">
                     {sections.map((section, index) => (
@@ -556,6 +494,25 @@ export function CmsPagesAdminPage() {
                 </>
               )}
             </div>
+
+            {/* Its own column, rendered with the same CmsSection components the live landing uses —
+                so this is the page, not an approximation of it. Sticky, because the value is
+                watching it change while editing rather than scrolling back to check. */}
+            {previewOpen && detail ? (
+              <div className="cms-preview-column">
+                <p className="cms-preview-label">
+                  Vista previa del borrador — con lo cargado hasta ahora, sin publicar.
+                </p>
+                <div className="cms-preview-frame">
+                  {sections.map((section) => (
+                    <CmsSection key={section.id} section={section} />
+                  ))}
+                  {sections.length === 0 ? (
+                    <p className="p-8 text-center text-ink-muted">Sin secciones todavía.</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
       </section>
@@ -590,10 +547,10 @@ function SectionFields({
             placeholder="Subtítulo (opcional)"
             value={field('subheadline')}
           />
-          <input
+          <CmsImageField
             disabled={disabled}
-            onChange={(event) => onChange({ imageUrl: event.target.value })}
-            placeholder="URL de imagen (opcional)"
+            label="Imagen (opcional)"
+            onChange={(url) => onChange({ imageUrl: url })}
             value={field('imageUrl')}
           />
           <div className="grid grid-cols-2 gap-2">
@@ -644,10 +601,10 @@ function SectionFields({
             rows={3}
             value={field('body')}
           />
-          <input
+          <CmsImageField
             disabled={disabled}
-            onChange={(event) => onChange({ imageUrl: event.target.value })}
-            placeholder="URL de imagen"
+            label="Imagen"
+            onChange={(url) => onChange({ imageUrl: url })}
             value={field('imageUrl')}
           />
           <select
@@ -730,10 +687,10 @@ function SectionFields({
             placeholder="Texto pequeño arriba (opcional, ej. “Bienvenido a nuestro mundo”)"
             value={field('kicker')}
           />
-          <input
+          <CmsImageField
             disabled={disabled}
-            onChange={(event) => onChange({ logoUrl: event.target.value })}
-            placeholder="URL del logo bajo ese texto (opcional)"
+            label="Logo bajo ese texto (opcional)"
+            onChange={(url) => onChange({ logoUrl: url })}
             value={field('logoUrl')}
           />
           <textarea

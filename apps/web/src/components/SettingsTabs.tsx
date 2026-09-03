@@ -6,7 +6,7 @@ interface SettingsTab {
   permission: string;
 }
 
-// The six lightweight settings screens that used to each claim their own "Administración" navbar
+// The lightweight settings screens that used to each claim their own "Administración" navbar
 // slot. They're small, related, and rarely all needed at once, so they're consolidated behind one
 // tab strip instead — every tab is still its own route (a real page load on click, not a soft
 // SPA switch), which keeps each page's existing loading/permission logic untouched.
@@ -22,10 +22,11 @@ const SETTINGS_TABS: readonly SettingsTab[] = [
     permission: 'messaging.accounts.manage',
   },
   { href: '/app/ajustes/correo', label: 'Correo', permission: 'ai.providers.manage' },
+  { href: '/app/ia', label: 'IA y plantillas', permission: 'ai.providers.manage' },
 ];
 
 // The single navbar "Ajustes" entry needs the OR of every tab's permission — a viewer who can
-// only reach one of the six tabs should still see the entry and land on that tab's own
+// only reach one of the tabs should still see the entry and land on that tab's own
 // "no tenés permiso" bounce-through for the others, rather than the entry disappearing entirely.
 export const SETTINGS_TAB_PERMISSIONS: readonly string[] = SETTINGS_TABS.map(
   (tab) => tab.permission,

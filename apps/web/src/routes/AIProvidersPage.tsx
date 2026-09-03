@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 
 import { DashboardShell } from '../components/DashboardShell.js';
+import { SettingsTabs } from '../components/SettingsTabs.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage, type AIProviderConfig } from '../lib/operations.js';
@@ -124,7 +125,8 @@ export function AIProvidersPage() {
     return (
       <DashboardShell profile={profile} onLogout={() => void logout()}>
         <section className="dashboard-panel">
-          <h1 className="text-2xl font-semibold text-forest">IA y plantillas</h1>
+          <SettingsTabs permissions={profile.permissions} />
+          <h1 className="mt-6 text-2xl font-semibold text-forest">IA y plantillas</h1>
           <p className="mt-3 text-ink-muted">
             Tu usuario no tiene permiso para administrar proveedores de IA.
           </p>
@@ -136,8 +138,9 @@ export function AIProvidersPage() {
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
       <section className="dashboard-panel">
-        <header>
-          <p className="dashboard-kicker">Inteligencia</p>
+        <SettingsTabs permissions={profile.permissions} />
+        <header className="mt-6">
+          <p className="dashboard-kicker">Ajustes</p>
           <h1 className="text-2xl font-semibold text-forest">Configuración segura del motor</h1>
           <p className="mt-3 max-w-3xl leading-7 text-ink-muted">
             La clave se cifra en el servidor y nunca vuelve al navegador. Este corte prepara el

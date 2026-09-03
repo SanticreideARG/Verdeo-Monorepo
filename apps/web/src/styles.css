@@ -3121,3 +3121,60 @@ a {
   height: auto;
   margin: 0.25rem 0 0.5rem;
 }
+
+/* --- CMS editor: preview column and per-field image upload ------------------------------------ */
+
+/* Sticky so the preview stays in view while the editor column scrolls — watching the page change
+   while editing is the whole point, and a preview you have to scroll back to is not that. */
+.cms-preview-column {
+  position: sticky;
+  top: 1rem;
+  align-self: start;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+
+.cms-image-field {
+  display: grid;
+  gap: 0.35rem;
+}
+.cms-image-field-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--db-text-soft);
+}
+.cms-image-field-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: start;
+}
+.cms-image-field-thumb {
+  width: 3.25rem;
+  height: 3.25rem;
+  border: 1px solid var(--db-border);
+  border-radius: 0.4rem;
+  object-fit: cover;
+  background: var(--db-surface);
+}
+.cms-image-field-thumb-empty {
+  display: grid;
+  place-items: center;
+  border-style: dashed;
+  color: var(--db-text-faint, var(--db-text-soft));
+}
+.cms-image-field-controls {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.cms-image-field-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.cms-image-field-error {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--db-danger, #b3261e);
+}
