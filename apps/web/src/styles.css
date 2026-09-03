@@ -3706,3 +3706,91 @@ main .operation-card {
     transition: none;
   }
 }
+
+/* --- Calendar ---------------------------------------------------------------------------------
+   An agenda rather than a month grid: what matters is what is coming and in what order, and a grid
+   spends most of its area on empty days while making a busy week look like a quiet one. */
+.dashboard-topbar-icon {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid var(--db-border);
+  border-radius: 0.6rem;
+  color: var(--db-text-soft);
+}
+.dashboard-topbar-icon:hover {
+  border-color: var(--db-accent);
+  color: var(--db-text);
+}
+.calendar-agenda {
+  display: grid;
+  gap: 1.5rem;
+}
+.calendar-day {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--db-text-soft);
+}
+.calendar-agenda ul {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.calendar-event {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  /* A left rail carries the kind, so what sort of thing this is reads before the words do. */
+  border-left: 3px solid var(--db-border);
+  border-radius: 0 0.5rem 0.5rem 0;
+  padding: 0.6rem 0.8rem;
+  background: var(--db-surface);
+}
+.calendar-event.is-cycle_close {
+  border-left-color: #c8a030;
+}
+.calendar-event.is-kitchen_cutoff {
+  border-left-color: #a24335;
+}
+.calendar-event.is-reminder {
+  border-left-color: var(--db-accent);
+}
+.calendar-event p {
+  margin: 0;
+  font-weight: 600;
+}
+.calendar-event-done {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+.calendar-event small {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.75rem;
+  color: var(--db-text-soft);
+}
+.calendar-event-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.calendar-event-actions button {
+  border: 0;
+  background: none;
+  color: var(--db-text-soft);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.calendar-event-actions button:hover {
+  color: var(--db-text);
+}

@@ -679,6 +679,29 @@ export function DashboardShell({
           </div>
           <div className="dashboard-topbar-tools">
             <PresenceControl enabled={profile.permissions.includes('chat.use')} />
+            {profile.permissions.includes('calendar.use') ? (
+              <Link
+                aria-label="Calendario"
+                className="dashboard-topbar-icon"
+                title="Calendario"
+                to="/app/calendario"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="none"
+                  height="18"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="1.8"
+                  viewBox="0 0 24 24"
+                  width="18"
+                >
+                  <rect x="3" y="5" width="18" height="16" rx="2" />
+                  <path d="M3 10h18M8 3v4M16 3v4" />
+                </svg>
+              </Link>
+            ) : null}
             {scope && (scope.sites.length > 0 || scope.canSelectGlobal) ? (
               <label className="dashboard-scope">
                 <span>Ciudad</span>

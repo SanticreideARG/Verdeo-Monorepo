@@ -683,3 +683,41 @@ export const orderRevisions = pgTable(
     index('order_revisions_order_idx').on(table.orderId, table.createdAt),
   ],
 );
+
+/**
+ * Reminders on the shared calendar.
+ *
+ * Two scopes, and the difference is who they belong to rather than who may read them: a personal
+ * reminder is private to the person who wrote it, a general one belongs to a city's team. That
+ * distinction is the whole permission model here, so it is a column rather than something derived.
+ *
+ * Deliberately only reminders. Period closes, delivery dates and kitchen cutoffs are already facts
+ * the system holds, so the calendar derives those at read time instead of copying them into rows
+ * that could drift from the sales cycle they describe.
+ */
+export const calendarReminders = pgTable(
+  'calendar_reminders',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    title: text('title').notNull(),
+    notes: text('notes'),
+    // Date, not timestamp: a reminder is for a day, and giving it a time would imply an alarm the
+    // system does not have.
+    remindOn: date('remind_on').notNull(),
+    scope: text('scope').notNull(),
+    // Null for a personal reminder, and for a general one that is not tied to a city.
+    operatingSiteId: uuid('operating_site_id').references(() => operatingSites.id, {
+      onDelete: 'cascade',
+    }),
+    createdByUserId: uuid('created_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    doneAt: timestamp('done_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index('calendar_reminders_date_idx').on(table.remindOn),
+    index('calendar_reminders_author_idx').on(table.createdByUserId, table.remindOn),
+    check('calendar_reminders_scope_check', sql`${table.scope} in ('personal', 'general')`),
+  ],
+);

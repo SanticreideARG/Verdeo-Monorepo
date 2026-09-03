@@ -127,6 +127,10 @@ import {
   OrderRevisionListResponseSchema,
   OrderSchema,
   OrderStatusHistoryResponseSchema,
+  CalendarEventListResponseSchema,
+  type CalendarReminderCreateRequest,
+  CalendarReminderCreateRequestSchema,
+  CalendarReminderDoneRequestSchema,
   CancellationReasonListResponseSchema,
   CancellationReasonsUpdateRequestSchema,
   OrderTransitionRequestSchema,
@@ -788,6 +792,13 @@ interface MessagingEngine {
   verifySignature(rawBody: string, signatureHeader: string | null): boolean;
 }
 
+interface CalendarContext {
+  actorUserId?: string | undefined;
+  correlationId: string;
+  requestId: string;
+  source: string;
+}
+
 interface DeliveryContext {
   actorUserId?: string | undefined;
   correlationId: string;
@@ -895,6 +906,20 @@ interface CreateAppOptions {
   logger: Logger;
   messaging?: MessagingEngine;
   oauth?: OAuthLogin;
+  calendar?: {
+    createReminder(
+      input: CalendarReminderCreateRequest,
+      context: CalendarContext,
+    ): Promise<unknown>;
+    deleteReminder(reminderId: string, context: CalendarContext): Promise<void>;
+    listEvents(input: {
+      from: string;
+      operatingSiteId?: string | null | undefined;
+      to: string;
+      viewerUserId: string;
+    }): Promise<unknown>;
+    setReminderDone(reminderId: string, done: boolean, context: CalendarContext): Promise<void>;
+  };
   customerOAuth?: OAuthLogin;
   /** Issues and consumes the email sign-in links. */
   customerLogin?: {
@@ -1011,6 +1036,13 @@ export function createApp(options: CreateAppOptions) {
   };
 
   const deliveryContext = (context: Context<{ Variables: AppVariables }>): DeliveryContext => ({
+    actorUserId: context.get('session')?.userId,
+    correlationId: context.get('requestId'),
+    requestId: context.get('requestId'),
+    source: 'api',
+  });
+
+  const calendarContext = (context: Context<{ Variables: AppVariables }>): CalendarContext => ({
     actorUserId: context.get('session')?.userId,
     correlationId: context.get('requestId'),
     requestId: context.get('requestId'),
@@ -3408,6 +3440,60 @@ export function createApp(options: CreateAppOptions) {
       paymentsContext(context),
     );
     return context.json(PaymentMethodListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.get('/api/v1/calendar', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('calendar.use')) return forbidden(context);
+    if (!options.calendar) throw new Error('Calendar engine is not configured');
+    const from = context.req.query('from');
+    const to = context.req.query('to');
+    if (!from || !to) return badRequest(context, 'Indicá el rango de fechas.');
+
+    const items = await options.calendar.listEvents({
+      from,
+      operatingSiteId: context.req.query('operatingSiteId') ?? null,
+      to,
+      // Personal reminders are filtered by the service against this, not by the caller.
+      viewerUserId: session.userId,
+    });
+    return context.json(CalendarEventListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.post('/api/v1/calendar/reminders', async (context) => {
+    if (!context.get('session').permissions.includes('calendar.use')) return forbidden(context);
+    if (!options.calendar) throw new Error('Calendar engine is not configured');
+    const input = CalendarReminderCreateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) return badRequest(context, 'Revisá el recordatorio.', input.error.issues);
+    const created = await options.calendar.createReminder(input.data, calendarContext(context));
+    return context.json(contractValue(created), 201);
+  });
+
+  app.patch('/api/v1/calendar/reminders/:id', async (context) => {
+    if (!context.get('session').permissions.includes('calendar.use')) return forbidden(context);
+    if (!options.calendar) throw new Error('Calendar engine is not configured');
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = CalendarReminderDoneRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success) return badRequest(context, 'Revisá el recordatorio.');
+    await options.calendar.setReminderDone(
+      params.data.id,
+      input.data.done,
+      calendarContext(context),
+    );
+    return context.body(null, 204);
+  });
+
+  app.delete('/api/v1/calendar/reminders/:id', async (context) => {
+    if (!context.get('session').permissions.includes('calendar.use')) return forbidden(context);
+    if (!options.calendar) throw new Error('Calendar engine is not configured');
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    if (!params.success) return badRequest(context, 'El recordatorio no es válido.');
+    await options.calendar.deleteReminder(params.data.id, calendarContext(context));
+    return context.body(null, 204);
   });
 
   app.get('/api/v1/cancellation-reasons', async (context) => {

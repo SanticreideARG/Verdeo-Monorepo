@@ -246,6 +246,13 @@
       "when": 1788439012435,
       "tag": "0034_cool_moondragon",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1788468402419,
+      "tag": "0035_exotic_supreme_intelligence",
+      "breakpoints": true
     }
   ]
 }

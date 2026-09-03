@@ -19,6 +19,7 @@ import { MenuCatalogSettingsPage } from './MenuCatalogSettingsPage.js';
 import { HelpPage } from './HelpPage.js';
 import { KitchenPage } from './KitchenPage.js';
 import { LabelSettingsPage } from './LabelSettingsPage.js';
+import { CalendarPage } from './CalendarPage.js';
 import { EmailSettingsPage } from './EmailSettingsPage.js';
 import { PaymentMethodsSettingsPage } from './PaymentMethodsSettingsPage.js';
 import { LoginPage } from './LoginPage.js';
@@ -258,6 +259,7 @@ export function App() {
       <Route path="/app/ajustes/zonas" element={<GeographySettingsPage />} />
       <Route path="/app/ajustes/menu" element={<MenuCatalogSettingsPage />} />
       <Route path="/app/ajustes/etiquetas" element={<LabelSettingsPage />} />
+      <Route path="/app/calendario" element={<CalendarPage />} />
       <Route path="/app/ajustes/correo" element={<EmailSettingsPage />} />
       <Route path="/app/ajustes/pagos" element={<PaymentMethodsSettingsPage />} />
       <Route path="/app/auditoria" element={<AuditLogPage />} />

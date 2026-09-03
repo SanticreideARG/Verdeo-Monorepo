@@ -995,3 +995,31 @@ export const CustomerOrderCreateRequestSchema = z.object({
   notes: z.string().trim().max(1000).optional(),
   paymentExpectation: z.string().trim().min(1).max(120),
 });
+
+export const CalendarEventSchema = z.object({
+  day: z.iso.date(),
+  done: z.boolean(),
+  id: z.string(),
+  kind: z.enum(['cycle_close', 'kitchen_cutoff', 'reminder']),
+  notes: z.string().nullable(),
+  operatingSiteName: z.string().nullable(),
+  scope: z.enum(['derived', 'general', 'personal']),
+  title: z.string(),
+});
+
+export const CalendarEventListResponseSchema = z.object({
+  items: z.array(CalendarEventSchema),
+});
+
+export const CalendarReminderCreateRequestSchema = z.object({
+  notes: z.string().trim().max(1_000).optional(),
+  operatingSiteId: UuidSchema.nullable().optional(),
+  remindOn: z.iso.date(),
+  // Personal is private to its author; general belongs to a city's team.
+  scope: z.enum(['general', 'personal']).default('personal'),
+  title: z.string().trim().min(1).max(200),
+});
+
+export const CalendarReminderDoneRequestSchema = z.object({ done: z.boolean() });
+
+export type CalendarReminderCreateRequest = z.infer<typeof CalendarReminderCreateRequestSchema>;
