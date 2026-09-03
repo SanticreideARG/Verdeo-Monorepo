@@ -730,6 +730,12 @@ function SectionFields({
             placeholder="Texto pequeño arriba (opcional, ej. “Bienvenido a nuestro mundo”)"
             value={field('kicker')}
           />
+          <input
+            disabled={disabled}
+            onChange={(event) => onChange({ logoUrl: event.target.value })}
+            placeholder="URL del logo bajo ese texto (opcional)"
+            value={field('logoUrl')}
+          />
           <textarea
             disabled={disabled}
             onChange={(event) =>

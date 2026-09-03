@@ -152,18 +152,40 @@ function DefaultHomeContent() {
   );
 }
 
+/**
+ * "Loading" is its own state, distinct from "loaded and empty".
+ *
+ * Collapsing the two made the fallback render for the length of the fetch, so every visit flashed
+ * the hand-built landing before the published one replaced it. The fallback is for the case where
+ * nobody has published a page — not for the moment before we know.
+ */
+type HomeContent =
+  { status: 'loading' } | { sections: PageSection[]; status: 'published' } | { status: 'fallback' };
+
 function HomePage() {
-  const [sections, setSections] = useState<PageSection[] | null>(null);
+  const [content, setContent] = useState<HomeContent>({ status: 'loading' });
 
   useEffect(() => {
     let active = true;
     void apiRequest('/api/v1/public/pages/home')
       .then(async (response) => {
-        if (!response.ok || !active) return;
+        if (!active) return;
+        if (!response.ok) {
+          setContent({ status: 'fallback' });
+          return;
+        }
         const body = (await response.json()) as { sections: PageSection[] };
-        if (active) setSections(body.sections);
+        if (!active) return;
+        setContent(
+          body.sections.length > 0
+            ? { sections: body.sections, status: 'published' }
+            : { status: 'fallback' },
+        );
       })
-      .catch(() => undefined);
+      // A failed fetch still has to resolve to something, or the page would stay blank forever.
+      .catch(() => {
+        if (active) setContent({ status: 'fallback' });
+      });
     return () => {
       active = false;
     };
@@ -171,12 +193,13 @@ function HomePage() {
 
   return (
     <PublicLayout>
-      <main>
-        {sections && sections.length > 0 ? (
-          sections.map((section) => <CmsSection key={section.id} section={section} />)
-        ) : (
-          <DefaultHomeContent />
-        )}
+      {/* Holds the viewport height while loading so the header does not sit on a collapsed page
+          and then jump when the content arrives. */}
+      <main className={content.status === 'loading' ? 'min-h-[70vh]' : undefined}>
+        {content.status === 'published'
+          ? content.sections.map((section) => <CmsSection key={section.id} section={section} />)
+          : null}
+        {content.status === 'fallback' ? <DefaultHomeContent /> : null}
       </main>
     </PublicLayout>
   );

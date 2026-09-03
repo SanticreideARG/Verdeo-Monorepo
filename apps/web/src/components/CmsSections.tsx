@@ -122,6 +122,16 @@ function HeroRotatorSection({ section }: { section: PageSection }) {
     >
       <div className="mx-auto flex w-full max-w-4xl flex-col items-center gap-5 text-center">
         {section.kicker ? <p className="eyebrow">{section.kicker as string}</p> : null}
+        {section.logoUrl ? (
+          <img
+            alt="Verdeo"
+            className="hero-logo"
+            src={section.logoUrl as string}
+            // Fixed intrinsic size so the layout does not jump while the image loads.
+            width={220}
+            height={220}
+          />
+        ) : null}
         <h1 className="max-w-3xl text-5xl font-semibold leading-[0.98] tracking-[-0.045em] sm:text-7xl">
           {words.length > 0 ? (
             <span className="hero-rotator-word" style={{ opacity: visible ? 1 : 0 }}>

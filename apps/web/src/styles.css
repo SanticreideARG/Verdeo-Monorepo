@@ -3113,3 +3113,11 @@ a {
     transform: none;
   }
 }
+
+/* Hero brand mark. Scales down on narrow screens so it never crowds the rotating headline, which
+   is what the eye should land on. */
+.hero-logo {
+  width: clamp(9rem, 22vw, 13.75rem);
+  height: auto;
+  margin: 0.25rem 0 0.5rem;
+}

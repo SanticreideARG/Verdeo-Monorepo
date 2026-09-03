@@ -31,6 +31,9 @@ const HeroRotatorSectionSchema = SectionBaseSchema.extend({
   ctaLabel: z.string().trim().max(80).optional(),
   fallback: z.string().trim().max(200).optional(),
   kicker: z.string().trim().max(200).optional(),
+  // Brand mark shown under the kicker. Optional so a hero without one renders no gap and no
+  // broken image — the field only exists once someone points it at a real file.
+  logoUrl: z.string().trim().max(500).optional(),
   secondaryHref: z.string().trim().max(300).optional(),
   secondaryLabel: z.string().trim().max(80).optional(),
   type: z.literal('HERO_ROTATOR'),
