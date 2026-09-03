@@ -306,7 +306,7 @@ export function CmsPagesAdminPage() {
                   </button>
                   {pageFormOpen ? (
                     <form
-                      className="mt-3 grid gap-3 rounded-xl border border-forest/15 p-4"
+                      className="mt-3 grid gap-3 rounded-xl border border-forest/10 p-4"
                       onSubmit={(event) => void createPage(event)}
                     >
                       <label className="field">

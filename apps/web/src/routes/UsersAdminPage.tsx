@@ -509,7 +509,7 @@ export function UsersAdminPage() {
                   </p>
 
                   {issuedToken ? (
-                    <div className="mt-3 rounded-xl border border-forest/20 bg-forest/5 p-3 text-sm">
+                    <div className="mt-3 rounded-xl border border-forest/10 bg-forest/5 p-3 text-sm">
                       <p className="font-semibold text-forest">
                         Copiá este token ahora: no se puede volver a mostrar.
                       </p>

@@ -71,7 +71,7 @@ export function OAuthCallbackPage() {
         ) : (
           <>
             <div
-              className="mx-auto mt-10 h-10 w-10 animate-spin rounded-full border-4 border-forest/15 border-t-forest"
+              className="mx-auto mt-10 h-10 w-10 animate-spin rounded-full border-4 border-forest/10 border-t-forest"
               aria-hidden="true"
             />
             <h1 className="mt-6 text-2xl font-semibold tracking-tight text-forest">

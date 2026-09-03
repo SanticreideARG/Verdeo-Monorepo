@@ -253,7 +253,7 @@ export function ChatLinksPage() {
         <ul className="mt-4 space-y-2">
           {links?.userLinks.map((link) => (
             <li
-              className="flex items-center justify-between gap-3 rounded-xl border border-forest/15 bg-white/60 px-4 py-3"
+              className="flex items-center justify-between gap-3 rounded-xl border border-forest/10 bg-white/60 px-4 py-3"
               key={link.id}
             >
               <div>
@@ -275,14 +275,14 @@ export function ChatLinksPage() {
             </li>
           ))}
           {(links?.userLinks.length ?? 0) === 0 ? (
-            <li className="rounded-xl border border-dashed border-forest/20 px-4 py-6 text-center text-ink-muted">
+            <li className="rounded-xl border border-dashed border-forest/10 px-4 py-6 text-center text-ink-muted">
               No hay excepciones: sólo manda la matriz de roles.
             </li>
           ) : null}
         </ul>
 
         <form
-          className="mt-6 space-y-3 rounded-xl border border-forest/15 bg-white/60 p-4"
+          className="mt-6 space-y-3 rounded-xl border border-forest/10 bg-white/60 p-4"
           onSubmit={(event) => void addException(event)}
         >
           <h3 className="font-semibold text-forest">Nueva excepción</h3>

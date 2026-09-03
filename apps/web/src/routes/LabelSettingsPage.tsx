@@ -145,7 +145,7 @@ export function LabelSettingsPage() {
               {settings?.backgroundImageUrl ? (
                 <img
                   alt="Fondo actual de la etiqueta"
-                  className="mt-2 h-32 w-32 rounded-lg border border-forest/15 object-cover"
+                  className="mt-2 h-32 w-32 rounded-lg border border-forest/10 object-cover"
                   src={settings.backgroundImageUrl}
                 />
               ) : (

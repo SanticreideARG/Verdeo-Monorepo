@@ -177,7 +177,7 @@ export function MessagingInboxPage() {
                   {canSend ? (
                     <form className="mt-4 flex gap-2" onSubmit={(event) => void submit(event)}>
                       <input
-                        className="flex-1 rounded-xl border border-forest/20 px-3 py-2"
+                        className="flex-1 rounded-xl border border-forest/10 px-3 py-2"
                         name="body"
                         placeholder="Escribí un mensaje…"
                         required

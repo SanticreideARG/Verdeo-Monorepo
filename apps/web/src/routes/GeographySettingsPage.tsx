@@ -430,7 +430,7 @@ export function GeographySettingsPage() {
                 </li>
               ))}
               {sites.length === 0 ? (
-                <li className="rounded-xl border border-dashed border-forest/20 px-4 py-6 text-center text-ink-muted">
+                <li className="rounded-xl border border-dashed border-forest/10 px-4 py-6 text-center text-ink-muted">
                   Todavía no hay operaciones configuradas.
                 </li>
               ) : null}
@@ -457,7 +457,7 @@ export function GeographySettingsPage() {
                     <label className="block text-sm">
                       Nombre
                       <input
-                        className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
+                        className="mt-1 w-full rounded-lg border border-forest/10 px-3 py-2"
                         onChange={(event) =>
                           setSiteDraft((current) => ({
                             ...current,
@@ -470,7 +470,7 @@ export function GeographySettingsPage() {
                     <label className="block text-sm">
                       Identificador (slug)
                       <input
-                        className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
+                        className="mt-1 w-full rounded-lg border border-forest/10 px-3 py-2"
                         onChange={(event) =>
                           setSiteDraft((current) => ({ ...current, slug: event.target.value }))
                         }
@@ -481,7 +481,7 @@ export function GeographySettingsPage() {
                     <label className="block text-sm">
                       Prefijo de pedidos
                       <input
-                        className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
+                        className="mt-1 w-full rounded-lg border border-forest/10 px-3 py-2"
                         onChange={(event) =>
                           setSiteDraft((current) => ({
                             ...current,
@@ -495,7 +495,7 @@ export function GeographySettingsPage() {
                     <label className="block text-sm">
                       Zona horaria
                       <input
-                        className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
+                        className="mt-1 w-full rounded-lg border border-forest/10 px-3 py-2"
                         onChange={(event) =>
                           setSiteDraft((current) => ({ ...current, timezone: event.target.value }))
                         }
@@ -560,19 +560,19 @@ export function GeographySettingsPage() {
                     </li>
                   ))}
                   {zones.length === 0 ? (
-                    <li className="rounded-xl border border-dashed border-forest/20 px-4 py-6 text-center text-ink-muted">
+                    <li className="rounded-xl border border-dashed border-forest/10 px-4 py-6 text-center text-ink-muted">
                       Esta operación todavía no tiene zonas.
                     </li>
                   ) : null}
 
                   {selectedZone ? (
-                    <li className="rounded-xl border border-forest/20 bg-forest/5 p-4">
+                    <li className="rounded-xl border border-forest/10 bg-forest/5 p-4">
                       <h3 className="font-semibold text-forest">{selectedZone.displayName}</h3>
                       <div className="mt-3 grid gap-3">
                         <label className="block text-sm">
                           Número de teléfono
                           <input
-                            className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
+                            className="mt-1 w-full rounded-lg border border-forest/10 px-3 py-2"
                             disabled={!canManageZones}
                             onChange={(event) =>
                               setZoneEdit((current) => ({
@@ -586,7 +586,7 @@ export function GeographySettingsPage() {
                         <label className="block text-sm">
                           Área de cobertura
                           <textarea
-                            className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
+                            className="mt-1 w-full rounded-lg border border-forest/10 px-3 py-2"
                             disabled={!canManageZones}
                             onChange={(event) =>
                               setZoneEdit((current) => ({
@@ -601,7 +601,7 @@ export function GeographySettingsPage() {
                         <label className="block text-sm">
                           Responsable
                           <input
-                            className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
+                            className="mt-1 w-full rounded-lg border border-forest/10 px-3 py-2"
                             disabled={!canManageZones}
                             onChange={(event) =>
                               setZoneEdit((current) => ({
@@ -630,7 +630,7 @@ export function GeographySettingsPage() {
                             Generar token para repartidor
                           </h4>
                           {issuedToken ? (
-                            <div className="mt-2 rounded-lg border border-forest/20 bg-white/60 p-3 text-sm">
+                            <div className="mt-2 rounded-lg border border-forest/10 bg-white/60 p-3 text-sm">
                               <p className="font-semibold text-forest">
                                 Copiá este token ahora: no se puede volver a mostrar.
                               </p>
@@ -647,7 +647,7 @@ export function GeographySettingsPage() {
                             <label className="block text-sm">
                               Repartidor
                               <select
-                                className="mt-1 rounded-lg border border-forest/20 px-3 py-2"
+                                className="mt-1 rounded-lg border border-forest/10 px-3 py-2"
                                 name="boundUserId"
                                 required
                               >
@@ -662,7 +662,7 @@ export function GeographySettingsPage() {
                             <label className="block text-sm">
                               Duración (hs)
                               <input
-                                className="mt-1 w-24 rounded-lg border border-forest/20 px-3 py-2"
+                                className="mt-1 w-24 rounded-lg border border-forest/10 px-3 py-2"
                                 defaultValue={48}
                                 min="1"
                                 name="ttlHours"
@@ -692,7 +692,7 @@ export function GeographySettingsPage() {
                     <label className="block text-sm">
                       Nombre
                       <input
-                        className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
+                        className="mt-1 w-full rounded-lg border border-forest/10 px-3 py-2"
                         onChange={(event) =>
                           setZoneDraft((current) => ({
                             ...current,
@@ -705,7 +705,7 @@ export function GeographySettingsPage() {
                     <label className="block text-sm">
                       Identificador (slug)
                       <input
-                        className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
+                        className="mt-1 w-full rounded-lg border border-forest/10 px-3 py-2"
                         onChange={(event) =>
                           setZoneDraft((current) => ({ ...current, slug: event.target.value }))
                         }
@@ -716,7 +716,7 @@ export function GeographySettingsPage() {
                     <label className="block text-sm">
                       Cobertura
                       <textarea
-                        className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2"
+                        className="mt-1 w-full rounded-lg border border-forest/10 px-3 py-2"
                         onChange={(event) =>
                           setZoneDraft((current) => ({
                             ...current,

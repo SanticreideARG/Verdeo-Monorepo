@@ -174,6 +174,24 @@ const themes = [
 
 type ThemeName = (typeof themes)[number]['value'];
 
+/**
+ * The count that belongs on a nav item, or nothing.
+ *
+ * Deliberately only two: orders nobody has confirmed, and unread chat. A badge on every entry is a
+ * badge nobody reads, so these are the two that mean "someone is waiting on you".
+ */
+function navBadge(href: string, pendingOrders: number, unreadChat: number): ReactNode {
+  const count =
+    href === '/app/pedidos/nuevo' ? pendingOrders : href === '/app/chat' ? unreadChat : 0;
+  if (count <= 0) return null;
+  return (
+    <b className="nav-badge" title={`${count} sin ver`}>
+      {/* Past ten the exact number does not change what you do about it. */}
+      {count > 10 ? '+10' : count}
+    </b>
+  );
+}
+
 function NavIcon({ name }: { name: IconName }) {
   const paths: Record<IconName, ReactNode> = {
     ai: (
@@ -287,6 +305,7 @@ export function DashboardShell({
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingOrders, setPendingOrders] = useState(0);
+  const [unreadChat, setUnreadChat] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => window.localStorage.getItem('verdeo-sidebar-collapsed') === 'true',
   );
@@ -334,6 +353,25 @@ export function DashboardShell({
         if (!response.ok || !active) return;
         const body = (await response.json()) as { items: unknown[] };
         if (active) setPendingOrders(body.items.length);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [profile.permissions]);
+
+  // The chat already tracks unread per conversation against last_read_at, so this is a sum rather
+  // than new bookkeeping.
+  useEffect(() => {
+    if (!profile.permissions.includes('chat.use')) return;
+    let active = true;
+    void apiRequest('/api/v1/chat/conversations')
+      .then(async (response) => {
+        if (!response.ok || !active) return;
+        const body = (await response.json()) as { items: { unreadCount: number }[] };
+        if (active) {
+          setUnreadChat(body.items.reduce((total, item) => total + item.unreadCount, 0));
+        }
       })
       .catch(() => undefined);
     return () => {
@@ -497,11 +535,7 @@ export function DashboardShell({
                         >
                           <NavIcon name={item.icon} />
                           <span>{item.label}</span>
-                          {item.href === '/app/pedidos/nuevo' && pendingOrders > 0 ? (
-                            <b className="nav-badge" title={`${pendingOrders} sin confirmar`}>
-                              {pendingOrders > 10 ? '+10' : pendingOrders}
-                            </b>
-                          ) : null}
+                          {navBadge(item.href, pendingOrders, unreadChat)}
                           {active ? <i aria-hidden="true" /> : null}
                         </Link>
                       );

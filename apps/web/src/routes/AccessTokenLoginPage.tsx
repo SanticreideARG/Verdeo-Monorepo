@@ -88,7 +88,7 @@ export function AccessTokenLoginPage() {
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-forest">Token de acceso</span>
               <input
-                className="min-h-12 w-full rounded-2xl border border-forest/20 bg-white px-4 text-base outline-none transition focus:border-forest focus:ring-4 focus:ring-forest/10"
+                className="min-h-12 w-full rounded-2xl border border-forest/10 bg-white px-4 text-base outline-none transition focus:border-forest focus:ring-4 focus:ring-forest/10"
                 onChange={(event) => setAccessToken(event.target.value)}
                 placeholder="vrd_…"
                 required
@@ -100,7 +100,7 @@ export function AccessTokenLoginPage() {
                 Tu nombre (solo si es una invitación nueva)
               </span>
               <input
-                className="min-h-12 w-full rounded-2xl border border-forest/20 bg-white px-4 text-base outline-none transition focus:border-forest focus:ring-4 focus:ring-forest/10"
+                className="min-h-12 w-full rounded-2xl border border-forest/10 bg-white px-4 text-base outline-none transition focus:border-forest focus:ring-4 focus:ring-forest/10"
                 onChange={(event) => setDisplayName(event.target.value)}
                 value={displayName}
               />

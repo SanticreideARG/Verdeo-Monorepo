@@ -251,7 +251,7 @@ export function CustomerAccountPage() {
             </p>
 
             {linkSent ? (
-              <div className="mt-10 rounded-2xl border border-forest/15 bg-white/70 p-5">
+              <div className="mt-10 rounded-2xl border border-forest/10 bg-white/70 p-5">
                 <p className="font-semibold text-forest">Revisá tu correo</p>
                 <p className="mt-1 text-sm leading-6 text-ink-muted">
                   Si el correo es válido, te enviamos un enlace para entrar. Vence en 15 minutos y

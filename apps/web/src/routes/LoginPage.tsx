@@ -111,7 +111,7 @@ export function LoginPage() {
               <span className="mb-2 block text-sm font-semibold text-forest">Email</span>
               <input
                 autoComplete="username"
-                className="min-h-12 w-full rounded-2xl border border-forest/20 bg-white px-4 text-base outline-none transition focus:border-forest focus:ring-4 focus:ring-forest/10"
+                className="min-h-12 w-full rounded-2xl border border-forest/10 bg-white px-4 text-base outline-none transition focus:border-forest focus:ring-4 focus:ring-forest/10"
                 name="email"
                 onChange={(event) => setEmail(event.target.value)}
                 required
@@ -123,7 +123,7 @@ export function LoginPage() {
               <span className="mb-2 block text-sm font-semibold text-forest">Contraseña</span>
               <input
                 autoComplete="current-password"
-                className="min-h-12 w-full rounded-2xl border border-forest/20 bg-white px-4 text-base outline-none transition focus:border-forest focus:ring-4 focus:ring-forest/10"
+                className="min-h-12 w-full rounded-2xl border border-forest/10 bg-white px-4 text-base outline-none transition focus:border-forest focus:ring-4 focus:ring-forest/10"
                 minLength={12}
                 name="password"
                 onChange={(event) => setPassword(event.target.value)}
