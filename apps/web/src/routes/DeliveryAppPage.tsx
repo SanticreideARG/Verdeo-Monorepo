@@ -10,6 +10,9 @@ interface MyStop {
   deliveryLocationUrl: string | null;
   id: string;
   paymentExpectation: string;
+  // Whether the money is already in. Nothing about how or by whom — the repartidor needs to know
+  // not to ask for cash, and the reconciliation detail is none of their business.
+  prepaid: boolean;
   publicNumber: string;
   routeId: string;
   sequence: number;
@@ -151,44 +154,57 @@ export function DeliveryAppPage() {
               className="rounded-2xl border border-forest/10 bg-white p-5 shadow-sm"
               key={stop.id}
             >
-              <p className="eyebrow">{stop.publicNumber}</p>
-              <h2 className="mt-1 text-xl font-semibold text-forest">{stop.customerFirstName}</h2>
-              <p className="mt-2 text-ink-muted">{stop.deliveryAddress}</p>
-              <p className="mt-1 text-sm text-ink-muted">
-                Cobrar: {formatMoney(stop.totalMinor, 'ARS')} · {stop.paymentExpectation}
-              </p>
+              <div className="delivery-stop-head">
+                <span className="delivery-stop-seq" aria-label={`Parada ${stop.sequence}`}>
+                  {stop.sequence}
+                </span>
+                <div>
+                  <p className="eyebrow">{stop.publicNumber}</p>
+                  <h2 className="text-xl font-semibold text-forest">{stop.customerFirstName}</h2>
+                </div>
+              </div>
+              <p className="mt-2 text-lg leading-6 text-ink">{stop.deliveryAddress}</p>
+
+              {/* What to collect is the thing that must not be got wrong, so it is stated plainly
+                  and a prepaid stop says so instead of showing an amount to ask for. */}
+              {stop.prepaid ? (
+                <p className="delivery-stop-paid">Ya está pagado · no cobrar</p>
+              ) : (
+                <p className="delivery-stop-collect">
+                  Cobrar {formatMoney(stop.totalMinor, 'ARS')}
+                  <small>{stop.paymentExpectation}</small>
+                </p>
+              )}
 
               {stop.deliveryLocationUrl ? (
                 <a
-                  className="button button-secondary mt-3 inline-flex"
+                  className="button button-secondary mt-3 w-full justify-center"
                   href={stop.deliveryLocationUrl}
                   rel="noreferrer"
                   target="_blank"
                 >
-                  Ver mapa
+                  Abrir en el mapa
                 </a>
               ) : null}
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                {canTrigger ? (
-                  <>
-                    <button
-                      className="button button-secondary"
-                      onClick={() => void trigger(stop.id, 'ON_MY_WAY')}
-                      type="button"
-                    >
-                      Estoy en camino
-                    </button>
-                    <button
-                      className="button button-secondary"
-                      onClick={() => void trigger(stop.id, 'AT_ADDRESS')}
-                      type="button"
-                    >
-                      Estoy en el domicilio
-                    </button>
-                  </>
-                ) : null}
-              </div>
+              {canTrigger ? (
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <button
+                    className="button button-secondary w-full justify-center"
+                    onClick={() => void trigger(stop.id, 'ON_MY_WAY')}
+                    type="button"
+                  >
+                    Estoy en camino
+                  </button>
+                  <button
+                    className="button button-secondary w-full justify-center"
+                    onClick={() => void trigger(stop.id, 'AT_ADDRESS')}
+                    type="button"
+                  >
+                    Estoy en la puerta
+                  </button>
+                </div>
+              ) : null}
 
               <button
                 className="button button-primary mt-4 w-full"

@@ -3331,3 +3331,192 @@ a {
   text-align: center;
   font-style: normal;
 }
+
+/* --- Intuitivo picker, mobile first -----------------------------------------------------------
+   The count is what you check on every tap, so it sticks to the top of the picker rather than
+   scrolling away above five groups of dishes. Dishes are full-width rows with a large tap target:
+   this is chosen on a phone, with a thumb. */
+.intuitivo-picker-count {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 0 0.75rem;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-forest);
+  color: #ffffff;
+  font-size: 0.85rem;
+}
+.intuitivo-picker-count b {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.intuitivo-picker-count.is-complete {
+  background: var(--color-lime);
+  color: var(--color-forest);
+}
+.intuitivo-picker-dishes {
+  display: grid;
+  gap: 0.35rem;
+}
+.intuitivo-picker-dish {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  /* 44px is the smallest target a thumb hits reliably. */
+  min-height: 2.75rem;
+  border: 1px solid color-mix(in srgb, var(--color-forest) 15%, transparent);
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.intuitivo-picker-dish.is-selected {
+  border-color: var(--color-forest);
+  background: color-mix(in srgb, var(--color-lime) 30%, transparent);
+}
+.intuitivo-picker-dish input {
+  margin-top: 0.15rem;
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: none;
+}
+/* A dish that cannot be picked because five are already chosen: dimmed, not hidden, so the menu
+   stays readable and the reason is obvious once the count is seen. */
+.intuitivo-picker-dish input:disabled {
+  cursor: not-allowed;
+}
+.intuitivo-picker-dish:has(input:disabled) {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.intuitivo-picker-group-label {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ink-muted);
+}
+
+/* --- Offering picker ---------------------------------------------------------------------------
+   A dropdown shows one option at a time, which is the wrong shape for the screen where a purchase
+   gets decided: comparing varieties and prices is the whole task. Cards show them all at once, and
+   one column on a phone keeps each one full width and easy to hit. */
+.offering-picker {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.offering-picker legend {
+  padding: 0;
+  margin-bottom: 0.5rem;
+}
+.offering-picker-grid {
+  display: grid;
+  gap: 0.6rem;
+}
+@media (min-width: 560px) {
+  .offering-picker-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.offering-card {
+  display: grid;
+  gap: 0.15rem;
+  min-height: 5rem;
+  border: 1.5px solid color-mix(in srgb, var(--color-forest) 15%, transparent);
+  border-radius: 0.85rem;
+  padding: 0.85rem 1rem;
+  background: #ffffff;
+  cursor: pointer;
+  transition: border-color 0.12s ease;
+}
+.offering-card:hover {
+  border-color: color-mix(in srgb, var(--color-forest) 40%, transparent);
+}
+.offering-card.is-selected {
+  border-color: var(--color-forest);
+  background: color-mix(in srgb, var(--color-lime) 22%, #ffffff);
+}
+/* Keyboard users get the same ring the mouse never needed. */
+.offering-card:has(input:focus-visible) {
+  outline: 2px solid var(--color-forest);
+  outline-offset: 2px;
+}
+.offering-card-name {
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--color-forest);
+}
+.offering-card-size {
+  font-size: 0.8rem;
+  color: var(--color-ink-muted);
+}
+.offering-card-price {
+  margin-top: 0.2rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.offering-card-note {
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #637420;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .offering-card {
+    transition: none;
+  }
+}
+
+/* --- Delivery app, mobile first ---------------------------------------------------------------
+   Read standing, in the street, with one hand. Big targets, short lines, and the two things that
+   must not be got wrong — which stop this is, and what to collect — stated plainly. */
+.delivery-stop-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.delivery-stop-seq {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: none;
+  border-radius: 999px;
+  background: var(--color-forest);
+  color: #ffffff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.delivery-stop-collect {
+  display: grid;
+  gap: 0.1rem;
+  margin-top: 0.75rem;
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  background: color-mix(in srgb, var(--color-lime) 35%, transparent);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-forest);
+}
+.delivery-stop-collect small {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--color-ink-muted);
+}
+.delivery-stop-paid {
+  margin-top: 0.75rem;
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  background: color-mix(in srgb, #2f7a4d 14%, transparent);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1f5c37;
+}

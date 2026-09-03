@@ -40,7 +40,13 @@ export function IntuitivoDishPicker({
 
   return (
     <div className="intuitivo-picker">
-      <p className="intuitivo-picker-count">Elegí hasta cinco platos ({selected.length}/5).</p>
+      <p
+        className={`intuitivo-picker-count ${selected.length === 5 ? 'is-complete' : ''}`}
+        role="status"
+      >
+        <b>{selected.length} de 5</b>
+        {selected.length === 5 ? ' · listo' : ` · elegí ${5 - selected.length} más`}
+      </p>
       {groups.map((group) => (
         <div className="intuitivo-picker-group" key={group.familyName}>
           <p className="intuitivo-picker-group-label">{group.familyName}</p>

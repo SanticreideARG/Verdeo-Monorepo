@@ -215,24 +215,36 @@ export function PublicOrderPage() {
           >
             {draft.restored ? <DraftNotice onDiscard={draft.dismissNotice} /> : null}
             <div className="form-grid">
-              <label className="field field-wide">
-                Variedad y tamaño
-                <select
-                  value={offeringId}
-                  onChange={(event) => {
-                    setOfferingId(event.target.value);
-                    setSelectedDishes([]);
-                  }}
-                  required
-                >
+              <fieldset className="field field-wide offering-picker">
+                <legend>Variedad y tamaño</legend>
+                <div className="offering-picker-grid">
                   {menu.offerings.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.familyName} {item.variantName} ·{' '}
-                      {formatMoney(item.unitPriceMinor, item.currency)}
-                    </option>
+                    <label
+                      className={`offering-card ${item.id === offeringId ? 'is-selected' : ''}`}
+                      key={item.id}
+                    >
+                      <input
+                        checked={item.id === offeringId}
+                        className="sr-only"
+                        name="offering"
+                        onChange={() => {
+                          setOfferingId(item.id);
+                          setSelectedDishes([]);
+                        }}
+                        type="radio"
+                      />
+                      <span className="offering-card-name">{item.familyName}</span>
+                      <span className="offering-card-size">{item.variantName}</span>
+                      <span className="offering-card-price">
+                        {formatMoney(item.unitPriceMinor, item.currency)}
+                      </span>
+                      {item.composable ? (
+                        <span className="offering-card-note">Armás tus cinco platos</span>
+                      ) : null}
+                    </label>
                   ))}
-                </select>
-              </label>
+                </div>
+              </fieldset>
               <label className="field">
                 Cantidad de unidades
                 <input name="quantityUnits" type="number" min="1" defaultValue="1" required />
