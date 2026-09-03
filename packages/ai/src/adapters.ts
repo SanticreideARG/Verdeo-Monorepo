@@ -14,6 +14,12 @@ export type ModelCapability =
   | 'REASONING';
 
 export interface GenerateTextInput {
+  /**
+   * The task expects a JSON object back. Providers that support a JSON mode are asked for it
+   * explicitly rather than being trusted to follow the prompt — prompting alone is the weakest
+   * link in structured extraction, and every OpenAI-compatible host worth using accepts the hint.
+   */
+  expectsJson?: boolean | undefined;
   maxTokens: number;
   model: string;
   systemPrompt: string;

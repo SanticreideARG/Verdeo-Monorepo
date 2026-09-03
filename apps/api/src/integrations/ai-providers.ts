@@ -6,8 +6,8 @@ import {
 } from '@verdeo/ai';
 
 /**
- * Chat Completions is the one API shape OpenAI, DeepSeek and most self-hosted/OpenAI-compatible
- * models all speak, so one implementation covers the `adapterType: 'openai-compatible'` row a
+ * Chat Completions is the one API shape OpenAI, DeepSeek, Gemini (through its OpenAI-compatible
+ * endpoint), Groq and most self-hosted models all speak, so one implementation covers the `adapterType: 'openai-compatible'` row a
  * superadmin can point at any of them just by changing `baseUrl` — this is the "adaptador genérico"
  * AI_CORE.md asks for, not a name for OpenAI specifically. `apiKey`/`baseUrl` come from the
  * decrypted `ai_provider_configs` row, never from env — each configured provider is independent.
@@ -28,6 +28,9 @@ export class OpenAICompatibleProvider implements AIProvider {
           { content: input.userPrompt, role: 'user' },
         ],
         model: input.model,
+        // Only sent when the task actually wants JSON: a host that does not recognise the field
+        // would otherwise reject every plain-text request over an option it never needed.
+        ...(input.expectsJson ? { response_format: { type: 'json_object' } } : {}),
         temperature: input.temperature,
       }),
       headers: {

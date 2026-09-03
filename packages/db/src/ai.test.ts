@@ -210,6 +210,82 @@ describe('PostgresAITaskService', () => {
     expect(result.output).toMatchObject({ familyName: 'Real', quantityUnits: 1 });
   });
 
+  /**
+   * Gemini and most open models wrap JSON in a markdown fence even when asked for a raw object, so
+   * treating the fence as a protocol error would fail the majority of valid extractions.
+   */
+  it('accepts structured output that the model wrapped in a markdown fence', async () => {
+    const { db, prompts } = await seededWithProvider();
+    await prompts.createVersion(
+      'extract_order',
+      { maxTokens: 400, systemPrompt: 'Extraé el pedido.', temperature: 0.1 },
+      CONTEXT,
+    );
+    const payload = JSON.stringify({
+      confidence: 0.8,
+      dishes: ['Lomo'],
+      familyName: 'Keto',
+      quantityUnits: 2,
+      sizeName: '250',
+      variantName: 'Lomo',
+    });
+    const provider = fakeProvider(
+      '```json' + String.fromCharCode(10) + payload + String.fromCharCode(10) + '```',
+    );
+    const service = new PostgresAITaskService(db, prompts, () => provider, ENCRYPTION_KEY);
+
+    const result = await service.runTask('extract_order', { message: 'dos keto 250' }, CONTEXT);
+
+    expect(result.output).toMatchObject({ familyName: 'Keto', quantityUnits: 2 });
+  });
+
+  // A task with a schema must ask the provider for JSON rather than trusting the prompt alone:
+  // prompting is the weakest link in structured extraction.
+  it('asks the provider for JSON mode only when the task validates a schema', async () => {
+    const { db, prompts } = await seededWithProvider();
+    await prompts.createVersion(
+      'extract_order',
+      { maxTokens: 400, systemPrompt: 'Extraé.', temperature: 0.1 },
+      CONTEXT,
+    );
+    await prompts.createVersion(
+      'rewrite_message',
+      { maxTokens: 200, systemPrompt: 'Reescribí.', temperature: 0.4 },
+      CONTEXT,
+    );
+    const structured = fakeProvider(
+      JSON.stringify({
+        confidence: 0.9,
+        dishes: [],
+        familyName: 'Real',
+        quantityUnits: 1,
+        sizeName: '400',
+        variantName: 'Pollo',
+      }),
+    );
+    const plain = fakeProvider('texto reescrito');
+
+    await new PostgresAITaskService(db, prompts, () => structured, ENCRYPTION_KEY).runTask(
+      'extract_order',
+      { message: 'algo' },
+      CONTEXT,
+    );
+    await new PostgresAITaskService(db, prompts, () => plain, ENCRYPTION_KEY).runTask(
+      'rewrite_message',
+      { message: 'algo' },
+      CONTEXT,
+    );
+
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- inspecting a vitest mock, not calling it
+    expect(structured.generateText).toHaveBeenCalledWith(
+      expect.objectContaining({ expectsJson: true }),
+    );
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- inspecting a vitest mock, not calling it
+    expect(plain.generateText).toHaveBeenCalledWith(
+      expect.objectContaining({ expectsJson: false }),
+    );
+  });
+
   it('throws AITaskValidationError and still audits when the model returns invalid JSON', async () => {
     const { db, prompts } = await seededWithProvider();
     await prompts.createVersion(

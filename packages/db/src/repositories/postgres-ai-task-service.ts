@@ -109,6 +109,7 @@ export class PostgresAITaskService {
 
     try {
       const result = await provider.generateText({
+        expectsJson: Boolean(task.outputSchema),
         maxTokens: promptVersion.maxTokens,
         model: selected.defaultModel,
         systemPrompt: promptVersion.systemPrompt,
@@ -174,10 +175,24 @@ function renderVariables(variables: Record<string, string>): string {
     .join('\n\n');
 }
 
+/**
+ * Models wrap JSON in a markdown fence often enough — Gemini and Llama especially, even in JSON
+ * mode — that treating it as a protocol error would fail most valid extractions. The fence is
+ * stripped rather than being fought with prompt wording.
+ */
+function stripJsonFence(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('```')) return trimmed;
+  return trimmed
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/, '')
+    .trim();
+}
+
 function parseStructuredOutput(task: AITaskDefinition, text: string): unknown {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(stripJsonFence(text));
   } catch {
     throw new AITaskValidationError('El modelo no devolvió un JSON válido.');
   }
