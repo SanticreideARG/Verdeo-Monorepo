@@ -21,6 +21,7 @@ import {
   PostgresGeographyService,
   PostgresPasswordCredentialRepository,
   PostgresOperationsService,
+  PostgresCustomerLoginService,
   PostgresOAuthIdentityRepository,
   PostgresPaymentsService,
   PostgresSessionRepository,
@@ -384,6 +385,45 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
         },
       }
     : undefined;
+  const customerLogin = new PostgresCustomerLoginService(database.db);
+
+  /**
+   * A proven address becomes a customer session through the same provisioning Google logins use:
+   * resolveOrProvisionCustomer finds the existing customer by email or creates one, so someone who
+   * signed in with Google before and now uses a link lands on the same ficha rather than a
+   * duplicate. The provider is 'email' and the subject is the address itself, since the address is
+   * exactly what the link proved.
+   */
+  const customerEmailLogin = (emailNormalized: string, requestId: string) =>
+    database.db.transaction(async (transaction) => {
+      const identities = new PostgresOAuthIdentityRepository(transaction);
+      const resolved = await identities.resolveOrProvisionCustomer({
+        email: emailNormalized,
+        provider: 'email',
+        providerSubject: emailNormalized,
+      });
+
+      const transactionalSessions = new SessionService(new PostgresSessionRepository(transaction));
+      const createdSession = await transactionalSessions.create(
+        resolved.userId,
+        env.SESSION_TTL_HOURS * 60 * 60 * 1000,
+      );
+
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: 'auth.customer_login_succeeded',
+        actor: { type: 'user', userId: resolved.userId },
+        correlationId: requestId,
+        entityId: createdSession.sessionId,
+        entityType: 'session',
+        metadata: { authenticationProvider: 'email', customerId: resolved.customerId },
+        requestId,
+        source: 'api',
+      });
+
+      return createdSession;
+    });
+
   const app = createApp({
     aiConfiguration,
     aiPrompts,
@@ -408,6 +448,8 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     messaging,
     ...(oauth ? { oauth } : {}),
     ...(customerOAuth ? { customerOAuth } : {}),
+    customerEmailLogin,
+    customerLogin,
     operations,
     payments,
     sessions,

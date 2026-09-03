@@ -127,6 +127,9 @@ import {
   CancellationReasonsUpdateRequestSchema,
   OrderTransitionRequestSchema,
   OrderUpdateRequestSchema,
+  CustomerLoginConsumeRequestSchema,
+  CustomerLoginRequestResponseSchema,
+  CustomerLoginRequestSchema,
   OAuthExchangeRequestSchema,
   ProfileUpdateRequestSchema,
   ProductionActualListResponseSchema,
@@ -889,6 +892,13 @@ interface CreateAppOptions {
   messaging?: MessagingEngine;
   oauth?: OAuthLogin;
   customerOAuth?: OAuthLogin;
+  /** Issues and consumes the email sign-in links. */
+  customerLogin?: {
+    consume(token: string): Promise<{ emailNormalized: string } | null>;
+    requestLogin(email: string): Promise<{ expiresAt: Date; token: string } | null>;
+  };
+  /** Turns a proven address into a customer session, provisioning the customer if new. */
+  customerEmailLogin?: (emailNormalized: string, requestId: string) => Promise<LoginResult>;
   operations?: OperationsEngine;
   payments?: PaymentsEngine;
   sessions: SessionAuthenticator;
@@ -1420,6 +1430,109 @@ export function createApp(options: CreateAppOptions) {
   // Public customer OAuth: never shares a handler with the staff exchange below — this one
   // auto-provisions a customer account + CRM record on a first-time identity, the staff one
   // requires a pre-existing user and rejects everyone else.
+  /**
+   * Asks for a sign-in link.
+   *
+   * Always answers the same thing. Whether the address is new, known, or has asked five times in
+   * the last quarter hour, the visitor is told to check their mail — anything else turns this into
+   * a way to enumerate who has an account.
+   */
+  app.post('/api/v1/public/auth/email/request', async (context) => {
+    const input = CustomerLoginRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success) return badRequest(context, 'Ingresá un email válido.', input.error.issues);
+    if (!options.customerLogin || !options.emailSender) {
+      const code: ApiErrorCode = 'SERVICE_UNAVAILABLE';
+      return context.json(
+        {
+          error: {
+            code,
+            message: 'El acceso por correo todavía no está disponible.',
+            requestId: context.get('requestId'),
+          },
+        },
+        statusForCode(code),
+      );
+    }
+
+    const issued = await options.customerLogin.requestLogin(input.data.email);
+    if (issued) {
+      const link = `${options.appOrigin}/mi-cuenta?token=${encodeURIComponent(issued.token)}`;
+      const body = renderEmail({
+        action: { href: link, label: 'Entrar a mi cuenta' },
+        bodyHtml:
+          '<p>Tocá el botón para entrar. El enlace vence en 15 minutos y sirve una sola vez.</p>' +
+          '<p>Si no pediste esto, podés ignorar este correo.</p>',
+        bodyText:
+          'Entrá con el enlace de abajo. Vence en 15 minutos y sirve una sola vez. ' +
+          'Si no pediste esto, ignorá este correo.',
+        heading: 'Tu acceso a Verdeo',
+      });
+      // Not awaited for its result beyond logging: a mail that bounces must not tell the caller
+      // that this address exists.
+      await options.emailSender.send({
+        html: body.html,
+        subject: 'Tu acceso a Verdeo',
+        text: body.text,
+        to: input.data.email,
+      });
+    }
+
+    return context.json(
+      CustomerLoginRequestResponseSchema.parse({
+        message: 'Si el correo es válido, te enviamos un enlace para entrar.',
+      }),
+    );
+  });
+
+  /** Follows the link: proves the address, resolves or creates the customer, opens a session. */
+  app.post('/api/v1/public/auth/email/consume', async (context) => {
+    const input = CustomerLoginConsumeRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) return badRequest(context, 'El enlace no es válido.', input.error.issues);
+    if (!options.customerLogin || !options.customerEmailLogin) {
+      const code: ApiErrorCode = 'SERVICE_UNAVAILABLE';
+      return context.json(
+        {
+          error: {
+            code,
+            message: 'El acceso por correo no está disponible.',
+            requestId: context.get('requestId'),
+          },
+        },
+        statusForCode(code),
+      );
+    }
+
+    const consumed = await options.customerLogin.consume(input.data.token);
+    if (!consumed) {
+      const code: ApiErrorCode = 'UNAUTHENTICATED';
+      return context.json(
+        {
+          error: {
+            code,
+            message: 'Ese enlace ya se usó o venció. Pedí uno nuevo.',
+            requestId: context.get('requestId'),
+          },
+        },
+        statusForCode(code),
+      );
+    }
+
+    const login = await options.customerEmailLogin(
+      consumed.emailNormalized,
+      context.get('requestId'),
+    );
+    setSessionCookie(context, login);
+    context.header('cache-control', 'no-store');
+    return context.json(
+      LoginResponseSchema.parse({
+        expiresAt: login.expiresAt.toISOString(),
+        sessionId: login.sessionId,
+      }),
+    );
+  });
+
   app.post('/api/v1/public/auth/oauth/exchange', async (context) => {
     const input = OAuthExchangeRequestSchema.safeParse(await context.req.json().catch(() => null));
     if (!input.success) {

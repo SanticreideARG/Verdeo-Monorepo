@@ -151,3 +151,30 @@ export const sessions = pgTable(
     index('sessions_expiry_idx').on(table.expiresAt),
   ],
 );
+
+/**
+ * Single-use email sign-in links for customers.
+ *
+ * Deliberately its own table rather than another `access_tokens` kind: that one binds to an
+ * existing user, and the whole point here is that the person may not exist yet — the email *is*
+ * the identity until the link is followed. The semantics differ too: short-lived, single-use, and
+ * consumed rather than revoked.
+ *
+ * Only the hash is stored, so a database leak does not hand anyone a working sign-in link.
+ */
+export const customerLoginTokens = pgTable(
+  'customer_login_tokens',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    emailNormalized: text('email_normalized').notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    // Set when the link is followed; a second visit finds it used and is refused.
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Rate limiting reads by email over a recent window, so it is worth an index of its own.
+    index('customer_login_tokens_email_created_idx').on(table.emailNormalized, table.createdAt),
+  ],
+);

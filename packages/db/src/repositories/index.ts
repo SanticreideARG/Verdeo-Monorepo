@@ -20,3 +20,4 @@ export * from './postgres-session-repository.js';
 export * from './postgres-survey-service.js';
 export * from './postgres-user-admin-repository.js';
 export * from './postgres-user-directory-repository.js';
+export * from './postgres-customer-login-service.js';

@@ -54,6 +54,8 @@ export function CustomerAccountPage() {
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [message, setMessage] = useState('');
   const [oauthSubmitting, setOAuthSubmitting] = useState(false);
+  const [emailSubmitting, setEmailSubmitting] = useState(false);
+  const [linkSent, setLinkSent] = useState(false);
   const oauthAvailable = isSupabaseOAuthConfigured();
 
   const [addingAddress, setAddingAddress] = useState(false);
@@ -126,6 +128,59 @@ export function CustomerAccountPage() {
     }
   }
 
+  // The sign-in link arrives as ?token=… on this page; consuming it opens the session and the
+  // parameter is stripped so a refresh or a shared URL cannot replay it.
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get('token');
+    if (!token) return;
+    let active = true;
+    void apiRequest('/api/v1/public/auth/email/consume', {
+      body: JSON.stringify({ token }),
+      method: 'POST',
+    })
+      .then(async (response) => {
+        window.history.replaceState({}, '', '/mi-cuenta');
+        if (!active) return;
+        if (!response.ok) {
+          setMessage(await errorMessage(response));
+          return;
+        }
+        setLoggedIn(true);
+        await load();
+      })
+      .catch(() => {
+        if (active) setMessage('No pudimos validar el enlace. Pedí uno nuevo.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [load]);
+
+  async function requestEmailLink(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const email = formText(new FormData(event.currentTarget), 'email').trim();
+    if (!email) {
+      setMessage('Ingresá tu correo.');
+      return;
+    }
+    setEmailSubmitting(true);
+    setMessage('');
+    try {
+      const response = await apiRequest('/api/v1/public/auth/email/request', {
+        body: JSON.stringify({ email }),
+        method: 'POST',
+      });
+      if (!response.ok) {
+        setMessage(await errorMessage(response));
+        return;
+      }
+      // The API answers the same whether the address is known or not, so the screen does too.
+      setLinkSent(true);
+    } finally {
+      setEmailSubmitting(false);
+    }
+  }
+
   async function logout() {
     await apiRequest('/api/v1/auth/logout', { method: 'POST' });
     setLoggedIn(false);
@@ -195,9 +250,49 @@ export function CustomerAccountPage() {
               quien quiere guardar direcciones y ver pedidos anteriores más rápido.
             </p>
 
+            {linkSent ? (
+              <div className="mt-10 rounded-2xl border border-forest/15 bg-white/70 p-5">
+                <p className="font-semibold text-forest">Revisá tu correo</p>
+                <p className="mt-1 text-sm leading-6 text-ink-muted">
+                  Si el correo es válido, te enviamos un enlace para entrar. Vence en 15 minutos y
+                  sirve una sola vez.
+                </p>
+                <button
+                  className="mt-3 text-xs font-semibold uppercase tracking-[0.1em] text-ink-muted underline underline-offset-4"
+                  onClick={() => setLinkSent(false)}
+                  type="button"
+                >
+                  Usar otro correo
+                </button>
+              </div>
+            ) : (
+              <form className="mt-10" onSubmit={(event) => void requestEmailLink(event)}>
+                <label className="field">
+                  Tu correo
+                  <input
+                    autoComplete="email"
+                    name="email"
+                    placeholder="vos@ejemplo.com"
+                    required
+                    type="email"
+                  />
+                </label>
+                <button
+                  className="button button-primary button-large mt-3 w-full disabled:cursor-wait disabled:opacity-60"
+                  disabled={emailSubmitting}
+                  type="submit"
+                >
+                  {emailSubmitting ? 'Enviando…' : 'Enviarme un enlace para entrar'}
+                </button>
+                <p className="mt-2 text-xs leading-5 text-ink-muted">
+                  Sin contraseña: te mandamos un enlace y entrás con un toque.
+                </p>
+              </form>
+            )}
+
             {oauthAvailable ? (
               <button
-                className="button button-secondary button-large mt-10 w-full disabled:cursor-wait disabled:opacity-60"
+                className="button button-secondary button-large mt-4 w-full disabled:cursor-wait disabled:opacity-60"
                 disabled={oauthSubmitting}
                 onClick={() => void continueWithGoogle()}
                 type="button"
@@ -210,11 +305,7 @@ export function CustomerAccountPage() {
                 </span>
                 {oauthSubmitting ? 'Conectando con Google…' : 'Continuar con Google'}
               </button>
-            ) : (
-              <p className="mt-8 text-sm text-ink-muted">
-                El acceso con Google no está disponible ahora.
-              </p>
-            )}
+            ) : null}
 
             {message ? (
               <p

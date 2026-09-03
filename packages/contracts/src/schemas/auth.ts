@@ -42,3 +42,19 @@ export type LoginRequest = z.infer<typeof LoginRequestSchema>;
 export type LoginResponse = z.infer<typeof LoginResponseSchema>;
 export type OAuthExchangeRequest = z.infer<typeof OAuthExchangeRequestSchema>;
 export type ProfileUpdateRequest = z.infer<typeof ProfileUpdateRequestSchema>;
+
+export const CustomerLoginRequestSchema = z.object({
+  email: z.string().trim().email().max(320),
+});
+
+/**
+ * Deliberately says nothing about whether the address exists or was rate limited: an endpoint that
+ * answered differently would be a way to discover who has an account.
+ */
+export const CustomerLoginRequestResponseSchema = z.object({
+  message: z.string(),
+});
+
+export const CustomerLoginConsumeRequestSchema = z.object({
+  token: z.string().trim().min(20).max(200),
+});
