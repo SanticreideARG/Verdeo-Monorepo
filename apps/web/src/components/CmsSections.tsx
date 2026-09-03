@@ -114,34 +114,38 @@ function HeroRotatorSection({ section }: { section: PageSection }) {
   }, [words.length]);
 
   return (
+    // Full-bleed: the night ground is a band across the page, so the colour lives on the outer
+    // section and the content stays centred inside it. Height is 1.5x the original padding.
     <section
-      className="mx-auto flex w-full max-w-4xl flex-col items-center gap-5 px-5 py-20 text-center sm:px-8 sm:py-28"
+      className="hero-night w-full px-5 py-[7.5rem] sm:px-8 sm:py-[10.5rem]"
       id={section.anchorId as string | undefined}
     >
-      {section.kicker ? <p className="eyebrow">{section.kicker as string}</p> : null}
-      <h1 className="max-w-3xl text-5xl font-semibold leading-[0.98] tracking-[-0.045em] sm:text-7xl">
-        {words.length > 0 ? (
-          <span className="hero-rotator-word" style={{ opacity: visible ? 1 : 0 }}>
-            {words[index]}
-          </span>
-        ) : (
-          ((section.fallback as string | undefined) ?? '')
-        )}
-      </h1>
-      <div className="mt-3 flex flex-wrap justify-center gap-3">
-        {section.ctaLabel && section.ctaHref ? (
-          <Link className="button button-primary button-large" to={section.ctaHref}>
-            {section.ctaLabel as string}
-          </Link>
-        ) : null}
-        {section.secondaryLabel && section.secondaryHref ? (
-          <a
-            className="button button-secondary button-large"
-            href={section.secondaryHref as string}
-          >
-            {section.secondaryLabel as string}
-          </a>
-        ) : null}
+      <div className="mx-auto flex w-full max-w-4xl flex-col items-center gap-5 text-center">
+        {section.kicker ? <p className="eyebrow">{section.kicker as string}</p> : null}
+        <h1 className="max-w-3xl text-5xl font-semibold leading-[0.98] tracking-[-0.045em] sm:text-7xl">
+          {words.length > 0 ? (
+            <span className="hero-rotator-word" style={{ opacity: visible ? 1 : 0 }}>
+              {words[index]}
+            </span>
+          ) : (
+            ((section.fallback as string | undefined) ?? '')
+          )}
+        </h1>
+        <div className="mt-3 flex flex-wrap justify-center gap-3">
+          {section.ctaLabel && section.ctaHref ? (
+            <Link className="button button-primary button-large" to={section.ctaHref}>
+              {section.ctaLabel as string}
+            </Link>
+          ) : null}
+          {section.secondaryLabel && section.secondaryHref ? (
+            <a
+              className="button button-secondary button-large"
+              href={section.secondaryHref as string}
+            >
+              {section.secondaryLabel as string}
+            </a>
+          ) : null}
+        </div>
       </div>
     </section>
   );
@@ -346,44 +350,8 @@ export function CmsSection({ section }: { section: PageSection }) {
           subheading={section.subheading as string | undefined}
         />
       );
-    case 'CONTACT': {
-      const regions =
-        (section.regions as { label?: string; whatsapp?: string }[] | undefined)?.filter(
-          (region) => region.label && region.whatsapp,
-        ) ?? [];
-      return (
-        <section className="mx-auto w-full max-w-3xl px-5 py-14 sm:px-8" id={anchorId}>
-          {section.heading ? (
-            <h2 className="mb-4 text-3xl font-semibold text-forest">{section.heading as string}</h2>
-          ) : null}
-          <ul className="grid gap-2 text-ink-muted">
-            {section.phone ? <li>Tel: {section.phone as string}</li> : null}
-            {section.whatsapp ? <li>WhatsApp: {section.whatsapp as string}</li> : null}
-            {section.email ? <li>Email: {section.email as string}</li> : null}
-            {section.address ? <li>{section.address as string}</li> : null}
-          </ul>
-          {/* One WhatsApp number per zona, same as the reference site's "atención por ciudad" —
-              lives alongside, not instead of, the single-contact fields above. */}
-          {regions.length > 0 ? (
-            <ul className="mt-6 grid gap-2 border-t border-forest/10 pt-6 text-ink-muted">
-              {regions.map((region) => (
-                <li key={region.label}>
-                  <strong className="text-forest">{region.label}:</strong>{' '}
-                  <a
-                    className="underline"
-                    href={`https://api.whatsapp.com/send?phone=${(region.whatsapp ?? '').replace(/\D/g, '')}`}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    {region.whatsapp}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </section>
-      );
-    }
+    case 'CONTACT':
+      return <ContactFooterSection anchorId={anchorId} section={section} />;
     case 'GALLERY':
       return (
         <section className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8" id={anchorId}>
@@ -413,4 +381,139 @@ export function CmsSection({ section }: { section: PageSection }) {
     default:
       return null;
   }
+}
+
+/**
+ * The landing's closing block: where Verdeo delivers, and who to talk to in each region.
+ *
+ * Renders as a full-bleed footer on a dark botanical ground rather than another cream section —
+ * it is the end of the page, and the change of ground is what signals that.
+ *
+ * Coverage is editorial copy, not the live zone catalogue: it names neighbourhoods and cities that
+ * are not all operating sites, so rendering it from geography would be both wrong and a second
+ * source of truth for something the operator writes by hand.
+ */
+function ContactFooterSection({
+  anchorId,
+  section,
+}: {
+  anchorId?: string | undefined;
+  section: PageSection;
+}) {
+  const coverage =
+    (section.coverage as { detail?: string; label?: string }[] | undefined)?.filter(
+      (item) => item.label,
+    ) ?? [];
+  const regions =
+    (section.regions as { label?: string; whatsapp?: string }[] | undefined)?.filter(
+      (region) => region.label && region.whatsapp,
+    ) ?? [];
+  const email = section.email as string | undefined;
+  const facebookUrl = section.facebookUrl as string | undefined;
+
+  return (
+    <footer className="cms-footer" id={anchorId}>
+      <div className="cms-footer-inner">
+        {section.heading ? <h2 className="cms-footer-title">{section.heading as string}</h2> : null}
+        {section.intro ? <p className="cms-footer-intro">{section.intro as string}</p> : null}
+
+        <div className="cms-footer-grid">
+          {coverage.length > 0 || email ? (
+            <section className="cms-footer-panel">
+              <h3>Dónde podés recibir tu menú Verdeo</h3>
+              <ul>
+                {coverage.map((item) => (
+                  <li key={item.label}>
+                    <PinIcon />
+                    <span>
+                      {item.label}
+                      {item.detail ? ` — ${item.detail}` : ''}
+                    </span>
+                  </li>
+                ))}
+                {email ? (
+                  <li className="cms-footer-email">
+                    <MailIcon />
+                    <span>
+                      ¿Querés que te llamemos para asesorarte en tu pedido? ¿Tenés dudas? Escribinos
+                      y te contestamos dentro de las próximas 48 hs hábiles:{' '}
+                      <a href={`mailto:${email}`}>{email}</a>
+                    </span>
+                  </li>
+                ) : null}
+              </ul>
+            </section>
+          ) : null}
+
+          {regions.length > 0 ? (
+            <section className="cms-footer-panel">
+              <h3>Atención al cliente · Pedidos y consultas por WhatsApp</h3>
+              <ul>
+                {regions.map((region) => (
+                  <li key={region.label}>
+                    <PhoneIcon />
+                    <span>
+                      {region.label}
+                      {/* The number is the action, so it gets the accent and its own line. */}
+                      <a
+                        className="cms-footer-number"
+                        href={`https://api.whatsapp.com/send?phone=${(region.whatsapp ?? '').replace(/\D/g, '')}`}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        {region.whatsapp}
+                      </a>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {facebookUrl ? (
+                <a
+                  aria-label="Verdeo en Facebook"
+                  className="cms-footer-social"
+                  href={facebookUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  <FacebookIcon />
+                </a>
+              ) : null}
+            </section>
+          ) : null}
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+function PinIcon() {
+  return (
+    <svg aria-hidden="true" fill="currentColor" height="16" viewBox="0 0 24 24" width="16">
+      <path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z" />
+    </svg>
+  );
+}
+
+function PhoneIcon() {
+  return (
+    <svg aria-hidden="true" fill="currentColor" height="16" viewBox="0 0 24 24" width="16">
+      <path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24 11.4 11.4 0 0 0 3.6.58 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.4 11.4 0 0 0 .58 3.6 1 1 0 0 1-.25 1l-2.23 2.2Z" />
+    </svg>
+  );
+}
+
+function MailIcon() {
+  return (
+    <svg aria-hidden="true" fill="currentColor" height="16" viewBox="0 0 24 24" width="16">
+      <path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 4-8 5-8-5V6l8 5 8-5v2Z" />
+    </svg>
+  );
+}
+
+function FacebookIcon() {
+  return (
+    <svg aria-hidden="true" fill="currentColor" height="20" viewBox="0 0 24 24" width="20">
+      <path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.4v7A10 10 0 0 0 22 12Z" />
+    </svg>
+  );
 }

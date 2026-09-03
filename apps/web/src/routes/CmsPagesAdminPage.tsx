@@ -76,7 +76,7 @@ function newSection(type: string): Section {
     case 'FAQ':
       return { id, items: [{ answer: '', question: '' }], type };
     case 'CONTACT':
-      return { id, regions: [], type };
+      return { coverage: [], id, regions: [], type };
     case 'GALLERY':
       return { id, images: [{ url: '' }], type };
     case 'CUSTOM':
@@ -811,6 +811,9 @@ function SectionFields({
       const regions = Array.isArray(section.regions)
         ? (section.regions as { label?: string; whatsapp?: string }[])
         : [];
+      const coverage = Array.isArray(section.coverage)
+        ? (section.coverage as { detail?: string; label?: string }[])
+        : [];
       return (
         <div className="mt-3 grid gap-2">
           <input
@@ -836,6 +839,42 @@ function SectionFields({
             onChange={(event) => onChange({ address: event.target.value })}
             placeholder="Dirección"
             value={field('address')}
+          />
+          <input
+            disabled={disabled}
+            onChange={(event) => onChange({ facebookUrl: event.target.value })}
+            placeholder="URL de Facebook"
+            value={field('facebookUrl')}
+          />
+          <label className="mt-1 text-xs font-semibold text-forest">Bajada del footer</label>
+          <textarea
+            className="w-full"
+            disabled={disabled}
+            onChange={(event) => onChange({ intro: event.target.value })}
+            placeholder="Estamos para servirte, consultá lo que necesites."
+            rows={2}
+            value={field('intro')}
+          />
+          <label className="mt-1 text-xs font-semibold text-forest">
+            Dónde entregamos — una por línea, "Zona|detalle"
+          </label>
+          <textarea
+            className="w-full font-mono text-xs"
+            disabled={disabled}
+            onChange={(event) =>
+              onChange({
+                coverage: event.target.value
+                  .split('\n')
+                  .filter(Boolean)
+                  .map((line) => {
+                    const [label, detail] = line.split('|');
+                    return { detail: detail ?? '', label: label ?? '' };
+                  }),
+              })
+            }
+            placeholder="Capital Federal, Buenos Aires|Sólo Núñez, Belgrano, Palermo y Recoleta"
+            rows={5}
+            value={coverage.map((item) => `${item.label ?? ''}|${item.detail ?? ''}`).join('\n')}
           />
           <label className="mt-1 text-xs font-semibold text-forest">
             WhatsApp por ciudad (opcional)

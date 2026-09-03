@@ -114,8 +114,22 @@ const DeliveryZonesSectionSchema = SectionBaseSchema.extend({
 
 const ContactSectionSchema = SectionBaseSchema.extend({
   address: z.string().trim().max(300).optional(),
+  // Where the menu can be delivered, as marketing copy rather than live geography: the coverage
+  // blurb names neighbourhoods and cities that are not all operating sites in the system, so it is
+  // editorial content, not a second rendering of the zone catalogue.
+  coverage: z
+    .array(
+      z.object({
+        detail: z.string().trim().max(300).optional(),
+        label: z.string().trim().max(200),
+      }),
+    )
+    .max(30)
+    .optional(),
   email: z.string().trim().max(320).optional(),
+  facebookUrl: z.string().trim().max(500).optional(),
   heading: z.string().trim().max(200).optional(),
+  intro: z.string().trim().max(400).optional(),
   phone: z.string().trim().max(60).optional(),
   // One WhatsApp number per zona — cloned from verdeo.com.ar's per-city "atención al cliente"
   // list, alongside (not instead of) the single-contact fields above.

@@ -2912,60 +2912,204 @@ a {
 }
 
 /* ---------------------------------------------------------------------------------------------
-   Landing on night ground.
+   Hero on night ground.
 
-   The public site sits on a dark navy rather than cream. Rather than rewriting every section's
-   utility classes, the ground is set here and the handful of tokens that were picked for a light
-   background are reassigned inside this scope — text, muted text, and the translucent white panels
-   that read as "slightly raised" on cream and would glare on navy.
-
-   Deliberately NOT overriding --color-forest itself: it is also the primary button's background and
-   the border colour, so flipping it would turn white text on a white button. Only the places where
-   forest is used AS TEXT are remapped, by class.
+   Only the hero carries the dark navy; the rest of the landing stays on white. The tokens chosen
+   for a light background are reassigned inside this scope so the hero's own text, eyebrow and
+   outlined button read correctly against it, without touching anything below the fold.
    --------------------------------------------------------------------------------------------- */
-.public-night {
-  --public-night-ground: #0b1828;
-  background: var(--public-night-ground);
+.hero-night {
+  --hero-night-ground: #0b1828;
+  background: var(--hero-night-ground);
   color: #eef2f0;
 }
 
-.public-night .public-header {
-  background: color-mix(in srgb, var(--public-night-ground) 88%, transparent);
-  border-bottom-color: rgb(255 255 255 / 10%);
+.hero-night h1,
+.hero-night .text-forest {
+  color: #f2f6f1;
 }
-
-.public-night .nav-link {
-  color: #cdd8d4;
+.hero-night .text-ink-muted {
+  color: #a8bcb5;
 }
-.public-night .nav-link:hover {
+.hero-night .eyebrow {
   color: #ffffff;
 }
 
-/* Headings across the CMS sections use text-forest, which is a dark green meant for cream. */
-.public-night .text-forest {
-  color: #f2f6f1;
-}
-.public-night .text-ink-muted {
-  color: #a8bcb5;
-}
-.public-night .eyebrow {
-  color: var(--color-lime);
-}
-
-/* "Raised panel" sections: white at 60% is a subtle lift on cream and a glare on navy. */
-.public-night .bg-white\/60 {
-  background: rgb(255 255 255 / 4%);
-}
-.public-night .border-forest\/10 {
-  border-color: rgb(255 255 255 / 10%);
-}
-
-/* The secondary button is outlined in forest, which disappears against the dark ground. */
-.public-night .button-secondary {
-  border-color: rgb(255 255 255 / 35%);
-  color: #eef2f0;
-}
-.public-night .button-secondary:hover {
+/* Outlined in forest, which disappears against the dark ground. */
+.hero-night .button-secondary {
   border-color: var(--color-lime);
   color: var(--color-lime);
+}
+.hero-night .button-secondary:hover {
+  background: var(--color-lime);
+  color: #0b1828;
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Landing footer: contact and coverage on a botanical ground.
+
+   The frond pattern is an inline SVG data URI rather than an image file — it has to survive with no
+   external requests, and a vector pattern stays crisp at any width without shipping a bitmap.
+   Layered over a deep green gradient so the leaves read as texture, not as a busy photograph
+   competing with the text on top of it.
+   --------------------------------------------------------------------------------------------- */
+.cms-footer {
+  --footer-ground: #0e3620;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: radial-gradient(
+    120% 90% at 50% 0%,
+    #17512f 0%,
+    var(--footer-ground) 55%,
+    #082514 100%
+  );
+  color: #eaf2e9;
+}
+
+.cms-footer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320' viewBox='0 0 320 320'%3E%3Cg fill='none' stroke='%234e7a3a' stroke-width='7' stroke-linecap='round' opacity='.55'%3E%3Cpath d='M20 300 L110 170'/%3E%3Cpath d='M55 305 L150 200'/%3E%3Cpath d='M0 250 L95 150'/%3E%3Cpath d='M160 20 L250 140'/%3E%3Cpath d='M200 10 L290 120'/%3E%3Cpath d='M240 0 L320 95'/%3E%3Cpath d='M300 200 L210 300'/%3E%3Cpath d='M320 240 L245 320'/%3E%3C/g%3E%3Cg fill='none' stroke='%23b9c94a' stroke-width='5' stroke-linecap='round' opacity='.4'%3E%3Cpath d='M40 320 L120 210'/%3E%3Cpath d='M180 0 L255 100'/%3E%3Cpath d='M290 175 L215 265'/%3E%3C/g%3E%3Cg fill='none' stroke='%23879a8f' stroke-width='4' stroke-linecap='round' opacity='.3'%3E%3Cpath d='M0 190 L70 120'/%3E%3Cpath d='M130 45 L195 130'/%3E%3Cpath d='M255 235 L190 310'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 340px 340px;
+}
+
+.cms-footer-inner {
+  width: 100%;
+  max-width: 78rem;
+  margin: 0 auto;
+  padding: 4rem 1.25rem 3.5rem;
+}
+@media (min-width: 640px) {
+  .cms-footer-inner {
+    padding: 5rem 2rem 4rem;
+  }
+}
+
+/* Boxed like the reference: the rule around the word is what makes it read as a section marker
+   rather than just another heading. */
+.cms-footer-title {
+  width: fit-content;
+  margin: 0 auto;
+  border: 2px solid #ffffff;
+  padding: 0.5rem 1.5rem;
+  font-size: clamp(1.4rem, 1.2rem + 0.9vw, 2rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-align: center;
+  color: #ffffff;
+}
+
+.cms-footer-intro {
+  max-width: 60ch;
+  margin: 1.5rem auto 0;
+  text-align: center;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #cfe0cd;
+}
+
+.cms-footer-grid {
+  display: grid;
+  gap: 1.5rem;
+  margin-top: 2.75rem;
+}
+@media (min-width: 900px) {
+  .cms-footer-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 3.5rem;
+  }
+}
+
+/* Translucent rather than solid, so the frond pattern stays faintly visible through the panel and
+   the two layers read as one composition. */
+.cms-footer-panel {
+  position: relative;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 0.25rem;
+  padding: 2rem 1.75rem;
+  background: rgb(255 255 255 / 6%);
+  backdrop-filter: blur(2px);
+}
+
+.cms-footer-panel h3 {
+  margin: 0 0 1.75rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.45;
+  color: #e7f0e5;
+}
+
+.cms-footer-panel ul {
+  display: grid;
+  gap: 1.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cms-footer-panel li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.7rem;
+  align-items: start;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: #dceadb;
+}
+
+.cms-footer-panel li svg {
+  margin-top: 0.28rem;
+  color: var(--color-lime);
+  flex: none;
+}
+
+/* The number is the action in this panel, so it gets the accent and a line of its own. */
+.cms-footer-number {
+  display: block;
+  margin-top: 0.55rem;
+  color: var(--color-lime);
+  font-size: 0.86rem;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+.cms-footer-number:hover {
+  text-decoration: underline;
+}
+
+.cms-footer-email a {
+  color: var(--color-lime);
+  text-decoration: none;
+}
+.cms-footer-email a:hover {
+  text-decoration: underline;
+}
+
+.cms-footer-social {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: 2.5rem auto 0;
+  border-radius: 0.35rem;
+  background: #2fa84f;
+  color: #ffffff;
+  transition: transform 0.15s ease;
+}
+.cms-footer-social:hover {
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cms-footer-social {
+    transition: none;
+  }
+  .cms-footer-social:hover {
+    transform: none;
+  }
 }
