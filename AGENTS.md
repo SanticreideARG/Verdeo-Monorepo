@@ -42,6 +42,21 @@ Construir Verdeo SCA siguiendo la librería documental de este repositorio. Ante
 10. Verificar logs/auditoría.
 11. Verificar estados de error y reintentos.
 12. Documentar cualquier decisión nueva en ADR.
+13. Actualizar `docs/08-delivery/BACKLOG.md` y el estado de fase en
+    `docs/08-delivery/IMPLEMENTATION_ROADMAP.md` **en el mismo commit que la feature**.
+
+## La documentación se despacha con el código
+
+En este repo los documentos mandan: la próxima decisión de qué construir se toma leyéndolos. Un
+backlog desactualizado es entonces peor que no tener ninguno, porque se lo cree.
+
+El backlog se desincronizó dos veces, y las dos por el mismo motivo: la feature se despachó y el
+documento quedó para después. "Después" no llegó. Por eso actualizar el documento **no es una tarea
+posterior sino parte del mismo commit** — si el commit no toca la documentación que su cambio
+invalida, el commit está incompleto.
+
+Aplica a: backlog, estado de fase en el roadmap, la sección "As built" del documento de feature
+correspondiente, y un ADR si la decisión es nueva.
 
 ## Convenciones sugeridas
 
@@ -68,7 +83,8 @@ Una feature no está terminada si:
 - no contempla reintentos/idempotencia en integraciones;
 - rompe mobile;
 - depende de un proveedor IA específico;
-- duplica datos que ya existen en otra entidad.
+- duplica datos que ya existen en otra entidad;
+- deja el backlog o el roadmap diciendo algo distinto de lo que hace el código.
 
 ## No inventar
 
