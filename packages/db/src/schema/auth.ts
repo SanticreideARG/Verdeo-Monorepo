@@ -163,6 +163,33 @@ export const sessions = pgTable(
  *
  * Only the hash is stored, so a database leak does not hand anyone a working sign-in link.
  */
+/**
+ * Enlaces de "olvidé mi contraseña" para el personal.
+ *
+ * Se guarda el `user_id` y no el correo, al revés que `customer_login_tokens`: acá la cuenta ya
+ * existe — el enlace sólo la reabre — y resolver el usuario al pedirlo evita que un cambio de
+ * dirección posterior deje un enlace apuntando a nadie.
+ *
+ * Sólo el hash. Un volcado de esta tabla no debe alcanzar para entrar a ninguna cuenta.
+ */
+export const passwordResetTokens = pgTable(
+  'password_reset_tokens',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // El límite de pedidos lee por usuario sobre una ventana reciente.
+    index('password_reset_tokens_user_created_idx').on(table.userId, table.createdAt),
+  ],
+);
+
 export const customerLoginTokens = pgTable(
   'customer_login_tokens',
   {

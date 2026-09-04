@@ -23,6 +23,7 @@ import {
   PostgresOperationsService,
   PostgresCalendarService,
   PostgresAppearanceService,
+  PostgresPasswordResetService,
   PostgresDashboardLayoutService,
   PostgresPasswordUserProvisioner,
   PostgresCustomerLoginService,
@@ -127,6 +128,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
   const emailSender = new ConfigurableEmailSender(() => integrationCredentials.configFor('email'));
   const calendar = new PostgresCalendarService(database.db);
   const appearance = new PostgresAppearanceService(database.db);
+  const passwordReset = new PostgresPasswordResetService(database.db);
   const dashboardLayout = new PostgresDashboardLayoutService(database.db);
   const userProvisioner = new PostgresPasswordUserProvisioner(database.db);
   const geography = new PostgresGeographyService(database.db);
@@ -458,6 +460,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     ...(customerOAuth ? { customerOAuth } : {}),
     calendar,
     appearance,
+    passwordReset,
     dashboardLayout,
     userProvisioner,
     customerEmailLogin,

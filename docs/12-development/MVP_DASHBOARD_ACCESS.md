@@ -3,7 +3,7 @@
 ## Scope
 
 This sprint enables the Staff dashboard without waiting for OAuth or transactional email. Access is limited
-to manually provisioned accounts. There is no public signup, password recovery, or email-confirmation flow.
+to manually provisioned accounts. There is no public signup. Password recovery sí existe — ver "Recuperación de contraseña (as built)".
 
 Implemented controls:
 
@@ -91,7 +91,7 @@ seed does not invent a permission matrix.
 
 - OAuth provider adapter and account linking;
 - email confirmation and Resend adapter;
-- password recovery and mandatory credential rotation UI;
+- rotación de credenciales obligatoria (forzar el cambio en el próximo ingreso);
 - globally distributed login rate limiting/WAF policy;
 - MFA and recovery policy;
 - removal of password login after OAuth adoption, if approved.
@@ -120,3 +120,34 @@ Tres decisiones que conviene no deshacer sin querer:
 
 `localStorage` sigue existiendo, pero como arranque: pinta bien en el primer frame y evita el
 parpadeo mientras llega la preferencia de la cuenta, que es la que manda.
+
+## Recuperación de contraseña (as built)
+
+Hasta ahora la única forma de recuperar una cuenta era que otra persona con `users.edit` la
+reseteara desde `POST /api/v1/users/:id/password`. Eso deja sin salida a la primera cuenta de una
+instalación y obliga a alguien a conocer la contraseña de otro.
+
+Tres endpoints nuevos, sobre la tabla `password_reset_tokens` (sólo el hash, TTL 30 minutos, un
+solo uso, cinco pedidos por cuenta cada 15 minutos):
+
+- `POST /api/v1/public/auth/password/request` — público. **Contesta lo mismo siempre**: exista la
+  cuenta, esté dada de baja, se haya limitado por frecuencia, o incluso si el correo no está
+  configurado. Contestar distinto convertiría al endpoint en una forma de averiguar quién trabaja
+  acá. Es el mismo criterio del enlace mágico de clientes.
+- `POST /api/v1/public/auth/password/confirm` — público, porque quien llega no puede entrar.
+- `POST /api/v1/me/password` — cambiar la propia sabiendo la actual.
+
+En el frontend: `/recuperar` (una sola pantalla para las dos mitades del trámite, con y sin token),
+el enlace "Olvidé mi contraseña" en `/login`, y la sección Contraseña en Mi perfil.
+
+Dos decisiones que conviene no deshacer:
+
+- **Consumir un enlace revoca todas las sesiones abiertas de esa cuenta.** Si el motivo del cambio
+  es que entró alguien más, dejarle la sesión viva vuelve inútil al cambio. También se levanta el
+  bloqueo por intentos fallidos, que es una de las razones por las que se llega a esta pantalla.
+- **Cambiar la propia contraseña revoca las otras sesiones pero no la que hace el cambio.** Echar a
+  alguien de la pantalla donde acaba de elegir una contraseña nueva lo lleva a pensar que falló.
+
+El mínimo de 12 caracteres es el mismo de `LoginRequestSchema`, y no es cosmético: una más corta se
+guardaría bien y después no serviría para entrar — exactamente la cuenta imposible de depurar que
+este flujo existe para evitar.

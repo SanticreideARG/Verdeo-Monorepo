@@ -274,6 +274,13 @@
       "when": 1788492691852,
       "tag": "0038_wild_felicia_hardy",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1788525238912,
+      "tag": "0039_sleepy_kate_bishop",
+      "breakpoints": true
     }
   ]
 }

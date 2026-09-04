@@ -27,6 +27,10 @@ import {
   AddressGeocodingRequestSchema,
   AppearanceSchema,
   AppearanceUpdateRequestSchema,
+  PasswordChangeRequestSchema,
+  PasswordResetConfirmRequestSchema,
+  PasswordResetRequestResponseSchema,
+  PasswordResetRequestSchema,
   ChatContactListResponseSchema,
   ChatConversationListResponseSchema,
   ChatConversationOpenRequestSchema,
@@ -937,6 +941,21 @@ interface CreateAppOptions {
       userId: string;
     }): Promise<{ password: string }>;
   };
+  passwordReset?: {
+    changeOwn(input: {
+      currentPassword: string;
+      exceptSessionId: string;
+      newPassword: string;
+      userId: string;
+    }): Promise<void>;
+    consume(token: string, newPassword: string): Promise<{ userId: string }>;
+    request(email: string): Promise<{
+      displayName: string;
+      email: string;
+      expiresAt: Date;
+      token: string;
+    } | null>;
+  };
   appearance?: {
     get(userId: string): Promise<{
       fontKey: string | null;
@@ -1524,6 +1543,72 @@ export function createApp(options: CreateAppOptions) {
    * the last quarter hour, the visitor is told to check their mail — anything else turns this into
    * a way to enumerate who has an account.
    */
+  /**
+   * "Olvidé mi contraseña" del personal. Público y sin sesión, por definición.
+   *
+   * Contesta lo mismo siempre — exista la cuenta, esté dada de baja o haya pedido demasiadas veces.
+   * Un endpoint que contestara distinto sería una forma de averiguar quién trabaja acá.
+   */
+  app.post('/api/v1/public/auth/password/request', async (context) => {
+    const input = PasswordResetRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success) return badRequest(context, 'Ingresá un email válido.', input.error.issues);
+
+    const sameAnswer = () =>
+      context.json(
+        PasswordResetRequestResponseSchema.parse({
+          message: 'Si la dirección tiene una cuenta, te enviamos un enlace para recuperarla.',
+        }),
+      );
+
+    // Sin correo configurado tampoco se delata nada: emitir el enlace y no poder mandarlo sería
+    // peor que no emitirlo.
+    if (!options.passwordReset || !options.emailSender) return sameAnswer();
+
+    const issued = await options.passwordReset.request(input.data.email);
+    if (issued) {
+      const link = `${options.appOrigin}/recuperar?token=${encodeURIComponent(issued.token)}`;
+      const body = renderEmail({
+        action: { href: link, label: 'Elegir una contraseña nueva' },
+        bodyHtml:
+          `<p>Hola ${issued.displayName}: recibimos un pedido para recuperar tu cuenta.</p>` +
+          '<p>El enlace vence en 30 minutos y sirve una sola vez. Al usarlo se cierran las demás ' +
+          'sesiones abiertas de tu cuenta.</p>' +
+          '<p>Si no pediste esto, ignorá este correo: tu contraseña sigue siendo la de siempre.</p>',
+        bodyText:
+          `Hola ${issued.displayName}: recibimos un pedido para recuperar tu cuenta. ` +
+          'El enlace de abajo vence en 30 minutos y sirve una sola vez. Si no pediste esto, ' +
+          'ignorá este correo: tu contraseña sigue siendo la de siempre.',
+        heading: 'Recuperar tu cuenta de Verdeo',
+      });
+      await options.emailSender.send({
+        html: body.html,
+        subject: 'Recuperar tu cuenta de Verdeo',
+        text: body.text,
+        to: issued.email,
+      });
+    }
+
+    return sameAnswer();
+  });
+
+  /** Sigue el enlace y deja la contraseña nueva. Público: quien llega acá no puede entrar. */
+  app.post('/api/v1/public/auth/password/confirm', async (context) => {
+    const input = PasswordResetConfirmRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) {
+      return badRequest(
+        context,
+        'Revisá el enlace y la contraseña nueva (mínimo 12 caracteres).',
+        input.error.issues,
+      );
+    }
+    if (!options.passwordReset) throw new Error('Password reset engine is not configured');
+
+    await options.passwordReset.consume(input.data.token, input.data.password);
+    return context.json({ message: 'Listo. Ya podés entrar con tu contraseña nueva.' });
+  });
+
   app.post('/api/v1/public/auth/email/request', async (context) => {
     const input = CustomerLoginRequestSchema.safeParse(await context.req.json().catch(() => null));
     if (!input.success) return badRequest(context, 'Ingresá un email válido.', input.error.issues);
@@ -3584,6 +3669,28 @@ export function createApp(options: CreateAppOptions) {
    * Aspecto de la app para quien está logueado. Sin permiso: es la preferencia de uno mismo, y
    * cualquiera que pueda entrar puede elegir con qué tamaño de letra trabaja.
    */
+  /** Cambiar la propia contraseña sabiendo la actual. Sin permiso: es la cuenta de uno mismo. */
+  app.post('/api/v1/me/password', async (context) => {
+    const input = PasswordChangeRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success) {
+      return badRequest(
+        context,
+        'Revisá las contraseñas (la nueva necesita 12 caracteres como mínimo).',
+        input.error.issues,
+      );
+    }
+    if (!options.passwordReset) throw new Error('Password reset engine is not configured');
+
+    const session = context.get('session');
+    await options.passwordReset.changeOwn({
+      currentPassword: input.data.currentPassword,
+      exceptSessionId: session.sessionId,
+      newPassword: input.data.newPassword,
+      userId: session.userId,
+    });
+    return context.json({ message: 'Contraseña cambiada. Cerramos tus otras sesiones abiertas.' });
+  });
+
   app.get('/api/v1/me/appearance', async (context) => {
     if (!options.appearance) throw new Error('Appearance engine is not configured');
     const appearance = await options.appearance.get(context.get('session').userId);
@@ -4750,6 +4857,7 @@ export function createApp(options: CreateAppOptions) {
       error.name === 'OrderRuleError' ||
       error.name === 'CustomerRuleError' ||
       error.name === 'CustomerMergeError' ||
+      error.name === 'PasswordResetError' ||
       error.name === 'AIConfigurationUnavailableError' ||
       error.name === 'DeliveryConflictError' ||
       error.name === 'PaymentsConflictError' ||

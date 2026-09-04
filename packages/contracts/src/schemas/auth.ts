@@ -95,3 +95,42 @@ export const AppearanceUpdateRequestSchema = z
   });
 
 export type Appearance = z.infer<typeof AppearanceSchema>;
+
+/**
+ * Recuperación de contraseña del personal.
+ *
+ * El mínimo de 12 es el mismo que exige `LoginRequestSchema`. No es un detalle cosmético: una
+ * contraseña más corta se guardaría bien y después no podría usarse para entrar, que es exactamente
+ * la cuenta imposible de depurar que este flujo existe para evitar.
+ */
+const StaffPasswordSchema = z.string().min(12).max(256);
+
+export const PasswordResetRequestSchema = z.object({
+  email: z.string().trim().email().max(320),
+});
+
+/**
+ * Igual que el enlace mágico de clientes: no dice si la dirección existe ni si se limitó por
+ * frecuencia. Un endpoint que contestara distinto sería una forma de averiguar quién trabaja acá.
+ */
+export const PasswordResetRequestResponseSchema = z.object({
+  message: z.string(),
+});
+
+export const PasswordResetConfirmRequestSchema = z.object({
+  password: StaffPasswordSchema,
+  token: z.string().min(20).max(200),
+});
+
+export const PasswordChangeRequestSchema = z
+  .object({
+    currentPassword: z.string().min(1).max(256),
+    newPassword: StaffPasswordSchema,
+  })
+  .refine((value) => value.currentPassword !== value.newPassword, {
+    message: 'La contraseña nueva tiene que ser distinta de la actual.',
+    path: ['newPassword'],
+  });
+
+export type PasswordChangeRequest = z.infer<typeof PasswordChangeRequestSchema>;
+export type PasswordResetConfirmRequest = z.infer<typeof PasswordResetConfirmRequestSchema>;

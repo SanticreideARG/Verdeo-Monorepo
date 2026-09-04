@@ -151,12 +151,20 @@ export function LoginPage() {
             </button>
           </form>
 
-          <Link
-            className="mt-6 inline-block text-xs font-semibold uppercase tracking-[0.1em] text-ink-muted underline underline-offset-4"
-            to="/acceso"
-          >
-            Acceder con token
-          </Link>
+          <div className="mt-6 flex flex-wrap gap-5">
+            <Link
+              className="inline-block text-xs font-semibold uppercase tracking-[0.1em] text-ink-muted underline underline-offset-4"
+              to="/recuperar"
+            >
+              Olvidé mi contraseña
+            </Link>
+            <Link
+              className="inline-block text-xs font-semibold uppercase tracking-[0.1em] text-ink-muted underline underline-offset-4"
+              to="/acceso"
+            >
+              Acceder con token
+            </Link>
+          </div>
         </div>
       </section>
 

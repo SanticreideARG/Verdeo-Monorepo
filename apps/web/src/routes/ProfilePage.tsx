@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'r
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
+import { ChangePasswordForm } from '../components/ChangePasswordForm.js';
 import { errorMessage } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
@@ -147,6 +148,14 @@ export function ProfilePage() {
             </button>
           </form>
         </div>
+      </section>
+
+      <section className="dashboard-panel mt-6">
+        <header>
+          <p className="dashboard-kicker">Seguridad</p>
+          <h2 className="text-2xl font-semibold text-forest">Contraseña</h2>
+        </header>
+        <ChangePasswordForm />
       </section>
     </DashboardShell>
   );

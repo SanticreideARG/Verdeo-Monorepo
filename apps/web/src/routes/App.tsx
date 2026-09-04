@@ -24,6 +24,7 @@ import { CalendarPage } from './CalendarPage.js';
 import { EmailSettingsPage } from './EmailSettingsPage.js';
 import { PaymentMethodsSettingsPage } from './PaymentMethodsSettingsPage.js';
 import { LoginPage } from './LoginPage.js';
+import { PasswordResetPage } from './PasswordResetPage.js';
 import { MenuBuilderPage } from './MenuBuilderPage.js';
 import { MenusPage } from './MenusPage.js';
 import { PriceByLocationPage } from './PriceByLocationPage.js';
@@ -233,6 +234,7 @@ export function App() {
       <Route path="/public/survey/:token" element={<PublicSurveyPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/acceso" element={<AccessTokenLoginPage />} />
+      <Route path="/recuperar" element={<PasswordResetPage />} />
       <Route path="/mi-cuenta" element={<CustomerAccountPage />} />
       <Route path="/auth/callback" element={<OAuthCallbackPage />} />
       <Route path="/app" element={<DashboardPage />} />
