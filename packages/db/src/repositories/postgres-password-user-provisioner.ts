@@ -17,7 +17,16 @@ import {
 export interface ProvisionPasswordUserInput {
   displayName: string;
   email: string;
+  /**
+   * Omitted means one is generated. Generating is the better default — an admin typing a password
+   * for someone else tends to pick a memorable one, and it has to be relayed either way.
+   */
+  password?: string | undefined;
   roleKey: string;
+  /** Who is doing this, so the audit trail names a person rather than "the system". */
+  actorUserId?: string | undefined;
+  /** Where from: the CLI or the admin screen. */
+  source?: string | undefined;
 }
 
 export interface ProvisionedPasswordUser {
@@ -37,9 +46,64 @@ export class UserAlreadyExistsError extends Error {
 export class PostgresPasswordUserProvisioner {
   public constructor(private readonly database: Database) {}
 
+  /**
+   * Replaces someone's password and clears any lockout, returning the new one to hand over.
+   *
+   * Separate from provision, which refuses an account that already exists — this is the "somebody
+   * is locked out" path, and conflating the two would mean an accidental re-provision could
+   * silently reset a colleague's access.
+   */
+  public async resetPassword(input: {
+    actorUserId?: string | undefined;
+    password?: string | undefined;
+    source?: string | undefined;
+    userId: string;
+  }): Promise<{ password: string }> {
+    const password = input.password ?? createRandomPassword();
+    const passwordHash = await hashPassword(password);
+
+    await this.database.transaction(async (transaction) => {
+      const [user] = await transaction
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
+      if (!user) throw new Error('User not found');
+
+      await transaction
+        .insert(passwordCredentials)
+        .values({ passwordChangedAt: new Date(), passwordHash, userId: input.userId })
+        .onConflictDoUpdate({
+          set: {
+            // Clearing the lockout is the point: a reset that leaves someone locked out has not
+            // actually let them back in.
+            failedAttempts: 0,
+            lockedUntil: null,
+            passwordChangedAt: new Date(),
+            passwordHash,
+          },
+          target: passwordCredentials.userId,
+        });
+
+      const correlationId = randomUUID();
+      await transaction.insert(auditEvents).values({
+        action: 'user.password_reset',
+        actorType: input.actorUserId ? 'user' : 'system',
+        actorUserId: input.actorUserId ?? null,
+        correlationId,
+        entityId: input.userId,
+        entityType: 'user',
+        requestId: correlationId,
+        source: input.source ?? 'provisioning-cli',
+      });
+    });
+
+    return { password };
+  }
+
   public async provision(input: ProvisionPasswordUserInput): Promise<ProvisionedPasswordUser> {
     const email = normalizeEmail(input.email);
-    const password = createRandomPassword();
+    const password = input.password ?? createRandomPassword();
     const passwordHash = await hashPassword(password);
 
     const userId = await this.database.transaction(async (transaction) => {
@@ -80,14 +144,15 @@ export class PostgresPasswordUserProvisioner {
       const correlationId = randomUUID();
       await transaction.insert(auditEvents).values({
         action: 'user.provisioned',
-        actorType: 'system',
+        actorType: input.actorUserId ? 'user' : 'system',
+        actorUserId: input.actorUserId ?? null,
         after: { status: 'active' },
         correlationId,
         entityId: createdUser.id,
         entityType: 'user',
         metadata: { authenticationProvider: 'password', roleKey: input.roleKey },
         requestId: correlationId,
-        source: 'provisioning-cli',
+        source: input.source ?? 'provisioning-cli',
       });
 
       return createdUser.id;

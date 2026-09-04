@@ -89,3 +89,32 @@ export type UserRolesUpdateRequest = z.infer<typeof UserRolesUpdateRequestSchema
 export type UserPermissionOverridesUpdateRequest = z.infer<
   typeof UserPermissionOverridesUpdateRequestSchema
 >;
+
+/**
+ * Creating a staff account from the admin screen.
+ *
+ * The password is optional and generating one is the default: an admin typing a password for
+ * someone else tends to pick something memorable, and it has to be relayed either way. When given,
+ * it must clear the same bar the login endpoint enforces, or the account would be created unable
+ * to sign in.
+ */
+export const UserProvisionRequestSchema = z.object({
+  displayName: z.string().trim().min(1).max(120),
+  email: z.string().trim().email().max(320),
+  password: z.string().min(12).max(256).optional(),
+  roleKey: z.string().trim().min(1).max(60),
+});
+
+/** Returned once, never stored in the clear, and never retrievable again. */
+export const UserProvisionResponseSchema = z.object({
+  email: z.string(),
+  password: z.string(),
+  roleKey: z.string(),
+  userId: UuidSchema,
+});
+
+export const UserPasswordResetRequestSchema = z.object({
+  password: z.string().min(12).max(256).optional(),
+});
+
+export const UserPasswordResetResponseSchema = z.object({ password: z.string() });

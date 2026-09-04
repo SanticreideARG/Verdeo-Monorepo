@@ -3969,3 +3969,41 @@ main .operation-card {
   margin-top: 0.75rem;
   padding: 0.35rem 0.7rem;
 }
+
+/* --- One-time credential handoff ---------------------------------------------------------------
+   Shown once, because there is no endpoint that could return it again: the password is stored as a
+   scrypt hash like every other. The monospace block and the copy button exist so it gets relayed
+   correctly rather than retyped from a glance. */
+.credential-handoff {
+  display: grid;
+  gap: 0.5rem;
+  border: 1px solid var(--db-accent);
+  border-radius: 0.7rem;
+  padding: 0.9rem 1rem;
+  background: color-mix(in srgb, var(--db-accent) 8%, transparent);
+}
+.credential-handoff p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+.credential-handoff code {
+  padding: 0.5rem 0.7rem;
+  border-radius: 0.4rem;
+  background: var(--db-bg);
+  font-family: ui-monospace, 'JetBrains Mono', monospace;
+  font-size: 1rem;
+  letter-spacing: 0.03em;
+  overflow-wrap: anywhere;
+}
+.credential-handoff button {
+  justify-self: start;
+  border: 1px solid var(--db-border);
+  border-radius: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  background: none;
+  color: var(--db-text);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}

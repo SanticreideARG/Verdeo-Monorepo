@@ -4,6 +4,7 @@ import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage } from '../lib/operations.js';
+import { showToast } from '../lib/toast.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 interface UserRow {
@@ -124,6 +125,8 @@ export function UsersAdminPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [roles, setRoles] = useState<RoleSummary[]>([]);
   const [search, setSearch] = useState('');
+  const [provisioning, setProvisioning] = useState(false);
+  const [issued, setIssued] = useState<{ email: string; password: string } | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
   const [catalog, setCatalog] = useState<PermissionCatalogEntry[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -141,6 +144,8 @@ export function UsersAdminPage() {
   const [loading, setLoading] = useState(true);
 
   const canManage = profile?.permissions.includes('roles.manage') ?? false;
+  const canCreate = profile?.permissions.includes('users.create') ?? false;
+  const canResetPassword = profile?.permissions.includes('users.edit') ?? false;
   const groupedUsers = useMemo(() => groupUsersByRole(users, search), [search, users]);
   const canOverride = profile?.permissions.includes('permissions.override') ?? false;
   const canDisable = profile?.permissions.includes('users.disable') ?? false;
@@ -194,6 +199,60 @@ export function UsersAdminPage() {
       new Map(loaded.overrides.map((override) => [override.permissionId, override.effect])),
     );
   }, []);
+
+  async function provisionUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const password = formText(form, 'password');
+    setProvisioning(true);
+    setMessage('');
+    setIssued(null);
+    try {
+      const response = await apiRequest('/api/v1/users', {
+        body: JSON.stringify({
+          displayName: formText(form, 'displayName'),
+          email: formText(form, 'email'),
+          // Omitted rather than empty: blank means "generate one", and an empty string would fail
+          // the minimum-length rule instead.
+          ...(password ? { password } : {}),
+          roleKey: formText(form, 'roleKey'),
+        }),
+        method: 'POST',
+      });
+      if (!response.ok) {
+        setMessage(await errorMessage(response));
+        return;
+      }
+      const created = (await response.json()) as { email: string; password: string };
+      setIssued(created);
+      event.currentTarget.reset();
+      showToast('Usuario creado.');
+      await loadUsers();
+    } finally {
+      setProvisioning(false);
+    }
+  }
+
+  async function resetPassword(user: { displayName: string; id: string }) {
+    if (
+      !window.confirm(
+        `¿Generar una contraseña nueva para ${user.displayName}? La actual deja de servir.`,
+      )
+    ) {
+      return;
+    }
+    const response = await apiRequest(`/api/v1/users/${user.id}/password`, {
+      body: JSON.stringify({}),
+      method: 'POST',
+    });
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    const result = (await response.json()) as { password: string };
+    setIssued({ email: user.displayName, password: result.password });
+    showToast('Contraseña restablecida.');
+  }
 
   async function selectUser(userId: string) {
     setSelectedUserId(userId);
@@ -319,6 +378,75 @@ export function UsersAdminPage() {
           </p>
         ) : null}
 
+        {canCreate ? (
+          <details className="operation-card mt-6">
+            <summary className="cursor-pointer font-semibold text-forest">
+              Dar de alta un usuario
+            </summary>
+            <p className="mt-2 text-sm text-ink-muted">
+              Queda activo al instante, sin invitación ni verificación. La contraseña se muestra una
+              sola vez — se guarda cifrada y no hay forma de volver a verla.
+            </p>
+            <form className="mt-4" onSubmit={(event) => void provisionUser(event)}>
+              <div className="form-grid">
+                <label className="field">
+                  Nombre
+                  <input name="displayName" required />
+                </label>
+                <label className="field">
+                  Correo
+                  <input name="email" required type="email" />
+                </label>
+                <label className="field">
+                  Rol
+                  <select name="roleKey" required defaultValue="">
+                    <option disabled value="">
+                      Elegir
+                    </option>
+                    {roles
+                      .filter((role) => role.active)
+                      .map((role) => (
+                        <option key={role.key} value={role.key}>
+                          {role.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label className="field">
+                  Contraseña (opcional)
+                  <input
+                    minLength={12}
+                    name="password"
+                    placeholder="Vacío = la generamos"
+                    type="password"
+                  />
+                </label>
+              </div>
+              <button className="button button-primary mt-4" disabled={provisioning} type="submit">
+                {provisioning ? 'Creando…' : 'Crear usuario'}
+              </button>
+            </form>
+
+            {/* Shown once and only in this session's memory: there is no endpoint that could
+                return it again. */}
+            {issued ? (
+              <div className="credential-handoff mt-4">
+                <p>
+                  Cuenta creada. Pasale estos datos a <b>{issued.email}</b> — no vas a poder verlos
+                  de nuevo.
+                </p>
+                <code>{issued.password}</code>
+                <button
+                  onClick={() => void navigator.clipboard.writeText(issued.password)}
+                  type="button"
+                >
+                  Copiar
+                </button>
+              </div>
+            ) : null}
+          </details>
+        ) : null}
+
         {loading ? (
           <p className="mt-6 text-ink-muted">Cargando…</p>
         ) : (
@@ -399,15 +527,26 @@ export function UsersAdminPage() {
                           {detail.email ?? 'Sin email'} · {detail.status}
                         </p>
                       </div>
-                      {canDisable ? (
-                        <button
-                          className="button button-secondary"
-                          onClick={() => void toggleStatus()}
-                          type="button"
-                        >
-                          {detail.status === 'active' ? 'Desactivar' : 'Activar'}
-                        </button>
-                      ) : null}
+                      <div className="flex flex-wrap gap-2">
+                        {canResetPassword ? (
+                          <button
+                            className="button button-secondary"
+                            onClick={() => void resetPassword(detail)}
+                            type="button"
+                          >
+                            Restablecer contraseña
+                          </button>
+                        ) : null}
+                        {canDisable ? (
+                          <button
+                            className="button button-secondary"
+                            onClick={() => void toggleStatus()}
+                            type="button"
+                          >
+                            {detail.status === 'active' ? 'Desactivar' : 'Activar'}
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                     <p className="mt-3 text-sm text-ink-muted">
                       Permisos efectivos: {detail.effectivePermissions.join(', ') || 'ninguno'}

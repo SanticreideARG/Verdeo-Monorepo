@@ -194,6 +194,10 @@ import {
   UserAdminDetailSchema,
   UserListQuerySchema,
   UserListResponseSchema,
+  UserPasswordResetRequestSchema,
+  UserPasswordResetResponseSchema,
+  UserProvisionRequestSchema,
+  UserProvisionResponseSchema,
   UserPermissionOverridesUpdateRequestSchema,
   UserRolesUpdateRequestSchema,
   UserStatusUpdateRequestSchema,
@@ -907,6 +911,22 @@ interface CreateAppOptions {
   logger: Logger;
   messaging?: MessagingEngine;
   oauth?: OAuthLogin;
+  userProvisioner?: {
+    provision(input: {
+      actorUserId?: string | undefined;
+      displayName: string;
+      email: string;
+      password?: string | undefined;
+      roleKey: string;
+      source?: string | undefined;
+    }): Promise<unknown>;
+    resetPassword(input: {
+      actorUserId?: string | undefined;
+      password?: string | undefined;
+      source?: string | undefined;
+      userId: string;
+    }): Promise<{ password: string }>;
+  };
   dashboardLayout?: {
     get(userId: string): Promise<string[] | null>;
     reset(userId: string): Promise<void>;
@@ -2156,6 +2176,70 @@ export function createApp(options: CreateAppOptions) {
     if (!context.get('session').permissions.includes('users.read')) return forbidden(context);
     const items = await requireUserAdmin().listPermissionsCatalog();
     return context.json(PermissionCatalogResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  /**
+   * Creates a staff account with a working password, which until now only the CLI could do —
+   * the app's only path was an invite token the person had to redeem.
+   *
+   * The password comes back exactly once. It is stored as a scrypt hash like every other, so there
+   * is no way to look it up later: if it is lost, reset it.
+   */
+  app.post('/api/v1/users', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('users.create')) return forbidden(context);
+    if (!options.userProvisioner) throw new Error('User provisioner is not configured');
+    const input = UserProvisionRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success)
+      return badRequest(context, 'Revisá los datos del usuario.', input.error.issues);
+
+    try {
+      const created = await options.userProvisioner.provision({
+        actorUserId: session.userId,
+        displayName: input.data.displayName,
+        email: input.data.email,
+        ...(input.data.password ? { password: input.data.password } : {}),
+        roleKey: input.data.roleKey,
+        source: 'api',
+      });
+      return context.json(UserProvisionResponseSchema.parse(contractValue(created)), 201);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'UserAlreadyExistsError') {
+        const code: ApiErrorCode = 'CONFLICT';
+        return context.json(
+          {
+            error: {
+              code,
+              message:
+                'Ya existe una cuenta con ese correo. Si perdió el acceso, reseteá su contraseña.',
+              requestId: context.get('requestId'),
+            },
+          },
+          statusForCode(code),
+        );
+      }
+      throw error;
+    }
+  });
+
+  /** The "somebody is locked out" path. Clears the lockout as well as setting the password. */
+  app.post('/api/v1/users/:id/password', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('users.edit')) return forbidden(context);
+    if (!options.userProvisioner) throw new Error('User provisioner is not configured');
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = UserPasswordResetRequestSchema.safeParse(
+      await context.req.json().catch(() => ({})),
+    );
+    if (!params.success || !input.success) return badRequest(context, 'Revisá la contraseña.');
+
+    const result = await options.userProvisioner.resetPassword({
+      actorUserId: session.userId,
+      ...(input.data.password ? { password: input.data.password } : {}),
+      source: 'api',
+      userId: params.data.id,
+    });
+    return context.json(UserPasswordResetResponseSchema.parse(result));
   });
 
   app.patch('/api/v1/users/:id/status', async (context) => {
