@@ -48,8 +48,8 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 
 ## P0 - Operational capture
 
-- [ ] Persisted provider-neutral inbound events with idempotency.
-- [ ] Conversations and messages linked to customer identities.
+- [x] Persisted provider-neutral inbound events with idempotency (`messaging_webhook_events`).
+- [x] Conversations and messages linked to customer identities.
 - [x] Scoped quick-response template CRUD.
 - [ ] One reviewable order draft per order intent.
 - [x] Zod-validated AI extraction candidates (`extract_order`, Fase 6).
@@ -63,7 +63,7 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [x] CMS.
 - [x] Menu display.
 - [x] Guest order wizard.
-- [ ] Customer portal base.
+- [x] Customer portal base (`/mi-cuenta`: acceso por enlace de correo, pedidos, domicilios).
 
 ## P0 - WhatsApp
 
@@ -131,7 +131,7 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [ ] Story 1080x1920.
 - [ ] Brand templates.
 - [ ] Image generation provider.
-- [ ] AI Workbench.
+- [x] AI Workbench.
 
 ## P2 - Customer surveys
 
@@ -147,7 +147,7 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [ ] Instagram adapter.
 - [ ] Messenger adapter.
 - [ ] Email adapter.
-- [ ] Internal messaging.
+- [x] Internal messaging (chat de staff con presencia y no-leídos).
 - [ ] Marketing automation.
-- [ ] Advanced analytics.
+- [x] Advanced analytics (Estadísticas: por zona, semana, tamaño, variedad y día).
 - [ ] Recommendation learning.

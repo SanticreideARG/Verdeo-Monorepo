@@ -17,13 +17,13 @@ datos, backups) más que código nuevo.
 | 1 - Auth, RBAC, Audit            | ✅ completa                                                                   |
 | 2 - CRM / Customer Identity      | ✅ completa                                                                   |
 | 3 - Weekly Menu / Catalog        | ✅ completa                                                                   |
-| 4 - Landing CMS + Web Orders     | ✅ completa — ver `CMS_AND_PUBLIC_WEB.md` "As built"                          |
+| 4 - Landing CMS + Web Orders     | ✅ completa — incluye portal de cliente con acceso por correo                 |
 | 5 - Messaging Core / WhatsApp    | ◐ esqueleto funcional — ver `MESSAGING_WHATSAPP.md` "As built"                |
 | 6 - AI Core                      | ◐ esqueleto funcional — ver `AI_CORE.md` "As built"                           |
 | 7 - Production                   | ✅ completa                                                                   |
 | 8 - Routes / Delivery / Payments | ◐ esqueleto funcional — ver `DELIVERY_AND_ROUTES.md`/`PAYMENTS.md` "As built" |
 | 9 - QA / Pilot                   | ⏳ pendiente                                                                  |
-| 10 - Encuestas de clientes       | ⏳ planificada (sin construir)                                                |
+| 10 - Encuestas de clientes       | ◐ construida; falta decidir el modelo de token y el QR                        |
 
 ## Fase 0 - Foundation (1-2 días)
 
