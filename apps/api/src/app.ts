@@ -25,6 +25,8 @@ import {
   AddressGeocodingParamSchema,
   AddressGeocodingRejectRequestSchema,
   AddressGeocodingRequestSchema,
+  AppearanceSchema,
+  AppearanceUpdateRequestSchema,
   ChatContactListResponseSchema,
   ChatConversationListResponseSchema,
   ChatConversationOpenRequestSchema,
@@ -934,6 +936,21 @@ interface CreateAppOptions {
       source?: string | undefined;
       userId: string;
     }): Promise<{ password: string }>;
+  };
+  appearance?: {
+    get(userId: string): Promise<{
+      fontKey: string | null;
+      textScale: string | null;
+      theme: string | null;
+    }>;
+    save(
+      userId: string,
+      input: {
+        fontKey?: string | null | undefined;
+        textScale?: string | null | undefined;
+        theme?: string | null | undefined;
+      },
+    ): Promise<{ fontKey: string | null; textScale: string | null; theme: string | null }>;
   };
   dashboardLayout?: {
     get(userId: string): Promise<string[] | null>;
@@ -3561,6 +3578,26 @@ export function createApp(options: CreateAppOptions) {
       paymentsContext(context),
     );
     return context.json(PaymentMethodListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  /**
+   * Aspecto de la app para quien está logueado. Sin permiso: es la preferencia de uno mismo, y
+   * cualquiera que pueda entrar puede elegir con qué tamaño de letra trabaja.
+   */
+  app.get('/api/v1/me/appearance', async (context) => {
+    if (!options.appearance) throw new Error('Appearance engine is not configured');
+    const appearance = await options.appearance.get(context.get('session').userId);
+    return context.json(AppearanceSchema.parse(contractValue(appearance)));
+  });
+
+  app.patch('/api/v1/me/appearance', async (context) => {
+    if (!options.appearance) throw new Error('Appearance engine is not configured');
+    const input = AppearanceUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) return badRequest(context, 'Revisá la apariencia.', input.error.issues);
+    const appearance = await options.appearance.save(context.get('session').userId, input.data);
+    return context.json(AppearanceSchema.parse(contractValue(appearance)));
   });
 
   app.get('/api/v1/dashboard/layout', async (context) => {

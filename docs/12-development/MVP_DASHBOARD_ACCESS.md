@@ -95,3 +95,28 @@ seed does not invent a permission matrix.
 - globally distributed login rate limiting/WAF policy;
 - MFA and recovery policy;
 - removal of password login after OAuth adoption, if approved.
+
+## Apariencia por usuario (as built)
+
+Tema, fuente y tamaño de texto se guardan en `user_appearance` (una fila por usuario, todas las
+columnas opcionales) y se leen y escriben con `GET`/`PATCH /api/v1/me/appearance`. Sin permiso: es
+la preferencia de uno mismo, y cualquiera que pueda entrar puede elegir con qué letra trabaja.
+
+Nueve temas, agrupados por tono en el panel: claros `natural`, `cielo`, `arena`, `papel`; oscuros
+`bosque`, `aurora`, `carbon`, `cacao`, `marea`. `papel` es el de contraste alto y sin viñeta, para
+pantallas pobres o a pleno sol.
+
+Tres decisiones que conviene no deshacer sin querer:
+
+- **La escala de texto se aplica a `html`, no al shell.** La hoja está escrita en `rem`, que es
+  relativa a la raíz; puesta en cualquier otro nodo no movería nada. Como efecto, la preferencia
+  también alcanza a las pantallas públicas, que es lo esperable de una preferencia de accesibilidad.
+- **Ninguna fuente del selector se descarga.** Son las que el navegador ya tiene más la que la app
+  ya carga. Una preferencia de legibilidad que tarda en llegar no sirve.
+- **El servidor no valida los valores.** Qué temas y qué fuentes existen es del catálogo del
+  frontend; encerrarlo en la API obligaría a desplegarla para agregar un tema, y el fallo que
+  evitaría — una preferencia que nombra un tema que ya no existe — se resuelve al renderizar,
+  cayendo al de por defecto. Sólo se acota el largo, que es lo que protege a la base.
+
+`localStorage` sigue existiendo, pero como arranque: pinta bien en el primer frame y evita el
+parpadeo mientras llega la preferencia de la cuenta, que es la que manda.

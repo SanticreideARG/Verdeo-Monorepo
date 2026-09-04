@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 import { apiRequest, storeOperatingSiteId, storedOperatingSiteId } from '../lib/api.js';
+import { AppearanceMenu, FONT_OPTIONS, SCALE_OPTIONS, type ThemeOption } from './AppearanceMenu.js';
 import { PresenceControl } from './PresenceControl.js';
 import { SETTINGS_TAB_PERMISSIONS } from './SettingsTabs.js';
 import { RequestProgressBar } from './RequestProgressBar.js';
@@ -172,15 +173,25 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
   },
 ];
 
-const themes = [
-  { color: '#3a7d44', label: 'Bosque', value: 'bosque' },
-  { color: '#b7d96d', label: 'Natural', value: 'natural' },
-  { color: '#3b82f6', label: 'Cielo', value: 'cielo' },
-  { color: '#a855f7', label: 'Aurora', value: 'aurora' },
-  { color: '#6b7280', label: 'Carbón', value: 'carbon' },
-] as const;
+const themes: readonly ThemeOption[] = [
+  { color: '#b7d96d', label: 'Natural', tone: 'claro', value: 'natural' },
+  { color: '#3b82f6', label: 'Cielo', tone: 'claro', value: 'cielo' },
+  { color: '#b47834', label: 'Arena', tone: 'claro', value: 'arena' },
+  { color: '#111111', label: 'Papel', tone: 'claro', value: 'papel' },
+  { color: '#3a7d44', label: 'Bosque', tone: 'oscuro', value: 'bosque' },
+  { color: '#a855f7', label: 'Aurora', tone: 'oscuro', value: 'aurora' },
+  { color: '#6b7280', label: 'Carbón', tone: 'oscuro', value: 'carbon' },
+  { color: '#d69e5c', label: 'Cacao', tone: 'oscuro', value: 'cacao' },
+  { color: '#2db2ac', label: 'Marea', tone: 'oscuro', value: 'marea' },
+];
 
-type ThemeName = (typeof themes)[number]['value'];
+const FONT_KEYS = new Set(FONT_OPTIONS.map((item) => item.value as string));
+const SCALE_KEYS = new Set(SCALE_OPTIONS.map((item) => item.value as string));
+
+/** Un valor que el catálogo no conoce cae al de por defecto en vez de romper la pantalla. */
+function known(value: string | null | undefined, allowed: Set<string>, fallback: string): string {
+  return value && allowed.has(value) ? value : fallback;
+}
 
 /**
  * The count that belongs on a nav item, or nothing.
@@ -375,10 +386,21 @@ export function DashboardShell({
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(() =>
     storedOperatingSiteId(),
   );
-  const [theme, setTheme] = useState<ThemeName>(() => {
-    const saved = window.localStorage.getItem('verdeo-dashboard-theme');
-    return themes.some((item) => item.value === saved) ? (saved as ThemeName) : 'natural';
-  });
+  // localStorage es el arranque, no la fuente de verdad: pinta bien en el primer frame y evita el
+  // parpadeo mientras llega la preferencia guardada en la cuenta, que es la que manda.
+  const [theme, setTheme] = useState<string>(() =>
+    known(
+      window.localStorage.getItem('verdeo-dashboard-theme'),
+      new Set(themes.map((item) => item.value)),
+      'natural',
+    ),
+  );
+  const [uiFont, setUiFont] = useState<string>(() =>
+    known(window.localStorage.getItem('verdeo-ui-font'), FONT_KEYS, 'barlow'),
+  );
+  const [textScale, setTextScale] = useState<string>(() =>
+    known(window.localStorage.getItem('verdeo-text-scale'), SCALE_KEYS, 'normal'),
+  );
   const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(() => {
     try {
       const saved = window.localStorage.getItem('verdeo-nav-collapsed-clusters');
@@ -443,6 +465,48 @@ export function DashboardShell({
   useEffect(() => {
     window.localStorage.setItem('verdeo-dashboard-theme', theme);
   }, [theme]);
+
+  /**
+   * La escala va en `html` y no en el shell porque la hoja está escrita en `rem`, que es relativa a
+   * la raíz: puesta en cualquier otro nodo no movería nada.
+   */
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset['uiFont'] = uiFont;
+    root.dataset['textScale'] = textScale;
+    window.localStorage.setItem('verdeo-ui-font', uiFont);
+    window.localStorage.setItem('verdeo-text-scale', textScale);
+  }, [textScale, uiFont]);
+
+  // La preferencia guardada en la cuenta pisa la del navegador: es la que viaja entre máquinas.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const response = await apiRequest('/api/v1/me/appearance');
+      if (!response.ok || cancelled) return;
+      const saved = (await response.json()) as {
+        fontKey: string | null;
+        textScale: string | null;
+        theme: string | null;
+      };
+      if (cancelled) return;
+      if (saved.theme) setTheme(known(saved.theme, new Set(themes.map((i) => i.value)), 'natural'));
+      if (saved.fontKey) setUiFont(known(saved.fontKey, FONT_KEYS, 'barlow'));
+      if (saved.textScale) setTextScale(known(saved.textScale, SCALE_KEYS, 'normal'));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const saveAppearance = useCallback((patch: Record<string, string>) => {
+    // Sin await ni toast: si la preferencia no llega a guardarse, el cambio local ya se ve y la
+    // próxima vez se vuelve a intentar. Interrumpir a alguien por esto sería peor que el fallo.
+    void apiRequest('/api/v1/me/appearance', {
+      body: JSON.stringify(patch),
+      method: 'PATCH',
+    }).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     window.localStorage.setItem('verdeo-sidebar-collapsed', String(sidebarCollapsed));
@@ -720,19 +784,24 @@ export function DashboardShell({
                 </select>
               </label>
             ) : null}
-            <div className="dashboard-themes" aria-label="Tema visual">
-              {themes.map((item) => (
-                <button
-                  aria-label={`Usar tema ${item.label}`}
-                  aria-pressed={theme === item.value}
-                  key={item.value}
-                  onClick={() => setTheme(item.value)}
-                  style={{ '--swatch': item.color } as CSSProperties}
-                  title={item.label}
-                  type="button"
-                />
-              ))}
-            </div>
+            <AppearanceMenu
+              font={uiFont}
+              onFont={(value) => {
+                setUiFont(value);
+                saveAppearance({ fontKey: value });
+              }}
+              onScale={(value) => {
+                setTextScale(value);
+                saveAppearance({ textScale: value });
+              }}
+              onTheme={(value) => {
+                setTheme(value);
+                saveAppearance({ theme: value });
+              }}
+              scale={textScale}
+              theme={theme}
+              themes={themes}
+            />
             <WeatherWidget cityName={weatherCityName} />
             <div className="dashboard-clock">
               <span>{timeLabel}</span>

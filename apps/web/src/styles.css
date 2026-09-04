@@ -26,6 +26,46 @@
   text-rendering: optimizeLegibility;
 }
 
+/* Tipografía por usuario.
+ *
+ * La escala se aplica a `html` y no al shell a propósito: la hoja está escrita en `rem`, que es
+ * relativa a la raíz, así que cambiar el tamaño en cualquier otro nodo no movería nada. Como
+ * efecto, la preferencia también alcanza a las pantallas públicas, que es lo que se espera de una
+ * preferencia de accesibilidad.
+ *
+ * Ninguna opción descarga una fuente nueva: son las que el navegador ya tiene más las dos que la
+ * app ya carga. Una preferencia de legibilidad que tarda en llegar no sirve. */
+:root[data-text-scale='compacto'] {
+  font-size: 93.75%;
+}
+:root[data-text-scale='comodo'] {
+  font-size: 106.25%;
+}
+:root[data-text-scale='grande'] {
+  font-size: 112.5%;
+}
+:root[data-text-scale='mayor'] {
+  font-size: 125%;
+}
+
+:root {
+  --db-font: 'Barlow';
+}
+:root[data-ui-font='sistema'] {
+  --db-font: system-ui;
+}
+:root[data-ui-font='serif'] {
+  --db-font: Georgia, 'Times New Roman';
+}
+:root[data-ui-font='mono'] {
+  --db-font: ui-monospace, 'Cascadia Mono', 'Consolas';
+}
+/* Verdana no es elegante, pero tiene aperturas anchas y letras muy diferenciadas: es la opción
+   para quien no llega a leer cómodo con las demás. */
+:root[data-ui-font='legible'] {
+  --db-font: Verdana, Tahoma;
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -529,7 +569,7 @@ a {
   min-height: 100vh;
   background: var(--db-bg);
   color: var(--db-text);
-  font-family: 'Barlow', var(--font-sans);
+  font-family: var(--db-font, 'Barlow'), var(--font-sans);
   transition:
     background 240ms ease,
     color 240ms ease;
@@ -617,6 +657,95 @@ a {
   --db-vignette:
     radial-gradient(ellipse 70% 48% at 15% 0%, rgb(107 114 128 / 15%), transparent 60%),
     radial-gradient(ellipse 48% 38% at 94% 96%, rgb(75 85 99 / 10%), transparent 58%);
+}
+
+/* Arena — claro cálido. La contracara de Cielo: mismo nivel de contraste, temperatura opuesta,
+   para quien encuentra fríos los grises azulados en pantallas muy iluminadas. */
+.dashboard-shell[data-theme='arena'] {
+  --db-bg: #faf6ef;
+  --db-bg-2: #f2e9db;
+  --db-surface: rgb(255 253 249 / 90%);
+  --db-surface-solid: #fffdf9;
+  --db-sidebar: linear-gradient(180deg, rgb(255 253 249 / 98%), rgb(246 238 226 / 96%));
+  --db-topbar: rgb(255 253 249 / 84%);
+  --db-text: #3a2c1c;
+  --db-text-soft: rgb(58 44 28 / 76%);
+  --db-muted: rgb(58 44 28 / 54%);
+  --db-muted-2: rgb(58 44 28 / 34%);
+  --db-border: rgb(180 120 52 / 24%);
+  --db-border-soft: rgb(58 44 28 / 10%);
+  --db-accent: #b47834;
+  --db-accent-strong: #94601f;
+  --db-gold: #8a6a12;
+  --db-vignette:
+    radial-gradient(ellipse 70% 48% at 15% 0%, rgb(180 120 52 / 14%), transparent 60%),
+    radial-gradient(ellipse 48% 38% at 94% 96%, rgb(138 106 18 / 9%), transparent 58%);
+}
+
+/* Papel — claro de contraste alto, casi sin color. Para trabajar a pleno sol, para pantallas
+   pobres, y para cuando los fondos translúcidos de los otros temas cansan la vista. */
+.dashboard-shell[data-theme='papel'] {
+  --db-bg: #fff;
+  --db-bg-2: #f4f4f5;
+  --db-surface: rgb(255 255 255 / 100%);
+  --db-surface-solid: #fff;
+  --db-sidebar: linear-gradient(180deg, #fff, #f7f7f8);
+  --db-topbar: rgb(255 255 255 / 96%);
+  --db-text: #111;
+  --db-text-soft: rgb(17 17 17 / 82%);
+  --db-muted: rgb(17 17 17 / 62%);
+  --db-muted-2: rgb(17 17 17 / 42%);
+  --db-border: rgb(17 17 17 / 26%);
+  --db-border-soft: rgb(17 17 17 / 13%);
+  --db-accent: #1a6b2c;
+  --db-accent-strong: #12551f;
+  --db-gold: #7a5c00;
+  /* Sin viñeta a propósito: el punto del tema es que no haya degradés detrás del texto. */
+  --db-vignette: none;
+}
+
+/* Cacao — oscuro cálido. Aurora y Carbón son fríos; este es el oscuro que no vira a azul. */
+.dashboard-shell[data-theme='cacao'] {
+  --db-bg: #1a1310;
+  --db-bg-2: #251b16;
+  --db-surface: rgb(37 27 22 / 80%);
+  --db-surface-solid: #261c17;
+  --db-sidebar: linear-gradient(180deg, rgb(20 15 12 / 98%), rgb(38 28 23 / 96%));
+  --db-topbar: rgb(20 15 12 / 78%);
+  --db-text: #f6efe6;
+  --db-text-soft: rgb(246 239 230 / 76%);
+  --db-muted: rgb(246 239 230 / 52%);
+  --db-muted-2: rgb(246 239 230 / 32%);
+  --db-border: rgb(214 158 92 / 26%);
+  --db-border-soft: rgb(255 255 255 / 8%);
+  --db-accent: #d69e5c;
+  --db-accent-strong: #b47c3a;
+  --db-gold: #e0b968;
+  --db-vignette:
+    radial-gradient(ellipse 70% 48% at 15% 0%, rgb(214 158 92 / 14%), transparent 60%),
+    radial-gradient(ellipse 48% 38% at 94% 96%, rgb(180 124 58 / 10%), transparent 58%);
+}
+
+/* Marea — oscuro frío verde-azulado, el más cercano a Bosque sin ser verde. */
+.dashboard-shell[data-theme='marea'] {
+  --db-bg: #071a1e;
+  --db-bg-2: #0c272d;
+  --db-surface: rgb(12 39 45 / 80%);
+  --db-surface-solid: #0d2a31;
+  --db-sidebar: linear-gradient(180deg, rgb(5 20 23 / 98%), rgb(12 41 47 / 96%));
+  --db-topbar: rgb(5 20 23 / 78%);
+  --db-text: #e8f6f5;
+  --db-text-soft: rgb(232 246 245 / 76%);
+  --db-muted: rgb(232 246 245 / 52%);
+  --db-muted-2: rgb(232 246 245 / 32%);
+  --db-border: rgb(45 178 172 / 26%);
+  --db-border-soft: rgb(255 255 255 / 8%);
+  --db-accent: #2db2ac;
+  --db-accent-strong: #1d8b86;
+  --db-gold: #c8a030;
+  --db-vignette:
+    radial-gradient(ellipse 70% 48% at 15% 0%, rgb(45 178 172 / 15%), transparent 60%),
+    radial-gradient(ellipse 48% 38% at 94% 96%, rgb(29 139 134 / 10%), transparent 58%);
 }
 
 .dashboard-shell::before {
@@ -4082,4 +4211,132 @@ main .operation-card {
   background: var(--db-surface);
   color: var(--db-text);
   font-size: 0.78rem;
+}
+
+/* Panel de apariencia. Reemplaza la fila de muestras en la barra: con nueve temas ya no entraba,
+   y la fuente y el tamaño necesitaban lugar propio. */
+.appearance-menu {
+  position: relative;
+}
+.appearance-trigger {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--db-border-soft);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--db-bg-2) 65%, transparent);
+  color: var(--db-text-soft);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 150ms ease;
+}
+.appearance-trigger:hover,
+.appearance-trigger[aria-expanded='true'] {
+  border-color: var(--db-border);
+  color: var(--db-text);
+}
+.appearance-panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  display: grid;
+  width: min(19rem, calc(100vw - 1.5rem));
+  gap: 0.85rem;
+  border: 1px solid var(--db-border);
+  border-radius: 0.7rem;
+  padding: 0.85rem;
+  background: var(--db-surface-solid);
+  box-shadow: 0 18px 44px rgb(0 0 0 / 26%);
+}
+.appearance-panel h3 {
+  margin-bottom: 0.45rem;
+  color: var(--db-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.appearance-swatches {
+  display: flex;
+  gap: 0.42rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.appearance-swatches button {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--swatch);
+  cursor: pointer;
+  box-shadow: 0 0 0 1px var(--db-border-soft);
+  transition: 150ms ease;
+}
+.appearance-swatches button[aria-pressed='true'] {
+  border-color: var(--db-text);
+  transform: scale(1.15);
+}
+.appearance-fonts {
+  display: grid;
+  gap: 0.3rem;
+}
+.appearance-font {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+  border: 1px solid var(--db-border-soft);
+  border-radius: 0.5rem;
+  padding: 0.34rem 0.5rem;
+  background: transparent;
+  color: var(--db-text-soft);
+  font-size: 0.76rem;
+  text-align: left;
+  cursor: pointer;
+}
+.appearance-font[aria-pressed='true'] {
+  border-color: var(--db-accent);
+  color: var(--db-text);
+}
+/* Cada opción se muestra con su propia fuente: el nombre no dice nada, la forma sí. */
+.appearance-font strong {
+  min-width: 1.6rem;
+  font-size: 0.95rem;
+}
+.appearance-font-barlow strong {
+  font-family: 'Barlow', sans-serif;
+}
+.appearance-font-sistema strong {
+  font-family: system-ui, sans-serif;
+}
+.appearance-font-serif strong {
+  font-family: Georgia, 'Times New Roman', serif;
+}
+.appearance-font-mono strong {
+  font-family: ui-monospace, Consolas, monospace;
+}
+.appearance-font-legible strong {
+  font-family: Verdana, Tahoma, sans-serif;
+}
+.appearance-scales {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+.appearance-scales button {
+  border: 1px solid var(--db-border-soft);
+  border-radius: 999px;
+  padding: 0.24rem 0.6rem;
+  background: transparent;
+  color: var(--db-text-soft);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.appearance-scales button[aria-pressed='true'] {
+  border-color: var(--db-accent);
+  background: color-mix(in srgb, var(--db-accent) 16%, transparent);
+  color: var(--db-text);
 }

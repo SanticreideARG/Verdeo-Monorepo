@@ -267,6 +267,13 @@
       "when": 1788490429354,
       "tag": "0037_narrow_exiles",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1788492691852,
+      "tag": "0038_wild_felicia_hardy",
+      "breakpoints": true
     }
   ]
 }

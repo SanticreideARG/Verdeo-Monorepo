@@ -66,3 +66,32 @@ export const CustomerLoginConsumeRequestSchema = z.object({
 export const DashboardLayoutSchema = z.object({
   widgets: z.array(z.string().trim().min(1).max(60)).max(24),
 });
+
+/**
+ * Aspecto de la app para una persona.
+ *
+ * Los valores no se validan contra una lista cerrada a propósito: qué temas y qué fuentes existen
+ * es del catálogo del frontend, y encerrarlo acá obligaría a desplegar la API para agregar un tema.
+ * Lo único que se acota es el largo, que es lo que protege a la base. Un valor que el frontend no
+ * conoce cae al de por defecto al renderizar.
+ */
+const AppearanceValueSchema = z.string().trim().min(1).max(40).nullable();
+
+export const AppearanceSchema = z.object({
+  fontKey: AppearanceValueSchema,
+  textScale: AppearanceValueSchema,
+  theme: AppearanceValueSchema,
+});
+
+/** Parcial: mandar sólo la fuente no debe borrar el tema elegido antes. */
+export const AppearanceUpdateRequestSchema = z
+  .object({
+    fontKey: AppearanceValueSchema.optional(),
+    textScale: AppearanceValueSchema.optional(),
+    theme: AppearanceValueSchema.optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'No hay nada que cambiar.',
+  });
+
+export type Appearance = z.infer<typeof AppearanceSchema>;

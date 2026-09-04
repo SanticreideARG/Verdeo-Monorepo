@@ -189,6 +189,26 @@ export const customerLoginTokens = pgTable(
  *
  * One row per user; absence means "the default layout", which is why there is no seeding step.
  */
+/**
+ * Cómo se ve la app para una persona: tema, fuente y tamaño de texto.
+ *
+ * Vive en el servidor y no en localStorage porque una preferencia de legibilidad que se pierde al
+ * cambiar de máquina no es una preferencia, es una molestia repetida. Todas las columnas son
+ * opcionales y el servidor no valida los valores: qué temas y qué fuentes existen es del frontend,
+ * y un valor desconocido cae al de por defecto al renderizar.
+ *
+ * Una fila por usuario; la ausencia de fila significa "lo de por defecto".
+ */
+export const userAppearance = pgTable('user_appearance', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  theme: text('theme'),
+  fontKey: text('font_key'),
+  textScale: text('text_scale'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const dashboardLayouts = pgTable('dashboard_layouts', {
   userId: uuid('user_id')
     .primaryKey()
