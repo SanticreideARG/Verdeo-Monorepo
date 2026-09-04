@@ -9,6 +9,7 @@ import {
   UserListResponseSchema,
 } from '@verdeo/contracts';
 import { createLogger } from '@verdeo/observability';
+import type { EmailSender } from '@verdeo/email';
 
 import { createApp } from './app.js';
 
@@ -2467,7 +2468,7 @@ describe('API foundation', () => {
     });
 
     it('triggers a delivery message with delivery.trigger_messages and denies without it', async () => {
-      const triggerMessage = vi.fn(() => Promise.resolve({ sent: true }));
+      const triggerMessage = vi.fn(() => Promise.resolve({ providerMessageId: null, sent: true }));
       const app = buildDeliveryApp({ triggerMessage }, ['delivery.trigger_messages']);
       const stopId = '90000000-0000-4000-8000-000000000002';
 
@@ -3528,6 +3529,193 @@ describe('API foundation', () => {
 
       expect(response.status).toBe(409);
       expect(await response.json()).toMatchObject({ error: { code: 'CONFLICT' } });
+    });
+  });
+
+  describe('password reset', () => {
+    const cookie = 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars';
+
+    function buildApp(passwordReset: Record<string, unknown>, emailSender?: EmailSender) {
+      return createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        emailSender: emailSender ?? {
+          send: () => Promise.resolve({ providerMessageId: null, sent: true }),
+        },
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        geography: singleSiteGeography,
+        passwordReset: {
+          changeOwn: vi.fn(),
+          consume: vi.fn(),
+          request: vi.fn(),
+          ...passwordReset,
+        },
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            Promise.resolve({
+              expiresAt: new Date('2026-08-20T12:00:00.000Z'),
+              permissions: [],
+              sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+            }),
+        },
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+    }
+
+    function requestReset(app: ReturnType<typeof createApp>) {
+      return app.request('/api/v1/public/auth/password/request', {
+        body: JSON.stringify({ email: 'isabella@ejemplo.com' }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+    }
+
+    /**
+     * La propiedad que sostiene todo el diseño: desde afuera, los tres desenlaces tienen que ser
+     * indistinguibles. El fallo importa especialmente porque una dirección sin cuenta corta antes
+     * de tocar la base — si el error de las que sí existen se propagara, el código de estado
+     * pasaría a delatar quién tiene cuenta.
+     */
+    it('answers identically whether a link was issued, refused, or blew up', async () => {
+      const issued = await requestReset(
+        buildApp({
+          request: vi.fn(() =>
+            Promise.resolve({
+              displayName: 'Isabella',
+              email: 'isabella@ejemplo.com',
+              expiresAt: new Date('2026-08-20T12:00:00.000Z'),
+              token: 'token-de-prueba-suficientemente-largo',
+            }),
+          ),
+        }),
+      );
+      const refused = await requestReset(buildApp({ request: vi.fn(() => Promise.resolve(null)) }));
+      const exploded = await requestReset(
+        buildApp({
+          request: vi.fn(() =>
+            Promise.reject(new Error('relation "password_reset_tokens" does not exist')),
+          ),
+        }),
+      );
+
+      expect([issued.status, refused.status, exploded.status]).toEqual([200, 200, 200]);
+      const bodies = await Promise.all([issued.json(), refused.json(), exploded.json()]);
+      expect(new Set(bodies.map((body) => JSON.stringify(body))).size).toBe(1);
+    });
+
+    // Un rebote del correo tampoco puede cambiar la respuesta, por la misma razón.
+    it('answers the same when sending the mail fails', async () => {
+      const response = await requestReset(
+        buildApp(
+          {
+            request: vi.fn(() =>
+              Promise.resolve({
+                displayName: 'Isabella',
+                email: 'isabella@ejemplo.com',
+                expiresAt: new Date('2026-08-20T12:00:00.000Z'),
+                token: 'token-de-prueba-suficientemente-largo',
+              }),
+            ),
+          },
+          { send: vi.fn(() => Promise.reject(new Error('smtp caído'))) },
+        ),
+      );
+
+      expect(response.status).toBe(200);
+    });
+
+    it('puts the raw token in the link, and mails the address the service resolved', async () => {
+      const send = vi.fn(() => Promise.resolve({ providerMessageId: null, sent: true }));
+      await requestReset(
+        buildApp(
+          {
+            request: vi.fn(() =>
+              Promise.resolve({
+                displayName: 'Isabella',
+                email: 'isabella@ejemplo.com',
+                expiresAt: new Date('2026-08-20T12:00:00.000Z'),
+                token: 'token-de-prueba-suficientemente-largo',
+              }),
+            ),
+          },
+          { send },
+        ),
+      );
+
+      const linkInHtml: unknown = expect.stringContaining(
+        'http://localhost:5173/recuperar?token=token-de-prueba-suficientemente-largo',
+      );
+      expect(send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          html: linkInHtml,
+          to: 'isabella@ejemplo.com',
+        }),
+      );
+    });
+
+    it('turns a spent or expired link into a 409, not a 500', async () => {
+      const refusal = new Error('Ese enlace ya se usó o venció.');
+      refusal.name = 'PasswordResetError';
+      const app = buildApp({ consume: vi.fn(() => Promise.reject(refusal)) });
+
+      const response = await app.request('/api/v1/public/auth/password/confirm', {
+        body: JSON.stringify({ password: 'contraseña-nueva-larga', token: 'x'.repeat(30) }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+
+      expect(response.status).toBe(409);
+    });
+
+    /** Doce, igual que el login: más corta se guardaría bien y después no serviría para entrar. */
+    it('rejects a new password shorter than the login minimum', async () => {
+      const consume = vi.fn();
+      const response = await buildApp({ consume }).request('/api/v1/public/auth/password/confirm', {
+        body: JSON.stringify({ password: 'corta123', token: 'x'.repeat(30) }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+
+      expect(response.status).toBe(400);
+      expect(consume).not.toHaveBeenCalled();
+    });
+
+    it('changes the own password using the session it was called with', async () => {
+      const changeOwn = vi.fn(() => Promise.resolve());
+      const response = await buildApp({ changeOwn }).request('/api/v1/me/password', {
+        body: JSON.stringify({
+          currentPassword: 'la-actual-larga',
+          newPassword: 'la-nueva-mas-larga',
+        }),
+        headers: { 'content-type': 'application/json', cookie },
+        method: 'POST',
+      });
+
+      expect(response.status).toBe(200);
+      expect(changeOwn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          exceptSessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+          userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+        }),
+      );
+    });
+
+    it('requires a session to change the own password', async () => {
+      const response = await buildApp({}).request('/api/v1/me/password', {
+        body: JSON.stringify({
+          currentPassword: 'la-actual-larga',
+          newPassword: 'la-nueva-mas-larga',
+        }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+
+      expect(response.status).toBe(401);
     });
   });
 });

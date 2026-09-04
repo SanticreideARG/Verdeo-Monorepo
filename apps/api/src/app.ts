@@ -1564,27 +1564,43 @@ export function createApp(options: CreateAppOptions) {
     // peor que no emitirlo.
     if (!options.passwordReset || !options.emailSender) return sameAnswer();
 
-    const issued = await options.passwordReset.request(input.data.email);
-    if (issued) {
-      const link = `${options.appOrigin}/recuperar?token=${encodeURIComponent(issued.token)}`;
-      const body = renderEmail({
-        action: { href: link, label: 'Elegir una contraseña nueva' },
-        bodyHtml:
-          `<p>Hola ${issued.displayName}: recibimos un pedido para recuperar tu cuenta.</p>` +
-          '<p>El enlace vence en 30 minutos y sirve una sola vez. Al usarlo se cierran las demás ' +
-          'sesiones abiertas de tu cuenta.</p>' +
-          '<p>Si no pediste esto, ignorá este correo: tu contraseña sigue siendo la de siempre.</p>',
-        bodyText:
-          `Hola ${issued.displayName}: recibimos un pedido para recuperar tu cuenta. ` +
-          'El enlace de abajo vence en 30 minutos y sirve una sola vez. Si no pediste esto, ' +
-          'ignorá este correo: tu contraseña sigue siendo la de siempre.',
-        heading: 'Recuperar tu cuenta de Verdeo',
-      });
-      await options.emailSender.send({
-        html: body.html,
-        subject: 'Recuperar tu cuenta de Verdeo',
-        text: body.text,
-        to: issued.email,
+    /**
+     * Cualquier fallo de acá para abajo también contesta lo mismo.
+     *
+     * No es exceso de cuidado: una dirección sin cuenta corta antes de tocar la base de tokens, así
+     * que un fallo que sólo alcanza a las que sí existen — la tabla todavía sin migrar, un problema
+     * de conexión, un rebote del correo — hace que el código de estado distinga un caso del otro, y
+     * la enumeración que todo este diseño evita vuelve por la puerta de atrás. Se registra, no se
+     * contesta.
+     */
+    try {
+      const issued = await options.passwordReset.request(input.data.email);
+      if (issued) {
+        const link = `${options.appOrigin}/recuperar?token=${encodeURIComponent(issued.token)}`;
+        const body = renderEmail({
+          action: { href: link, label: 'Elegir una contraseña nueva' },
+          bodyHtml:
+            `<p>Hola ${issued.displayName}: recibimos un pedido para recuperar tu cuenta.</p>` +
+            '<p>El enlace vence en 30 minutos y sirve una sola vez. Al usarlo se cierran las demás ' +
+            'sesiones abiertas de tu cuenta.</p>' +
+            '<p>Si no pediste esto, ignorá este correo: tu contraseña sigue igual.</p>',
+          bodyText:
+            `Hola ${issued.displayName}: recibimos un pedido para recuperar tu cuenta. ` +
+            'El enlace de abajo vence en 30 minutos y sirve una sola vez. Si no pediste esto, ' +
+            'ignorá este correo: tu contraseña sigue igual.',
+          heading: 'Recuperar tu cuenta de Verdeo',
+        });
+        await options.emailSender.send({
+          html: body.html,
+          subject: 'Recuperar tu cuenta de Verdeo',
+          text: body.text,
+          to: issued.email,
+        });
+      }
+    } catch (error) {
+      (context.get('logger') ?? options.logger).error({
+        error,
+        event: 'auth.password_reset.request_failed',
       });
     }
 
