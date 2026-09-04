@@ -76,6 +76,7 @@ import {
   weeklyMenuPrices,
   weeklyMenus,
 } from '../schema/index.js';
+import { findMergeCandidates, mergeCustomers } from './customer-merge.js';
 import { PostgresAuditSink } from './postgres-audit-sink.js';
 
 type DatabaseTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -932,6 +933,18 @@ export class PostgresOperationsService {
       })
       .catch(translateDatabaseConflict);
     return { ...identity, value: identity.valueDisplay };
+  }
+
+  /** Records that look like the same person — a suggestion list, never acted on automatically. */
+  public async listMergeCandidates(limit: number) {
+    return findMergeCandidates(this.database, limit);
+  }
+
+  public async mergeCustomers(
+    input: { mergedId: string; survivorId: string },
+    context: OperationsContext,
+  ) {
+    return mergeCustomers(this.database, input, context);
   }
 
   public async updateCustomerIdentity(

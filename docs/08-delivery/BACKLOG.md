@@ -21,7 +21,11 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [x] CustomerAddress.
 - [x] Preferences/restrictions.
 - [x] Geocoding.
-- [ ] Merge/unmerge.
+- [x] Merge (fusión con lápida, candidatos por nombre/contacto archivado, auditada — ver
+      CRM_IMPLEMENTATION.md "As built (fusión, sin reversa)").
+- [ ] Unmerge — bloqueado: hace falta una tabla de linaje por relación, hoy sólo se guarda a dónde
+      fue la ficha, no de dónde vino cada pedido.
+- [ ] Preview de conflictos antes de fusionar.
 
 ## P0 - Catalog
 

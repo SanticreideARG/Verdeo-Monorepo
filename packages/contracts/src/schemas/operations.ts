@@ -1023,3 +1023,33 @@ export const CalendarReminderCreateRequestSchema = z.object({
 export const CalendarReminderDoneRequestSchema = z.object({ done: z.boolean() });
 
 export type CalendarReminderCreateRequest = z.infer<typeof CalendarReminderCreateRequestSchema>;
+
+/**
+ * Folding one customer record into another. The caller names which record survives rather than the
+ * server picking: the operator is the one who knows which of the two the customer actually uses.
+ */
+export const CustomerMergeRequestSchema = z.object({
+  mergedId: UuidSchema,
+  survivorId: UuidSchema,
+});
+
+export const CustomerMergeResultSchema = z.object({
+  movedAddresses: z.number().int().nonnegative(),
+  movedIdentities: z.number().int().nonnegative(),
+  movedOrders: z.number().int().nonnegative(),
+  retiredIdentities: z.number().int().nonnegative(),
+  survivorId: UuidSchema,
+});
+
+export const MergeCandidateSchema = z.object({
+  customerIds: z.array(UuidSchema),
+  customerNames: z.array(z.string()),
+  reason: z.enum(['duplicate-contact', 'same-name']),
+  value: z.string(),
+});
+
+export const MergeCandidateListResponseSchema = z.object({
+  items: z.array(MergeCandidateSchema),
+});
+
+export type CustomerMergeRequest = z.infer<typeof CustomerMergeRequestSchema>;

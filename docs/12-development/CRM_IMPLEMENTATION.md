@@ -148,6 +148,38 @@ ambiguous or unsafe automatic merges.
 Unmerge requires `customers.unmerge`, reconstructs relationships from stored lineage, reports conflicts
 created after the merge, and never overwrites newer data silently.
 
+### As built (fusión, sin reversa)
+
+Construido en `packages/db/src/repositories/customer-merge.ts`, expuesto como
+`GET /api/v1/customers/merge-candidates` (permiso `customers.merge`) y
+`POST /api/v1/customers/merge` (`customers.merge` + `customers.view_sensitive`), con el diálogo
+"Fusionar duplicados" en Clientes.
+
+Qué cumple del flujo de arriba: elección explícita del sobreviviente por parte del operador (3), una
+única transacción (4), re-chequeo de conflictos de identidad dentro de ella (5), movimiento o
+reconciliación relación por relación (7), la ficha fusionada queda como lápida —`status = 'merged'`
+más `merged_into_customer_id`— sin destruir historia (8), y auditoría `customer.merged` dentro de la
+misma transacción (9).
+
+Qué **no** está y hay que decirlo:
+
+- **No hay preview** (paso 2). El diálogo muestra candidatos y nombres, no un diff de conflictos.
+- **No hay linaje por relación** (paso 6). Se guarda a dónde fue la ficha, no de dónde vino cada
+  pedido o domicilio, así que **unmerge no es reconstruible** con lo que hay hoy: haría falta una
+  tabla de linaje escrita antes de mover referencias. `customers.unmerge` sigue en el catálogo de
+  permisos sin endpoint detrás.
+- **No se emite `CUSTOMER_MERGED`** como evento de dominio; por ahora sólo el registro de auditoría.
+
+Dos decisiones que el documento no anticipaba, tomadas contra el esquema real:
+
+- **Se rechaza** fusionar dos fichas que tengan cuenta de acceso (`customer_logins` es único en ambos
+  lados): plegarlas obligaría a descartar una en silencio y alguien perdería el acceso sin enterarse.
+  Cuál sobrevive no es una decisión del motor.
+- **Los candidatos no se detectan por contacto activo compartido.** El índice único parcial sobre
+  `(type, value_normalized) where active` vuelve ese estado inalcanzable, así que agrupar identidades
+  activas no devolvería nada nunca. Las dos señales que sí ocurren son el mismo contacto con un lado
+  desactivado, y el mismo nombre.
+
 ## Audit and events
 
 Required domain events:

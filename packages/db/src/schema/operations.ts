@@ -34,11 +34,20 @@ export const customers = pgTable(
     lastName: text('last_name'),
     internalNotes: text('internal_notes'),
     status: text('status').default('active').notNull(),
+    // Set when this record was merged into another. The row survives as a tombstone rather than
+    // being deleted: an old link, a printed order or an audit entry pointing here must still
+    // resolve to something, and it should say where the customer went.
+    mergedIntoCustomerId: uuid('merged_into_customer_id'),
     ...timestamps,
   },
   (table) => [
     index('customers_display_name_idx').on(table.displayName),
     index('customers_status_idx').on(table.status),
+    foreignKey({
+      columns: [table.mergedIntoCustomerId],
+      foreignColumns: [table.id],
+      name: 'customers_merged_into_fk',
+    }).onDelete('set null'),
   ],
 );
 

@@ -58,6 +58,8 @@ const customerOperationsStubs = {
   cycleLabels: vi.fn(),
   exportCustomers: vi.fn(),
   exportOrdersCsv: vi.fn(),
+  listMergeCandidates: vi.fn(),
+  mergeCustomers: vi.fn(),
   generateProductionSnapshot: vi.fn(),
   getAddressGeocodingRequest: vi.fn(),
   getCustomer: vi.fn(),
@@ -726,7 +728,9 @@ describe('API foundation', () => {
         kitchenSummary: vi.fn(),
         listCustomers: vi.fn(),
         listMenus: vi.fn(),
+        listMergeCandidates: vi.fn(),
         listOrders: vi.fn(),
+        mergeCustomers: vi.fn(),
         publishMenu: vi.fn(),
         transitionOrder: vi.fn(),
       },
@@ -762,7 +766,9 @@ describe('API foundation', () => {
         kitchenSummary: vi.fn(),
         listCustomers: vi.fn(),
         listMenus: vi.fn(),
+        listMergeCandidates: vi.fn(),
         listOrders: vi.fn(),
+        mergeCustomers: vi.fn(),
         publishMenu: vi.fn(),
         transitionOrder: vi.fn(),
       },
@@ -815,7 +821,9 @@ describe('API foundation', () => {
         kitchenSummary: vi.fn(),
         listCustomers: vi.fn(),
         listMenus: vi.fn(),
+        listMergeCandidates: vi.fn(),
         listOrders: vi.fn(),
+        mergeCustomers: vi.fn(),
         publishMenu: vi.fn(),
         trackPublicOrder,
         transitionOrder: vi.fn(),
@@ -856,7 +864,9 @@ describe('API foundation', () => {
         kitchenSummary: vi.fn(),
         listCustomers: vi.fn(),
         listMenus: vi.fn(),
+        listMergeCandidates: vi.fn(),
         listOrders: vi.fn(),
+        mergeCustomers: vi.fn(),
         publishMenu: vi.fn(),
         trackPublicOrder: () => Promise.resolve(null),
         transitionOrder: vi.fn(),
@@ -951,7 +961,9 @@ describe('API foundation', () => {
         kitchenSummary: vi.fn(),
         listCustomers: vi.fn(),
         listMenus: vi.fn(),
+        listMergeCandidates: vi.fn(),
         listOrders: vi.fn(),
+        mergeCustomers: vi.fn(),
         publishMenu: vi.fn(),
         transitionOrder: vi.fn(),
       },
@@ -1029,7 +1041,9 @@ describe('API foundation', () => {
         kitchenSummary: vi.fn(),
         listCustomers: vi.fn(),
         listMenus: vi.fn(),
+        listMergeCandidates: vi.fn(),
         listOrders: vi.fn(),
+        mergeCustomers: vi.fn(),
         publishMenu: vi.fn(),
         transitionOrder: vi.fn(),
       },
@@ -1101,7 +1115,9 @@ describe('API foundation', () => {
           kitchenSummary: vi.fn(),
           listCustomers: vi.fn(),
           listMenus: vi.fn(),
+          listMergeCandidates: vi.fn(),
           listOrders: vi.fn(),
+          mergeCustomers: vi.fn(),
           publishMenu: vi.fn(),
           requestAddressGeocoding,
           transitionOrder: vi.fn(),
@@ -1224,7 +1240,9 @@ describe('API foundation', () => {
           kitchenSummary: vi.fn(),
           listCustomers: vi.fn(),
           listMenus: vi.fn(),
+          listMergeCandidates: vi.fn(),
           listOrders: vi.fn(),
+          mergeCustomers: vi.fn(),
           publishMenu: vi.fn(),
           transitionOrder: vi.fn(),
           ...operationsOverrides,
@@ -3213,7 +3231,9 @@ describe('API foundation', () => {
         logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
         operations: {
           ...customerOperationsStubs,
+          listMergeCandidates: vi.fn(),
           listOrders: vi.fn(),
+          mergeCustomers: vi.fn(),
           ...operationsOverrides,
         } as never,
         sessions: {
@@ -3366,6 +3386,148 @@ describe('API foundation', () => {
       expect(response.status).toBe(200);
       expect(response.headers.get('set-cookie')).toContain('verdeo_session=');
       expect(exchange).toHaveBeenCalledWith('supabase-access-token', expect.any(String));
+    });
+  });
+
+  describe('customer merge', () => {
+    const SURVIVOR = '20000000-0000-4000-8000-000000000001';
+    const MERGED = '20000000-0000-4000-8000-000000000002';
+    const cookie = 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars';
+
+    function buildApp(operationsOverrides: Record<string, unknown>, permissions: string[]) {
+      return createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        geography: singleSiteGeography,
+        operations: {
+          ...customerOperationsStubs,
+          createCustomer: vi.fn(),
+          createMenu: vi.fn(),
+          distributeMenu: vi.fn(),
+          createOrder: vi.fn(),
+          createPublicOrder: vi.fn(),
+          currentPublishedMenu: vi.fn(),
+          kitchenSummary: vi.fn(),
+          listCustomers: vi.fn(),
+          listMenus: vi.fn(),
+          listMergeCandidates: vi.fn(),
+          listOrders: vi.fn(),
+          mergeCustomers: vi.fn(),
+          publishMenu: vi.fn(),
+          transitionOrder: vi.fn(),
+          ...operationsOverrides,
+        },
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            Promise.resolve({
+              expiresAt: new Date('2026-08-20T12:00:00.000Z'),
+              permissions,
+              sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+            }),
+        },
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+    }
+
+    it('lists candidates for customers.merge and denies without it', async () => {
+      const listMergeCandidates = vi.fn(() =>
+        Promise.resolve([
+          {
+            customerIds: [SURVIVOR, MERGED],
+            customerNames: ['Camila Rojas', 'Camila R.'],
+            reason: 'same-name',
+            value: 'Camila Rojas',
+          },
+        ]),
+      );
+
+      const allowed = await buildApp({ listMergeCandidates }, ['customers.merge']).request(
+        '/api/v1/customers/merge-candidates',
+        { headers: { cookie } },
+      );
+      expect(allowed.status).toBe(200);
+      expect(await allowed.json()).toMatchObject({ items: [{ reason: 'same-name' }] });
+
+      const denied = await buildApp({ listMergeCandidates }, ['customers.read']).request(
+        '/api/v1/customers/merge-candidates',
+        { headers: { cookie } },
+      );
+      expect(denied.status).toBe(403);
+    });
+
+    /**
+     * The literal segment is registered before `/customers/:id`; if that order ever regresses the
+     * router reads "merge-candidates" as an id and this returns the wrong handler's error.
+     */
+    it('does not read merge-candidates as a customer id', async () => {
+      const getCustomer = vi.fn();
+      const listMergeCandidates = vi.fn(() => Promise.resolve([]));
+      const response = await buildApp({ getCustomer, listMergeCandidates }, [
+        'customers.merge',
+        'customers.read',
+      ]).request('/api/v1/customers/merge-candidates', { headers: { cookie } });
+
+      expect(response.status).toBe(200);
+      expect(getCustomer).not.toHaveBeenCalled();
+    });
+
+    it('merges with customers.merge plus view_sensitive, and denies with only one', async () => {
+      const mergeCustomers = vi.fn(() =>
+        Promise.resolve({
+          movedAddresses: 1,
+          movedIdentities: 2,
+          movedOrders: 3,
+          retiredIdentities: 0,
+          survivorId: SURVIVOR,
+        }),
+      );
+      const body = JSON.stringify({ mergedId: MERGED, survivorId: SURVIVOR });
+
+      const response = await buildApp({ mergeCustomers }, [
+        'customers.merge',
+        'customers.view_sensitive',
+      ]).request('/api/v1/customers/merge', {
+        body,
+        headers: { 'content-type': 'application/json', cookie },
+        method: 'POST',
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ movedOrders: 3, survivorId: SURVIVOR });
+      expect(mergeCustomers).toHaveBeenCalledWith(
+        { mergedId: MERGED, survivorId: SURVIVOR },
+        expect.objectContaining({ actorUserId: '55276601-ec66-4f63-9f2f-edf73904ede0' }),
+      );
+
+      // Merging without being allowed to read the contacts would be choosing a survivor blind.
+      const denied = await buildApp({ mergeCustomers }, ['customers.merge']).request(
+        '/api/v1/customers/merge',
+        { body, headers: { 'content-type': 'application/json', cookie }, method: 'POST' },
+      );
+      expect(denied.status).toBe(403);
+    });
+
+    it('answers a refused merge with 409 rather than a 500', async () => {
+      const refusal = new Error('Los dos clientes tienen una cuenta de acceso.');
+      refusal.name = 'CustomerMergeError';
+      const mergeCustomers = vi.fn(() => Promise.reject(refusal));
+
+      const response = await buildApp({ mergeCustomers }, [
+        'customers.merge',
+        'customers.view_sensitive',
+      ]).request('/api/v1/customers/merge', {
+        body: JSON.stringify({ mergedId: MERGED, survivorId: SURVIVOR }),
+        headers: { 'content-type': 'application/json', cookie },
+        method: 'POST',
+      });
+
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({ error: { code: 'CONFLICT' } });
     });
   });
 });

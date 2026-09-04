@@ -4007,3 +4007,79 @@ main .operation-card {
   font-weight: 600;
   cursor: pointer;
 }
+
+/* Merge dialog. The candidate list is a suggestion, not a verdict: two real customers can share a
+   name, so both records stay visible with their own explicit "keep"/"merge" choice. */
+.crm-dialog-heading {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 0.9rem;
+}
+.crm-dialog-heading p {
+  margin-top: 0.35rem;
+  color: var(--db-muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+.crm-dialog-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+.crm-merge-candidates {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0.9rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.crm-merge-candidates > li {
+  border: 1px solid var(--db-border-soft);
+  border-radius: 0.6rem;
+  padding: 0.65rem 0.75rem;
+}
+.crm-merge-candidate-title {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  color: var(--db-text);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.crm-merge-candidate-people {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+.crm-merge-candidate-people > div {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+}
+.crm-merge-selection {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+.crm-merge-selection label {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--db-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.crm-merge-selection input {
+  border: 1px solid var(--db-border);
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  background: var(--db-surface);
+  color: var(--db-text);
+  font-size: 0.78rem;
+}

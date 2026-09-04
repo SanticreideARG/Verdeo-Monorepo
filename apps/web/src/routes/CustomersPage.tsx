@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { AddressMap } from '../components/AddressMap.js';
 import { CustomerExportDialog } from '../components/CustomerExportDialog.js';
+import { MergeCustomersDialog } from '../components/MergeCustomersDialog.js';
 import { DraftNotice } from '../components/DraftNotice.js';
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { BrandLoading } from '../components/BrandLoading.js';
@@ -68,6 +69,7 @@ export function CustomersPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  const [showMerge, setShowMerge] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const createFormRef = useRef<HTMLFormElement>(null);
@@ -517,6 +519,10 @@ export function CustomersPage() {
   const canEdit =
     profile.permissions.includes('customers.edit') &&
     profile.permissions.includes('customers.view_sensitive');
+  // Same pair the API demands: choosing a survivor means reading both records' contacts.
+  const canMerge =
+    profile.permissions.includes('customers.merge') &&
+    profile.permissions.includes('customers.view_sensitive');
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
@@ -531,6 +537,11 @@ export function CustomersPage() {
             <button className="button button-secondary" onClick={() => setShowExport(true)}>
               Exportar a Excel
             </button>
+            {canMerge ? (
+              <button className="button button-secondary" onClick={() => setShowMerge(true)}>
+                Fusionar duplicados
+              </button>
+            ) : null}
             {canCreate ? (
               <button className="button button-primary" onClick={() => setShowCreate(true)}>
                 Nuevo cliente
@@ -1097,6 +1108,13 @@ export function CustomersPage() {
 
         {showExport ? (
           <CustomerExportDialog onClose={() => setShowExport(false)} search={search} />
+        ) : null}
+
+        {showMerge ? (
+          <MergeCustomersDialog
+            onClose={() => setShowMerge(false)}
+            onMerged={() => void loadDirectory(search)}
+          />
         ) : null}
 
         {showImport ? (

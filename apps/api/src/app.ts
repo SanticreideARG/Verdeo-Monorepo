@@ -54,6 +54,8 @@ import {
   CustomerIdentityUpdateRequestSchema,
   CustomerImportResponseSchema,
   CustomerListResponseSchema,
+  CustomerMergeRequestSchema,
+  CustomerMergeResultSchema,
   CustomerSelfAddressSchema,
   CustomerSelfAddressUpdateSchema,
   CustomerSelfAddressWriteSchema,
@@ -109,6 +111,7 @@ import {
   MenuDistributionResponseSchema,
   MenuListResponseSchema,
   MenuPricesUpdateRequestSchema,
+  MergeCandidateListResponseSchema,
   MessageTemplateListResponseSchema,
   MessageTemplateSchema,
   MessageTemplateUpsertRequestSchema,
@@ -527,6 +530,11 @@ interface OperationsEngine {
     customerId: string,
     addressId: string,
     input: CustomerAddressUpdateRequest,
+    context: OperationsContext,
+  ): Promise<unknown>;
+  listMergeCandidates(limit: number): Promise<unknown>;
+  mergeCustomers(
+    input: { mergedId: string; survivorId: string },
     context: OperationsContext,
   ): Promise<unknown>;
   updateCustomerIdentity(
@@ -2693,6 +2701,14 @@ export function createApp(options: CreateAppOptions) {
     return context.json(ChatPurgeResponseSchema.parse(contractValue(result)));
   });
 
+  // Registered before `/customers/:id` on purpose: a literal segment must not be read as an id.
+  app.get('/api/v1/customers/merge-candidates', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (!permissions.includes('customers.merge')) return forbidden(context);
+    const items = await requireOperations().listMergeCandidates(50);
+    return context.json(MergeCandidateListResponseSchema.parse(contractValue({ items })));
+  });
+
   app.get('/api/v1/customers', async (context) => {
     const session = context.get('session');
     if (!session.permissions.includes('customers.read')) return forbidden(context);
@@ -2888,6 +2904,21 @@ export function createApp(options: CreateAppOptions) {
       operationsContext(context),
     );
     return context.json(CustomerIdentitySchema.parse(contractValue(identity)));
+  });
+
+  app.post('/api/v1/customers/merge', async (context) => {
+    const permissions = context.get('session').permissions;
+    // Sensitive data too: the operator has to see both records' contacts to choose correctly.
+    if (
+      !permissions.includes('customers.merge') ||
+      !permissions.includes('customers.view_sensitive')
+    )
+      return forbidden(context);
+    const input = CustomerMergeRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success)
+      return badRequest(context, 'Revisá los clientes a fusionar.', input.error.issues);
+    const result = await requireOperations().mergeCustomers(input.data, operationsContext(context));
+    return context.json(CustomerMergeResultSchema.parse(contractValue(result)));
   });
 
   app.post('/api/v1/customers/:id/addresses', async (context) => {
@@ -4681,6 +4712,7 @@ export function createApp(options: CreateAppOptions) {
       error.name === 'ChatConflictError' ||
       error.name === 'OrderRuleError' ||
       error.name === 'CustomerRuleError' ||
+      error.name === 'CustomerMergeError' ||
       error.name === 'AIConfigurationUnavailableError' ||
       error.name === 'DeliveryConflictError' ||
       error.name === 'PaymentsConflictError' ||
