@@ -151,3 +151,43 @@ Dos decisiones que conviene no deshacer:
 El mínimo de 12 caracteres es el mismo de `LoginRequestSchema`, y no es cosmético: una más corta se
 guardaría bien y después no serviría para entrar — exactamente la cuenta imposible de depurar que
 este flujo existe para evitar.
+
+## Celular y PWA (as built)
+
+**Los puntos de quiebre del shell viven al final de `styles.css`, y ahí tienen que quedarse.**
+Estaban repartidos en dos grupos, uno antes y otro después del bloque "Neon-inspired density pass",
+que redeclara los mismos selectores sin media query: con igual especificidad ganaba el de abajo, así
+que la regla que colapsa el hero a una columna nunca se aplicaba. Si se agrega otra capa de estilos,
+va **antes** de esa sección.
+
+En pantallas de hasta 680px:
+
+- **el hero se esconde**, queda sólo la tarjeta de sprint a ancho completo. Es una frase de
+  bienvenida: en escritorio adorna, en un teléfono empuja el trabajo abajo del pliegue;
+- **la barra superior queda con lo que se usa a cada rato**: menú, ciudad y perfil. La ciudad no se
+  saca por ADR-031 — determina qué pedidos, qué menú y qué rutas se ven;
+- **estado, calendario y apariencia bajan al cajón**. Se mueve el nodo, no se duplica: se decide con
+  `useNarrowViewport()` y no con CSS, porque CSS puede esconder pero no cambiar de padre, y una
+  segunda copia de `PresenceControl` significaría el doble de latidos contra la API;
+- **barra inferior con las cuatro pantallas del turno** (Pedidos, Cocina, Rutas, Chat) más "Más",
+  que abre el mismo cajón. Abajo porque es donde llega el pulgar, y 56px de alto útil porque por
+  debajo de eso el dedo empieza a errar;
+- **los widgets muestran el número primero** y la etiqueta debajo — se miran de reojo, no se leen —
+  y **los que no tienen datos se esconden**, porque una tarjeta entera para no decir nada es peor
+  que nada.
+
+### PWA
+
+`vite-plugin-pwa` genera el service worker, que era **la única pieza que faltaba**: Android Chrome no
+ofrece instalar una app que no tenga uno. El manifiesto sigue siendo `public/site.webmanifest`
+escrito a mano, y el plugin va con `manifest: false` a propósito — dejar que genere otro daría dos
+manifiestos compitiendo por el mismo `<link>`. `start_url` apunta a `/app` y hay atajos a la hoja de
+ruta y a tomar un pedido.
+
+**No se cachea nada de la API.** Guardar respuestas serviría un pedido cancelado como si siguiera
+activo, y quién ve qué dato viejo es una decisión de negocio, no una opción de build. El offline real
+—la hoja de ruta del repartidor, con su fecha a la vista— queda para después del piloto.
+
+**Pendiente de diseño:** un ícono *maskable*. El actual es un círculo casi a sangre, así que
+declararlo como tal haría que Android le recorte el anillo verde con su propia máscara. Hace falta
+una versión con el logo al 80% dentro del lienzo.

@@ -1,9 +1,12 @@
 {
+  "id": "/app",
   "name": "Verdeo SCA",
   "short_name": "Verdeo",
   "description": "Pedidos y operación semanal de Verdeo.",
-  "start_url": "/",
+  "start_url": "/app",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#f5f2e8",
   "theme_color": "#174c3c",
   "icons": [
@@ -18,6 +21,20 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Hoja de ruta",
+      "short_name": "Reparto",
+      "description": "La ruta del día para entregar.",
+      "url": "/delivery"
+    },
+    {
+      "name": "Tomar un pedido",
+      "short_name": "Pedido",
+      "description": "Cargar y confirmar un pedido nuevo.",
+      "url": "/app/pedidos/nuevo"
     }
   ]
 }

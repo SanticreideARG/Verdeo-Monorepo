@@ -33,11 +33,18 @@ function Stat({
   label: string;
   value: number | string;
 }) {
+  /*
+   * El número va primero y grande, la etiqueta debajo. En un teléfono un widget se mira de reojo,
+   * no se lee: lo que tiene que saltar es el 11, no la palabra "sin confirmar".
+   *
+   * `data-empty` marca el widget que no tiene nada que decir. En escritorio sobra lugar y puede
+   * quedarse; en celular ocupa una tarjeta entera para no informar nada, así que se esconde.
+   */
   return (
     <>
-      <div>
-        <small>{label}</small>
+      <div data-empty={value === '—' ? 'true' : undefined}>
         <strong>{value}</strong>
+        <small>{label}</small>
       </div>
       <em>{caption}</em>
     </>

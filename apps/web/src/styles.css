@@ -4316,12 +4316,10 @@ main .operation-card {
     height: 56px;
     padding: 0 1rem;
   }
-  /* Lo que se saca de la barra por falta de lugar. `appearance-menu` reemplazó a `dashboard-themes`
-     al agrupar tema, fuente y tamaño de letra: la regla vieja nombraba la clase anterior y el botón
-     nuevo quedó sumando un control a una barra que ya no entraba. */
+  /* Lo que se saca de la barra por falta de lugar. El botón de apariencia no se esconde acá: en
+     pantalla angosta React lo monta dentro del cajón, no en la barra. */
   .dashboard-topbar-welcome span,
-  .dashboard-clock,
-  .appearance-menu {
+  .dashboard-clock {
     display: none;
   }
   .dashboard-content {
@@ -4344,4 +4342,118 @@ main .operation-card {
   .dashboard-module-card {
     min-height: 210px;
   }
+}
+
+/* Controles secundarios cuando bajan al cajón: en fila, separados del bloque de navegación. */
+.dashboard-drawer-tools {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0.75rem 0.85rem 0;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--db-border-soft);
+}
+
+/* El número y la etiqueta del widget se apilan. Sin esto quedan en el mismo renglón —`small` y
+   `strong` son inline por defecto— y se lee "SIN CONFIRMAR11". */
+.widget small,
+.widget strong {
+  display: block;
+}
+.widget strong {
+  line-height: 1;
+}
+.widget small {
+  margin-top: 0.2rem;
+}
+
+@media (max-width: 680px) {
+  /* El hero es una frase de bienvenida: en escritorio adorna, en un teléfono empuja el trabajo
+     abajo del pliegue. Queda sólo la tarjeta de sprint, a ancho completo. */
+  .dashboard-hero > div:first-child {
+    display: none;
+  }
+  .dashboard-hero {
+    margin-top: 0.25rem;
+  }
+  /* Un widget sin datos ocupa una tarjeta entera para no decir nada. */
+  .widget:has(> [data-empty]) {
+    display: none;
+  }
+  .widget strong {
+    font-size: 2rem;
+  }
+}
+
+/* Barra inferior del teléfono. Abajo y no arriba porque es donde llega el pulgar; fija porque su
+   razón de ser es volver a estas cuatro pantallas sin tener que subir hasta el menú. */
+.dashboard-bottom-nav {
+  position: fixed;
+  z-index: 44;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: none;
+  align-items: stretch;
+  border-top: 1px solid var(--db-border);
+  background: var(--db-surface-solid);
+  /* Respeta la franja del gesto de inicio en los teléfonos que la tienen. */
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.dashboard-bottom-nav > a,
+.dashboard-bottom-nav > button {
+  position: relative;
+  display: grid;
+  flex: 1;
+  gap: 0.15rem;
+  justify-items: center;
+  /* 56px de alto útil: por debajo de eso el dedo empieza a errar. */
+  min-height: 56px;
+  padding: 0.5rem 0.2rem;
+  border: 0;
+  background: none;
+  color: var(--db-muted);
+  font: inherit;
+  font-size: 0.64rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.dashboard-bottom-nav svg {
+  width: 21px;
+  height: 21px;
+}
+.dashboard-bottom-nav > a[aria-current='page'] {
+  color: var(--db-accent);
+}
+.dashboard-bottom-nav .nav-badge {
+  position: absolute;
+  top: 0.3rem;
+  left: 55%;
+}
+
+@media (max-width: 680px) {
+  .dashboard-bottom-nav {
+    display: flex;
+  }
+  /* Que la barra no tape el final del contenido. */
+  .dashboard-content {
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Al pie del cajón, el panel de apariencia tiene que abrir hacia arriba: hacia abajo se saldría
+   de la pantalla y quedaría inalcanzable. */
+.dashboard-drawer-tools .appearance-panel {
+  /* Anclado al viewport y no al botón: el cajón mide 244px y el panel casi 300, así que
+     posicionado contra el botón se saldría por la derecha y las últimas opciones quedarían fuera. */
+  position: fixed;
+  top: auto;
+  right: 0.5rem;
+  bottom: 5.5rem;
+  left: 0.5rem;
+  width: auto;
+  max-height: calc(100vh - 9rem);
+  overflow-y: auto;
 }

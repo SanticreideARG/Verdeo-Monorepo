@@ -194,6 +194,40 @@ function known(value: string | null | undefined, allowed: Set<string>, fallback:
 }
 
 /**
+ * Si la pantalla es angosta, para decidir **dónde se monta** un control y no sólo cómo se ve.
+ *
+ * Con CSS alcanzaría para esconderlo, pero no para moverlo de la barra al cajón: son dos padres
+ * distintos. Y montarlo dos veces no es opción — `PresenceControl` late contra la API en intervalo,
+ * así que dos copias serían el doble de tráfico por nada.
+ */
+function useNarrowViewport(): boolean {
+  const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width: 680px)').matches);
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 680px)');
+    const update = (event: MediaQueryListEvent) => setNarrow(event.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
+  return narrow;
+}
+
+/**
+ * Las cuatro pantallas de un turno, para la barra inferior del teléfono.
+ *
+ * No son las cuatro "más importantes" en abstracto: son a las que se vuelve una y otra vez durante
+ * el día. Configurar la semana o repartir permisos importan más y no están acá, porque se hacen una
+ * vez y desde un escritorio. Lo que no entra se alcanza por "Más", que abre el mismo cajón.
+ */
+const shiftNavigation: readonly NavigationItem[] = [
+  { href: '/app/pedidos/nuevo', icon: 'ordersNew', label: 'Pedidos', permission: 'orders.read' },
+  { href: '/app/cocina', icon: 'kitchen', label: 'Cocina', permission: 'production.read' },
+  { href: '/app/reparto/rutas', icon: 'delivery', label: 'Rutas', permission: 'routes.read' },
+  { href: '/app/chat', icon: 'chat', label: 'Chat', permission: 'chat.use' },
+];
+
+/**
  * The count that belongs on a nav item, or nothing.
  *
  * Deliberately only two: orders nobody has confirmed, and unread chat. A badge on every entry is a
@@ -375,6 +409,7 @@ export function DashboardShell({
   profile: DashboardProfile;
 }) {
   const location = useLocation();
+  const narrow = useNarrowViewport();
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingOrders, setPendingOrders] = useState(0);
   const [unreadChat, setUnreadChat] = useState(0);
@@ -600,6 +635,59 @@ export function DashboardShell({
     scope?.sites[0]?.displayName ??
     null;
 
+  /**
+   * Estado, calendario y apariencia: tres controles que se tocan una vez por día o menos, y que en
+   * escritorio viven en la barra. En un teléfono la barra sólo tiene lugar para lo que se usa a cada
+   * rato — el menú y la ciudad — así que estos bajan al cajón. Es el mismo nodo montado en otro
+   * padre, no una segunda copia.
+   */
+  const secondaryTools = (
+    <>
+      <PresenceControl enabled={profile.permissions.includes('chat.use')} />
+      {profile.permissions.includes('calendar.use') ? (
+        <Link
+          aria-label="Calendario"
+          className="dashboard-topbar-icon"
+          title="Calendario"
+          to="/app/calendario"
+        >
+          <svg
+            aria-hidden="true"
+            fill="none"
+            height="18"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.8"
+            viewBox="0 0 24 24"
+            width="18"
+          >
+            <rect x="3" y="5" width="18" height="16" rx="2" />
+            <path d="M3 10h18M8 3v4M16 3v4" />
+          </svg>
+        </Link>
+      ) : null}
+      <AppearanceMenu
+        font={uiFont}
+        onFont={(value) => {
+          setUiFont(value);
+          saveAppearance({ fontKey: value });
+        }}
+        onScale={(value) => {
+          setTextScale(value);
+          saveAppearance({ textScale: value });
+        }}
+        onTheme={(value) => {
+          setTheme(value);
+          saveAppearance({ theme: value });
+        }}
+        scale={textScale}
+        theme={theme}
+        themes={themes}
+      />
+    </>
+  );
+
   return (
     <div
       className={`dashboard-shell ${sidebarCollapsed ? 'has-collapsed-sidebar' : ''}`}
@@ -689,6 +777,8 @@ export function DashboardShell({
           <span>Contraer menú</span>
         </button>
 
+        {narrow ? <div className="dashboard-drawer-tools">{secondaryTools}</div> : null}
+
         <div className="dashboard-sidebar-footer">
           <Link className="dashboard-sidebar-user" to="/app/perfil">
             {profile.user.avatarUrl ? (
@@ -742,30 +832,7 @@ export function DashboardShell({
             <strong>{profile.user.displayName}</strong>
           </div>
           <div className="dashboard-topbar-tools">
-            <PresenceControl enabled={profile.permissions.includes('chat.use')} />
-            {profile.permissions.includes('calendar.use') ? (
-              <Link
-                aria-label="Calendario"
-                className="dashboard-topbar-icon"
-                title="Calendario"
-                to="/app/calendario"
-              >
-                <svg
-                  aria-hidden="true"
-                  fill="none"
-                  height="18"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="1.8"
-                  viewBox="0 0 24 24"
-                  width="18"
-                >
-                  <rect x="3" y="5" width="18" height="16" rx="2" />
-                  <path d="M3 10h18M8 3v4M16 3v4" />
-                </svg>
-              </Link>
-            ) : null}
+            {narrow ? null : secondaryTools}
             {scope && (scope.sites.length > 0 || scope.canSelectGlobal) ? (
               <label className="dashboard-scope">
                 <span>Ciudad</span>
@@ -784,24 +851,6 @@ export function DashboardShell({
                 </select>
               </label>
             ) : null}
-            <AppearanceMenu
-              font={uiFont}
-              onFont={(value) => {
-                setUiFont(value);
-                saveAppearance({ fontKey: value });
-              }}
-              onScale={(value) => {
-                setTextScale(value);
-                saveAppearance({ textScale: value });
-              }}
-              onTheme={(value) => {
-                setTheme(value);
-                saveAppearance({ theme: value });
-              }}
-              scale={textScale}
-              theme={theme}
-              themes={themes}
-            />
             <WeatherWidget cityName={weatherCityName} />
             <div className="dashboard-clock">
               <span>{timeLabel}</span>
@@ -819,6 +868,27 @@ export function DashboardShell({
         </header>
         <RequestProgressBar />
         <main className="dashboard-content">{children}</main>
+        {narrow ? (
+          <nav aria-label="Accesos del turno" className="dashboard-bottom-nav">
+            {shiftNavigation
+              .filter((item) => !item.permission || profile.permissions.includes(item.permission))
+              .map((item) => (
+                <Link
+                  aria-current={location.pathname === item.href ? 'page' : undefined}
+                  key={item.href}
+                  to={item.href}
+                >
+                  <NavIcon name={item.icon} />
+                  <span>{item.label}</span>
+                  {navBadge(item.href, pendingOrders, unreadChat)}
+                </Link>
+              ))}
+            <button aria-label="Más secciones" onClick={() => setMenuOpen(true)} type="button">
+              <NavIcon name="settings" />
+              <span>Más</span>
+            </button>
+          </nav>
+        ) : null}
       </div>
       <ToastHost />
     </div>
