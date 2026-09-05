@@ -207,10 +207,11 @@ export function OrderDetailPage() {
           <div>
             <p className="dashboard-kicker">Pedidos</p>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold text-forest">{order.publicNumber}</h1>
+              <h1 className="text-2xl font-semibold text-forest">{order.customer.displayName}</h1>
               <span className="status-chip">{orderStatusLabel(order.status)}</span>
             </div>
-            <p className="mt-2 text-sm text-ink-muted">{order.customer.displayName}</p>
+            {/* El número queda a mano —es lo que se dicta por teléfono— pero sin encabezar. */}
+            <p className="order-card-meta mt-2">{order.publicNumber}</p>
           </div>
           <Link className="button button-secondary" to="/app/pedidos">
             Volver a Ver pedidos

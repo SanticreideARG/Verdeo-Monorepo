@@ -136,23 +136,25 @@ export function OrdersPage() {
           <div className="mt-6 grid gap-3">
             {orders.map((order) => (
               <Link className="operation-card block" key={order.id} to={`/app/pedidos/${order.id}`}>
+                {/* Quien lee esta lista busca una persona y un pedido, no un código. El número
+                    sigue estando porque es lo que se dice por teléfono, pero abajo y en gris. */}
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <strong className="text-xl text-forest">{order.publicNumber}</strong>
+                    <strong className="text-xl text-forest">{order.customer.displayName}</strong>
                     <span className="status-chip">{orderStatusLabel(order.status)}</span>
                   </div>
                   <p className="font-semibold">{formatMoney(order.totalMinor, order.currency)}</p>
                 </div>
-                <p className="mt-2 text-sm text-ink-muted">
-                  {order.customer.displayName} ·{' '}
-                  {new Intl.DateTimeFormat('es-AR').format(new Date(order.deliveryDate))}
-                </p>
-                <p className="mt-1 text-sm text-ink-muted">
+                <p className="mt-2 font-medium">
                   {order.items
                     .map(
                       (item) => `${item.productName} ${item.variantName} × ${item.quantityUnits}`,
                     )
                     .join(', ')}
+                </p>
+                <p className="order-card-meta mt-1">
+                  <span>{order.publicNumber}</span> ·{' '}
+                  {new Intl.DateTimeFormat('es-AR').format(new Date(order.deliveryDate))}
                 </p>
               </Link>
             ))}

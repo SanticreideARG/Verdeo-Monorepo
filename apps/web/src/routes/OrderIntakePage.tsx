@@ -30,6 +30,21 @@ function dateLabel(iso: string): string {
   return new Intl.DateTimeFormat('es-AR', { dateStyle: 'long' }).format(new Date(dateOnly(iso)));
 }
 
+/**
+ * Cómo se llama cada campo para una persona.
+ *
+ * Un aviso que dice "deliveryAddress" no ayuda a nadie. Se declara acá y no se lee del DOM porque
+ * la etiqueta de un `select` incluye su valor y saldría "Pago esperado Transferencia".
+ */
+const FIELD_LABELS: Record<string, string> = {
+  deliveryAddress: 'la dirección de entrega',
+  menuId: 'el período',
+  newCustomerDisplayName: 'el nombre del cliente nuevo',
+  offeringId: 'la variedad',
+  paymentExpectation: 'el pago esperado',
+  quantityUnits: 'las unidades',
+};
+
 function formText(form: FormData, key: string): string {
   const value = form.get(key);
   return typeof value === 'string' ? value : '';
@@ -163,7 +178,40 @@ export function OrderIntakePage() {
 
   async function createOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
+
+    /*
+     * La validación la reporta la pantalla, no el navegador.
+     *
+     * El formulario lleva `noValidate` justamente para llegar hasta acá: con la validación nativa,
+     * el navegador cortaba el envío antes de ejecutar nada y mostraba su globo sobre el primer
+     * campo vacío. En un formulario de esta altura ese campo suele estar fuera de la pantalla —y en
+     * un teléfono, encima, el globo se va solo—, así que apretar "Registrar borrador" no parecía
+     * hacer nada. Los `required` se conservan porque siguen sirviendo para los lectores de
+     * pantalla; lo que cambia es quién avisa.
+     */
+    const missing = [...formEl.elements].filter(
+      (element): element is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement =>
+        (element instanceof HTMLInputElement ||
+          element instanceof HTMLSelectElement ||
+          element instanceof HTMLTextAreaElement) &&
+        element.willValidate &&
+        !element.checkValidity(),
+    );
+    if (missing.length > 0) {
+      const names = missing.map((element) => FIELD_LABELS[element.name] ?? 'un dato');
+      setMessage(
+        names.length === 1
+          ? `Falta completar: ${names[0]}.`
+          : `Faltan completar: ${[...new Set(names)].join(', ')}.`,
+      );
+      // Llevar la vista al primero: el mensaje dice qué falta, esto dice dónde.
+      missing[0]?.scrollIntoView({ block: 'center' });
+      missing[0]?.focus({ preventScroll: true });
+      return;
+    }
+
     if (selectedOffering?.composable && selectedDishes.length !== 5) {
       setMessage('Elegí exactamente cinco platos para el Intuitivo.');
       return;
@@ -273,6 +321,9 @@ export function OrderIntakePage() {
         {formOpen && permissions.includes('orders.create') ? (
           <form
             className="operation-card mt-6 max-w-3xl"
+            // El navegador no reporta: cortaba el envío y mostraba su globo sobre un campo que en
+            // este formulario suele estar fuera de la pantalla. Lo reporta createOrder.
+            noValidate
             onSubmit={(event) => void createOrder(event)}
             ref={formRef}
           >
@@ -468,6 +519,30 @@ export function OrderIntakePage() {
                 />
               </div>
             ) : null}
+
+            {/*
+             * El estado de la regla, al lado del botón y contando en vivo.
+             *
+             * El aviso de "elegí exactamente cinco" se dibuja arriba de todo el formulario, a
+             * doscientas líneas de acá: en un teléfono, con la lista de platos abierta, apretar
+             * "Registrar borrador" parecía no hacer nada porque el mensaje aparecía fuera de la
+             * pantalla. Contar antes de apretar evita llegar a ese punto.
+             */}
+            {selectedOffering?.composable ? (
+              <p className={`intake-rule mt-3 ${selectedDishes.length === 5 ? 'is-ready' : ''}`}>
+                {selectedDishes.length === 5
+                  ? 'Cinco platos elegidos. Ya podés registrar el borrador.'
+                  : `Elegiste ${selectedDishes.length} de 5 platos.`}
+              </p>
+            ) : null}
+
+            {/* El mismo mensaje que arriba, acá abajo, donde está el dedo cuando algo falla. */}
+            {message ? (
+              <p className="intake-rule intake-rule-alert mt-3" role="alert">
+                {message}
+              </p>
+            ) : null}
+
             <div className="form-actions mt-4">
               <button className="button button-primary" type="submit">
                 Registrar borrador
@@ -502,12 +577,11 @@ export function OrderIntakePage() {
                     className="text-xl font-semibold text-forest"
                     to={`/app/pedidos/${order.id}`}
                   >
-                    {order.publicNumber}
+                    {order.customer.displayName}
                   </Link>
                   <span className="status-chip">{orderStatusLabel(order.status)}</span>
                 </div>
-                <p className="mt-2 text-sm text-ink-muted">
-                  {order.customer.displayName} ·{' '}
+                <p className="mt-2 font-medium">
                   {order.items
                     .map(
                       (item) => `${item.productName} ${item.variantName} × ${item.quantityUnits}`,
@@ -517,6 +591,7 @@ export function OrderIntakePage() {
                 <p className="mt-1 text-sm font-semibold">
                   {formatMoney(order.totalMinor, order.currency)}
                 </p>
+                <p className="order-card-meta mt-1">{order.publicNumber}</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {order.status === 'DRAFT' && permissions.includes('orders.confirm') ? (

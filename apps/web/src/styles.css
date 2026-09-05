@@ -4982,3 +4982,37 @@ main .operation-card {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* El código de pedido y la fecha, en tercer plano.
+   Sigue estando porque es lo que se dicta por teléfono y lo que busca un cliente en el seguimiento,
+   pero quien lee la lista busca una persona y un pedido: el código es la referencia, no el título. */
+.order-card-meta {
+  margin: 0;
+  color: var(--db-muted-2, var(--color-ink-muted));
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+}
+.order-card-meta span {
+  font-weight: 600;
+}
+
+/* Estado de la regla del Intuitivo, junto al botón. Un aviso que aparece fuera de la pantalla es,
+   para quien lo necesita, lo mismo que ningún aviso. */
+.intake-rule {
+  margin: 0;
+  border-radius: 0.55rem;
+  padding: 0.5rem 0.75rem;
+  background: color-mix(in srgb, var(--db-muted-2, #999) 12%, transparent);
+  color: var(--db-text-soft, var(--color-ink-muted));
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.intake-rule.is-ready {
+  background: color-mix(in srgb, var(--db-accent, #3a7d44) 16%, transparent);
+  color: var(--db-text, var(--color-forest));
+}
+.intake-rule-alert {
+  background: color-mix(in srgb, #c0392b 14%, transparent);
+  color: #c0392b;
+}
