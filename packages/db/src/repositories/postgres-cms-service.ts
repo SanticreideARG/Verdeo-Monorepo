@@ -199,7 +199,7 @@ export class PostgresCmsService {
         .from(pageRevisions)
         .where(eq(pageRevisions.pageId, page.id));
 
-      const [created] = await transaction
+      const [inserted] = await transaction
         .insert(pageRevisions)
         .values({
           createdByUserId: context.actorUserId ?? null,
@@ -207,8 +207,17 @@ export class PostgresCmsService {
           revision: (aggregate?.nextRevision ?? 0) + 1,
           sections: [...sections],
         })
-        .returning(revisionColumns);
-      if (!created) throw new Error('Revision insert returned no row');
+        .returning({ id: pageRevisions.id });
+      if (!inserted) throw new Error('Revision insert returned no row');
+
+      /*
+       * Se relee con `loadRevision` en vez de devolver lo que dio el insert, porque `returning` no
+       * puede hacer el join con `users` y el contrato exige `createdByDisplayName` — nullable, pero
+       * presente. Sin él, la respuesta no valida y el guardado terminaba en 500 aunque la revisión
+       * ya estuviera escrita: el borrador se guardaba y la pantalla decía que no.
+       */
+      const created = await this.loadRevision(transaction, inserted.id);
+      if (!created) throw new Error('Revision disappeared right after insert');
 
       const audit = new AuditService(new PostgresAuditSink(transaction));
       await audit.record({

@@ -99,6 +99,22 @@ describe('cms: drafts and publishing', () => {
     expect(detail?.published?.sections).toEqual([]);
   });
 
+  /**
+   * `PageRevisionSchema` exige `createdByDisplayName` — nullable, pero presente — y la ruta valida
+   * la respuesta antes de devolverla. `saveDraft` devolvía lo que daba el `returning` del insert,
+   * que no puede hacer el join con `users`, así que la clave faltaba: la revisión quedaba escrita y
+   * el guardado respondía 500. Guardar la landing fallaba a la vista aunque hubiera funcionado.
+   */
+  it('returns the author with the saved draft, as the response contract requires', async () => {
+    const cms = await service();
+    await cms.createPage({ slug: 'home', title: 'Inicio' }, context);
+
+    const draft = await cms.saveDraft('home', [heroSection], context);
+
+    expect(draft).toHaveProperty('createdByDisplayName');
+    expect(draft.sections).toEqual([heroSection]);
+  });
+
   it('publishing moves the pointer without creating a new revision', async () => {
     const cms = await service();
     await cms.createPage({ slug: 'home', title: 'Inicio' }, context);
