@@ -448,9 +448,39 @@ export const MenuCreateRequestSchema = z
         'Las variedades fijas necesitan exactamente cinco platos; el menú personalizado no define platos propios.',
     },
   )
-  .refine((value) => value.offerings.filter((offering) => offering.composable).length <= 1, {
-    message: 'Solo puede haber un menú personalizado (Intuitivo) por semana.',
-  });
+  /*
+   * Una variedad personalizada por semana, contada por FAMILIA y no por oferta.
+   *
+   * Una oferta es (familia, tamaño), así que contar ofertas limitaba a Intuitivo a un solo tamaño:
+   * cargado en 250, el de 400 quedaba rechazado y no aparecía en el formulario de pedido, mientras
+   * las demás variedades sí tenían los dos. El mensaje siempre habló de "un menú personalizado" —una
+   * familia—, y la cuenta decía otra cosa. Por ADR-030 el precio depende del tamaño y no de la
+   * variedad, así que Intuitivo tiene los mismos tamaños que el resto.
+   */
+  .refine(
+    (value) =>
+      new Set(
+        value.offerings
+          .filter((offering) => offering.composable)
+          .map((offering) => offering.familyName.trim().toLowerCase()),
+      ).size <= 1,
+    { message: 'Solo puede haber una variedad personalizada (Intuitivo) por semana.' },
+  )
+  /*
+   * Y que no se repita la misma variedad en el mismo tamaño. Antes lo impedía de rebote la regla
+   * anterior para Intuitivo; ahora que cuenta familias, hace falta decirlo aparte — y vale para
+   * todas, que nunca estuvo cubierto.
+   */
+  .refine(
+    (value) =>
+      new Set(
+        value.offerings.map(
+          (offering) =>
+            `${offering.familyName.trim().toLowerCase()}::${offering.sizeName.trim().toLowerCase()}`,
+        ),
+      ).size === value.offerings.length,
+    { message: 'Cada variedad puede aparecer una sola vez por tamaño.' },
+  );
 
 export const MenuOfferingSchema = z.object({
   composable: z.boolean(),

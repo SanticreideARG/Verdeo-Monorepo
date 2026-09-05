@@ -35,17 +35,20 @@ describe('buildMenuPayload', () => {
   });
 
   /**
-   * Regression: Intuitivo used to be generated inside the same flatMap as the fixed varieties,
-   * producing one composable offering per size. The API allows exactly one per menu, so the
-   * request 400'd — and because the message never surfaced, the screen looked like it did nothing.
+   * Intuitivo va en todos los tamaños, como cualquier variedad.
+   *
+   * Antes se generaba una sola vez con el primer tamaño, porque la API contaba ofertas componibles
+   * y rechazaba la segunda. El resultado era una semana con Intuitivo 250 y sin Intuitivo 400: en
+   * el formulario de pedido aparecía un solo tamaño mientras el resto tenía los dos. La regla del
+   * contrato ahora cuenta familias, que es lo que su mensaje siempre dijo.
    */
-  it('adds exactly one composable offering no matter how many sizes are priced', () => {
+  it('adds the composable variety once per priced size', () => {
     const result = buildMenuPayload(input({ includeIntuitivo: true }));
 
     const composable = result.payload?.offerings.filter((offering) => offering.composable) ?? [];
-    expect(composable).toHaveLength(1);
+    expect(composable.map((offering) => offering.sizeName)).toEqual(['250', '400']);
     expect(composable[0]).toMatchObject({ dishes: [], familyName: 'Intuitivo' });
-    expect(result.payload?.offerings).toHaveLength(5);
+    expect(result.payload?.offerings).toHaveLength(6);
   });
 
   it('leaves Intuitivo out entirely when the toggle is off', () => {

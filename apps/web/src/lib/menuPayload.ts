@@ -99,23 +99,29 @@ export function buildMenuPayload(input: MenuPayloadInput): MenuPayloadResult {
   }
   if (!input.alias.trim()) return { error: 'Ponele un alias a la semana.' };
 
-  // Size and variety are unrelated axes for a *fixed* offering, so one row per (variety, size) pair
-  // is generated here rather than asked for per option. Intuitivo is different: it is priced by
-  // whatever size the customer picks at order time (via weeklyMenuPrices, not its own offering
-  // row), so the API allows at most one composable offering per menu, period. It is pushed once
-  // after the flatMap — generating it inside the flatMap yields one per size and the request 400s
-  // with "Solo puede haber un menú personalizado (Intuitivo) por semana".
+  /*
+   * Tamaño y variedad son ejes independientes, así que se genera una fila por par (variedad,
+   * tamaño) en vez de pedirla por opción. Intuitivo va igual que el resto.
+   *
+   * Antes se empujaba una sola vez, con el primer tamaño, porque la API contaba ofertas componibles
+   * y rechazaba la segunda con "Solo puede haber un menú personalizado por semana". El efecto era
+   * que la semana quedaba con Intuitivo 250 y sin Intuitivo 400, y en el formulario de pedido
+   * aparecía un solo tamaño mientras las demás variedades tenían los dos. La regla ahora cuenta
+   * familias, que es lo que siempre quiso decir.
+   */
   const offerings: MenuOfferingPayload[] = varieties.flatMap((variety) =>
     prices.map((price) => ({ ...variety, sizeName: price.sizeName })),
   );
   if (input.includeIntuitivo) {
-    offerings.push({
-      composable: true,
-      description: null,
-      dishes: [],
-      familyName: 'Intuitivo',
-      sizeName: prices[0]?.sizeName ?? '',
-    });
+    offerings.push(
+      ...prices.map((price) => ({
+        composable: true,
+        description: null,
+        dishes: [],
+        familyName: 'Intuitivo',
+        sizeName: price.sizeName,
+      })),
+    );
   }
 
   return {

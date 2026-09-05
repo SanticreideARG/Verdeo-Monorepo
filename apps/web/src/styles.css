@@ -5016,3 +5016,19 @@ main .operation-card {
   background: color-mix(in srgb, #c0392b 14%, transparent);
   color: #c0392b;
 }
+
+/* El teléfono del cliente en la lista de pedidos: acompaña al nombre, sin competirle. */
+.order-card-phone {
+  display: block;
+  margin: 0;
+  color: var(--db-text-soft, var(--color-ink-muted));
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+a.order-card-phone:hover,
+a.order-card-phone:focus-visible {
+  color: var(--db-accent, var(--color-forest));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

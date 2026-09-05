@@ -6,6 +6,7 @@ import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus
 import { DraftNotice } from '../components/DraftNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
+import { formatArgentinePhone } from '../lib/phone.js';
 import { showToast } from '../lib/toast.js';
 import {
   errorMessage,
@@ -591,6 +592,12 @@ export function OrderIntakePage() {
                 <p className="mt-1 text-sm font-semibold">
                   {formatMoney(order.totalMinor, order.currency)}
                 </p>
+                {/* Acá la tarjeta no es un enlace entero, así que el número se puede tocar. */}
+                {order.customer.phone ? (
+                  <a className="order-card-phone mt-1" href={`tel:${order.customer.phone}`}>
+                    {formatArgentinePhone(order.customer.phone)}
+                  </a>
+                ) : null}
                 <p className="order-card-meta mt-1">{order.publicNumber}</p>
               </div>
               <div className="flex flex-wrap gap-2">

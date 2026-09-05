@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
+import { formatArgentinePhone } from '../lib/phone.js';
 import {
   errorMessage,
   formatMoney,
@@ -152,6 +153,15 @@ export function OrdersPage() {
                     )
                     .join(', ')}
                 </p>
+                {/* El teléfono acompaña al nombre porque es lo que se necesita cuando hay que
+                    llamar por este pedido. Va como texto y no como enlace: la tarjeta entera ya es
+                    un enlace a la ficha, y un `a` adentro de otro es HTML inválido. En la ficha sí
+                    es tocable. */}
+                {order.customer.phone ? (
+                  <p className="order-card-phone mt-1">
+                    {formatArgentinePhone(order.customer.phone)}
+                  </p>
+                ) : null}
                 <p className="order-card-meta mt-1">
                   <span>{order.publicNumber}</span> ·{' '}
                   {new Intl.DateTimeFormat('es-AR').format(new Date(order.deliveryDate))}

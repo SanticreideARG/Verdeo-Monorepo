@@ -94,12 +94,48 @@ describe('weekly menu contract', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects more than one composable offering in the same week', () => {
+  it('rejects more than one composable family in the same week', () => {
     const result = MenuCreateRequestSchema.safeParse({
       ...cycle,
       offerings: [
         { composable: true, dishes: [], familyName: 'Intuitivo', sizeName: '250' },
         { composable: true, dishes: [], familyName: 'Otro', sizeName: '250' },
+      ],
+      prices: [{ sizeName: '250', unitPriceMinor: 25_000 }],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  /**
+   * La regla se contaba por oferta, y una oferta es (familia, tamaño): Intuitivo cargado en 250
+   * hacía rechazar el de 400, así que quedaba con un solo tamaño mientras el resto tenía los dos —
+   * y en el formulario de pedido aparecía sólo "Intuitivo 250". Por ADR-030 el precio depende del
+   * tamaño y no de la variedad; no hay motivo para que ésta tenga menos tamaños.
+   */
+  it('accepts the composable variety in every size', () => {
+    const result = MenuCreateRequestSchema.safeParse({
+      ...cycle,
+      offerings: [
+        { composable: true, dishes: [], familyName: 'Intuitivo', sizeName: '250' },
+        { composable: true, dishes: [], familyName: 'Intuitivo', sizeName: '400' },
+      ],
+      prices: [
+        { sizeName: '250', unitPriceMinor: 25_000 },
+        { sizeName: '400', unitPriceMinor: 40_000 },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  // Antes lo impedía de rebote la regla anterior; ahora que cuenta familias, se dice aparte.
+  it('rejects the same variety twice in the same size', () => {
+    const result = MenuCreateRequestSchema.safeParse({
+      ...cycle,
+      offerings: [
+        { composable: true, dishes: [], familyName: 'Intuitivo', sizeName: '250' },
+        { composable: true, dishes: [], familyName: 'Intuitivo', sizeName: '250' },
       ],
       prices: [{ sizeName: '250', unitPriceMinor: 25_000 }],
     });
