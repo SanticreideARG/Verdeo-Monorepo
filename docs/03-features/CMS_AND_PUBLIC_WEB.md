@@ -110,3 +110,29 @@ Tablas `pages`, `page_revisions`, `media_assets` (migración 0018, additiva). Se
 **Diferido explícitamente**: SEO básico, edición asistida por IA (ver Fase 6 más abajo — la tarea
 `rewrite_message` puede usarse manualmente sobre el copy, pero no hay integración directa
 editor↔IA todavía).
+
+## Pie público (as built)
+
+La cabecera esconde "Mi cuenta" y "Seguir mi pedido" por debajo de 640px y deja sólo "Hacer un
+pedido". En un teléfono eso dejaba sin acceso a **cualquier** cuenta, de cliente o de equipo. Y en
+la PWA instalada no hay barra de direcciones: si un enlace no está en la página, la pantalla no
+existe.
+
+El pie, presente en todas las páginas que usan `PublicLayout`, lleva "Hacer un pedido", "Seguir mi
+pedido", "Mi cuenta" y —más chico y apagado, en su propio grupo— **"Acceso del equipo"** hacia
+`/login`, con `rel="nofollow"` para que no lo indexen los buscadores.
+
+**No está escondido detrás de un gesto secreto**, y es deliberado. Un triple toque en el logo sería
+indescubrible justo para quien lo necesita, imposible de usar con lector de pantalla, y no agregaría
+seguridad: lo que protege `/login` es la contraseña, no que cueste encontrarlo. La discreción es de
+ubicación y de peso visual.
+
+### `start_url` de la PWA
+
+Apunta a `/app`, que redirige a `/login` cuando no hay sesión: la app instalada abre en el ingreso
+del equipo, que es quien la instala. Si la abre un cliente, el logo de esa pantalla vuelve a la
+landing, así que no queda encerrado.
+
+Una PWA instalada **conserva el manifiesto con el que se instaló**. Quien la haya agregado antes de
+que `start_url` cambiara sigue abriendo en `/`; hay que desinstalarla y volver a instalarla para que
+tome el nuevo.

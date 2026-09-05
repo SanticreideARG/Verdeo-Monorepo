@@ -65,6 +65,43 @@ const PUBLIC_ANCHOR_LINKS = [
   { href: '/#section-contact', label: 'Contacto' },
 ] as const;
 
+/**
+ * El pie es la única puerta de entrada que sobrevive a todo.
+ *
+ * La cabecera esconde "Mi cuenta" y "Seguir mi pedido" por debajo de 640px y deja sólo "Hacer un
+ * pedido", así que en un teléfono no había forma de llegar a ninguna cuenta. Y en la PWA instalada
+ * no hay barra de direcciones: si un enlace no está en la página, la pantalla no existe.
+ *
+ * El acceso del equipo va acá y no escondido detrás de un gesto secreto. Un triple toque en el logo
+ * sería indescubrible para quien lo necesita e imposible de usar con un lector de pantalla, y no
+ * agregaría seguridad: lo que protege `/login` es la contraseña, no que cueste encontrarlo. La
+ * discreción es de ubicación y de peso visual — abajo, chico y apagado —, más `nofollow` para que
+ * no aparezca en buscadores.
+ */
+function PublicFooter() {
+  return (
+    <footer className="public-footer">
+      <div className="public-footer-inner">
+        <p className="public-footer-brand">
+          Verdeo SCA <span>· comidas listas para tu semana</span>
+        </p>
+
+        <nav aria-label="Accesos" className="public-footer-links">
+          <Link to="/pedido">Hacer un pedido</Link>
+          <Link to="/seguimiento">Seguir mi pedido</Link>
+          <Link to="/mi-cuenta">Mi cuenta</Link>
+        </nav>
+
+        <nav aria-label="Equipo" className="public-footer-staff">
+          <Link rel="nofollow" to="/login">
+            Acceso del equipo
+          </Link>
+        </nav>
+      </div>
+    </footer>
+  );
+}
+
 function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-white text-ink">
@@ -92,6 +129,7 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       {children}
+      <PublicFooter />
     </div>
   );
 }

@@ -4646,3 +4646,68 @@ main .operation-card {
   display: block;
   color: var(--db-text, var(--color-ink));
 }
+
+/* ==========================================================================
+   Pie público. Es el único acceso que sobrevive en la PWA instalada, donde no hay barra de
+   direcciones: si un enlace no está en la página, la pantalla no existe.
+   ========================================================================== */
+
+.public-footer {
+  margin-top: 4rem;
+  border-top: 1px solid var(--border-hairline);
+  background: color-mix(in srgb, var(--color-cream) 55%, #fff);
+}
+.public-footer-inner {
+  display: flex;
+  gap: 1.1rem 2rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1.6rem 1.25rem;
+}
+@media (min-width: 640px) {
+  .public-footer-inner {
+    padding-inline: 2rem;
+  }
+}
+.public-footer-brand {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.public-footer-brand span {
+  color: var(--color-ink-muted);
+  font-weight: 400;
+}
+.public-footer-links {
+  display: flex;
+  gap: 0.4rem 1.25rem;
+  flex-wrap: wrap;
+}
+.public-footer-links a {
+  color: var(--color-ink);
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.public-footer-links a:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+/* Más chico y apagado que el resto: presente para quien lo busca, discreto para quien no. */
+.public-footer-staff a {
+  color: var(--color-ink-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+}
+.public-footer-staff a:hover,
+.public-footer-staff a:focus-visible {
+  color: var(--color-forest);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
