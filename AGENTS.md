@@ -99,3 +99,17 @@ Consultar/registrar OPEN si una decisión no está en documentación y afecta:
 - mensajes automáticos;
 - datos visibles a repartidores;
 - reglas de cierre semanal.
+
+## Por qué el gate corre los tests de a dos paquetes
+
+`pnpm test` lleva `--workspace-concurrency=2`, y `packages/db` además fija `maxWorkers: 1`. No es
+lentitud gratuita: cada archivo de `packages/db` levanta su propio PGlite —un PostgreSQL entero
+compilado a WebAssembly— y con todos los paquetes en paralelo la máquina se queda sin memoria. El
+error que aparece es `Zone Allocation failed - process out of memory` o
+`RangeError: Array buffer allocation failed`, y arrastra media docena de suites cayendo con "PGlite
+failed to initialize".
+
+Ese síntoma engaña: parece que fallaron los tests cuando lo que faltó fue RAM. Pasó tres veces en un
+mismo día como un rojo del gate que no era real, y cada vez costó descartarlo a mano corriendo
+`packages/db` solo. El gate tarda unos minutos más y a cambio un rojo vuelve a significar siempre lo
+mismo: algo se rompió.

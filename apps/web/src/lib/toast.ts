@@ -9,6 +9,7 @@ export interface ToastItem {
 
 let toasts: readonly ToastItem[] = [];
 let nextId = 1;
+let shown = 0;
 const listeners = new Set<() => void>();
 
 function notify(): void {
@@ -31,6 +32,7 @@ const DEFAULT_DURATION_MS = 3200;
  * guardado); a failure should still go through each page's own persistent inline error message,
  * since that one may need to stay up while the operator fixes something. */
 export function showToast(message: string, tone: ToastItem['tone'] = 'success'): void {
+  shown += 1;
   const id = nextId++;
   toasts = [...toasts, { id, message, tone }];
   notify();
@@ -38,4 +40,13 @@ export function showToast(message: string, tone: ToastItem['tone'] = 'success'):
     toasts = toasts.filter((toast) => toast.id !== id);
     notify();
   }, DEFAULT_DURATION_MS);
+}
+
+/**
+ * Cuántos avisos se mostraron. Lo lee el aviso automático de `apiRequest` para no duplicar: si la
+ * pantalla ya dijo lo suyo —con su propio texto, que siempre es mejor que uno genérico— el
+ * automático se calla.
+ */
+export function toastsShown(): number {
+  return shown;
 }

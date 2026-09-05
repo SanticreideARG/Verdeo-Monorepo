@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { Link, useLocation } from 'react-router-dom';
 
 import { apiRequest, storeOperatingSiteId, storedOperatingSiteId } from '../lib/api.js';
+import { AppearanceContext, type AppearanceState } from '../lib/appearanceContext.js';
 import { useNarrowViewport } from '../lib/useNarrowViewport.js';
 import { AppearanceMenu, FONT_OPTIONS, SCALE_OPTIONS, type ThemeOption } from './AppearanceMenu.js';
 import { PresenceControl } from './PresenceControl.js';
@@ -669,110 +670,106 @@ export function DashboardShell({
     </>
   );
 
+  /*
+   * Se expone para que Ajustes → Apariencia monte los mismos controles. Es el mismo estado, no una
+   * copia: dos copias terminarían discrepando sobre qué tema está puesto.
+   */
+  const appearance: AppearanceState = {
+    font: uiFont,
+    scale: textScale,
+    setFont: (value) => {
+      setUiFont(value);
+      saveAppearance({ fontKey: value });
+    },
+    setScale: (value) => {
+      setTextScale(value);
+      saveAppearance({ textScale: value });
+    },
+    setTheme: (value) => {
+      setTheme(value);
+      saveAppearance({ theme: value });
+    },
+    theme,
+  };
+
   return (
-    <div
-      className={`dashboard-shell ${sidebarCollapsed ? 'has-collapsed-sidebar' : ''}`}
-      data-theme={theme}
-    >
-      <button
-        aria-label="Cerrar navegación"
-        className={`dashboard-sidebar-backdrop ${menuOpen ? 'is-visible' : ''}`}
-        onClick={() => setMenuOpen(false)}
-        type="button"
-      />
-      <aside className={`dashboard-sidebar ${menuOpen ? 'is-open' : ''}`}>
-        <Link className="dashboard-brand" to="/app" aria-label="Verdeo SCA, dashboard">
-          <img src="/brand/verdeo-icon.png" alt="" width="38" height="38" />
-          <span>
-            verdeo<strong>.</strong>
-          </span>
-          <small>SCA</small>
-        </Link>
-
-        <nav className="dashboard-navigation" aria-label="Navegación del dashboard">
-          {visibleClusters.map((cluster) => {
-            const collapsed = collapsedClusters.has(cluster.label);
-            return (
-              <section
-                className={`dashboard-nav-cluster ${collapsed ? 'is-collapsed' : ''}`}
-                key={cluster.label}
-              >
-                <button
-                  aria-expanded={!collapsed}
-                  onClick={() => toggleCluster(cluster.label)}
-                  type="button"
-                >
-                  <span>{cluster.label}</span>
-                  <svg
-                    aria-hidden="true"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                {!collapsed
-                  ? cluster.items.map((item) => {
-                      const active = isNavigationActive(
-                        location.pathname,
-                        location.hash,
-                        item.href,
-                      );
-                      return (
-                        <Link
-                          className={active ? 'is-active' : ''}
-                          key={item.label}
-                          title={item.label}
-                          to={item.href}
-                        >
-                          <NavIcon name={item.icon} />
-                          <span>{item.label}</span>
-                          {navBadge(item.href, pendingOrders, unreadChat)}
-                          {active ? <i aria-hidden="true" /> : null}
-                        </Link>
-                      );
-                    })
-                  : null}
-              </section>
-            );
-          })}
-        </nav>
-
+    <AppearanceContext.Provider value={appearance}>
+      <div
+        className={`dashboard-shell ${sidebarCollapsed ? 'has-collapsed-sidebar' : ''}`}
+        data-theme={theme}
+      >
         <button
-          className="dashboard-sidebar-collapse"
-          onClick={() => setSidebarCollapsed((current) => !current)}
-          title={sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'}
+          aria-label="Cerrar navegación"
+          className={`dashboard-sidebar-backdrop ${menuOpen ? 'is-visible' : ''}`}
+          onClick={() => setMenuOpen(false)}
           type="button"
-        >
-          <svg
-            aria-hidden="true"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth="1.8"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5 3 12l6 7M3 12h18" />
-          </svg>
-          <span>Contraer menú</span>
-        </button>
-
-        {narrow ? <div className="dashboard-drawer-tools">{secondaryTools}</div> : null}
-
-        <div className="dashboard-sidebar-footer">
-          <Link className="dashboard-sidebar-user" to="/app/perfil">
-            {profile.user.avatarUrl ? (
-              <img alt="" src={profile.user.avatarUrl} />
-            ) : (
-              <span>{initial}</span>
-            )}
-            <div>
-              <strong>{profile.user.displayName}</strong>
-              <small>Equipo Verdeo</small>
-            </div>
+        />
+        <aside className={`dashboard-sidebar ${menuOpen ? 'is-open' : ''}`}>
+          <Link className="dashboard-brand" to="/app" aria-label="Verdeo SCA, dashboard">
+            <img src="/brand/verdeo-icon.png" alt="" width="38" height="38" />
+            <span>
+              verdeo<strong>.</strong>
+            </span>
+            <small>SCA</small>
           </Link>
-          <button aria-label="Cerrar sesión" onClick={onLogout} title="Cerrar sesión" type="button">
+
+          <nav className="dashboard-navigation" aria-label="Navegación del dashboard">
+            {visibleClusters.map((cluster) => {
+              const collapsed = collapsedClusters.has(cluster.label);
+              return (
+                <section
+                  className={`dashboard-nav-cluster ${collapsed ? 'is-collapsed' : ''}`}
+                  key={cluster.label}
+                >
+                  <button
+                    aria-expanded={!collapsed}
+                    onClick={() => toggleCluster(cluster.label)}
+                    type="button"
+                  >
+                    <span>{cluster.label}</span>
+                    <svg
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  {!collapsed
+                    ? cluster.items.map((item) => {
+                        const active = isNavigationActive(
+                          location.pathname,
+                          location.hash,
+                          item.href,
+                        );
+                        return (
+                          <Link
+                            className={active ? 'is-active' : ''}
+                            key={item.label}
+                            title={item.label}
+                            to={item.href}
+                          >
+                            <NavIcon name={item.icon} />
+                            <span>{item.label}</span>
+                            {navBadge(item.href, pendingOrders, unreadChat)}
+                            {active ? <i aria-hidden="true" /> : null}
+                          </Link>
+                        );
+                      })
+                    : null}
+                </section>
+              );
+            })}
+          </nav>
+
+          <button
+            className="dashboard-sidebar-collapse"
+            onClick={() => setSidebarCollapsed((current) => !current)}
+            title={sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'}
+            type="button"
+          >
             <svg
               aria-hidden="true"
               fill="none"
@@ -780,98 +777,131 @@ export function DashboardShell({
               stroke="currentColor"
               strokeWidth="1.8"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9 8V5a2 2 0 0 1 2-2h8v18h-8a2 2 0 0 1-2-2v-3M15 12H3m0 0 3-3m-3 3 3 3"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5 3 12l6 7M3 12h18" />
             </svg>
+            <span>Contraer menú</span>
           </button>
-        </div>
-      </aside>
 
-      <div className="dashboard-workspace">
-        <header className="dashboard-topbar">
-          <button
-            className="dashboard-menu-button"
-            onClick={() => setMenuOpen(true)}
-            type="button"
-            aria-label="Abrir navegación"
-          >
-            <svg
-              aria-hidden="true"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" />
-            </svg>
-          </button>
-          <div className="dashboard-topbar-welcome">
-            <span>Buen día,</span>
-            <strong>{profile.user.displayName}</strong>
-          </div>
-          <div className="dashboard-topbar-tools">
-            {narrow ? null : secondaryTools}
-            {scope && (scope.sites.length > 0 || scope.canSelectGlobal) ? (
-              <label className="dashboard-scope">
-                <span>Ciudad</span>
-                <select
-                  onChange={(event) => selectScope(event.target.value)}
-                  value={selectedSiteId ?? GLOBAL_OPTION}
-                >
-                  {scope.canSelectGlobal ? (
-                    <option value={GLOBAL_OPTION}>Todas las ciudades</option>
-                  ) : null}
-                  {scope.sites.map((site) => (
-                    <option key={site.id} value={site.id}>
-                      {site.displayName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            <WeatherWidget cityName={weatherCityName} />
-            <div className="dashboard-clock">
-              <span>{timeLabel}</span>
-              <small>{dateLabel}</small>
-            </div>
-            <Link
-              aria-label="Mi perfil"
-              className="dashboard-topbar-avatar"
-              title="Mi perfil"
-              to="/app/perfil"
-            >
-              {profile.user.avatarUrl ? <img alt="" src={profile.user.avatarUrl} /> : initial}
+          {narrow ? <div className="dashboard-drawer-tools">{secondaryTools}</div> : null}
+
+          <div className="dashboard-sidebar-footer">
+            <Link className="dashboard-sidebar-user" to="/app/perfil">
+              {profile.user.avatarUrl ? (
+                <img alt="" src={profile.user.avatarUrl} />
+              ) : (
+                <span>{initial}</span>
+              )}
+              <div>
+                <strong>{profile.user.displayName}</strong>
+                <small>Equipo Verdeo</small>
+              </div>
             </Link>
-          </div>
-        </header>
-        <RequestProgressBar />
-        <main className="dashboard-content">{children}</main>
-        {narrow ? (
-          <nav aria-label="Accesos del turno" className="dashboard-bottom-nav">
-            {shiftNavigation
-              .filter((item) => !item.permission || profile.permissions.includes(item.permission))
-              .map((item) => (
-                <Link
-                  aria-current={location.pathname === item.href ? 'page' : undefined}
-                  key={item.href}
-                  to={item.href}
-                >
-                  <NavIcon name={item.icon} />
-                  <span>{item.label}</span>
-                  {navBadge(item.href, pendingOrders, unreadChat)}
-                </Link>
-              ))}
-            <button aria-label="Más secciones" onClick={() => setMenuOpen(true)} type="button">
-              <NavIcon name="settings" />
-              <span>Más</span>
+            <button
+              aria-label="Cerrar sesión"
+              onClick={onLogout}
+              title="Cerrar sesión"
+              type="button"
+            >
+              <svg
+                aria-hidden="true"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M9 8V5a2 2 0 0 1 2-2h8v18h-8a2 2 0 0 1-2-2v-3M15 12H3m0 0 3-3m-3 3 3 3"
+                />
+              </svg>
             </button>
-          </nav>
-        ) : null}
+          </div>
+        </aside>
+
+        <div className="dashboard-workspace">
+          <header className="dashboard-topbar">
+            <button
+              className="dashboard-menu-button"
+              onClick={() => setMenuOpen(true)}
+              type="button"
+              aria-label="Abrir navegación"
+            >
+              <svg
+                aria-hidden="true"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" />
+              </svg>
+            </button>
+            <div className="dashboard-topbar-welcome">
+              <span>Buen día,</span>
+              <strong>{profile.user.displayName}</strong>
+            </div>
+            <div className="dashboard-topbar-tools">
+              {narrow ? null : secondaryTools}
+              {scope && (scope.sites.length > 0 || scope.canSelectGlobal) ? (
+                <label className="dashboard-scope">
+                  <span>Ciudad</span>
+                  <select
+                    onChange={(event) => selectScope(event.target.value)}
+                    value={selectedSiteId ?? GLOBAL_OPTION}
+                  >
+                    {scope.canSelectGlobal ? (
+                      <option value={GLOBAL_OPTION}>Todas las ciudades</option>
+                    ) : null}
+                    {scope.sites.map((site) => (
+                      <option key={site.id} value={site.id}>
+                        {site.displayName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              <WeatherWidget cityName={weatherCityName} />
+              <div className="dashboard-clock">
+                <span>{timeLabel}</span>
+                <small>{dateLabel}</small>
+              </div>
+              <Link
+                aria-label="Mi perfil"
+                className="dashboard-topbar-avatar"
+                title="Mi perfil"
+                to="/app/perfil"
+              >
+                {profile.user.avatarUrl ? <img alt="" src={profile.user.avatarUrl} /> : initial}
+              </Link>
+            </div>
+          </header>
+          <RequestProgressBar />
+          <main className="dashboard-content">{children}</main>
+          {narrow ? (
+            <nav aria-label="Accesos del turno" className="dashboard-bottom-nav">
+              {shiftNavigation
+                .filter((item) => !item.permission || profile.permissions.includes(item.permission))
+                .map((item) => (
+                  <Link
+                    aria-current={location.pathname === item.href ? 'page' : undefined}
+                    key={item.href}
+                    to={item.href}
+                  >
+                    <NavIcon name={item.icon} />
+                    <span>{item.label}</span>
+                    {navBadge(item.href, pendingOrders, unreadChat)}
+                  </Link>
+                ))}
+              <button aria-label="Más secciones" onClick={() => setMenuOpen(true)} type="button">
+                <NavIcon name="settings" />
+                <span>Más</span>
+              </button>
+            </nav>
+          ) : null}
+        </div>
+        <ToastHost />
       </div>
-      <ToastHost />
-    </div>
+    </AppearanceContext.Provider>
   );
 }

@@ -3,7 +3,8 @@ import { Link, useLocation } from 'react-router-dom';
 interface SettingsTab {
   href: string;
   label: string;
-  permission: string;
+  /** Sin permiso: la pestaña la ve cualquiera que pueda entrar (p. ej. su propia apariencia). */
+  permission?: string;
 }
 
 // The lightweight settings screens that used to each claim their own "Administración" navbar
@@ -16,6 +17,8 @@ const SETTINGS_TABS: readonly SettingsTab[] = [
   { href: '/app/ajustes/etiquetas', label: 'Etiquetas', permission: 'production.read' },
   { href: '/app/ajustes/pagos', label: 'Métodos de pago', permission: 'payments.read' },
   { href: '/app/ajustes/chat', label: 'Enlaces de chat', permission: 'chat.links.manage' },
+  // Sin permiso: es la preferencia de uno mismo, no configuración del sistema.
+  { href: '/app/ajustes/apariencia', label: 'Apariencia' },
   {
     href: '/app/ajustes/mensajes',
     label: 'Cuentas de WhatsApp',
@@ -30,11 +33,14 @@ const SETTINGS_TABS: readonly SettingsTab[] = [
 // "no tenés permiso" bounce-through for the others, rather than the entry disappearing entirely.
 export const SETTINGS_TAB_PERMISSIONS: readonly string[] = SETTINGS_TABS.map(
   (tab) => tab.permission,
-);
+).filter((permission): permission is string => permission !== undefined);
 
 export function SettingsTabs({ permissions }: { permissions: string[] }) {
   const location = useLocation();
-  const visible = SETTINGS_TABS.filter((tab) => permissions.includes(tab.permission));
+  // Una pestaña sin permiso la ve cualquiera que haya llegado hasta acá.
+  const visible = SETTINGS_TABS.filter(
+    (tab) => !tab.permission || permissions.includes(tab.permission),
+  );
   if (visible.length <= 1) return null;
 
   return (

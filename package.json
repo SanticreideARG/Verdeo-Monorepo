@@ -21,7 +21,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
-    "test": "pnpm -r --if-present test",
+    "test": "pnpm -r --workspace-concurrency=2 --if-present test",
     "test:coverage": "pnpm -r --if-present test:coverage",
     "typecheck": "pnpm -r --if-present typecheck"
   },

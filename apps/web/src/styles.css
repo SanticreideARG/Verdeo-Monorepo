@@ -4927,3 +4927,58 @@ main .operation-card {
   /* Los saltos de línea del texto se respetan: el cierre está escrito en tres renglones. */
   white-space: pre-line;
 }
+
+/* Apariencia en Ajustes: los mismos controles del desplegable, con lugar de sobra. */
+.appearance-settings {
+  display: grid;
+  gap: 1.4rem;
+  max-width: 34rem;
+  margin-top: 1.4rem;
+}
+.appearance-settings .appearance-swatches {
+  display: grid;
+  gap: 0.45rem;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+}
+/* Con lugar, cada tema dice su nombre: nueve círculos sin etiqueta obligan a probarlos uno por uno. */
+.appearance-settings .appearance-swatches button {
+  display: flex;
+  width: auto;
+  height: auto;
+  gap: 0.55rem;
+  align-items: center;
+  border: 1px solid var(--db-border-soft);
+  border-radius: 0.55rem;
+  padding: 0.45rem 0.6rem;
+  background: transparent;
+  color: var(--db-text-soft);
+  font-size: 0.85rem;
+  font-weight: 600;
+  transform: none;
+}
+.appearance-settings .appearance-swatches button::before {
+  content: '';
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--swatch);
+  box-shadow: 0 0 0 1px var(--db-border-soft);
+}
+.appearance-settings .appearance-swatches button[aria-pressed='true'] {
+  border-color: var(--db-accent);
+  color: var(--db-text);
+  transform: none;
+}
+.appearance-settings .appearance-swatch-label {
+  display: inline;
+}
+/* En el desplegable no hay lugar para el nombre: ahí el círculo es todo el botón. */
+.appearance-panel .appearance-swatch-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

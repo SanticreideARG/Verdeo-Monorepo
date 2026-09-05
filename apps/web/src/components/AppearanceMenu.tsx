@@ -66,11 +66,6 @@ export function AppearanceMenu({
     };
   }, [open]);
 
-  const groups: { tone: ThemeOption['tone']; title: string }[] = [
-    { title: 'Claros', tone: 'claro' },
-    { title: 'Oscuros', tone: 'oscuro' },
-  ];
-
   return (
     <div className="appearance-menu" ref={container}>
       <button
@@ -87,62 +82,109 @@ export function AppearanceMenu({
 
       {open ? (
         <div aria-label="Apariencia" className="appearance-panel" role="dialog">
-          {groups.map((group) => (
-            <section key={group.tone}>
-              <h3>{group.title}</h3>
-              <div className="appearance-swatches">
-                {themes
-                  .filter((item) => item.tone === group.tone)
-                  .map((item) => (
-                    <button
-                      aria-label={`Usar tema ${item.label}`}
-                      aria-pressed={theme === item.value}
-                      key={item.value}
-                      onClick={() => onTheme(item.value)}
-                      style={{ '--swatch': item.color } as CSSProperties}
-                      title={item.label}
-                      type="button"
-                    />
-                  ))}
-              </div>
-            </section>
-          ))}
-
-          <section>
-            <h3>Fuente</h3>
-            <div className="appearance-fonts">
-              {FONT_OPTIONS.map((item) => (
-                <button
-                  aria-pressed={font === item.value}
-                  className={`appearance-font appearance-font-${item.value}`}
-                  key={item.value}
-                  onClick={() => onFont(item.value)}
-                  type="button"
-                >
-                  <strong aria-hidden="true">{item.sample}</strong>
-                  <span>{item.label}</span>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h3>Tamaño del texto</h3>
-            <div className="appearance-scales">
-              {SCALE_OPTIONS.map((item) => (
-                <button
-                  aria-pressed={scale === item.value}
-                  key={item.value}
-                  onClick={() => onScale(item.value)}
-                  type="button"
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </section>
+          <AppearanceControls
+            font={font}
+            onFont={onFont}
+            onScale={onScale}
+            onTheme={onTheme}
+            scale={scale}
+            theme={theme}
+            themes={themes}
+          />
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Los controles en sí, sin envoltorio.
+ *
+ * Los usan el desplegable de la barra y la pantalla de Ajustes. Escribirlos dos veces sería
+ * garantizar que dentro de unos meses una pantalla ofrezca un tema que la otra no.
+ */
+export function AppearanceControls({
+  font,
+  onFont,
+  onScale,
+  onTheme,
+  scale,
+  theme,
+  themes,
+}: {
+  font: string;
+  onFont: (value: string) => void;
+  onScale: (value: string) => void;
+  onTheme: (value: string) => void;
+  scale: string;
+  theme: string;
+  themes: readonly ThemeOption[];
+}) {
+  const groups: { title: string; tone: ThemeOption['tone'] }[] = [
+    { title: 'Claros', tone: 'claro' },
+    { title: 'Oscuros', tone: 'oscuro' },
+  ];
+
+  return (
+    <>
+      {groups.map((group) => (
+        <section key={group.tone}>
+          <h3>{group.title}</h3>
+          <div className="appearance-swatches">
+            {themes
+              .filter((item) => item.tone === group.tone)
+              .map((item) => (
+                <button
+                  aria-label={`Usar tema ${item.label}`}
+                  aria-pressed={theme === item.value}
+                  key={item.value}
+                  onClick={() => onTheme(item.value)}
+                  style={{ '--swatch': item.color } as CSSProperties}
+                  title={item.label}
+                  type="button"
+                >
+                  {/* Sólo visible cuando hay lugar (Ajustes): un círculo sin nombre obliga a
+                      probarlos uno por uno para saber cuál es cuál. */}
+                  <span className="appearance-swatch-label">{item.label}</span>
+                </button>
+              ))}
+          </div>
+        </section>
+      ))}
+
+      <section>
+        <h3>Fuente</h3>
+        <div className="appearance-fonts">
+          {FONT_OPTIONS.map((item) => (
+            <button
+              aria-pressed={font === item.value}
+              className={`appearance-font appearance-font-${item.value}`}
+              key={item.value}
+              onClick={() => onFont(item.value)}
+              type="button"
+            >
+              <strong aria-hidden="true">{item.sample}</strong>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h3>Tamaño del texto</h3>
+        <div className="appearance-scales">
+          {SCALE_OPTIONS.map((item) => (
+            <button
+              aria-pressed={scale === item.value}
+              key={item.value}
+              onClick={() => onScale(item.value)}
+              type="button"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </section>
+    </>
   );
 }
