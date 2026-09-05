@@ -118,9 +118,15 @@ pedido". En un teléfono eso dejaba sin acceso a **cualquier** cuenta, de client
 la PWA instalada no hay barra de direcciones: si un enlace no está en la página, la pantalla no
 existe.
 
-El pie, presente en todas las páginas que usan `PublicLayout`, lleva "Hacer un pedido", "Seguir mi
-pedido", "Mi cuenta" y —más chico y apagado, en su propio grupo— **"Acceso del equipo"** hacia
-`/login`, con `rel="nofollow"` para que no lo indexen los buscadores.
+Los enlaces de cliente viven en el **menú de la barra**, que aparece por debajo de 1024px y agrupa
+las secciones de la landing y lo de la cuenta. "Hacer un pedido" queda fuera del menú: es la acción
+que la página existe para provocar, y esconderla detrás de un toque extra sería ahorrar en lo único
+que no conviene. El panel se ancla a la cabecera y no al botón — con la barra en dos líneas el botón
+no queda contra el borde y el panel se salía de la pantalla.
+
+El **pie** tiene un solo trabajo: **"Acceso del equipo"** hacia `/login`, con `rel="nofollow"` para
+que no lo indexen los buscadores. No lleva margen superior: con separación quedaba una franja blanca
+entre la última sección de la landing y el pie, que se lee como un pedazo de página que falta.
 
 **No está escondido detrás de un gesto secreto**, y es deliberado. Un triple toque en el logo sería
 indescubrible justo para quien lo necesita, imposible de usar con lector de pantalla, y no agregaría

@@ -27,6 +27,7 @@ import { LoginPage } from './LoginPage.js';
 import { PasswordResetPage } from './PasswordResetPage.js';
 import { MenuBuilderPage } from './MenuBuilderPage.js';
 import { MenusPage } from './MenusPage.js';
+import { PublicMenu } from '../components/PublicMenu.js';
 import { PriceByLocationPage } from './PriceByLocationPage.js';
 import { MessagingAccountsPage } from './MessagingAccountsPage.js';
 import { MessagingInboxPage } from './MessagingInboxPage.js';
@@ -65,18 +66,23 @@ const PUBLIC_ANCHOR_LINKS = [
   { href: '/#section-contact', label: 'Contacto' },
 ] as const;
 
+/** Lo que una persona hace con su propio pedido. Se muestra inline en escritorio y en el menú. */
+const PUBLIC_ACCOUNT_LINKS = [
+  { href: '/seguimiento', label: 'Seguir mi pedido' },
+  { href: '/mi-cuenta', label: 'Mi cuenta' },
+] as const;
+
 /**
- * El pie es la única puerta de entrada que sobrevive a todo.
+ * El pie tiene un solo trabajo: el ingreso del equipo.
  *
- * La cabecera esconde "Mi cuenta" y "Seguir mi pedido" por debajo de 640px y deja sólo "Hacer un
- * pedido", así que en un teléfono no había forma de llegar a ninguna cuenta. Y en la PWA instalada
- * no hay barra de direcciones: si un enlace no está en la página, la pantalla no existe.
+ * Los enlaces de cliente que vivían acá se mudaron al menú de la barra, que es donde alguien los
+ * busca. Queda esto, que no puede ir en la barra sin volverse visible para todo el mundo, y que en
+ * la PWA instalada —sin barra de direcciones— es la única forma de llegar a `/login`.
  *
- * El acceso del equipo va acá y no escondido detrás de un gesto secreto. Un triple toque en el logo
- * sería indescubrible para quien lo necesita e imposible de usar con un lector de pantalla, y no
- * agregaría seguridad: lo que protege `/login` es la contraseña, no que cueste encontrarlo. La
- * discreción es de ubicación y de peso visual — abajo, chico y apagado —, más `nofollow` para que
- * no aparezca en buscadores.
+ * No está escondido detrás de un gesto secreto, y es deliberado: un triple toque en el logo sería
+ * indescubrible justo para quien lo necesita, imposible con un lector de pantalla, y no agregaría
+ * seguridad — lo que protege `/login` es la contraseña, no que cueste encontrarlo. La discreción es
+ * de ubicación y de peso visual, más `nofollow` para que no lo indexen.
  */
 function PublicFooter() {
   return (
@@ -85,12 +91,6 @@ function PublicFooter() {
         <p className="public-footer-brand">
           Verdeo SCA <span>· comidas listas para tu semana</span>
         </p>
-
-        <nav aria-label="Accesos" className="public-footer-links">
-          <Link to="/pedido">Hacer un pedido</Link>
-          <Link to="/seguimiento">Seguir mi pedido</Link>
-          <Link to="/mi-cuenta">Mi cuenta</Link>
-        </nav>
 
         <nav aria-label="Equipo" className="public-footer-staff">
           <Link rel="nofollow" to="/login">
@@ -116,15 +116,16 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
           <nav className="flex items-center gap-2" aria-label="Cuenta">
-            <Link className="nav-link hidden sm:inline-flex" to="/seguimiento">
-              Seguir mi pedido
-            </Link>
-            <Link className="nav-link hidden sm:inline-flex" to="/mi-cuenta">
-              Mi cuenta
-            </Link>
+            {PUBLIC_ACCOUNT_LINKS.map((link) => (
+              <Link className="nav-link hidden lg:inline-flex" key={link.href} to={link.href}>
+                {link.label}
+              </Link>
+            ))}
             <Link className="button button-primary" to="/pedido">
               Hacer un pedido
             </Link>
+            {/* Debajo de 1024px los enlaces de arriba se esconden y esta es su única puerta. */}
+            <PublicMenu account={PUBLIC_ACCOUNT_LINKS} sections={PUBLIC_ANCHOR_LINKS} />
           </nav>
         </div>
       </header>
