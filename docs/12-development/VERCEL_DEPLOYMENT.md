@@ -398,3 +398,41 @@ copying workspace code manually into the API app.
 - [Vercel rewrites](https://vercel.com/docs/routing/rewrites)
 - [Vercel rollback](https://vercel.com/docs/cli/rollback)
 - [Hono runtime entrypoints](https://hono.dev/docs/getting-started/basic)
+
+## Trabajos programados (as built)
+
+Dos crones, ambos en `apps/api/vercel.json`, autenticados con `Authorization: Bearer $CRON_SECRET`
+—que es la cabecera que Vercel manda sola cuando esa variable existe— y **expuestos en GET y en
+POST**.
+
+El GET no es un detalle: **los Cron Jobs de Vercel invocan con GET**. `/api/v1/cron/chat-retention`
+estuvo registrado sólo como POST, así que el cron diario le pegó a un 404 desde que se creó y la
+purga de mensajes nunca corrió. Un trabajo que existe en el panel y devuelve 404 no deja rastro que
+alguien vaya a mirar. El POST se conserva para dispararlos a mano.
+
+- `chat-retention` (04:00) — borra los mensajes vencidos.
+- `keep-alive` (13:00) — mantiene despierto el proyecto de Supabase.
+
+### Por qué existe keep-alive
+
+Los proyectos gratuitos de Supabase se pausan tras unos días sin actividad. Uno pausado no sólo deja
+sin ingreso por Google: **rompe el build del frontend**, que lee las variables de Supabase al
+compilar. Eso fue lo que dejó al proyecto web congelado en `3f3f5eb` mientras la API seguía
+desplegando, y costó una tarde de diagnóstico.
+
+No escribe en ninguna base, y no podría: los datos de Verdeo viven en Neon, y de Supabase sólo
+tenemos la URL y la clave publicable. Lo que Supabase cuenta como actividad son peticiones a su API,
+así que el trabajo llama a `/auth/v1/settings`, que responde con la sola clave publicable.
+
+De paso toca Neon con un `select 1`. No hace falta para mantenerlo vivo —Neon reanuda el cómputo al
+conectarse— pero convierte el trabajo en un canario diario.
+
+**Devuelve 200 aunque un ping falle**, y el estado va en el cuerpo. Un cron que responde error se
+reintenta y Vercel lo desactiva tras varios fallos seguidos: justo cuando más falta hace que siga
+pasando, porque el proyecto está por pausarse.
+
+**Lo que esto no garantiza:** Supabase no documenta que una petición de este tipo reinicie el
+contador, y ha cambiado la heurística antes. Es la solución habitual y debería alcanzar, pero la
+única garantía real es un plan pago. Si el proyecto se vuelve a pausar, revisar primero que
+`CRON_SECRET` esté configurada en producción — sin ella el endpoint responde 403 y el trabajo no
+hace nada.

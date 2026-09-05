@@ -23,6 +23,7 @@ import {
   PostgresOperationsService,
   PostgresCalendarService,
   PostgresAppearanceService,
+  pingDatabase,
   PostgresPasswordResetService,
   PostgresDashboardLayoutService,
   PostgresPasswordUserProvisioner,
@@ -448,6 +449,10 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     chat,
     chatRetentionDays: env.CHAT_RETENTION_DAYS,
     ...(env.CRON_SECRET ? { cronSecret: env.CRON_SECRET } : {}),
+    databasePing: async () => {
+      await pingDatabase(database.db);
+    },
+    ...(supabaseAuth ? { supabasePing: () => supabaseAuth.ping() } : {}),
     cookieSameSite: env.SESSION_COOKIE_SAME_SITE,
     credentials,
     delivery,

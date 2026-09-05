@@ -917,6 +917,10 @@ interface CreateAppOptions {
   chatRetentionDays?: number | undefined;
   cms?: CmsEngine;
   cronSecret?: string | undefined;
+  /** Un `select 1` contra la base, para que el cron diario sirva también de canario. */
+  databasePing?: (() => Promise<void>) | undefined;
+  /** Una petición al proyecto de Supabase, para que no lo pausen por inactividad. */
+  supabasePing?: (() => Promise<{ detail: string; ok: boolean }>) | undefined;
   credentials: CredentialLogin;
   delivery?: DeliveryEngine;
   geography?: GeographyEngine;
@@ -2803,7 +2807,62 @@ export function createApp(options: CreateAppOptions) {
 
   // Scheduled retention. Authenticated by a shared secret rather than a session: no person triggers
   // it. With no secret configured the endpoint refuses everyone, which is the safe direction.
-  app.post('/api/v1/cron/chat-retention', async (context) => {
+  /**
+   * Mantiene despierto el proyecto de Supabase.
+   *
+   * Los proyectos gratuitos se pausan tras unos días sin actividad, y uno pausado no sólo deja sin
+   * ingreso por Google: rompe el build del frontend, que lee las variables de Supabase al compilar.
+   * Fue exactamente lo que dejó al proyecto web congelado cuatro commits atrás.
+   *
+   * No hay nada que escribir: los datos de Verdeo viven en Neon, y de Supabase sólo tenemos la URL
+   * y la clave publicable. Lo que cuenta como actividad es una petición a su API.
+   *
+   * De paso toca Neon con un `select 1`. No hace falta para mantenerlo vivo —Neon reanuda el cómputo
+   * solo al conectarse— pero convierte esto en un canario diario: si la base no responde, se entera
+   * el cron y no un operador a las nueve de la mañana.
+   */
+  const keepAlive = async (context: Context<{ Variables: AppVariables }>) => {
+    const provided = context.req.header('authorization');
+    if (!options.cronSecret || provided !== `Bearer ${options.cronSecret}`)
+      return forbidden(context);
+
+    const supabase = options.supabasePing
+      ? await options.supabasePing()
+      : { detail: 'sin configurar', ok: false };
+
+    let database = { detail: 'sin configurar', ok: false };
+    if (options.databasePing) {
+      try {
+        await options.databasePing();
+        database = { detail: 'responde', ok: true };
+      } catch (error) {
+        database = {
+          detail: error instanceof Error ? error.message : 'fallo desconocido',
+          ok: false,
+        };
+      }
+    }
+
+    (context.get('logger') ?? options.logger).info({
+      database,
+      event: 'cron.keep_alive',
+      supabase,
+    });
+    // 200 aunque algo falle: un cron que devuelve error se reintenta y se apaga solo tras varios
+    // fallos, justo cuando más falta hace que siga pasando. El estado va en el cuerpo.
+    return context.json({ database, supabase });
+  };
+
+  app.get('/api/v1/cron/keep-alive', keepAlive);
+  app.post('/api/v1/cron/keep-alive', keepAlive);
+
+  /**
+   * GET además de POST porque los Cron Jobs de Vercel invocan con GET.
+   *
+   * Estuvo sólo como POST y el cron diario le pegó a un 404 durante todo ese tiempo: la purga de
+   * mensajes nunca corrió. Se conserva el POST para poder dispararla a mano sin ambigüedad.
+   */
+  const chatRetention = async (context: Context<{ Variables: AppVariables }>) => {
     const provided = context.req.header('authorization');
     if (!options.cronSecret || provided !== `Bearer ${options.cronSecret}`)
       return forbidden(context);
@@ -2817,7 +2876,10 @@ export function createApp(options: CreateAppOptions) {
       },
     );
     return context.json(ChatPurgeResponseSchema.parse(contractValue(result)));
-  });
+  };
+
+  app.get('/api/v1/cron/chat-retention', chatRetention);
+  app.post('/api/v1/cron/chat-retention', chatRetention);
 
   // Registered before `/customers/:id` on purpose: a literal segment must not be read as an id.
   app.get('/api/v1/customers/merge-candidates', async (context) => {

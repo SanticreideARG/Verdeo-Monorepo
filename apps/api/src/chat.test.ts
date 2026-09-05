@@ -343,6 +343,35 @@ describe('chat retention endpoint', () => {
       expect.objectContaining({ source: 'cron' }),
     );
   });
+
+  /**
+   * Los Cron Jobs de Vercel invocan con GET. La ruta estuvo sólo como POST, así que el cron diario
+   * le pegó a un 404 durante todo ese tiempo y la purga nunca corrió — un fallo que no deja rastro,
+   * porque nadie mira si un trabajo que "existe" está devolviendo 404.
+   */
+  it('runs on GET, which is how Vercel invokes a cron', async () => {
+    const chat = chatStubs();
+    const app = createApp({
+      appOrigin: 'http://localhost:5173',
+      chat,
+      chatRetentionDays: 30,
+      cookieSameSite: 'Lax',
+      credentials: emptyCredentials,
+      cronSecret: 'a-long-enough-cron-secret',
+      logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+      sessions: emptySessions,
+      secureCookies: false,
+      users: emptyUsers,
+      version: 'test',
+    });
+
+    const response = await app.request('/api/v1/cron/chat-retention', {
+      headers: { authorization: 'Bearer a-long-enough-cron-secret' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(chat.purgeExpiredMessages).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('chat presence', () => {

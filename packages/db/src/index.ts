@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 
@@ -23,3 +24,11 @@ export type Database = ReturnType<typeof createDatabase>['db'];
 
 export * from './repositories/index.js';
 export * from './schema/index.js';
+
+/**
+ * Un `select 1`, para que quien quiera saber si la base responde no tenga que inventarse una
+ * consulta ni depender de drizzle desde afuera del paquete.
+ */
+export async function pingDatabase(db: Database): Promise<void> {
+  await db.execute(sql`select 1`);
+}

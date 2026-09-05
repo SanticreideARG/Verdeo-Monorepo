@@ -5,6 +5,10 @@
     {
       "path": "/api/v1/cron/chat-retention",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/v1/cron/keep-alive",
+      "schedule": "0 13 * * *"
     }
   ],
   "framework": null,

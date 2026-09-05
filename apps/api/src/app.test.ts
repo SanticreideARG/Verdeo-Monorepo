@@ -3718,4 +3718,84 @@ describe('API foundation', () => {
       expect(response.status).toBe(401);
     });
   });
+
+  describe('keep-alive', () => {
+    const SECRET = 'a-long-enough-cron-secret';
+
+    function buildApp(overrides: Record<string, unknown>) {
+      return createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        cronSecret: SECRET,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        secureCookies: false,
+        sessions: emptySessions,
+        users: emptyUsers,
+        version: 'test',
+        ...overrides,
+      });
+    }
+
+    const ok = { headers: { authorization: `Bearer ${SECRET}` } };
+
+    /** Igual que la purga: un trabajo que cualquiera puede disparar no sirve de trabajo. */
+    it('refuses without the cron secret', async () => {
+      const supabasePing = vi.fn();
+      const response = await buildApp({ supabasePing }).request('/api/v1/cron/keep-alive');
+
+      expect(response.status).toBe(403);
+      expect(supabasePing).not.toHaveBeenCalled();
+    });
+
+    it('pings Supabase and the database on GET, which is how Vercel invokes it', async () => {
+      const supabasePing = vi.fn(() => Promise.resolve({ detail: 'HTTP 200', ok: true }));
+      const databasePing = vi.fn(() => Promise.resolve());
+
+      const response = await buildApp({ databasePing, supabasePing }).request(
+        '/api/v1/cron/keep-alive',
+        ok,
+      );
+
+      expect(response.status).toBe(200);
+      expect(supabasePing).toHaveBeenCalledTimes(1);
+      expect(databasePing).toHaveBeenCalledTimes(1);
+      expect(await response.json()).toMatchObject({
+        database: { ok: true },
+        supabase: { ok: true },
+      });
+    });
+
+    /**
+     * La propiedad que sostiene el trabajo: un cron que devuelve error se reintenta y Vercel lo
+     * desactiva tras fallar varias veces seguidas — justo cuando más falta hace que siga pasando,
+     * porque el proyecto está por pausarse. El estado va en el cuerpo, no en el código HTTP.
+     */
+    it('answers 200 even when a ping fails, and says which one', async () => {
+      const response = await buildApp({
+        databasePing: vi.fn(() => Promise.reject(new Error('conexión rechazada'))),
+        supabasePing: vi.fn(() => Promise.resolve({ detail: 'HTTP 503', ok: false })),
+      }).request('/api/v1/cron/keep-alive', ok);
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        database: { detail: 'conexión rechazada', ok: false },
+        supabase: { detail: 'HTTP 503', ok: false },
+      });
+    });
+
+    // Sin Supabase configurado el trabajo sigue sirviendo para la base; no se cae ni miente.
+    it('reports Supabase as unconfigured instead of failing', async () => {
+      const response = await buildApp({ databasePing: vi.fn(() => Promise.resolve()) }).request(
+        '/api/v1/cron/keep-alive',
+        ok,
+      );
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        database: { ok: true },
+        supabase: { detail: 'sin configurar', ok: false },
+      });
+    });
+  });
 });
