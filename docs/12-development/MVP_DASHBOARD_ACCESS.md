@@ -188,6 +188,31 @@ ruta y a tomar un pedido.
 activo, y quién ve qué dato viejo es una decisión de negocio, no una opción de build. El offline real
 —la hoja de ruta del repartidor, con su fecha a la vista— queda para después del piloto.
 
-**Pendiente de diseño:** un ícono *maskable*. El actual es un círculo casi a sangre, así que
+**Pendiente de diseño:** un ícono _maskable_. El actual es un círculo casi a sangre, así que
 declararlo como tal haría que Android le recorte el anillo verde con su propia máscara. Hace falta
 una versión con el logo al 80% dentro del lienzo.
+
+### El tablero del teléfono es otra pantalla
+
+`MobileDashboard` se renderiza en vez del tablero de escritorio, no además. La decisión es de React
+(`useNarrowViewport`) y no de CSS, porque lo que cambia no es el tamaño sino el contenido: esconder
+con `display: none` lo que igual se arma cuesta el mismo trabajo y deja el nodo en el árbol.
+
+Qué queda afuera en un teléfono, y por qué:
+
+- **la tarjeta de sprint** — habla del estado del software, no del negocio;
+- **la grilla de módulos** — era navegación por tercera vez después de la barra inferior y el cajón,
+  y dos de sus tarjetas apuntaban a anclas muertas (`#reparto`, `#usuarios`) anunciándose como
+  "próximo sprint" cuando esas pantallas estaban construidas hace rato. Los enlaces quedaron
+  corregidos también para escritorio;
+- **el tablero de widgets** — los widgets por defecto son pedidos sin confirmar y mensajes sin leer,
+  así que con la bandeja vacía quedaban dos tarjetas con un cero justo abajo de un "Nada pendiente".
+  Elegir widgets es trabajo de escritorio y ahí sigue estando.
+
+Lo que queda contesta una sola pregunta: qué está esperando, y qué se puede empezar ahora. Filas y
+no tarjetas — en el alto de una tarjeta entran tres filas, y lo que importa es cuántas cosas hay.
+Sólo se listan las que tienen algo: una fila que dice cero no es información.
+
+**El estado vacío distingue "cargando" de "no hay nada".** Decir "Todo al día" antes de que lleguen
+los datos es afirmar durante segundos, y sobre lo único que la pantalla existe para responder, algo
+que todavía no se sabe.

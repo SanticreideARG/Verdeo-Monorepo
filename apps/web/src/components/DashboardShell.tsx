@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { Link, useLocation } from 'react-router-dom';
 
 import { apiRequest, storeOperatingSiteId, storedOperatingSiteId } from '../lib/api.js';
+import { useNarrowViewport } from '../lib/useNarrowViewport.js';
 import { AppearanceMenu, FONT_OPTIONS, SCALE_OPTIONS, type ThemeOption } from './AppearanceMenu.js';
 import { PresenceControl } from './PresenceControl.js';
 import { SETTINGS_TAB_PERMISSIONS } from './SettingsTabs.js';
@@ -191,26 +192,6 @@ const SCALE_KEYS = new Set(SCALE_OPTIONS.map((item) => item.value as string));
 /** Un valor que el catálogo no conoce cae al de por defecto en vez de romper la pantalla. */
 function known(value: string | null | undefined, allowed: Set<string>, fallback: string): string {
   return value && allowed.has(value) ? value : fallback;
-}
-
-/**
- * Si la pantalla es angosta, para decidir **dónde se monta** un control y no sólo cómo se ve.
- *
- * Con CSS alcanzaría para esconderlo, pero no para moverlo de la barra al cajón: son dos padres
- * distintos. Y montarlo dos veces no es opción — `PresenceControl` late contra la API en intervalo,
- * así que dos copias serían el doble de tráfico por nada.
- */
-function useNarrowViewport(): boolean {
-  const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width: 680px)').matches);
-
-  useEffect(() => {
-    const query = window.matchMedia('(max-width: 680px)');
-    const update = (event: MediaQueryListEvent) => setNarrow(event.matches);
-    query.addEventListener('change', update);
-    return () => query.removeEventListener('change', update);
-  }, []);
-
-  return narrow;
 }
 
 /**

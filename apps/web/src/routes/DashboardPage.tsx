@@ -8,7 +8,9 @@ import {
   WIDGET_CATALOGUE,
   type WidgetData,
 } from '../components/dashboard-widgets.js';
+import { MobileDashboard } from '../components/MobileDashboard.js';
 import { BrandLoading } from '../components/BrandLoading.js';
+import { useNarrowViewport } from '../lib/useNarrowViewport.js';
 import { apiRequest } from '../lib/api.js';
 
 const modules = [
@@ -40,7 +42,7 @@ const modules = [
     accent: 'violet',
     cluster: 'Logística',
     copy: 'Rutas, entregas y ejecución en calle desde una única vista.',
-    href: '#reparto',
+    href: '/app/reparto/rutas',
     permission: 'routes.read',
     title: 'Reparto',
   },
@@ -48,7 +50,7 @@ const modules = [
     accent: 'slate',
     cluster: 'Administración',
     copy: 'Usuarios, roles, permisos y trazabilidad de accesos.',
-    href: '#usuarios',
+    href: '/app/usuarios',
     permission: 'users.read',
     title: 'Administración',
   },
@@ -72,6 +74,7 @@ function ModuleArrow() {
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const narrow = useNarrowViewport();
   const [profile, setProfile] = useState<DashboardProfile | null>(null);
   const [failed, setFailed] = useState(false);
   const [demand, setDemand] = useState<{ day: string; orderCount: number }[]>([]);
@@ -80,6 +83,7 @@ export function DashboardPage() {
   const [reminders, setReminders] = useState<{ day: string; title: string }[]>([]);
   const [layout, setLayout] = useState<string[]>([...DEFAULT_LAYOUT]);
   const [editing, setEditing] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -117,6 +121,7 @@ export function DashboardPage() {
       if (orders) setPendingOrders(orders.items.length);
       if (chat) setUnreadChat(chat.items.reduce((total, item) => total + item.unreadCount, 0));
       if (calendar) setReminders(calendar.items.filter((item) => item.kind === 'reminder'));
+      setLoaded(true);
     })();
 
     return () => {
@@ -236,6 +241,30 @@ export function DashboardPage() {
     unreadChat,
   };
   const visibleWidgets = resolveWidgets(layout, profile.permissions);
+
+  /*
+   * En un teléfono el tablero es otra pantalla, no ésta más chica.
+   *
+   * Se renderiza aparte en vez de esconderse con CSS porque lo que cambia no es el tamaño sino el
+   * contenido. Afuera quedan tres cosas:
+   *
+   * - la tarjeta de sprint, que habla del estado del software y no del negocio;
+   * - la grilla de módulos, que en un teléfono era navegación por tercera vez después de la barra
+   *   inferior y el cajón;
+   * - el tablero de widgets, que dice lo mismo que el bloque de espera pero peor. Los widgets por
+   *   defecto son pedidos sin confirmar y mensajes sin leer: con la bandeja vacía quedaban dos
+   *   tarjetas con un cero abajo de un "Nada pendiente". Elegir widgets es además trabajo de
+   *   escritorio, y ahí siguen estando.
+   */
+  if (narrow) {
+    return (
+      <DashboardShell profile={profile} onLogout={() => void logout()}>
+        <MobileDashboard
+          data={{ loaded, pendingOrders, permissions: profile.permissions, reminders, unreadChat }}
+        />
+      </DashboardShell>
+    );
+  }
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
