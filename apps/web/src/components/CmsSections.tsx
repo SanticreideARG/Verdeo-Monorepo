@@ -10,10 +10,107 @@ export interface PageSection {
   type: string;
 }
 
+interface MenuFamilyBlock {
+  caption?: string | undefined;
+  familyName: string;
+  iconUrl?: string | undefined;
+  note?: string | undefined;
+  title: string;
+}
+
+/**
+ * La carta de la semana, familia por familia.
+ *
+ * Lo estable —ícono, título y descripción— viene del CMS; **los platos vienen del menú publicado**,
+ * buscados por `familyName`. Guardarlos también en el CMS obligaría a cargarlos dos veces por semana
+ * y a que un día se contradigan.
+ *
+ * Sin menú publicado la sección igual se muestra: las familias son lo que Verdeo ofrece siempre, y
+ * quedan sin lista de platos hasta que se publique la semana. Es más honesto que esconderla.
+ */
+function MenuFamiliesSection({
+  anchorId,
+  eyebrow,
+  families,
+  footnote,
+  heading,
+  intro,
+}: {
+  anchorId?: string | undefined;
+  eyebrow?: string | undefined;
+  families: readonly MenuFamilyBlock[];
+  footnote?: string | undefined;
+  heading: string;
+  intro?: string | undefined;
+}) {
+  const [menu, setMenu] = useState<WeeklyMenu | null>(null);
+
+  useEffect(() => {
+    void apiRequest('/api/v1/public/menu/current')
+      .then(async (response) => {
+        if (!response.ok) return;
+        setMenu((await response.json()) as WeeklyMenu);
+      })
+      .catch(() => setMenu(null));
+  }, []);
+
+  /*
+   * Cada familia aparece una vez por tamaño (250 y 400) con los mismos cinco platos, así que se
+   * toma la primera coincidencia. Comparación sin distinguir mayúsculas ni espacios de más: el
+   * nombre lo escribe una persona en el CMS y otra en el catálogo.
+   */
+  const dishesFor = (familyName: string): readonly string[] => {
+    const key = familyName.trim().toLowerCase();
+    const offering = menu?.offerings.find(
+      (candidate) => candidate.familyName.trim().toLowerCase() === key,
+    );
+    return offering?.dishes ?? [];
+  };
+
+  return (
+    <section className="menu-families" id={anchorId}>
+      <div className="menu-families-inner">
+        <header className="menu-families-head">
+          <h2>{heading}</h2>
+          {eyebrow ? <p className="menu-families-eyebrow">{eyebrow}</p> : null}
+          {intro ? <p className="menu-families-intro">{intro}</p> : null}
+        </header>
+
+        <div className="menu-families-grid">
+          {families.map((family) => {
+            const dishes = dishesFor(family.familyName);
+            return (
+              <article key={family.familyName}>
+                <h3>{family.title}</h3>
+                {family.iconUrl ? (
+                  <img alt="" height="96" loading="lazy" src={family.iconUrl} width="96" />
+                ) : null}
+                {family.caption ? <p className="menu-families-caption">{family.caption}</p> : null}
+                {dishes.length > 0 ? (
+                  <ul>
+                    {dishes.map((dish) => (
+                      <li key={dish}>{dish}</li>
+                    ))}
+                  </ul>
+                ) : family.note ? (
+                  <p className="menu-families-note">{family.note}</p>
+                ) : null}
+              </article>
+            );
+          })}
+        </div>
+
+        {footnote ? <p className="menu-families-footnote">{footnote}</p> : null}
+      </div>
+    </section>
+  );
+}
+
 /** WEEKLY_MENU and DELIVERY_ZONES sections carry no stored content — they're placement markers.
  * Rendering them from copy saved in a CMS revision would be a second source of truth for the real
  * menu/geography systems, so both resolve live against the same public endpoints the order page
- * uses, right here at render time. */
+ * uses, right here at render time. MENU_FAMILIES above splits the difference: the stable branding
+ * copy is stored, the dishes are resolved live for the same reason. */
 function WeeklyMenuSection({ anchorId }: { anchorId?: string | undefined }) {
   const [menu, setMenu] = useState<WeeklyMenu | null>(null);
 
@@ -321,6 +418,17 @@ export function CmsSection({ section }: { section: PageSection }) {
       );
     case 'WEEKLY_MENU':
       return <WeeklyMenuSection anchorId={anchorId} />;
+    case 'MENU_FAMILIES':
+      return (
+        <MenuFamiliesSection
+          anchorId={anchorId}
+          eyebrow={section.eyebrow as string | undefined}
+          families={(section.families as MenuFamilyBlock[] | undefined) ?? []}
+          footnote={section.footnote as string | undefined}
+          heading={(section.heading as string | undefined) ?? 'Menús de la semana'}
+          intro={section.intro as string | undefined}
+        />
+      );
     case 'CTA':
       return (
         <section className="mx-auto w-full max-w-4xl px-5 py-14 text-center sm:px-8" id={anchorId}>

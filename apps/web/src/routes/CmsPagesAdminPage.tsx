@@ -42,6 +42,7 @@ const SECTION_TYPES = [
   'STEPS',
   'CAROUSEL',
   'WEEKLY_MENU',
+  'MENU_FAMILIES',
   'CTA',
   'FAQ',
   'DELIVERY_ZONES',
@@ -65,6 +66,21 @@ function newSection(type: string): Section {
       return { id, steps: [{ body: '', number: '01', title: '' }], type };
     case 'CAROUSEL':
       return { id, slides: [{ caption: '', imageUrl: '' }], type };
+    case 'MENU_FAMILIES':
+      return {
+        families: [
+          {
+            caption: '',
+            familyName: 'Keto',
+            iconUrl: '/menus/Keto.png',
+            note: '',
+            title: 'Menú Keto',
+          },
+        ],
+        heading: 'Menús de la semana',
+        id,
+        type,
+      };
     case 'CTA':
       return { buttonHref: '/pedido', buttonLabel: 'Hacer un pedido', heading: 'Título', id, type };
     case 'FAQ':
@@ -877,6 +893,97 @@ function SectionFields({
           value={field('html')}
         />
       );
+    case 'MENU_FAMILIES': {
+      const families = Array.isArray(section.families)
+        ? (section.families as {
+            caption?: string;
+            familyName: string;
+            iconUrl?: string;
+            note?: string;
+            title: string;
+          }[])
+        : [];
+      return (
+        <div className="mt-3 grid gap-3">
+          <label className="field">
+            Encabezado
+            <input
+              disabled={disabled}
+              onChange={(event) => onChange({ heading: event.target.value })}
+              value={(section.heading as string | undefined) ?? ''}
+            />
+          </label>
+          <label className="field">
+            Bajada corta
+            <input
+              disabled={disabled}
+              onChange={(event) => onChange({ eyebrow: event.target.value })}
+              value={(section.eyebrow as string | undefined) ?? ''}
+            />
+          </label>
+          <label className="field">
+            Texto introductorio
+            <textarea
+              disabled={disabled}
+              onChange={(event) => onChange({ intro: event.target.value })}
+              rows={2}
+              value={(section.intro as string | undefined) ?? ''}
+            />
+          </label>
+          <label className="field">
+            Familias — una por línea: nombre en el catálogo | título | ícono | descripción | nota
+            <textarea
+              className="font-mono text-xs"
+              disabled={disabled}
+              onChange={(event) =>
+                onChange({
+                  families: event.target.value
+                    .split('\n')
+                    .filter((line) => line.trim().length > 0)
+                    .map((line) => {
+                      const [familyName, title, iconUrl, caption, note] = line.split('|');
+                      return {
+                        caption: caption?.trim() ?? '',
+                        familyName: familyName?.trim() ?? '',
+                        iconUrl: iconUrl?.trim() ?? '',
+                        note: note?.trim() ?? '',
+                        title: title?.trim() || (familyName?.trim() ?? ''),
+                      };
+                    }),
+                })
+              }
+              placeholder="Keto|Menú Keto|/menus/Keto.png|(Sin harinas, sin cereales. Con lácteos.)|"
+              rows={6}
+              value={families
+                .map((family) =>
+                  [
+                    family.familyName,
+                    family.title,
+                    family.iconUrl ?? '',
+                    family.caption ?? '',
+                    family.note ?? '',
+                  ].join('|'),
+                )
+                .join('\n')}
+            />
+          </label>
+          {/* Lo que no se edita acá, y conviene que se sepa. */}
+          <p className="text-xs text-ink-muted">
+            Los platos de cada familia no se cargan acá: salen del menú semanal publicado, buscados
+            por el nombre en el catálogo. Así se cargan una sola vez y no pueden contradecirse.
+          </p>
+          <label className="field">
+            Cierre
+            <textarea
+              disabled={disabled}
+              onChange={(event) => onChange({ footnote: event.target.value })}
+              rows={3}
+              value={(section.footnote as string | undefined) ?? ''}
+            />
+          </label>
+        </div>
+      );
+    }
     // STEPS, FAQ, GALLERY use structured arrays; edited as line-per-item text for a fast v1
     // instead of full add/remove sub-forms.
     case 'STEPS': {

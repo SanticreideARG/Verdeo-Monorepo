@@ -87,6 +87,39 @@ const StepsSectionSchema = SectionBaseSchema.extend({
 
 const WeeklyMenuSectionSchema = SectionBaseSchema.extend({ type: z.literal('WEEKLY_MENU') });
 
+/**
+ * La carta de la semana presentada por familia: ícono, descripción y los platos.
+ *
+ * Guarda **sólo lo estable** — encabezado, bajada, y por familia el ícono y la descripción entre
+ * paréntesis. Los platos NO se guardan acá: cambian cada semana, ya viven en el armador de menús, y
+ * escribirlos también en el CMS obligaría a cargarlos dos veces y garantizaría que un día digan
+ * cosas distintas. Es el mismo criterio por el que `WEEKLY_MENU` no guarda copia del menú.
+ *
+ * `familyName` es la llave con la que cada bloque encuentra sus platos en el menú publicado, así que
+ * tiene que coincidir con el nombre de la familia en el catálogo.
+ */
+const MenuFamiliesSectionSchema = SectionBaseSchema.extend({
+  eyebrow: z.string().trim().max(120).optional(),
+  families: z
+    .array(
+      z.object({
+        // Lo que va entre paréntesis bajo el título: qué incluye y qué no.
+        caption: z.string().trim().max(400).optional(),
+        familyName: z.string().trim().min(1).max(120),
+        iconUrl: z.string().trim().max(2_000).optional(),
+        // Para las familias sin cinco platos fijos (Intuitivo), que explican cómo se arma.
+        note: z.string().trim().max(400).optional(),
+        title: z.string().trim().min(1).max(120),
+      }),
+    )
+    .min(1)
+    .max(8),
+  footnote: z.string().trim().max(600).optional(),
+  heading: z.string().trim().min(1).max(200),
+  intro: z.string().trim().max(600).optional(),
+  type: z.literal('MENU_FAMILIES'),
+});
+
 const CtaSectionSchema = SectionBaseSchema.extend({
   body: z.string().trim().max(400).optional(),
   buttonHref: z.string().trim().min(1).max(300),
@@ -170,6 +203,7 @@ export const PageSectionSchema = z.discriminatedUnion('type', [
   StepsSectionSchema,
   CarouselSectionSchema,
   WeeklyMenuSectionSchema,
+  MenuFamiliesSectionSchema,
   CtaSectionSchema,
   FaqSectionSchema,
   DeliveryZonesSectionSchema,

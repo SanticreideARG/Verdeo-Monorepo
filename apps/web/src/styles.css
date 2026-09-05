@@ -4804,3 +4804,126 @@ main .operation-card {
     right: 2rem;
   }
 }
+
+/* ==========================================================================
+   Carta de la semana por familia. Fondo crema y centrado, como el diseño de referencia.
+   ========================================================================== */
+
+.menu-families {
+  background: var(--color-cream);
+}
+.menu-families-inner {
+  width: 100%;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 3.5rem 1.25rem 4rem;
+}
+@media (min-width: 640px) {
+  .menu-families-inner {
+    padding-inline: 2rem;
+  }
+}
+.menu-families-head {
+  text-align: center;
+}
+.menu-families-head h2 {
+  margin: 0;
+  color: var(--color-forest);
+  font-family: 'Barlow Condensed', var(--font-sans);
+  font-size: clamp(1.9rem, 4.5vw, 2.6rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.menu-families-eyebrow {
+  margin: 0.5rem 0 0;
+  color: var(--color-ink-muted);
+  font-size: 0.82rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.menu-families-intro {
+  max-width: 46rem;
+  margin: 0.9rem auto 0;
+  color: var(--color-ink-muted);
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+
+.menu-families-grid {
+  display: grid;
+  gap: 2.5rem 3rem;
+  margin-top: 2.75rem;
+}
+@media (min-width: 768px) {
+  .menu-families-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* Una familia impar al final (Intuitivo) queda centrada en vez de pegada a la izquierda. */
+  .menu-families-grid > article:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    max-width: 32rem;
+    justify-self: center;
+  }
+}
+.menu-families-grid > article {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid color-mix(in srgb, var(--color-ink) 18%, transparent);
+  text-align: center;
+}
+.menu-families-grid h3 {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.menu-families-grid img {
+  width: 84px;
+  height: 84px;
+  object-fit: contain;
+}
+.menu-families-caption {
+  max-width: 30rem;
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.55;
+}
+.menu-families-grid ul {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.menu-families-grid li {
+  color: var(--color-ink-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+.menu-families-note {
+  max-width: 32rem;
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+.menu-families-footnote {
+  max-width: 46rem;
+  margin: 3rem auto 0;
+  padding-top: 2rem;
+  border-top: 1px solid color-mix(in srgb, var(--color-ink) 18%, transparent);
+  color: var(--color-ink);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.65;
+  text-align: center;
+  /* Los saltos de línea del texto se respetan: el cierre está escrito en tres renglones. */
+  white-space: pre-line;
+}
