@@ -155,3 +155,12 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [ ] Marketing automation.
 - [x] Advanced analytics (Estadísticas: por zona, semana, tamaño, variedad y día).
 - [ ] Recommendation learning.
+
+## Deuda encontrada, sin resolver
+
+- [ ] **`updateMenu` borra y recrea todas las ofertas de la semana.** Los ítems de pedido apuntan a
+      la oferta con `on delete set null`, así que volver a guardar una semana ya publicada deja a los
+      pedidos existentes sin vínculo con el menú — hoy serían 231. Guardan su `productNameSnapshot`,
+      así que las listas siguen mostrándose bien, pero cualquier lógica que dependa de `offeringId`
+      queda sin base. Debería ser aditivo/upsert por (menú, variante) en vez de borrar.
+- [ ] `audit` y `observability` siguen sin un solo test.

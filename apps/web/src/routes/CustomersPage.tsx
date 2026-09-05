@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { AddressMap } from '../components/AddressMap.js';
+import { AfterSaveDialog } from '../components/AfterSaveDialog.js';
 import { CustomerExportDialog } from '../components/CustomerExportDialog.js';
 import { MergeCustomersDialog } from '../components/MergeCustomersDialog.js';
 import { DraftNotice } from '../components/DraftNotice.js';
@@ -67,6 +68,8 @@ export function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  // Cliente recién creado: mientras haya uno, el diálogo pregunta qué sigue.
+  const [savedCustomer, setSavedCustomer] = useState<{ id: string; name: string } | null>(null);
   const [showImport, setShowImport] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
@@ -272,12 +275,16 @@ export function CustomersPage() {
           method: 'POST',
         }),
       );
-      target.reset();
       createDraft.discard();
-      setShowCreate(false);
       setSearch('');
       await loadDirectory('', created.id);
-      showToast('Cliente registrado. Ya podés completar sus contactos y domicilios.');
+      showToast('Cliente registrado.');
+      /*
+       * Acá "conservar" no tendría sentido —nadie carga dos clientes con los mismos datos—, así que
+       * la segunda opción es la que sigue de verdad: ir a la ficha a completar contactos y
+       * domicilios. El formulario se limpia sólo si se elige cargar otro.
+       */
+      setSavedCustomer({ id: created.id, name: created.displayName });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos registrar el cliente.');
     }
@@ -1194,6 +1201,23 @@ export function CustomersPage() {
               </form>
             </section>
           </div>
+        ) : null}
+
+        {savedCustomer ? (
+          <AfterSaveDialog
+            detail={`${savedCustomer.name} ya está en el padrón.`}
+            keepLabel="Completar su ficha"
+            newLabel="Cargar otro cliente"
+            onKeep={() => {
+              setShowCreate(false);
+              setSavedCustomer(null);
+            }}
+            onNew={() => {
+              createFormRef.current?.reset();
+              setSavedCustomer(null);
+            }}
+            title="Cliente registrado"
+          />
         ) : null}
       </div>
     </DashboardShell>

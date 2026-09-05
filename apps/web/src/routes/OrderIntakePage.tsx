@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
+import { AfterSaveDialog } from '../components/AfterSaveDialog.js';
 import { DraftNotice } from '../components/DraftNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
@@ -67,6 +68,8 @@ export function OrderIntakePage() {
   const [selectedMenuId, setSelectedMenuId] = useState('');
   const [selectedOfferingId, setSelectedOfferingId] = useState('');
   const [selectedDishes, setSelectedDishes] = useState<string[]>([]);
+  // Número del pedido recién guardado: mientras haya uno, el diálogo pregunta qué sigue.
+  const [savedNumber, setSavedNumber] = useState<string | null>(null);
 
   // "Nuevo cliente" (quick alta) vs "Buscar cliente" (by name/number) — a client is picked before
   // the rest of the order form matters, so this drives what `customerId` ends up as on submit.
@@ -236,7 +239,7 @@ export function OrderIntakePage() {
         return;
       }
 
-      await mutate('/api/v1/orders', {
+      const createdOrder = await mutate('/api/v1/orders', {
         customerId,
         deliveryAddress: formText(form, 'deliveryAddress'),
         deliveryDate: selectedMenu ? dateOnly(selectedMenu.cycle.closeAt) : '',
@@ -255,18 +258,20 @@ export function OrderIntakePage() {
         paymentExpectation: formText(form, 'paymentExpectation'),
         source: formText(form, 'source'),
       });
-      event.currentTarget.reset();
       // The draft is dropped on a successful save, not on unmount: that is what makes "I switched
       // screens and came back" restore, while "I already saved this" does not come back as a ghost.
       draft.discard();
-      setSelectedCustomer(null);
-      setCustomerResults([]);
-      setCustomerQuery('');
-      setSelectedOfferingId('');
-      setSelectedDishes([]);
       setMessage('');
-      setFormOpen(false);
       showToast('Pedido registrado como borrador.');
+      /*
+       * El formulario NO se limpia ni se cierra acá: eso lo decide el diálogo.
+       *
+       * Antes se reseteaba y se cerraba solo, y con la pantalla scrolleada abajo ese cambio pasaba
+       * desapercibido: alguien tocó el botón treinta y seis veces en ochenta segundos creyendo que
+       * no pasaba nada, y creó treinta y seis pedidos. Un paso que corta y obliga a elegir hace
+       * imposible esa confusión.
+       */
+      setSavedNumber(((await createdOrder.json()) as OrderSummary).publicNumber);
       await loadData();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos crear el pedido.');
@@ -634,6 +639,27 @@ export function OrderIntakePage() {
           ) : null}
         </div>
       </section>
+
+      {savedNumber ? (
+        <AfterSaveDialog
+          detail={`Quedó como borrador con el número ${savedNumber}.`}
+          keepLabel="Conservar los datos"
+          newLabel="Cargar otro pedido"
+          onKeep={() => setSavedNumber(null)}
+          onNew={() => {
+            // Vaciar de verdad: el formulario, lo elegido y el cliente. Lo guardado no se pierde,
+            // ya está en la base.
+            formRef.current?.reset();
+            setSelectedCustomer(null);
+            setCustomerResults([]);
+            setCustomerQuery('');
+            setSelectedOfferingId('');
+            setSelectedDishes([]);
+            setSavedNumber(null);
+          }}
+          title="Pedido registrado"
+        />
+      ) : null}
     </DashboardShell>
   );
 }

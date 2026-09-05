@@ -5032,3 +5032,42 @@ a.order-card-phone:focus-visible {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* Diálogo de "¿y ahora qué?" después de guardar. Corta el paso a propósito: un aviso que se
+   desvanece no alcanza cuando la acción se puede repetir sin darse cuenta. */
+.after-save-dialog {
+  width: min(100%, 24rem);
+  border: 1px solid var(--db-border, var(--border-hairline));
+  border-radius: 0.9rem;
+  padding: 1.4rem;
+  background: var(--db-surface-solid, #fff);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 28%);
+  text-align: center;
+}
+.after-save-dialog h2 {
+  margin: 0;
+  color: var(--db-text, var(--color-forest));
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+.after-save-dialog p {
+  margin: 0.5rem 0 0;
+  color: var(--db-muted, var(--color-ink-muted));
+  font-size: 0.9rem;
+}
+.after-save-actions {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1.2rem;
+}
+.after-save-actions .button {
+  width: 100%;
+  justify-content: center;
+  /* 48px: se toca sin apuntar, que es el punto de un diálogo que aparece de golpe. */
+  min-height: 48px;
+}
+.after-save-hint {
+  margin-top: 0.9rem !important;
+  font-size: 0.72rem !important;
+  letter-spacing: 0.03em;
+}
