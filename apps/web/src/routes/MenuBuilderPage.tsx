@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
+import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { DraftNotice } from '../components/DraftNotice.js';
@@ -298,6 +299,7 @@ export function MenuBuilderPage() {
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
+      <DeskWorkNotice can="podés revisar el menú vigente; armarlo pide varios campos a la vez." />
       <section className="dashboard-panel">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>

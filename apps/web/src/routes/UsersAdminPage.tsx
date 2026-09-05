@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useEffect, useState, type FormEvent } from 'react';
 
+import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
@@ -366,6 +367,7 @@ export function UsersAdminPage() {
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
+      <DeskWorkNotice can="podés consultar quién es quién; repartir permisos conviene con la grilla entera a la vista." />
       <section className="dashboard-panel">
         <header>
           <p className="dashboard-kicker">Administración</p>

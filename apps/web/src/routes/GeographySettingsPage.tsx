@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { SettingsTabs } from '../components/SettingsTabs.js';
 import { BrandLoading } from '../components/BrandLoading.js';
@@ -369,6 +370,7 @@ export function GeographySettingsPage() {
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
+      <DeskWorkNotice can="podés consultar zonas y ajustes; cambiarlos conviene con la grilla entera a la vista." />
       <SettingsTabs permissions={profile.permissions} />
       <section className="dashboard-panel">
         <header>

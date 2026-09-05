@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
+import { DataTable, type DataColumn } from '../components/DataTable.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import {
   errorMessage,
   menusForAmbientScope,
   type KitchenSummary,
   type ProductionSnapshot,
+  type SurplusItem,
   type SurplusReport,
   type WeeklyMenu,
 } from '../lib/operations.js';
@@ -17,6 +19,27 @@ function formText(form: FormData, key: string): string {
   const value = form.get(key);
   return typeof value === 'string' ? value : '';
 }
+
+/**
+ * Ocho columnas, declaradas una sola vez para las dos formas — tabla en escritorio, tarjetas en
+ * teléfono. `disponible` es la que se destaca: las otras siete explican cómo se llegó a ese número,
+ * pero el que decide qué hacer con el excedente es ése.
+ */
+const SURPLUS_COLUMNS: readonly DataColumn<SurplusItem>[] = [
+  {
+    key: 'variedad',
+    label: 'Variedad',
+    primary: true,
+    render: (item) => `${item.familyName} ${item.variantName}`,
+  },
+  { key: 'demanda', label: 'Demanda', render: (item) => item.demandaConfirmada },
+  { key: 'planificada', label: 'Planificada', render: (item) => item.produccionPlanificada },
+  { key: 'real', label: 'Real', render: (item) => item.produccionReal ?? '—' },
+  { key: 'efectivo', label: 'Efectivo', render: (item) => item.excedenteEfectivo },
+  { key: 'oportunidad', label: 'Vendido oport.', render: (item) => item.vendidoOportunidad },
+  { key: 'baja', label: 'Baja', render: (item) => item.bajaMerma },
+  { emphasis: true, key: 'disponible', label: 'Disponible', render: (item) => item.disponible },
+];
 
 async function downloadExport(cycleId: string, kind: 'final' | 'partial', format: 'pdf' | 'xlsx') {
   const response = await apiRequest(
@@ -457,47 +480,14 @@ export function KitchenPage() {
                 {surplus ? (
                   <div className="operation-card mt-6">
                     <h3 className="text-xl font-semibold text-forest">Excedente</h3>
-                    <div className="mt-4 overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="text-left text-ink-muted">
-                            <th className="pb-2">Variedad</th>
-                            <th className="pb-2">Demanda</th>
-                            <th className="pb-2">Planificada</th>
-                            <th className="pb-2">Real</th>
-                            <th className="pb-2">Efectivo</th>
-                            <th className="pb-2">Vendido oport.</th>
-                            <th className="pb-2">Baja</th>
-                            <th className="pb-2">Disponible</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {surplus.items.map((item) => (
-                            <tr
-                              className="border-t border-forest/10"
-                              key={`${item.familyName}-${item.variantName}`}
-                            >
-                              <td className="py-2">
-                                {item.familyName} {item.variantName}
-                              </td>
-                              <td>{item.demandaConfirmada}</td>
-                              <td>{item.produccionPlanificada}</td>
-                              <td>{item.produccionReal ?? '—'}</td>
-                              <td>{item.excedenteEfectivo}</td>
-                              <td>{item.vendidoOportunidad}</td>
-                              <td>{item.bajaMerma}</td>
-                              <td className="font-semibold">{item.disponible}</td>
-                            </tr>
-                          ))}
-                          {surplus.items.length === 0 ? (
-                            <tr>
-                              <td className="py-2 text-ink-muted" colSpan={8}>
-                                Sin datos todavía.
-                              </td>
-                            </tr>
-                          ) : null}
-                        </tbody>
-                      </table>
+                    <div className="mt-4">
+                      <DataTable
+                        caption="Excedente por variedad"
+                        columns={SURPLUS_COLUMNS}
+                        empty="Sin datos todavía."
+                        rowKey={(item) => `${item.familyName}-${item.variantName}`}
+                        rows={surplus.items}
+                      />
                     </div>
 
                     {canAdjustSurplus ? (

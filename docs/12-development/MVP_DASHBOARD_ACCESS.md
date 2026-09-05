@@ -216,3 +216,22 @@ Sólo se listan las que tienen algo: una fila que dice cero no es información.
 **El estado vacío distingue "cargando" de "no hay nada".** Decir "Todo al día" antes de que lleguen
 los datos es afirmar durante segundos, y sobre lo único que la pantalla existe para responder, algo
 que todavía no se sabe.
+
+### Tablas y pantallas de escritorio
+
+**`DataTable`** declara las columnas una sola vez y de ahí salen dos formas: tabla en escritorio,
+una tarjeta por fila en teléfono. Una tabla de ocho columnas en 375px no se arregla con
+`overflow-x`: obliga a arrastrar de lado para leer una fila y se pierde de vista la columna que dice
+de qué fila se trata. Escribir las dos formas por separado sería garantizar que dentro de unos meses
+digan cosas distintas.
+
+La usa hoy el excedente de Cocina, que era **la única tabla real de la app**. Un barrido de las nueve
+pantallas de consulta a 375px no encontró ninguna otra que desborde: Pedidos y Pagos ya venían
+resueltos con tarjetas.
+
+**`DeskWorkNotice`** avisa, en pantalla angosta, en las ocho pantallas que son trabajo de escritorio
+(menú semanal, contenidos, workbench de IA, usuarios, estadísticas, auditoría, encuestas, ajustes).
+Dice qué **sí** se puede hacer desde el teléfono en cada una, en vez de un genérico.
+
+No bloquea, a propósito. Bloquear sería decidir por alguien que quizás está en la calle y sin otra
+opción; dejar un formulario de doce campos apretado sin decir nada sería peor todavía.

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
@@ -123,6 +124,7 @@ export function AuditLogPage() {
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
+      <DeskWorkNotice can="podés buscar un evento; leer la traza entera pide más ancho." />
       <section className="dashboard-panel">
         <header>
           <p className="dashboard-kicker">Administración</p>

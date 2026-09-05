@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type DragEvent, type FormEvent } from
 
 import { CmsSection } from '../components/CmsSections.js';
 import { CmsImageField } from '../components/CmsImageField.js';
+import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
@@ -255,6 +256,7 @@ export function CmsPagesAdminPage() {
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
+      <DeskWorkNotice can="podés leer lo publicado; editarlo con la vista previa al lado pide ancho." />
       <section className="dashboard-panel">
         <header>
           <p className="dashboard-kicker">Administración</p>

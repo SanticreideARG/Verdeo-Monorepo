@@ -4545,3 +4545,104 @@ main .operation-card {
 .mobile-actions a:active {
   border-color: var(--db-accent);
 }
+
+/* ==========================================================================
+   Tablas que dejan de serlo en un teléfono (DataTable).
+   ========================================================================== */
+
+.data-table-scroll {
+  overflow-x: auto;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.data-table th {
+  padding-bottom: 0.5rem;
+  color: var(--db-muted, var(--color-ink-muted));
+  font-weight: 600;
+  text-align: left;
+}
+.data-table td {
+  padding: 0.5rem 0.6rem 0.5rem 0;
+  border-top: 1px solid var(--db-border-soft, var(--border-hairline));
+  /* Las columnas de números se leen comparando entre filas: sin ancho fijo por dígito, bailan. */
+  font-variant-numeric: tabular-nums;
+}
+.data-table td.is-emphasis {
+  font-weight: 700;
+}
+.data-table-empty {
+  margin: 0;
+  padding: 0.6rem 0;
+  color: var(--db-muted, var(--color-ink-muted));
+  font-size: 0.9rem;
+}
+
+.data-cards {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.data-cards > li {
+  border: 1px solid var(--db-border, var(--border-hairline));
+  border-radius: 0.7rem;
+  padding: 0.75rem 0.85rem;
+  background: var(--db-surface, #fff);
+}
+.data-cards-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+.data-cards dl {
+  display: grid;
+  gap: 0.3rem 0.9rem;
+  margin: 0;
+  /* Dos por fila: siete pares en una sola columna serían una tarjeta más alta que la pantalla. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.data-cards dl > div {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 0.82rem;
+}
+.data-cards dt {
+  color: var(--db-muted, var(--color-ink-muted));
+}
+.data-cards dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+/* La que resume la fila ocupa el ancho entero y se separa del resto. */
+.data-cards dl > div.is-emphasis {
+  grid-column: 1 / -1;
+  margin-top: 0.15rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--db-border-soft, var(--border-hairline));
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+/* Aviso de trabajo de escritorio. Informa y no bloquea: quien esté en la calle sin otra opción
+   tiene que poder seguir, sabiendo que va a costar. */
+.desk-work-notice {
+  margin: 0 0 1rem;
+  border: 1px solid var(--db-border, var(--border-hairline));
+  border-left: 4px solid var(--db-gold, #a9841f);
+  border-radius: 0.5rem;
+  padding: 0.7rem 0.85rem;
+  background: var(--db-surface, #fff);
+  color: var(--db-text-soft, var(--color-ink-muted));
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+.desk-work-notice strong {
+  display: block;
+  color: var(--db-text, var(--color-ink));
+}
