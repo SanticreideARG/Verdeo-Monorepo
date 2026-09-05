@@ -1601,81 +1601,6 @@ a {
   }
 }
 
-@media (max-width: 1180px) {
-  .dashboard-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .dashboard-module-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .dashboard-weather {
-    display: none;
-  }
-}
-
-@media (max-width: 900px) {
-  .dashboard-sidebar {
-    transform: translateX(-105%);
-  }
-  .dashboard-sidebar.is-open {
-    transform: translateX(0);
-  }
-  .dashboard-sidebar-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 45;
-    border: 0;
-    background: rgb(3 10 17 / 58%);
-    backdrop-filter: blur(2px);
-  }
-  .dashboard-sidebar-backdrop.is-visible {
-    display: block;
-  }
-  .dashboard-workspace {
-    margin-left: 0;
-  }
-  .dashboard-menu-button {
-    display: grid;
-  }
-  .dashboard-topbar-welcome {
-    margin-right: auto;
-  }
-  .dashboard-hero {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 680px) {
-  .dashboard-topbar {
-    height: 66px;
-    padding: 0 1rem;
-  }
-  .dashboard-topbar-welcome span,
-  .dashboard-clock,
-  .dashboard-themes {
-    display: none;
-  }
-  .dashboard-content {
-    padding: 1.25rem 1rem 2rem;
-  }
-  .dashboard-hero > div:first-child {
-    padding: 0.8rem 0;
-  }
-  .dashboard-hero h1 {
-    font-size: 3.4rem;
-  }
-  .dashboard-metrics,
-  .dashboard-module-grid {
-    grid-template-columns: 1fr;
-  }
-  .dashboard-section-heading > span {
-    display: none;
-  }
-  .dashboard-module-card {
-    min-height: 210px;
-  }
-}
-
 .operation-workspace > div:first-child {
   padding: 1rem 0 1.5rem;
   border-bottom: 1px solid var(--db-border-soft);
@@ -2655,54 +2580,6 @@ a {
 }
 .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar-footer {
   flex-direction: column;
-}
-
-@media (max-width: 900px) {
-  .dashboard-sidebar,
-  .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar {
-    width: 244px;
-  }
-  .dashboard-workspace,
-  .dashboard-shell.has-collapsed-sidebar .dashboard-workspace {
-    margin-left: 0;
-  }
-  .dashboard-shell.has-collapsed-sidebar .dashboard-brand {
-    justify-content: flex-start;
-    padding-inline: 1rem;
-  }
-  .dashboard-shell.has-collapsed-sidebar .dashboard-brand > span,
-  .dashboard-shell.has-collapsed-sidebar .dashboard-brand > small,
-  .dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > a > span,
-  .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar-collapse > span,
-  .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar-user > div {
-    display: initial;
-  }
-  .dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > button {
-    display: flex;
-  }
-  .dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > a,
-  .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar-collapse {
-    justify-content: flex-start;
-    padding-inline: 0.55rem;
-  }
-  .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar-collapse svg {
-    transform: none;
-  }
-  .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar-footer {
-    flex-direction: row;
-  }
-}
-
-@media (max-width: 680px) {
-  .dashboard-topbar {
-    height: 56px;
-  }
-  .dashboard-content {
-    padding: 1.15rem 0.9rem 2rem;
-  }
-  .dashboard-hero h1 {
-    font-size: 2.85rem;
-  }
 }
 
 /* Internal chat. Two columns on desktop, stacked on mobile. */
@@ -4339,4 +4216,132 @@ main .operation-card {
   border-color: var(--db-accent);
   background: color-mix(in srgb, var(--db-accent) 16%, transparent);
   color: var(--db-text);
+}
+
+/* ==========================================================================
+   Puntos de quiebre del shell.
+
+   Van al final del archivo, y eso no es una preferencia de orden: es la corrección de un error
+   real. Estas reglas estaban repartidas en dos grupos, uno antes y otro después del bloque de
+   densidad que arranca en "Neon-inspired density pass". Ese bloque vuelve a declarar los mismos
+   selectores sin media query, y como la especificidad es idéntica ganaba por estar más abajo —
+   así que la regla que colapsaba el hero a una columna en celular nunca se aplicaba. El hero
+   quedaba en dos columnas con una de mínimo 310px, más ancho que la pantalla, y de ahí salían
+   todos los síntomas: el título partido palabra por palabra y la barra superior cortada.
+
+   Regla para el futuro: cualquier regla de layout que dependa del ancho vive acá abajo. Si se
+   agrega otra capa de estilos, se agrega ANTES de esta sección, nunca después.
+   ========================================================================== */
+
+@media (max-width: 1180px) {
+  .dashboard-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dashboard-module-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dashboard-weather {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  /* El menú lateral pasa a ser un cajón: sale de la pantalla y vuelve al tocar el botón. */
+  .dashboard-sidebar,
+  .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar {
+    width: 244px;
+    transform: translateX(-105%);
+  }
+  .dashboard-sidebar.is-open,
+  .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar.is-open {
+    transform: translateX(0);
+  }
+  .dashboard-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    border: 0;
+    background: rgb(3 10 17 / 58%);
+    backdrop-filter: blur(2px);
+  }
+  .dashboard-sidebar-backdrop.is-visible {
+    display: block;
+  }
+  .dashboard-workspace,
+  .dashboard-shell.has-collapsed-sidebar .dashboard-workspace {
+    margin-left: 0;
+  }
+  .dashboard-menu-button {
+    display: grid;
+  }
+  .dashboard-topbar-welcome {
+    margin-right: auto;
+  }
+
+  /* La que estaba muerta. Sin esto el hero se desborda y arrastra a toda la página. */
+  .dashboard-hero {
+    grid-template-columns: 1fr;
+  }
+
+  /* Con el cajón abierto no tiene sentido el modo angosto: se muestra completo. */
+  .dashboard-shell.has-collapsed-sidebar .dashboard-brand {
+    justify-content: flex-start;
+    padding-inline: 1rem;
+  }
+  .dashboard-shell.has-collapsed-sidebar .dashboard-brand > span,
+  .dashboard-shell.has-collapsed-sidebar .dashboard-brand > small,
+  .dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > a > span,
+  .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar-collapse > span,
+  .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar-user > div {
+    display: initial;
+  }
+  .dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > button {
+    display: flex;
+  }
+  .dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > a,
+  .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar-collapse {
+    justify-content: flex-start;
+    padding-inline: 0.55rem;
+  }
+  .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar-collapse svg {
+    transform: none;
+  }
+  .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar-footer {
+    flex-direction: row;
+  }
+}
+
+@media (max-width: 680px) {
+  .dashboard-topbar {
+    height: 56px;
+    padding: 0 1rem;
+  }
+  /* Lo que se saca de la barra por falta de lugar. `appearance-menu` reemplazó a `dashboard-themes`
+     al agrupar tema, fuente y tamaño de letra: la regla vieja nombraba la clase anterior y el botón
+     nuevo quedó sumando un control a una barra que ya no entraba. */
+  .dashboard-topbar-welcome span,
+  .dashboard-clock,
+  .appearance-menu {
+    display: none;
+  }
+  .dashboard-content {
+    padding: 1.15rem 0.9rem 2rem;
+  }
+  .dashboard-hero > div:first-child {
+    padding: 0.8rem 0;
+  }
+  /* Fluido en vez de fijo: a 2.85rem clavados, un teléfono de 320px vuelve a partir palabras. */
+  .dashboard-hero h1 {
+    font-size: clamp(2.1rem, 9vw, 2.85rem);
+  }
+  .dashboard-metrics,
+  .dashboard-module-grid {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-section-heading > span {
+    display: none;
+  }
+  .dashboard-module-card {
+    min-height: 210px;
+  }
 }

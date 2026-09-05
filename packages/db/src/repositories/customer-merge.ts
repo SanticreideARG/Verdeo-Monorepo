@@ -332,29 +332,47 @@ export async function findMergeCandidates(
   database: Database,
   limit: number,
 ): Promise<MergeCandidate[]> {
+  /*
+   * Los dos arreglos se emparejan por posición, así que ninguno puede llevar `distinct`: en el
+   * grupo "mismo nombre" los nombres son idénticos por definición, y `distinct` los colapsaba a uno
+   * solo — seis fichas y un nombre. Las filas se deduplican antes de agregar, y las dos columnas se
+   * ordenan por el mismo id para que la posición signifique lo mismo en las dos.
+   */
   const rows = await database.execute(sql`
     select customer_ids, customer_names, reason, value from (
       select
-        array_agg(distinct ci.customer_id::text) as customer_ids,
-        array_agg(distinct c.display_name) as customer_names,
+        array_agg(customer_id order by customer_id) as customer_ids,
+        array_agg(display_name order by customer_id) as customer_names,
         'duplicate-contact' as reason,
-        min(ci.value_display) as value
-      from customer_identities ci
-      join customers c on c.id = ci.customer_id
-      where c.merged_into_customer_id is null
-      group by ci.type, ci.value_normalized
-      having count(distinct ci.customer_id) > 1
+        min(value_display) as value
+      from (
+        select
+          ci.type as type,
+          ci.value_normalized as value_normalized,
+          ci.customer_id::text as customer_id,
+          min(c.display_name) as display_name,
+          min(ci.value_display) as value_display
+        from customer_identities ci
+        join customers c on c.id = ci.customer_id
+        where c.merged_into_customer_id is null
+        group by ci.type, ci.value_normalized, ci.customer_id
+      ) contacts
+      group by type, value_normalized
+      having count(*) > 1
 
       union all
 
       select
-        array_agg(distinct c.id::text) as customer_ids,
-        array_agg(distinct c.display_name) as customer_names,
+        array_agg(customer_id order by customer_id) as customer_ids,
+        array_agg(display_name order by customer_id) as customer_names,
         'same-name' as reason,
-        min(c.display_name) as value
-      from customers c
-      where c.merged_into_customer_id is null
-      group by lower(btrim(c.display_name))
+        min(display_name) as value
+      from (
+        select id::text as customer_id, display_name
+        from customers
+        where merged_into_customer_id is null
+      ) people
+      group by lower(btrim(display_name))
       having count(*) > 1
     ) candidates
     order by reason, value

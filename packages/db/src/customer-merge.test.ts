@@ -247,6 +247,15 @@ describe('findMergeCandidates', () => {
       expect.objectContaining({ reason: 'same-name', value: 'Camila Rojas' }),
     );
 
+    /*
+     * Un nombre por ficha, aunque los dos nombres sean el mismo. El diálogo empareja ids con
+     * nombres por posición, así que un arreglo más corto deja fichas sin nombre — y en el grupo
+     * "mismo nombre" los nombres son idénticos siempre, que es donde más duele.
+     */
+    const candidate = before.find((item) => item.reason === 'same-name');
+    expect(candidate?.customerNames).toHaveLength(candidate?.customerIds.length ?? 0);
+    expect(candidate?.customerNames).toEqual(['Camila Rojas', 'Camila Rojas']);
+
     await mergeCustomers(db, { mergedId: MERGED, survivorId: SURVIVOR }, CONTEXT);
 
     // A tombstone is not a candidate: suggesting it again would offer to merge what was merged.
