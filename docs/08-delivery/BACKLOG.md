@@ -166,4 +166,8 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
       cualquier revisión regional**, así que guardar la semana de una ciudad le cambiaba el nombre y
       las fechas a las demás. Desde una revisión regional el ciclo ya no se toca y se rechaza con un
       mensaje si vienen valores distintos; el formulario los muestra de sólo lectura.
-- [ ] `audit` y `observability` siguen sin un solo test.
+- [x] `audit` y `observability` ya tienen tests (5 y 10). Los dos que importan: que `AuditService`
+      no se trague un fallo del sink —corre dentro de la transacción de quien audita, y tragarlo
+      daría la operación por buena sin dejar rastro— y que el logger tape tokens, claves y headers
+      de autorización. Para poder comprobar lo segundo, `createLogger` acepta un destino opcional:
+      por defecto pino escribe al descriptor 1 y lo que sale no se puede leer desde un test.

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import pino, { type Logger, type LoggerOptions } from 'pino';
+import pino, { type DestinationStream, type Logger, type LoggerOptions } from 'pino';
 
 export interface LoggerConfig {
   level: NonNullable<LoggerOptions['level']>;
@@ -8,8 +8,16 @@ export interface LoggerConfig {
   service: string;
 }
 
-export function createLogger(config: LoggerConfig): Logger {
-  return pino({
+/**
+ * El logger de la aplicación, con las credenciales tapadas.
+ *
+ * `destination` existe para poder verificar eso último. Sin él, pino escribe directo al descriptor
+ * 1 y lo que sale no se puede leer desde un test —ni espiando `process.stdout.write`—, así que la
+ * redacción, que es lo único que este archivo tiene de riesgoso, quedaría sin comprobar. En
+ * producción no se pasa: el destino por defecto es el de siempre.
+ */
+export function createLogger(config: LoggerConfig, destination?: DestinationStream): Logger {
+  const options: LoggerOptions = {
     base: { service: config.service },
     level: config.level,
     redact: {
@@ -32,7 +40,9 @@ export function createLogger(config: LoggerConfig): Logger {
           },
         }
       : {}),
-  });
+  };
+
+  return destination ? pino(options, destination) : pino(options);
 }
 
 export function createRequestId(incoming?: string): string {
