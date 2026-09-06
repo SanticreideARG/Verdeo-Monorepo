@@ -46,8 +46,17 @@ Each screen fetches `/api/v1/me` independently and blocks on it before anything 
 fetches `/api/v1/scope` on every mount. That is two serialised round trips added to every
 navigation, for data that does not change between screens.
 
+**Partially delivered.** `/me` is now cached at module level in `useDashboardProfile.ts` and shared
+with the five screens that fetch it themselves (they read `cachedProfile()` and feed it back with
+`rememberProfile()`). A screen that finds the session cached renders with it on the first pass, so
+navigating no longer fades to a full-screen loader; the request still goes out in the background so
+a permission change lands without a reload, but it can no longer blank anything. `forgetCachedProfile()`
+runs on logout and on a 401, so a session cannot outlive itself in the tab. Measured before the
+change: 5 of 5 navigations showed the full-screen loader. After: 0 of 7. `/scope` is untouched.
+
 - A `SessionProvider` at the `App` level resolving `/me` and `/scope` once, with screens reading
-  from context.
+  from context. The module-level cache is the cheap half of this; the provider is still what makes
+  invalidation explicit and removes the second round trip.
 - Changing the operating site currently calls `window.location.reload()`
   (`DashboardShell.tsx`). Replace it with cache invalidation plus a background refetch. This is
   the last full page reload left in the dashboard, and it needs Fase 3's invalidation hook to be

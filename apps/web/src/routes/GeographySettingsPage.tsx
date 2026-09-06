@@ -6,6 +6,7 @@ import { DashboardShell, type DashboardProfile } from '../components/DashboardSh
 import { SettingsTabs } from '../components/SettingsTabs.js';
 import { BrandLoading } from '../components/BrandLoading.js';
 import { apiRequest } from '../lib/api.js';
+import { cachedProfile, rememberProfile } from '../lib/useDashboardProfile.js';
 
 export interface OperatingSite {
   active: boolean;
@@ -75,7 +76,7 @@ function timeLabel(value: string): string {
 
 export function GeographySettingsPage() {
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<DashboardProfile | null>(null);
+  const [profile, setProfile] = useState<DashboardProfile | null>(cachedProfile);
   const [failed, setFailed] = useState(false);
   const [sites, setSites] = useState<OperatingSite[]>([]);
   const [zones, setZones] = useState<GeographicZone[]>([]);
@@ -108,6 +109,7 @@ export function GeographySettingsPage() {
         }
         if (!response.ok) throw new Error('Could not load session');
         const body = (await response.json()) as DashboardProfile;
+        rememberProfile(body);
         if (active) setProfile(body);
       })
       .catch(() => {

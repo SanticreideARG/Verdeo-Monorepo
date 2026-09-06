@@ -9,6 +9,7 @@ import { DraftNotice } from '../components/DraftNotice.js';
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { BrandLoading } from '../components/BrandLoading.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
+import { cachedProfile, rememberProfile } from '../lib/useDashboardProfile.js';
 import { showToast } from '../lib/toast.js';
 import { useFormDraft } from '../lib/useFormDraft.js';
 import {
@@ -57,7 +58,7 @@ export function CustomersPage() {
   // Deep-links a shared customer reference from chat straight to that customer's detail.
   const [searchParams] = useSearchParams();
   const linkedCustomerId = searchParams.get('customerId') ?? '';
-  const [profile, setProfile] = useState<DashboardProfile | null>(null);
+  const [profile, setProfile] = useState<DashboardProfile | null>(cachedProfile);
   const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
@@ -179,6 +180,7 @@ export function CustomersPage() {
         return;
       }
       if (!active) return;
+      rememberProfile(loadedProfile);
       setProfile(loadedProfile);
       await loadDirectory('', linkedCustomerId);
       // The default page may not include the linked customer at all (it isn't a search match), so
@@ -504,8 +506,13 @@ export function CustomersPage() {
     }
   }
 
-  if (loading || !profile) {
-    if (!loading && !profile) {
+  /*
+   * La pantalla completa se toma sólo mientras no se sabe quién es la persona, que es una sola vez
+   * por pestaña. El padrón puede tardar —son cientos de fichas— y esperarlo en blanco hacía que
+   * entrar a Clientes pareciera una recarga entera; ahora la espera vive dentro de la lista.
+   */
+  if (!profile) {
+    if (!loading) {
       return (
         <main className="grid min-h-screen place-items-center bg-cream px-5 text-center">
           <div>
@@ -585,6 +592,10 @@ export function CustomersPage() {
               </button>
             </div>
             <div className="crm-customer-list">
+              {/* La espera del padrón, acá adentro y no tapando la pantalla. */}
+              {loading && customers.length === 0 ? (
+                <p className="crm-list-loading">Cargando el padrón…</p>
+              ) : null}
               {customers.map((customer) => (
                 <button
                   className={selectedId === customer.id && !showCreate ? 'is-active' : ''}

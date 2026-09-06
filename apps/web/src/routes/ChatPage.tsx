@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { BrandLoading } from '../components/BrandLoading.js';
 import { apiRequest } from '../lib/api.js';
+import { cachedProfile, rememberProfile } from '../lib/useDashboardProfile.js';
 import { errorMessage, formatMoney, orderStatusLabel } from '../lib/operations.js';
 
 interface ChatContact {
@@ -153,7 +154,7 @@ function ReferenceCard({ reference }: { reference: ChatReference }) {
 
 export function ChatPage() {
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<DashboardProfile | null>(null);
+  const [profile, setProfile] = useState<DashboardProfile | null>(cachedProfile);
   const [failed, setFailed] = useState(false);
   const [contacts, setContacts] = useState<ChatContact[]>([]);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
@@ -180,6 +181,7 @@ export function ChatPage() {
         }
         if (!response.ok) throw new Error('sesión');
         const body = (await response.json()) as DashboardProfile;
+        rememberProfile(body);
         if (active) setProfile(body);
       })
       .catch(() => {

@@ -5,6 +5,7 @@ import { DashboardShell, type DashboardProfile } from '../components/DashboardSh
 import { SettingsTabs } from '../components/SettingsTabs.js';
 import { BrandLoading } from '../components/BrandLoading.js';
 import { apiRequest } from '../lib/api.js';
+import { cachedProfile, rememberProfile } from '../lib/useDashboardProfile.js';
 import { errorMessage } from '../lib/operations.js';
 
 interface ChatRole {
@@ -35,7 +36,7 @@ function formText(form: FormData, key: string): string {
 
 export function ChatLinksPage() {
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<DashboardProfile | null>(null);
+  const [profile, setProfile] = useState<DashboardProfile | null>(cachedProfile);
   const [failed, setFailed] = useState(false);
   const [links, setLinks] = useState<ChatLinks | null>(null);
   const [users, setUsers] = useState<{ displayName: string; id: string }[]>([]);
@@ -51,6 +52,7 @@ export function ChatLinksPage() {
         }
         if (!response.ok) throw new Error('sesión');
         const body = (await response.json()) as DashboardProfile;
+        rememberProfile(body);
         if (active) setProfile(body);
       })
       .catch(() => {

@@ -12,6 +12,7 @@ import { MobileDashboard } from '../components/MobileDashboard.js';
 import { BrandLoading } from '../components/BrandLoading.js';
 import { useNarrowViewport } from '../lib/useNarrowViewport.js';
 import { apiRequest } from '../lib/api.js';
+import { cachedProfile, rememberProfile } from '../lib/useDashboardProfile.js';
 
 const modules = [
   {
@@ -75,7 +76,7 @@ function ModuleArrow() {
 export function DashboardPage() {
   const navigate = useNavigate();
   const narrow = useNarrowViewport();
-  const [profile, setProfile] = useState<DashboardProfile | null>(null);
+  const [profile, setProfile] = useState<DashboardProfile | null>(cachedProfile);
   const [failed, setFailed] = useState(false);
   const [demand, setDemand] = useState<{ day: string; orderCount: number }[]>([]);
   const [pendingOrders, setPendingOrders] = useState(0);
@@ -184,6 +185,7 @@ export function DashboardPage() {
         }
         if (!response.ok) throw new Error('Could not load session');
         const body = (await response.json()) as DashboardProfile;
+        rememberProfile(body);
         if (active) setProfile(body);
       })
       .catch(() => {
