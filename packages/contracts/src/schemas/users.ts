@@ -118,3 +118,16 @@ export const UserPasswordResetRequestSchema = z.object({
 });
 
 export const UserPasswordResetResponseSchema = z.object({ password: z.string() });
+
+/**
+ * Un enlace para que la persona elija su propia contraseña.
+ *
+ * No devuelve ninguna contraseña a propósito: la gracia es que quien la genera no la sepa. El
+ * administrador recibe el enlace y se lo pasa por donde pueda —lo cual, además, no depende de que
+ * el correo esté andando—.
+ */
+export const UserPasswordResetLinkResponseSchema = z.object({
+  displayName: z.string(),
+  expiresAt: z.string(),
+  url: z.string(),
+});

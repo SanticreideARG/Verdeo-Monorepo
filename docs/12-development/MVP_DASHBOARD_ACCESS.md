@@ -152,6 +152,37 @@ El mínimo de 12 caracteres es el mismo de `LoginRequestSchema`, y no es cosmét
 guardaría bien y después no serviría para entrar — exactamente la cuenta imposible de depurar que
 este flujo existe para evitar.
 
+### Blanqueo por un administrador, sin correo de por medio
+
+`POST /api/v1/users/:id/password-reset-link` (permiso `users.edit`) emite un enlace de un solo uso
+para una cuenta concreta y **se lo devuelve a quien lo pidió**, que se lo pasa a la persona por donde
+sea. Es la contracara de `POST /api/v1/users/:id/password`: en vez de generar una contraseña que el
+administrador conoce —y que hay que hacer llegar igual, y que termina sabida por dos— la elige la
+persona, y el administrador nunca la sabe.
+
+Resuelve dos cosas a la vez: el blanqueo deja de depender de que el correo esté andando, y funciona
+igual en una cuenta sin dirección cargada.
+
+A diferencia del endpoint público, éste **falla explícitamente** si la cuenta no existe o está dada
+de baja. Ahí no hay nada que ocultar: quien llama está autenticado, tiene el permiso y queda
+auditado, y un silencio sería un enlace que no llega sin que nadie sepa por qué. Emitirlo equivale a
+poder entrar a esa cuenta, así que se audita como `user.password_reset_link_issued` con quién lo
+pidió; el token no se registra, sólo el hecho.
+
+### Lo que se aprendió del correo que no llegaba
+
+Un pedido de recuperación generaba el token, contestaba "te enviamos un enlace" y no mandaba nada,
+**sin dejar una sola línea en ningún lado**: `EmailSender.send` devuelve `{ sent, reason }` en vez de
+tirar —un pedido no puede fallar porque un correo no salga— y los dos llamadores públicos
+descartaban el resultado. Ahora lo registran (`auth.password_reset.email_not_sent`,
+`auth.customer_login.email_not_sent`) sin cambiar la respuesta, que tiene que seguir siendo igual
+siempre.
+
+La causa de fondo era de configuración: el remitente era una dirección `@gmail.com`. Resend sólo
+acepta enviar desde un dominio verificado en la cuenta, así que rechazaba todos los envíos. Ajustes →
+Correo tiene un botón de prueba (`POST /api/v1/integrations/email/test`) que devuelve el motivo
+textual del proveedor: es el primer lugar donde mirar cuando el correo no llega.
+
 ## Celular y PWA (as built)
 
 **Los puntos de quiebre del shell viven al final de `styles.css`, y ahí tienen que quedarse.**

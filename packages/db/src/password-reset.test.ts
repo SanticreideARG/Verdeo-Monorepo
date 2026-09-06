@@ -182,6 +182,80 @@ describe('consume', () => {
   });
 });
 
+const ADMIN_CONTEXT = {
+  actorUserId: OTHER,
+  correlationId: 'corr-1',
+  requestId: 'req-1',
+  source: 'api',
+};
+
+describe('issueForUser', () => {
+  it('emite un enlace usable sin pasar por el correo', async () => {
+    const { client, service } = await seeded();
+
+    const issued = await service.issueForUser(USER, ADMIN_CONTEXT);
+    await service.consume(issued.token, NEXT);
+
+    expect(issued.displayName).toBe('Isabella');
+    // La prueba de que sirve: la contraseña quedó cambiada por quien siguió el enlace.
+    expect(await verifyPassword(NEXT, await storedHash(client))).toBe(true);
+  });
+
+  it('no necesita que la cuenta tenga correo cargado', async () => {
+    const { service, client } = await seeded();
+    await client.exec(`update users set email_normalized = null where id = '${USER}'`);
+
+    // Es justo el caso que hace falta cuando el correo no está andando o nunca se cargó.
+    const issued = await service.issueForUser(USER, ADMIN_CONTEXT);
+
+    expect(issued.token.length).toBeGreaterThan(20);
+  });
+
+  it('nunca guarda el token en crudo', async () => {
+    const { client, service } = await seeded();
+
+    const issued = await service.issueForUser(USER, ADMIN_CONTEXT);
+
+    const rows = await client.query<{ token_hash: string }>(
+      `select token_hash from password_reset_tokens where user_id = '${USER}'`,
+    );
+    expect(rows.rows[0]?.token_hash).not.toBe(issued.token);
+  });
+
+  it('deja registrado quién lo pidió, y no el token', async () => {
+    const { client, service } = await seeded();
+
+    const issued = await service.issueForUser(USER, ADMIN_CONTEXT);
+
+    const rows = await client.query<{ action: string; actor_user_id: string; metadata: unknown }>(
+      `select action, actor_user_id, metadata from audit_events where entity_id = '${USER}'`,
+    );
+    // Emitirlo equivale a poder entrar a esa cuenta: tiene que quedar quién fue.
+    expect(rows.rows[0]?.action).toBe('user.password_reset_link_issued');
+    expect(rows.rows[0]?.actor_user_id).toBe(OTHER);
+    expect(JSON.stringify(rows.rows[0]?.metadata)).not.toContain(issued.token);
+  });
+
+  it('se planta si la cuenta está dada de baja, en vez de emitir un enlace inútil', async () => {
+    const { service } = await seeded({ status: 'disabled' });
+
+    /*
+     * Al revés que `request`, acá conviene fallar fuerte: quien llama es un administrador mirando
+     * una cuenta puntual, no un desconocido probando direcciones, así que no hay nada que ocultar y
+     * un silencio sería un enlace que no llega sin que nadie sepa por qué.
+     */
+    await expect(service.issueForUser(USER, ADMIN_CONTEXT)).rejects.toThrow(PasswordResetError);
+  });
+
+  it('se planta si la cuenta no existe', async () => {
+    const { service } = await seeded();
+
+    await expect(
+      service.issueForUser('f0000000-0000-4000-8000-0000000000ff', ADMIN_CONTEXT),
+    ).rejects.toThrow(PasswordResetError);
+  });
+});
+
 describe('changeOwn', () => {
   it('changes the password when the current one matches', async () => {
     const { client, service } = await seeded();

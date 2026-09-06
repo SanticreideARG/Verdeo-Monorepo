@@ -3548,6 +3548,7 @@ describe('API foundation', () => {
         passwordReset: {
           changeOwn: vi.fn(),
           consume: vi.fn(),
+          issueForUser: vi.fn(),
           request: vi.fn(),
           ...passwordReset,
         },

@@ -1,10 +1,12 @@
 import { createHash, randomBytes } from 'node:crypto';
 
+import { AuditService } from '@verdeo/audit';
 import { hashPassword, verifyPassword } from '@verdeo/auth';
 import { and, eq, gt, isNull, ne, sql } from 'drizzle-orm';
 
 import type { Database } from '../index.js';
 import { passwordCredentials, passwordResetTokens, sessions, users } from '../schema/index.js';
+import { PostgresAuditSink } from './postgres-audit-sink.js';
 
 /** Treinta minutos: alcanza para ir al correo, poco para que un enlace filtrado siga sirviendo. */
 const TOKEN_TTL_MS = 30 * 60 * 1000;
@@ -80,6 +82,63 @@ export class PostgresPasswordResetService {
     });
 
     return { displayName: user.displayName, email: emailNormalized, expiresAt, token };
+  }
+
+  /**
+   * Emite un enlace para una cuenta concreta, a pedido de un administrador.
+   *
+   * Es la contracara de resetear la contraseña por alguien: en vez de generar una que el
+   * administrador conoce —y que hay que pasarle a la persona por algún lado, y que queda sabida por
+   * dos— genera un enlace de un solo uso para que la elija ella. El administrador nunca sabe la
+   * contraseña resultante.
+   *
+   * A diferencia de `request`, acá no hay nada que ocultar ni límite de pedidos: quien llama ya
+   * está autenticado, tiene el permiso y queda auditado. Sí falla explícitamente si la cuenta no
+   * existe o está dada de baja, porque el administrador está mirando una cuenta puntual y un
+   * silencio ahí sería un enlace que no llega y nadie sabe por qué.
+   *
+   * Tampoco necesita que la cuenta tenga correo: el enlace se lo pasa el administrador por donde
+   * pueda, que es justamente lo que hace falta cuando el correo todavía no anda.
+   */
+  public async issueForUser(
+    userId: string,
+    context: { actorUserId: string; correlationId: string; requestId: string; source: string },
+  ): Promise<{ displayName: string; expiresAt: Date; token: string }> {
+    return this.database.transaction(async (transaction) => {
+      const [user] = await transaction
+        .select({ displayName: users.displayName, status: users.status })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      if (!user) throw new PasswordResetError('Esa cuenta no existe.');
+      if (user.status !== 'active') {
+        throw new PasswordResetError(
+          'Esa cuenta está dada de baja: reactivala antes de generar un enlace.',
+        );
+      }
+
+      const token = randomBytes(32).toString('base64url');
+      const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
+      await transaction
+        .insert(passwordResetTokens)
+        .values({ expiresAt, tokenHash: hashToken(token), userId });
+
+      // Emitirlo equivale a poder entrar a esa cuenta, así que queda quién lo pidió y cuándo. El
+      // token no: lo que se audita es el hecho, no la credencial.
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: 'user.password_reset_link_issued',
+        actor: { type: 'user', userId: context.actorUserId },
+        correlationId: context.correlationId,
+        entityId: userId,
+        entityType: 'user',
+        metadata: { expiresAt: expiresAt.toISOString() },
+        requestId: context.requestId,
+        source: context.source,
+      });
+
+      return { displayName: user.displayName, expiresAt, token };
+    });
   }
 
   /**

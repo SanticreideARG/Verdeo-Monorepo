@@ -204,6 +204,7 @@ import {
   UserListQuerySchema,
   UserListResponseSchema,
   UserPasswordResetRequestSchema,
+  UserPasswordResetLinkResponseSchema,
   UserPasswordResetResponseSchema,
   UserProvisionRequestSchema,
   UserProvisionResponseSchema,
@@ -953,6 +954,10 @@ interface CreateAppOptions {
       userId: string;
     }): Promise<void>;
     consume(token: string, newPassword: string): Promise<{ userId: string }>;
+    issueForUser(
+      userId: string,
+      context: { actorUserId: string; correlationId: string; requestId: string; source: string },
+    ): Promise<{ displayName: string; expiresAt: Date; token: string }>;
     request(email: string): Promise<{
       displayName: string;
       email: string;
@@ -1594,12 +1599,24 @@ export function createApp(options: CreateAppOptions) {
             'ignorá este correo: tu contraseña sigue igual.',
           heading: 'Recuperar tu cuenta de Verdeo',
         });
-        await options.emailSender.send({
+        const result = await options.emailSender.send({
           html: body.html,
           subject: 'Recuperar tu cuenta de Verdeo',
           text: body.text,
           to: issued.email,
         });
+        /*
+         * El envío no puede cambiar la respuesta —contestar distinto cuando rebota delata que la
+         * cuenta existe— pero sí tiene que dejar rastro. Sin esto, un remitente sin dominio
+         * verificado se ve exactamente igual que un correo entregado: el token se emite, la
+         * pantalla dice "te enviamos un enlace" y no llega nada, sin una sola línea en ningún lado.
+         */
+        if (!result.sent) {
+          (context.get('logger') ?? options.logger).error({
+            event: 'auth.password_reset.email_not_sent',
+            reason: result.reason,
+          });
+        }
       }
     } catch (error) {
       (context.get('logger') ?? options.logger).error({
@@ -1659,14 +1676,20 @@ export function createApp(options: CreateAppOptions) {
           'Si no pediste esto, ignorá este correo.',
         heading: 'Tu acceso a Verdeo',
       });
-      // Not awaited for its result beyond logging: a mail that bounces must not tell the caller
-      // that this address exists.
-      await options.emailSender.send({
+      // El resultado se registra y no se contesta: un correo que rebota no puede delatarle a quien
+      // pregunta que esa dirección existe.
+      const result = await options.emailSender.send({
         html: body.html,
         subject: 'Tu acceso a Verdeo',
         text: body.text,
         to: input.data.email,
       });
+      if (!result.sent) {
+        (context.get('logger') ?? options.logger).error({
+          event: 'auth.customer_login.email_not_sent',
+          reason: result.reason,
+        });
+      }
     }
 
     return context.json(
@@ -2370,6 +2393,39 @@ export function createApp(options: CreateAppOptions) {
       userId: params.data.id,
     });
     return context.json(UserPasswordResetResponseSchema.parse(result));
+  });
+
+  /**
+   * Un enlace de un solo uso para que la persona elija su propia contraseña.
+   *
+   * La alternativa a generarle una: nadie más que ella termina sabiéndola, y el administrador le
+   * pasa el enlace por donde pueda —no depende del correo, que es justo lo que hace falta cuando el
+   * correo no está andando o la cuenta no tiene dirección cargada—.
+   *
+   * Emitirlo es equivalente a poder entrar a esa cuenta, así que queda auditado con quién lo pidió.
+   * El token no se registra: lo que se audita es el hecho, no la credencial.
+   */
+  app.post('/api/v1/users/:id/password-reset-link', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('users.edit')) return forbidden(context);
+    if (!options.passwordReset) throw new Error('Password reset engine is not configured');
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    if (!params.success) return badRequest(context, 'Revisá el usuario.');
+
+    const issued = await options.passwordReset.issueForUser(params.data.id, {
+      actorUserId: session.userId,
+      correlationId: context.get('requestId'),
+      requestId: context.get('requestId'),
+      source: 'api',
+    });
+
+    return context.json(
+      UserPasswordResetLinkResponseSchema.parse({
+        displayName: issued.displayName,
+        expiresAt: issued.expiresAt.toISOString(),
+        url: `${options.appOrigin}/recuperar?token=${encodeURIComponent(issued.token)}`,
+      }),
+    );
   });
 
   app.patch('/api/v1/users/:id/status', async (context) => {

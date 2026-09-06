@@ -128,6 +128,11 @@ export function UsersAdminPage() {
   const [search, setSearch] = useState('');
   const [provisioning, setProvisioning] = useState(false);
   const [issued, setIssued] = useState<{ email: string; password: string } | null>(null);
+  const [resetLink, setResetLink] = useState<{
+    displayName: string;
+    expiresAt: string;
+    url: string;
+  } | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
   const [catalog, setCatalog] = useState<PermissionCatalogEntry[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -253,6 +258,28 @@ export function UsersAdminPage() {
     const result = (await response.json()) as { password: string };
     setIssued({ email: user.displayName, password: result.password });
     showToast('Contraseña restablecida.');
+  }
+
+  /**
+   * Un enlace de un solo uso para que la persona elija su propia contraseña.
+   *
+   * Preferible a generarle una: nadie más que ella termina sabiéndola, y el enlace se pasa por
+   * donde haga falta —no depende de que el correo esté andando ni de que la cuenta tenga
+   * dirección cargada—.
+   */
+  async function issueResetLink(user: { displayName: string; id: string }) {
+    setMessage('');
+    const response = await apiRequest(`/api/v1/users/${user.id}/password-reset-link`, {
+      body: JSON.stringify({}),
+      method: 'POST',
+    });
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    const result = (await response.json()) as { expiresAt: string; url: string };
+    setResetLink({ displayName: user.displayName, expiresAt: result.expiresAt, url: result.url });
+    showToast('Enlace generado.');
   }
 
   async function selectUser(userId: string) {
@@ -428,25 +455,54 @@ export function UsersAdminPage() {
                 {provisioning ? 'Creando…' : 'Crear usuario'}
               </button>
             </form>
-
-            {/* Shown once and only in this session's memory: there is no endpoint that could
-                return it again. */}
-            {issued ? (
-              <div className="credential-handoff mt-4">
-                <p>
-                  Cuenta creada. Pasale estos datos a <b>{issued.email}</b> — no vas a poder verlos
-                  de nuevo.
-                </p>
-                <code>{issued.password}</code>
-                <button
-                  onClick={() => void navigator.clipboard.writeText(issued.password)}
-                  type="button"
-                >
-                  Copiar
-                </button>
-              </div>
-            ) : null}
           </details>
+        ) : null}
+
+        {/*
+         * Fuera del formulario de alta, y a propósito: restablecer la contraseña de alguien se hace
+         * desde la ficha de la persona, más abajo, y este panel vivía adentro del desplegable de
+         * "Crear usuario". Con el desplegable cerrado —que es como está siempre que no se esté
+         * creando a alguien— la contraseña se generaba y no se veía en ningún lado.
+         *
+         * Se muestra una sola vez y sólo en la memoria de esta pestaña: no hay endpoint que la
+         * pueda devolver de nuevo.
+         */}
+        {issued ? (
+          <div className="credential-handoff mt-4">
+            <p>
+              Contraseña nueva de <b>{issued.email}</b>. Pasásela — no vas a poder verla de nuevo.
+            </p>
+            <code>{issued.password}</code>
+            <button
+              onClick={() => void navigator.clipboard.writeText(issued.password)}
+              type="button"
+            >
+              Copiar
+            </button>
+            <button onClick={() => setIssued(null)} type="button">
+              Listo
+            </button>
+          </div>
+        ) : null}
+
+        {resetLink ? (
+          <div className="credential-handoff mt-4">
+            <p>
+              Enlace para <b>{resetLink.displayName}</b>. Pasáselo por donde quieras: al abrirlo
+              elige su propia contraseña, y vos no la vas a saber. Vence{' '}
+              {new Intl.DateTimeFormat('es-AR', { timeStyle: 'short' }).format(
+                new Date(resetLink.expiresAt),
+              )}{' '}
+              y sirve una sola vez.
+            </p>
+            <code>{resetLink.url}</code>
+            <button onClick={() => void navigator.clipboard.writeText(resetLink.url)} type="button">
+              Copiar
+            </button>
+            <button onClick={() => setResetLink(null)} type="button">
+              Listo
+            </button>
+          </div>
         ) : null}
 
         {loading ? (
@@ -531,13 +587,24 @@ export function UsersAdminPage() {
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {canResetPassword ? (
-                          <button
-                            className="button button-secondary"
-                            onClick={() => void resetPassword(detail)}
-                            type="button"
-                          >
-                            Restablecer contraseña
-                          </button>
+                          <>
+                            {/* Primero el enlace: es el camino bueno. Generar una contraseña deja
+                                a dos personas sabiéndola y hay que hacerla llegar igual. */}
+                            <button
+                              className="button button-primary"
+                              onClick={() => void issueResetLink(detail)}
+                              type="button"
+                            >
+                              Enlace para que elija su contraseña
+                            </button>
+                            <button
+                              className="button button-secondary"
+                              onClick={() => void resetPassword(detail)}
+                              type="button"
+                            >
+                              Generar una contraseña
+                            </button>
+                          </>
                         ) : null}
                         {canDisable ? (
                           <button
