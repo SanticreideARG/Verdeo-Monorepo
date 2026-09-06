@@ -326,6 +326,11 @@ export function MenuBuilderPage() {
   if (!profile) return <DashboardLoading />;
   if (loading) return <DashboardLoading />;
 
+  // Ajustando una revisión de una ciudad: los platos y precios son suyos, el nombre y las fechas
+  // de la semana no. Se dejan de sólo lectura y no deshabilitados para que sigan viajando en el
+  // envío tal como están —el servidor los compara y rechaza si difieren— y para que se puedan leer.
+  const cycleLocked = Boolean(editingMenu && editingMenu.operatingSiteId !== null);
+
   if (!profile.permissions.includes('production.generate')) {
     return (
       <DashboardShell profile={profile} onLogout={() => void logout()}>
@@ -371,6 +376,15 @@ export function MenuBuilderPage() {
           onSubmit={(event) => void submitMenu(event)}
         >
           {draftRestored ? <DraftNotice onDiscard={clearWeekDraft} /> : null}
+          {cycleLocked ? (
+            /* El nombre y las fechas viven en el ciclo de venta, que es uno solo para todas las
+               localidades: editarlos desde acá se los cambiaba también a las otras ciudades. Se
+               muestran, porque ubican, pero se cambian en la semana general. */
+            <p className="intake-rule mb-4">
+              Estás ajustando <strong>{editingMenu?.operatingSiteName}</strong>. El nombre y las
+              fechas son los mismos para todas las localidades: se cambian en la semana general.
+            </p>
+          ) : null}
           <div className="form-grid">
             <label className="field field-wide">
               Alias de la semana
@@ -378,6 +392,7 @@ export function MenuBuilderPage() {
                 defaultValue={editingMenu?.cycle.alias}
                 name="alias"
                 placeholder="Ej. Semana 34 · 24 al 28 de agosto"
+                readOnly={cycleLocked}
                 required
               />
             </label>
@@ -386,6 +401,7 @@ export function MenuBuilderPage() {
               <input
                 defaultValue={editingMenu ? isoToLocalInput(editingMenu.cycle.openAt) : undefined}
                 name="openAt"
+                readOnly={cycleLocked}
                 required
                 type="datetime-local"
               />
@@ -399,6 +415,7 @@ export function MenuBuilderPage() {
                     : undefined
                 }
                 name="partialKitchenCutoffAt"
+                readOnly={cycleLocked}
                 required
                 type="datetime-local"
               />
@@ -408,6 +425,7 @@ export function MenuBuilderPage() {
               <input
                 defaultValue={editingMenu ? isoToLocalInput(editingMenu.cycle.closeAt) : undefined}
                 name="closeAt"
+                readOnly={cycleLocked}
                 required
                 type="datetime-local"
               />

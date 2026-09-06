@@ -81,6 +81,27 @@ pedidos vivos. La distribución la omite e informa `SKIPPED_PUBLISHED`.
 Una operación sin revisión propia vende el menú maestro publicado. Eso es selección de revisión, no
 fallback campo por campo.
 
+### Editar una semana ya cargada
+
+`updateMenu` es aditivo. Hace upsert contra los índices únicos `(menú, tamaño)` y `(menú, variante)`,
+así que una variedad que sigue en el menú **conserva su `id`**, y borra sólo lo que el operador sacó.
+Eso importa porque `order_items.offering_id` apunta ahí con `on delete set null`: borrar para recrear
+—que es lo que hacía antes— dejaba sin vínculo a todos los pedidos ya cargados de esa semana. Las
+listas seguían viéndose bien, porque cada ítem guarda su snapshot de nombre y precio, pero cualquier
+lógica que dependa de `offeringId` se quedaba sin base y en silencio.
+
+Los platos sí se reescriben enteros: los pedidos guardan el plato elegido en
+`order_item_selections.dish_name_snapshot` y nunca apuntan a `weekly_menu_items` por id.
+
+**El nombre y las fechas de la semana viven en el ciclo de venta, que es uno solo y lo comparten
+todas las localidades.** Editarlos desde una revisión regional se los cambiaba a las demás ciudades
+sin que nadie se enterara. Ahora sólo la revisión maestra puede tocarlos; desde una regional se
+rechaza con un mensaje —descartarlos en silencio es la otra forma de mentir sobre lo que se guardó— y
+el formulario los muestra de sólo lectura.
+
+Editar una revisión regional marca sus filas como `customized`, que es lo que una distribución
+posterior en modo "actualizar lo no personalizado" respeta.
+
 ### Cómo se ve eso en "Periodos"
 
 El modelo guarda una fila por ciudad, pero la pantalla lista **una fila por semana**. Listarlo tal

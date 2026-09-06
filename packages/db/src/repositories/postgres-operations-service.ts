@@ -1880,12 +1880,28 @@ export class PostgresOperationsService {
   // wiped and rewritten wholesale — same "resubmit everything" pattern used elsewhere this session
   // for label settings and survey questions, since a partial-field update of a nested list invites
   // more bugs than it saves). `offerings` must already carry the Intuitivo name coercion.
+  /**
+   * Escribe precios y ofertas de una semana, sin borrar lo que ya estaba.
+   *
+   * Hace upsert contra los índices únicos (menú, tamaño) y (menú, variante), así que una oferta que
+   * sigue existiendo conserva su `id`. Eso es lo que importa: `order_items.offeringId` apunta ahí
+   * con `on delete set null`, y borrar para recrear dejaba sin vínculo a todos los pedidos ya
+   * cargados de esa semana.
+   *
+   * Devuelve lo que quedó vigente para que quien actualiza pueda borrar sólo lo que el operador
+   * efectivamente sacó del menú.
+   */
   private async writeMenuPricesAndOfferings(
     transaction: DatabaseTransaction,
     menuId: string,
     offerings: MenuInput['offerings'],
     prices: MenuInput['prices'],
-  ): Promise<void> {
+    // Una edición sobre una revisión regional es, por definición, una personalización: así una
+    // distribución posterior en modo "actualizar lo no personalizado" no la pisa (ADR-028).
+    markCustomized = false,
+  ): Promise<{ offeringIds: string[]; sizeIds: string[] }> {
+    const writtenOfferingIds: string[] = [];
+    const writtenSizeIds: string[] = [];
     // Sizes and their prices are established first: an offering only names the size it belongs to.
     const sizeIdsByName = new Map<string, string>();
     for (const [index, price] of prices.entries()) {
@@ -1909,13 +1925,24 @@ export class PostgresOperationsService {
         .returning({ id: productSizes.id });
       if (!size) throw new Error('Product size upsert did not return a row');
       sizeIdsByName.set(price.sizeName, size.id);
+      writtenSizeIds.push(size.id);
 
-      await transaction.insert(weeklyMenuPrices).values({
-        currency: price.currency.toUpperCase(),
-        productSizeId: size.id,
-        unitPriceMinor: price.unitPriceMinor,
-        weeklyMenuId: menuId,
-      });
+      await transaction
+        .insert(weeklyMenuPrices)
+        .values({
+          currency: price.currency.toUpperCase(),
+          productSizeId: size.id,
+          unitPriceMinor: price.unitPriceMinor,
+          weeklyMenuId: menuId,
+        })
+        .onConflictDoUpdate({
+          set: {
+            currency: price.currency.toUpperCase(),
+            unitPriceMinor: price.unitPriceMinor,
+            ...(markCustomized ? { customized: true } : {}),
+          },
+          target: [weeklyMenuPrices.weeklyMenuId, weeklyMenuPrices.productSizeId],
+        });
     }
 
     for (const offering of offerings) {
@@ -1968,18 +1995,36 @@ export class PostgresOperationsService {
         .returning({ id: productVariants.id });
       if (!variant) throw new Error('Product variant upsert did not return a row');
 
-      const [createdOffering] = await transaction
+      // Sin `overridePriceMinor` el precio vuelve a null a propósito: null significa "usá el precio
+      // del tamaño", así que sacar el override tiene que borrarlo y no dejar el anterior colgado.
+      const overridePrice = offering.overridePriceMinor ?? null;
+      const [writtenOffering] = await transaction
         .insert(weeklyMenuOfferings)
         .values({
           description: offering.description ?? null,
           productVariantId: variant.id,
+          unitPriceMinor: overridePrice,
           weeklyMenuId: menuId,
-          ...(offering.overridePriceMinor === undefined
-            ? {}
-            : { unitPriceMinor: offering.overridePriceMinor }),
+        })
+        .onConflictDoUpdate({
+          set: {
+            active: true,
+            description: offering.description ?? null,
+            unitPriceMinor: overridePrice,
+            ...(markCustomized ? { customized: true } : {}),
+          },
+          target: [weeklyMenuOfferings.weeklyMenuId, weeklyMenuOfferings.productVariantId],
         })
         .returning({ id: weeklyMenuOfferings.id });
-      if (!createdOffering) throw new Error('Menu offering creation did not return a row');
+      if (!writtenOffering) throw new Error('Menu offering upsert did not return a row');
+      writtenOfferingIds.push(writtenOffering.id);
+
+      // Los platos sí se reescriben enteros: los pedidos guardan el nombre elegido en
+      // `order_item_selections.dishNameSnapshot` y nunca apuntan a esta tabla por id, así que acá
+      // no hay vínculo que romper.
+      await transaction
+        .delete(weeklyMenuItems)
+        .where(eq(weeklyMenuItems.offeringId, writtenOffering.id));
 
       // A composable offering submits no dishes of its own (its universe is every dish
       // published this week for the same size), so there's nothing to insert for it.
@@ -1987,12 +2032,14 @@ export class PostgresOperationsService {
         await transaction.insert(weeklyMenuItems).values(
           offering.dishes.map((dishName, index) => ({
             dishName,
-            offeringId: createdOffering.id,
+            offeringId: writtenOffering.id,
             slot: index + 1,
           })),
         );
       }
     }
+
+    return { offeringIds: writtenOfferingIds, sizeIds: writtenSizeIds };
   }
 
   // The Intuitivo-name coercion is identical in both callers, so it lives once here rather than
@@ -2059,39 +2106,99 @@ export class PostgresOperationsService {
       .catch(translateDatabaseConflict);
   }
 
-  // "Los menús se deben poder modificar. Pueden haber errores de carga." — offerings/items/prices
-  // are wiped and rewritten wholesale for this one menu id (master or regional; editing a regional
-  // row never touches its master or siblings). Safe to do even after publish or after orders exist
-  // against it: order_items.offeringId is `onDelete: 'set null'` and every order already carries
-  // its own name/price snapshot at order time, so deleting an offering row here never corrupts an
-  // existing order — the same snapshot-over-live-reference design used everywhere else.
+  /**
+   * "Los menús se deben poder modificar. Pueden haber errores de carga."
+   *
+   * Se actualiza sólo este menú (maestro o regional; editar una revisión regional nunca toca a su
+   * maestra ni a sus hermanas). Lo que sigue vigente se actualiza en su lugar y conserva su `id`;
+   * se borra únicamente lo que el operador sacó del menú.
+   *
+   * Antes esto borraba y recreaba todo. `order_items.offeringId` apunta a la oferta con
+   * `on delete set null`, así que volver a guardar una semana ya publicada dejaba sin vínculo a
+   * todos sus pedidos —231 al momento de encontrarlo—. Las listas seguían viéndose bien porque cada
+   * ítem guarda su snapshot de nombre y precio, pero cualquier lógica que dependa de `offeringId`
+   * se quedaba sin base, en silencio.
+   */
   public async updateMenu(menuId: string, input: MenuInput, context: OperationsContext) {
     return this.database
       .transaction(async (transaction) => {
         const [existing] = await transaction
-          .select({ salesCycleId: weeklyMenus.salesCycleId })
+          .select({
+            alias: salesCycles.alias,
+            closeAt: salesCycles.closeAt,
+            openAt: salesCycles.openAt,
+            operatingSiteId: weeklyMenus.operatingSiteId,
+            partialKitchenCutoffAt: salesCycles.partialKitchenCutoffAt,
+            salesCycleId: weeklyMenus.salesCycleId,
+          })
           .from(weeklyMenus)
+          .innerJoin(salesCycles, eq(salesCycles.id, weeklyMenus.salesCycleId))
           .where(eq(weeklyMenus.id, menuId))
           .limit(1);
         if (!existing) throw new OperationsNotFoundError('Weekly menu not found');
 
-        await transaction
-          .update(salesCycles)
-          .set({
-            alias: input.alias,
-            closeAt: new Date(input.closeAt),
-            openAt: new Date(input.openAt),
-            partialKitchenCutoffAt: new Date(input.partialKitchenCutoffAt),
-          })
-          .where(eq(salesCycles.id, existing.salesCycleId));
+        /*
+         * El ciclo de venta —nombre y fechas de la semana— es uno solo y lo comparten todas las
+         * localidades. Guardar la revisión de Neuquén le cambiaba el nombre y las fechas a Mendoza
+         * y a Buenos Aires sin que nadie se enterara. Desde una revisión regional el ciclo no se
+         * toca; si vienen valores distintos se avisa, porque descartarlos en silencio es la otra
+         * forma de mentir sobre lo que se guardó.
+         */
+        const cycleChanged =
+          existing.alias !== input.alias ||
+          existing.openAt.getTime() !== new Date(input.openAt).getTime() ||
+          existing.closeAt.getTime() !== new Date(input.closeAt).getTime() ||
+          existing.partialKitchenCutoffAt.getTime() !==
+            new Date(input.partialKitchenCutoffAt).getTime();
 
-        await transaction
-          .delete(weeklyMenuOfferings)
-          .where(eq(weeklyMenuOfferings.weeklyMenuId, menuId));
-        await transaction.delete(weeklyMenuPrices).where(eq(weeklyMenuPrices.weeklyMenuId, menuId));
+        if (existing.operatingSiteId === null) {
+          if (cycleChanged) {
+            await transaction
+              .update(salesCycles)
+              .set({
+                alias: input.alias,
+                closeAt: new Date(input.closeAt),
+                openAt: new Date(input.openAt),
+                partialKitchenCutoffAt: new Date(input.partialKitchenCutoffAt),
+              })
+              .where(eq(salesCycles.id, existing.salesCycleId));
+          }
+        } else if (cycleChanged) {
+          throw new OperationsConflictError(
+            'El nombre y las fechas de la semana son los mismos para todas las localidades: se cambian en la semana general, no acá.',
+          );
+        }
 
         const offerings = this.coerceComposableNames(input.offerings);
-        await this.writeMenuPricesAndOfferings(transaction, menuId, offerings, input.prices);
+        const written = await this.writeMenuPricesAndOfferings(
+          transaction,
+          menuId,
+          offerings,
+          input.prices,
+          existing.operatingSiteId !== null,
+        );
+
+        // Lo que el operador sacó del menú. Con la lista vacía se va todo, que es lo que pidió.
+        await transaction
+          .delete(weeklyMenuOfferings)
+          .where(
+            written.offeringIds.length > 0
+              ? and(
+                  eq(weeklyMenuOfferings.weeklyMenuId, menuId),
+                  notInArray(weeklyMenuOfferings.id, written.offeringIds),
+                )
+              : eq(weeklyMenuOfferings.weeklyMenuId, menuId),
+          );
+        await transaction
+          .delete(weeklyMenuPrices)
+          .where(
+            written.sizeIds.length > 0
+              ? and(
+                  eq(weeklyMenuPrices.weeklyMenuId, menuId),
+                  notInArray(weeklyMenuPrices.productSizeId, written.sizeIds),
+                )
+              : eq(weeklyMenuPrices.weeklyMenuId, menuId),
+          );
 
         const audit = new AuditService(new PostgresAuditSink(transaction));
         await audit.record({

@@ -158,9 +158,12 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 
 ## Deuda encontrada, sin resolver
 
-- [ ] **`updateMenu` borra y recrea todas las ofertas de la semana.** Los ítems de pedido apuntan a
-      la oferta con `on delete set null`, así que volver a guardar una semana ya publicada deja a los
-      pedidos existentes sin vínculo con el menú — hoy serían 231. Guardan su `productNameSnapshot`,
-      así que las listas siguen mostrándose bien, pero cualquier lógica que dependa de `offeringId`
-      queda sin base. Debería ser aditivo/upsert por (menú, variante) en vez de borrar.
+- [x] **`updateMenu` borraba y recreaba todas las ofertas de la semana**, dejando sin vínculo a los
+      pedidos ya cargados (231 al encontrarlo). Ahora hace upsert contra los índices únicos
+      (menú, tamaño) y (menú, variante), así que una variedad que sigue en el menú conserva su `id`;
+      se borra sólo lo que el operador sacó. Cubierto en `menu-update.test.ts`.
+- [x] **El ciclo de venta es uno solo para todas las localidades y `updateMenu` lo reescribía desde
+      cualquier revisión regional**, así que guardar la semana de una ciudad le cambiaba el nombre y
+      las fechas a las demás. Desde una revisión regional el ciclo ya no se toca y se rechaza con un
+      mensaje si vienen valores distintos; el formulario los muestra de sólo lectura.
 - [ ] `audit` y `observability` siguen sin un solo test.
