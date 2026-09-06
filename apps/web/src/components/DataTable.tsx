@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { useNarrowViewport } from '../lib/useNarrowViewport.js';
 
@@ -10,6 +10,19 @@ export interface DataColumn<T> {
   /** Encabeza la tarjeta en celular. Exactamente una columna debería tenerlo. */
   primary?: boolean;
   render: (row: T) => ReactNode;
+  /**
+   * Por qué valor se ordena esta columna. Sin esto no se puede ordenar por ella, y es a propósito:
+   * `render` devuelve nodos y ordenar por lo que se ve terminaría comparando "$ 1.000" con
+   * "$ 900" como texto.
+   */
+  sortValue?: (row: T) => number | string;
+}
+
+type SortState = { dir: 'asc' | 'desc'; key: string };
+
+function compare(a: number | string, b: number | string): number {
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  return String(a).localeCompare(String(b), 'es-AR', { numeric: true, sensitivity: 'base' });
 }
 
 /**
@@ -38,6 +51,24 @@ export function DataTable<T>({
   rows: readonly T[];
 }) {
   const narrow = useNarrowViewport();
+  const [sort, setSort] = useState<SortState | null>(null);
+
+  const sortValue = sort ? columns.find((column) => column.key === sort.key)?.sortValue : undefined;
+  const descending = sort?.dir === 'desc';
+  const sorted = sortValue
+    ? [...rows].sort((left, right) => {
+        const value = compare(sortValue(left), sortValue(right));
+        return descending ? -value : value;
+      })
+    : rows;
+
+  /** Un clic ordena ascendente; el segundo sobre la misma columna invierte; el tercero desordena. */
+  function toggleSort(key: string) {
+    setSort((current) => {
+      if (current?.key !== key) return { dir: 'asc', key };
+      return current.dir === 'asc' ? { dir: 'desc', key } : null;
+    });
+  }
 
   if (rows.length === 0) {
     return <p className="data-table-empty">{empty}</p>;
@@ -47,22 +78,45 @@ export function DataTable<T>({
     const primary = columns.find((column) => column.primary) ?? columns[0];
     const rest = columns.filter((column) => column !== primary);
 
+    const sortables = columns.filter((column) => column.sortValue);
+
     return (
-      <ul aria-label={caption} className="data-cards">
-        {rows.map((row) => (
-          <li key={rowKey(row)}>
-            <p className="data-cards-title">{primary?.render(row)}</p>
-            <dl>
-              {rest.map((column) => (
-                <div className={column.emphasis ? 'is-emphasis' : undefined} key={column.key}>
-                  <dt>{column.label}</dt>
-                  <dd>{column.render(row)}</dd>
-                </div>
+      <>
+        {/* En el teléfono no hay encabezados donde hacer clic, así que ordenar es un campo más. */}
+        {sortables.length > 0 ? (
+          <label className="field data-cards-sort">
+            Ordenar por
+            <select
+              onChange={(event) =>
+                setSort(event.target.value ? { dir: 'asc', key: event.target.value } : null)
+              }
+              value={sort?.key ?? ''}
+            >
+              <option value="">Sin ordenar</option>
+              {sortables.map((column) => (
+                <option key={column.key} value={column.key}>
+                  {column.label}
+                </option>
               ))}
-            </dl>
-          </li>
-        ))}
-      </ul>
+            </select>
+          </label>
+        ) : null}
+        <ul aria-label={caption} className="data-cards">
+          {sorted.map((row) => (
+            <li key={rowKey(row)}>
+              <p className="data-cards-title">{primary?.render(row)}</p>
+              <dl>
+                {rest.map((column) => (
+                  <div className={column.emphasis ? 'is-emphasis' : undefined} key={column.key}>
+                    <dt>{column.label}</dt>
+                    <dd>{column.render(row)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </li>
+          ))}
+        </ul>
+      </>
     );
   }
 
@@ -72,15 +126,42 @@ export function DataTable<T>({
         <caption className="sr-only">{caption}</caption>
         <thead>
           <tr>
-            {columns.map((column) => (
-              <th key={column.key} scope="col">
-                {column.label}
-              </th>
-            ))}
+            {columns.map((column) =>
+              column.sortValue ? (
+                <th
+                  aria-sort={
+                    sort?.key === column.key
+                      ? sort.dir === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
+                  key={column.key}
+                  scope="col"
+                >
+                  <button
+                    className="data-table-sort"
+                    onClick={() => toggleSort(column.key)}
+                    type="button"
+                  >
+                    {column.label}
+                    {/* La flecha sólo aparece en la columna que ordena: un indicador en todas es
+                        ruido, y uno en ninguna deja sin saber por qué está en ese orden. */}
+                    <span aria-hidden="true">
+                      {sort?.key === column.key ? (sort.dir === 'asc' ? '↑' : '↓') : ''}
+                    </span>
+                  </button>
+                </th>
+              ) : (
+                <th key={column.key} scope="col">
+                  {column.label}
+                </th>
+              ),
+            )}
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
+          {sorted.map((row) => (
             <tr key={rowKey(row)}>
               {columns.map((column) => (
                 <td className={column.emphasis ? 'is-emphasis' : undefined} key={column.key}>

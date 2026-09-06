@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
 
+import { AfterSaveDialog } from '../components/AfterSaveDialog.js';
+import { ColumnPicker } from '../components/ColumnPicker.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
-import { AfterSaveDialog } from '../components/AfterSaveDialog.js';
+import { DataTable } from '../components/DataTable.js';
 import { DraftNotice } from '../components/DraftNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
-import { formatArgentinePhone } from '../lib/phone.js';
+import {
+  ORDER_COLUMNS,
+  readStoredColumns,
+  writeStoredColumns,
+  type OrderColumn,
+} from '../lib/orderColumns.js';
 import { showToast } from '../lib/toast.js';
 import {
   errorMessage,
@@ -31,6 +37,24 @@ function dateOnly(iso: string): string {
 function dateLabel(iso: string): string {
   return new Intl.DateTimeFormat('es-AR', { dateStyle: 'long' }).format(new Date(dateOnly(iso)));
 }
+
+/**
+ * Qué se ve de cada pedido en la cola de trabajo.
+ *
+ * Menos que en "Ver pedidos" a propósito: acá no se consulta, se decide si confirmar o cancelar. El
+ * número de pedido queda disponible pero apagado —sirve para citarlo, no para reconocerlo—; lo que
+ * identifica la fila es el nombre, y lo que se necesita a mano para terminar de acordarlo es el
+ * WhatsApp.
+ */
+const DEFAULT_COLUMNS = ['cliente', 'whatsapp', 'pedido', 'estado', 'total', 'acciones'];
+
+const COLUMNS_KEY = 'verdeo-intake-columns';
+
+/** Sólo claves y candados: los botones se arman en el render, donde están los permisos. */
+const INTAKE_CATALOGUE: readonly { key: string; locked?: boolean }[] = [
+  ...ORDER_COLUMNS,
+  { key: 'acciones', locked: true },
+];
 
 /**
  * Cómo se llama cada campo para una persona.
@@ -81,6 +105,9 @@ export function OrderIntakePage() {
 
   const loadedOnce = useRef(false);
   const [loading, setLoading] = useState(true);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(() =>
+    readStoredColumns(COLUMNS_KEY, DEFAULT_COLUMNS, INTAKE_CATALOGUE),
+  );
 
   const loadData = useCallback(async () => {
     if (!profile) return;
@@ -288,7 +315,9 @@ export function OrderIntakePage() {
         reason,
         status,
       });
-      showToast(`${order.publicNumber} actualizado a ${status}.`);
+      showToast(
+        `Pedido de ${order.customer.displayName} (${order.publicNumber}) ${orderStatusLabel(status).toLowerCase()}.`,
+      );
       await loadData();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos actualizar el pedido.');
@@ -299,6 +328,52 @@ export function OrderIntakePage() {
   if (!profile) return <DashboardLoading />;
   if (loading) return <DashboardLoading />;
 
+  /*
+   * El catálogo compartido más los botones. Se arma en el render y no en un `useMemo` porque
+   * depende de `transition`, que se redefine en cada render: memorizarlo guardaría una versión
+   * vieja de la función y los botones dejarían de recargar la lista.
+   */
+  const intakeColumns: readonly OrderColumn[] = [
+    ...ORDER_COLUMNS,
+    {
+      key: 'acciones',
+      label: 'Acciones',
+      locked: true,
+      render: (order) => (
+        <div className="row-actions">
+          {order.status === 'DRAFT' && permissions.includes('orders.confirm') ? (
+            <button
+              className="button button-primary"
+              onClick={() => void transition(order, 'CONFIRMED')}
+              type="button"
+            >
+              Confirmar
+            </button>
+          ) : null}
+          {order.status === 'CONFIRMED' && permissions.includes('orders.edit') ? (
+            <button
+              className="button button-secondary"
+              onClick={() => void transition(order, 'READY')}
+              type="button"
+            >
+              Marcar listo
+            </button>
+          ) : null}
+          {['DRAFT', 'CONFIRMED'].includes(order.status) &&
+          permissions.includes('orders.cancel') ? (
+            <button
+              className="button button-secondary"
+              onClick={() => void transition(order, 'CANCELLED')}
+              type="button"
+            >
+              Cancelar
+            </button>
+          ) : null}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
       <section className="dashboard-panel">
@@ -307,15 +382,25 @@ export function OrderIntakePage() {
             <p className="dashboard-kicker">Pedidos</p>
             <h1 className="text-2xl font-semibold text-forest">Tomar y confirmar pedidos</h1>
           </div>
-          {permissions.includes('orders.create') ? (
-            <button
-              className="button button-primary"
-              onClick={() => setFormOpen((current) => !current)}
-              type="button"
-            >
-              {formOpen ? 'Cerrar formulario' : '+ Nuevo pedido'}
-            </button>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-3">
+            <ColumnPicker
+              columns={intakeColumns}
+              onChange={(next) => {
+                setVisibleColumns(next);
+                writeStoredColumns(COLUMNS_KEY, next);
+              }}
+              visible={visibleColumns}
+            />
+            {permissions.includes('orders.create') ? (
+              <button
+                className="button button-primary"
+                onClick={() => setFormOpen((current) => !current)}
+                type="button"
+              >
+                {formOpen ? 'Cerrar formulario' : '+ Nuevo pedido'}
+              </button>
+            ) : null}
+          </div>
         </header>
 
         {message ? (
@@ -571,72 +656,18 @@ export function OrderIntakePage() {
           </form>
         ) : null}
 
-        <div className="mt-6 grid gap-3">
-          {orders.map((order) => (
-            <article
-              className="operation-card flex flex-col justify-between gap-4 sm:flex-row sm:items-center"
-              key={order.id}
-            >
-              <div>
-                <div className="flex items-center gap-3">
-                  <Link
-                    className="text-xl font-semibold text-forest"
-                    to={`/app/pedidos/${order.id}`}
-                  >
-                    {order.customer.displayName}
-                  </Link>
-                  <span className="status-chip">{orderStatusLabel(order.status)}</span>
-                </div>
-                <p className="mt-2 font-medium">
-                  {order.items
-                    .map(
-                      (item) => `${item.productName} ${item.variantName} × ${item.quantityUnits}`,
-                    )
-                    .join(', ')}
-                </p>
-                <p className="mt-1 text-sm font-semibold">
-                  {formatMoney(order.totalMinor, order.currency)}
-                </p>
-                {/* Acá la tarjeta no es un enlace entero, así que el número se puede tocar. */}
-                {order.customer.phone ? (
-                  <a className="order-card-phone mt-1" href={`tel:${order.customer.phone}`}>
-                    {formatArgentinePhone(order.customer.phone)}
-                  </a>
-                ) : null}
-                <p className="order-card-meta mt-1">{order.publicNumber}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {order.status === 'DRAFT' && permissions.includes('orders.confirm') ? (
-                  <button
-                    className="button button-primary"
-                    onClick={() => void transition(order, 'CONFIRMED')}
-                  >
-                    Confirmar
-                  </button>
-                ) : null}
-                {order.status === 'CONFIRMED' && permissions.includes('orders.edit') ? (
-                  <button
-                    className="button button-secondary"
-                    onClick={() => void transition(order, 'READY')}
-                  >
-                    Marcar listo
-                  </button>
-                ) : null}
-                {['DRAFT', 'CONFIRMED'].includes(order.status) &&
-                permissions.includes('orders.cancel') ? (
-                  <button
-                    className="button button-secondary"
-                    onClick={() => void transition(order, 'CANCELLED')}
-                  >
-                    Cancelar
-                  </button>
-                ) : null}
-              </div>
-            </article>
-          ))}
-          {orders.length === 0 ? (
-            <p className="empty-state">Ningún pedido pendiente de acción.</p>
-          ) : null}
+        {/*
+         * La misma tabla configurable que "Ver pedidos", más la columna de acciones —que no se
+         * puede apagar, porque esta pantalla existe para tocar esos botones.
+         */}
+        <div className="mt-6">
+          <DataTable
+            caption="Pedidos pendientes de acción"
+            columns={intakeColumns.filter((column) => visibleColumns.includes(column.key))}
+            empty="Ningún pedido pendiente de acción."
+            rowKey={(order) => order.id}
+            rows={orders}
+          />
         </div>
       </section>
 

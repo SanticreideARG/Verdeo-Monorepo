@@ -225,9 +225,33 @@ una tarjeta por fila en teléfono. Una tabla de ocho columnas en 375px no se arr
 de qué fila se trata. Escribir las dos formas por separado sería garantizar que dentro de unos meses
 digan cosas distintas.
 
-La usa hoy el excedente de Cocina, que era **la única tabla real de la app**. Un barrido de las nueve
-pantallas de consulta a 375px no encontró ninguna otra que desborde: Pedidos y Pagos ya venían
-resueltos con tarjetas.
+La usan hoy el excedente de Cocina y **Ver pedidos**. Un barrido de las nueve pantallas de consulta a
+375px no encontró ninguna que desborde: Pagos sigue resuelto con tarjetas propias.
+
+**Ver pedidos elige sus columnas.** Un pedido tiene catorce datos que alguien puede querer ver y
+ninguna combinación sirve para todos: quien arma las rutas quiere domicilio y zona, quien concilia
+quiere total y pago esperado, quien atiende el teléfono quiere el teléfono. Mostrarlos todos vuelve
+la tabla ilegible y elegir siete por nosotros deja a los otros dos trabajos exportando a CSV para
+leer algo que ya estaba en pantalla. El selector guarda la elección en el navegador de cada persona
+(`verdeo-orders-columns`): es una preferencia de lectura, no un dato del negocio, y no justifica una
+tabla, un endpoint y una migración. Como las columnas son las mismas en las dos formas, la elección
+vale igual en la tarjeta del teléfono.
+
+El cliente encabeza la fila y no se puede apagar —es lo que identifica el pedido— y es él, y no la
+fila entera, el que enlaza a la ficha: con catorce columnas posibles, una fila-enlace convierte
+cualquier intento de seleccionar un texto en una navegación accidental. El número de pedido es una
+columna más, sin jerarquía: sirve para citar un pedido, no para reconocerlo.
+
+**"Tomar y confirmar pedidos" usa la misma tabla**, con su propia elección guardada aparte
+(`verdeo-intake-columns`) y una columna de acciones que tampoco se puede apagar —esa pantalla existe
+para tocar esos botones—. Trae menos columnas encendidas de fábrica porque ahí no se consulta, se
+decide: nombre, WhatsApp, pedido, estado, total y las acciones. El catálogo vive una sola vez en
+`lib/orderColumns.tsx`; declararlo en cada pantalla sería garantizar que dentro de unos meses el
+mismo teléfono se formatee distinto según desde dónde se mire.
+
+**El contacto tiene dos columnas y no una.** "WhatsApp" abre el chat (`wa.me`) y usa
+`customer.whatsapp` o, si no hay, el teléfono; "Teléfono" marca (`tel:`). Son cosas distintas y en
+esta operación la primera es la que se usa: casi todo pedido se termina de acordar por chat.
 
 **`DeskWorkNotice`** avisa, en pantalla angosta, en las ocho pantallas que son trabajo de escritorio
 (menú semanal, contenidos, workbench de IA, usuarios, estadísticas, auditoría, encuestas, ajustes).

@@ -9,6 +9,20 @@
  */
 const AREA_CODES = ['11', '221', '223', '261', '264', '299', '341', '351', '381', '387', '2920'];
 
+/**
+ * El enlace para escribirle a alguien por WhatsApp.
+ *
+ * wa.me quiere el número internacional sin nada más que dígitos. Los que están bien cargados ya
+ * vienen con 54 adelante; a los que no, se les asume Argentina móvil (549) y se les saca el 0 del
+ * código de área y el 15 del abonado, que son notación local y sobran en el formato internacional.
+ */
+export function whatsappHref(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.startsWith('54')) return `https://wa.me/${digits}`;
+  const local = digits.replace(/^0/, '').replace(/^(\d{2,4})15/, '$1');
+  return `https://wa.me/549${local}`;
+}
+
 export function formatArgentinePhone(raw: string): string {
   const digits = raw.replace(/\D/g, '');
   const local = digits.startsWith('549')

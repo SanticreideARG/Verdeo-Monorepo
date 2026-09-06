@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 
+import { ColumnPicker } from '../components/ColumnPicker.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
+import { DataTable } from '../components/DataTable.js';
 import { apiRequest } from '../lib/api.js';
-import { formatArgentinePhone } from '../lib/phone.js';
-import {
-  errorMessage,
-  formatMoney,
-  orderStatusLabel,
-  type OrderSummary,
-} from '../lib/operations.js';
+import { errorMessage, orderStatusLabel, type OrderSummary } from '../lib/operations.js';
+import { ORDER_COLUMNS, readStoredColumns, writeStoredColumns } from '../lib/orderColumns.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 const STATUS_OPTIONS = ['DRAFT', 'CONFIRMED', 'READY', 'DELIVERED', 'CANCELLED'] as const;
+
+/** Lo que se ve sin tocar nada: la fila de un pedido leída de un vistazo. */
+const DEFAULT_COLUMNS = ['cliente', 'whatsapp', 'pedido', 'estado', 'total', 'entrega', 'numero'];
+
+const COLUMNS_KEY = 'verdeo-orders-columns';
 
 /** "Ver pedidos": browsing the full history, filterable by status, with a CSV export. No creation
  * or transition controls here — those live in "Tomar y confirmar pedidos".
@@ -29,6 +31,9 @@ export function OrdersPage() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(() =>
+    readStoredColumns(COLUMNS_KEY, DEFAULT_COLUMNS, ORDER_COLUMNS),
+  );
 
   const load = useCallback(
     async (cursor?: string) => {
@@ -115,6 +120,14 @@ export function OrdersPage() {
                 ))}
               </select>
             </label>
+            <ColumnPicker
+              columns={ORDER_COLUMNS}
+              onChange={(next) => {
+                setVisibleColumns(next);
+                writeStoredColumns(COLUMNS_KEY, next);
+              }}
+              visible={visibleColumns}
+            />
             <button
               className="button button-secondary"
               onClick={() => void exportCsv()}
@@ -135,42 +148,17 @@ export function OrdersPage() {
           <p className="mt-6 text-ink-muted">Cargando pedidos…</p>
         ) : (
           <div className="mt-6 grid gap-3">
-            {orders.map((order) => (
-              <Link className="operation-card block" key={order.id} to={`/app/pedidos/${order.id}`}>
-                {/* Quien lee esta lista busca una persona y un pedido, no un código. El número
-                    sigue estando porque es lo que se dice por teléfono, pero abajo y en gris. */}
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <strong className="text-xl text-forest">{order.customer.displayName}</strong>
-                    <span className="status-chip">{orderStatusLabel(order.status)}</span>
-                  </div>
-                  <p className="font-semibold">{formatMoney(order.totalMinor, order.currency)}</p>
-                </div>
-                <p className="mt-2 font-medium">
-                  {order.items
-                    .map(
-                      (item) => `${item.productName} ${item.variantName} × ${item.quantityUnits}`,
-                    )
-                    .join(', ')}
-                </p>
-                {/* El teléfono acompaña al nombre porque es lo que se necesita cuando hay que
-                    llamar por este pedido. Va como texto y no como enlace: la tarjeta entera ya es
-                    un enlace a la ficha, y un `a` adentro de otro es HTML inválido. En la ficha sí
-                    es tocable. */}
-                {order.customer.phone ? (
-                  <p className="order-card-phone mt-1">
-                    {formatArgentinePhone(order.customer.phone)}
-                  </p>
-                ) : null}
-                <p className="order-card-meta mt-1">
-                  <span>{order.publicNumber}</span> ·{' '}
-                  {new Intl.DateTimeFormat('es-AR').format(new Date(order.deliveryDate))}
-                </p>
-              </Link>
-            ))}
-            {orders.length === 0 ? (
-              <p className="empty-state">No hay pedidos para este filtro.</p>
-            ) : null}
+            {/*
+             * Tabla en escritorio, una tarjeta por pedido en teléfono — lo resuelve DataTable con
+             * las mismas columnas, así que elegir qué ver vale para las dos formas.
+             */}
+            <DataTable
+              caption="Pedidos"
+              columns={ORDER_COLUMNS.filter((column) => visibleColumns.includes(column.key))}
+              empty="No hay pedidos para este filtro."
+              rowKey={(order) => order.id}
+              rows={orders}
+            />
             {nextCursor ? (
               <button
                 className="button button-secondary justify-self-center"

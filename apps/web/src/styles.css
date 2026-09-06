@@ -5071,3 +5071,129 @@ a.order-card-phone:focus-visible {
   font-size: 0.72rem !important;
   letter-spacing: 0.03em;
 }
+
+/* La espera del padrón, dentro de la lista. Tapar la pantalla entera para esperar una lista hace
+   que cambiar de sección parezca una recarga completa. */
+.crm-list-loading {
+  margin: 0;
+  padding: 0.9rem 0.75rem;
+  color: var(--db-muted, var(--color-ink-muted));
+  font-size: 0.85rem;
+}
+
+/* Selector de columnas. */
+.column-picker {
+  position: relative;
+}
+.column-picker-panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  display: grid;
+  gap: 0.1rem;
+  width: max-content;
+  min-width: 13rem;
+  max-height: 22rem;
+  overflow-y: auto;
+  border: 1px solid var(--db-border, var(--border-hairline));
+  border-radius: 0.7rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--db-surface-solid, #fff);
+  box-shadow: 0 18px 44px rgb(0 0 0 / 22%);
+}
+.column-picker-panel > p {
+  margin: 0 0 0.4rem;
+  color: var(--db-muted, var(--color-ink-muted));
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.column-picker-panel label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  /* 36px: entra en una lista de quince y sigue siendo tocable. */
+  min-height: 36px;
+  border-radius: 0.4rem;
+  padding: 0 0.35rem;
+  color: var(--db-text, var(--color-ink));
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.column-picker-panel label:hover {
+  background: color-mix(in srgb, var(--db-accent, #3a7d44) 10%, transparent);
+}
+.column-picker-panel input:disabled + *,
+.column-picker-panel label:has(input:disabled) {
+  color: var(--db-muted-2, #999);
+  cursor: default;
+}
+
+/* Los botones de una fila: en la tabla van apilados si no entran, en la tarjeta ocupan el ancho. */
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.row-actions .button {
+  padding-inline: 0.9rem;
+  font-size: 0.82rem;
+}
+.data-cards .row-actions {
+  width: 100%;
+}
+.data-cards .row-actions .button {
+  flex: 1 1 auto;
+  justify-content: center;
+  /* En el teléfono confirmar es la acción de la pantalla: que se pueda tocar sin apuntar. */
+  min-height: 42px;
+}
+.order-name {
+  color: var(--db-text, var(--color-ink));
+  font-weight: 600;
+}
+.order-name:hover {
+  text-decoration: underline;
+}
+
+/*
+ * En la tarjeta, las acciones no son un par etiqueta/valor: son la razón por la que la pantalla
+ * existe. Ocupan el ancho entero, debajo del resto, con los botones en fila propia.
+ */
+.data-cards dl > div:has(.row-actions) {
+  display: block;
+  grid-column: 1 / -1;
+  margin-top: 0.4rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--db-border-soft, var(--border-hairline));
+}
+.data-cards dl > div:has(.row-actions) dt {
+  margin-bottom: 0.4rem;
+}
+
+/* Encabezado que ordena: se ve como encabezado, se toca como botón. */
+.data-table-sort {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.data-table-sort:hover {
+  color: var(--db-accent, #3a7d44);
+}
+.data-table-sort span {
+  font-size: 0.9em;
+}
+.data-cards-sort {
+  margin-bottom: 0.6rem;
+}
+
