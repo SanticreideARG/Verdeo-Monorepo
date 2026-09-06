@@ -81,6 +81,28 @@ pedidos vivos. La distribución la omite e informa `SKIPPED_PUBLISHED`.
 Una operación sin revisión propia vende el menú maestro publicado. Eso es selección de revisión, no
 fallback campo por campo.
 
+### Cómo se ve eso en "Periodos"
+
+El modelo guarda una fila por ciudad, pero la pantalla lista **una fila por semana**. Listarlo tal
+cual convertía una semana con tres ciudades en cuatro tarjetas con el mismo nombre y la misma fecha,
+imposibles de distinguir de un vistazo, y hacía parecer que había que armar la semana una vez por
+localidad. Las ciudades pasaron a ser un detalle de la semana: se abre la fila y ahí está cada una
+con su estado y su acceso a ajustarla.
+
+**El estado de la semana es el del alcance, no el de la fila maestra.** La maestra puede quedar en
+borrador para siempre y aun así la semana estar publicada en las tres ciudades, que es lo que un
+cliente ve. La columna cuenta localidades publicadas y sólo cae al estado de la maestra cuando
+todavía no llegó a ninguna.
+
+**Distribuir dejó de ser tildar ciudad por ciudad.** Una semana se ofrece en toda la operación salvo
+excepción, así que el botón es "Llevar a todas las localidades" y manda las activas juntas. Los tres
+modos siguen existiendo con la misma semántica; lo que cambió es que el trabajo por defecto —crear
+sólo lo que falta, sin pisar nada personalizado— es un clic y no una lista de casillas.
+
+La tabla se ordena por cualquiera de sus columnas (un clic ascendente, otro descendente, otro sin
+orden). En teléfono, donde no hay encabezado que tocar, ordenar es un campo más arriba de las
+tarjetas.
+
 ## Weekly Menu Builder
 
 Funciones V1:

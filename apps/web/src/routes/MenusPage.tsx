@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
+import { DataTable, type DataColumn } from '../components/DataTable.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage, type WeeklyMenu } from '../lib/operations.js';
 import { showToast } from '../lib/toast.js';
@@ -10,17 +11,96 @@ import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 type DistributionMode = 'CREATE_MISSING' | 'UPDATE_UNCUSTOMIZED' | 'REPLACE';
 
-/** "Periodos" (formerly "Ver menús"): the list of weekly menus with publish and per-city
- * distribution. Creating a new master menu happens in "Configurar la semana" instead. */
+interface OperatingSite {
+  displayName: string;
+  id: string;
+}
+
+/**
+ * Una semana, con sus localidades adentro.
+ *
+ * La base guarda una fila por ciudad (ADR-028: un pedido apunta a una revisión concreta y nunca
+ * compone global más regional al momento de pedir). Eso está bien para el motor y es lo que
+ * permite que cada ciudad tenga su precio, pero listarlo tal cual convertía una semana con tres
+ * ciudades en cuatro tarjetas iguales, con el mismo nombre y la misma fecha, imposibles de
+ * distinguir de un vistazo. Acá se agrupa: una fila por semana, y las ciudades pasan a ser un
+ * detalle de esa fila.
+ */
+interface WeekRow {
+  alias: string;
+  closeAt: string;
+  cycleId: string;
+  master: WeeklyMenu | null;
+  offerings: number;
+  openAt: string;
+  sites: WeeklyMenu[];
+}
+
+function groupByWeek(menus: readonly WeeklyMenu[]): WeekRow[] {
+  const weeks = new Map<string, WeekRow>();
+  for (const menu of menus) {
+    const row = weeks.get(menu.cycle.id) ?? {
+      alias: menu.cycle.alias,
+      closeAt: menu.cycle.closeAt,
+      cycleId: menu.cycle.id,
+      master: null,
+      offerings: 0,
+      openAt: menu.cycle.openAt,
+      sites: [],
+    };
+    if (menu.operatingSiteId === null) row.master = menu;
+    else row.sites.push(menu);
+    // La cantidad de opciones se toma de la maestra; si la semana sólo existe distribuida, de la
+    // primera ciudad, que es lo mismo salvo que alguien la haya personalizado.
+    row.offerings = row.master?.offerings.length ?? row.sites[0]?.offerings.length ?? 0;
+    weeks.set(menu.cycle.id, row);
+  }
+  return [...weeks.values()].sort((left, right) => right.openAt.localeCompare(left.openAt));
+}
+
+function dayMonth(iso: string): string {
+  return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short' }).format(new Date(iso));
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  ARCHIVED: 'Archivada',
+  DRAFT: 'Borrador',
+  PUBLISHED: 'Publicada',
+};
+
+function statusLabel(status: string): string {
+  return STATUS_LABELS[status] ?? status;
+}
+
+/**
+ * En qué estado está la semana para quien la vende.
+ *
+ * No es el estado de la fila maestra: esa puede quedar en borrador para siempre y aun así la semana
+ * estar publicada en las tres ciudades, que es lo que un cliente ve. Lo que importa acá es dónde se
+ * puede pedir, así que cuenta localidades publicadas y sólo cae al estado de la maestra cuando
+ * todavía no llegó a ninguna.
+ */
+function weekStatus(week: WeekRow, siteCount: number): string {
+  const published = week.sites.filter((menu) => menu.status === 'PUBLISHED').length;
+  if (published === 0) return statusLabel(week.master?.status ?? 'DRAFT');
+  if (siteCount > 0 && published >= siteCount) return 'Publicada';
+  return `Publicada en ${published} de ${siteCount || week.sites.length}`;
+}
+
+/**
+ * "Periodos": una fila por semana, con publicación y alcance por localidad.
+ *
+ * Crear una semana nueva es "Configurar la semana"; los precios de cada ciudad viven en "Precios
+ * por ubicación".
+ */
 export function MenusPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const permissions = profile?.permissions ?? [];
   const [menus, setMenus] = useState<WeeklyMenu[]>([]);
-  const [sites, setSites] = useState<{ displayName: string; id: string }[]>([]);
-  const [distributionSites, setDistributionSites] = useState<string[]>([]);
-  const [distributionMode, setDistributionMode] = useState<DistributionMode>('CREATE_MISSING');
+  const [sites, setSites] = useState<OperatingSite[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [openWeek, setOpenWeek] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     if (!profile) return;
@@ -60,12 +140,12 @@ export function MenusPage() {
       setMessage(await errorMessage(response));
       return;
     }
-    showToast('Menú publicado.');
+    showToast('Semana publicada.');
     await loadData();
   }
 
-  async function deleteMenu(menuId: string) {
-    if (!window.confirm('¿Eliminar este menú? Solo funciona si no tiene pedidos cargados.')) return;
+  async function deleteMenu(menuId: string, label: string) {
+    if (!window.confirm(`¿Eliminar ${label}? Solo funciona si no tiene pedidos cargados.`)) return;
     setMessage('');
     const response = await apiRequest(`/api/v1/menus/${menuId}`, { method: 'DELETE' });
     if (!response.ok) {
@@ -76,9 +156,16 @@ export function MenusPage() {
     await loadData();
   }
 
-  async function distributeMenu(menuId: string) {
+  /**
+   * Llevar la semana a todas las localidades de una vez.
+   *
+   * Antes había que tildar ciudad por ciudad. Una semana se ofrece en toda la operación salvo
+   * excepción, así que el trabajo por defecto es "en todas": el modo por defecto sólo crea lo que
+   * falta y no pisa nada de lo que cada ciudad haya personalizado.
+   */
+  async function distribute(menuId: string, mode: DistributionMode) {
     if (
-      distributionMode === 'REPLACE' &&
+      mode === 'REPLACE' &&
       !window.confirm(
         'Reemplazar sobrescribe los precios y platos que cada ciudad haya personalizado. ¿Continuar?',
       )
@@ -88,9 +175,9 @@ export function MenusPage() {
     setMessage('');
     const response = await apiRequest(`/api/v1/menus/${menuId}/distribute`, {
       body: JSON.stringify({
-        confirmedReplace: distributionMode === 'REPLACE',
-        mode: distributionMode,
-        operatingSiteIds: distributionSites,
+        confirmedReplace: mode === 'REPLACE',
+        mode,
+        operatingSiteIds: sites.map((site) => site.id),
       }),
       method: 'POST',
     });
@@ -99,17 +186,91 @@ export function MenusPage() {
       return;
     }
     const results = (await response.json()) as { results: { outcome: string }[] };
-    const created = results.results.filter((r) => r.outcome === 'CREATED').length;
-    const skipped = results.results.filter((r) => r.outcome.startsWith('SKIPPED')).length;
+    const created = results.results.filter((result) => result.outcome === 'CREATED').length;
+    const skipped = results.results.filter((result) => result.outcome.startsWith('SKIPPED')).length;
     showToast(
-      `Distribución lista: ${created} creada(s), ${results.results.length - created - skipped} actualizada(s), ${skipped} omitida(s).`,
+      `Alcance actualizado: ${created} localidad(es) nueva(s), ${results.results.length - created - skipped} actualizada(s), ${skipped} sin cambios.`,
     );
-    setDistributionSites([]);
     await loadData();
   }
 
   if (failed) return <DashboardFailed label="los menús" />;
   if (!profile) return <DashboardLoading />;
+
+  const canEdit = permissions.includes('production.generate');
+  const canDistribute = permissions.includes('menus.distribute');
+  const weeks = groupByWeek(menus);
+
+  const columns: readonly DataColumn<WeekRow>[] = [
+    {
+      key: 'semana',
+      label: 'Semana',
+      primary: true,
+      render: (week) =>
+        week.master && canEdit ? (
+          <Link className="order-name" to={`/app/menus/${week.master.id}/editar`}>
+            {week.alias}
+          </Link>
+        ) : (
+          <span className="order-name">{week.alias}</span>
+        ),
+      sortValue: (week) => week.alias,
+    },
+    {
+      key: 'apertura',
+      label: 'Apertura',
+      render: (week) => dayMonth(week.openAt),
+      sortValue: (week) => week.openAt,
+    },
+    {
+      key: 'cierre',
+      label: 'Cierre',
+      render: (week) => dayMonth(week.closeAt),
+      sortValue: (week) => week.closeAt,
+    },
+    {
+      key: 'estado',
+      label: 'Estado',
+      render: (week) => <span className="status-chip">{weekStatus(week, sites.length)}</span>,
+      sortValue: (week) => weekStatus(week, sites.length),
+    },
+    {
+      key: 'opciones',
+      label: 'Opciones',
+      render: (week) => week.offerings,
+      sortValue: (week) => week.offerings,
+    },
+    {
+      emphasis: true,
+      key: 'localidades',
+      label: 'Localidades',
+      /*
+       * El alcance es lo que esta pantalla vino a resolver, así que se dice con números y no con
+       * un tilde: "2 de 3" es accionable, "distribuida" no.
+       */
+      render: (week) =>
+        sites.length === 0
+          ? 'Sin ciudades configuradas'
+          : `${week.sites.length} de ${sites.length}`,
+      sortValue: (week) => week.sites.length,
+    },
+    {
+      key: 'detalle',
+      label: 'Detalle',
+      render: (week) => (
+        <button
+          className="button button-secondary"
+          onClick={() => setOpenWeek((current) => (current === week.cycleId ? null : week.cycleId))}
+          type="button"
+        >
+          {openWeek === week.cycleId ? 'Cerrar' : 'Ver'}
+        </button>
+      ),
+    },
+  ];
+
+  const detail = weeks.find((week) => week.cycleId === openWeek) ?? null;
+  const detailMaster = detail?.master ?? null;
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
@@ -119,14 +280,14 @@ export function MenusPage() {
             <p className="dashboard-kicker">Menús</p>
             <h1 className="text-2xl font-semibold text-forest">Periodos</h1>
           </div>
-          {permissions.includes('production.generate') ? (
+          {canEdit ? (
             <Link className="button button-primary" to="/app/menus/nuevo">
               Configurar la semana
             </Link>
           ) : null}
         </header>
 
-        {permissions.includes('production.generate') ? (
+        {canEdit ? (
           <p className="mt-3">
             <Link className="text-sm underline" to="/app/menus/precios">
               Precios por ubicación →
@@ -143,105 +304,141 @@ export function MenusPage() {
         {loading ? (
           <p className="mt-6 text-ink-muted">Cargando menús…</p>
         ) : (
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            {menus.map((menu) => (
-              <article className="operation-card" key={menu.id}>
-                <div className="flex justify-between gap-4">
-                  <div>
-                    <h3 className="text-xl font-semibold text-forest">{menu.cycle.alias}</h3>
-                    <p className="mt-1 text-sm text-ink-muted">
-                      {menu.operatingSiteName ?? 'Global'} · {menu.offerings.length} opciones ·
-                      revisión {menu.revision}
-                    </p>
-                  </div>
-                  <span className="status-chip">{menu.status}</span>
-                </div>
-                {permissions.includes('production.generate') ? (
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    <Link className="button button-secondary" to={`/app/menus/${menu.id}/editar`}>
-                      Editar
+          <div className="mt-6">
+            <DataTable
+              caption="Semanas"
+              columns={columns}
+              empty="Todavía no hay semanas cargadas."
+              rowKey={(week) => week.cycleId}
+              rows={weeks}
+            />
+          </div>
+        )}
+
+        {detail ? (
+          <article className="operation-card mt-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-forest">{detail.alias}</h2>
+                <p className="mt-1 text-sm text-ink-muted">
+                  {dayMonth(detail.openAt)} al {dayMonth(detail.closeAt)} · {detail.offerings}{' '}
+                  opciones
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {detailMaster && canEdit ? (
+                  <>
+                    <Link
+                      className="button button-secondary"
+                      to={`/app/menus/${detailMaster.id}/editar`}
+                    >
+                      Editar la semana
                     </Link>
+                    {detailMaster.status === 'DRAFT' ? (
+                      <button
+                        className="button button-primary"
+                        onClick={() => void publish(detailMaster.id)}
+                        type="button"
+                      >
+                        Publicar
+                      </button>
+                    ) : null}
                     <button
                       className="button button-secondary"
-                      onClick={() => void deleteMenu(menu.id)}
+                      onClick={() => void deleteMenu(detailMaster.id, `la semana ${detail.alias}`)}
                       type="button"
                     >
                       Eliminar
                     </button>
-                  </div>
+                  </>
                 ) : null}
-                {menu.status === 'DRAFT' && permissions.includes('production.generate') ? (
+              </div>
+            </div>
+
+            {detailMaster ? null : (
+              /* Sin fila maestra no hay nada que editar una vez y repartir: la semana sólo existe
+                 dentro de cada ciudad, así que se ajusta ahí. Decirlo evita buscar un botón que no
+                 está. */
+              <p className="mt-4 text-sm text-ink-muted">
+                Esta semana no tiene una versión general: existe sólo dentro de cada localidad, así
+                que se edita en cada una.
+              </p>
+            )}
+
+            <h3 className="mt-6 text-sm font-semibold uppercase tracking-wide text-ink-muted">
+              Localidades
+            </h3>
+            <ul className="mt-2 grid gap-2">
+              {sites.map((site) => {
+                const distributed = detail.sites.find((menu) => menu.operatingSiteId === site.id);
+                return (
+                  <li className="week-site" key={site.id}>
+                    <span>{site.displayName}</span>
+                    {distributed ? (
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="status-chip">{statusLabel(distributed.status)}</span>
+                        {canEdit ? (
+                          <Link
+                            className="button button-secondary"
+                            to={`/app/menus/${distributed.id}/editar`}
+                          >
+                            Ajustar
+                          </Link>
+                        ) : null}
+                        {distributed.status === 'DRAFT' && canEdit ? (
+                          <button
+                            className="button button-secondary"
+                            onClick={() => void publish(distributed.id)}
+                            type="button"
+                          >
+                            Publicar
+                          </button>
+                        ) : null}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-ink-muted">Todavía no llegó acá</span>
+                    )}
+                  </li>
+                );
+              })}
+              {sites.length === 0 ? (
+                <li className="text-sm text-ink-muted">Todavía no hay ciudades configuradas.</li>
+              ) : null}
+            </ul>
+
+            {detailMaster && canDistribute && sites.length > 0 ? (
+              <div className="mt-5 flex flex-wrap items-center gap-2">
+                <button
+                  className="button button-primary"
+                  onClick={() => void distribute(detailMaster.id, 'CREATE_MISSING')}
+                  type="button"
+                >
+                  Llevar a todas las localidades
+                </button>
+                <button
+                  className="button button-secondary"
+                  onClick={() => void distribute(detailMaster.id, 'UPDATE_UNCUSTOMIZED')}
+                  type="button"
+                >
+                  Actualizar lo no personalizado
+                </button>
+                {permissions.includes('menus.distribute_replace') ? (
                   <button
-                    className="button button-primary mt-5"
-                    onClick={() => void publish(menu.id)}
+                    className="button button-secondary"
+                    onClick={() => void distribute(detailMaster.id, 'REPLACE')}
+                    type="button"
                   >
-                    Publicar
+                    Reemplazar personalizaciones
                   </button>
                 ) : null}
-                {menu.operatingSiteId === null && permissions.includes('menus.distribute') ? (
-                  <details className="mt-5">
-                    <summary className="cursor-pointer text-sm font-semibold text-forest">
-                      Distribuir por ciudad
-                    </summary>
-                    <p className="mt-2 text-sm text-ink-muted">
-                      Crea una revisión propia en cada ciudad elegida. Lo que un operador ya
-                      personalizó allá se conserva, salvo que reemplaces.
-                    </p>
-                    <div className="mt-3 grid gap-2">
-                      {sites.map((site) => (
-                        <label className="flex items-center gap-2 text-sm" key={site.id}>
-                          <input
-                            checked={distributionSites.includes(site.id)}
-                            onChange={(event) =>
-                              setDistributionSites((current) =>
-                                event.target.checked
-                                  ? [...current, site.id]
-                                  : current.filter((id) => id !== site.id),
-                              )
-                            }
-                            type="checkbox"
-                          />
-                          {site.displayName}
-                        </label>
-                      ))}
-                      {sites.length === 0 ? (
-                        <p className="text-sm text-ink-muted">
-                          Todavía no hay ciudades configuradas.
-                        </p>
-                      ) : null}
-                    </div>
-                    <label className="field mt-3">
-                      Modo
-                      <select
-                        onChange={(event) =>
-                          setDistributionMode(event.target.value as DistributionMode)
-                        }
-                        value={distributionMode}
-                      >
-                        <option value="CREATE_MISSING">Sólo donde no exista</option>
-                        <option value="UPDATE_UNCUSTOMIZED">Actualizar lo no personalizado</option>
-                        {permissions.includes('menus.distribute_replace') ? (
-                          <option value="REPLACE">Reemplazar personalizaciones</option>
-                        ) : null}
-                      </select>
-                    </label>
-                    <button
-                      className="button button-secondary mt-3"
-                      disabled={distributionSites.length === 0}
-                      onClick={() => void distributeMenu(menu.id)}
-                      type="button"
-                    >
-                      Distribuir
-                    </button>
-                  </details>
-                ) : null}
-              </article>
-            ))}
-            {menus.length === 0 ? (
-              <p className="empty-state">Todavía no hay menús cargados.</p>
+                <p className="w-full text-sm text-ink-muted">
+                  Lo que una ciudad ya personalizó se conserva, salvo que elijas reemplazar. Los
+                  precios de cada una siguen en “Precios por ubicación”.
+                </p>
+              </div>
             ) : null}
-          </div>
-        )}
+          </article>
+        ) : null}
       </section>
     </DashboardShell>
   );

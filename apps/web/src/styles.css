@@ -5197,3 +5197,17 @@ a.order-card-phone:focus-visible {
   margin-bottom: 0.6rem;
 }
 
+/* Una localidad dentro del detalle de la semana. */
+.week-site {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--db-border-soft, var(--border-hairline));
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.75rem;
+}
+.week-site > span:first-child {
+  font-weight: 600;
+}

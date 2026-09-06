@@ -215,6 +215,45 @@ export function MenuBuilderPage() {
     return null;
   }
 
+  /**
+   * Una semana se configura una vez y vale para toda la operación.
+   *
+   * El modelo materializa una revisión por ciudad (ADR-028) y eso no cambia —es lo que permite que
+   * cada una tenga su precio—, pero armar la semana no puede significar repetir el mismo trabajo
+   * una vez por localidad. Al publicarla se lleva sola a todas las activas, en el modo que sólo
+   * crea lo que falta: nada de lo que una ciudad haya personalizado se pisa.
+   *
+   * Si esto falla, la semana igual quedó publicada: se avisa y se puede repartir desde "Periodos",
+   * que es donde vive el alcance. No es motivo para tirar abajo un guardado que sí funcionó.
+   */
+  async function spreadToEveryCity(menuId: string): Promise<void> {
+    if (!profile?.permissions.includes('menus.distribute')) return;
+    try {
+      const siteResponse = await apiRequest('/api/v1/operating-sites');
+      if (!siteResponse.ok) return;
+      const siteIds = (
+        (await siteResponse.json()) as { items: { active: boolean; id: string }[] }
+      ).items
+        .filter((site) => site.active)
+        .map((site) => site.id);
+      if (siteIds.length === 0) return;
+
+      const response = await apiRequest(`/api/v1/menus/${menuId}/distribute`, {
+        body: JSON.stringify({
+          confirmedReplace: false,
+          mode: 'CREATE_MISSING',
+          operatingSiteIds: siteIds,
+        }),
+        method: 'POST',
+      });
+      if (!response.ok) {
+        showToast('La semana se publicó, pero no llegó a las localidades. Revisá "Periodos".');
+      }
+    } catch {
+      showToast('La semana se publicó, pero no llegó a las localidades. Revisá "Periodos".');
+    }
+  }
+
   async function saveMenu(form: FormData, options: { alsoPublish: boolean }) {
     const payload = buildPayload(form);
     if (!payload) return;
@@ -245,6 +284,7 @@ export function MenuBuilderPage() {
             `El borrador se guardó, pero no pudimos publicarlo: ${await errorMessage(publishResponse)} Podés publicarlo desde "Periodos".`,
           );
         }
+        await spreadToEveryCity(created.id);
       }
 
       // Redirect to "Ver menús" instead of just clearing the form in place — on a long form, an
@@ -259,7 +299,7 @@ export function MenuBuilderPage() {
       clearIntuitivoDraft();
       showToast(
         options.alsoPublish
-          ? `Menú "${payload.alias}" guardado y publicado.`
+          ? `Semana "${payload.alias}" publicada en todas las localidades.`
           : `Menú "${payload.alias}" guardado como borrador.`,
       );
       await navigate('/app/menus');
