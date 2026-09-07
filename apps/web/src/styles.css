@@ -5342,3 +5342,43 @@ a.order-card-phone:focus-visible {
   font-size: 0.9rem;
   cursor: pointer;
 }
+
+/* Marcar listos por zona: cocina produce por lote, así que el lote es la unidad de la acción. */
+.ready-batches {
+  display: grid;
+  gap: 0.5rem;
+  border: 1px solid var(--db-border-soft, var(--border-hairline));
+  border-radius: 0.7rem;
+  padding: 0.8rem;
+}
+.ready-batches-title {
+  margin: 0;
+  color: var(--db-muted, var(--color-ink-muted));
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.ready-batches-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* El total de platos de los Intuitivos: una grilla para poder barrerla de un vistazo. */
+.dish-tally {
+  display: grid;
+  gap: 0.3rem 1.2rem;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+}
+.dish-tally > div {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--db-border-soft, var(--border-hairline));
+  padding-bottom: 0.25rem;
+}
+.dish-tally strong {
+  font-variant-numeric: tabular-nums;
+}

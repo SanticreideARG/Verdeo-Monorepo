@@ -146,11 +146,55 @@ describe('order engine', () => {
           },
         ],
         familyName: 'Keto',
+        // Tres unidades repartidas en dos pedidos: las dos cifras dicen cosas distintas y cocina
+        // necesita las dos — una para cocinar, otra para saber cuántos paquetes arma.
+        orderCount: 2,
         quantityUnits: 3,
         variantName: '250',
       },
     ]);
     expect(summary.custom[0]).toMatchObject({ orderPublicNumber: 'N00455', sequence: 1 });
+    expect(summary.totalOrders).toBe(3);
+  });
+
+  it('suma las porciones de cada plato de los Intuitivos', () => {
+    const summary = buildKitchenSummary([
+      {
+        composable: true,
+        customerDisplayName: 'Lola',
+        deliveryDate: '2026-08-28',
+        deliveryZone: 'Centro',
+        dietaryInstructions: [],
+        dishSelections: ['Pollo al verdeo', 'Tarta', 'Wok', 'Guiso', 'Milanesa'],
+        familyName: 'Intuitivo',
+        orderPublicNumber: 'N00455',
+        // Dos unidades del mismo Intuitivo necesitan el doble de porciones de cada plato.
+        quantityUnits: 2,
+        variantName: '400',
+      },
+      {
+        composable: true,
+        customerDisplayName: 'Rosa',
+        deliveryDate: '2026-08-28',
+        deliveryZone: 'Centro',
+        dietaryInstructions: [],
+        dishSelections: ['Pollo al verdeo', 'Ensalada', 'Wok', 'Guiso', 'Tarta'],
+        familyName: 'Intuitivo',
+        orderPublicNumber: 'N00456',
+        quantityUnits: 1,
+        variantName: '250',
+      },
+    ]);
+
+    // De mayor a menor: lo que más se repite es lo primero que hay que comprar.
+    expect(summary.dishTally.slice(0, 4)).toEqual([
+      { dishName: 'Guiso', portions: 3 },
+      { dishName: 'Pollo al verdeo', portions: 3 },
+      { dishName: 'Tarta', portions: 3 },
+      { dishName: 'Wok', portions: 3 },
+    ]);
+    expect(summary.dishTally.find((entry) => entry.dishName === 'Ensalada')?.portions).toBe(1);
+    expect(summary.dishTally.find((entry) => entry.dishName === 'Milanesa')?.portions).toBe(2);
   });
 
   it('expande cada línea en una etiqueta por unidad física, siempre con el nombre del cliente', () => {

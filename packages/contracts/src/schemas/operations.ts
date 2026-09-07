@@ -652,6 +652,23 @@ export const CancellationReasonsUpdateRequestSchema = z.object({
     .max(40),
 });
 
+/**
+ * Pasar varios pedidos a listo de una.
+ *
+ * Ids explícitos y no un filtro: el servidor transiciona exactamente lo que el operador tenía a la
+ * vista, en vez de volver a resolver una condición que podría barrer más de lo que se vio.
+ */
+export const OrderReadyBatchRequestSchema = z.object({
+  orderIds: z.array(UuidSchema).min(1).max(200),
+});
+
+/** Uno por pedido: un fallo suelto no invalida la tanda, pero tiene que poder verse cuál fue. */
+export const OrderReadyBatchResponseSchema = z.object({
+  results: z.array(
+    z.object({ error: z.string().optional(), orderId: UuidSchema, ready: z.boolean() }),
+  ),
+});
+
 /** Un tilde, nada más: quién y cuándo los pone el servidor. */
 export const OrderPaidRequestSchema = z.object({ paid: z.boolean() });
 
@@ -818,6 +835,9 @@ export const KitchenSummaryResponseSchema = z.object({
         }),
       ),
       familyName: z.string(),
+      // Pedidos distintos que aportan a este renglón: ocho unidades pueden ser ocho pedidos de una
+      // o dos de cuatro, y eso cambia cuántos paquetes se arman.
+      orderCount: z.number().int(),
       quantityUnits: z.number().int(),
       variantName: z.string(),
     }),
@@ -835,7 +855,10 @@ export const KitchenSummaryResponseSchema = z.object({
     }),
   ),
   cycle: z.object({ alias: z.string(), id: UuidSchema }),
+  // Los platos de todos los Intuitivos, sumados: es la pregunta que cocina se hace antes de comprar.
+  dishTally: z.array(z.object({ dishName: z.string(), portions: z.number().int() })),
   generatedAt: IsoDateTimeSchema,
+  totalOrders: z.number().int(),
   totalUnits: z.number().int(),
 });
 
@@ -950,6 +973,8 @@ export const ProductionSnapshotSchema = z.object({
     custom: KitchenSummaryResponseSchema.shape.custom,
     cycle: KitchenSummaryResponseSchema.shape.cycle,
     delta: z.array(ProductionDeltaLineSchema).nullable(),
+    dishTally: KitchenSummaryResponseSchema.shape.dishTally,
+    totalOrders: z.number().int(),
     totalUnits: z.number().int(),
   }),
   salesCycleId: UuidSchema,
@@ -1045,6 +1070,7 @@ export type PublicOrderTrackResponse = z.infer<typeof PublicOrderTrackResponseSc
 export type Order = z.infer<typeof OrderSchema>;
 export type OrderTransitionRequest = z.infer<typeof OrderTransitionRequestSchema>;
 export type OrderPaidRequest = z.infer<typeof OrderPaidRequestSchema>;
+export type OrderReadyBatchRequest = z.infer<typeof OrderReadyBatchRequestSchema>;
 export type OrderUpdateRequest = z.infer<typeof OrderUpdateRequestSchema>;
 export type OrderListQuery = z.infer<typeof OrderListQuerySchema>;
 export type KitchenSummaryResponse = z.infer<typeof KitchenSummaryResponseSchema>;

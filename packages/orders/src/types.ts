@@ -22,8 +22,21 @@ export interface KitchenBaseRequirement {
     quantityUnits: number;
   }[];
   familyName: string;
+  /**
+   * Cuántos pedidos distintos aportan a este renglón.
+   *
+   * No es lo mismo que las unidades y las dos cosas importan: ocho unidades pueden ser ocho pedidos
+   * de una o dos de cuatro, y eso cambia cuántos paquetes se arman y cuántas etiquetas se pegan.
+   */
+  orderCount: number;
   quantityUnits: number;
   variantName: string;
+}
+
+/** Cuántas porciones de cada plato hacen falta, sumando todos los Intuitivos. */
+export interface KitchenDishTally {
+  dishName: string;
+  portions: number;
 }
 
 export interface KitchenCustomRequirement extends KitchenSourceLine {
@@ -33,6 +46,16 @@ export interface KitchenCustomRequirement extends KitchenSourceLine {
 export interface KitchenSummary {
   base: KitchenBaseRequirement[];
   custom: KitchenCustomRequirement[];
+  /**
+   * Los platos de todos los Intuitivos, sumados.
+   *
+   * Sin esto, saber cuánto pollo al verdeo hay que cocinar era recorrer una por una las tarjetas de
+   * Intuitivo y llevar la cuenta a mano — que es precisamente la pregunta que cocina se hace antes
+   * de comprar.
+   */
+  dishTally: KitchenDishTally[];
+  /** Pedidos distintos del ciclo, no unidades. */
+  totalOrders: number;
   totalUnits: number;
 }
 

@@ -135,6 +135,49 @@ export function KitchenPage() {
     }
   }, []);
 
+  /**
+   * El consolidado en vivo, listo para pegar en un chat.
+   *
+   * Se copia al portapapeles en vez de descargar un archivo: lo que se hace con esto es mandárselo
+   * a cocina por WhatsApp, y un .txt adjunto obliga a abrirlo, copiarlo y recién ahí pegarlo.
+   */
+  async function copyProduction() {
+    if (!selectedMenu) return;
+    setMessage('');
+    const response = await apiRequest(
+      `/api/v1/production/${selectedMenu.cycle.id}/export?format=whatsapp`,
+    );
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    await navigator.clipboard.writeText(await response.text());
+    setMessage('Producción copiada. Pegala en el chat de cocina.');
+  }
+
+  async function downloadProduction(format: 'pdf' | 'xlsx') {
+    if (!selectedMenu) return;
+    setMessage('');
+    const response = await apiRequest(
+      `/api/v1/production/${selectedMenu.cycle.id}/export?format=${format}`,
+    );
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    const url = URL.createObjectURL(await response.blob());
+    if (format === 'pdf') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } else {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `produccion-${selectedMenu.cycle.alias}.xlsx`;
+      link.click();
+    }
+    // Revocar en el mismo turno corre carrera con la pestaña que recién se abre.
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  }
+
   async function generate() {
     if (!selectedMenu) return;
     setMessage('');
@@ -317,6 +360,37 @@ export function KitchenPage() {
               >
                 Generar etiquetas
               </button>
+              {/*
+               * Los tres formatos del consolidado que está en pantalla. Existían sólo para
+               * snapshots ya tomados, así que pasarle la producción a cocina obligaba a congelar
+               * uno antes — un acto con significado propio que no debería hacer falta sólo para
+               * mandar un mensaje.
+               */}
+              {kitchen ? (
+                <>
+                  <button
+                    className="button button-secondary"
+                    onClick={() => void copyProduction()}
+                    type="button"
+                  >
+                    Copiar para WhatsApp
+                  </button>
+                  <button
+                    className="button button-secondary"
+                    onClick={() => void downloadProduction('xlsx')}
+                    type="button"
+                  >
+                    Descargar planilla
+                  </button>
+                  <button
+                    className="button button-secondary"
+                    onClick={() => void downloadProduction('pdf')}
+                    type="button"
+                  >
+                    Imprimir
+                  </button>
+                </>
+              ) : null}
             </div>
 
             {kitchen ? (
@@ -330,11 +404,18 @@ export function KitchenPage() {
                           className="border-b border-forest/10 pb-3"
                           key={`${item.familyName}-${item.variantName}`}
                         >
-                          <div className="flex justify-between">
+                          <div className="flex items-baseline justify-between gap-3">
                             <span>
                               {item.familyName} {item.variantName}
                             </span>
-                            <strong>{item.quantityUnits}</strong>
+                            {/* Unidades y pedidos: ocho unidades pueden ser ocho pedidos de una o
+                                dos de cuatro, y eso cambia cuántos paquetes se arman. */}
+                            <span className="whitespace-nowrap">
+                              <strong>{item.quantityUnits}</strong>{' '}
+                              <span className="text-sm text-ink-muted">
+                                en {item.orderCount} {item.orderCount === 1 ? 'pedido' : 'pedidos'}
+                              </span>
+                            </span>
                           </div>
                           {item.exceptions.map((exception) => (
                             <p
@@ -380,8 +461,31 @@ export function KitchenPage() {
                       ))}
                     </div>
                   </article>
+                  {/*
+                   * Cuántas porciones de cada plato, sumando todos los Intuitivos.
+                   *
+                   * Es la pregunta que cocina se hace antes de comprar, y hasta ahora se contestaba
+                   * recorriendo una por una las tarjetas de Intuitivo llevando la cuenta a mano.
+                   */}
+                  {kitchen.dishTally.length > 0 ? (
+                    <article className="operation-card lg:col-span-2">
+                      <h3 className="text-xl font-semibold text-forest">
+                        Platos a preparar (Intuitivos)
+                      </h3>
+                      <div className="dish-tally mt-4">
+                        {kitchen.dishTally.map((entry) => (
+                          <div key={entry.dishName}>
+                            <span>{entry.dishName}</span>
+                            <strong>{entry.portions}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    </article>
+                  ) : null}
+
                   <p className="text-right font-bold text-forest lg:col-span-2">
-                    Total: {kitchen.totalUnits} unidades
+                    Total: {kitchen.totalUnits} unidades en {kitchen.totalOrders}{' '}
+                    {kitchen.totalOrders === 1 ? 'pedido' : 'pedidos'}
                   </p>
                 </div>
 

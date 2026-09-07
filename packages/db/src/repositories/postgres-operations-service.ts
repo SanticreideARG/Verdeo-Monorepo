@@ -4395,6 +4395,10 @@ export class PostgresOperationsService {
       custom: summary.custom,
       cycle: summary.cycle,
       delta,
+      // El snapshot guarda lo mismo que muestra la pantalla: si el consolidado en vivo dice
+      // cuántas porciones de cada plato hacen falta, el congelado también tiene que decirlo.
+      dishTally: summary.dishTally,
+      totalOrders: summary.totalOrders,
       totalUnits: summary.totalUnits,
     };
 

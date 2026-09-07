@@ -6,6 +6,34 @@ import type { z } from 'zod';
 type ProductionSnapshot = z.infer<typeof ProductionSnapshotSchema>;
 
 /**
+ * Lo que se exporta, venga de un snapshot congelado o del consolidado en vivo.
+ *
+ * Los dos informes son el mismo informe: uno se sacó el martes a las 20:00 y el otro es lo que hay
+ * ahora. `actuals` y `delta` sólo tienen contenido en el congelado —producción real informada y
+ * cuánto se movió contra el parcial—, y en el vivo llegan vacíos, que es más simple que sostener
+ * dos juegos de constructores para la misma tabla.
+ */
+export interface ProductionReport {
+  actuals: ProductionSnapshot['payload']['actuals'];
+  base: ProductionSnapshot['payload']['base'];
+  custom: ProductionSnapshot['payload']['custom'];
+  cycle: ProductionSnapshot['payload']['cycle'];
+  delta: ProductionSnapshot['payload']['delta'];
+  dishTally: ProductionSnapshot['payload']['dishTally'];
+  /** "Parcial (martes 20:00)", "Final" o "Consolidado al momento". */
+  subtitle: string;
+  totalOrders: number;
+  totalUnits: number;
+}
+
+export function reportFromSnapshot(snapshot: ProductionSnapshot): ProductionReport {
+  return {
+    ...snapshot.payload,
+    subtitle: snapshot.kind === 'partial' ? 'Parcial (martes 20:00)' : 'Final (miércoles 19:00)',
+  };
+}
+
+/**
  * Turns a stored production snapshot into the three hand-off formats the spec asks for
  * (WEEKLY_MENU_AND_PRODUCTION.md "Snapshots"): Excel for the kitchen sheet, a WhatsApp-ready text
  * block, and a print-ready page. "PDF" is deliberately the print page rather than a generated
@@ -23,8 +51,8 @@ export function productionSnapshotFilenameBase(snapshot: ProductionSnapshot): st
   return `produccion-${alias}-${snapshot.kind}`;
 }
 
-export function buildProductionExcel(snapshot: ProductionSnapshot): Uint8Array {
-  const { actuals, base, delta } = snapshot.payload;
+export function buildProductionExcel(report: ProductionReport): Uint8Array {
+  const { actuals, base, delta } = report;
   const actualByKey = new Map(
     actuals.map((actual) => [
       lineLabel(actual.familyName, actual.variantName),
@@ -46,6 +74,9 @@ export function buildProductionExcel(snapshot: ProductionSnapshot): Uint8Array {
         )
         .join(' | '),
       Familia: line.familyName,
+      // Unidades y pedidos son dos números distintos: ocho unidades pueden ser ocho pedidos de una
+      // o dos de cuatro, y eso cambia cuántos paquetes se arman.
+      Pedidos: line.orderCount,
       'Producción real': actualByKey.get(key) ?? '',
       Tamaño: line.variantName,
       'Unidades planificadas': line.quantityUnits,
@@ -56,9 +87,23 @@ export function buildProductionExcel(snapshot: ProductionSnapshot): Uint8Array {
   const sheet = XLSX.utils.json_to_sheet(rows);
   XLSX.utils.book_append_sheet(workbook, sheet, 'Producción base');
 
-  if (snapshot.payload.custom.length > 0) {
+  // Los platos de los Intuitivos, sumados: es la hoja con la que se va a comprar.
+  if (report.dishTally.length > 0) {
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(
+        report.dishTally.map((entry) => ({
+          Plato: entry.dishName,
+          Porciones: entry.portions,
+        })),
+      ),
+      'Platos a preparar',
+    );
+  }
+
+  if (report.custom.length > 0) {
     const customSheet = XLSX.utils.json_to_sheet(
-      snapshot.payload.custom.map((item) => ({
+      report.custom.map((item) => ({
         Cliente: item.customerDisplayName,
         Composición: item.dishSelections.join(' · '),
         Familia: item.familyName,
@@ -75,8 +120,8 @@ export function buildProductionExcel(snapshot: ProductionSnapshot): Uint8Array {
   return XLSX.write(workbook, { type: 'array', bookType: 'xlsx' }) as Uint8Array;
 }
 
-export function buildProductionWhatsAppText(snapshot: ProductionSnapshot): string {
-  const { actuals, base, custom, cycle, delta, totalUnits } = snapshot.payload;
+export function buildProductionWhatsAppText(report: ProductionReport): string {
+  const { actuals, base, custom, cycle, delta, dishTally, totalOrders, totalUnits } = report;
   const actualByKey = new Map(
     actuals.map((actual) => [
       lineLabel(actual.familyName, actual.variantName),
@@ -87,15 +132,13 @@ export function buildProductionWhatsAppText(snapshot: ProductionSnapshot): strin
     (delta ?? []).map((line) => [lineLabel(line.familyName, line.variantName), line.deltaUnits]),
   );
 
-  const kindLabel =
-    snapshot.kind === 'partial' ? 'Parcial (martes 20:00)' : 'Final (miércoles 19:00)';
-  const lines = [`*Producción — ${cycle.alias}*`, `_${kindLabel}_`, ''];
+  const lines = [`*Producción — ${cycle.alias}*`, `_${report.subtitle}_`, ''];
 
   for (const line of base) {
     const key = lineLabel(line.familyName, line.variantName);
     const actual = actualByKey.get(key);
     const deltaUnits = deltaByKey.get(key);
-    let text = `• ${line.familyName} ${line.variantName}: ${line.quantityUnits}`;
+    let text = `• ${line.familyName} ${line.variantName}: ${line.quantityUnits} (${line.orderCount} ${line.orderCount === 1 ? 'pedido' : 'pedidos'})`;
     if (actual !== undefined) text += ` (real: ${actual})`;
     if (deltaUnits !== undefined) text += ` (Δ ${deltaUnits >= 0 ? '+' : ''}${deltaUnits})`;
     lines.push(text);
@@ -115,12 +158,24 @@ export function buildProductionWhatsAppText(snapshot: ProductionSnapshot): strin
     }
   }
 
-  lines.push('', `*Total: ${totalUnits} unidades*`);
+  // Los platos van después de los Intuitivos y antes del total: es lo que se lee para ir a comprar,
+  // y el detalle de arriba es lo que se consulta después, ya cocinando.
+  if (dishTally.length > 0) {
+    lines.push('', '*Platos a preparar*');
+    for (const entry of dishTally) {
+      lines.push(`• ${entry.dishName}: ${entry.portions}`);
+    }
+  }
+
+  lines.push(
+    '',
+    `*Total: ${totalUnits} unidades en ${totalOrders} ${totalOrders === 1 ? 'pedido' : 'pedidos'}*`,
+  );
   return lines.join('\n');
 }
 
-export function buildProductionPrintHtml(snapshot: ProductionSnapshot): string {
-  const { actuals, base, custom, cycle, delta, totalUnits } = snapshot.payload;
+export function buildProductionPrintHtml(report: ProductionReport): string {
+  const { actuals, base, custom, cycle, delta, dishTally, totalOrders, totalUnits } = report;
   const actualByKey = new Map(
     actuals.map((actual) => [
       lineLabel(actual.familyName, actual.variantName),
@@ -152,6 +207,7 @@ export function buildProductionPrintHtml(snapshot: ProductionSnapshot): string {
         <td>${escape(line.familyName)}</td>
         <td>${escape(line.variantName)}</td>
         <td>${line.quantityUnits}</td>
+        <td>${line.orderCount}</td>
         <td>${actual ?? '—'}</td>
         <td>${deltaUnits === undefined ? '—' : (deltaUnits >= 0 ? '+' : '') + deltaUnits}</td>
         <td>${exceptions}</td>
@@ -170,9 +226,6 @@ export function buildProductionPrintHtml(snapshot: ProductionSnapshot): string {
       </tr>`,
     )
     .join('');
-
-  const kindLabel =
-    snapshot.kind === 'partial' ? 'Parcial (martes 20:00)' : 'Final (miércoles 19:00)';
 
   return `<!doctype html>
 <html lang="es">
@@ -193,9 +246,9 @@ export function buildProductionPrintHtml(snapshot: ProductionSnapshot): string {
 </head>
 <body>
   <h1>Producción — ${escape(cycle.alias)}</h1>
-  <p class="subtitle">${kindLabel} · generado ${escape(snapshot.generatedAt)}</p>
+  <p class="subtitle">${escape(report.subtitle)}</p>
   <table>
-    <thead><tr><th>Familia</th><th>Tamaño</th><th>Planificado</th><th>Real</th><th>Delta</th><th>Excepciones</th></tr></thead>
+    <thead><tr><th>Familia</th><th>Tamaño</th><th>Planificado</th><th>Pedidos</th><th>Real</th><th>Delta</th><th>Excepciones</th></tr></thead>
     <tbody>${baseRows}</tbody>
   </table>
   ${
@@ -206,7 +259,17 @@ export function buildProductionPrintHtml(snapshot: ProductionSnapshot): string {
   </table>`
       : ''
   }
-  <p class="total">Total: ${totalUnits} unidades</p>
+  ${
+    dishTally.length > 0
+      ? `<h2>Platos a preparar</h2><table>
+    <thead><tr><th>Plato</th><th>Porciones</th></tr></thead>
+    <tbody>${dishTally
+      .map((entry) => `<tr><td>${escape(entry.dishName)}</td><td>${entry.portions}</td></tr>`)
+      .join('')}</tbody>
+  </table>`
+      : ''
+  }
+  <p class="total">Total: ${totalUnits} unidades en ${totalOrders} ${totalOrders === 1 ? 'pedido' : 'pedidos'}</p>
 </body>
 </html>`;
 }

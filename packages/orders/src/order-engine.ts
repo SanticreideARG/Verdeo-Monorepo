@@ -152,10 +152,21 @@ export function resolveOrderComposition(input: ResolveCompositionInput): {
 export function buildKitchenSummary(lines: readonly KitchenSourceLine[]): KitchenSummary {
   const base = new Map<string, KitchenSummary['base'][number]>();
   const custom: KitchenSummary['custom'] = [];
+  // Los pedidos que aportan a cada renglón, para contarlos sin contarlos dos veces: un pedido con
+  // dos ítems de la misma variedad es un pedido, no dos.
+  const ordersByKey = new Map<string, Set<string>>();
+  const dishPortions = new Map<string, number>();
+  const allOrders = new Set<string>();
   let totalUnits = 0;
 
   for (const line of lines) {
     totalUnits += line.quantityUnits;
+    allOrders.add(line.orderPublicNumber);
+    // Cada unidad del renglón lleva sus cinco platos: dos Intuitivos iguales necesitan el doble de
+    // porciones de cada uno.
+    for (const dish of line.dishSelections) {
+      dishPortions.set(dish, (dishPortions.get(dish) ?? 0) + line.quantityUnits);
+    }
     // A line is custom because it carries its own composition or belongs to a composable family,
     // never because of what the family is called.
     if (line.dishSelections.length > 0 || line.composable) {
@@ -165,6 +176,9 @@ export function buildKitchenSummary(lines: readonly KitchenSourceLine[]): Kitche
 
     const key = `${line.familyName}\u0000${line.variantName}`;
     const current = base.get(key);
+    const orders = ordersByKey.get(key) ?? new Set<string>();
+    orders.add(line.orderPublicNumber);
+    ordersByKey.set(key, orders);
     base.set(key, {
       exceptions: [
         ...(current?.exceptions ?? []),
@@ -180,6 +194,7 @@ export function buildKitchenSummary(lines: readonly KitchenSourceLine[]): Kitche
           : []),
       ],
       familyName: line.familyName,
+      orderCount: orders.size,
       quantityUnits: (current?.quantityUnits ?? 0) + line.quantityUnits,
       variantName: line.variantName,
     });
@@ -192,6 +207,14 @@ export function buildKitchenSummary(lines: readonly KitchenSourceLine[]): Kitche
         left.variantName.localeCompare(right.variantName),
     ),
     custom,
+    // De mayor a menor: lo que más se repite es lo primero que hay que comprar.
+    dishTally: [...dishPortions.entries()]
+      .map(([dishName, portions]) => ({ dishName, portions }))
+      .sort(
+        (left, right) =>
+          right.portions - left.portions || left.dishName.localeCompare(right.dishName, 'es-AR'),
+      ),
+    totalOrders: allOrders.size,
     totalUnits,
   };
 }

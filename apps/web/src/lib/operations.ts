@@ -236,6 +236,8 @@ export interface KitchenSummary {
       quantityUnits: number;
     }[];
     familyName: string;
+    /** Pedidos distintos que aportan a este renglón, que no es lo mismo que las unidades. */
+    orderCount: number;
     quantityUnits: number;
     variantName: string;
   }[];
@@ -250,7 +252,10 @@ export interface KitchenSummary {
     variantName: string;
   }[];
   cycle: { alias: string; id: string };
+  /** Los platos de todos los Intuitivos, sumados y de mayor a menor. */
+  dishTally: { dishName: string; portions: number }[];
   generatedAt: string;
+  totalOrders: number;
   totalUnits: number;
 }
 

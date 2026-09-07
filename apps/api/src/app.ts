@@ -131,6 +131,8 @@ import {
   MeResponseSchema,
   OrderCreateRequestSchema,
   OrderPaidRequestSchema,
+  OrderReadyBatchRequestSchema,
+  OrderReadyBatchResponseSchema,
   CustomerOrderCreateRequestSchema,
   OrderListQuerySchema,
   OrderPageResponseSchema,
@@ -276,6 +278,7 @@ import {
   buildProductionPrintHtml,
   buildProductionWhatsAppText,
   productionSnapshotFilenameBase,
+  reportFromSnapshot,
 } from './production-export.js';
 import { requirePermission } from './middleware/authorization.js';
 
@@ -4345,6 +4348,53 @@ export function createApp(options: CreateAppOptions) {
     return context.json(OrderSchema.parse(contractValue(order)));
   });
 
+  /**
+   * Marcar varios pedidos como listos de una.
+   *
+   * Cocina produce por lote —toda una zona junta—, así que pasarlos de a uno es repetir el mismo
+   * clic veinte veces sobre una decisión que ya se tomó para todo el grupo.
+   *
+   * Recibe ids explícitos y no un filtro. Un filtro lo volvería a resolver el servidor, y podría
+   * barrer más pedidos que los que el operador tenía a la vista cuando decidió; con ids, se
+   * transiciona exactamente lo que se vio.
+   *
+   * Cada pedido pasa por la misma transición de siempre, que valida el estado de origen y audita.
+   * Uno que falle no cancela al resto: se informa por pedido y los demás quedan listos igual, que es
+   * lo que se espera de una acción de lote — lo contrario obligaría a adivinar cuál fue el que
+   * arruinó la tanda.
+   */
+  app.post('/api/v1/orders/ready-batch', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('orders.edit')) return forbidden(context);
+    const input = OrderReadyBatchRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) return badRequest(context, 'Revisá los pedidos.', input.error.issues);
+
+    const results: { error?: string; orderId: string; ready: boolean }[] = [];
+    for (const orderId of input.data.orderIds) {
+      try {
+        await requireOperations().transitionOrder(
+          orderId,
+          'READY',
+          undefined,
+          false,
+          session.permissions.includes('orders.override_cycle_lock'),
+          operationsContext(context),
+        );
+        results.push({ orderId, ready: true });
+      } catch (error) {
+        results.push({
+          error: error instanceof Error ? error.message : 'No pudimos marcarlo listo.',
+          orderId,
+          ready: false,
+        });
+      }
+    }
+
+    return context.json(OrderReadyBatchResponseSchema.parse({ results }));
+  });
+
   app.get('/api/v1/production/:cycleId', async (context) => {
     if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
     const params = CycleIdParamSchema.safeParse(context.req.param());
@@ -4469,14 +4519,66 @@ export function createApp(options: CreateAppOptions) {
         'content-type',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
-      return context.body(buildProductionExcel(snapshot).buffer as ArrayBuffer, 200);
+      return context.body(
+        buildProductionExcel(reportFromSnapshot(snapshot)).buffer as ArrayBuffer,
+        200,
+      );
     }
     if (format === 'whatsapp') {
       context.header('content-type', 'text/plain; charset=utf-8');
-      return context.body(buildProductionWhatsAppText(snapshot));
+      return context.body(buildProductionWhatsAppText(reportFromSnapshot(snapshot)));
     }
     context.header('content-type', 'text/html; charset=utf-8');
-    return context.html(buildProductionPrintHtml(snapshot));
+    return context.html(buildProductionPrintHtml(reportFromSnapshot(snapshot)));
+  });
+
+  /**
+   * El consolidado que está en pantalla, en los mismos tres formatos que un snapshot.
+   *
+   * Los exports existían sólo para snapshots ya tomados, así que pasarle la producción a cocina
+   * obligaba a congelar uno antes — un acto con significado propio (el parcial del martes, el final
+   * del miércoles) que no se debería tener que hacer sólo para mandar un mensaje.
+   */
+  app.get('/api/v1/production/:cycleId/export', async (context) => {
+    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El ciclo indicado no es válido.');
+    const format = context.req.query('format');
+    if (format !== 'xlsx' && format !== 'whatsapp' && format !== 'pdf')
+      return badRequest(context, 'El formato debe ser xlsx, whatsapp o pdf.');
+
+    const summary = KitchenSummaryResponseSchema.parse(
+      contractValue(
+        await requireOperations().kitchenSummary(
+          params.data.cycleId,
+          context.get('scope')?.operatingSiteId ?? null,
+        ),
+      ),
+    );
+    // Sin producción real ni delta: los dos son propios del congelado, no del momento.
+    const report = {
+      ...summary,
+      actuals: [],
+      delta: null,
+      subtitle: 'Consolidado al momento',
+    };
+    const filename = `produccion-${summary.cycle.alias.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`;
+
+    context.header('cache-control', 'private, no-store');
+    if (format === 'xlsx') {
+      context.header('content-disposition', `attachment; filename="${filename}.xlsx"`);
+      context.header(
+        'content-type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      return context.body(buildProductionExcel(report).buffer as ArrayBuffer, 200);
+    }
+    if (format === 'whatsapp') {
+      context.header('content-type', 'text/plain; charset=utf-8');
+      return context.body(buildProductionWhatsAppText(report));
+    }
+    context.header('content-type', 'text/html; charset=utf-8');
+    return context.html(buildProductionPrintHtml(report));
   });
 
   app.get('/api/v1/production/:cycleId/surplus', async (context) => {
