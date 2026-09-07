@@ -27,6 +27,16 @@ const EMPTY_DRAFT = {
   title: '',
 };
 
+/**
+ * "Ciclo semanal" va primero.
+ *
+ * Es la única categoría que cuenta un proceso completo en vez de explicar una pantalla, así que es
+ * lo que necesita alguien que recién entra: el resto de la ayuda se entiende mejor sabiendo en qué
+ * paso de la semana encaja. Dejarla en orden alfabético la escondía entre "Administración" y
+ * "Clientes".
+ */
+const FIRST_CATEGORY = 'Ciclo semanal';
+
 function groupByCategory(articles: HelpArticle[]): [string, HelpArticle[]][] {
   const groups = new Map<string, HelpArticle[]>();
   for (const article of articles) {
@@ -34,7 +44,12 @@ function groupByCategory(articles: HelpArticle[]): [string, HelpArticle[]][] {
     list.push(article);
     groups.set(article.category, list);
   }
-  return [...groups.entries()];
+  return [...groups.entries()].sort(([a], [b]) => {
+    if (a === b) return 0;
+    if (a === FIRST_CATEGORY) return -1;
+    if (b === FIRST_CATEGORY) return 1;
+    return a.localeCompare(b, 'es-AR');
+  });
 }
 
 /** "Ayuda modularizada": lista solo los artículos relevantes para el viewer — el propio backend
