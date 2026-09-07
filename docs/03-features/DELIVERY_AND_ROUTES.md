@@ -106,3 +106,23 @@ OR-Tools u otro adapter)" que pide este documento; los llamadores solo conocen l
 
 **Diferido**: QR/etiquetas imprimibles y el flujo de token público, optimización con ventanas
 horarias, integración con un optimizador real.
+
+## Sacar la ruta de la pantalla
+
+Proponer una ruta la guardaba y ahí terminaba: no había forma de dársela a nadie. Ahora la ficha de
+una ruta con paradas ofrece dos salidas:
+
+- **Copiar para el repartidor** — un mensaje de texto con las paradas en orden, cada una con nombre,
+  dirección, **enlace de ubicación** y lo que hay que cobrar. El enlace es lo que el repartidor abre
+  en el teléfono; una dirección escrita obliga a tipearla en un mapa.
+- **Descargar planilla** — el mismo contenido como CSV, con BOM para que Excel no rompa los acentos.
+
+Para eso `DeliveryStopSchema` incorpora `deliveryLocationUrl`, que ya estaba en el pedido pero no
+llegaba a la parada.
+
+**Un bug que valía la pena anotar:** el formulario de "Proponer ruta" hacía `event.currentTarget.reset()`
+después de un `await`. React deja `currentTarget` en null en cuanto el handler cede el control, así
+que eso tiraba un TypeError y se llevaba puesto todo lo que venía atrás —cerrar el formulario,
+recargar la lista, mostrar la ruta—. La ruta se creaba y la pantalla no decía nada; había siete en la
+base cuando se encontró. El formulario ahora se captura antes del `await`, y al crear una ruta se
+avisa cuántas paradas quedaron (o por qué quedó vacía).

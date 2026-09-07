@@ -21,6 +21,7 @@ interface RouteStop {
   assignedUserId: string | null;
   customerDisplayName: string;
   deliveryAddress: string;
+  deliveryLocationUrl: string | null;
   id: string;
   orderId: string;
   paymentExpectation: string;
@@ -108,7 +109,14 @@ export function RoutesPage() {
   async function createRoute(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage('');
-    const form = new FormData(event.currentTarget);
+    /*
+     * El formulario se guarda ANTES del await. React deja `event.currentTarget` en null en cuanto
+     * el handler cede el control, así que el `.reset()` de después tiraba un TypeError y se llevaba
+     * puesto todo lo que venía atrás: cerrar el formulario, recargar la lista y mostrar la ruta
+     * recién creada. La ruta se creaba —hay siete en la base— y la pantalla no decía nada.
+     */
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
     const label = formText(form, 'label').trim();
     const response = await apiRequest('/api/v1/delivery/routes', {
       body: JSON.stringify({
@@ -123,10 +131,65 @@ export function RoutesPage() {
       return;
     }
     const route = (await response.json()) as RouteDetail;
-    event.currentTarget.reset();
+    formEl.reset();
     setFormOpen(false);
     await loadRoutes();
     setSelectedRoute(route);
+    setMessage(
+      route.stops.length > 0
+        ? `Ruta creada con ${String(route.stops.length)} paradas.`
+        : 'Ruta creada, pero sin paradas: no hay pedidos confirmados y geocodificados para ese día y esa ciudad.',
+    );
+  }
+
+  /**
+   * La ruta como algo que se le puede pasar a alguien.
+   *
+   * Hasta ahora "Proponer ruta" guardaba una ruta y ahí terminaba: no había forma de sacarla de la
+   * pantalla. Esto la convierte en un mensaje listo para mandar por chat, con las paradas en orden
+   * y el enlace de ubicación de cada una — que es lo que el repartidor abre en el teléfono, y lo
+   * que una dirección escrita no resuelve.
+   */
+  function routeMessage(route: RouteDetail): string {
+    const header = `Reparto ${route.deliveryDate}${route.label ? ` · ${route.label}` : ''} — ${String(route.stops.length)} paradas`;
+    const lines = route.stops.map((stop) => {
+      const parts = [`${String(stop.sequence)}. ${stop.customerDisplayName}`, stop.deliveryAddress];
+      if (stop.deliveryLocationUrl) parts.push(stop.deliveryLocationUrl);
+      // El pago esperado va en la parada: es lo que el repartidor tiene que cobrar ahí.
+      parts.push(`${stop.paymentExpectation} · ${formatMoney(stop.totalMinor, 'ARS')}`);
+      return parts.join('\n');
+    });
+    return [header, '', ...lines].join('\n\n');
+  }
+
+  async function copyRoute(route: RouteDetail) {
+    await navigator.clipboard.writeText(routeMessage(route));
+    setMessage('Mensaje de la ruta copiado. Pegalo en el chat del repartidor.');
+  }
+
+  /** La misma ruta como planilla, para quien prefiere abrirla en Excel. */
+  function downloadRouteCsv(route: RouteDetail) {
+    const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const rows = [
+      ['Orden', 'Cliente', 'Dirección', 'Ubicación', 'Pago esperado', 'Total', 'N° de pedido'],
+      ...route.stops.map((stop) => [
+        String(stop.sequence),
+        stop.customerDisplayName,
+        stop.deliveryAddress,
+        stop.deliveryLocationUrl ?? '',
+        stop.paymentExpectation,
+        String(stop.totalMinor / 100),
+        stop.publicNumber,
+      ]),
+    ];
+    // BOM para que Excel abra los acentos bien; sin esto "Neuquén" sale roto.
+    const csv = `\uFEFF${rows.map((row) => row.map(escape).join(',')).join('\r\n')}`;
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `ruta-${route.deliveryDate}.csv`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
   }
 
   async function publish(routeId: string) {
@@ -281,15 +344,36 @@ export function RoutesPage() {
                       {selectedRoute.deliveryDate}{' '}
                       {selectedRoute.label ? `· ${selectedRoute.label}` : ''}
                     </p>
-                    {canPublish && selectedRoute.status === 'draft' ? (
-                      <button
-                        className="button button-primary"
-                        onClick={() => void publish(selectedRoute.id)}
-                        type="button"
-                      >
-                        Publicar
-                      </button>
-                    ) : null}
+                    <div className="flex flex-wrap gap-2">
+                      {/* Lo que faltaba: poder sacar la ruta de la pantalla. */}
+                      {selectedRoute.stops.length > 0 ? (
+                        <>
+                          <button
+                            className="button button-secondary"
+                            onClick={() => void copyRoute(selectedRoute)}
+                            type="button"
+                          >
+                            Copiar para el repartidor
+                          </button>
+                          <button
+                            className="button button-secondary"
+                            onClick={() => downloadRouteCsv(selectedRoute)}
+                            type="button"
+                          >
+                            Descargar planilla
+                          </button>
+                        </>
+                      ) : null}
+                      {canPublish && selectedRoute.status === 'draft' ? (
+                        <button
+                          className="button button-primary"
+                          onClick={() => void publish(selectedRoute.id)}
+                          type="button"
+                        >
+                          Publicar
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                   <ol className="mt-4 grid gap-2">
                     {selectedRoute.stops.map((stop, index) => (

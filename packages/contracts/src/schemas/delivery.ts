@@ -26,6 +26,7 @@ export const DeliveryStopSchema = z.object({
   customerDisplayName: z.string(),
   deliveredAt: IsoDateTimeSchema.nullable(),
   deliveryAddress: z.string(),
+  deliveryLocationUrl: z.string().nullable(),
   id: UuidSchema,
   orderId: UuidSchema,
   paymentExpectation: z.string(),
