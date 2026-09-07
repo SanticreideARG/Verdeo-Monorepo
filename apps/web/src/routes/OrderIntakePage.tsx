@@ -109,6 +109,9 @@ export function OrderIntakePage() {
   const [loading, setLoading] = useState(true);
   // El pedido que se está por cancelar: mientras haya uno, el diálogo pide el motivo.
   const [cancelling, setCancelling] = useState<OrderSummary | null>(null);
+  // La zona cuyo lote se está marcando: deshabilita todos los botones mientras corre, para que dos
+  // clics seguidos no manden la misma tanda dos veces.
+  const [markingZone, setMarkingZone] = useState<string | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() =>
     readStoredColumns(COLUMNS_KEY, DEFAULT_COLUMNS, INTAKE_CATALOGUE),
   );
@@ -336,6 +339,48 @@ export function OrderIntakePage() {
     }
   }
 
+  /**
+   * Pasa a "listo" todos los confirmados de una zona.
+   *
+   * Manda los ids que están a la vista y no un filtro: el servidor transiciona exactamente lo que
+   * se vio, en vez de volver a resolver una condición que entre medio pudo cambiar.
+   */
+  async function markZoneReady(zone: string, batch: readonly OrderSummary[]) {
+    setMarkingZone(zone);
+    try {
+      const response = await apiRequest('/api/v1/orders/ready-batch', {
+        body: JSON.stringify({ orderIds: batch.map((order) => order.id) }),
+        method: 'POST',
+      });
+      if (!response.ok) {
+        setMessage(await errorMessage(response));
+        return;
+      }
+      const body = (await response.json()) as {
+        results: { error?: string; orderId: string; ready: boolean }[];
+      };
+      const failed = body.results.filter((result) => !result.ready);
+      // Los que fallaron se nombran: "18 de 20" sin decir cuáles dos deja buscándolos a mano.
+      if (failed.length === 0) {
+        showToast(`${String(body.results.length)} pedidos de ${zone} marcados listos.`);
+      } else {
+        const names = failed
+          .map(
+            (result) =>
+              batch.find((order) => order.id === result.orderId)?.customer.displayName ??
+              result.orderId,
+          )
+          .join(', ');
+        setMessage(
+          `${String(body.results.length - failed.length)} de ${String(body.results.length)} marcados listos. Quedaron sin marcar: ${names}.`,
+        );
+      }
+      await loadData();
+    } finally {
+      setMarkingZone(null);
+    }
+  }
+
   /** Confirma la cancelación con el motivo elegido en el diálogo. */
   async function cancelOrder(
     order: OrderSummary,
@@ -361,6 +406,25 @@ export function OrderIntakePage() {
    * depende de `transition`, que se redefine en cada render: memorizarlo guardaría una versión
    * vieja de la función y los botones dejarían de recargar la lista.
    */
+  /*
+   * Los confirmados agrupados por zona, que es como cocina termina de producir.
+   *
+   * Sólo los CONFIRMED: un borrador todavía no se produjo y uno ya listo no vuelve a marcarse. Sin
+   * zona cargada caen juntos en su propio grupo en vez de desaparecer del lote.
+   */
+  const readyBatches = [
+    ...orders
+      .filter((order) => order.status === 'CONFIRMED')
+      .reduce((groups, order) => {
+        const zone = order.deliveryZone ?? 'Sin zona';
+        groups.set(zone, [...(groups.get(zone) ?? []), order]);
+        return groups;
+      }, new Map<string, OrderSummary[]>())
+      .entries(),
+  ]
+    .map(([zone, zoneOrders]) => ({ orders: zoneOrders, zone }))
+    .sort((left, right) => left.zone.localeCompare(right.zone, 'es-AR'));
+
   const intakeColumns: readonly OrderColumn[] = [
     ...ORDER_COLUMNS,
     {
@@ -697,6 +761,36 @@ export function OrderIntakePage() {
          * La misma tabla configurable que "Ver pedidos", más la columna de acciones —que no se
          * puede apagar, porque esta pantalla existe para tocar esos botones.
          */}
+        {/*
+         * Marcar listos por zona.
+         *
+         * Cocina produce por lote: cuando termina una zona, termina entera. Pasar veinte pedidos de
+         * a uno es repetir el mismo clic sobre una decisión que ya se tomó para todo el grupo.
+         *
+         * Sólo aparecen las zonas que tienen algo que marcar, y el botón dice cuántos son: "Marcar
+         * listos" a secas obliga a contar las filas antes de animarse a tocarlo.
+         */}
+        {permissions.includes('orders.edit') && readyBatches.length > 0 ? (
+          <div className="ready-batches mt-6">
+            <p className="ready-batches-title">Marcar listos por zona</p>
+            <div className="ready-batches-row">
+              {readyBatches.map((batch) => (
+                <button
+                  className="button button-secondary"
+                  disabled={markingZone !== null}
+                  key={batch.zone}
+                  onClick={() => void markZoneReady(batch.zone, batch.orders)}
+                  type="button"
+                >
+                  {markingZone === batch.zone
+                    ? 'Marcando…'
+                    : `${batch.zone} · ${String(batch.orders.length)}`}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-6">
           <DataTable
             caption="Pedidos pendientes de acción"
