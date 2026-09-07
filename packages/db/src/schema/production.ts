@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   integer,
   jsonb,
@@ -130,6 +131,20 @@ export const labelSettings = pgTable(
     // migrar cada vez que se agregue una fuente.
     fontFamily: text('font_family').default('system').notNull(),
     fontScale: integer('font_scale').default(100).notNull(),
+    /*
+     * Qué campos se imprimen, en el orden en que se muestran.
+     *
+     * Como texto separado por comas y no como columnas booleanas: la lista de campos posibles va a
+     * crecer, y cada campo nuevo sería una migración. El servidor valida contra su propio catálogo
+     * al leer, así que un campo viejo que ya no existe se ignora en vez de romper la impresión.
+     */
+    fields: text('fields').default('tamano,numero').notNull(),
+    /** Izquierda o centro. La etiqueta es chica: son las dos que tienen sentido. */
+    alignment: text('alignment').default('center').notNull(),
+    /** El nombre en mayúsculas se lee de más lejos, que es como se leen sobre una mesa. */
+    uppercaseName: boolean('uppercase_name').default(false).notNull(),
+    /** El recuadro punteado guía la tijera; sobre etiqueta autoadhesiva sobra. */
+    showBorders: boolean('show_borders').default(true).notNull(),
     updatedByUserId: uuid('updated_by_user_id').references(() => users.id, {
       onDelete: 'set null',
     }),

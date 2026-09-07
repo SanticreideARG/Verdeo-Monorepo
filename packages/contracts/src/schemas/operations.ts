@@ -844,9 +844,14 @@ export const KitchenSummaryResponseSchema = z.object({
 // customerDisplayName is set only for composable (Intuitivo) units; a fixed variety's label never
 // carries a name, per the "solo nombre + variedad/tamaño" decision.
 export const LabelSchema = z.object({
-  customerDisplayName: z.string().nullable(),
+  customerDisplayName: z.string(),
+  deliveryDate: z.iso.date(),
+  deliveryZone: z.string().nullable(),
+  dietaryInstructions: z.array(z.string()),
   familyName: z.string(),
   orderPublicNumber: z.string(),
+  unitIndex: z.number().int(),
+  unitTotal: z.number().int(),
   variantName: z.string(),
 });
 
@@ -856,21 +861,47 @@ export const LabelListResponseSchema = z.object({ items: z.array(LabelSchema) })
  * impresión: son familias de sistema, así que no dependen de descargar nada al imprimir. */
 export const LabelFontSchema = z.enum(['system', 'serif', 'mono', 'rounded', 'condensed']);
 
+/**
+ * Todo lo que una etiqueta puede mostrar.
+ *
+ * `cliente` no está en la lista a propósito: va siempre y no se puede apagar. Una etiqueta sin
+ * nombre no dice de quién es la vianda, que es lo único que hace falta para repartirla.
+ */
+export const LabelFieldSchema = z.enum([
+  'tamano',
+  'variedad',
+  'unidad',
+  'numero',
+  'zona',
+  'entrega',
+  'restricciones',
+]);
+
+export const LabelAlignmentSchema = z.enum(['center', 'left']);
+
 export const LabelSettingsSchema = z.object({
+  alignment: LabelAlignmentSchema,
   backgroundImageUrl: z.string().nullable(),
+  fields: z.array(LabelFieldSchema),
   fontFamily: LabelFontSchema,
   fontScale: z.number().int().min(60).max(200),
   id: UuidSchema.nullable(),
   labelsPerPage: z.number().int().min(4).max(12),
+  showBorders: z.boolean(),
   updatedAt: IsoDateTimeSchema.nullable(),
   updatedByUserId: UuidSchema.nullable(),
+  uppercaseName: z.boolean(),
 });
 
 export const LabelSettingsUpdateRequestSchema = z.object({
+  alignment: LabelAlignmentSchema.optional(),
   backgroundImageUrl: z.string().url().nullable().optional(),
+  fields: z.array(LabelFieldSchema).max(7).optional(),
   fontFamily: LabelFontSchema.optional(),
   fontScale: z.number().int().min(60).max(200).optional(),
   labelsPerPage: z.number().int().min(4).max(12),
+  showBorders: z.boolean().optional(),
+  uppercaseName: z.boolean().optional(),
 });
 
 export const ProductionActualEntrySchema = z.object({
@@ -1018,6 +1049,8 @@ export type OrderUpdateRequest = z.infer<typeof OrderUpdateRequestSchema>;
 export type OrderListQuery = z.infer<typeof OrderListQuerySchema>;
 export type KitchenSummaryResponse = z.infer<typeof KitchenSummaryResponseSchema>;
 export type Label = z.infer<typeof LabelSchema>;
+export type LabelAlignment = z.infer<typeof LabelAlignmentSchema>;
+export type LabelField = z.infer<typeof LabelFieldSchema>;
 export type LabelFont = z.infer<typeof LabelFontSchema>;
 export type LabelListResponse = z.infer<typeof LabelListResponseSchema>;
 export type LabelSettings = z.infer<typeof LabelSettingsSchema>;

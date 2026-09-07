@@ -310,6 +310,53 @@ export class OperationsConflictError extends Error {
   }
 }
 
+/**
+ * Los campos que una etiqueta puede llevar, además del nombre —que va siempre—.
+ *
+ * El catálogo vive acá y no en la base: es lo que sabe qué campos existen, así que también es lo
+ * que tiene que decidir qué hacer con una elección guardada que ya no corresponde a ninguno.
+ */
+const LABEL_FIELDS = [
+  'tamano',
+  'variedad',
+  'unidad',
+  'numero',
+  'zona',
+  'entrega',
+  'restricciones',
+] as const;
+
+const LABEL_DEFAULT_FIELDS = ['tamano', 'numero'] as const;
+
+const LABEL_SETTINGS_FALLBACK = {
+  alignment: 'center',
+  backgroundImageUrl: null,
+  fontFamily: 'system',
+  fontScale: 100,
+  id: null,
+  labelsPerPage: 8,
+  showBorders: true,
+  updatedAt: null,
+  updatedByUserId: null,
+  uppercaseName: false,
+} as const;
+
+/**
+ * Un campo guardado que ya no existe se ignora en vez de romper la impresión.
+ *
+ * Se respeta el orden guardado, que es el orden en que se imprimen; una lista vacía es una elección
+ * válida —sólo el nombre— y no se rellena con los valores por defecto.
+ */
+function parseLabelFields(stored: string | null | undefined): string[] {
+  if (stored === null || stored === undefined) return [...LABEL_DEFAULT_FIELDS];
+  return stored
+    .split(',')
+    .map((field) => field.trim())
+    .filter((field): field is (typeof LABEL_FIELDS)[number] =>
+      (LABEL_FIELDS as readonly string[]).includes(field),
+    );
+}
+
 function catalogCode(value: string): string {
   return value
     .normalize('NFKD')
@@ -4028,6 +4075,10 @@ export class PostgresOperationsService {
         // was since removed falls back to its own composition, which is still correct.
         composable: sql<boolean>`coalesce(${productFamilies.kind} = 'COMPOSABLE', false)`,
         customerDisplayName: customers.displayName,
+        // La etiqueta puede querer mostrar la fecha y la zona: viajan siempre y Ajustes decide si
+        // se imprimen. Un dato que no llega hasta acá no se puede activar sin volver al backend.
+        deliveryDate: orders.deliveryDate,
+        deliveryZone: customerAddresses.operationalZone,
         familyName: orderItems.productNameSnapshot,
         orderId: orders.id,
         orderItemId: orderItems.id,
@@ -4038,6 +4089,7 @@ export class PostgresOperationsService {
       .from(orderItems)
       .innerJoin(orders, eq(orders.id, orderItems.orderId))
       .innerJoin(customers, eq(customers.id, orders.customerId))
+      .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
       .leftJoin(productVariants, eq(productVariants.id, orderItems.productVariantId))
       .leftJoin(productFamilies, eq(productFamilies.id, productVariants.productFamilyId))
       .where(
@@ -4133,21 +4185,21 @@ export class PostgresOperationsService {
       .from(labelSettings)
       .orderBy(desc(labelSettings.updatedAt))
       .limit(1);
-    return (
-      config ?? {
-        backgroundImageUrl: null,
-        fontFamily: 'system',
-        fontScale: 100,
-        id: null,
-        labelsPerPage: 8,
-        updatedAt: null,
-        updatedByUserId: null,
-      }
-    );
+    if (!config) return { ...LABEL_SETTINGS_FALLBACK, fields: [...LABEL_DEFAULT_FIELDS] };
+    return { ...config, fields: parseLabelFields(config.fields) };
   }
 
   public async setLabelSettings(
-    input: { backgroundImageUrl?: string | null | undefined; labelsPerPage: number },
+    input: {
+      alignment?: string | undefined;
+      backgroundImageUrl?: string | null | undefined;
+      fields?: readonly string[] | undefined;
+      fontFamily?: string | undefined;
+      fontScale?: number | undefined;
+      labelsPerPage: number;
+      showBorders?: boolean | undefined;
+      uppercaseName?: boolean | undefined;
+    },
     context: OperationsContext,
   ) {
     return this.database
@@ -4157,13 +4209,21 @@ export class PostgresOperationsService {
           .from(labelSettings)
           .orderBy(desc(labelSettings.updatedAt))
           .limit(1);
+        // Cada campo que no viene conserva lo que había: la pantalla manda todo junto, pero el
+        // endpoint también lo usa la subida de fondo, que sólo manda la imagen.
         const values = {
+          alignment: input.alignment ?? existing?.alignment ?? 'center',
           backgroundImageUrl:
             input.backgroundImageUrl === undefined
               ? (existing?.backgroundImageUrl ?? null)
               : input.backgroundImageUrl,
+          fields: (input.fields ?? parseLabelFields(existing?.fields)).join(','),
+          fontFamily: input.fontFamily ?? existing?.fontFamily ?? 'system',
+          fontScale: input.fontScale ?? existing?.fontScale ?? 100,
           labelsPerPage: input.labelsPerPage,
+          showBorders: input.showBorders ?? existing?.showBorders ?? true,
           updatedByUserId: context.actorUserId ?? null,
+          uppercaseName: input.uppercaseName ?? existing?.uppercaseName ?? false,
         };
         let row: typeof labelSettings.$inferSelect | undefined;
         if (existing) {

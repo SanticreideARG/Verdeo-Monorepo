@@ -98,6 +98,8 @@ describe('order engine', () => {
     const summary = buildKitchenSummary([
       {
         composable: false,
+        deliveryDate: '2026-08-28',
+        deliveryZone: 'Centro',
         customerDisplayName: 'Rosa',
         dietaryInstructions: ['Sin cebolla'],
         dishSelections: [],
@@ -108,6 +110,8 @@ describe('order engine', () => {
       },
       {
         composable: false,
+        deliveryDate: '2026-08-28',
+        deliveryZone: 'Centro',
         customerDisplayName: 'Juan',
         dietaryInstructions: [],
         dishSelections: [],
@@ -118,6 +122,8 @@ describe('order engine', () => {
       },
       {
         composable: true,
+        deliveryDate: '2026-08-28',
+        deliveryZone: 'Centro',
         customerDisplayName: 'Lola',
         dietaryInstructions: [],
         dishSelections: ['A', 'A', 'B', 'C', 'D'],
@@ -151,6 +157,8 @@ describe('order engine', () => {
     const labels = buildLabels([
       {
         composable: false,
+        deliveryDate: '2026-08-28',
+        deliveryZone: 'Centro',
         customerDisplayName: 'Rosa',
         dietaryInstructions: [],
         dishSelections: [],
@@ -161,6 +169,8 @@ describe('order engine', () => {
       },
       {
         composable: true,
+        deliveryDate: '2026-08-28',
+        deliveryZone: 'Centro',
         customerDisplayName: 'Lola',
         dietaryInstructions: [],
         dishSelections: ['A', 'A', 'B', 'C', 'D'],
@@ -174,24 +184,32 @@ describe('order engine', () => {
     expect(labels).toHaveLength(3);
     // El nombre va en todas y no sólo en las del Intuitivo: es lo que se lee para saber a quién va
     // cada vianda, así que una etiqueta sin nombre no sirve para repartir.
+    const rosa = {
+      customerDisplayName: 'Rosa',
+      deliveryDate: '2026-08-28',
+      deliveryZone: 'Centro',
+      dietaryInstructions: [],
+      familyName: 'Keto',
+      orderPublicNumber: 'N00453',
+      unitTotal: 2,
+      variantName: '250',
+    };
+    // Las dos unidades del mismo renglón salen numeradas: con dos viandas iguales sobre la mesa,
+    // "1 de 2" es lo que dice si están las dos.
     expect(labels.filter((label) => label.orderPublicNumber === 'N00453')).toEqual([
-      {
-        customerDisplayName: 'Rosa',
-        familyName: 'Keto',
-        orderPublicNumber: 'N00453',
-        variantName: '250',
-      },
-      {
-        customerDisplayName: 'Rosa',
-        familyName: 'Keto',
-        orderPublicNumber: 'N00453',
-        variantName: '250',
-      },
+      { ...rosa, unitIndex: 1 },
+      { ...rosa, unitIndex: 2 },
     ]);
+    // Una sola unidad igual se numera, y el renderizador decide no imprimirla.
     expect(labels.find((label) => label.orderPublicNumber === 'N00455')).toEqual({
       customerDisplayName: 'Lola',
+      deliveryDate: '2026-08-28',
+      deliveryZone: 'Centro',
+      dietaryInstructions: [],
       familyName: 'Intuitivo',
       orderPublicNumber: 'N00455',
+      unitIndex: 1,
+      unitTotal: 1,
       variantName: '400',
     });
   });

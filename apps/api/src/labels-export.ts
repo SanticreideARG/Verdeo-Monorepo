@@ -1,4 +1,4 @@
-import type { Label, LabelSettings } from '@verdeo/contracts';
+import type { Label, LabelField, LabelSettings } from '@verdeo/contracts';
 
 /**
  * Same adapter choice as production-export.ts: "PDF" is a print-ready HTML page, not a generated
@@ -48,11 +48,55 @@ const FONT_STACKS: Record<LabelSettings['fontFamily'], string> = {
   system: 'system-ui, sans-serif',
 };
 
+function shortDate(iso: string): string {
+  // Fecha sola, leída como local: la entrega es un día, no un instante, y parsearla como UTC la
+  // corría un día para atrás en Argentina.
+  return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit' }).format(
+    new Date(`${iso}T00:00:00`),
+  );
+}
+
+/**
+ * Cómo se imprime cada campo, y con qué peso.
+ *
+ * `destacado` es el segundo renglón grande —el que se lee de lejos junto con el nombre—; el resto va
+ * chico. Un campo que no tiene valor devuelve null y no ocupa lugar: una etiqueta con "Zona: —" es
+ * peor que una sin zona.
+ */
+const FIELD_RENDERERS: Record<
+  LabelField,
+  { render: (label: Label) => string | null; weight: 'destacado' | 'menor' }
+> = {
+  entrega: { render: (label) => shortDate(label.deliveryDate), weight: 'menor' },
+  numero: { render: (label) => label.orderPublicNumber, weight: 'menor' },
+  restricciones: {
+    render: (label) =>
+      label.dietaryInstructions.length > 0 ? label.dietaryInstructions.join(' · ') : null,
+    weight: 'destacado',
+  },
+  tamano: { render: (label) => label.variantName, weight: 'destacado' },
+  // Sólo cuando hay más de una: "1 de 1" no le dice nada a nadie.
+  unidad: {
+    render: (label) =>
+      label.unitTotal > 1 ? `${String(label.unitIndex)} de ${String(label.unitTotal)}` : null,
+    weight: 'menor',
+  },
+  variedad: { render: (label) => label.familyName, weight: 'destacado' },
+  zona: { render: (label) => label.deliveryZone, weight: 'menor' },
+};
+
 export function buildLabelsPrintHtml(
   labels: readonly Label[],
   settings: Pick<
     LabelSettings,
-    'backgroundImageUrl' | 'fontFamily' | 'fontScale' | 'labelsPerPage'
+    | 'alignment'
+    | 'backgroundImageUrl'
+    | 'fields'
+    | 'fontFamily'
+    | 'fontScale'
+    | 'labelsPerPage'
+    | 'showBorders'
+    | 'uppercaseName'
   >,
   title: string,
 ): string {
@@ -64,20 +108,24 @@ export function buildLabelsPrintHtml(
   const fontStack = FONT_STACKS[settings.fontFamily] ?? FONT_STACKS.system;
 
   /*
-   * Nombre y tamaño, nada más.
-   *
-   * La variedad no va: quien reparte busca a quién le toca cada vianda, y el nombre es lo único que
-   * responde eso. El tamaño sí, porque distingue dos viandas del mismo cliente. El número de pedido
-   * queda chico abajo, para poder rastrear una si hace falta.
+   * El nombre encabeza siempre y no se puede apagar: es lo único que responde de quién es la vianda,
+   * que es la pregunta que la etiqueta existe para contestar. Lo demás sale de Ajustes, en el orden
+   * en que se guardó.
    */
   const cards = labels
-    .map(
-      (label) => `<div class="label" style="${backgroundStyle}">
-        <p class="customer">${escape(label.customerDisplayName ?? 'Sin nombre')}</p>
-        <p class="size">${escape(label.variantName)}</p>
-        <p class="order">${escape(label.orderPublicNumber)}</p>
-      </div>`,
-    )
+    .map((label) => {
+      const extras = settings.fields
+        .map((field) => {
+          const spec = FIELD_RENDERERS[field];
+          const value = spec.render(label);
+          return value === null ? '' : `<p class="${spec.weight}">${escape(value)}</p>`;
+        })
+        .join('');
+      return `<div class="label" style="${backgroundStyle}">
+        <p class="customer">${escape(label.customerDisplayName)}</p>
+        ${extras}
+      </div>`;
+    })
     .join('');
 
   return `<!doctype html>
@@ -95,13 +143,14 @@ export function buildLabelsPrintHtml(
     gap: 4mm;
   }
   .label {
-    border: 1px dashed #999;
+    border: ${settings.showBorders ? '1px dashed #999' : 'none'};
     border-radius: 4px;
     padding: 4mm;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    text-align: center;
+    align-items: ${settings.alignment === 'left' ? 'flex-start' : 'center'};
+    text-align: ${settings.alignment};
     overflow: hidden;
     /* Sin esto el navegador descarta el fondo al imprimir, que es exactamente lo que pasaba con el
        PNG cargado en Ajustes: se veía en pantalla y salía en blanco. */
@@ -109,13 +158,21 @@ export function buildLabelsPrintHtml(
     print-color-adjust: exact;
   }
   /* El nombre manda: es lo que se busca para saber a quién va cada vianda. */
-  .customer { font-size: ${(20 * scale).toFixed(1)}px; font-weight: 700; line-height: 1.15; margin: 0; }
-  .size { font-size: ${(15 * scale).toFixed(1)}px; font-weight: 600; margin: 1mm 0 0; }
-  .order { font-size: ${(10 * scale).toFixed(1)}px; color: #555; margin: 2mm 0 0; }
+  .customer {
+    font-size: ${(20 * scale).toFixed(1)}px;
+    font-weight: 700;
+    line-height: 1.15;
+    margin: 0;
+    text-transform: ${settings.uppercaseName ? 'uppercase' : 'none'};
+  }
+  .destacado { font-size: ${(15 * scale).toFixed(1)}px; font-weight: 600; margin: 1mm 0 0; }
+  .menor { font-size: ${(10 * scale).toFixed(1)}px; color: #555; margin: 1mm 0 0; }
   .label:nth-child(${settings.labelsPerPage}n) { break-after: page; }
   @media print {
     body { padding: 8mm; }
-    .label { border-style: solid; }
+    /* Punteado en pantalla, sólido al imprimir — pero sólo si hay borde: con el recuadro apagado,
+       forzarlo acá lo hacía reaparecer justo en el papel. */
+    ${settings.showBorders ? '.label { border-style: solid; }' : ''}
   }
   @page { size: A4; margin: 8mm; }
 </style>

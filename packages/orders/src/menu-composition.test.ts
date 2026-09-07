@@ -51,6 +51,8 @@ describe('Composable variety identification', () => {
     const summary = buildKitchenSummary([
       {
         composable: true,
+        deliveryDate: '2026-08-28',
+        deliveryZone: 'Centro',
         customerDisplayName: 'Lola',
         dietaryInstructions: [],
         dishSelections: [],
@@ -70,6 +72,8 @@ describe('Composable variety identification', () => {
     const summary = buildKitchenSummary([
       {
         composable: false,
+        deliveryDate: '2026-08-28',
+        deliveryZone: 'Centro',
         customerDisplayName: 'Rosa',
         dietaryInstructions: [],
         dishSelections: [],

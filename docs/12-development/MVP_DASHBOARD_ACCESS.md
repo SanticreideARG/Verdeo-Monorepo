@@ -290,3 +290,40 @@ Dice qué **sí** se puede hacer desde el teléfono en cada una, en vez de un ge
 
 No bloquea, a propósito. Bloquear sería decidir por alguien que quizás está en la calle y sin otra
 opción; dejar un formulario de doce campos apretado sin decir nada sería peor todavía.
+
+## Ajustes, agrupado (as built)
+
+Eran nueve pestañas en una tira plana, ordenadas por cuándo se fueron construyendo: "Zonas
+geográficas" al lado de "Apariencia" al lado de "Correo". Con nueve, encontrar la que se busca era
+leerlas todas.
+
+Ahora se agrupan por a qué pregunta contestan:
+
+- **Operación** — zonas geográficas, menú personalizado, etiquetas, métodos de pago. Lo que cambia
+  cuando cambia el negocio.
+- **Integraciones** — correo, cuentas de WhatsApp, enlaces de chat, IA y plantillas. Lo que se toca
+  una vez al conectar un servicio de afuera.
+- **Personal** — apariencia. Preferencia de uno mismo, sin permiso que la gatee.
+
+Un grupo entero sin permiso no aparece, para no dejar un título colgado sobre nada. Cada pestaña
+sigue siendo su propia ruta: una carga real al hacer clic, que es lo que mantiene intacta la lógica
+de permisos y de carga de cada página.
+
+## Ayuda: el ciclo semanal (as built)
+
+La ayuda describía pantallas. Faltaba lo que hace falta para empezar: en qué orden se hacen las
+cosas y qué pasa si se saltea un paso.
+
+La categoría **"Ciclo semanal"** cuenta el proceso completo en siete artículos —una vista general más
+un paso por etapa: configurar y publicar la semana, tomar y confirmar pedidos, cerrar producción,
+imprimir etiquetas, armar la ruta, marcar lo cobrado— y se ordena primera en la pantalla, por delante
+del orden alfabético. Es la única que cuenta un proceso en vez de explicar una pantalla, y el resto
+de la ayuda se entiende mejor sabiendo en qué paso encaja.
+
+Cada artículo queda gateado por el mismo permiso que gatea la pantalla de la que habla, así que
+alguien de cocina no lee instrucciones de una sección a la que no entra.
+
+**Los artículos viven en `packages/db/src/help-articles.ts`, con su propio seed
+(`pnpm --filter @verdeo/db db:seed-help`).** El seed completo también escribe permisos, roles y
+concesiones: correrlo en producción sólo para corregir un texto de ayuda arriesga pisar
+configuración que alguien ajustó a mano.

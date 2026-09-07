@@ -18,6 +18,37 @@ const FONT_OPTIONS = [
   { key: 'mono', label: 'Monoespaciada' },
 ] as const;
 
+/**
+ * Qué puede llevar una etiqueta además del nombre.
+ *
+ * El nombre no está en la lista y no se puede apagar: es lo único que responde de quién es la
+ * vianda, que es la pregunta que la etiqueta existe para contestar.
+ */
+const FIELD_OPTIONS = [
+  { key: 'tamano', label: 'Tamaño (250 / 400)' },
+  { key: 'variedad', label: 'Variedad' },
+  { key: 'unidad', label: 'Unidad (1 de 3)' },
+  { key: 'numero', label: 'N° de pedido' },
+  { key: 'zona', label: 'Zona de entrega' },
+  { key: 'entrega', label: 'Fecha de entrega' },
+  { key: 'restricciones', label: 'Indicaciones alimentarias' },
+] as const;
+
+type LabelField = (typeof FIELD_OPTIONS)[number]['key'];
+
+/** El renglón que se ve grande junto al nombre; el resto va chico, igual que al imprimir. */
+const EMPHASISED = new Set<LabelField>(['tamano', 'variedad', 'restricciones']);
+
+const SAMPLE: Record<LabelField, string> = {
+  entrega: '28/08',
+  numero: 'NQN-00090',
+  restricciones: 'Sin cebolla',
+  tamano: '250',
+  unidad: '1 de 3',
+  variedad: 'Keto',
+  zona: 'Centro',
+};
+
 /** Ajustes → Etiquetas: one global row (not per-zona, unlike Intuitivo), editable by
  * superusuarios/operadores — how many labels print per page and the optional background image
  * every label carries. Sent to `PATCH /api/v1/label-settings`; the background image is uploaded
@@ -28,6 +59,10 @@ export function LabelSettingsPage() {
   const [labelsPerPage, setLabelsPerPage] = useState(8);
   const [fontFamily, setFontFamily] = useState<LabelSettings['fontFamily']>('system');
   const [fontScale, setFontScale] = useState(100);
+  const [fields, setFields] = useState<LabelField[]>(['tamano', 'numero']);
+  const [alignment, setAlignment] = useState<'center' | 'left'>('center');
+  const [uppercaseName, setUppercaseName] = useState(false);
+  const [showBorders, setShowBorders] = useState(true);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -44,6 +79,10 @@ export function LabelSettingsPage() {
       setLabelsPerPage(body.labelsPerPage);
       setFontFamily(body.fontFamily);
       setFontScale(body.fontScale);
+      setFields(body.fields);
+      setAlignment(body.alignment);
+      setUppercaseName(body.uppercaseName);
+      setShowBorders(body.showBorders);
     }
     setLoading(false);
   }, []);
@@ -58,9 +97,13 @@ export function LabelSettingsPage() {
     const response = await apiRequest('/api/v1/label-settings', {
       body: JSON.stringify({
         ...(backgroundImageUrl !== undefined ? { backgroundImageUrl } : {}),
+        alignment,
+        fields,
         fontFamily,
         fontScale,
         labelsPerPage,
+        showBorders,
+        uppercaseName,
       }),
       method: 'PATCH',
     });
@@ -148,6 +191,69 @@ export function LabelSettingsPage() {
               </select>
             </label>
 
+            <fieldset className="label-fields">
+              <legend>Qué muestra cada etiqueta</legend>
+              {/* El nombre encabeza siempre: se enuncia acá para que no parezca un olvido. */}
+              <p className="text-sm text-ink-muted">
+                El nombre del cliente va siempre y no se puede quitar. Los campos se imprimen en
+                este orden.
+              </p>
+              {FIELD_OPTIONS.map((option) => (
+                <label key={option.key}>
+                  <input
+                    checked={fields.includes(option.key)}
+                    disabled={!canWrite}
+                    onChange={() =>
+                      // Se guarda en el orden del catálogo y no en el de los clics: si no, los
+                      // renglones bailan de lugar cada vez que se apaga y se enciende uno.
+                      setFields((current) =>
+                        current.includes(option.key)
+                          ? current.filter((field) => field !== option.key)
+                          : FIELD_OPTIONS.filter(
+                              (candidate) =>
+                                candidate.key === option.key || current.includes(candidate.key),
+                            ).map((candidate) => candidate.key),
+                      )
+                    }
+                    type="checkbox"
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </fieldset>
+
+            <label className="field">
+              Alineación
+              <select
+                disabled={!canWrite}
+                onChange={(event) => setAlignment(event.target.value as 'center' | 'left')}
+                value={alignment}
+              >
+                <option value="center">Centrada</option>
+                <option value="left">A la izquierda</option>
+              </select>
+            </label>
+
+            <label className="label-switch">
+              <input
+                checked={uppercaseName}
+                disabled={!canWrite}
+                onChange={(event) => setUppercaseName(event.target.checked)}
+                type="checkbox"
+              />
+              Nombre en mayúsculas
+            </label>
+
+            <label className="label-switch">
+              <input
+                checked={showBorders}
+                disabled={!canWrite}
+                onChange={(event) => setShowBorders(event.target.checked)}
+                type="checkbox"
+              />
+              Recuadro de corte
+            </label>
+
             <label className="field">
               Tipografía
               <select
@@ -191,20 +297,35 @@ export function LabelSettingsPage() {
                   serif: 'Georgia, serif',
                   system: 'system-ui, sans-serif',
                 }[fontFamily],
+                alignItems: alignment === 'left' ? 'flex-start' : 'center',
+                border: showBorders ? '1px dashed #999' : '1px solid transparent',
+                textAlign: alignment,
                 ...(settings?.backgroundImageUrl
                   ? { backgroundImage: `url(${settings.backgroundImageUrl})` }
                   : {}),
               }}
             >
-              <p style={{ fontSize: `${String(20 * (fontScale / 100))}px`, fontWeight: 700 }}>
+              <p
+                style={{
+                  fontSize: `${String(20 * (fontScale / 100))}px`,
+                  fontWeight: 700,
+                  textTransform: uppercaseName ? 'uppercase' : 'none',
+                }}
+              >
                 Ana Isabella Vega
               </p>
-              <p style={{ fontSize: `${String(15 * (fontScale / 100))}px`, fontWeight: 600 }}>
-                250
-              </p>
-              <p style={{ color: '#555', fontSize: `${String(10 * (fontScale / 100))}px` }}>
-                NQN-00090
-              </p>
+              {fields.map((field) => (
+                <p
+                  key={field}
+                  style={
+                    EMPHASISED.has(field)
+                      ? { fontSize: `${String(15 * (fontScale / 100))}px`, fontWeight: 600 }
+                      : { color: '#555', fontSize: `${String(10 * (fontScale / 100))}px` }
+                  }
+                >
+                  {SAMPLE[field]}
+                </p>
+              ))}
             </div>
 
             {canWrite ? (

@@ -1220,8 +1220,27 @@ a {
 .settings-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  /* Los grupos se separan más entre sí que las pestañas dentro de uno: es lo que hace que se lean
+     como tres bloques y no como nueve pastillas seguidas. */
+  gap: 0.4rem 1.6rem;
   margin-bottom: 1.25rem;
+}
+.settings-tabs-group {
+  display: grid;
+  gap: 0.3rem;
+}
+.settings-tabs-label {
+  margin: 0 0 0 0.5rem;
+  color: var(--db-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.settings-tabs-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 .settings-tabs a {
   border-radius: 999px;
@@ -5297,4 +5316,29 @@ a.order-card-phone:focus-visible {
   /* 18px: se toca sin apuntar, sin agrandar la fila. */
   width: 18px;
   height: 18px;
+}
+
+/* Elegir qué lleva la etiqueta. */
+.label-fields {
+  display: grid;
+  gap: 0.35rem;
+  border: 1px solid var(--db-border-soft, var(--border-hairline));
+  border-radius: 0.7rem;
+  padding: 0.8rem;
+}
+.label-fields legend {
+  padding: 0 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.label-fields label,
+.label-switch {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  min-height: 32px;
+  font-size: 0.9rem;
+  cursor: pointer;
 }

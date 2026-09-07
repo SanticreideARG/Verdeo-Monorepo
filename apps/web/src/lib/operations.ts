@@ -307,14 +307,19 @@ export interface Label {
 }
 
 export interface LabelSettings {
+  alignment: 'center' | 'left';
   backgroundImageUrl: string | null;
+  /** Qué campos, además del nombre, se imprimen — en el orden en que salen. */
+  fields: ('entrega' | 'numero' | 'restricciones' | 'tamano' | 'unidad' | 'variedad' | 'zona')[];
   fontFamily: 'condensed' | 'mono' | 'rounded' | 'serif' | 'system';
   /** Porcentaje sobre el tamaño base de la etiqueta, entre 60 y 200. */
   fontScale: number;
   id: string | null;
   labelsPerPage: number;
+  showBorders: boolean;
   updatedAt: string | null;
   updatedByUserId: string | null;
+  uppercaseName: boolean;
 }
 
 // The admin-editable catalog behind "Método" pickers (order intake, cobro manual).

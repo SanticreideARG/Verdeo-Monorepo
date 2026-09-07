@@ -210,8 +210,15 @@ export function buildLabels(lines: readonly KitchenSourceLine[]): Label[] {
         // para saber de quién es esa combinación de platos— y el resto salía sin nombre, que es
         // justo lo que hay que leer para repartir una vianda.
         customerDisplayName: line.customerDisplayName,
+        deliveryDate: line.deliveryDate,
+        deliveryZone: line.deliveryZone,
+        dietaryInstructions: line.dietaryInstructions,
         familyName: line.familyName,
         orderPublicNumber: line.orderPublicNumber,
+        // Numerar las unidades de un mismo renglón: con tres viandas iguales sobre la mesa, "2 de 3"
+        // es lo que dice si están todas.
+        unitIndex: unit + 1,
+        unitTotal: line.quantityUnits,
         variantName: line.variantName,
       });
     }

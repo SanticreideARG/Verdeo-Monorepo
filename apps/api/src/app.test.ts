@@ -1524,26 +1524,40 @@ describe('API foundation', () => {
 
     const sampleLabels = [
       {
-        customerDisplayName: null,
+        customerDisplayName: 'Rosa',
+        deliveryDate: '2026-08-28',
+        deliveryZone: 'Centro',
+        dietaryInstructions: [],
         familyName: 'Keto',
         orderPublicNumber: 'N00453',
+        unitIndex: 1,
+        unitTotal: 1,
         variantName: '250',
       },
       {
         customerDisplayName: 'Lola',
+        deliveryDate: '2026-08-28',
+        deliveryZone: null,
+        dietaryInstructions: ['Sin cebolla'],
         familyName: 'Intuitivo',
         orderPublicNumber: 'N00455',
+        unitIndex: 1,
+        unitTotal: 1,
         variantName: '400',
       },
     ];
     const sampleLabelSettings = {
+      alignment: 'center',
       backgroundImageUrl: null,
+      fields: ['tamano', 'numero'],
       fontFamily: 'system',
       fontScale: 100,
       id: null,
       labelsPerPage: 8,
+      showBorders: true,
       updatedAt: null,
       updatedByUserId: null,
+      uppercaseName: false,
     };
 
     it('lists and exports kitchen labels for a cycle', async () => {
