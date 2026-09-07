@@ -576,6 +576,18 @@ export const orders = pgTable(
       onDelete: 'set null',
     }),
     cancellationNotes: text('cancellation_notes'),
+    /*
+     * Cobrado o no, y nada más.
+     *
+     * Reemplaza a la sección Pagos entera —tres estados, rendiciones de repartidor, conciliación de
+     * transferencias— que en producción nunca registró un solo movimiento. Lo que la operación
+     * necesita saber de un pedido es si está cobrado; el resto era una contabilidad que nadie
+     * llevaba. Se guarda cuándo y quién, para que el tilde no sea una afirmación anónima.
+     *
+     * El método sigue en `payment_expectation`: qué se espera cobrar es otra cosa que si se cobró.
+     */
+    paidAt: timestamp('paid_at', { withTimezone: true }),
+    paidByUserId: uuid('paid_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     currency: text('currency').default('ARS').notNull(),
     totalMinor: integer('total_minor').notNull(),
     ...timestamps,

@@ -125,6 +125,11 @@ export const labelSettings = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     labelsPerPage: integer('labels_per_page').default(8).notNull(),
     backgroundImageUrl: text('background_image_url'),
+    // Tipografía y tamaño de la etiqueta impresa. Se guardan como texto porque van derecho a un
+    // `font-family` y a un multiplicador de CSS: acotar el juego con un enum en la base obligaría a
+    // migrar cada vez que se agregue una fuente.
+    fontFamily: text('font_family').default('system').notNull(),
+    fontScale: integer('font_scale').default(100).notNull(),
     updatedByUserId: uuid('updated_by_user_id').references(() => users.id, {
       onDelete: 'set null',
     }),
@@ -134,6 +139,11 @@ export const labelSettings = pgTable(
     check(
       'label_settings_labels_per_page_check',
       sql`${table.labelsPerPage} >= 4 and ${table.labelsPerPage} <= 12`,
+    ),
+    // Entre 60% y 200%: por debajo no se lee de lejos y por encima se desborda la etiqueta.
+    check(
+      'label_settings_font_scale_check',
+      sql`${table.fontScale} >= 60 and ${table.fontScale} <= 200`,
     ),
   ],
 );

@@ -724,6 +724,7 @@ describe('API foundation', () => {
         createMenu: vi.fn(),
         distributeMenu: vi.fn(),
         createOrder: vi.fn(),
+        setOrderPaid: vi.fn(),
         createPublicOrder: vi.fn(),
         currentPublishedMenu: () => Promise.resolve(sampleMenu),
         kitchenSummary: vi.fn(),
@@ -762,6 +763,7 @@ describe('API foundation', () => {
         createMenu: vi.fn(),
         distributeMenu: vi.fn(),
         createOrder: vi.fn(),
+        setOrderPaid: vi.fn(),
         createPublicOrder,
         currentPublishedMenu: vi.fn(),
         kitchenSummary: vi.fn(),
@@ -817,6 +819,7 @@ describe('API foundation', () => {
         createMenu: vi.fn(),
         distributeMenu: vi.fn(),
         createOrder: vi.fn(),
+        setOrderPaid: vi.fn(),
         createPublicOrder: vi.fn(),
         currentPublishedMenu: vi.fn(),
         kitchenSummary: vi.fn(),
@@ -860,6 +863,7 @@ describe('API foundation', () => {
         createMenu: vi.fn(),
         distributeMenu: vi.fn(),
         createOrder: vi.fn(),
+        setOrderPaid: vi.fn(),
         createPublicOrder: vi.fn(),
         currentPublishedMenu: vi.fn(),
         kitchenSummary: vi.fn(),
@@ -901,6 +905,7 @@ describe('API foundation', () => {
         createMenu: vi.fn(),
         distributeMenu: vi.fn(),
         createOrder: vi.fn(),
+        setOrderPaid: vi.fn(),
         createPublicOrder: vi.fn(),
         currentPublishedMenu: vi.fn(),
         kitchenSummary: vi.fn(),
@@ -957,6 +962,7 @@ describe('API foundation', () => {
         createMenu: vi.fn(),
         distributeMenu: vi.fn(),
         createOrder: vi.fn(),
+        setOrderPaid: vi.fn(),
         createPublicOrder: vi.fn(),
         currentPublishedMenu: vi.fn(),
         kitchenSummary: vi.fn(),
@@ -1037,6 +1043,7 @@ describe('API foundation', () => {
         createMenu: vi.fn(),
         distributeMenu: vi.fn(),
         createOrder: vi.fn(),
+        setOrderPaid: vi.fn(),
         createPublicOrder: vi.fn(),
         currentPublishedMenu: vi.fn(),
         kitchenSummary: vi.fn(),
@@ -1111,6 +1118,7 @@ describe('API foundation', () => {
           createMenu: vi.fn(),
           distributeMenu: vi.fn(),
           createOrder: vi.fn(),
+          setOrderPaid: vi.fn(),
           createPublicOrder: vi.fn(),
           currentPublishedMenu: vi.fn(),
           kitchenSummary: vi.fn(),
@@ -1172,6 +1180,7 @@ describe('API foundation', () => {
         createMenu: vi.fn(),
         distributeMenu: vi.fn(),
         createOrder: vi.fn(),
+        setOrderPaid: vi.fn(),
         createPublicOrder: vi.fn(),
         currentPublishedMenu: vi.fn(),
         exportOrdersCsv,
@@ -1236,6 +1245,7 @@ describe('API foundation', () => {
           createMenu: vi.fn(),
           distributeMenu: vi.fn(),
           createOrder: vi.fn(),
+          setOrderPaid: vi.fn(),
           createPublicOrder: vi.fn(),
           currentPublishedMenu: vi.fn(),
           kitchenSummary: vi.fn(),
@@ -1528,6 +1538,8 @@ describe('API foundation', () => {
     ];
     const sampleLabelSettings = {
       backgroundImageUrl: null,
+      fontFamily: 'system',
+      fontScale: 100,
       id: null,
       labelsPerPage: 8,
       updatedAt: null,
@@ -3111,6 +3123,65 @@ describe('API foundation', () => {
     });
   });
 
+  describe('cancellation reasons', () => {
+    const cookie = 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars';
+
+    function buildApp(permissions: string[]) {
+      return createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        operations: {
+          listCancellationReasons: () =>
+            Promise.resolve([
+              {
+                active: true,
+                code: 'cliente_ausente',
+                countsAsFailedDelivery: true,
+                displayName: 'Cliente ausente',
+                id: '70000000-0000-4000-8000-000000000001',
+                sortOrder: 0,
+              },
+            ]),
+        } as never,
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            Promise.resolve({
+              expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+              permissions,
+              sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+            }),
+        },
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+    }
+
+    /*
+     * La ruta no estaba registrada bajo `requireAuthentication`, así que el handler leía una sesión
+     * que no existía y tiraba 500. Nadie podía cancelar un pedido ni reportar una entrega fallida.
+     * Un 500 acá se ve, desde el navegador, igual que una respuesta que no llega nunca.
+     */
+    it('resuelve la sesión: contesta 200 con permiso, 403 sin él y 401 sin sesión', async () => {
+      const allowed = await buildApp(['orders.read']).request('/api/v1/cancellation-reasons', {
+        headers: { cookie },
+      });
+      expect(allowed.status).toBe(200);
+
+      const denied = await buildApp([]).request('/api/v1/cancellation-reasons', {
+        headers: { cookie },
+      });
+      expect(denied.status).toBe(403);
+
+      const anonymous = await buildApp(['orders.read']).request('/api/v1/cancellation-reasons');
+      expect(anonymous.status).toBe(401);
+    });
+  });
+
   describe('help articles', () => {
     function buildHelpApp(help: Record<string, unknown>, permissions: string[]) {
       return createApp({
@@ -3408,6 +3479,7 @@ describe('API foundation', () => {
           createMenu: vi.fn(),
           distributeMenu: vi.fn(),
           createOrder: vi.fn(),
+          setOrderPaid: vi.fn(),
           createPublicOrder: vi.fn(),
           currentPublishedMenu: vi.fn(),
           kitchenSummary: vi.fn(),

@@ -4,16 +4,24 @@ import { Link, useParams } from 'react-router-dom';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { CancelOrderDialog } from '../components/CancelOrderDialog.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
-import { TransferReconciliation } from '../components/TransferReconciliation.js';
 import { apiRequest } from '../lib/api.js';
+import {
+  OrderItemsEditor,
+  itemsFromOrder,
+  toItemPayload,
+  type EditableItem,
+} from '../components/OrderItemsEditor.js';
 import {
   errorMessage,
   formatMoney,
   orderStatusLabel,
+  type MenuOffering,
   type OrderRevision,
   type OrderStatusHistoryEntry,
   type OrderSummary,
+  type WeeklyMenu,
 } from '../lib/operations.js';
+import { sourceLabel } from '../lib/orderColumns.js';
 import { showToast } from '../lib/toast.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
@@ -45,15 +53,18 @@ async function printLabels(orderId: string): Promise<string | null> {
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank', 'noopener,noreferrer');
-  URL.revokeObjectURL(url);
+  // Revocar en el mismo turno corre carrera con la pestaña que recién se abre: a veces se queda
+  // sin nada que cargar. Se libera un segundo después, ya con la página leída.
+  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
   return null;
 }
 
 /** "Ver pedidos" drills into here for a single order: full detail, status history, revision
- * history, and an edit form for everything a PATCH can change short of the line composition —
- * reprogramming date/address/payment/notes requires a reason, mirroring the audit-first design of
- * `orderUpdate` on the backend. Line-item editing (re-picking offerings) is not built yet; see
- * CRM_ORDER_CYCLE_IMPLEMENTATION.md "Still OPEN". */
+ * history, and an edit form for everything a PATCH can change — incluidos los ítems, que son lo que
+ * más cambia. Todo cambio pide un motivo, igual que `orderUpdate` en el backend.
+ *
+ * Los ítems se editan en borradores y confirmados; de READY en adelante el backend lo rechaza,
+ * porque a esa altura la cocina ya produjo contra esa composición. */
 export function OrderDetailPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const { id } = useParams<{ id: string }>();
@@ -65,6 +76,16 @@ export function OrderDetailPage() {
   const [message, setMessage] = useState('');
   const [cancelOpen, setCancelOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  /*
+   * Los ítems se editan como estado y no como campos del formulario: son una lista de largo
+   * variable con una sublista de platos adentro, que en `FormData` habría que serializar a mano y
+   * volver a parsear.
+   *
+   * Las variedades salen del menú del propio pedido y no del de esta semana: un pedido de una
+   * semana ya cerrada se sigue editando contra lo que esa semana ofrecía.
+   */
+  const [items, setItems] = useState<EditableItem[]>([]);
+  const [offerings, setOfferings] = useState<MenuOffering[]>([]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -84,7 +105,18 @@ export function OrderDetailPage() {
       setLoading(false);
       return;
     }
-    setOrder((await orderResponse.json()) as OrderSummary);
+    const loaded = (await orderResponse.json()) as OrderSummary;
+    setOrder(loaded);
+    setItems(itemsFromOrder(loaded));
+    // El menú del pedido, para saber qué variedades se pueden elegir. Falla en silencio a
+    // propósito: sin él la ficha se sigue viendo entera, sólo que no se pueden editar los ítems.
+    void apiRequest('/api/v1/menus')
+      .then(async (response) => {
+        if (!response.ok) return;
+        const menus = ((await response.json()) as { items: WeeklyMenu[] }).items;
+        setOfferings(menus.find((menu) => menu.id === loaded.menuId)?.offerings ?? []);
+      })
+      .catch(() => undefined);
     if (historyResponse.ok) {
       setHistory(((await historyResponse.json()) as { items: OrderStatusHistoryEntry[] }).items);
     }
@@ -145,6 +177,30 @@ export function OrderDetailPage() {
       .filter(Boolean);
     const notes = formText(form, 'notes').trim();
     const locationUrl = formText(form, 'deliveryLocationUrl').trim();
+    // Los ítems se mandan sólo si alguno cambió: un PATCH que los reenvía iguales igual dispara la
+    // reescritura y la revisión auditada, y ensucia el historial con cambios que no lo son.
+    const itemsChanged = JSON.stringify(items) !== JSON.stringify(itemsFromOrder(order));
+    if (itemsChanged) {
+      if (items.length === 0) {
+        setMessage('El pedido tiene que llevar al menos un ítem.');
+        return;
+      }
+      const incomplete = items.find(
+        (item) =>
+          !item.offeringId ||
+          (offerings.find((offering) => offering.id === item.offeringId)?.composable === true &&
+            item.selectedDishNames.length !== 5),
+      );
+      if (incomplete) {
+        setMessage(
+          !incomplete.offeringId
+            ? 'Hay un ítem sin variedad elegida.'
+            : 'Un Intuitivo tiene que llevar exactamente cinco platos.',
+        );
+        return;
+      }
+    }
+
     setMessage('');
     const response = await apiRequest(`/api/v1/orders/${order.id}`, {
       body: JSON.stringify({
@@ -152,6 +208,7 @@ export function OrderDetailPage() {
         deliveryDate: formText(form, 'deliveryDate'),
         deliveryLocationUrl: locationUrl ? locationUrl : null,
         dietaryInstructions,
+        ...(itemsChanged ? { items: toItemPayload(items, offerings) } : {}),
         notes: notes ? notes : null,
         paymentExpectation: formText(form, 'paymentExpectation').trim(),
         reason: formText(form, 'reason').trim(),
@@ -309,6 +366,26 @@ export function OrderDetailPage() {
                 />
               </label>
             </div>
+
+            {/*
+             * Los ítems son lo que más cambia —alguien pide dos y quiere tres, o cambia la variedad
+             * el día antes—. Se editan en borradores y confirmados; de READY en adelante el backend
+             * lo rechaza, así que acá no se ofrece.
+             */}
+            {order.status === 'DRAFT' || order.status === 'CONFIRMED' ? (
+              <section className="mt-6">
+                <h3 className="text-sm font-bold text-forest">Ítems</h3>
+                {offerings.length === 0 ? (
+                  <p className="mt-2 text-sm text-ink-muted">
+                    No pudimos cargar las variedades de la semana de este pedido, así que los ítems
+                    no se pueden editar acá.
+                  </p>
+                ) : (
+                  <OrderItemsEditor items={items} offerings={offerings} onChange={setItems} />
+                )}
+              </section>
+            ) : null}
+
             <button className="button button-primary mt-4" type="submit">
               Guardar cambios
             </button>
@@ -391,7 +468,7 @@ export function OrderDetailPage() {
           </div>
           <div>
             <dt>Origen</dt>
-            <dd>{order.source}</dd>
+            <dd>{sourceLabel(order.source)}</dd>
           </div>
           {order.dietaryInstructions.length > 0 ? (
             <div className="order-facts-wide">
@@ -417,8 +494,14 @@ export function OrderDetailPage() {
                 </strong>
                 <span>{formatMoney(item.totalMinor, order.currency)}</span>
               </div>
+              {/* Uno por línea: cinco platos separados por comas se leen como una frase larga, y lo
+                  que hace falta es contarlos y ubicar uno. */}
               {item.dishSelections.length > 0 ? (
-                <p className="mt-1 text-sm text-ink-muted">{item.dishSelections.join(', ')}</p>
+                <ul className="dish-selections mt-1">
+                  {item.dishSelections.map((dish, index) => (
+                    <li key={`${dish}-${String(index)}`}>{dish}</li>
+                  ))}
+                </ul>
               ) : null}
             </article>
           ))}
@@ -432,13 +515,6 @@ export function OrderDetailPage() {
             onCancel={() => setCancelOpen(false)}
             onConfirm={cancelOrder}
             orderNumber={order.publicNumber}
-          />
-        ) : null}
-
-        {profile.permissions.includes('payments.read') ? (
-          <TransferReconciliation
-            canRecord={profile.permissions.includes('payments.record')}
-            orderId={order.id}
           />
         ) : null}
 

@@ -2701,6 +2701,64 @@ export class PostgresOperationsService {
       .catch(translateDatabaseConflict);
   }
 
+  /**
+   * Marcar un pedido como cobrado, o desmarcarlo.
+   *
+   * Un tilde, no una contabilidad. La sección Pagos tenía tres estados, rendiciones de repartidor y
+   * conciliación de transferencias, y en producción nunca registró un movimiento: lo que la
+   * operación necesita saber de un pedido es si está cobrado.
+   *
+   * Queda quién lo tildó y cuándo, y se audita: es una afirmación sobre plata, no una preferencia
+   * de pantalla, y desmarcar tiene que poder rastrearse igual que marcar.
+   */
+  public async setOrderPaid(
+    orderId: string,
+    paid: boolean,
+    context: OperationsContext & { actorUserId: string },
+  ) {
+    return this.database
+      .transaction(async (transaction) => {
+        const [current] = await transaction
+          .select({ paidAt: orders.paidAt, publicNumber: orders.publicNumber })
+          .from(orders)
+          .where(eq(orders.id, orderId))
+          .limit(1);
+        if (!current) throw new OperationsNotFoundError('Order not found');
+
+        const paidAt = paid ? new Date() : null;
+        await transaction
+          .update(orders)
+          .set({
+            paidAt,
+            paidByUserId: paid ? context.actorUserId : null,
+            updatedAt: new Date(),
+          })
+          .where(eq(orders.id, orderId));
+
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        await audit.record({
+          action: paid ? 'order.marked_paid' : 'order.marked_unpaid',
+          actor: auditActor(context),
+          after: { paidAt: paidAt?.toISOString() ?? null },
+          before: { paidAt: current.paidAt?.toISOString() ?? null },
+          correlationId: context.correlationId,
+          entityId: orderId,
+          entityType: 'order',
+          metadata: { publicNumber: current.publicNumber },
+          requestId: context.requestId,
+          source: context.source,
+        });
+
+        return orderId;
+      })
+      .then(async (id) => {
+        const order = await this.loadOrder(this.database, id);
+        if (!order) throw new Error('Order could not be reloaded');
+        return order;
+      })
+      .catch(translateDatabaseConflict);
+  }
+
   public async updateOrder(
     orderId: string,
     input: OrderUpdateInput,
@@ -3739,6 +3797,7 @@ export class PostgresOperationsService {
         id: orders.id,
         menuId: orders.weeklyMenuId,
         notes: orders.notes,
+        paidAt: orders.paidAt,
         paymentExpectation: orders.paymentExpectation,
         publicNumber: orders.publicNumber,
         source: orders.source,
@@ -3756,6 +3815,10 @@ export class PostgresOperationsService {
     const itemRows = await database
       .select({
         id: orderItems.id,
+        // Necesario para editar los ítems: es lo que dice a qué variedad del menú apunta cada
+        // línea. Puede ser null —los ítems apuntan con `on delete set null`— y en ese caso la
+        // pantalla pide volver a elegirla en vez de esconder el ítem.
+        offeringId: orderItems.offeringId,
         orderId: orderItems.orderId,
         productName: orderItems.productNameSnapshot,
         quantityUnits: orderItems.quantityUnits,
@@ -3848,6 +3911,7 @@ export class PostgresOperationsService {
           items: (itemsByOrder.get(row.id) ?? []).map((item) => ({
             dishSelections: dishesByItem.get(item.id) ?? [],
             id: item.id,
+            offeringId: item.offeringId,
             productName: item.productName,
             quantityUnits: item.quantityUnits,
             totalMinor: item.totalMinor,
@@ -4072,6 +4136,8 @@ export class PostgresOperationsService {
     return (
       config ?? {
         backgroundImageUrl: null,
+        fontFamily: 'system',
+        fontScale: 100,
         id: null,
         labelsPerPage: 8,
         updatedAt: null,

@@ -36,7 +36,6 @@ import { OAuthCallbackPage } from './OAuthCallbackPage.js';
 import { OrderDetailPage } from './OrderDetailPage.js';
 import { OrderIntakePage } from './OrderIntakePage.js';
 import { OrdersPage } from './OrdersPage.js';
-import { PaymentsPage } from './PaymentsPage.js';
 import { ProfilePage } from './ProfilePage.js';
 import { PublicOrderPage } from './PublicOrderPage.js';
 import { PublicSurveyPage } from './PublicSurveyPage.js';
@@ -295,7 +294,6 @@ export function App() {
       <Route path="/app/mensajes" element={<MessagingInboxPage />} />
       <Route path="/app/ajustes/mensajes" element={<MessagingAccountsPage />} />
       <Route path="/app/reparto/rutas" element={<RoutesPage />} />
-      <Route path="/app/pagos" element={<PaymentsPage />} />
       <Route path="/delivery" element={<DeliveryAppPage />} />
       <Route path="/app/perfil" element={<ProfilePage />} />
       <Route path="/app/usuarios" element={<UsersAdminPage />} />

@@ -72,3 +72,22 @@ Tablas `payments`, `cash_collections`, `cash_settlements` (migración 0020, addi
 
 **Diferido**: adapter de Mercado Pago (webhook + conciliación), UI para rendiciones/liquidaciones
 parciales más allá de la rendición 1:1 de una cobranza.
+
+## Dado de baja: la sección Pagos se reemplazó por un tilde
+
+Todo lo de arriba se construyó y **nunca se usó**: al darlo de baja, `payments`, `cash_collections`,
+`cash_settlements` y `transfer_reconciliations` tenían cero filas en producción. Tres estados,
+rendiciones de repartidor y conciliación de transferencias para una operación que sólo necesitaba
+saber si un pedido está cobrado.
+
+En su lugar, la lista de pedidos tiene una columna **Cobrado** con un tilde
+(`POST /api/v1/orders/:id/paid`, permiso `orders.edit`). Se guarda `orders.paid_at` y
+`orders.paid_by_user_id`, y queda auditado como `order.marked_paid` / `order.marked_unpaid`: es una
+afirmación sobre plata, y destildar tiene que poder rastrearse igual que tildar.
+
+Lo que **sí** sobrevive: el catálogo de métodos de pago (Ajustes → Métodos de pago) alimenta el "Pago
+esperado" de cada pedido. Qué se espera cobrar y si se cobró son dos cosas distintas.
+
+Las tablas no se borraron. Están vacías y sin uso, pero eliminarlas es una migración destructiva sin
+nada que ganar; si mañana hace falta una contabilidad de verdad, el modelo de arriba sigue descrito
+acá y las tablas siguen ahí.

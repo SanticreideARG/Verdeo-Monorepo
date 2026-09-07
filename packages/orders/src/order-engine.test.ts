@@ -147,7 +147,7 @@ describe('order engine', () => {
     expect(summary.custom[0]).toMatchObject({ orderPublicNumber: 'N00455', sequence: 1 });
   });
 
-  it('expands each line into one label per physical unit, named only for composable units', () => {
+  it('expande cada línea en una etiqueta por unidad física, siempre con el nombre del cliente', () => {
     const labels = buildLabels([
       {
         composable: false,
@@ -172,15 +172,17 @@ describe('order engine', () => {
     ]);
 
     expect(labels).toHaveLength(3);
+    // El nombre va en todas y no sólo en las del Intuitivo: es lo que se lee para saber a quién va
+    // cada vianda, así que una etiqueta sin nombre no sirve para repartir.
     expect(labels.filter((label) => label.orderPublicNumber === 'N00453')).toEqual([
       {
-        customerDisplayName: null,
+        customerDisplayName: 'Rosa',
         familyName: 'Keto',
         orderPublicNumber: 'N00453',
         variantName: '250',
       },
       {
-        customerDisplayName: null,
+        customerDisplayName: 'Rosa',
         familyName: 'Keto',
         orderPublicNumber: 'N00453',
         variantName: '250',

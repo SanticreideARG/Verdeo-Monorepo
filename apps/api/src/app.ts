@@ -130,6 +130,7 @@ import {
   MessagingSendRequestSchema,
   MeResponseSchema,
   OrderCreateRequestSchema,
+  OrderPaidRequestSchema,
   CustomerOrderCreateRequestSchema,
   OrderListQuerySchema,
   OrderPageResponseSchema,
@@ -454,6 +455,11 @@ interface OperationsEngine {
     context: OperationsContext,
   ): Promise<unknown>;
   createOrder(input: ScopedInput<OrderCreateRequest>, context: OperationsContext): Promise<unknown>;
+  setOrderPaid(
+    orderId: string,
+    paid: boolean,
+    context: OperationsContext & { actorUserId: string },
+  ): Promise<unknown>;
   createPublicOrder(input: PublicOrderCreateRequest, context: OperationsContext): Promise<unknown>;
   trackPublicOrder(publicNumber: string, contact: string): Promise<unknown>;
   confirmAddressGeocoding(
@@ -1996,6 +2002,12 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/ai/prompts/*', requireAuthentication);
   app.use('/api/v1/audit', requireAuthentication);
   app.use('/api/v1/audit/*', requireAuthentication);
+  /*
+   * Faltaba, y por eso cancelar un pedido no funcionaba: el handler lee `session` para chequear el
+   * permiso, sin este `use` la sesión nunca se resuelve y la lectura tiraba 500. Falla cerrado, así
+   * que no filtró nada — simplemente nadie podía cancelar nada.
+   */
+  app.use('/api/v1/cancellation-reasons', requireAuthentication);
   app.use('/api/v1/label-settings', requireAuthentication);
   app.use('/api/v1/label-settings/*', requireAuthentication);
   app.use('/api/v1/surveys', requireAuthentication);
@@ -4228,6 +4240,27 @@ export function createApp(options: CreateAppOptions) {
     return context.json(
       OrderSchema.parse(contractValue(await requireOperations().getOrder(params.data.id))),
     );
+  });
+
+  /**
+   * Tildar un pedido como cobrado, o destildarlo.
+   *
+   * Reemplaza a la sección Pagos, que en producción nunca registró un movimiento: lo que la
+   * operación necesita saber de un pedido es si está cobrado, no llevarle una contabilidad de tres
+   * estados. Queda auditado con quién lo tildó — es una afirmación sobre plata.
+   */
+  app.post('/api/v1/orders/:id/paid', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('orders.edit')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = OrderPaidRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success) return badRequest(context, 'Revisá el pedido.');
+
+    const order = await requireOperations().setOrderPaid(params.data.id, input.data.paid, {
+      ...operationsContext(context),
+      actorUserId: session.userId,
+    });
+    return context.json(OrderSchema.parse(contractValue(order)));
   });
 
   app.patch('/api/v1/orders/:id', async (context) => {

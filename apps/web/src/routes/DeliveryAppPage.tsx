@@ -33,6 +33,9 @@ export function DeliveryAppPage() {
   const [busyStopId, setBusyStopId] = useState<string | null>(null);
   const [failingStop, setFailingStop] = useState<MyStop | null>(null);
   const [reasons, setReasons] = useState<{ displayName: string; id: string }[]>([]);
+  // Decir "no hay motivos configurados" cuando en realidad la petición falló es mentirle a alguien
+  // parado en una puerta esperando poder reportar.
+  const [reasonsFailed, setReasonsFailed] = useState(false);
 
   const canExecute = profile?.permissions.includes('delivery.execute') ?? false;
   const canTrigger = profile?.permissions.includes('delivery.trigger_messages') ?? false;
@@ -70,14 +73,20 @@ export function DeliveryAppPage() {
     let active = true;
     void apiRequest('/api/v1/cancellation-reasons')
       .then(async (response) => {
-        if (!response.ok || !active) return;
+        if (!active) return;
+        if (!response.ok) {
+          setReasonsFailed(true);
+          return;
+        }
         const body = (await response.json()) as {
           items: { countsAsFailedDelivery: boolean; displayName: string; id: string }[];
         };
         // Only the failed-delivery ones — "cliente canceló" is not something a repartidor reports.
         if (active) setReasons(body.items.filter((item) => item.countsAsFailedDelivery));
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (active) setReasonsFailed(true);
+      });
     return () => {
       active = false;
     };
@@ -253,7 +262,11 @@ export function DeliveryAppPage() {
                 </button>
               ))}
               {reasons.length === 0 ? (
-                <p className="text-sm text-ink-muted">No hay motivos configurados.</p>
+                <p className="text-sm text-ink-muted">
+                  {reasonsFailed
+                    ? 'No pudimos cargar los motivos. Revisá la conexión y volvé a abrir esta pantalla.'
+                    : 'No hay motivos configurados.'}
+                </p>
               ) : null}
             </div>
             <button

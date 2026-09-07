@@ -19,6 +19,11 @@ export const OrderSourceSchema = z.enum([
   'facebook',
   'email',
   'phone',
+  /*
+   * Ya no se ofrece al cargar un pedido, pero sigue siendo un valor válido: era la opción por
+   * defecto y los 230 pedidos que hay lo tienen. `source` se valida también al leer, así que
+   * sacarlo del enum no "limpiaría" nada — haría que el historial entero dejara de poder leerse.
+   */
   'manual',
   'opportunity_sale',
   // Referral ("recomendación") — a distinct origin from opportunity_sale, which stays load-bearing
@@ -587,6 +592,9 @@ export const PublicOrderCreateRequestSchema = OrderCreateRequestSchema.omit({
   customerId: true,
 }).extend({
   customer: CustomerCreateRequestSchema,
+  // Un pedido que entra por el sitio es "web", no "manual". Heredaba el default del esquema interno
+  // y quedaba etiquetado como si lo hubiera cargado alguien a mano.
+  source: OrderSourceSchema.default('web'),
   // The visitor chooses the operation explicitly (ADR-031).
   operatingSiteSlug: z
     .string()
@@ -644,6 +652,9 @@ export const CancellationReasonsUpdateRequestSchema = z.object({
     .max(40),
 });
 
+/** Un tilde, nada más: quién y cuándo los pone el servidor. */
+export const OrderPaidRequestSchema = z.object({ paid: z.boolean() });
+
 export const OrderUpdateRequestSchema = z
   .object({
     deliveryAddress: z.string().trim().min(4).max(500).optional(),
@@ -681,6 +692,9 @@ export const OrderSchema = z.object({
     z.object({
       dishSelections: z.array(z.string()),
       id: UuidSchema,
+      // Null cuando la oferta del menú se borró: el ítem conserva sus snapshots de nombre y precio,
+      // pero deja de saber contra qué variedad del menú se cargó.
+      offeringId: UuidSchema.nullable(),
       productName: z.string(),
       quantityUnits: z.number().int(),
       totalMinor: z.number().int(),
@@ -690,6 +704,8 @@ export const OrderSchema = z.object({
   ),
   menuId: UuidSchema,
   notes: z.string().nullable(),
+  // Cuándo se tildó como cobrado. Null = todavía no.
+  paidAt: IsoDateTimeSchema.nullable(),
   paymentExpectation: z.string(),
   publicNumber: z.string(),
   source: OrderSourceSchema,
@@ -836,8 +852,14 @@ export const LabelSchema = z.object({
 
 export const LabelListResponseSchema = z.object({ items: z.array(LabelSchema) });
 
+/** Las tipografías que la etiqueta puede usar. Se resuelven a un `font-family` en el HTML de
+ * impresión: son familias de sistema, así que no dependen de descargar nada al imprimir. */
+export const LabelFontSchema = z.enum(['system', 'serif', 'mono', 'rounded', 'condensed']);
+
 export const LabelSettingsSchema = z.object({
   backgroundImageUrl: z.string().nullable(),
+  fontFamily: LabelFontSchema,
+  fontScale: z.number().int().min(60).max(200),
   id: UuidSchema.nullable(),
   labelsPerPage: z.number().int().min(4).max(12),
   updatedAt: IsoDateTimeSchema.nullable(),
@@ -846,6 +868,8 @@ export const LabelSettingsSchema = z.object({
 
 export const LabelSettingsUpdateRequestSchema = z.object({
   backgroundImageUrl: z.string().url().nullable().optional(),
+  fontFamily: LabelFontSchema.optional(),
+  fontScale: z.number().int().min(60).max(200).optional(),
   labelsPerPage: z.number().int().min(4).max(12),
 });
 
@@ -989,10 +1013,12 @@ export type PublicOrderTrackRequest = z.infer<typeof PublicOrderTrackRequestSche
 export type PublicOrderTrackResponse = z.infer<typeof PublicOrderTrackResponseSchema>;
 export type Order = z.infer<typeof OrderSchema>;
 export type OrderTransitionRequest = z.infer<typeof OrderTransitionRequestSchema>;
+export type OrderPaidRequest = z.infer<typeof OrderPaidRequestSchema>;
 export type OrderUpdateRequest = z.infer<typeof OrderUpdateRequestSchema>;
 export type OrderListQuery = z.infer<typeof OrderListQuerySchema>;
 export type KitchenSummaryResponse = z.infer<typeof KitchenSummaryResponseSchema>;
 export type Label = z.infer<typeof LabelSchema>;
+export type LabelFont = z.infer<typeof LabelFontSchema>;
 export type LabelListResponse = z.infer<typeof LabelListResponseSchema>;
 export type LabelSettings = z.infer<typeof LabelSettingsSchema>;
 export type LabelSettingsUpdateRequest = z.infer<typeof LabelSettingsUpdateRequestSchema>;

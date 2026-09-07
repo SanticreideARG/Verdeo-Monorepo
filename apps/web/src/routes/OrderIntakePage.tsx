@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { AfterSaveDialog } from '../components/AfterSaveDialog.js';
+import { CancelOrderDialog } from '../components/CancelOrderDialog.js';
 import { ColumnPicker } from '../components/ColumnPicker.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
@@ -69,6 +70,7 @@ const FIELD_LABELS: Record<string, string> = {
   offeringId: 'la variedad',
   paymentExpectation: 'el pago esperado',
   quantityUnits: 'las unidades',
+  source: 'el origen del pedido',
 };
 
 function formText(form: FormData, key: string): string {
@@ -105,6 +107,8 @@ export function OrderIntakePage() {
 
   const loadedOnce = useRef(false);
   const [loading, setLoading] = useState(true);
+  // El pedido que se está por cancelar: mientras haya uno, el diálogo pide el motivo.
+  const [cancelling, setCancelling] = useState<OrderSummary | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() =>
     readStoredColumns(COLUMNS_KEY, DEFAULT_COLUMNS, INTAKE_CATALOGUE),
   );
@@ -306,13 +310,21 @@ export function OrderIntakePage() {
   }
 
   async function transition(order: OrderSummary, status: OrderSummary['status']) {
+    /*
+     * Cancelar abre el mismo diálogo que la ficha del pedido, con los motivos ya cargados.
+     *
+     * Antes era un `window.prompt`: la ventanita gris del navegador, con el dominio arriba, pidiendo
+     * texto libre. Además de no parecerse en nada al resto, cada quien escribía el motivo como se le
+     * ocurría, así que "cliente ausente" y "no estaba" quedaban como dos motivos distintos y las
+     * estadísticas de entregas fallidas no significaban nada.
+     */
+    if (status === 'CANCELLED') {
+      setCancelling(order);
+      return;
+    }
     try {
-      const reason =
-        status === 'CANCELLED' ? window.prompt('Motivo de cancelación')?.trim() : undefined;
-      if (status === 'CANCELLED' && !reason) return;
       await mutate(`/api/v1/orders/${order.id}/status`, {
         confirmedReversal: false,
-        reason,
         status,
       });
       showToast(
@@ -322,6 +334,22 @@ export function OrderIntakePage() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos actualizar el pedido.');
     }
+  }
+
+  /** Confirma la cancelación con el motivo elegido en el diálogo. */
+  async function cancelOrder(
+    order: OrderSummary,
+    { notes, reasonId }: { notes: string; reasonId: string },
+  ) {
+    await mutate(`/api/v1/orders/${order.id}/status`, {
+      cancellationNotes: notes || undefined,
+      cancellationReasonId: reasonId,
+      confirmedReversal: false,
+      status: 'CANCELLED',
+    });
+    setCancelling(null);
+    showToast(`Pedido de ${order.customer.displayName} cancelado.`);
+    await loadData();
   }
 
   if (failed) return <DashboardFailed label="los pedidos" />;
@@ -568,11 +596,20 @@ export function OrderIntakePage() {
               </label>
               <label className="field">
                 Origen
-                <select defaultValue="manual" name="source">
-                  <option value="manual">Manual</option>
+                {/*
+                 * Sin opción por defecto, igual que "Pago esperado" acá al lado. "Manual" era la
+                 * primera y la preseleccionada, así que nadie la cambiaba nunca: los 230 pedidos
+                 * cargados decían "Manual" y el campo no informaba absolutamente nada. Obligar a
+                 * elegir es lo que lo vuelve un dato.
+                 */}
+                <select defaultValue="" name="source" required>
+                  <option disabled value="">
+                    Seleccionar
+                  </option>
                   <option value="whatsapp">WhatsApp</option>
-                  <option value="facebook">Facebook</option>
+                  <option value="phone">Teléfono</option>
                   <option value="instagram">Instagram</option>
+                  <option value="facebook">Facebook</option>
                   <option value="email">Email</option>
                   <option value="referral">Recomendación</option>
                   <option value="opportunity_sale">Venta de oportunidad (excedente)</option>
@@ -670,6 +707,14 @@ export function OrderIntakePage() {
           />
         </div>
       </section>
+
+      {cancelling ? (
+        <CancelOrderDialog
+          onCancel={() => setCancelling(null)}
+          onConfirm={(input) => cancelOrder(cancelling, input)}
+          orderNumber={`el pedido de ${cancelling.customer.displayName}`}
+        />
+      ) : null}
 
       {savedNumber ? (
         <AfterSaveDialog

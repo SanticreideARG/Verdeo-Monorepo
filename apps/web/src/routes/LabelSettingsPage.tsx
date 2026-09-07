@@ -9,6 +9,15 @@ import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 const LABELS_PER_PAGE_OPTIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12];
 
+/** Familias de sistema: la etiqueta se imprime sin depender de descargar una fuente. */
+const FONT_OPTIONS = [
+  { key: 'system', label: 'Del sistema' },
+  { key: 'rounded', label: 'Redondeada' },
+  { key: 'serif', label: 'Con serifa' },
+  { key: 'condensed', label: 'Condensada' },
+  { key: 'mono', label: 'Monoespaciada' },
+] as const;
+
 /** Ajustes → Etiquetas: one global row (not per-zona, unlike Intuitivo), editable by
  * superusuarios/operadores — how many labels print per page and the optional background image
  * every label carries. Sent to `PATCH /api/v1/label-settings`; the background image is uploaded
@@ -17,6 +26,8 @@ export function LabelSettingsPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const [settings, setSettings] = useState<LabelSettings | null>(null);
   const [labelsPerPage, setLabelsPerPage] = useState(8);
+  const [fontFamily, setFontFamily] = useState<LabelSettings['fontFamily']>('system');
+  const [fontScale, setFontScale] = useState(100);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -31,6 +42,8 @@ export function LabelSettingsPage() {
       const body = (await response.json()) as LabelSettings;
       setSettings(body);
       setLabelsPerPage(body.labelsPerPage);
+      setFontFamily(body.fontFamily);
+      setFontScale(body.fontScale);
     }
     setLoading(false);
   }, []);
@@ -45,6 +58,8 @@ export function LabelSettingsPage() {
     const response = await apiRequest('/api/v1/label-settings', {
       body: JSON.stringify({
         ...(backgroundImageUrl !== undefined ? { backgroundImageUrl } : {}),
+        fontFamily,
+        fontScale,
         labelsPerPage,
       }),
       method: 'PATCH',
@@ -101,8 +116,10 @@ export function LabelSettingsPage() {
           <p className="dashboard-kicker">Ajustes</p>
           <h1 className="text-2xl font-semibold text-forest">Etiquetas</h1>
           <p className="mt-2 text-sm text-ink-muted">
-            Formato de las etiquetas de cocina: cuántas salen por hoja y el fondo que llevan
-            impreso. Es una configuración única para toda la operación, no por zona.
+            Formato de las etiquetas de cocina: cuántas salen por hoja, la tipografía y el fondo que
+            llevan impreso. Cada etiqueta muestra el nombre del cliente y el tamaño; la variedad no,
+            porque lo que hace falta para repartir es saber de quién es. Es una configuración única
+            para toda la operación, no por zona.
           </p>
         </header>
 
@@ -130,6 +147,65 @@ export function LabelSettingsPage() {
                 ))}
               </select>
             </label>
+
+            <label className="field">
+              Tipografía
+              <select
+                disabled={!canWrite}
+                onChange={(event) =>
+                  setFontFamily(event.target.value as LabelSettings['fontFamily'])
+                }
+                value={fontFamily}
+              >
+                {FONT_OPTIONS.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              Tamaño de letra — {fontScale}%
+              {/* Un rango y no un número escrito: lo que importa es "un poco más grande", y el
+                  resultado se ve recién al imprimir. */}
+              <input
+                disabled={!canWrite}
+                max={200}
+                min={60}
+                onChange={(event) => setFontScale(Number(event.target.value))}
+                step={10}
+                type="range"
+                value={fontScale}
+              />
+            </label>
+
+            {/* La misma jerarquía que la etiqueta impresa, para no tener que gastar una hoja. */}
+            <div
+              className="label-preview"
+              style={{
+                fontFamily: {
+                  condensed: '"Arial Narrow", sans-serif',
+                  mono: 'ui-monospace, monospace',
+                  rounded: '"Nunito", system-ui, sans-serif',
+                  serif: 'Georgia, serif',
+                  system: 'system-ui, sans-serif',
+                }[fontFamily],
+                ...(settings?.backgroundImageUrl
+                  ? { backgroundImage: `url(${settings.backgroundImageUrl})` }
+                  : {}),
+              }}
+            >
+              <p style={{ fontSize: `${String(20 * (fontScale / 100))}px`, fontWeight: 700 }}>
+                Ana Isabella Vega
+              </p>
+              <p style={{ fontSize: `${String(15 * (fontScale / 100))}px`, fontWeight: 600 }}>
+                250
+              </p>
+              <p style={{ color: '#555', fontSize: `${String(10 * (fontScale / 100))}px` }}>
+                NQN-00090
+              </p>
+            </div>
 
             {canWrite ? (
               <button

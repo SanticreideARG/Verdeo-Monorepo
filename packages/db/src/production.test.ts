@@ -273,7 +273,9 @@ describe('kitchen labels', () => {
     expect(
       labels.every((label) => label.familyName === 'Keto' && label.variantName === '250'),
     ).toBe(true);
-    expect(labels.every((label) => label.customerDisplayName === null)).toBe(true);
+    // Todas llevan el nombre, no sólo las del Intuitivo: la etiqueta impresa muestra al cliente y
+    // el tamaño, y sin nombre no sirve para repartir.
+    expect(labels.every((label) => label.customerDisplayName !== null)).toBe(true);
   });
 
   it('labels a single order the same way, scoped to just that order', async () => {

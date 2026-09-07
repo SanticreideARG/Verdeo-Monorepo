@@ -191,6 +191,7 @@ export interface OrderSummary {
   items: {
     dishSelections: string[];
     id: string;
+    offeringId: string | null;
     productName: string;
     quantityUnits: number;
     totalMinor: number;
@@ -199,6 +200,7 @@ export interface OrderSummary {
   }[];
   menuId: string;
   notes: string | null;
+  paidAt: string | null;
   paymentExpectation: string;
   publicNumber: string;
   source: string;
@@ -306,6 +308,9 @@ export interface Label {
 
 export interface LabelSettings {
   backgroundImageUrl: string | null;
+  fontFamily: 'condensed' | 'mono' | 'rounded' | 'serif' | 'system';
+  /** Porcentaje sobre el tamaño base de la etiqueta, entre 60 y 200. */
+  fontScale: number;
   id: string | null;
   labelsPerPage: number;
   updatedAt: string | null;

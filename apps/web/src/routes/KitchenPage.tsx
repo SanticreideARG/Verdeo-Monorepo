@@ -65,7 +65,9 @@ async function printLabels(cycleId: string): Promise<string | null> {
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank', 'noopener,noreferrer');
-  URL.revokeObjectURL(url);
+  // Revocar en el mismo turno corre carrera con la pestaña que recién se abre: a veces se queda
+  // sin nada que cargar. Se libera un segundo después, ya con la página leída.
+  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
   return null;
 }
 
@@ -362,9 +364,13 @@ export function KitchenPage() {
                           <p className="mt-1 text-sm">
                             {item.customerDisplayName} ({item.orderPublicNumber})
                           </p>
-                          <p className="mt-1 text-sm text-ink-muted">
-                            {item.dishSelections.join(' · ')}
-                          </p>
+                          {/* Uno por línea: en cocina esto se lee de reojo mientras se arma, y una
+                              tira de cinco platos separados por puntos obliga a leerla entera. */}
+                          <ul className="dish-selections mt-1">
+                            {item.dishSelections.map((dish, index) => (
+                              <li key={`${dish}-${String(index)}`}>{dish}</li>
+                            ))}
+                          </ul>
                           {item.dietaryInstructions.length ? (
                             <p className="mt-2 text-sm font-semibold text-red-800">
                               {item.dietaryInstructions.join(' · ')}

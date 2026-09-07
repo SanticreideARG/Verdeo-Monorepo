@@ -23,10 +23,14 @@ function toDraft(method: PaymentMethod): MethodDraft {
   };
 }
 
-/** Ajustes → Métodos de pago: the admin-editable catalog behind every "Método" picker — cobro
- * manual (PaymentsPage) and, eventually, order intake. `isCash` decides settlement routing
- * (efectivo queda TO_SETTLE hasta rendir, todo lo demás pasa directo a PAID), so agregar un método
- * nuevo implica decidir explícitamente de qué lado cae. */
+/**
+ * Ajustes → Métodos de pago: el catálogo detrás del "Pago esperado" al tomar un pedido.
+ *
+ * Sobrevivió a la sección Pagos, que se reemplazó por un tilde de "Cobrado" en la lista de pedidos:
+ * qué se espera cobrar y si se cobró son dos cosas distintas, y la primera se sigue eligiendo acá.
+ * `isCash` ya no enruta ninguna rendición —eso se fue con Pagos— pero se conserva porque distingue
+ * el efectivo del resto, que es información del método, no del flujo que se dio de baja.
+ */
 export function PaymentMethodsSettingsPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const [drafts, setDrafts] = useState<MethodDraft[]>([]);

@@ -21,11 +21,19 @@ const SOURCE_LABELS: Record<string, string> = {
   email: 'Email',
   facebook: 'Facebook',
   instagram: 'Instagram',
+  // Ya no se puede elegir al cargar un pedido, pero los que se cargaron antes lo tienen y tienen
+  // que seguir diciendo algo legible.
   manual: 'Manual',
   opportunity_sale: 'Venta de oportunidad',
+  phone: 'Teléfono',
   referral: 'Recomendación',
+  web: 'Sitio web',
   whatsapp: 'WhatsApp',
 };
+
+export function sourceLabel(source: string): string {
+  return SOURCE_LABELS[source] ?? source;
+}
 
 export function shortDate(iso: string): string {
   return new Intl.DateTimeFormat('es-AR').format(new Date(iso));
@@ -104,9 +112,19 @@ export const ORDER_COLUMNS: readonly OrderColumn[] = [
   { key: 'zona', label: 'Zona', render: (order) => order.deliveryZone ?? '—' },
   { key: 'pago', label: 'Pago esperado', render: (order) => order.paymentExpectation || '—' },
   {
+    key: 'cobrado',
+    label: 'Cobrado',
+    /*
+     * Sólo el estado. El tilde que se puede tocar lo arma cada pantalla, porque necesita el
+     * permiso y una función que recargue la lista; acá el catálogo no tiene ni una cosa ni la otra.
+     */
+    render: (order) => (order.paidAt ? `Sí · ${shortDate(order.paidAt)}` : 'No'),
+    sortValue: (order) => (order.paidAt ? 1 : 0),
+  },
+  {
     key: 'origen',
     label: 'Origen',
-    render: (order) => SOURCE_LABELS[order.source] ?? order.source,
+    render: (order) => sourceLabel(order.source),
   },
   {
     key: 'numero',

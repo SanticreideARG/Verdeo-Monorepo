@@ -34,17 +34,35 @@ export function CancelOrderDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  /*
+   * Tres estados distintos, y antes eran uno solo.
+   *
+   * "Cargando motivos…" se mostraba mientras la lista estuviera vacía, así que un fallo de la
+   * petición y una lista genuinamente vacía se veían igual que estar cargando: el cartel quedaba
+   * para siempre y no había forma de cancelar el pedido ni de saber por qué.
+   */
+  const [loadingReasons, setLoadingReasons] = useState(true);
+
   useEffect(() => {
     let active = true;
     void apiRequest('/api/v1/cancellation-reasons')
       .then(async (response) => {
-        if (!response.ok || !active) return;
+        if (!active) return;
+        if (!response.ok) {
+          setError('No pudimos cargar los motivos de cancelación. Probá de nuevo en un momento.');
+          return;
+        }
         const body = (await response.json()) as { items: CancellationReason[] };
         if (!active) return;
         setReasons(body.items);
         setReasonId((current) => current || (body.items[0]?.id ?? ''));
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (active) setError('No pudimos cargar los motivos de cancelación.');
+      })
+      .finally(() => {
+        if (active) setLoadingReasons(false);
+      });
     return () => {
       active = false;
     };
@@ -76,8 +94,12 @@ export function CancelOrderDialog({
           El motivo queda registrado en el pedido y en su historial.
         </p>
 
-        {reasons.length === 0 ? (
+        {loadingReasons ? (
           <p className="mt-4 text-sm text-ink-muted">Cargando motivos…</p>
+        ) : reasons.length === 0 ? (
+          <p className="mt-4 text-sm text-ink-muted">
+            No hay motivos de cancelación cargados. Se configuran en Ajustes.
+          </p>
         ) : (
           <div className="mt-4 grid gap-4">
             {failed.length > 0 ? (

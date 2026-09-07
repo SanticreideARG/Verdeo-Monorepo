@@ -206,7 +206,10 @@ export function buildLabels(lines: readonly KitchenSourceLine[]): Label[] {
   )) {
     for (let unit = 0; unit < line.quantityUnits; unit += 1) {
       labels.push({
-        customerDisplayName: line.composable ? line.customerDisplayName : null,
+        // El nombre va siempre. Antes sólo lo llevaban las líneas del Intuitivo —donde hace falta
+        // para saber de quién es esa combinación de platos— y el resto salía sin nombre, que es
+        // justo lo que hay que leer para repartir una vianda.
+        customerDisplayName: line.customerDisplayName,
         familyName: line.familyName,
         orderPublicNumber: line.orderPublicNumber,
         variantName: line.variantName,

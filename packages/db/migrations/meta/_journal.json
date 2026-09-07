@@ -281,6 +281,20 @@
       "when": 1788525238912,
       "tag": "0039_sleepy_kate_bishop",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1788713106684,
+      "tag": "0040_ordinary_namorita",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1788713382327,
+      "tag": "0041_happy_banshee",
+      "breakpoints": true
     }
   ]
 }

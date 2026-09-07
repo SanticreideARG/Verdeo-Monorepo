@@ -13,7 +13,7 @@ import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 const STATUS_OPTIONS = ['DRAFT', 'CONFIRMED', 'READY', 'DELIVERED', 'CANCELLED'] as const;
 
 /** Lo que se ve sin tocar nada: la fila de un pedido leída de un vistazo. */
-const DEFAULT_COLUMNS = ['cliente', 'whatsapp', 'pedido', 'estado', 'total', 'entrega', 'numero'];
+const DEFAULT_COLUMNS = ['cliente', 'whatsapp', 'pedido', 'estado', 'total', 'cobrado', 'entrega'];
 
 const COLUMNS_KEY = 'verdeo-orders-columns';
 
@@ -58,6 +58,29 @@ export function OrdersPage() {
     setLoading(true);
     void load().finally(() => setLoading(false));
   }, [load, profile?.permissions]);
+
+  /**
+   * El tilde de cobrado, directo en la lista.
+   *
+   * Reemplaza a la sección Pagos entera, que nunca registró un movimiento. Actualiza la fila en el
+   * lugar en vez de recargar todo: con la lista paginada y filtrada, recargar la devolvería al
+   * principio y perdería de vista justo la fila que se acaba de tildar.
+   */
+  async function togglePaid(order: OrderSummary) {
+    const paid = !order.paidAt;
+    const response = await apiRequest(`/api/v1/orders/${order.id}/paid`, {
+      body: JSON.stringify({ paid }),
+      method: 'POST',
+    });
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    const updated = (await response.json()) as OrderSummary;
+    setOrders((current) =>
+      current.map((row) => (row.id === updated.id ? { ...row, paidAt: updated.paidAt } : row)),
+    );
+  }
 
   async function exportCsv() {
     setMessage('');
@@ -154,7 +177,26 @@ export function OrdersPage() {
              */}
             <DataTable
               caption="Pedidos"
-              columns={ORDER_COLUMNS.filter((column) => visibleColumns.includes(column.key))}
+              columns={ORDER_COLUMNS.filter((column) => visibleColumns.includes(column.key)).map(
+                // "Cobrado" se vuelve un tilde que se puede tocar cuando hay permiso para editar.
+                (column) =>
+                  column.key === 'cobrado' && profile.permissions.includes('orders.edit')
+                    ? {
+                        ...column,
+                        render: (order: OrderSummary) => (
+                          <label className="paid-check">
+                            <input
+                              aria-label={`Marcar ${order.customer.displayName} como cobrado`}
+                              checked={Boolean(order.paidAt)}
+                              onChange={() => void togglePaid(order)}
+                              type="checkbox"
+                            />
+                            <span>{order.paidAt ? 'Cobrado' : 'Pendiente'}</span>
+                          </label>
+                        ),
+                      }
+                    : column,
+              )}
               empty="No hay pedidos para este filtro."
               rowKey={(order) => order.id}
               rows={orders}

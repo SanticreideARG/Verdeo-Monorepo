@@ -5211,3 +5211,90 @@ a.order-card-phone:focus-visible {
 .week-site > span:first-child {
   font-weight: 600;
 }
+
+/* Los platos elegidos de un Intuitivo: uno por línea, no una tira separada por comas. */
+.dish-selections {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--db-muted, var(--color-ink-muted));
+  font-size: 0.85rem;
+}
+.dish-selections li::before {
+  content: '· ';
+  opacity: 0.6;
+}
+
+/* Editar los ítems de un pedido: una fila por ítem, con sus platos debajo si es un Intuitivo. */
+.items-editor {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 0.6rem;
+}
+.items-editor-row {
+  display: grid;
+  gap: 0.6rem;
+  align-items: end;
+  grid-template-columns: minmax(0, 1fr) 7rem auto;
+  border: 1px solid var(--db-border-soft, var(--border-hairline));
+  border-radius: 0.7rem;
+  padding: 0.7rem;
+}
+.items-editor-dishes {
+  grid-column: 1 / -1;
+}
+.items-editor-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  align-items: end;
+  justify-content: space-between;
+  border-top: 1px solid var(--db-border-soft, var(--border-hairline));
+  padding-top: 0.7rem;
+}
+.items-editor-total {
+  margin: 0;
+  font-weight: 700;
+}
+@media (max-width: 640px) {
+  .items-editor-row {
+    grid-template-columns: minmax(0, 1fr) 6rem;
+  }
+  .items-editor-row > .button {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Vista previa de la etiqueta en Ajustes: la misma jerarquía que la impresa. */
+.label-preview {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 8rem;
+  border: 1px solid var(--db-border, var(--border-hairline));
+  border-radius: 0.5rem;
+  padding: 1rem;
+  background-color: #fff;
+  background-position: center;
+  background-size: cover;
+  color: #111;
+  text-align: center;
+}
+.label-preview p {
+  margin: 0.1rem 0;
+}
+
+/* El tilde de cobrado dentro de la fila de un pedido. */
+.paid-check {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  cursor: pointer;
+}
+.paid-check input {
+  /* 18px: se toca sin apuntar, sin agrandar la fila. */
+  width: 18px;
+  height: 18px;
+}
