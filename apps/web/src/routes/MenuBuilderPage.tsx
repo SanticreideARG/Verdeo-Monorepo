@@ -4,10 +4,12 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
+import { ClosePeriodsDialog, periodsToOffer } from '../components/ClosePeriodsDialog.js';
 import { DraftNotice } from '../components/DraftNotice.js';
 import { apiRequest } from '../lib/api.js';
 import { buildMenuPayload, type OfferingDraft, type SizePriceDraft } from '../lib/menuPayload.js';
 import { errorMessage, type WeeklyMenu } from '../lib/operations.js';
+import { periodsFromMenus, type Period } from '../lib/periods.js';
 import { showToast } from '../lib/toast.js';
 import { hasPersistedState, usePersistedState } from '../lib/usePersistedState.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
@@ -108,6 +110,13 @@ export function MenuBuilderPage() {
   const [editingMenu, setEditingMenu] = useState<WeeklyMenu | null>(null);
   const [loading, setLoading] = useState(Boolean(editingMenuId));
   const [publishing, setPublishing] = useState(false);
+  /*
+   * Los períodos que se ofrecen cerrar después de publicar.
+   *
+   * Vacío significa que no hay nada que preguntar y la pantalla navega derecho, que es el caso de
+   * la primera semana de una instalación.
+   */
+  const [toClose, setToClose] = useState<Period[]>([]);
   const [draftRestored, setDraftRestored] = useState(false);
   const messageRef = useRef<HTMLParagraphElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -254,6 +263,47 @@ export function MenuBuilderPage() {
     }
   }
 
+  /**
+   * Qué períodos quedaron abiertos y conviene cerrar.
+   *
+   * Falla en silencio devolviendo nada: la semana ya se publicó, y no poder ofrecer el cierre no es
+   * motivo para dejar a alguien mirando un error sobre algo que sí funcionó.
+   */
+  async function periodsPendingClose(newCycleId: string): Promise<Period[]> {
+    try {
+      const response = await apiRequest('/api/v1/menus');
+      if (!response.ok) return [];
+      const menus = ((await response.json()) as { items: WeeklyMenu[] }).items;
+      return periodsToOffer(periodsFromMenus(menus), newCycleId);
+    } catch {
+      return [];
+    }
+  }
+
+  /** Cierra los elegidos y recién ahí sale de la pantalla. */
+  async function closeChosen(cycleIds: string[]) {
+    let closed = 0;
+    let units = 0;
+    for (const cycleId of cycleIds) {
+      const response = await apiRequest(`/api/v1/production/${cycleId}/closed`, {
+        body: JSON.stringify({ closed: true }),
+        method: 'POST',
+      });
+      // Uno que falle no cancela al resto: son períodos independientes.
+      if (!response.ok) continue;
+      const result = (await response.json()) as { writtenOffUnits: number };
+      closed += 1;
+      units += result.writtenOffUnits;
+    }
+    showToast(
+      units > 0
+        ? `${String(closed)} período(s) cerrado(s). Se dieron de baja ${String(units)} unidades.`
+        : `${String(closed)} período(s) cerrado(s).`,
+    );
+    setToClose([]);
+    await navigate('/app/menus');
+  }
+
   async function saveMenu(form: FormData, options: { alsoPublish: boolean }) {
     const payload = buildPayload(form);
     if (!payload) return;
@@ -302,6 +352,18 @@ export function MenuBuilderPage() {
           ? `Semana "${payload.alias}" publicada en todas las localidades.`
           : `Menú "${payload.alias}" guardado como borrador.`,
       );
+
+      /*
+       * Publicar una semana es exactamente cuando la anterior dejó de estar en curso, así que es el
+       * momento de preguntar por ella. Sólo al publicar: un borrador no reemplaza a nada todavía.
+       */
+      if (options.alsoPublish) {
+        const pending = await periodsPendingClose(created.cycle.id);
+        if (pending.length > 0) {
+          setToClose(pending);
+          return;
+        }
+      }
       await navigate('/app/menus');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos guardar el menú.');
@@ -573,6 +635,17 @@ export function MenuBuilderPage() {
           </div>
         </form>
       </section>
+
+      {toClose.length > 0 ? (
+        <ClosePeriodsDialog
+          onConfirm={closeChosen}
+          onSkip={() => {
+            setToClose([]);
+            void navigate('/app/menus');
+          }}
+          periods={toClose}
+        />
+      ) : null}
     </DashboardShell>
   );
 }
