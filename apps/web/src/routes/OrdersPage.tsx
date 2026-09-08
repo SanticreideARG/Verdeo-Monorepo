@@ -6,8 +6,15 @@ import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { DataTable } from '../components/DataTable.js';
 import { apiRequest } from '../lib/api.js';
-import { errorMessage, orderStatusLabel, type OrderSummary } from '../lib/operations.js';
+import {
+  errorMessage,
+  orderStatusLabel,
+  type OrderSummary,
+  type WeeklyMenu,
+} from '../lib/operations.js';
 import { ORDER_COLUMNS, readStoredColumns, writeStoredColumns } from '../lib/orderColumns.js';
+import { PeriodPicker } from '../components/PeriodPicker.js';
+import { currentPeriod, periodsFromMenus, type Period } from '../lib/periods.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 const STATUS_OPTIONS = ['DRAFT', 'CONFIRMED', 'READY', 'DELIVERED', 'CANCELLED'] as const;
@@ -31,15 +38,59 @@ export function OrdersPage() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  /*
+   * Sobre qué semana se está mirando.
+   *
+   * `null` es "todavía no sé cuál" y no "todas": la pantalla espera a saber cuál es el período
+   * actual antes de pedir pedidos, para no traer el histórico entero y reemplazarlo un instante
+   * después. Una cadena vacía sí significa todas, y es una elección explícita.
+   */
+  const [periods, setPeriods] = useState<Period[]>([]);
+  const [cycleId, setCycleId] = useState<string | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() =>
     readStoredColumns(COLUMNS_KEY, DEFAULT_COLUMNS, ORDER_COLUMNS),
   );
+
+  /*
+   * Los períodos salen de los menús: todo pedido referencia un menú, así que un ciclo sin menú
+   * tampoco tiene pedidos. Se resuelve antes de pedir la primera página, para abrir directamente
+   * sobre la semana actual en vez de traer el histórico y reemplazarlo un instante después.
+   */
+  useEffect(() => {
+    if (!profile?.permissions.includes('orders.read')) return;
+    let active = true;
+    void apiRequest('/api/v1/menus')
+      .then(async (response) => {
+        if (!active) return;
+        // Sin menús no hay períodos que ofrecer: la pantalla cae a "todos", que es lo que hacía
+        // siempre, en vez de quedarse sin poder listar nada.
+        const list = response.ok
+          ? periodsFromMenus(((await response.json()) as { items: WeeklyMenu[] }).items)
+          : [];
+        if (!active) return;
+        setPeriods(list);
+        /*
+         * Llegar con `?search=` es venir a buscar un pedido puntual —una tarjeta de chat apunta
+         * acá con su número—, y ese pedido puede ser de cualquier semana. Abrir filtrado por el
+         * período actual haría que el enlace no encontrara nada justamente cuando apunta a algo
+         * viejo, que es cuando más se usa.
+         */
+        setCycleId(searchParams.get('search') ? '' : (currentPeriod(list)?.id ?? ''));
+      })
+      .catch(() => {
+        if (active) setCycleId('');
+      });
+    return () => {
+      active = false;
+    };
+  }, [profile?.permissions, searchParams]);
 
   const load = useCallback(
     async (cursor?: string) => {
       const params = new URLSearchParams();
       if (status) params.set('status', status);
       if (search.trim()) params.set('search', search.trim());
+      if (cycleId) params.set('cycleId', cycleId);
       if (cursor) params.set('cursor', cursor);
       const response = await apiRequest(`/api/v1/orders?${params.toString()}`);
       if (!response.ok) {
@@ -50,14 +101,16 @@ export function OrdersPage() {
       setOrders((current) => (cursor ? [...current, ...body.items] : body.items));
       setNextCursor(body.nextCursor);
     },
-    [search, status],
+    [cycleId, search, status],
   );
 
   useEffect(() => {
     if (!profile?.permissions.includes('orders.read')) return;
+    // `null` es "todavía no sé sobre qué período": esperar evita una primera consulta al histórico.
+    if (cycleId === null) return;
     setLoading(true);
     void load().finally(() => setLoading(false));
-  }, [load, profile?.permissions]);
+  }, [cycleId, load, profile?.permissions]);
 
   /**
    * El tilde de cobrado, directo en la lista.
@@ -87,6 +140,8 @@ export function OrdersPage() {
     const params = new URLSearchParams();
     if (status) params.set('status', status);
     if (search.trim()) params.set('search', search.trim());
+    // El CSV exporta lo que se está mirando, no el histórico entero.
+    if (cycleId) params.set('cycleId', cycleId);
     const response = await apiRequest(`/api/v1/orders/export?${params.toString()}`);
     if (!response.ok) {
       setMessage(await errorMessage(response));
@@ -132,6 +187,7 @@ export function OrdersPage() {
                 value={search}
               />
             </label>
+            <PeriodPicker allowAll onChange={setCycleId} periods={periods} value={cycleId ?? ''} />
             <label className="field">
               Estado
               <select onChange={(event) => setStatus(event.target.value)} value={status}>
@@ -197,7 +253,11 @@ export function OrdersPage() {
                       }
                     : column,
               )}
-              empty="No hay pedidos para este filtro."
+              empty={
+                cycleId
+                  ? 'No hay pedidos en este período. Probá con "Todos los períodos".'
+                  : 'No hay pedidos para este filtro.'
+              }
               rowKey={(order) => order.id}
               rows={orders}
             />

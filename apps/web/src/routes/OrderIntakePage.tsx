@@ -15,6 +15,8 @@ import {
   writeStoredColumns,
   type OrderColumn,
 } from '../lib/orderColumns.js';
+import { PeriodPicker } from '../components/PeriodPicker.js';
+import { currentPeriod, periodsFromMenus, type Period } from '../lib/periods.js';
 import { showToast } from '../lib/toast.js';
 import {
   errorMessage,
@@ -112,6 +114,15 @@ export function OrderIntakePage() {
   // La zona cuyo lote se está marcando: deshabilita todos los botones mientras corre, para que dos
   // clics seguidos no manden la misma tanda dos veces.
   const [markingZone, setMarkingZone] = useState<string | null>(null);
+  /*
+   * Sobre qué semana trabaja la cola.
+   *
+   * `null` es "todavía no se resolvió"; la primera carga lo fija en el período actual. Es una cola
+   * de trabajo: sin esto, un borrador que alguien dejó a medias hace tres semanas se queda acá para
+   * siempre.
+   */
+  const [periods, setPeriods] = useState<Period[]>([]);
+  const [periodId, setPeriodId] = useState<string | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() =>
     readStoredColumns(COLUMNS_KEY, DEFAULT_COLUMNS, INTAKE_CATALOGUE),
   );
@@ -121,22 +132,24 @@ export function OrderIntakePage() {
     if (!loadedOnce.current) setLoading(true);
     setPermissions(profile.permissions);
 
-    const [menuResponse, orderResponse, methodsResponse] = await Promise.all([
-      profile.permissions.some((permission) =>
-        ['orders.read', 'production.read'].includes(permission),
-      )
-        ? apiRequest('/api/v1/menus')
-        : null,
-      profile.permissions.includes('orders.read') ? apiRequest('/api/v1/orders') : null,
-      // Optional: staff without payments.read (e.g. cocina) still create orders fine — "Pago
-      // esperado" just falls back to free text for them instead of the method picker.
-      profile.permissions.includes('payments.read') ? apiRequest('/api/v1/payments/methods') : null,
-    ]);
+    /*
+     * Los menús se piden primero y no en paralelo con los pedidos, a propósito.
+     *
+     * La cola tiene que salir filtrada por período, y para eso hay que saber cuál es antes de
+     * pedirla. Filtrar del lado del cliente no alcanzaría: la lista viene paginada de a treinta, y
+     * con doscientos treinta pedidos históricos la primera página podría no traer ni uno de la
+     * semana actual — la cola se vería vacía teniendo trabajo pendiente.
+     */
+    const menuResponse = profile.permissions.some((permission) =>
+      ['orders.read', 'production.read'].includes(permission),
+    )
+      ? await apiRequest('/api/v1/menus')
+      : null;
+
+    let queueCycleId = periodId;
     if (menuResponse?.ok) {
-      const loadedMenus = menusForAmbientScope(
-        ((await menuResponse.json()) as { items: WeeklyMenu[] }).items,
-        storedOperatingSiteId(),
-      );
+      const allMenus = ((await menuResponse.json()) as { items: WeeklyMenu[] }).items;
+      const loadedMenus = menusForAmbientScope(allMenus, storedOperatingSiteId());
       setMenus(loadedMenus);
       setSelectedMenuId(
         (current) =>
@@ -145,7 +158,21 @@ export function OrderIntakePage() {
           loadedMenus[0]?.id ||
           '',
       );
+      const list = periodsFromMenus(allMenus);
+      setPeriods(list);
+      // La primera carga elige el período actual; después manda lo que el operador haya elegido.
+      queueCycleId ??= currentPeriod(list)?.id ?? '';
+      setPeriodId(queueCycleId);
     }
+
+    const [orderResponse, methodsResponse] = await Promise.all([
+      profile.permissions.includes('orders.read')
+        ? apiRequest(`/api/v1/orders${queueCycleId ? `?cycleId=${queueCycleId}` : ''}`)
+        : null,
+      // Optional: staff without payments.read (e.g. cocina) still create orders fine — "Pago
+      // esperado" just falls back to free text for them instead of the method picker.
+      profile.permissions.includes('payments.read') ? apiRequest('/api/v1/payments/methods') : null,
+    ]);
     if (orderResponse?.ok) {
       const items = ((await orderResponse.json()) as { items: OrderSummary[] }).items;
       // Only what still needs someone's attention; delivered and cancelled belong to "Ver pedidos".
@@ -161,7 +188,7 @@ export function OrderIntakePage() {
     }
     loadedOnce.current = true;
     setLoading(false);
-  }, [profile]);
+  }, [periodId, profile]);
 
   useEffect(() => {
     void loadData().catch((error: unknown) => {
@@ -475,6 +502,9 @@ export function OrderIntakePage() {
             <h1 className="text-2xl font-semibold text-forest">Tomar y confirmar pedidos</h1>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            {/* Sin "todos los períodos": esto es la cola de esta semana, no un archivo. Para
+                buscar en el histórico está "Ver pedidos". */}
+            <PeriodPicker onChange={setPeriodId} periods={periods} value={periodId ?? ''} />
             <ColumnPicker
               columns={intakeColumns}
               onChange={(next) => {
