@@ -51,6 +51,31 @@ export function productionSnapshotFilenameBase(snapshot: ProductionSnapshot): st
   return `produccion-${alias}-${snapshot.kind}`;
 }
 
+/**
+ * Una hoja con su título arriba y los encabezados debajo.
+ *
+ * El título en la fila 1 dice de qué semana es la planilla: abierta tres días después, "Producción
+ * base" sola no lo dice, y el nombre del archivo se pierde apenas alguien la reenvía.
+ *
+ * Lo que se puede dar de formato es acotado, y conviene saber por qué: `xlsx` 0.18 descarta los
+ * estilos de celda al escribir —la negrita es de la versión paga— y tampoco escribe paneles fijos,
+ * ni por `!freeze` ni por `!views`. Comprobado, no supuesto. Queda lo que sí llega al archivo:
+ * anchos de columna pensados por contenido y el autofiltro sobre la fila de encabezados, que es lo
+ * que permite ordenar y filtrar sin tocar nada.
+ */
+function sheetWithTitle(
+  title: string,
+  rows: Record<string, number | string>[],
+  widths: number[],
+): XLSX.WorkSheet {
+  const sheet = XLSX.utils.aoa_to_sheet([[title], []]);
+  XLSX.utils.sheet_add_json(sheet, rows, { origin: 'A2' });
+  sheet['!cols'] = widths.map((wch) => ({ wch }));
+  const lastColumn = XLSX.utils.encode_col(Math.max(0, widths.length - 1));
+  sheet['!autofilter'] = { ref: `A2:${lastColumn}${String(rows.length + 2)}` };
+  return sheet;
+}
+
 export function buildProductionExcel(report: ProductionReport): ArrayBuffer {
   const { actuals, base, delta } = report;
   const actualByKey = new Map(
@@ -63,58 +88,122 @@ export function buildProductionExcel(report: ProductionReport): ArrayBuffer {
     (delta ?? []).map((line) => [lineLabel(line.familyName, line.variantName), line.deltaUnits]),
   );
 
-  const rows = base.map((line) => {
-    const key = lineLabel(line.familyName, line.variantName);
-    return {
-      Delta: delta ? (deltaByKey.get(key) ?? 0) : '',
-      Excepciones: line.exceptions
-        .map(
-          (exception) =>
-            `${exception.quantityUnits} (${exception.customerDisplayName} · ${exception.orderPublicNumber}): ${exception.dietaryInstructions.join(' · ')}`,
-        )
-        .join(' | '),
-      Familia: line.familyName,
-      // Unidades y pedidos son dos números distintos: ocho unidades pueden ser ocho pedidos de una
-      // o dos de cuatro, y eso cambia cuántos paquetes se arman.
-      Pedidos: line.orderCount,
-      'Producción real': actualByKey.get(key) ?? '',
-      Tamaño: line.variantName,
-      'Unidades planificadas': line.quantityUnits,
-    };
-  });
-
+  const title = `Producción — ${report.cycle.alias} · ${report.subtitle}`;
   const workbook = XLSX.utils.book_new();
-  const sheet = XLSX.utils.json_to_sheet(rows);
-  XLSX.utils.book_append_sheet(workbook, sheet, 'Producción base');
+
+  /*
+   * Conciliado: cuántos menús de cada uno, incluyendo los Intuitivos.
+   *
+   * La hoja base no los tiene: un Intuitivo lleva su propia composición, así que el consolidado lo
+   * saca aparte, uno por pedido. Eso dejaba sin contestar la pregunta más simple —"¿cuántos menús
+   * de cada tipo salen esta semana?"—, que había que sumar a mano.
+   */
+  const totals = new Map<
+    string,
+    { familyName: string; orders: Set<string>; units: number; variantName: string }
+  >();
+  const totalFor = (familyName: string, variantName: string) => {
+    const key = lineLabel(familyName, variantName);
+    const row = totals.get(key) ?? { familyName, orders: new Set<string>(), units: 0, variantName };
+    totals.set(key, row);
+    return row;
+  };
+  for (const line of base) {
+    const row = totalFor(line.familyName, line.variantName);
+    row.units += line.quantityUnits;
+  }
+  // Los pedidos de la base ya vienen contados; los del Intuitivo se cuentan acá, uno por renglón.
+  const baseOrderCounts = new Map(
+    base.map((line) => [lineLabel(line.familyName, line.variantName), line.orderCount]),
+  );
+  for (const item of report.custom) {
+    const row = totalFor(item.familyName, item.variantName);
+    row.units += item.quantityUnits;
+    row.orders.add(item.orderPublicNumber);
+  }
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    sheetWithTitle(
+      title,
+      [...totals.values()]
+        .sort(
+          (left, right) =>
+            left.familyName.localeCompare(right.familyName, 'es-AR') ||
+            left.variantName.localeCompare(right.variantName, 'es-AR'),
+        )
+        .map((row) => ({
+          Menú: row.familyName,
+          Tamaño: row.variantName,
+          Unidades: row.units,
+          Pedidos:
+            baseOrderCounts.get(lineLabel(row.familyName, row.variantName)) ?? row.orders.size,
+        })),
+      [24, 10, 12, 10],
+    ),
+    'Conciliado',
+  );
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    sheetWithTitle(
+      title,
+      base.map((line) => {
+        const key = lineLabel(line.familyName, line.variantName);
+        return {
+          Familia: line.familyName,
+          Tamaño: line.variantName,
+          // Unidades y pedidos son dos números distintos: ocho unidades pueden ser ocho pedidos de
+          // una o dos de cuatro, y eso cambia cuántos paquetes se arman.
+          Unidades: line.quantityUnits,
+          Pedidos: line.orderCount,
+          'Producción real': actualByKey.get(key) ?? '',
+          Delta: delta ? (deltaByKey.get(key) ?? 0) : '',
+          Excepciones: line.exceptions
+            .map(
+              (exception) =>
+                `${exception.quantityUnits} (${exception.customerDisplayName} · ${exception.orderPublicNumber}): ${exception.dietaryInstructions.join(' · ')}`,
+            )
+            .join(' | '),
+        };
+      }),
+      [24, 10, 12, 10, 16, 8, 60],
+    ),
+    'Producción base',
+  );
 
   // Los platos de los Intuitivos, sumados: es la hoja con la que se va a comprar.
   if (report.dishTally.length > 0) {
     XLSX.utils.book_append_sheet(
       workbook,
-      XLSX.utils.json_to_sheet(
-        report.dishTally.map((entry) => ({
-          Plato: entry.dishName,
-          Porciones: entry.portions,
-        })),
+      sheetWithTitle(
+        title,
+        report.dishTally.map((entry) => ({ Plato: entry.dishName, Porciones: entry.portions })),
+        [40, 12],
       ),
       'Platos a preparar',
     );
   }
 
   if (report.custom.length > 0) {
-    const customSheet = XLSX.utils.json_to_sheet(
-      report.custom.map((item) => ({
-        Cliente: item.customerDisplayName,
-        Composición: item.dishSelections.join(' · '),
-        Familia: item.familyName,
-        Indicaciones: item.dietaryInstructions.join(' · '),
-        Pedido: item.orderPublicNumber,
-        Secuencia: item.sequence,
-        Tamaño: item.variantName,
-        Unidades: item.quantityUnits,
-      })),
+    XLSX.utils.book_append_sheet(
+      workbook,
+      sheetWithTitle(
+        title,
+        report.custom.map((item) => ({
+          '#': item.sequence,
+          Familia: item.familyName,
+          Tamaño: item.variantName,
+          Unidades: item.quantityUnits,
+          Cliente: item.customerDisplayName,
+          Pedido: item.orderPublicNumber,
+          Composición: item.dishSelections.join(' · '),
+          Indicaciones: item.dietaryInstructions.join(' · '),
+        })),
+        [6, 16, 10, 10, 28, 14, 60, 30],
+      ),
+      'Intuitivos',
     );
-    XLSX.utils.book_append_sheet(workbook, customSheet, 'Intuitivos');
   }
 
   // `type: 'array'` devuelve un ArrayBuffer, no un Uint8Array. Declararlo como Uint8Array era una
