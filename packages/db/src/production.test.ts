@@ -224,6 +224,59 @@ describe('excedente', () => {
     expect(keto?.disponible).toBe(2);
   });
 
+  it('al cerrar el período da de baja el remanente sin vender', async () => {
+    const service = await seededService();
+    await service.reportProduction(
+      CYCLE,
+      [{ familyName: 'Keto', quantityUnits: 6, variantName: '250' }],
+      context,
+    );
+
+    const closed = await service.setCycleClosed(CYCLE, true, context);
+
+    // Dos unidades producidas de más que nadie pidió: terminada la semana no se arrastran.
+    expect(closed.writtenOffUnits).toBe(2);
+    expect(closed.status).toBe('CLOSED');
+    const keto = (await service.surplusReport(CYCLE)).items.find(
+      (item) => item.familyName === 'Keto' && item.variantName === '250',
+    );
+    expect(keto?.bajaMerma).toBe(2);
+    expect(keto?.disponible).toBe(0);
+  });
+
+  it('cerrar dos veces no duplica la baja', async () => {
+    const service = await seededService();
+    await service.reportProduction(
+      CYCLE,
+      [{ familyName: 'Keto', quantityUnits: 6, variantName: '250' }],
+      context,
+    );
+    await service.setCycleClosed(CYCLE, true, context);
+
+    // Reabrir no borra la baja —es un hecho, no un estado— y al volver a cerrar ya no queda nada
+    // disponible, así que la segunda vez no da de baja de nuevo.
+    await service.setCycleClosed(CYCLE, false, context);
+    const again = await service.setCycleClosed(CYCLE, true, context);
+
+    expect(again.writtenOffUnits).toBe(0);
+    const keto = (await service.surplusReport(CYCLE)).items.find(
+      (item) => item.familyName === 'Keto' && item.variantName === '250',
+    );
+    expect(keto?.bajaMerma).toBe(2);
+  });
+
+  it('cerrar sin remanente no da de baja nada', async () => {
+    const service = await seededService();
+    await service.reportProduction(
+      CYCLE,
+      [{ familyName: 'Keto', quantityUnits: 4, variantName: '250' }],
+      context,
+    );
+
+    // Producido exactamente lo pedido: no hay excedente que dar de baja.
+    expect((await service.setCycleClosed(CYCLE, true, context)).writtenOffUnits).toBe(0);
+  });
+
   it('produccion planificada applies the configured coefficient over demand', async () => {
     const service = await seededService();
     await service.setSurplusConfig(25, context);

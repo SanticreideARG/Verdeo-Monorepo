@@ -33,7 +33,6 @@ const SURPLUS_COLUMNS: readonly DataColumn<SurplusItem>[] = [
     render: (item) => `${item.familyName} ${item.variantName}`,
   },
   { key: 'demanda', label: 'Demanda', render: (item) => item.demandaConfirmada },
-  { key: 'planificada', label: 'Planificada', render: (item) => item.produccionPlanificada },
   { key: 'real', label: 'Real', render: (item) => item.produccionReal ?? '—' },
   { key: 'efectivo', label: 'Efectivo', render: (item) => item.excedenteEfectivo },
   { key: 'oportunidad', label: 'Vendido oport.', render: (item) => item.vendidoOportunidad },
@@ -87,14 +86,12 @@ export function KitchenPage() {
   const [kitchen, setKitchen] = useState<KitchenSummary | null>(null);
   const [snapshots, setSnapshots] = useState<ProductionSnapshot[]>([]);
   const [surplus, setSurplus] = useState<SurplusReport | null>(null);
-  const [coefficientInput, setCoefficientInput] = useState('0');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
 
   const permissions = profile?.permissions ?? [];
   const canReport = permissions.includes('production.report');
   const canGenerate = permissions.includes('production.generate');
-  const canAdjustSurplus = permissions.includes('production.adjust_surplus');
 
   const loadMenus = useCallback(async () => {
     if (!profile?.permissions.includes('production.read')) {
@@ -131,7 +128,6 @@ export function KitchenPage() {
     if (response.ok) {
       const report = (await response.json()) as SurplusReport;
       setSurplus(report);
-      setCoefficientInput(String(report.coefficientPercent));
     }
   }, []);
 
@@ -240,53 +236,41 @@ export function KitchenPage() {
     await loadSnapshots(selectedMenu.cycle.id);
   }
 
-  async function saveCoefficient(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const coefficientPercent = Number(coefficientInput);
+  /**
+   * Cerrar el período.
+   *
+   * A mano y no por fecha: una semana puede seguir necesitando ajustes después de su cierre —un
+   * pedido que se reprograma, una entrega que se rehace— y que el sistema la trabe sola dejaría a
+   * alguien sin poder arreglar algo real.
+   *
+   * Al cerrar, el remanente que no se colocó se da de baja solo: terminada la semana, el excedente
+   * no se arrastra a la siguiente.
+   */
+  async function closeCycle() {
+    if (!selectedMenu) return;
     if (
-      !Number.isFinite(coefficientPercent) ||
-      coefficientPercent < 0 ||
-      coefficientPercent > 100
+      !window.confirm(
+        `¿Cerrar ${selectedMenu.cycle.alias}? Sus pedidos dejan de poder editarse y el remanente sin vender se da de baja.`,
+      )
     ) {
-      setMessage('El coeficiente debe estar entre 0 y 100.');
       return;
     }
     setMessage('');
-    const response = await apiRequest('/api/v1/surplus/config', {
-      body: JSON.stringify({ coefficientPercent }),
-      method: 'PATCH',
+    const response = await apiRequest(`/api/v1/production/${selectedMenu.cycle.id}/closed`, {
+      body: JSON.stringify({ closed: true }),
+      method: 'POST',
     });
     if (!response.ok) {
       setMessage(await errorMessage(response));
       return;
     }
-    setMessage('Coeficiente actualizado.');
-    if (selectedMenu) await loadSurplus(selectedMenu.cycle.id);
-  }
-
-  async function writeOff(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selectedMenu) return;
-    const form = new FormData(event.currentTarget);
-    const familyName = formText(form, 'familyName');
-    const variantName = formText(form, 'variantName');
-    const quantityUnits = Number(formText(form, 'quantityUnits'));
-    const reason = formText(form, 'reason').trim();
-    if (!familyName || !variantName || !quantityUnits || !reason) return;
-    setMessage('');
-    const response = await apiRequest(
-      `/api/v1/production/${selectedMenu.cycle.id}/surplus/writeoffs`,
-      {
-        body: JSON.stringify({ entries: [{ familyName, quantityUnits, reason, variantName }] }),
-        method: 'POST',
-      },
+    const closed = (await response.json()) as { writtenOffUnits: number };
+    setMessage(
+      closed.writtenOffUnits > 0
+        ? `Período cerrado. Se dieron de baja ${String(closed.writtenOffUnits)} unidades sin vender.`
+        : 'Período cerrado. No quedaba remanente sin vender.',
     );
-    if (!response.ok) {
-      setMessage(await errorMessage(response));
-      return;
-    }
-    setMessage('Baja registrada.');
-    event.currentTarget.reset();
+    await loadMenus();
     await loadSurplus(selectedMenu.cycle.id);
   }
 
@@ -390,6 +374,19 @@ export function KitchenPage() {
                     Imprimir
                   </button>
                 </>
+              ) : null}
+              {/* Cerrar es lo último de la semana, así que va al final y separado del resto. */}
+              {canGenerate && selectedMenu && selectedMenu.cycle.status !== 'CLOSED' ? (
+                <button
+                  className="button button-secondary"
+                  onClick={() => void closeCycle()}
+                  type="button"
+                >
+                  Cerrar período
+                </button>
+              ) : null}
+              {selectedMenu?.cycle.status === 'CLOSED' ? (
+                <span className="status-chip">Período cerrado</span>
               ) : null}
             </div>
 
@@ -600,58 +597,18 @@ export function KitchenPage() {
                       />
                     </div>
 
-                    {canAdjustSurplus ? (
-                      <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                        <form
-                          className="rounded-xl border border-forest/10 p-3"
-                          onSubmit={(event) => void saveCoefficient(event)}
-                        >
-                          <label className="field">
-                            Coeficiente global (%)
-                            <input
-                              max="100"
-                              min="0"
-                              onChange={(event) => setCoefficientInput(event.target.value)}
-                              step="0.01"
-                              type="number"
-                              value={coefficientInput}
-                            />
-                          </label>
-                          <button className="button button-secondary mt-3" type="submit">
-                            Guardar coeficiente
-                          </button>
-                        </form>
-                        <form
-                          className="rounded-xl border border-forest/10 p-3"
-                          onSubmit={(event) => void writeOff(event)}
-                        >
-                          <p className="mb-2 text-sm font-semibold text-forest">
-                            Dar de baja remanente
-                          </p>
-                          <div className="form-grid">
-                            <label className="field">
-                              Variedad
-                              <input name="familyName" required />
-                            </label>
-                            <label className="field">
-                              Tamaño
-                              <input name="variantName" required />
-                            </label>
-                            <label className="field">
-                              Unidades
-                              <input min="1" name="quantityUnits" required type="number" />
-                            </label>
-                            <label className="field field-wide">
-                              Motivo
-                              <input name="reason" required />
-                            </label>
-                          </div>
-                          <button className="button button-secondary mt-3" type="submit">
-                            Registrar baja
-                          </button>
-                        </form>
-                      </div>
-                    ) : null}
+                    {/*
+                     * Ni coeficiente ni baja manual.
+                     *
+                     * El coeficiente calculaba una producción sugerida sobre la demanda; en la
+                     * práctica cocina produce lo que decide y después informa lo real, así que era
+                     * un número que nadie miraba. Y dar de baja el remanente a mano era un paso
+                     * que había que acordarse de hacer: ahora lo hace el cierre del período.
+                     */}
+                    <p className="mt-4 text-sm text-ink-muted">
+                      <strong>Disponible</strong> es lo producido que todavía no está asignado a
+                      ningún pedido. Al cerrar el período, lo que quede se da de baja solo.
+                    </p>
                   </div>
                 ) : null}
               </>

@@ -669,6 +669,23 @@ export const OrderReadyBatchResponseSchema = z.object({
   ),
 });
 
+/**
+ * Cerrar o reabrir un período.
+ *
+ * Cerrar es decir "esta semana terminó": sus pedidos dejan de poder editarse y deja de ofrecerse
+ * como el período actual. Se hace a mano; reabrir existe porque si se cerró de más tiene que haber
+ * vuelta atrás.
+ */
+export const CycleClosedRequestSchema = z.object({ closed: z.boolean() });
+
+export const CycleClosedResponseSchema = z.object({
+  alias: z.string(),
+  id: UuidSchema,
+  status: z.string(),
+  /** Unidades dadas de baja al cerrar: el remanente que no se colocó. */
+  writtenOffUnits: z.number().int(),
+});
+
 /** Un tilde, nada más: quién y cuándo los pone el servidor. */
 export const OrderPaidRequestSchema = z.object({ paid: z.boolean() });
 

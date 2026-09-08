@@ -2389,6 +2389,82 @@ export class PostgresOperationsService {
       .catch(translateDatabaseConflict);
   }
 
+  /**
+   * Cerrar un período, a mano.
+   *
+   * Cerrar es decir "esta semana terminó": sus pedidos dejan de poder editarse y deja de aparecer
+   * como el período actual. Se hace a mano y no por fecha porque una semana puede seguir
+   * necesitando ajustes después de su fecha de cierre —un pedido que se reprograma, una entrega que
+   * se rehace— y que el sistema la trabe sola dejaría a alguien sin poder arreglar algo real.
+   *
+   * Reabrir existe por la misma razón: si se cerró de más, tiene que haber vuelta atrás. Las dos
+   * direcciones se auditan.
+   */
+  public async setCycleClosed(cycleId: string, closed: boolean, context: OperationsContext) {
+    return this.database
+      .transaction(async (transaction) => {
+        const [current] = await transaction
+          .select({ alias: salesCycles.alias, status: salesCycles.status })
+          .from(salesCycles)
+          .where(eq(salesCycles.id, cycleId))
+          .limit(1);
+        if (!current) throw new OperationsNotFoundError('Sales cycle not found');
+
+        const status = closed ? 'CLOSED' : 'OPEN';
+        await transaction
+          .update(salesCycles)
+          .set({ status, updatedAt: new Date() })
+          .where(eq(salesCycles.id, cycleId));
+
+        /*
+         * Al cerrar, lo que quedó sin vender se da de baja solo.
+         *
+         * Es lo que pasa de verdad: terminada la semana, el excedente que no se colocó no se
+         * arrastra a la siguiente. Hacerlo automático evita el paso manual que nadie iba a hacer y
+         * deja el número de la semana cerrado en vez de eternamente pendiente.
+         *
+         * Reabrir no borra estas bajas: son un hecho registrado, no un estado. Si se vuelve a
+         * cerrar, `disponible` ya descuenta lo dado de baja, así que la segunda vez no da nada y no
+         * se duplica.
+         */
+        let writtenOff = 0;
+        if (closed) {
+          const rows = await this.surplusRows(transaction, cycleId);
+          const pending = [...rows.values()].filter((row) => row.disponible > 0);
+          if (pending.length > 0) {
+            await transaction.insert(surplusWriteoffs).values(
+              pending.map((row) => ({
+                actorUserId: context.actorUserId ?? null,
+                familyName: row.familyName,
+                quantityUnits: row.disponible,
+                reason: 'Cierre de período: remanente sin vender.',
+                salesCycleId: cycleId,
+                variantName: row.variantName,
+              })),
+            );
+            writtenOff = pending.reduce((sum, row) => sum + row.disponible, 0);
+          }
+        }
+
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        await audit.record({
+          action: closed ? 'sales_cycle.closed' : 'sales_cycle.reopened',
+          actor: auditActor(context),
+          after: { status, writtenOffUnits: writtenOff },
+          before: { status: current.status },
+          correlationId: context.correlationId,
+          entityId: cycleId,
+          entityType: 'sales_cycle',
+          metadata: { alias: current.alias },
+          requestId: context.requestId,
+          source: context.source,
+        });
+
+        return { alias: current.alias, id: cycleId, status, writtenOffUnits: writtenOff };
+      })
+      .catch(translateDatabaseConflict);
+  }
+
   public async publishMenu(menuId: string, context: OperationsContext) {
     await this.database.transaction(async (transaction) => {
       const [current] = await transaction

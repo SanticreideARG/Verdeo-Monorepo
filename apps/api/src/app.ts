@@ -129,6 +129,8 @@ import {
   MessagingMessageListResponseSchema,
   MessagingSendRequestSchema,
   MeResponseSchema,
+  CycleClosedRequestSchema,
+  CycleClosedResponseSchema,
   OrderCreateRequestSchema,
   OrderPaidRequestSchema,
   OrderReadyBatchRequestSchema,
@@ -463,6 +465,7 @@ interface OperationsEngine {
     paid: boolean,
     context: OperationsContext & { actorUserId: string },
   ): Promise<unknown>;
+  setCycleClosed(cycleId: string, closed: boolean, context: OperationsContext): Promise<unknown>;
   createPublicOrder(input: PublicOrderCreateRequest, context: OperationsContext): Promise<unknown>;
   trackPublicOrder(publicNumber: string, contact: string): Promise<unknown>;
   confirmAddressGeocoding(
@@ -4536,6 +4539,27 @@ export function createApp(options: CreateAppOptions) {
    * obligaba a congelar uno antes — un acto con significado propio (el parcial del martes, el final
    * del miércoles) que no se debería tener que hacer sólo para mandar un mensaje.
    */
+  /**
+   * Cerrar o reabrir un período.
+   *
+   * Mismo permiso que publicar una semana: quien decide qué se vende es quien decide cuándo esa
+   * semana terminó.
+   */
+  app.post('/api/v1/production/:cycleId/closed', async (context) => {
+    if (!context.get('session').permissions.includes('production.generate'))
+      return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    const input = CycleClosedRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success) return badRequest(context, 'Revisá el período.');
+
+    const cycle = await requireOperations().setCycleClosed(
+      params.data.cycleId,
+      input.data.closed,
+      operationsContext(context),
+    );
+    return context.json(CycleClosedResponseSchema.parse(contractValue(cycle)));
+  });
+
   app.get('/api/v1/production/:cycleId/export', async (context) => {
     if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
     const params = CycleIdParamSchema.safeParse(context.req.param());
