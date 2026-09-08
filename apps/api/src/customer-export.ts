@@ -112,7 +112,7 @@ export const DEFAULT_CUSTOMER_EXPORT_COLUMNS = [
 export function buildCustomersExcel(
   rows: readonly CustomerExportRow[],
   columnKeys: readonly string[],
-): Uint8Array {
+): ArrayBuffer {
   const selected = CUSTOMER_EXPORT_COLUMNS.filter((column) => columnKeys.includes(column.key));
   // An empty or fully-unknown selection would produce a sheet with no columns at all, which reads
   // as a broken export rather than an empty one — fall back to the sensible default instead.
@@ -135,5 +135,8 @@ export function buildCustomersExcel(
   });
   sheet['!cols'] = columns.map((column) => ({ wch: Math.max(12, column.label.length + 2) }));
   XLSX.utils.book_append_sheet(workbook, sheet, 'Clientes');
-  return XLSX.write(workbook, { type: 'array', bookType: 'xlsx' }) as Uint8Array;
+  // `type: 'array'` devuelve un ArrayBuffer, no un Uint8Array. Declararlo como Uint8Array era una
+  // mentira que el compilador aceptaba y que después hacía leer `.buffer` —undefined en un
+  // ArrayBuffer—, así que la respuesta salía vacía: un .xlsx de cero bytes, sin ningún error.
+  return XLSX.write(workbook, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
 }

@@ -4256,7 +4256,15 @@ export class PostgresOperationsService {
           requestId: context.requestId,
           source: context.source,
         });
-        return row;
+        /*
+         * La misma forma que devuelve la lectura.
+         *
+         * `fields` se guarda como texto separado por comas y el contrato espera un array. Devolver
+         * la fila cruda hacía fallar el parseo de la respuesta *después* de haber guardado: el
+         * cambio quedaba aplicado y la pantalla mostraba "Ocurrió un error inesperado", así que
+         * parecía no haber guardado nada.
+         */
+        return { ...row, fields: parseLabelFields(row.fields) };
       })
       .catch(translateDatabaseConflict);
   }

@@ -80,6 +80,22 @@ describe('buildLabelsPrintHtml', () => {
     expect(html).toContain('https://ejemplo.test/fondo.png');
   });
 
+  it('declara el fondo de forma que el navegador lo pueda leer', () => {
+    const html = render({ backgroundImageUrl: 'https://ejemplo.test/fondo.png' });
+
+    /*
+     * Estaba inline como `style="background-image: url("https://…")"`: las comillas dobles de la
+     * URL cerraban el atributo y el fondo no se aplicaba nunca. La URL igual aparecía en el HTML,
+     * así que el test anterior —que sólo la buscaba— pasaba con el fondo roto.
+     */
+    expect(html).toContain("url('https://ejemplo.test/fondo.png')");
+    expect(html).not.toContain('style="background-image');
+  });
+
+  it('no declara ningún fondo cuando no hay imagen', () => {
+    expect(render({ backgroundImageUrl: null })).not.toContain('background-image');
+  });
+
   it('no reimprime el recuadro al imprimir cuando está apagado', () => {
     const html = render({ showBorders: false });
 

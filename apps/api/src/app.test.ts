@@ -1507,6 +1507,18 @@ describe('API foundation', () => {
       );
       expect(xlsx.status).toBe(200);
       expect(xlsx.headers.get('content-type')).toContain('spreadsheetml');
+      /*
+       * El cuerpo, no sólo el encabezado.
+       *
+       * `XLSX.write` con `type: 'array'` devuelve un ArrayBuffer, pero estaba declarado como
+       * Uint8Array y el endpoint leía `.buffer` —undefined— así que mandaba un archivo de cero
+       * bytes con status 200 y el content-type correcto. Este test miraba justamente lo que sí
+       * estaba bien.
+       */
+      const bytes = await xlsx.arrayBuffer();
+      expect(bytes.byteLength).toBeGreaterThan(0);
+      // "PK": todo .xlsx es un zip, así que si no arranca así no es un archivo válido.
+      expect(new Uint8Array(bytes).slice(0, 2)).toEqual(new Uint8Array([0x50, 0x4b]));
 
       const whatsapp = await app.request(
         `/api/v1/production/${CYCLE}/snapshots/export?kind=partial&format=whatsapp`,

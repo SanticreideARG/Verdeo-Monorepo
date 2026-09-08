@@ -51,7 +51,7 @@ export function productionSnapshotFilenameBase(snapshot: ProductionSnapshot): st
   return `produccion-${alias}-${snapshot.kind}`;
 }
 
-export function buildProductionExcel(report: ProductionReport): Uint8Array {
+export function buildProductionExcel(report: ProductionReport): ArrayBuffer {
   const { actuals, base, delta } = report;
   const actualByKey = new Map(
     actuals.map((actual) => [
@@ -117,7 +117,10 @@ export function buildProductionExcel(report: ProductionReport): Uint8Array {
     XLSX.utils.book_append_sheet(workbook, customSheet, 'Intuitivos');
   }
 
-  return XLSX.write(workbook, { type: 'array', bookType: 'xlsx' }) as Uint8Array;
+  // `type: 'array'` devuelve un ArrayBuffer, no un Uint8Array. Declararlo como Uint8Array era una
+  // mentira que el compilador aceptaba y que después hacía leer `.buffer` —undefined en un
+  // ArrayBuffer—, así que la respuesta salía vacía: un .xlsx de cero bytes, sin ningún error.
+  return XLSX.write(workbook, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
 }
 
 export function buildProductionWhatsAppText(report: ProductionReport): string {

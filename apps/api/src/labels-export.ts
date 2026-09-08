@@ -101,8 +101,22 @@ export function buildLabelsPrintHtml(
   title: string,
 ): string {
   const { columns, rows } = labelGrid(settings.labelsPerPage);
-  const backgroundStyle = settings.backgroundImageUrl
-    ? `background-image: url(${JSON.stringify(settings.backgroundImageUrl)}); background-size: cover; background-position: center;`
+  /*
+   * El fondo va en la hoja de estilos, no en un atributo `style` de cada etiqueta.
+   *
+   * Estaba inline con `JSON.stringify(url)`, que envuelve la URL en comillas dobles — las mismas que
+   * delimitan el atributo. El navegador cortaba el atributo ahí y el fondo no se aplicaba nunca:
+   * la URL aparecía en el HTML, así que revisar el HTML no lo delataba.
+   *
+   * Acá va entre comillas simples y con las comillas simples de la URL escapadas, que es lo que CSS
+   * necesita. Además no se repite una vez por etiqueta.
+   */
+  const backgroundRule = settings.backgroundImageUrl
+    ? `.label {
+    background-image: url('${settings.backgroundImageUrl.replace(/'/g, "\\'")}');
+    background-size: cover;
+    background-position: center;
+  }`
     : '';
   const scale = settings.fontScale / 100;
   const fontStack = FONT_STACKS[settings.fontFamily] ?? FONT_STACKS.system;
@@ -121,7 +135,7 @@ export function buildLabelsPrintHtml(
           return value === null ? '' : `<p class="${spec.weight}">${escape(value)}</p>`;
         })
         .join('');
-      return `<div class="label" style="${backgroundStyle}">
+      return `<div class="label">
         <p class="customer">${escape(label.customerDisplayName)}</p>
         ${extras}
       </div>`;
@@ -165,6 +179,7 @@ export function buildLabelsPrintHtml(
     margin: 0;
     text-transform: ${settings.uppercaseName ? 'uppercase' : 'none'};
   }
+  ${backgroundRule}
   .destacado { font-size: ${(15 * scale).toFixed(1)}px; font-weight: 600; margin: 1mm 0 0; }
   .menor { font-size: ${(10 * scale).toFixed(1)}px; color: #555; margin: 1mm 0 0; }
   .label:nth-child(${settings.labelsPerPage}n) { break-after: page; }

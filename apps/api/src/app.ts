@@ -3012,7 +3012,7 @@ export function createApp(options: CreateAppOptions) {
       'content-type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
-    return context.body(workbook as unknown as ArrayBuffer);
+    return context.body(workbook);
   });
 
   app.post('/api/v1/customers', async (context) => {
@@ -4519,10 +4519,7 @@ export function createApp(options: CreateAppOptions) {
         'content-type',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
-      return context.body(
-        buildProductionExcel(reportFromSnapshot(snapshot)).buffer as ArrayBuffer,
-        200,
-      );
+      return context.body(buildProductionExcel(reportFromSnapshot(snapshot)), 200);
     }
     if (format === 'whatsapp') {
       context.header('content-type', 'text/plain; charset=utf-8');
@@ -4571,7 +4568,7 @@ export function createApp(options: CreateAppOptions) {
         'content-type',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
-      return context.body(buildProductionExcel(report).buffer as ArrayBuffer, 200);
+      return context.body(buildProductionExcel(report), 200);
     }
     if (format === 'whatsapp') {
       context.header('content-type', 'text/plain; charset=utf-8');
