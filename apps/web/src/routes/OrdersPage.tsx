@@ -1,17 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import { ActionButton } from '../components/ActionButton.js';
 import { ColumnPicker } from '../components/ColumnPicker.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { DataTable } from '../components/DataTable.js';
+import { ErrorNotice } from '../components/ErrorNotice.js';
 import { apiRequest } from '../lib/api.js';
-import {
-  errorMessage,
-  orderStatusLabel,
-  type OrderSummary,
-  type WeeklyMenu,
-} from '../lib/operations.js';
+import { describeResponse, type AppError } from '../lib/errors.js';
+import { orderStatusLabel, type OrderSummary, type WeeklyMenu } from '../lib/operations.js';
 import { maskSurname, readMaskSurnames, writeMaskSurnames } from '../lib/maskName.js';
 import {
   buildOrderColumns,
@@ -44,7 +42,12 @@ export function OrdersPage() {
   const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState('');
+  /*
+   * El error de la pantalla, con sus partes: qué pasó, qué hacer y si tiene sentido reintentar.
+   * Antes era una cadena en el mismo renglón donde también aparecían las confirmaciones, así que
+   * las dos cosas se veían igual y se aprendía a ignorarlo.
+   */
+  const [error, setError] = useState<AppError | null>(null);
   /*
    * Sobre qué semana se está mirando.
    *
@@ -114,7 +117,7 @@ export function OrdersPage() {
       if (cursor) params.set('cursor', cursor);
       const response = await apiRequest(`/api/v1/orders?${params.toString()}`);
       if (!response.ok) {
-        setMessage(await errorMessage(response));
+        setError(await describeResponse(response));
         return;
       }
       const body = (await response.json()) as { items: OrderSummary[]; nextCursor: string | null };
@@ -146,7 +149,7 @@ export function OrdersPage() {
       method: 'POST',
     });
     if (!response.ok) {
-      setMessage(await errorMessage(response));
+      setError(await describeResponse(response));
       return;
     }
     const updated = (await response.json()) as OrderSummary;
@@ -164,7 +167,7 @@ export function OrdersPage() {
    * reenvía todavía más fácil.
    */
   async function exportOrders() {
-    setMessage('');
+    setError(null);
     const params = new URLSearchParams();
     if (status) params.set('status', status);
     if (search.trim()) params.set('search', search.trim());
@@ -174,7 +177,7 @@ export function OrdersPage() {
     if (maskSurnames) params.set('maskSurnames', '1');
     const response = await apiRequest(`/api/v1/orders/export?${params.toString()}`);
     if (!response.ok) {
-      setMessage(await errorMessage(response));
+      setError(await describeResponse(response));
       return;
     }
     const blob = await response.blob();
@@ -250,20 +253,20 @@ export function OrdersPage() {
               }}
               visible={visibleColumns}
             />
-            <button
+            <ActionButton
               className="button button-secondary"
-              onClick={() => void exportOrders()}
-              type="button"
+              onClick={exportOrders}
+              pendingLabel="Preparando…"
             >
               Exportar Excel
-            </button>
+            </ActionButton>
           </div>
         </header>
 
-        {message ? (
-          <p className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
-            {message}
-          </p>
+        {error ? (
+          <div className="mt-5">
+            <ErrorNotice error={error} onRetry={() => void load()} />
+          </div>
         ) : null}
 
         {loading ? (

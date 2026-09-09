@@ -5689,3 +5689,40 @@ a.order-card-phone:focus-visible {
 .link-button:hover {
   color: var(--color-forest, #174c3c);
 }
+
+/*
+ * El error de una pantalla.
+ *
+ * Distinto de una confirmación a propósito: compartían el mismo renglón gris —"Pedido actualizado" y
+ * "No pudimos guardar" con el mismo peso y en el mismo lugar— y eso enseña a ignorarlo, que es lo
+ * peor que le puede pasar a un mensaje de error. La barra al costado es la señal; el fondo se
+ * mantiene tenue para que el texto se lea sin esfuerzo.
+ */
+.error-notice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.1rem;
+  border-radius: 14px;
+  border-left: 3px solid #b42318;
+  background: color-mix(in srgb, #b42318 7%, transparent);
+}
+.error-notice-message {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--db-ink, var(--color-ink));
+}
+.error-notice-hint {
+  margin: 0.15rem 0 0;
+  font-size: 0.88rem;
+  color: var(--db-muted, var(--color-ink-muted));
+}
+.error-notice-id {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--db-muted, var(--color-ink-muted));
+}

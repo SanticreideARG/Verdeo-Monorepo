@@ -190,14 +190,16 @@ Del relevamiento del 9 de septiembre de 2026 (19 hallazgos). Hechos: fechas unif
 cliente traducidos, teléfonos formateados en la ficha, tono de fila por estado, hover de fila, la
 semana en la ficha del pedido, y el vacío de "Ver pedidos" con botón para limpiar filtros.
 
-- [ ] **Los errores dicen qué hacer.** Hoy se muestra el mensaje del servidor tal cual. Falta separar
-      los tres casos que hoy se ven iguales —sin permiso, sin conexión, rechazado por una regla— y
-      dar el botón que resuelve cuando lo hay.
-- [ ] **Un solo patrón de confirmación.** Conviven modal, dos toques y nada; el más liviano quedó en
-      las acciones más difíciles de deshacer. Criterio: si afecta a más de un pedido, o sale del
-      sistema, se pregunta, y el texto dice a cuántas cosas.
-- [ ] **`<ActionButton>`**: deshabilitar y mostrar el gerundio mientras corre. El patrón ya existe en
-      dos pantallas; falta que sea el único.
+- [x] **Los errores dicen qué hacer** (`lib/errors.ts`): separa sin permiso, sin conexión, sesión
+      vencida, rechazo por una regla y fallo del servidor, y cada uno trae su salida. `errorMessage`
+      pasa por ahí, así que las cuarenta pantallas que muestran una línea mejoraron sin tocarlas;
+      "Ver pedidos" usa además `ErrorNotice`, con el botón de reintentar sólo donde sirve.
+- [x] **Un solo patrón de confirmación** (`ConfirmDialog`): marcar listo un lote y publicar una
+      ruta ahora preguntan, y descartar una propuesta dejó los dos toques. El texto dice qué va a
+      pasar y a cuántas cosas. Falta pasar a él la cancelación de pedidos y el borrado de clientes,
+      que ya usan modales propios y funcionan.
+- [x] **`<ActionButton>`**: puesto en exportar y en generar etiquetas, que son las acciones que más
+      tardan. Falta llevarlo al resto de los botones que guardan.
 - [ ] **`<EmptyState>`** con título, explicación y acción, para que ninguna pantalla escriba el suyo.
 - [ ] **Totales al pie** de la tabla de pedidos, respetando el filtro puesto.
 - [ ] **Normalizar los nombres de menú al guardar**: la mayúscula sostenida se lee peor y ya partió

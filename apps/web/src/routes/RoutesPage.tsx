@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
+import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
@@ -89,8 +90,17 @@ export function RoutesPage() {
   const [selectedRoute, setSelectedRoute] = useState<RouteDetail | null>(null);
   const [message, setMessage] = useState('');
   const [formOpen, setFormOpen] = useState(false);
-  // La propuesta que se está por descartar: se pregunta antes, aunque no sea grave.
-  const [confirmDiscard, setConfirmDiscard] = useState<string | null>(null);
+  /*
+   * Qué se está por confirmar: descartar una propuesta, o publicarla.
+   *
+   * Publicar era la acción sin confirmación de esta pantalla, y es la que menos vuelve: manda la
+   * hoja al teléfono del repartidor. Descartar usaba dos toques del mismo botón, que es un cuarto
+   * patrón para lo mismo.
+   */
+  const [pending, setPending] = useState<{
+    kind: 'descartar' | 'publicar';
+    routeId: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const canRead = profile?.permissions.includes('routes.read') ?? false;
@@ -276,7 +286,6 @@ export function RoutesPage() {
       return;
     }
     if (selectedRoute?.id === routeId) setSelectedRoute(null);
-    setConfirmDiscard(null);
     await loadRoutes();
     setMessage('Propuesta descartada.');
   }
@@ -506,7 +515,9 @@ export function RoutesPage() {
                       {canPublish && selectedRoute.status === 'draft' ? (
                         <button
                           className="button button-primary"
-                          onClick={() => void publish(selectedRoute.id)}
+                          onClick={() =>
+                            setPending({ kind: 'publicar', routeId: selectedRoute.id })
+                          }
                           type="button"
                         >
                           Publicar
@@ -515,17 +526,12 @@ export function RoutesPage() {
                       {canManage && selectedRoute.status === 'draft' ? (
                         <button
                           className="button button-danger"
-                          /* Dos toques en vez de un diálogo: descartar una propuesta vacía no
-                             merece interrumpir la pantalla, pero sí merece no pasar por accidente. */
-                          onClick={() => {
-                            if (confirmDiscard === selectedRoute.id) void discard(selectedRoute.id);
-                            else setConfirmDiscard(selectedRoute.id);
-                          }}
+                          onClick={() =>
+                            setPending({ kind: 'descartar', routeId: selectedRoute.id })
+                          }
                           type="button"
                         >
-                          {confirmDiscard === selectedRoute.id
-                            ? '¿Seguro? Tocá de nuevo'
-                            : 'Descartar propuesta'}
+                          Descartar propuesta
                         </button>
                       ) : null}
                     </div>
@@ -596,6 +602,26 @@ export function RoutesPage() {
           </div>
         )}
       </section>
+
+      {pending ? (
+        <ConfirmDialog
+          confirmLabel={pending.kind === 'publicar' ? 'Publicar la ruta' : 'Descartar'}
+          detail={
+            pending.kind === 'publicar'
+              ? `La hoja pasa a la aplicación de reparto y el repartidor la ve en su teléfono. ${String(selectedRoute?.stops.length ?? 0)} paradas.`
+              : 'La propuesta se borra y sus pedidos vuelven a estar disponibles para otra hoja. No afecta a ningún pedido.'
+          }
+          onCancel={() => setPending(null)}
+          onConfirm={async () => {
+            const target = pending;
+            setPending(null);
+            if (target.kind === 'publicar') await publish(target.routeId);
+            else await discard(target.routeId);
+          }}
+          tone={pending.kind === 'descartar' ? 'destructivo' : 'normal'}
+          title={pending.kind === 'publicar' ? '¿Publicar esta ruta?' : '¿Descartar la propuesta?'}
+        />
+      ) : null}
     </DashboardShell>
   );
 }

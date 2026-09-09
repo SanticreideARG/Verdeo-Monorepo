@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
+import { ActionButton } from '../components/ActionButton.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { CancelOrderDialog } from '../components/CancelOrderDialog.js';
 import { DeliveryMap } from '../components/DeliveryMap.js';
@@ -316,13 +317,13 @@ export function OrderDetailPage() {
               {editing ? 'Cerrar edición' : 'Editar pedido'}
             </button>
           ) : null}
-          <button
+          <ActionButton
             className="button button-secondary"
-            onClick={() => void printLabels(order.id).then((error) => error && setMessage(error))}
-            type="button"
+            onClick={() => printLabels(order.id).then((error) => error && setMessage(error))}
+            pendingLabel="Generando…"
           >
             Generar etiquetas
-          </button>
+          </ActionButton>
         </div>
 
         {editing && canEdit ? (

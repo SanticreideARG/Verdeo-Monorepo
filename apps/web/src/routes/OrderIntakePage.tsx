@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 
+import { ActionButton } from '../components/ActionButton.js';
 import { AfterSaveDialog } from '../components/AfterSaveDialog.js';
 import { CancelOrderDialog } from '../components/CancelOrderDialog.js';
 import { ColumnPicker } from '../components/ColumnPicker.js';
+import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { DataTable } from '../components/DataTable.js';
@@ -110,6 +112,16 @@ export function OrderIntakePage() {
   // La zona cuyo lote se está marcando: deshabilita todos los botones mientras corre, para que dos
   // clics seguidos no manden la misma tanda dos veces.
   const [markingZone, setMarkingZone] = useState<string | null>(null);
+  /*
+   * El lote que se está por marcar listo.
+   *
+   * Marcar listos veinte pedidos de una es la acción más difícil de deshacer de esta pantalla —hay
+   * que revertir uno por uno— y era la única que no preguntaba nada.
+   */
+  const [confirmingBatch, setConfirmingBatch] = useState<{
+    orders: OrderSummary[];
+    zone: string;
+  } | null>(null);
   /*
    * Sobre qué semana trabaja la cola.
    *
@@ -558,13 +570,13 @@ export function OrderIntakePage() {
               }}
               visible={visibleColumns}
             />
-            <button
+            <ActionButton
               className="button button-secondary"
-              onClick={() => void exportPeriod()}
-              type="button"
+              onClick={exportPeriod}
+              pendingLabel="Preparando…"
             >
               Exportar Excel
-            </button>
+            </ActionButton>
             {permissions.includes('orders.create') ? (
               <button
                 className="button button-primary"
@@ -863,7 +875,7 @@ export function OrderIntakePage() {
                   className="button button-secondary"
                   disabled={markingZone !== null}
                   key={batch.zone}
-                  onClick={() => void markZoneReady(batch.zone, batch.orders)}
+                  onClick={() => setConfirmingBatch(batch)}
                   type="button"
                 >
                   {markingZone === batch.zone
@@ -893,6 +905,22 @@ export function OrderIntakePage() {
           />
         </div>
       </section>
+
+      {confirmingBatch ? (
+        <ConfirmDialog
+          confirmLabel={`Marcar listos ${String(confirmingBatch.orders.length)}`}
+          /* El texto dice qué va a pasar y a cuántas cosas: un "¿Estás seguro?" no le da a nadie
+             con qué decidir. */
+          detail={`Vas a marcar listos para entrega ${String(confirmingBatch.orders.length)} pedidos de ${confirmingBatch.zone}. Se revierte de a uno, así que conviene mirar la lista antes.`}
+          onCancel={() => setConfirmingBatch(null)}
+          onConfirm={async () => {
+            const batch = confirmingBatch;
+            setConfirmingBatch(null);
+            await markZoneReady(batch.zone, batch.orders);
+          }}
+          title={`¿Marcar listos los pedidos de ${confirmingBatch.zone}?`}
+        />
+      ) : null}
 
       {cancelling ? (
         <CancelOrderDialog

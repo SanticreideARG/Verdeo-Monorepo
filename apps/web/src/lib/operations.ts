@@ -1,3 +1,5 @@
+import { describeResponse, errorText } from './errors.js';
+
 export interface AIProviderConfig {
   adapterType: string;
   apiKeyMask: string | null;
@@ -365,9 +367,16 @@ export interface StatsOverview {
   };
 }
 
+/**
+ * El error de una respuesta, como una sola línea lista para mostrar.
+ *
+ * Devolvía el `message` de la API tal cual, que dejaba "Forbidden" y "Failed to fetch" en la
+ * pantalla y hacía que tres situaciones muy distintas —sin permiso, sin conexión, rechazado por una
+ * regla— se vieran iguales. Ahora pasa por `describeResponse`, así que además de qué pasó dice qué
+ * hacer. Las pantallas que quieran el error separado en partes usan `describeResponse` directo.
+ */
 export async function errorMessage(response: Response): Promise<string> {
-  const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
-  return body?.error?.message ?? 'No pudimos completar la operación.';
+  return errorText(await describeResponse(response));
 }
 
 export function formatMoney(amountMinor: number, currency: string): string {
