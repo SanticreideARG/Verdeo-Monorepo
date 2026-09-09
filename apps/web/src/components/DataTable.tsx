@@ -16,6 +16,17 @@ export interface DataColumn<T> {
    * "$ 900" como texto.
    */
   sortValue?: (row: T) => number | string;
+  /**
+   * Qué dice esta columna al pie, sumando las filas que están a la vista.
+   *
+   * Sólo unas pocas columnas tienen un total con sentido —plata, unidades—, y las que no lo tienen
+   * dejan la celda vacía. Sumar todo lo sumable sería peor: una columna de números de pedido no
+   * suma nada, y un total ahí es ruido que hay que aprender a ignorar.
+   *
+   * Recibe las filas cargadas, no el conjunto entero: es el total de lo que se está mirando, que es
+   * para lo que sirve un filtro.
+   */
+  total?: (rows: readonly T[]) => ReactNode;
 }
 
 type SortState = { dir: 'asc' | 'desc'; key: string };
@@ -180,6 +191,24 @@ export function DataTable<T>({
             </tr>
           ))}
         </tbody>
+        {/*
+         * Los totales, al pie y sólo si alguna columna sabe calcularlos.
+         *
+         * "Cuántos pedidos hay" ya lo decía la pantalla; "cuánta plata suman" había que exportar
+         * la planilla para saberlo. Y es el total de lo filtrado, no del histórico: es la pregunta
+         * que uno se hace justo después de poner un filtro.
+         */}
+        {columns.some((column) => column.total) ? (
+          <tfoot>
+            <tr>
+              {columns.map((column) => (
+                <td className={column.emphasis ? 'is-emphasis' : undefined} key={column.key}>
+                  {column.total?.(sorted)}
+                </td>
+              ))}
+            </tr>
+          </tfoot>
+        ) : null}
       </table>
     </div>
   );

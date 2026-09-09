@@ -103,6 +103,9 @@ export function buildOrderColumns(options: { maskSurnames?: boolean } = {}): Ord
       // Se ordena por lo que se muestra: con los apellidos tapados, ordenar por el nombre completo
       // daría un orden que en pantalla no se explica.
       sortValue: (order) => displayName(order),
+      // Ancla la fila de totales: sin un rótulo a la izquierda, una fila con dos números sueltos
+      // al pie no se sabe de qué es.
+      total: (rows) => `${String(rows.length)} ${rows.length === 1 ? 'pedido' : 'pedidos'}`,
     },
     {
       emphasis: true,
@@ -137,6 +140,14 @@ export function buildOrderColumns(options: { maskSurnames?: boolean } = {}): Ord
           .map((item) => `${item.productName} ${item.variantName} × ${String(item.quantityUnits)}`)
           .join(', '),
       sortValue: orderKind,
+      // Unidades y no pedidos: es lo que cocina tiene que producir, y no coinciden.
+      total: (rows) => {
+        const units = rows.reduce(
+          (all, order) => all + order.items.reduce((sum, item) => sum + item.quantityUnits, 0),
+          0,
+        );
+        return `${String(units)} u.`;
+      },
     },
     {
       key: 'estado',
@@ -150,6 +161,15 @@ export function buildOrderColumns(options: { maskSurnames?: boolean } = {}): Ord
       label: 'Total',
       render: (order) => formatMoney(order.totalMinor, order.currency),
       sortValue: (order) => order.totalMinor,
+      /*
+       * La plata de lo que se está mirando. Los cancelados no suman: no se cobran, y meterlos daría
+       * un número que no coincide con ninguna otra pantalla.
+       */
+      total: (rows) => {
+        const vigentes = rows.filter((order) => order.status !== 'CANCELLED');
+        const sum = vigentes.reduce((all, order) => all + order.totalMinor, 0);
+        return formatMoney(sum, vigentes[0]?.currency ?? 'ARS');
+      },
     },
     {
       key: 'telefono',
@@ -199,6 +219,9 @@ export function buildOrderColumns(options: { maskSurnames?: boolean } = {}): Ord
        */
       render: (order) => (order.paidAt ? `Sí · ${formatDay(order.paidAt)}` : 'No'),
       sortValue: (order) => (order.paidAt ? 1 : 0),
+      // "18 de 24" contesta de un vistazo lo que la columna sólo contesta contando a mano.
+      total: (rows) =>
+        `${String(rows.filter((order) => order.paidAt).length)} de ${String(rows.length)}`,
     },
     {
       key: 'origen',

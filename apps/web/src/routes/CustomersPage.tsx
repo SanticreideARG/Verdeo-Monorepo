@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { AddressMap } from '../components/AddressMap.js';
 import { AfterSaveDialog } from '../components/AfterSaveDialog.js';
+import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { CustomerExportDialog } from '../components/CustomerExportDialog.js';
 import { MergeCustomersDialog } from '../components/MergeCustomersDialog.js';
 import { DraftNotice } from '../components/DraftNotice.js';
@@ -1194,41 +1195,20 @@ export function CustomersPage() {
         ) : null}
 
         {confirmDelete && detail ? (
-          <div
-            aria-label="Eliminar cliente"
-            aria-modal="true"
-            className="modal-backdrop"
-            role="dialog"
-          >
-            <div className="modal-panel">
-              <h2 className="text-xl font-semibold text-forest">
-                ¿Eliminar a {detail.displayName}?
-              </h2>
-              {/* Se dice de antemano qué va a pasar: no es lo mismo borrar un duplicado que sacar
-                  de la lista a alguien que compró treinta veces. */}
-              <p className="mt-1 text-sm text-ink-muted">
-                {detail.orders.length > 0
-                  ? `Tiene ${String(detail.orders.length)} pedidos, así que se archiva en vez de borrarse: sale de las listas y el historial de venta se conserva. Se puede reactivar cambiándole el estado.`
-                  : 'No tiene pedidos, así que se borra de verdad, junto con sus contactos y domicilios. Esto no se puede deshacer.'}
-              </p>
-              <div className="form-actions mt-5">
-                <button
-                  className="button button-danger"
-                  onClick={() => void deleteCustomer()}
-                  type="button"
-                >
-                  {detail.orders.length > 0 ? 'Archivar' : 'Eliminar'}
-                </button>
-                <button
-                  className="button button-secondary"
-                  onClick={() => setConfirmDelete(false)}
-                  type="button"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          </div>
+          <ConfirmDialog
+            confirmLabel={detail.orders.length > 0 ? 'Archivar' : 'Eliminar'}
+            /* Se dice de antemano qué va a pasar: no es lo mismo borrar un duplicado que sacar de
+               la lista a alguien que compró treinta veces. */
+            detail={
+              detail.orders.length > 0
+                ? `Tiene ${String(detail.orders.length)} pedidos, así que se archiva en vez de borrarse: sale de las listas y el historial de venta se conserva. Se puede reactivar cambiándole el estado.`
+                : 'No tiene pedidos, así que se borra de verdad, junto con sus contactos y domicilios. Esto no se puede deshacer.'
+            }
+            onCancel={() => setConfirmDelete(false)}
+            onConfirm={deleteCustomer}
+            tone="destructivo"
+            title={`¿Eliminar a ${detail.displayName}?`}
+          />
         ) : null}
 
         {showMerge ? (

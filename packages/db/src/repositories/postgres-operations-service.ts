@@ -34,6 +34,7 @@ import {
   calculateLineTotal,
   calculateOrderTotal,
   mergeByLooseName,
+  normalizeMenuName,
   resolveOrderComposition,
   type KitchenSourceLine,
   type OrderExportRow,
@@ -2061,16 +2062,23 @@ export class PostgresOperationsService {
         );
 
       const familyCode = catalogCode(offering.familyName);
+      /*
+       * El nombre se guarda con la caja corregida cuando viene enteramente en mayúsculas. El código
+       * ya era insensible a la caja, así que "MENÚ REAL" y "Menú Real" siempre fueron la misma
+       * familia; lo que cambiaba era el nombre para mostrar, y con él el snapshot que queda en cada
+       * ítem vendido — que es lo que partió "Demanda por variedad" en dos porciones.
+       */
+      const familyName = normalizeMenuName(offering.familyName);
       const [family] = await transaction
         .insert(productFamilies)
         .values({
           code: familyCode,
-          displayName: offering.familyName,
+          displayName: familyName,
           kind: offering.composable ? 'COMPOSABLE' : 'FIXED',
         })
         .onConflictDoUpdate({
           set: {
-            displayName: offering.familyName,
+            displayName: familyName,
             kind: offering.composable ? 'COMPOSABLE' : 'FIXED',
             updatedAt: new Date(),
           },

@@ -5726,3 +5726,18 @@ a.order-card-phone:focus-visible {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   color: var(--db-muted, var(--color-ink-muted));
 }
+
+/*
+ * La fila de totales.
+ *
+ * Separada del cuerpo por una línea más marcada: es un renglón que no es un pedido, y con sesenta
+ * filas arriba tiene que leerse como el cierre y no como una fila más.
+ */
+.data-table tfoot td {
+  padding: 0.6rem 0.6rem 0.2rem 0;
+  border-top: 2px solid var(--db-border-soft, var(--border-hairline));
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--db-ink, var(--color-ink));
+  white-space: nowrap;
+}
