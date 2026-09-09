@@ -607,9 +607,12 @@ interface OperationsEngine {
     entries: ProductionReportRequest['entries'],
     context: OperationsContext,
   ): Promise<unknown>;
-  setIntuitivoEnabled(
+  setMenuCatalogSettings(
     operatingSiteId: string,
-    intuitivoEnabled: boolean,
+    changes: {
+      dietaryInstructionsEnabled?: boolean | undefined;
+      intuitivoEnabled?: boolean | undefined;
+    },
     context: OperationsContext,
   ): Promise<unknown>;
   setLabelSettings(input: LabelSettingsUpdateRequest, context: OperationsContext): Promise<unknown>;
@@ -1471,6 +1474,38 @@ export function createApp(options: CreateAppOptions) {
         .filter((method) => method.active)
         .map(({ code, displayName, sortOrder }) => ({ code, displayName, sortOrder })),
     });
+  });
+
+  /*
+   * Qué campos pide el formulario de pedidos, para la ciudad que se esté usando.
+   *
+   * Público porque el formulario público no tiene sesión, y sin permiso porque no hay nada que
+   * proteger: dice si se pregunta o no por indicaciones alimentarias. Lo consultan también las
+   * pantallas internas, que no siempre tienen `production.read` para leer la pantalla de Ajustes.
+   *
+   * Sin ciudad —o con una que no existe— responde que no se piden. Es lo mismo que hace el ajuste
+   * por defecto, y ante la duda es preferible no pedir un dato de más.
+   */
+  app.get('/api/v1/public/order-form-settings', async (context) => {
+    const slug = context.req.query('site')?.trim();
+    const siteId = context.req.query('siteId')?.trim();
+    const sites = (await requireGeography().listSites()) as readonly {
+      active: boolean;
+      id: string;
+      slug: string;
+    }[];
+    const site = sites.find(
+      (candidate) =>
+        candidate.active && (siteId ? candidate.id === siteId : candidate.slug === slug),
+    );
+    const settings = (await requireOperations().listMenuCatalogSettings()) as readonly {
+      dietaryInstructionsEnabled: boolean;
+      operatingSiteId: string;
+    }[];
+    const found = site
+      ? settings.find((row) => row.operatingSiteId === site.id)?.dietaryInstructionsEnabled
+      : undefined;
+    return context.json({ dietaryInstructionsEnabled: found ?? false });
   });
 
   app.get('/api/v1/public/pages/:slug', async (context) => {
@@ -4749,9 +4784,9 @@ export function createApp(options: CreateAppOptions) {
         (!params.success ? params.error.issues : undefined) ??
           (!input.success ? input.error.issues : undefined),
       );
-    await requireOperations().setIntuitivoEnabled(
+    await requireOperations().setMenuCatalogSettings(
       params.data.id,
-      input.data.intuitivoEnabled,
+      input.data,
       operationsContext(context),
     );
     const items = await requireOperations().listMenuCatalogSettings();

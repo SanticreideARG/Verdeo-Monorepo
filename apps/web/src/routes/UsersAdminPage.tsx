@@ -392,6 +392,9 @@ export function UsersAdminPage() {
     return groups;
   }, new Map());
 
+  /* Cuántas excepciones tiene puestas este usuario, para poder decirlo con la lista cerrada. */
+  const overrideCount = [...overrideEffects.values()].filter((effect) => effect !== 'none').length;
+
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
       <DeskWorkNotice can="podés consultar quién es quién; repartir permisos conviene con la grilla entera a la vista." />
@@ -656,52 +659,75 @@ export function UsersAdminPage() {
                   </article>
 
                   <article className="operation-card">
-                    <h3 className="font-semibold text-forest">Excepciones de permisos</h3>
-                    <div className="mt-3 grid gap-4 max-h-96 overflow-y-auto">
-                      {[...groupedCatalog.entries()].map(([group, entries]) => (
-                        <div key={group}>
-                          <p className="text-xs font-semibold uppercase text-ink-muted">{group}</p>
-                          {entries.map((entry) => (
-                            <div
-                              className="mt-1 flex flex-wrap items-center justify-between gap-3 text-sm"
-                              key={entry.id}
-                            >
-                              <span className="min-w-0 flex-1 break-words">
-                                {entry.description}
-                              </span>
-                              <select
-                                className="shrink-0"
-                                disabled={!canOverride}
-                                onChange={(event) =>
-                                  setOverrideEffects((current) => {
-                                    const next = new Map(current);
-                                    next.set(
-                                      entry.id,
-                                      event.target.value as 'allow' | 'deny' | 'none',
-                                    );
-                                    return next;
-                                  })
-                                }
-                                value={overrideEffects.get(entry.id) ?? 'none'}
+                    {/*
+                     * Colapsable, y cerrada de entrada.
+                     *
+                     * Son casi cincuenta permisos en ocho grupos, y la enorme mayoría de las veces
+                     * un usuario no tiene ninguna excepción: la lista entera abierta empujaba fuera
+                     * de la pantalla todo lo que sí se mira. Cada grupo abre por separado, así que
+                     * tocar un permiso de Pedidos no obliga a scrollear los de Producción.
+                     */}
+                    <details className="permission-overrides">
+                      <summary>
+                        <h3 className="font-semibold text-forest">Excepciones de permisos</h3>
+                        {/* Cuántas hay puestas: si no, cerrarla escondería que este usuario tiene
+                            una excepción y nadie se enteraría hasta que algo no funcione. */}
+                        <span className="text-xs text-ink-muted">
+                          {overrideCount === 0
+                            ? 'Sin excepciones'
+                            : overrideCount === 1
+                              ? '1 excepción'
+                              : String(overrideCount) + ' excepciones'}
+                        </span>
+                      </summary>
+                      <div className="mt-3 grid gap-2">
+                        {[...groupedCatalog.entries()].map(([group, entries]) => (
+                          <details key={group}>
+                            <summary className="text-xs font-semibold uppercase text-ink-muted">
+                              {group}
+                            </summary>
+                            {entries.map((entry) => (
+                              <div
+                                className="mt-1 flex flex-wrap items-center justify-between gap-3 text-sm"
+                                key={entry.id}
                               >
-                                <option value="none">Sin excepción</option>
-                                <option value="allow">Permitir</option>
-                                <option value="deny">Denegar</option>
-                              </select>
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                    {canOverride ? (
-                      <button
-                        className="button button-secondary mt-3"
-                        onClick={() => void saveOverrides()}
-                        type="button"
-                      >
-                        Guardar excepciones
-                      </button>
-                    ) : null}
+                                <span className="min-w-0 flex-1 break-words">
+                                  {entry.description}
+                                </span>
+                                <select
+                                  className="shrink-0"
+                                  disabled={!canOverride}
+                                  onChange={(event) =>
+                                    setOverrideEffects((current) => {
+                                      const next = new Map(current);
+                                      next.set(
+                                        entry.id,
+                                        event.target.value as 'allow' | 'deny' | 'none',
+                                      );
+                                      return next;
+                                    })
+                                  }
+                                  value={overrideEffects.get(entry.id) ?? 'none'}
+                                >
+                                  <option value="none">Sin excepción</option>
+                                  <option value="allow">Permitir</option>
+                                  <option value="deny">Denegar</option>
+                                </select>
+                              </div>
+                            ))}
+                          </details>
+                        ))}
+                      </div>
+                      {canOverride ? (
+                        <button
+                          className="button button-secondary mt-3"
+                          onClick={() => void saveOverrides()}
+                          type="button"
+                        >
+                          Guardar excepciones
+                        </button>
+                      ) : null}
+                    </details>
                   </article>
                 </>
               ) : (

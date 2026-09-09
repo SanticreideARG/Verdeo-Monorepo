@@ -127,7 +127,7 @@ describe('per-site menu catalog settings', () => {
   it('toggles one site without affecting another', async () => {
     const { service } = await seededServiceWithSites();
 
-    await service.setIntuitivoEnabled(SITE_A, false, CONTEXT);
+    await service.setMenuCatalogSettings(SITE_A, { intuitivoEnabled: false }, CONTEXT);
     const list = await service.listMenuCatalogSettings();
 
     expect(list.find((row) => row.operatingSiteId === SITE_A)?.intuitivoEnabled).toBe(false);
@@ -137,8 +137,8 @@ describe('per-site menu catalog settings', () => {
   it('updates the same row in place across repeated toggles for one site', async () => {
     const { db, service } = await seededServiceWithSites();
 
-    await service.setIntuitivoEnabled(SITE_A, false, CONTEXT);
-    await service.setIntuitivoEnabled(SITE_A, true, CONTEXT);
+    await service.setMenuCatalogSettings(SITE_A, { intuitivoEnabled: false }, CONTEXT);
+    await service.setMenuCatalogSettings(SITE_A, { intuitivoEnabled: true }, CONTEXT);
 
     const rows = await db.select().from(menuCatalogSettings);
     expect(rows).toHaveLength(1);
@@ -149,7 +149,11 @@ describe('per-site menu catalog settings', () => {
     const { service } = await seededServiceWithSites();
 
     await expect(
-      service.setIntuitivoEnabled('00000000-0000-4000-8000-000000000000', false, CONTEXT),
+      service.setMenuCatalogSettings(
+        '00000000-0000-4000-8000-000000000000',
+        { intuitivoEnabled: false },
+        CONTEXT,
+      ),
     ).rejects.toThrow();
   });
 });
@@ -277,7 +281,7 @@ describe('updateMenu', () => {
 describe('distributeMenu and the per-site Intuitivo toggle', () => {
   it('excludes the composable offering only for a site that disabled it', async () => {
     const { db, service } = await seededServiceWithSites();
-    await service.setIntuitivoEnabled(SITE_A, false, CONTEXT);
+    await service.setMenuCatalogSettings(SITE_A, { intuitivoEnabled: false }, CONTEXT);
 
     const master = await service.createMenu(
       { ...menuInputBase, offerings: [fixedOffering('Real'), composableOffering('Intuitivo')] },

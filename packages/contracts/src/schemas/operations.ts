@@ -712,7 +712,14 @@ export const OrderUpdateRequestSchema = z
     items: z.array(OrderItemInputSchema).min(1).max(50).optional(),
     notes: z.string().trim().max(500).nullable().optional(),
     paymentExpectation: z.string().trim().min(1).max(80).optional(),
-    reason: z.string().trim().min(3).max(500),
+    /*
+     * Opcional a propósito.
+     *
+     * Pedirlo obligatorio no producía mejores motivos, producía "cambio" y "correccion": lo que
+     * hacía era frenar la edición del pedido, que es lo que de verdad hay que poder hacer. La
+     * revisión se guarda igual, con quién y qué cambió; el motivo suma cuando alguien lo escribe.
+     */
+    reason: z.string().trim().min(3).max(500).optional(),
   })
   .refine((value) => Object.keys(value).some((key) => key !== 'reason'), {
     message: 'No hay cambios para aplicar.',
@@ -731,7 +738,11 @@ export const OrderSchema = z.object({
   deliveryAddress: z.string(),
   deliveryAddressId: UuidSchema.nullable(),
   deliveryDate: z.iso.date(),
+  // Coordenadas de la dirección de entrega, cuando está geocodificada: con esto la ficha puede
+  // mostrar el mapa sin una segunda consulta a la dirección del cliente.
+  deliveryLatitude: z.number().nullable(),
   deliveryLocationUrl: z.string().nullable(),
+  deliveryLongitude: z.number().nullable(),
   deliveryZone: z.string().nullable(),
   dietaryInstructions: z.array(z.string()),
   id: UuidSchema,
@@ -1044,6 +1055,12 @@ export const SurplusConfigUpdateRequestSchema = z.object({
 });
 
 export const MenuCatalogSettingsSchema = z.object({
+  /*
+   * Si el formulario de pedidos pide indicaciones alimentarias. Apagado por defecto: se pidió
+   * sacarlas. Apagarlo saca el campo de los formularios, no el dato de los pedidos que ya las
+   * tienen — esos las siguen mostrando.
+   */
+  dietaryInstructionsEnabled: z.boolean(),
   intuitivoEnabled: z.boolean(),
   operatingSiteId: UuidSchema,
   operatingSiteName: z.string(),
@@ -1053,9 +1070,13 @@ export const MenuCatalogSettingsListResponseSchema = z.object({
   items: z.array(MenuCatalogSettingsSchema),
 });
 
-export const MenuCatalogSettingsUpdateRequestSchema = z.object({
-  intuitivoEnabled: z.boolean(),
-});
+/** Se manda sólo lo que cambió: la pantalla toca un tilde por vez. */
+export const MenuCatalogSettingsUpdateRequestSchema = z
+  .object({
+    dietaryInstructionsEnabled: z.boolean().optional(),
+    intuitivoEnabled: z.boolean().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, { message: 'No hay cambios para aplicar.' });
 
 export const SurplusWriteoffEntrySchema = z.object({
   familyName: z.string().trim().min(1).max(120),

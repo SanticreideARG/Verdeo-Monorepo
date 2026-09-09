@@ -184,7 +184,10 @@ export interface OrderSummary {
   deliveryAddress: string;
   deliveryAddressId: string | null;
   deliveryDate: string;
+  // Coordenadas de la dirección de entrega, cuando está geocodificada.
+  deliveryLatitude: number | null;
   deliveryLocationUrl: string | null;
+  deliveryLongitude: number | null;
   deliveryZone: string | null;
   dietaryInstructions: string[];
   id: string;

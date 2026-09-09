@@ -5144,6 +5144,13 @@ a.order-card-phone:focus-visible {
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
+/* Separa las columnas de las otras opciones de lectura: son la misma decisión, no la misma cosa. */
+.column-picker-panel hr {
+  margin: 0.4rem 0;
+  border: 0;
+  border-top: 1px solid var(--db-border-soft, var(--border-hairline));
+}
+
 .column-picker-panel label {
   display: flex;
   gap: 0.5rem;
@@ -5417,4 +5424,93 @@ a.order-card-phone:focus-visible {
   /* Mismo tamaño que el tilde de cobrado: se toca sin apuntar. */
   width: 18px;
   height: 18px;
+}
+
+/*
+ * La ficha del pedido: los datos a la izquierda, el mapa a la derecha.
+ *
+ * En el teléfono se apilan, con el mapa debajo: los datos son lo primero que se lee y el mapa lo
+ * que se mira cuando ya se decidió salir a entregar.
+ */
+.order-detail-body {
+  display: grid;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .order-detail-body {
+    /* El mapa no crece más de lo que aporta: pasado cierto ancho ya se ve la misma esquina. */
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+  }
+}
+
+.delivery-map {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.delivery-map-frame {
+  width: 100%;
+  /* Alto fijo y no relación de aspecto: en el teléfono un cuadrado empuja todo lo demás fuera de
+     la pantalla. */
+  height: 280px;
+  border: 1px solid var(--db-border-soft, var(--border-hairline));
+  border-radius: 16px;
+}
+
+.delivery-map-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.delivery-map-empty {
+  padding: 1rem;
+  border: 1px dashed var(--db-border-soft, var(--border-hairline));
+  border-radius: 16px;
+  font-size: 0.9rem;
+  color: var(--ink-muted, #5b6b5f);
+  justify-items: start;
+}
+
+/*
+ * Excepciones de permisos: cerrada de entrada, cada grupo abre por separado.
+ *
+ * Son casi cincuenta permisos y la enorme mayoría de las veces un usuario no tiene ninguna
+ * excepción; la lista abierta empujaba fuera de la pantalla todo lo que sí se mira.
+ */
+.permission-overrides > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.permission-overrides > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* El triángulo se dibuja acá para que gire con el estado abierto/cerrado sin depender del que el
+   navegador pone por defecto, que en Safari no se puede estilar. */
+.permission-overrides > summary::before {
+  content: '▸';
+  color: var(--ink-muted, #5b6b5f);
+  transition: transform 120ms ease;
+}
+
+.permission-overrides[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.permission-overrides details > summary {
+  padding: 0.35rem 0;
+  cursor: pointer;
+}
+
+.permission-overrides details[open] {
+  padding-bottom: 0.5rem;
 }

@@ -6,6 +6,7 @@ import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
 import { BrandLoading } from '../components/BrandLoading.js';
 import { apiRequest } from '../lib/api.js';
 import { useFormDraft } from '../lib/useFormDraft.js';
+import { useOrderFormSettings } from '../lib/useOrderFormSettings.js';
 import {
   errorMessage,
   formatMoney,
@@ -51,6 +52,8 @@ export function PublicOrderPage() {
   // A visitor filling this in is not staff: a stray back button or a refresh on mobile costs them
   // the whole order, and there is no dashboard to fall back on.
   const draft = useFormDraft(formRef, 'public-order');
+  // Si esta ciudad pide indicaciones alimentarias. Vienen apagadas: se pidió sacarlas.
+  const { dietaryInstructionsEnabled } = useOrderFormSettings({ slug: siteSlug });
 
   useEffect(() => {
     void apiRequest('/api/v1/public/payment-methods')
@@ -336,10 +339,12 @@ export function PublicOrderPage() {
                   />
                 </div>
               ) : null}
-              <label className="field field-wide">
-                Indicaciones alimentarias
-                <textarea name="dietaryInstructions" rows={2} placeholder="Ej. sin cebolla" />
-              </label>
+              {dietaryInstructionsEnabled ? (
+                <label className="field field-wide">
+                  Indicaciones alimentarias
+                  <textarea name="dietaryInstructions" rows={2} placeholder="Ej. sin cebolla" />
+                </label>
+              ) : null}
               <label className="field field-wide">
                 Notas
                 <textarea name="notes" rows={2} />

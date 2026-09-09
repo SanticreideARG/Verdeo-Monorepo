@@ -346,6 +346,17 @@ export const menuCatalogSettings = pgTable(
       onDelete: 'cascade',
     }),
     intuitivoEnabled: boolean('intuitivo_enabled').default(true).notNull(),
+    /*
+     * Si el formulario pide indicaciones alimentarias.
+     *
+     * Apagado por defecto: se pidió sacarlo. Era un texto libre que llegaba a cocina con cosas que
+     * cocina no puede resolver por pedido, y lo que de verdad hace falta —que un cliente no coma
+     * algo— vive en las restricciones del cliente, que sí son un dato y no una nota suelta.
+     *
+     * Es un parámetro y no un borrado porque los pedidos viejos las tienen, y siguen mostrándose:
+     * apagarlo saca el campo de los formularios, no el dato de lo que ya pasó.
+     */
+    dietaryInstructionsEnabled: boolean('dietary_instructions_enabled').default(false).notNull(),
     updatedByUserId: uuid('updated_by_user_id').references(() => users.id, {
       onDelete: 'set null',
     }),

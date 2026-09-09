@@ -268,7 +268,7 @@ export interface OrderUpdateInput {
     | undefined;
   notes?: string | null | undefined;
   paymentExpectation?: string | undefined;
-  reason: string;
+  reason?: string | undefined;
 }
 
 export interface OrderListInput {
@@ -2998,7 +2998,9 @@ export class PostgresOperationsService {
       await transaction.insert(orderRevisions).values({
         actorUserId: context.actorUserId,
         orderId,
-        reason: input.reason,
+        // Sin motivo escrito la revisión se guarda igual: qué cambió y quién lo cambió es lo que
+        // hace falta para reconstruir el pedido; el motivo suma cuando alguien lo escribe.
+        reason: input.reason ?? 'Sin motivo indicado',
         revision: (latestRevision?.revision ?? 0) + 1,
         snapshot: JSON.parse(JSON.stringify(beforeSnapshot)) as Record<string, unknown>,
       });
@@ -3092,7 +3094,10 @@ export class PostgresOperationsService {
         correlationId: context.correlationId,
         entityId: orderId,
         entityType: 'order',
-        metadata: { cycleOverride: cycleLocked && allowCycleOverride, reason: input.reason },
+        metadata: {
+          cycleOverride: cycleLocked && allowCycleOverride,
+          reason: input.reason ?? null,
+        },
         requestId: context.requestId,
         source: context.source,
       });
@@ -4005,6 +4010,13 @@ export class PostgresOperationsService {
         deliveryAddressId: orders.deliveryAddressId,
         deliveryDate: orders.deliveryDate,
         deliveryLocationUrl: orders.deliveryLocationUrlSnapshot,
+        /*
+         * Las coordenadas de la dirección de entrega, para poder mostrar el mapa en la ficha del
+         * pedido. Salen de la dirección viva y no de un snapshot: si el domicilio se geocodificó
+         * después de tomarse el pedido, el mapa aparece igual.
+         */
+        deliveryLatitude: customerAddresses.latitude,
+        deliveryLongitude: customerAddresses.longitude,
         deliveryZone: customerAddresses.operationalZone,
         id: orders.id,
         menuId: orders.weeklyMenuId,
@@ -4111,6 +4123,9 @@ export class PostgresOperationsService {
         row.id,
         {
           ...row,
+          // `numeric` llega como texto desde Postgres; el contrato pide números.
+          deliveryLatitude: row.deliveryLatitude === null ? null : Number(row.deliveryLatitude),
+          deliveryLongitude: row.deliveryLongitude === null ? null : Number(row.deliveryLongitude),
           customer: {
             displayName: row.customerDisplayName,
             email: contactFor(row.customerId, 'email'),
@@ -4677,9 +4692,9 @@ export class PostgresOperationsService {
       .catch(translateDatabaseConflict);
   }
 
-  /** One row per active operating site, its own latest Intuitivo toggle (default enabled when no
-   * row exists yet for that site). For the settings screen, not the distribution path — that path
-   * calls `isIntuitivoEnabledForSite` directly instead of listing everything. */
+  /** One row per active operating site with its latest settings (defaults when no row exists yet
+   * for that site). For the settings screen, not the distribution path — that path calls
+   * `isIntuitivoEnabledForSite` directly instead of listing everything. */
   public async listMenuCatalogSettings() {
     const sites = await this.database
       .select({ displayName: operatingSites.displayName, id: operatingSites.id })
@@ -4689,20 +4704,24 @@ export class PostgresOperationsService {
 
     const rows = await this.database
       .select({
+        dietaryInstructionsEnabled: menuCatalogSettings.dietaryInstructionsEnabled,
         intuitivoEnabled: menuCatalogSettings.intuitivoEnabled,
         operatingSiteId: menuCatalogSettings.operatingSiteId,
         updatedAt: menuCatalogSettings.updatedAt,
       })
       .from(menuCatalogSettings)
       .orderBy(desc(menuCatalogSettings.updatedAt));
-    const latestBySite = new Map<string, boolean>();
+    const latestBySite = new Map<string, (typeof rows)[number]>();
     for (const row of rows) {
       if (row.operatingSiteId && !latestBySite.has(row.operatingSiteId))
-        latestBySite.set(row.operatingSiteId, row.intuitivoEnabled);
+        latestBySite.set(row.operatingSiteId, row);
     }
 
     return sites.map((site) => ({
-      intuitivoEnabled: latestBySite.get(site.id) ?? true,
+      // Sin fila todavía: el Intuitivo viene encendido —es parte de la oferta— y las indicaciones
+      // alimentarias apagadas, porque se pidió sacarlas.
+      dietaryInstructionsEnabled: latestBySite.get(site.id)?.dietaryInstructionsEnabled ?? false,
+      intuitivoEnabled: latestBySite.get(site.id)?.intuitivoEnabled ?? true,
       operatingSiteId: site.id,
       operatingSiteName: site.displayName,
     }));
@@ -4721,9 +4740,18 @@ export class PostgresOperationsService {
     return row?.intuitivoEnabled ?? true;
   }
 
-  public async setIntuitivoEnabled(
+  /**
+   * Guardar los ajustes de catálogo de una ciudad.
+   *
+   * Recibe sólo lo que cambió: la pantalla toca un tilde por vez, y mandar los dos obligaría a que
+   * conozca el valor del otro para no pisarlo.
+   */
+  public async setMenuCatalogSettings(
     operatingSiteId: string,
-    intuitivoEnabled: boolean,
+    changes: {
+      dietaryInstructionsEnabled?: boolean | undefined;
+      intuitivoEnabled?: boolean | undefined;
+    },
     context: OperationsContext,
   ) {
     return this.database.transaction(async (transaction) => {
@@ -4746,7 +4774,7 @@ export class PostgresOperationsService {
         [row] = await transaction
           .update(menuCatalogSettings)
           .set({
-            intuitivoEnabled,
+            ...changes,
             updatedAt: new Date(),
             updatedByUserId: context.actorUserId ?? null,
           })
@@ -4756,7 +4784,7 @@ export class PostgresOperationsService {
         [row] = await transaction
           .insert(menuCatalogSettings)
           .values({
-            intuitivoEnabled,
+            ...changes,
             operatingSiteId,
             updatedByUserId: context.actorUserId ?? null,
           })
@@ -4766,10 +4794,20 @@ export class PostgresOperationsService {
 
       const audit = new AuditService(new PostgresAuditSink(transaction));
       await audit.record({
-        action: 'menu_catalog.intuitivo_toggled',
+        action: 'menu_catalog.settings_updated',
         actor: auditActor(context),
-        after: { intuitivoEnabled: row.intuitivoEnabled },
-        ...(existing ? { before: { intuitivoEnabled: existing.intuitivoEnabled } } : {}),
+        after: {
+          dietaryInstructionsEnabled: row.dietaryInstructionsEnabled,
+          intuitivoEnabled: row.intuitivoEnabled,
+        },
+        ...(existing
+          ? {
+              before: {
+                dietaryInstructionsEnabled: existing.dietaryInstructionsEnabled,
+                intuitivoEnabled: existing.intuitivoEnabled,
+              },
+            }
+          : {}),
         correlationId: context.correlationId,
         entityId: row.id,
         entityType: 'menu_catalog_settings',

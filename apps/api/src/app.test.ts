@@ -79,7 +79,7 @@ const customerOperationsStubs = {
   rejectAddressGeocoding: vi.fn(),
   reportProduction: vi.fn(),
   requestAddressGeocoding: vi.fn(),
-  setIntuitivoEnabled: vi.fn(),
+  setMenuCatalogSettings: vi.fn(),
   setLabelSettings: vi.fn(),
   setSurplusConfig: vi.fn(),
   surplusReport: vi.fn(),
@@ -1491,7 +1491,12 @@ describe('API foundation', () => {
     it('lists the per-site Intuitivo toggle with production.read and denies without it', async () => {
       const listMenuCatalogSettings = vi.fn(() =>
         Promise.resolve([
-          { intuitivoEnabled: true, operatingSiteId: SITE, operatingSiteName: 'Neuquén' },
+          {
+            dietaryInstructionsEnabled: false,
+            intuitivoEnabled: true,
+            operatingSiteId: SITE,
+            operatingSiteName: 'Neuquén',
+          },
         ]),
       );
       const app = buildApp({ listMenuCatalogSettings }, ['production.read']);
@@ -1499,7 +1504,14 @@ describe('API foundation', () => {
       const response = await app.request('/api/v1/menu-catalog/settings', { headers: { cookie } });
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({
-        items: [{ intuitivoEnabled: true, operatingSiteId: SITE, operatingSiteName: 'Neuquén' }],
+        items: [
+          {
+            dietaryInstructionsEnabled: false,
+            intuitivoEnabled: true,
+            operatingSiteId: SITE,
+            operatingSiteName: 'Neuquén',
+          },
+        ],
       });
 
       const denied = buildApp({ listMenuCatalogSettings: vi.fn() }, []);
@@ -1510,9 +1522,9 @@ describe('API foundation', () => {
     });
 
     it("flips one site's Intuitivo toggle with production.generate and denies without it", async () => {
-      const setIntuitivoEnabled = vi.fn(() => Promise.resolve(undefined));
+      const setMenuCatalogSettings = vi.fn(() => Promise.resolve(undefined));
       const listMenuCatalogSettings = vi.fn(() => Promise.resolve([]));
-      const app = buildApp({ listMenuCatalogSettings, setIntuitivoEnabled }, [
+      const app = buildApp({ listMenuCatalogSettings, setMenuCatalogSettings }, [
         'production.generate',
       ]);
 
@@ -1522,9 +1534,13 @@ describe('API foundation', () => {
         method: 'PATCH',
       });
       expect(response.status).toBe(200);
-      expect(setIntuitivoEnabled).toHaveBeenCalledWith(SITE, false, expect.anything());
+      expect(setMenuCatalogSettings).toHaveBeenCalledWith(
+        SITE,
+        { intuitivoEnabled: false },
+        expect.anything(),
+      );
 
-      const denied = buildApp({ setIntuitivoEnabled: vi.fn() }, ['production.read']);
+      const denied = buildApp({ setMenuCatalogSettings: vi.fn() }, ['production.read']);
       const deniedResponse = await denied.request(`/api/v1/menu-catalog/settings/${SITE}`, {
         body: JSON.stringify({ intuitivoEnabled: false }),
         headers: { cookie, 'content-type': 'application/json' },

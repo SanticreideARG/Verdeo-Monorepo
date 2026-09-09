@@ -8,15 +8,23 @@ import { errorMessage } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 interface SiteSetting {
+  dietaryInstructionsEnabled: boolean;
   intuitivoEnabled: boolean;
   operatingSiteId: string;
   operatingSiteName: string;
 }
 
-/** "Ajustes → Menú personalizado": whether Intuitivo can be offered, decided per operation, not
- * globally -- a city that turns it off simply never receives the composable offering when a menu
- * is distributed to it (PostgresOperationsService.distributeMenu), regardless of what the master
- * week includes. Turning it off doesn't touch any menu already distributed. */
+/** "Ajustes → Menú personalizado": qué ofrece y qué pregunta el formulario de pedidos, decidido por
+ * ciudad y no globalmente.
+ *
+ * Intuitivo: una ciudad que lo apaga simplemente no recibe la oferta componible cuando se distribuye
+ * el menú (PostgresOperationsService.distributeMenu), diga lo que diga la semana maestra. Apagarlo
+ * no toca ningún menú ya distribuido.
+ *
+ * Indicaciones alimentarias: si el formulario las pide. Vienen apagadas —se pidió sacarlas—; era un
+ * texto libre que llegaba a cocina con cosas que no se pueden resolver por pedido, mientras que lo
+ * que de verdad hace falta, que un cliente no coma algo, vive en las restricciones del cliente.
+ * Apagarlas saca el campo de los formularios, no el dato de los pedidos que ya las tienen. */
 export function MenuCatalogSettingsPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const [sites, setSites] = useState<SiteSetting[]>([]);
@@ -39,11 +47,16 @@ export function MenuCatalogSettingsPage() {
     else setLoading(false);
   }, [canRead, load]);
 
-  async function toggle(site: SiteSetting) {
+  // Se manda sólo el tilde que se tocó: mandar los dos obligaría a esta pantalla a conocer el
+  // valor del otro para no pisarlo.
+  async function toggle(
+    site: SiteSetting,
+    field: 'dietaryInstructionsEnabled' | 'intuitivoEnabled',
+  ) {
     setSavingSiteId(site.operatingSiteId);
     setMessage('');
     const response = await apiRequest(`/api/v1/menu-catalog/settings/${site.operatingSiteId}`, {
-      body: JSON.stringify({ intuitivoEnabled: !site.intuitivoEnabled }),
+      body: JSON.stringify({ [field]: !site[field] }),
       method: 'PATCH',
     });
     setSavingSiteId(null);
@@ -78,10 +91,8 @@ export function MenuCatalogSettingsPage() {
         </header>
 
         <p className="mt-3 max-w-xl text-sm text-ink-muted">
-          Controlá por ciudad si Intuitivo -- la variedad donde el cliente elige cinco platos del
-          universo publicado esa semana -- puede ofrecerse. No es un interruptor único para todo el
-          catálogo: cada operación tiene el suyo, y se aplica cuando se distribuye el menú a esa
-          ciudad.
+          Controlá por ciudad qué ofrece y qué pregunta el formulario de pedidos. No son
+          interruptores únicos para todo el catálogo: cada operación tiene los suyos.
         </p>
 
         {message ? <p className="mt-4 text-sm text-red-600">{message}</p> : null}
@@ -100,22 +111,32 @@ export function MenuCatalogSettingsPage() {
                 <div>
                   <p className="font-semibold text-forest">{site.operatingSiteName}</p>
                   <p className="text-sm text-ink-muted">
-                    {site.intuitivoEnabled ? 'Habilitado' : 'Deshabilitado'}
+                    Intuitivo: {site.intuitivoEnabled ? 'habilitado' : 'deshabilitado'} ·
+                    Indicaciones alimentarias:{' '}
+                    {site.dietaryInstructionsEnabled ? 'se piden' : 'no se piden'}
                   </p>
                 </div>
                 {canManage ? (
-                  <button
-                    className="button button-primary"
-                    disabled={savingSiteId === site.operatingSiteId}
-                    onClick={() => void toggle(site)}
-                    type="button"
-                  >
-                    {savingSiteId === site.operatingSiteId
-                      ? 'Guardando…'
-                      : site.intuitivoEnabled
-                        ? 'Deshabilitar'
-                        : 'Habilitar'}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="button button-secondary"
+                      disabled={savingSiteId === site.operatingSiteId}
+                      onClick={() => void toggle(site, 'intuitivoEnabled')}
+                      type="button"
+                    >
+                      {site.intuitivoEnabled ? 'Deshabilitar Intuitivo' : 'Habilitar Intuitivo'}
+                    </button>
+                    <button
+                      className="button button-secondary"
+                      disabled={savingSiteId === site.operatingSiteId}
+                      onClick={() => void toggle(site, 'dietaryInstructionsEnabled')}
+                      type="button"
+                    >
+                      {site.dietaryInstructionsEnabled
+                        ? 'No pedir indicaciones'
+                        : 'Pedir indicaciones'}
+                    </button>
+                  </div>
                 ) : null}
               </li>
             ))}

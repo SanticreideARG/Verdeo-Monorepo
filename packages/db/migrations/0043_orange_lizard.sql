@@ -1,0 +1,1 @@
+ALTER TABLE "menu_catalog_settings" ADD COLUMN "dietary_instructions_enabled" boolean DEFAULT false NOT NULL;

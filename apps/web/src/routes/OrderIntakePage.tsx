@@ -32,6 +32,7 @@ import {
   type WeeklyMenu,
 } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { useOrderFormSettings } from '../lib/useOrderFormSettings.js';
 import { useFormDraft } from '../lib/useFormDraft.js';
 
 // The delivery date is fixed to the período's own close date — not a free pick — so it lives here,
@@ -136,6 +137,8 @@ export function OrderIntakePage() {
    * a cocina y al repartidor. El nombre de pila alcanza para saber de quién es cada vianda.
    */
   const [maskSurnames, setMaskSurnames] = useState(readMaskSurnames);
+  // Si esta ciudad pide indicaciones alimentarias. Vienen apagadas: se pidió sacarlas.
+  const { dietaryInstructionsEnabled } = useOrderFormSettings({ siteId: storedOperatingSiteId() });
 
   const loadData = useCallback(async () => {
     if (!profile) return;
@@ -544,23 +547,25 @@ export function OrderIntakePage() {
             <PeriodPicker onChange={setPeriodId} periods={periods} value={periodId ?? ''} />
             <ColumnPicker
               columns={intakeColumns}
+              extras={[
+                {
+                  checked: maskSurnames,
+                  key: 'ocultar-apellidos',
+                  label: 'Ocultar apellidos',
+                  onToggle: () => {
+                    setMaskSurnames((current) => {
+                      writeMaskSurnames(!current);
+                      return !current;
+                    });
+                  },
+                },
+              ]}
               onChange={(next) => {
                 setVisibleColumns(next);
                 writeStoredColumns(COLUMNS_KEY, next);
               }}
               visible={visibleColumns}
             />
-            <label className="field-inline">
-              <input
-                checked={maskSurnames}
-                onChange={(event) => {
-                  setMaskSurnames(event.target.checked);
-                  writeMaskSurnames(event.target.checked);
-                }}
-                type="checkbox"
-              />
-              Ocultar apellidos
-            </label>
             <button
               className="button button-secondary"
               onClick={() => void exportPeriod()}
@@ -781,10 +786,12 @@ export function OrderIntakePage() {
                   <input name="paymentExpectation" placeholder="Transferencia" required />
                 )}
               </label>
-              <label className="field field-wide">
-                Indicaciones para cocina
-                <textarea name="dietaryInstructions" placeholder="Una por línea" rows={2} />
-              </label>
+              {dietaryInstructionsEnabled ? (
+                <label className="field field-wide">
+                  Indicaciones para cocina
+                  <textarea name="dietaryInstructions" placeholder="Una por línea" rows={2} />
+                </label>
+              ) : null}
             </div>
             {selectedOffering?.composable ? (
               <div className="field field-wide mt-4">
@@ -877,6 +884,13 @@ export function OrderIntakePage() {
         ) : null}
 
         <div className="mt-6">
+          {/* Cuántos pedidos hay en la cola: una lista sin número no dice si es un rato de
+              trabajo o una tarde. */}
+          <p className="mb-3 text-sm text-ink-muted" role="status">
+            {orders.length === 1
+              ? '1 pedido pendiente de acción'
+              : String(orders.length) + ' pedidos pendientes de acción'}
+          </p>
           <DataTable
             caption="Pedidos pendientes de acción"
             columns={intakeColumns.filter((column) => visibleColumns.includes(column.key))}

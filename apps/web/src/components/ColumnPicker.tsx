@@ -17,10 +17,18 @@ export interface ColumnChoice {
  */
 export function ColumnPicker({
   columns,
+  extras,
   onChange,
   visible,
 }: {
   columns: readonly ColumnChoice[];
+  /*
+   * Otras opciones de "qué ver en la tabla" que no son una columna, como tapar los apellidos.
+   *
+   * Van acá y no sueltas en la barra porque son la misma decisión —qué muestra esta tabla— y la
+   * barra ya tenía cuatro controles antes de llegar a los botones.
+   */
+  extras?: readonly { checked: boolean; key: string; label: string; onToggle: () => void }[];
   onChange: (next: string[]) => void;
   visible: readonly string[];
 }) {
@@ -83,6 +91,17 @@ export function ColumnPicker({
               {column.label}
             </label>
           ))}
+          {extras && extras.length > 0 ? (
+            <>
+              <hr />
+              {extras.map((extra) => (
+                <label key={extra.key}>
+                  <input checked={extra.checked} onChange={extra.onToggle} type="checkbox" />
+                  {extra.label}
+                </label>
+              ))}
+            </>
+          ) : null}
         </div>
       ) : null}
     </div>

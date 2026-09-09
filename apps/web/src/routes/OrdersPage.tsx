@@ -150,20 +150,21 @@ export function OrdersPage() {
   }
 
   /**
-   * Bajar lo que se está mirando.
+   * Bajar lo que se está mirando, como planilla.
    *
-   * Los dos formatos salen de la misma ruta con los mismos filtros: el CSV para meter los pedidos
-   * en otra herramienta, la planilla para abrirla, mirarla y reenviarla. Y con los apellidos
-   * tapados si así se está mirando la pantalla — un archivo se reenvía todavía más fácil.
+   * La ruta sigue sabiendo devolver CSV —es el formato para llevar los pedidos a otra herramienta—
+   * pero el botón no está: acá se baja para abrir, mirar y reenviar, y dos botones para eso era uno
+   * de más. Sale con los apellidos tapados si así se está mirando la pantalla: un archivo se
+   * reenvía todavía más fácil.
    */
-  async function exportOrders(format: 'csv' | 'xlsx') {
+  async function exportOrders() {
     setMessage('');
     const params = new URLSearchParams();
     if (status) params.set('status', status);
     if (search.trim()) params.set('search', search.trim());
     // Se exporta lo que se está mirando, no el histórico entero.
     if (cycleId) params.set('cycleId', cycleId);
-    if (format === 'xlsx') params.set('format', 'xlsx');
+    params.set('format', 'xlsx');
     if (maskSurnames) params.set('maskSurnames', '1');
     const response = await apiRequest(`/api/v1/orders/export?${params.toString()}`);
     if (!response.ok) {
@@ -174,7 +175,7 @@ export function OrdersPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `verdeo-pedidos.${format === 'xlsx' ? 'xlsx' : 'csv'}`;
+    link.download = 'verdeo-pedidos.xlsx';
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -224,36 +225,31 @@ export function OrdersPage() {
             </label>
             <ColumnPicker
               columns={ORDER_COLUMNS}
+              extras={[
+                {
+                  checked: maskSurnames,
+                  key: 'ocultar-apellidos',
+                  label: 'Ocultar apellidos',
+                  onToggle: () => {
+                    setMaskSurnames((current) => {
+                      writeMaskSurnames(!current);
+                      return !current;
+                    });
+                  },
+                },
+              ]}
               onChange={(next) => {
                 setVisibleColumns(next);
                 writeStoredColumns(COLUMNS_KEY, next);
               }}
               visible={visibleColumns}
             />
-            <label className="field-inline">
-              <input
-                checked={maskSurnames}
-                onChange={(event) => {
-                  setMaskSurnames(event.target.checked);
-                  writeMaskSurnames(event.target.checked);
-                }}
-                type="checkbox"
-              />
-              Ocultar apellidos
-            </label>
             <button
               className="button button-secondary"
-              onClick={() => void exportOrders('xlsx')}
+              onClick={() => void exportOrders()}
               type="button"
             >
               Exportar Excel
-            </button>
-            <button
-              className="button button-secondary"
-              onClick={() => void exportOrders('csv')}
-              type="button"
-            >
-              Exportar CSV
             </button>
           </div>
         </header>
@@ -268,6 +264,17 @@ export function OrdersPage() {
           <p className="mt-6 text-ink-muted">Cargando pedidos…</p>
         ) : (
           <div className="mt-6 grid gap-3">
+            {/*
+             * Cuántos resultados trajo el filtro.
+             *
+             * Una lista filtrada sin número no dice si son tres pedidos o trescientos, y con la
+             * lista paginada tampoco se puede contar mirando. Cuando quedan más por traer se
+             * dice, para que "24" no se lea como "hay veinticuatro y se terminó".
+             */}
+            <p className="text-sm text-ink-muted" role="status">
+              {orders.length === 1 ? '1 pedido' : String(orders.length) + ' pedidos'}
+              {nextCursor ? ' cargados · hay más, seguí bajando' : ''}
+            </p>
             {/*
              * Tabla en escritorio, una tarjeta por pedido en teléfono — lo resuelve DataTable con
              * las mismas columnas, así que elegir qué ver vale para las dos formas.
