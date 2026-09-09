@@ -59,6 +59,7 @@ import {
   CustomerIdentitySchema,
   CustomerIdentityUpdateRequestSchema,
   CustomerImportResponseSchema,
+  CustomerDeleteResponseSchema,
   CustomerListResponseSchema,
   CustomerMergeRequestSchema,
   CustomerMergeResultSchema,
@@ -487,6 +488,10 @@ interface OperationsEngine {
     context: OperationsContext,
     format: 'csv' | 'xlsx',
   ): Promise<{ cycleAlias: string | null; rows: OrderExportRow[] }>;
+  deleteCustomer(
+    customerId: string,
+    context: OperationsContext,
+  ): Promise<{ orderCount: number; outcome: 'ARCHIVED' | 'DELETED' }>;
   getCustomer(customerId: string, includeSensitive: boolean): Promise<unknown>;
   getAddressGeocodingRequest(
     customerId: string,
@@ -3111,6 +3116,24 @@ export function createApp(options: CreateAppOptions) {
       operationsContext(context),
     );
     return context.json(CustomerDetailSchema.parse(contractValue(customer)));
+  });
+
+  /*
+   * Eliminar un cliente.
+   *
+   * Sin pedidos se borra de verdad —es el caso que motivó esto: un duplicado, una prueba, un
+   * contacto cargado dos veces—; con pedidos se archiva, porque borrarlo se llevaría puesto el
+   * historial de venta. La respuesta dice cuál de las dos cosas pasó.
+   */
+  app.delete('/api/v1/customers/:id', async (context) => {
+    if (!context.get('session').permissions.includes('customers.delete')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'Cliente inválido.', params.error.issues);
+    const result = await requireOperations().deleteCustomer(
+      params.data.id,
+      operationsContext(context),
+    );
+    return context.json(CustomerDeleteResponseSchema.parse(result));
   });
 
   app.post('/api/v1/customers/:id/identities', async (context) => {

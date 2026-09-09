@@ -29,6 +29,11 @@ export const initialPermissionCatalog: readonly PermissionDefinition[] = [
   { key: 'customers.read', group: 'customers', description: 'Ver clientes' },
   { key: 'customers.create', group: 'customers', description: 'Crear clientes' },
   { key: 'customers.edit', group: 'customers', description: 'Editar clientes' },
+  {
+    key: 'customers.delete',
+    group: 'customers',
+    description: 'Eliminar o archivar clientes',
+  },
   { key: 'customers.merge', group: 'customers', description: 'Fusionar clientes' },
   { key: 'customers.unmerge', group: 'customers', description: 'Revertir fusiones' },
   { key: 'customers.restrict', group: 'customers', description: 'Restringir clientes' },

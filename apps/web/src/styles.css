@@ -168,6 +168,21 @@ a {
   background: white;
 }
 
+/*
+ * El botón de una acción que no vuelve.
+ *
+ * Rojo y con borde, no relleno: no es la acción principal de ninguna pantalla y no tiene que
+ * competir con "Guardar". Lo que aporta el color es que no se toque por inercia.
+ */
+.button-danger {
+  border-color: color-mix(in srgb, #b42318 35%, transparent);
+  color: #b42318;
+}
+
+.button-danger:hover {
+  background: color-mix(in srgb, #b42318 8%, white);
+}
+
 .button-large {
   min-height: 52px;
   padding-inline: 1.45rem;

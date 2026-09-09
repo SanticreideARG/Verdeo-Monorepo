@@ -23,6 +23,7 @@ No usar `if role === ...` como autorización.
 - `customers.read`
 - `customers.create`
 - `customers.edit`
+- `customers.delete`
 - `customers.merge`
 - `customers.unmerge`
 - `customers.restrict`

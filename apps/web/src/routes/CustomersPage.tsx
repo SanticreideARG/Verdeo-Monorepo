@@ -81,6 +81,8 @@ export function CustomersPage() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [message, setMessage] = useState('');
+  // Eliminar es a un clic de distancia y no vuelve: se pregunta antes.
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [geocoding, setGeocoding] = useState<Record<string, AddressGeocodingRequest>>({});
 
   const loadCustomer = useCallback(async (customerId: string) => {
@@ -343,6 +345,31 @@ export function CustomersPage() {
     }
   }
 
+  /**
+   * Eliminar el cliente que se está mirando.
+   *
+   * El servidor decide qué significa "eliminar" según lo que el cliente tenga colgando: sin pedidos
+   * se borra, con pedidos se archiva —borrarlo se llevaría puesto el historial de venta—. Acá sólo
+   * se avisa cuál de las dos cosas pasó, porque si no, archivar se ve como que el botón no anduvo.
+   */
+  async function deleteCustomer() {
+    if (!detail) return;
+    try {
+      const result = await responseJson<{ orderCount: number; outcome: 'ARCHIVED' | 'DELETED' }>(
+        await apiRequest(`/api/v1/customers/${detail.id}`, { method: 'DELETE' }),
+      );
+      setConfirmDelete(false);
+      await loadDirectory(search);
+      showToast(
+        result.outcome === 'DELETED'
+          ? `${detail.displayName} se eliminó.`
+          : `${detail.displayName} tiene ${String(result.orderCount)} pedidos, así que se archivó en vez de borrarse: el historial de venta se conserva.`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'No pudimos eliminar el cliente.');
+    }
+  }
+
   async function addIdentity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!detail) return;
@@ -533,6 +560,7 @@ export function CustomersPage() {
   const canEdit =
     profile.permissions.includes('customers.edit') &&
     profile.permissions.includes('customers.view_sensitive');
+  const canDelete = profile.permissions.includes('customers.delete');
   // Same pair the API demands: choosing a survivor means reading both records' contacts.
   const canMerge =
     profile.permissions.includes('customers.merge') &&
@@ -795,9 +823,20 @@ export function CustomersPage() {
                           />
                         </label>
                       </div>
-                      <button className="button button-primary" type="submit">
-                        Guardar cambios
-                      </button>
+                      <div className="form-actions">
+                        <button className="button button-primary" type="submit">
+                          Guardar cambios
+                        </button>
+                        {canDelete ? (
+                          <button
+                            className="button button-danger"
+                            onClick={() => setConfirmDelete(true)}
+                            type="button"
+                          >
+                            Eliminar cliente
+                          </button>
+                        ) : null}
+                      </div>
                     </form>
                   </details>
                 ) : null}
@@ -1126,6 +1165,44 @@ export function CustomersPage() {
 
         {showExport ? (
           <CustomerExportDialog onClose={() => setShowExport(false)} search={search} />
+        ) : null}
+
+        {confirmDelete && detail ? (
+          <div
+            aria-label="Eliminar cliente"
+            aria-modal="true"
+            className="modal-backdrop"
+            role="dialog"
+          >
+            <div className="modal-panel">
+              <h2 className="text-xl font-semibold text-forest">
+                ¿Eliminar a {detail.displayName}?
+              </h2>
+              {/* Se dice de antemano qué va a pasar: no es lo mismo borrar un duplicado que sacar
+                  de la lista a alguien que compró treinta veces. */}
+              <p className="mt-1 text-sm text-ink-muted">
+                {detail.orders.length > 0
+                  ? `Tiene ${String(detail.orders.length)} pedidos, así que se archiva en vez de borrarse: sale de las listas y el historial de venta se conserva. Se puede reactivar cambiándole el estado.`
+                  : 'No tiene pedidos, así que se borra de verdad, junto con sus contactos y domicilios. Esto no se puede deshacer.'}
+              </p>
+              <div className="form-actions mt-5">
+                <button
+                  className="button button-danger"
+                  onClick={() => void deleteCustomer()}
+                  type="button"
+                >
+                  {detail.orders.length > 0 ? 'Archivar' : 'Eliminar'}
+                </button>
+                <button
+                  className="button button-secondary"
+                  onClick={() => setConfirmDelete(false)}
+                  type="button"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
         ) : null}
 
         {showMerge ? (

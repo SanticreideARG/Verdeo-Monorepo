@@ -995,6 +995,66 @@ export class PostgresOperationsService {
     return mergeCustomers(this.database, input, context);
   }
 
+  /**
+   * Sacar un cliente de encima.
+   *
+   * Dos resultados distintos según lo que el cliente tenga colgando, y la diferencia importa:
+   *
+   * - **Sin pedidos**: se borra de verdad. Es el caso que motivó esto —un duplicado, una prueba, un
+   *   contacto cargado dos veces—, y archivar un registro que nunca compró nada sólo ensucia la
+   *   lista para siempre. Identidades, direcciones, preferencias y restricciones se van con él por
+   *   cascada; una conversación queda huérfana y no borrada (`set null`), porque el mensaje existió.
+   * - **Con pedidos**: se archiva. La clave foránea de `orders` es `restrict` justamente para que
+   *   esto no sea una decisión: borrar al cliente destruiría el historial de venta, la facturación y
+   *   la trazabilidad de la auditoría. Queda en `archived`, fuera de las listas, y se puede
+   *   reactivar editándolo.
+   *
+   * Devuelve cuál de los dos pasó para que la pantalla lo pueda decir, en vez de que quien tocó el
+   * botón tenga que adivinar por qué el nombre sigue apareciendo.
+   */
+  public async deleteCustomer(
+    customerId: string,
+    context: OperationsContext,
+  ): Promise<{ orderCount: number; outcome: 'ARCHIVED' | 'DELETED' }> {
+    return this.database.transaction(async (transaction) => {
+      const [existing] = await transaction
+        .select({ displayName: customers.displayName, id: customers.id, status: customers.status })
+        .from(customers)
+        .where(eq(customers.id, customerId))
+        .limit(1);
+      if (!existing) throw new OperationsNotFoundError('Customer not found');
+
+      const [counted] = await transaction
+        .select({ orderCount: sql<number>`count(*)` })
+        .from(orders)
+        .where(eq(orders.customerId, customerId));
+      const orderCount = Number(counted?.orderCount ?? 0);
+
+      if (orderCount > 0) {
+        await transaction
+          .update(customers)
+          .set({ status: 'archived', updatedAt: new Date() })
+          .where(eq(customers.id, customerId));
+        await this.auditCustomerMutation(transaction, customerId, 'customer.archived', context, {
+          after: { orderCount, status: 'archived' },
+          before: { status: existing.status },
+        });
+        return { orderCount, outcome: 'ARCHIVED' as const };
+      }
+
+      /*
+       * La auditoría va ANTES del borrado: `customer.deleted` referencia al cliente por
+       * `entityId`, y si la fila ya no está no queda quién dice qué se borró ni con qué nombre.
+       */
+      await this.auditCustomerMutation(transaction, customerId, 'customer.deleted', context, {
+        after: { displayName: existing.displayName },
+        before: { status: existing.status },
+      });
+      await transaction.delete(customers).where(eq(customers.id, customerId));
+      return { orderCount: 0, outcome: 'DELETED' as const };
+    });
+  }
+
   public async updateCustomerIdentity(
     customerId: string,
     identityId: string,

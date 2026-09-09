@@ -13,6 +13,7 @@ No es contrato final OpenAPI; es mapa inicial.
 - `POST /customers`
 - `GET /customers/:id`
 - `PATCH /customers/:id`
+- `DELETE /customers/:id` (sin pedidos borra; con pedidos archiva)
 - `POST /customers/:id/identities`
 - `PATCH /customers/:customerId/identities/:identityId`
 - `POST /customers/:id/addresses`

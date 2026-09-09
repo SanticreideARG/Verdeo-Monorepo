@@ -57,6 +57,7 @@ const customerOperationsStubs = {
   addCustomerRestriction: vi.fn(),
   confirmAddressGeocoding: vi.fn(),
   cycleLabels: vi.fn(),
+  deleteCustomer: vi.fn(),
   exportCustomers: vi.fn(),
   exportOrders: vi.fn(),
   listMergeCandidates: vi.fn(),

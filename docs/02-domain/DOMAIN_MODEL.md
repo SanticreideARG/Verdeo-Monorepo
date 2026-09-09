@@ -77,6 +77,20 @@ Con reason, createdBy, timestamps, active.
 
 Merge/unmerge auditable. Debe conservar procedencia de identidades, pedidos y conversaciones para poder revertir.
 
+### Baja de cliente
+
+Un cliente **sin pedidos** se borra de verdad: es el caso del duplicado, la prueba o el contacto
+cargado dos veces, y archivarlo sólo ensucia la lista para siempre. Sus identidades, domicilios,
+preferencias y restricciones se van con él por cascada; una conversación queda huérfana y no
+borrada, porque el mensaje existió.
+
+Un cliente **con pedidos** se archiva (`status = archived`). La clave foránea de `orders` es
+`restrict` justamente para que esto no sea una decisión: borrarlo destruiría el historial de venta,
+la facturación y la trazabilidad de la auditoría. Se puede reactivar cambiándole el estado.
+
+Los dos casos quedan auditados, y en el borrado el registro se escribe antes de borrar la fila: si
+no, no quedaría quién dice qué se borró ni con qué nombre.
+
 ## Catálogo
 
 ### ProductFamily

@@ -51,6 +51,7 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [x] CSV export and Excel adapter (`GET /orders/export?format=csv|xlsx`; la planilla trae
       Pedidos, Conciliado y Por zona).
 - [x] Ocultar apellidos en pantalla y en la exportación (`maskSurnames=1`).
+- [x] Eliminar clientes: borra el que no tiene pedidos, archiva el que sí.
 - [x] Ordenar la lista por cualquier columna.
 
 ## P0 - Operational capture

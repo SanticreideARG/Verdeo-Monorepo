@@ -166,6 +166,19 @@ export const CustomerUpdateRequestSchema = z
   })
   .refine((value) => Object.keys(value).length > 0, { message: 'No hay cambios para aplicar.' });
 
+/**
+ * Qué pasó al eliminar un cliente.
+ *
+ * Un cliente sin pedidos se borra de verdad; uno con pedidos se archiva, porque borrarlo se llevaría
+ * puesto el historial de venta. La respuesta dice cuál de las dos cosas pasó —y cuántos pedidos
+ * tenía— para que la pantalla lo pueda explicar en vez de que quien tocó el botón tenga que
+ * adivinar por qué el nombre sigue apareciendo.
+ */
+export const CustomerDeleteResponseSchema = z.object({
+  orderCount: z.number().int(),
+  outcome: z.enum(['ARCHIVED', 'DELETED']),
+});
+
 export const CustomerListQuerySchema = z.object({
   cursor: UuidSchema.optional(),
   limit: z.coerce.number().int().min(1).max(100).default(30),
