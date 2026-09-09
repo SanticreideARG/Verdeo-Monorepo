@@ -387,3 +387,21 @@ const ORDER_STATUS_LABELS: Record<string, string> = {
 export function orderStatusLabel(status: string): string {
   return ORDER_STATUS_LABELS[status] ?? status;
 }
+
+/**
+ * Las variedades como se eligen: el Intuitivo último.
+ *
+ * El Intuitivo no es una variedad más —hay que armarlo, eligiendo cinco platos— y apareciendo
+ * primero se lleva puesta la decisión: quien viene a pedir "el Keto" se encuentra arriba con una
+ * tarjeta que le pide construir algo. Va al final, después de los menús que ya vienen resueltos.
+ *
+ * Dentro de cada grupo se mantiene el orden que trae el menú, que es el que el operador armó.
+ */
+export function offeringsForPicking<T extends { composable: boolean }>(
+  offerings: readonly T[],
+): T[] {
+  return [
+    ...offerings.filter((offering) => !offering.composable),
+    ...offerings.filter((offering) => offering.composable),
+  ];
+}

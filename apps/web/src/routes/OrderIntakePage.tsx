@@ -24,6 +24,7 @@ import {
   errorMessage,
   formatMoney,
   menusForAmbientScope,
+  offeringsForPicking,
   orderStatusLabel,
   type CustomerSummary,
   type OrderSummary,
@@ -720,7 +721,7 @@ export function OrderIntakePage() {
                   value={selectedOfferingId}
                 >
                   <option value="">Seleccionar</option>
-                  {selectedMenu?.offerings.map((offering) => (
+                  {offeringsForPicking(selectedMenu?.offerings ?? []).map((offering) => (
                     <option key={offering.id} value={offering.id}>
                       {offering.familyName} {offering.variantName} ·{' '}
                       {formatMoney(offering.unitPriceMinor, offering.currency)}

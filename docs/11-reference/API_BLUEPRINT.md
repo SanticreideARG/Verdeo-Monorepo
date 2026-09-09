@@ -102,6 +102,7 @@ confirmación recibe un candidato persistido o un par latitud/longitud corregido
 
 ## CMS
 
+- `GET /public/payment-methods`
 - `GET /public/pages/:slug`
 - `GET /cms/pages`
 - `PATCH /cms/pages/:id`

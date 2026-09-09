@@ -1451,6 +1451,28 @@ export function createApp(options: CreateAppOptions) {
     return context.json(MenuListResponseSchema.parse({ items: [contractValue(menu)] }).items[0]);
   });
 
+  /*
+   * Los métodos de pago que el formulario público ofrece.
+   *
+   * Sin esto, "Pago esperado" era un campo de texto libre y cada quien escribía lo que quería:
+   * "transf", "Transferencia", "efvo". Después eso hay que conciliarlo a mano, y el mismo pedido
+   * dice una cosa distinta según quién lo cargó. Público a propósito —quien pide no tiene sesión— y
+   * sólo los activos, con lo que hace falta para mostrarlos: acá no hay nada sensible.
+   */
+  app.get('/api/v1/public/payment-methods', async (context) => {
+    const items = (await requirePayments().listPaymentMethods()) as readonly {
+      active: boolean;
+      code: string;
+      displayName: string;
+      sortOrder: number;
+    }[];
+    return context.json({
+      items: items
+        .filter((method) => method.active)
+        .map(({ code, displayName, sortOrder }) => ({ code, displayName, sortOrder })),
+    });
+  });
+
   app.get('/api/v1/public/pages/:slug', async (context) => {
     const slug = context.req.param('slug');
     const page = await requireCms().getPublicPage(slug);

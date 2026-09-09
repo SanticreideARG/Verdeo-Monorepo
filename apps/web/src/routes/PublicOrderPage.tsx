@@ -9,6 +9,7 @@ import { useFormDraft } from '../lib/useFormDraft.js';
 import {
   errorMessage,
   formatMoney,
+  offeringsForPicking,
   type OrderSummary,
   type WeeklyMenu,
 } from '../lib/operations.js';
@@ -37,10 +38,31 @@ export function PublicOrderPage() {
   const [sites, setSites] = useState<{ displayName: string; slug: string }[]>([]);
   const [siteSlug, setSiteSlug] = useState('');
   const [selectedDishes, setSelectedDishes] = useState<string[]>([]);
+  /*
+   * Los métodos de pago configurados en Ajustes.
+   *
+   * Antes esto era un campo de texto libre y cada quien escribía lo que quería —"transf",
+   * "Transferencia", "efvo"—, y después había que conciliarlo a mano. Si la lista no llega, el
+   * campo vuelve a ser texto: no se puede dejar a alguien sin poder terminar el pedido porque una
+   * consulta falló.
+   */
+  const [paymentMethods, setPaymentMethods] = useState<{ code: string; displayName: string }[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
   // A visitor filling this in is not staff: a stray back button or a refresh on mobile costs them
   // the whole order, and there is no dashboard to fall back on.
   const draft = useFormDraft(formRef, 'public-order');
+
+  useEffect(() => {
+    void apiRequest('/api/v1/public/payment-methods')
+      .then(async (response) => {
+        if (!response.ok) return;
+        const body = (await response.json()) as {
+          items: { code: string; displayName: string; sortOrder: number }[];
+        };
+        setPaymentMethods([...body.items].sort((left, right) => left.sortOrder - right.sortOrder));
+      })
+      .catch(() => setPaymentMethods([]));
+  }, []);
 
   // The visitor chooses the city; it is never inferred from IP or domain.
   useEffect(() => {
@@ -215,7 +237,7 @@ export function PublicOrderPage() {
               <fieldset className="field field-wide offering-picker">
                 <legend>Variedad y tamaño</legend>
                 <div className="offering-picker-grid">
-                  {menu.offerings.map((item) => (
+                  {offeringsForPicking(menu.offerings).map((item) => (
                     <label
                       className={`offering-card ${item.id === offeringId ? 'is-selected' : ''}`}
                       key={item.id}
@@ -288,11 +310,21 @@ export function PublicOrderPage() {
               </label>
               <label className="field field-wide">
                 Pago esperado
-                <input
-                  name="paymentExpectation"
-                  placeholder="Ej. transferencia o efectivo"
-                  required
-                />
+                {paymentMethods.length > 0 ? (
+                  <select name="paymentExpectation" required>
+                    {paymentMethods.map((method) => (
+                      <option key={method.code} value={method.displayName}>
+                        {method.displayName}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    name="paymentExpectation"
+                    placeholder="Ej. transferencia o efectivo"
+                    required
+                  />
+                )}
               </label>
               {offering?.composable ? (
                 <div className="field field-wide">
