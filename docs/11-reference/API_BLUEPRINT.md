@@ -82,7 +82,9 @@ confirmación recibe un candidato persistido o un par latitud/longitud corregido
 ## Routes
 
 - `GET /routes`
+- `GET /delivery/routable-dates` (qué días tienen pedidos esperando ruta)
 - `POST /routes` (opcional `geographicZoneId`: una hoja por zona)
+- `DELETE /delivery/routes/:id` (sólo borradores)
 - `POST /routes/:id/optimize`
 - `POST /routes/:id/publish`
 

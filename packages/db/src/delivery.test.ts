@@ -249,3 +249,89 @@ describe('triggerMessage', () => {
     expect(result).toEqual({ reason: 'no_template', sent: false });
   });
 });
+
+describe('deleteRoute', () => {
+  it('borra una propuesta y devuelve sus pedidos al pozo de ruteables', async () => {
+    const { service } = await seededService();
+    const first = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
+    expect(first?.stops).toHaveLength(2);
+
+    await service.deleteRoute(first!.id, CONTEXT);
+
+    /*
+     * `createRoute` excluye lo que está en una ruta activa. Si borrar no devolviera los pedidos al
+     * pozo, una propuesta descartada dejaría esos pedidos sin poder entrar en ninguna otra hoja —
+     * invisibles, y sin nada que lo explique.
+     */
+    const second = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
+    expect(second?.stops).toHaveLength(2);
+  });
+
+  it('se niega a borrar una ruta publicada', async () => {
+    const { service } = await seededService();
+    const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
+    await service.publishRoute(route!.id, CONTEXT);
+
+    // Una publicada ya está en el teléfono de alguien, y sus paradas entregadas son parte de lo que
+    // pasó ese día.
+    await expect(service.deleteRoute(route!.id, CONTEXT)).rejects.toThrow();
+  });
+
+  it('deja el rastro en auditoría antes de borrar', async () => {
+    const { db, service } = await seededService();
+    const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
+
+    await service.deleteRoute(route!.id, CONTEXT);
+
+    const events = await db.select().from(schema.auditEvents);
+    expect(events.some((event) => event.action === 'delivery.route_deleted')).toBe(true);
+  });
+});
+
+describe('routableDates', () => {
+  it('dice qué días tienen pedidos y cuántos se pueden rutear', async () => {
+    const { service } = await seededService();
+
+    const dates = await service.routableDates(SITE);
+
+    /*
+     * Esto es lo que el formulario necesita para no fallar en silencio: la fecha de entrega de un
+     * pedido es la del cierre de su semana, no "mañana", y el campo de fecha libre con "mañana" por
+     * defecto proponía rutas para días vacíos y contestaba "0 paradas" sin decir por qué.
+     */
+    expect(dates).toEqual([{ deliveryDate: '2026-08-26', geocoded: 2, routed: 0, total: 2 }]);
+  });
+
+  it('descuenta los que ya están en una ruta', async () => {
+    const { service } = await seededService();
+    await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
+
+    const [date] = await service.routableDates(SITE);
+
+    // "Hay 2 pedidos y 0 paradas" tiene dos causas muy distintas; sin separarlas no hay forma de
+    // saber qué hacer al respecto.
+    expect(date).toEqual({ deliveryDate: '2026-08-26', geocoded: 0, routed: 2, total: 2 });
+  });
+
+  it('separa los que no se pueden rutear por falta de coordenadas', async () => {
+    const { client, service } = await seededService();
+    await client.exec(
+      `update customer_addresses set latitude = null, longitude = null where id = '${ADDRESS_B}';`,
+    );
+
+    const [date] = await service.routableDates(SITE);
+
+    expect(date).toEqual({ deliveryDate: '2026-08-26', geocoded: 1, routed: 0, total: 2 });
+  });
+
+  it('acota a una zona cuando se pide', async () => {
+    const { client, service } = await seededService();
+    await client.exec(
+      `update customer_addresses set geographic_zone_id = '${ZONE_SUR}' where id = '${ADDRESS_B}';`,
+    );
+
+    const [date] = await service.routableDates(SITE, ZONE);
+
+    expect(date?.geocoded).toBe(1);
+  });
+});

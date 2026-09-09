@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
+import { maskSurname } from '../lib/maskName.js';
 import { errorMessage, formatMoney } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
@@ -21,7 +22,9 @@ interface RouteStop {
   assignedUserId: string | null;
   customerDisplayName: string;
   deliveryAddress: string;
+  deliveryLatitude: number | null;
   deliveryLocationUrl: string | null;
+  deliveryLongitude: number | null;
   id: string;
   orderId: string;
   paymentExpectation: string;
@@ -48,10 +51,20 @@ function formText(form: FormData, key: string): string {
   return typeof value === 'string' ? value : '';
 }
 
-function tomorrow(): string {
-  const date = new Date();
-  date.setDate(date.getDate() + 1);
-  return date.toISOString().slice(0, 10);
+/** Fechas de entrega con pedidos confirmados, y en qué estado están para poder rutearlos. */
+interface RoutableDate {
+  deliveryDate: string;
+  /** Confirmados, geocodificados y todavía sin ruta: los que entrarían en la hoja. */
+  geocoded: number;
+  /** Ya están en otra ruta activa. */
+  routed: number;
+  total: number;
+}
+
+function dateLabel(iso: string): string {
+  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'long', timeZone: 'UTC' }).format(
+    new Date(`${iso}T00:00:00Z`),
+  );
 }
 
 /** "Rutas" (Operación): operators propose a route for a site+date — every CONFIRMED, geocoded
@@ -67,11 +80,22 @@ export function RoutesPage() {
    * cambiar de ciudad recarga la pantalla entera, así que alcanza con pedirlas una vez.
    */
   const [zones, setZones] = useState<{ displayName: string; id: string }[]>([]);
+  /*
+   * Los días que tienen pedidos esperando una ruta.
+   *
+   * Reemplazan al campo de fecha libre. La fecha de entrega de un pedido es la del cierre de su
+   * semana, no "mañana": el formulario proponía para mañana, no encontraba nada, y contestaba "0
+   * paradas" sin decir por qué. Se recargan al cambiar de zona, porque la respuesta depende de ella.
+   */
+  const [routableDates, setRoutableDates] = useState<RoutableDate[]>([]);
+  const [zoneId, setZoneId] = useState('');
   const [users, setUsers] = useState<{ displayName: string; id: string }[]>([]);
   const [routes, setRoutes] = useState<RouteSummary[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteDetail | null>(null);
   const [message, setMessage] = useState('');
   const [formOpen, setFormOpen] = useState(false);
+  // La propuesta que se está por descartar: se pregunta antes, aunque no sea grave.
+  const [confirmDiscard, setConfirmDiscard] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const canRead = profile?.permissions.includes('routes.read') ?? false;
@@ -111,6 +135,17 @@ export function RoutesPage() {
       }),
     ]).finally(() => setLoading(false));
   }, [canRead, loadRoutes]);
+
+  useEffect(() => {
+    if (!canRead) return;
+    const params = new URLSearchParams(zoneId ? { geographicZoneId: zoneId } : {});
+    void apiRequest(`/api/v1/delivery/routable-dates?${params.toString()}`)
+      .then(async (response) => {
+        if (!response.ok) return;
+        setRoutableDates(((await response.json()) as { items: RoutableDate[] }).items);
+      })
+      .catch(() => setRoutableDates([]));
+  }, [canRead, zoneId]);
 
   async function createRoute(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -164,22 +199,42 @@ export function RoutesPage() {
   }
 
   /**
+   * El enlace de mapa de una parada.
+   *
+   * Prioridad a la ubicación que el cliente compartió: es la puerta exacta, dicha por quien vive
+   * ahí. Si no hay, se arma con las coordenadas del domicilio. Y si tampoco hay coordenadas, una
+   * búsqueda por la dirección escrita: peor que un pin, muchísimo mejor que tipearla a mano en el
+   * teléfono, parado en la vereda.
+   */
+  function stopMapLink(stop: RouteStop): string {
+    if (stop.deliveryLocationUrl) return stop.deliveryLocationUrl;
+    if (stop.deliveryLatitude !== null && stop.deliveryLongitude !== null) {
+      return `https://www.google.com/maps/search/?api=1&query=${String(stop.deliveryLatitude)},${String(stop.deliveryLongitude)}`;
+    }
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stop.deliveryAddress)}`;
+  }
+
+  /**
    * La ruta como algo que se le puede pasar a alguien.
    *
-   * Hasta ahora "Proponer ruta" guardaba una ruta y ahí terminaba: no había forma de sacarla de la
-   * pantalla. Esto la convierte en un mensaje listo para mandar por chat, con las paradas en orden
-   * y el enlace de ubicación de cada una — que es lo que el repartidor abre en el teléfono, y lo
-   * que una dirección escrita no resuelve.
+   * Es el mensaje que se pega en el chat del repartidor: las paradas en orden, con el enlace de
+   * mapa de cada una —que es lo que se abre en el teléfono, y lo que una dirección escrita no
+   * resuelve— y lo que hay que cobrar ahí.
+   *
+   * Sin apellidos. El mensaje sale del sistema y entra a un chat de WhatsApp, que se reenvía sin
+   * pensarlo; el nombre de pila alcanza de sobra para saber a quién se le entrega.
    */
   function routeMessage(route: RouteDetail): string {
     const header = `Reparto ${route.deliveryDate}${route.label ? ` · ${route.label}` : ''} — ${String(route.stops.length)} paradas`;
-    const lines = route.stops.map((stop) => {
-      const parts = [`${String(stop.sequence)}. ${stop.customerDisplayName}`, stop.deliveryAddress];
-      if (stop.deliveryLocationUrl) parts.push(stop.deliveryLocationUrl);
-      // El pago esperado va en la parada: es lo que el repartidor tiene que cobrar ahí.
-      parts.push(`${stop.paymentExpectation} · ${formatMoney(stop.totalMinor, 'ARS')}`);
-      return parts.join('\n');
-    });
+    const lines = route.stops.map((stop) =>
+      [
+        `${String(stop.sequence)}. ${maskSurname(stop.customerDisplayName)}`,
+        stop.deliveryAddress,
+        stopMapLink(stop),
+        // El pago esperado va en la parada: es lo que el repartidor tiene que cobrar ahí.
+        `${stop.paymentExpectation} · ${formatMoney(stop.totalMinor, 'ARS')}`,
+      ].join('\n'),
+    );
     return [header, '', ...lines].join('\n\n');
   }
 
@@ -195,9 +250,9 @@ export function RoutesPage() {
       ['Orden', 'Cliente', 'Dirección', 'Ubicación', 'Pago esperado', 'Total', 'N° de pedido'],
       ...route.stops.map((stop) => [
         String(stop.sequence),
-        stop.customerDisplayName,
+        maskSurname(stop.customerDisplayName),
         stop.deliveryAddress,
-        stop.deliveryLocationUrl ?? '',
+        stopMapLink(stop),
         stop.paymentExpectation,
         String(stop.totalMinor / 100),
         stop.publicNumber,
@@ -211,6 +266,24 @@ export function RoutesPage() {
     link.download = `ruta-${route.deliveryDate}.csv`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  }
+
+  /**
+   * Descartar una propuesta.
+   *
+   * Proponer es barato y las propuestas se acumulan: la lista se llena de "0 paradas · Borrador" y
+   * deja de decir cuál es la ruta de mañana. Sólo borradores; una publicada ya salió a la calle.
+   */
+  async function discard(routeId: string) {
+    const response = await apiRequest(`/api/v1/delivery/routes/${routeId}`, { method: 'DELETE' });
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    if (selectedRoute?.id === routeId) setSelectedRoute(null);
+    setConfirmDiscard(null);
+    await loadRoutes();
+    setMessage('Propuesta descartada.');
   }
 
   async function publish(routeId: string) {
@@ -303,7 +376,11 @@ export function RoutesPage() {
             */}
             <label className="field">
               Zona
-              <select name="geographicZoneId">
+              <select
+                name="geographicZoneId"
+                onChange={(event) => setZoneId(event.target.value)}
+                value={zoneId}
+              >
                 <option value="">Toda la ciudad</option>
                 {zones.map((zone) => (
                   <option key={zone.id} value={zone.id}>
@@ -314,15 +391,55 @@ export function RoutesPage() {
             </label>
             <label className="field">
               Fecha de entrega
-              <input defaultValue={tomorrow()} name="deliveryDate" required type="date" />
+              {/*
+               * Sólo los días que tienen pedidos, con cuántos entrarían en la hoja. Un campo de
+               * fecha libre dejaba proponer rutas para días vacíos, que es lo que venía pasando.
+               */}
+              {routableDates.length > 0 ? (
+                <select name="deliveryDate" required>
+                  {routableDates.map((date) => (
+                    <option key={date.deliveryDate} value={date.deliveryDate}>
+                      {dateLabel(date.deliveryDate)} · {String(date.geocoded)} para rutear
+                      {date.routed > 0 ? ` (${String(date.routed)} ya en ruta)` : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input disabled placeholder="No hay pedidos confirmados para rutear" />
+              )}
             </label>
             <label className="field">
               Etiqueta (opcional)
               <input name="label" placeholder="Ej. Turno mañana" />
             </label>
-            <button className="button button-primary sm:col-span-3" type="submit">
+            <button
+              className="button button-primary sm:col-span-3"
+              disabled={routableDates.length === 0}
+              type="submit"
+            >
               Proponer ruta
             </button>
+            {/*
+             * Por qué no hay nada que rutear, cuando no lo hay. "0 paradas" tiene dos causas muy
+             * distintas —sin geocodificar, o ya en otra ruta— y sin decirlas no hay forma de saber
+             * qué hacer al respecto.
+             */}
+            {routableDates.length === 0 ? (
+              <p className="text-sm text-ink-muted sm:col-span-3">
+                No hay pedidos confirmados en esta ciudad
+                {zoneId ? ' y esta zona' : ''}. Un pedido entra en una hoja de ruta cuando está
+                confirmado y su domicilio está geocodificado.
+              </p>
+            ) : (
+              <p className="text-sm text-ink-muted sm:col-span-3">
+                {routableDates.reduce(
+                  (total, date) => total + date.total - date.geocoded - date.routed,
+                  0,
+                ) > 0
+                  ? `Hay ${String(routableDates.reduce((total, date) => total + date.total - date.geocoded - date.routed, 0))} pedidos confirmados que no entran en ninguna hoja porque su domicilio no está geocodificado.`
+                  : 'Todos los pedidos confirmados tienen domicilio geocodificado.'}
+              </p>
+            )}
           </form>
         ) : null}
 
@@ -398,6 +515,22 @@ export function RoutesPage() {
                           type="button"
                         >
                           Publicar
+                        </button>
+                      ) : null}
+                      {canManage && selectedRoute.status === 'draft' ? (
+                        <button
+                          className="button button-danger"
+                          /* Dos toques en vez de un diálogo: descartar una propuesta vacía no
+                             merece interrumpir la pantalla, pero sí merece no pasar por accidente. */
+                          onClick={() => {
+                            if (confirmDiscard === selectedRoute.id) void discard(selectedRoute.id);
+                            else setConfirmDiscard(selectedRoute.id);
+                          }}
+                          type="button"
+                        >
+                          {confirmDiscard === selectedRoute.id
+                            ? '¿Seguro? Tocá de nuevo'
+                            : 'Descartar propuesta'}
                         </button>
                       ) : null}
                     </div>

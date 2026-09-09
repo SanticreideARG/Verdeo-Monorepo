@@ -862,6 +862,11 @@ interface DeliveryEngine {
     context: DeliveryContext,
     geographicZoneId?: string,
   ): Promise<unknown>;
+  deleteRoute(routeId: string, context: DeliveryContext): Promise<unknown>;
+  routableDates(
+    operatingSiteId: string,
+    geographicZoneId?: string,
+  ): Promise<{ deliveryDate: string; geocoded: number; routed: number; total: number }[]>;
   getRouteDetail(routeId: string): Promise<unknown>;
   listRoutes(operatingSiteId?: string): Promise<unknown>;
   listStopsForUser(userId: string): Promise<unknown>;
@@ -2047,6 +2052,12 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/access-tokens', requireAuthentication);
   app.use('/api/v1/cms/*', requireAuthentication);
   app.use('/api/v1/messaging/*', requireAuthentication);
+  /*
+   * Sólo esta ruta resuelve el ámbito: las fechas que se pueden rutear son las de la ciudad que se
+   * está mirando. Se registra antes del comodín porque el resto de `/delivery` no necesita el
+   * ámbito, y pedirlo para todas ataría el módulo entero al servicio de geografía.
+   */
+  app.use('/api/v1/delivery/routable-dates', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/delivery/*', requireAuthentication);
   app.use('/api/v1/payments/*', requireAuthentication);
   app.use('/api/v1/stats', requireAuthentication);
@@ -3683,6 +3694,22 @@ export function createApp(options: CreateAppOptions) {
     return context.json(DeliveryRouteListResponseSchema.parse({ items: contractValue(items) }));
   });
 
+  /*
+   * Qué días tienen pedidos esperando una ruta.
+   *
+   * El formulario preguntaba una fecha libre con "mañana" por defecto, y la fecha de entrega de un
+   * pedido es la del cierre de su semana: proponer para mañana daba "0 paradas" sin decir por qué.
+   * Con esto el formulario ofrece las fechas que sí tienen pedidos, y el error deja de ser posible.
+   */
+  app.get('/api/v1/delivery/routable-dates', async (context) => {
+    if (!context.get('session').permissions.includes('routes.read')) return forbidden(context);
+    const operatingSiteId = context.get('scope')?.operatingSiteId;
+    if (!operatingSiteId) return context.json({ items: [] });
+    const zone = context.req.query('geographicZoneId');
+    const items = await requireDelivery().routableDates(operatingSiteId, zone || undefined);
+    return context.json({ items });
+  });
+
   app.post('/api/v1/delivery/routes', async (context) => {
     if (!context.get('session').permissions.includes('routes.manage')) return forbidden(context);
     const input = DeliveryRouteCreateRequestSchema.safeParse(
@@ -3706,6 +3733,20 @@ export function createApp(options: CreateAppOptions) {
     if (!params.success) return badRequest(context, 'Ruta inválida.', params.error.issues);
     const route = await requireDelivery().getRouteDetail(params.data.id);
     return context.json(DeliveryRouteDetailSchema.parse(contractValue(route)));
+  });
+
+  /*
+   * Borrar una propuesta.
+   *
+   * Sólo borradores; publicar es lo que la vuelve real. Requiere `routes.manage`, el mismo permiso
+   * que la propone: quien puede crear una propuesta puede descartarla.
+   */
+  app.delete('/api/v1/delivery/routes/:id', async (context) => {
+    if (!context.get('session').permissions.includes('routes.manage')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    if (!params.success) return badRequest(context, 'Ruta inválida.', params.error.issues);
+    const result = await requireDelivery().deleteRoute(params.data.id, deliveryContext(context));
+    return context.json(result as Record<string, unknown>);
   });
 
   app.post('/api/v1/delivery/routes/:id/publish', async (context) => {

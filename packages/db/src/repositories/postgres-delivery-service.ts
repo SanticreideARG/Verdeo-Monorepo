@@ -193,6 +193,56 @@ export class PostgresDeliveryService {
     });
   }
 
+  /**
+   * Qué días hay pedidos esperando una ruta, y cuántos.
+   *
+   * Es lo que el formulario necesita para no fallar en silencio. La fecha de entrega de un pedido
+   * es la del cierre de su semana —no "mañana"—, así que un campo de fecha libre con "mañana" por
+   * defecto proponía rutas para días en los que no hay nada, y el resultado era "0 paradas" sin
+   * decir por qué. Ofreciendo las fechas que sí tienen pedidos, el error deja de ser posible.
+   *
+   * Cuenta por separado lo que se puede rutear y lo que no, porque "hay 30 pedidos y 0 paradas"
+   * tiene dos causas muy distintas: sin geocodificar (hay que resolver el domicilio) o ya ruteado
+   * (está en otra hoja). Sin esa distinción no hay forma de saber qué hacer al respecto.
+   */
+  public async routableDates(operatingSiteId: string, geographicZoneId?: string) {
+    const alreadyRouted = this.database
+      .select({ orderId: deliveryStops.orderId })
+      .from(deliveryStops)
+      .innerJoin(deliveryRoutes, eq(deliveryRoutes.id, deliveryStops.routeId))
+      .where(inArray(deliveryRoutes.status, ['draft', 'published']));
+
+    const rows = await this.database
+      .select({
+        deliveryDate: orders.deliveryDate,
+        geocoded: sql<number>`count(*) filter (
+          where ${customerAddresses.latitude} is not null
+            and ${customerAddresses.longitude} is not null
+            and ${orders.id} not in ${alreadyRouted}
+        )`,
+        routed: sql<number>`count(*) filter (where ${orders.id} in ${alreadyRouted})`,
+        total: sql<number>`count(*)`,
+      })
+      .from(orders)
+      .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+      .where(
+        and(
+          eq(orders.operatingSiteId, operatingSiteId),
+          eq(orders.status, 'CONFIRMED'),
+          ...(geographicZoneId ? [eq(customerAddresses.geographicZoneId, geographicZoneId)] : []),
+        ),
+      )
+      .groupBy(orders.deliveryDate)
+      .orderBy(asc(orders.deliveryDate));
+
+    return rows.map((row) => ({
+      deliveryDate: row.deliveryDate,
+      geocoded: Number(row.geocoded),
+      routed: Number(row.routed),
+      total: Number(row.total),
+    }));
+  }
+
   public async listRoutes(operatingSiteId?: string) {
     const rows = await this.database
       .select({
@@ -241,6 +291,15 @@ export class PostgresDeliveryService {
         // El enlace de ubicación es lo que el repartidor abre en el teléfono: sin esto, la lista que
         // se le pasa son direcciones escritas que hay que tipear en un mapa.
         deliveryLocationUrl: orders.deliveryLocationUrlSnapshot,
+        /*
+         * Las coordenadas del domicilio.
+         *
+         * El enlace compartido existe sólo si alguien lo mandó por chat, y en la mayoría de los
+         * pedidos no está: la lista que se le pasaba al repartidor eran direcciones escritas para
+         * tipear a mano en un mapa. Con esto se arma el enlace igual.
+         */
+        deliveryLatitude: customerAddresses.latitude,
+        deliveryLongitude: customerAddresses.longitude,
         id: deliveryStops.id,
         orderId: deliveryStops.orderId,
         paymentExpectation: orders.paymentExpectation,
@@ -252,11 +311,70 @@ export class PostgresDeliveryService {
       .from(deliveryStops)
       .innerJoin(orders, eq(orders.id, deliveryStops.orderId))
       .innerJoin(customers, eq(customers.id, orders.customerId))
+      .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
       .leftJoin(users, eq(users.id, deliveryStops.assignedUserId))
       .where(eq(deliveryStops.routeId, routeId))
       .orderBy(asc(deliveryStops.sequence));
 
-    return { ...route, stops };
+    return {
+      ...route,
+      stops: stops.map((stop) => ({
+        ...stop,
+        // `numeric` llega como texto desde Postgres; el contrato pide números.
+        deliveryLatitude: stop.deliveryLatitude === null ? null : Number(stop.deliveryLatitude),
+        deliveryLongitude: stop.deliveryLongitude === null ? null : Number(stop.deliveryLongitude),
+      })),
+    };
+  }
+
+  /**
+   * Borrar una propuesta.
+   *
+   * Sólo borradores: una ruta publicada ya está en el teléfono de alguien, y sus paradas entregadas
+   * son parte de lo que pasó ese día. Una propuesta, en cambio, es un intento — y proponer es
+   * barato, así que se acumulan. Sin poder borrarlas la lista se llena de "0 paradas · Borrador" y
+   * deja de decir cuál es la ruta de mañana.
+   *
+   * Las paradas se van con la ruta por cascada, y los pedidos vuelven a estar disponibles para otra
+   * ruta: `createRoute` excluye lo que está en una ruta activa, y ésta deja de existir.
+   */
+  public async deleteRoute(routeId: string, context: DeliveryContext) {
+    return this.database.transaction(async (transaction) => {
+      const [current] = await transaction
+        .select({ status: deliveryRoutes.status })
+        .from(deliveryRoutes)
+        .where(eq(deliveryRoutes.id, routeId))
+        .limit(1);
+      if (!current) throw new DeliveryNotFoundError('Route not found');
+      if (current.status !== 'draft')
+        throw new DeliveryConflictError(
+          'Sólo se puede borrar una ruta en borrador. Una ruta publicada ya salió a la calle.',
+        );
+
+      const [stopCount] = await transaction
+        .select({ total: sql<number>`count(*)` })
+        .from(deliveryStops)
+        .where(eq(deliveryStops.routeId, routeId));
+
+      // La auditoría va antes del borrado: después la fila ya no está y no queda quién dice qué se
+      // borró ni cuántas paradas tenía.
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: 'delivery.route_deleted',
+        actor: context.actorUserId
+          ? { type: 'user', userId: context.actorUserId }
+          : { type: 'system' },
+        before: { status: current.status, stopCount: Number(stopCount?.total ?? 0) },
+        correlationId: context.correlationId,
+        entityId: routeId,
+        entityType: 'delivery_route',
+        requestId: context.requestId,
+        source: context.source,
+      });
+
+      await transaction.delete(deliveryRoutes).where(eq(deliveryRoutes.id, routeId));
+      return { deleted: true, stopCount: Number(stopCount?.total ?? 0) };
+    });
   }
 
   public async publishRoute(routeId: string, context: DeliveryContext) {

@@ -112,6 +112,8 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 
 - [x] Route CRUD.
 - [x] Hoja de ruta por zona (`geographicZoneId` opcional en `POST /routes`).
+- [x] Descartar propuestas de ruta sin publicar.
+- [x] El formulario ofrece sólo fechas con pedidos por rutear, con el conteo.
 - [ ] Time windows.
 - [x] Optimization adapter (`@verdeo/routing` — determinista, sin ventanas horarias; ver
       DELIVERY_AND_ROUTES.md "As built").
