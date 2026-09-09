@@ -33,6 +33,7 @@ import {
   buildLabels,
   calculateLineTotal,
   calculateOrderTotal,
+  mergeByLooseName,
   resolveOrderComposition,
   type KitchenSourceLine,
   type OrderExportRow,
@@ -5051,21 +5052,36 @@ export class PostgresOperationsService {
         orderCount: Number(row.orderCount),
         revenueMinor: Number(row.revenueMinor),
       })),
-      byVariety: byVariety.map((row) => ({
-        ...row,
-        revenueMinor: Number(row.revenueMinor),
-        units: Number(row.units),
-      })),
+      /*
+       * El nombre sale del snapshot del ítem —el nombre tal como estaba el día que se vendió—, así
+       * que una semana cargada con "MENÚ REAL" y otra con "Menú Real" partían el mismo menú en dos
+       * porciones de la torta. Se juntan al leer: el informe no puede depender de con qué caja se
+       * tipeó el menú esa semana.
+       */
+      byVariety: mergeByLooseName(
+        byVariety.map((row) => ({
+          ...row,
+          revenueMinor: Number(row.revenueMinor),
+          units: Number(row.units),
+        })),
+        'familyName',
+        ['units', 'revenueMinor'],
+      ).sort((left, right) => right.revenueMinor - left.revenueMinor),
       byCycle: byCycle.map((row) => ({
         ...row,
         orderCount: Number(row.orderCount),
         revenueMinor: Number(row.revenueMinor),
       })),
-      bySize: bySize.map((row) => ({
-        ...row,
-        revenueMinor: Number(row.revenueMinor),
-        units: Number(row.units),
-      })),
+      // Mismo problema y misma solución: "400 g" y "400 G" son el mismo tamaño.
+      bySize: mergeByLooseName(
+        bySize.map((row) => ({
+          ...row,
+          revenueMinor: Number(row.revenueMinor),
+          units: Number(row.units),
+        })),
+        'sizeName',
+        ['units', 'revenueMinor'],
+      ).sort((left, right) => right.revenueMinor - left.revenueMinor),
       byZone: byZone.map((row) => ({
         ...row,
         orderCount: Number(row.orderCount),
