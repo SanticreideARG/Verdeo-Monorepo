@@ -335,3 +335,40 @@ describe('routableDates', () => {
     expect(date?.geocoded).toBe(1);
   });
 });
+
+describe('un pedido marcado listo sigue siendo ruteable', () => {
+  it('lo incluye en la hoja, igual que a uno confirmado', async () => {
+    const { client, service } = await seededService();
+    // Cocina marca listo por zona: es como trabaja, y es el estado del pedido que hay que repartir.
+    await client.exec(`update orders set status = 'READY' where id = '${ORDER_A}';`);
+
+    const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
+
+    /*
+     * Tomando sólo CONFIRMED, marcar los pedidos listos los sacaba del pozo de ruteo y la ciudad
+     * entera se volvía irruteable sin que nada lo dijera: "no hay pedidos confirmados y
+     * geocodificados para esa fecha" con veintiséis pedidos listos esperando el reparto.
+     */
+    expect(route?.stops).toHaveLength(2);
+  });
+
+  it('también los cuenta al decir qué días se pueden rutear', async () => {
+    const { client, service } = await seededService();
+    await client.exec(`update orders set status = 'READY' where id = '${ORDER_A}';`);
+
+    const [date] = await service.routableDates(SITE);
+
+    expect(date?.geocoded).toBe(2);
+  });
+
+  it('no toma borradores ni cancelados', async () => {
+    const { client, service } = await seededService();
+    await client.exec(`update orders set status = 'DRAFT' where id = '${ORDER_A}';`);
+    await client.exec(`update orders set status = 'CANCELLED' where id = '${ORDER_B}';`);
+
+    // Un borrador todavía no está vendido y un cancelado no se reparte.
+    const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
+
+    expect(route?.stops).toHaveLength(0);
+  });
+});

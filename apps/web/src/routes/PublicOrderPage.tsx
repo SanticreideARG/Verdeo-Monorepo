@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { DraftNotice } from '../components/DraftNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
 import { BrandLoading } from '../components/BrandLoading.js';
+import { deliveryDateFor, deliveryDateLabel } from '../lib/deliveryDate.js';
 import { apiRequest } from '../lib/api.js';
 import { useFormDraft } from '../lib/useFormDraft.js';
 import { useOrderFormSettings } from '../lib/useOrderFormSettings.js';
@@ -14,16 +15,6 @@ import {
   type OrderSummary,
   type WeeklyMenu,
 } from '../lib/operations.js';
-
-// The delivery date is fixed to the período's own close date — not a free pick — so it lives here,
-// not as an editable form field.
-function dateOnly(iso: string): string {
-  return iso.slice(0, 10);
-}
-
-function dateLabel(iso: string): string {
-  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'long' }).format(new Date(dateOnly(iso)));
-}
 
 function formText(form: FormData, key: string): string {
   const value = form.get(key);
@@ -123,7 +114,7 @@ export function PublicOrderPage() {
         phone: formText(form, 'phone') || undefined,
       },
       deliveryAddress: formText(form, 'deliveryAddress'),
-      deliveryDate: menu ? dateOnly(menu.cycle.closeAt) : '',
+      deliveryDate: menu ? deliveryDateFor(menu.cycle.closeAt) : '',
       dietaryInstructions: formText(form, 'dietaryInstructions')
         .split('\n')
         .map((instruction) => instruction.trim())
@@ -273,7 +264,7 @@ export function PublicOrderPage() {
               </label>
               <div className="field">
                 Fecha de entrega
-                <p className="field-static">{menu ? dateLabel(menu.cycle.closeAt) : ''}</p>
+                <p className="field-static">{menu ? deliveryDateLabel(menu.cycle.closeAt) : ''}</p>
               </div>
               <label className="field field-wide">
                 Nombre y apellido

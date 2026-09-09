@@ -45,6 +45,14 @@ export class DeliveryConflictError extends Error {
 
 type StopStatus = 'pending' | 'en_route' | 'at_address' | 'delivered' | 'skipped';
 
+/**
+ * Qué estados de un pedido pueden entrar en una hoja de ruta.
+ *
+ * CONFIRMED es un pedido en firme; READY es uno que cocina ya produjo. Los dos hay que repartirlos.
+ * Un borrador todavía no está vendido, un cancelado no se reparte y un entregado ya salió.
+ */
+const ROUTABLE_STATUSES = ['CONFIRMED', 'READY'] as const;
+
 // Also the messageTemplates.actionKey an operator configures a template against — kept as a type
 // rather than a lookup table since the trigger name already IS the action key.
 export const TRIGGER_ACTIONS = ['ON_MY_WAY', 'AT_ADDRESS', 'DELIVERED_THANKS'] as const;
@@ -74,9 +82,15 @@ export class PostgresDeliveryService {
   ) {}
 
   /**
-   * Proposes a route for every CONFIRMED, geocoded, not-already-routed order due that day at that
-   * site. "Puede existir pedido sin delivery como excepción": an order with no address coordinates
-   * yet is simply left off — an operator handles it manually, nothing blocks on it.
+   * Propone una ruta con todo pedido listo para salir ese día en esa operación: geocodificado y que
+   * no esté ya en otra ruta activa. "Puede existir pedido sin delivery como excepción": un pedido
+   * sin coordenadas queda afuera —lo maneja un operador a mano— y no bloquea nada.
+   *
+   * Entran los CONFIRMED y los READY, y lo segundo importa más de lo que parece. READY significa que
+   * cocina ya lo produjo: es justamente el pedido que hay que repartir. Tomando sólo CONFIRMED,
+   * marcar los pedidos listos por zona —que es como trabaja cocina— los sacaba del pozo de ruteo, y
+   * la ciudad entera se volvía irruteable sin que nada lo dijera. Fue exactamente lo que pasó con
+   * los veintiséis pedidos de Neuquén.
    */
   public async createRoute(
     operatingSiteId: string,
@@ -121,7 +135,7 @@ export class PostgresDeliveryService {
           and(
             eq(orders.operatingSiteId, operatingSiteId),
             eq(orders.deliveryDate, deliveryDate),
-            eq(orders.status, 'CONFIRMED'),
+            inArray(orders.status, ROUTABLE_STATUSES),
             // La zona se filtra por la dirección de entrega y no por el cliente: manda dónde se
             // entrega (ADR-031), que es lo mismo que decide de qué ciudad es el pedido.
             ...(geographicZoneId ? [eq(customerAddresses.geographicZoneId, geographicZoneId)] : []),
@@ -228,7 +242,7 @@ export class PostgresDeliveryService {
       .where(
         and(
           eq(orders.operatingSiteId, operatingSiteId),
-          eq(orders.status, 'CONFIRMED'),
+          inArray(orders.status, ROUTABLE_STATUSES),
           ...(geographicZoneId ? [eq(customerAddresses.geographicZoneId, geographicZoneId)] : []),
         ),
       )

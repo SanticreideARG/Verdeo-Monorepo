@@ -51,10 +51,10 @@ function formText(form: FormData, key: string): string {
   return typeof value === 'string' ? value : '';
 }
 
-/** Fechas de entrega con pedidos confirmados, y en qué estado están para poder rutearlos. */
+/** Fechas de entrega con pedidos por repartir, y en qué estado están para poder rutearlos. */
 interface RoutableDate {
   deliveryDate: string;
-  /** Confirmados, geocodificados y todavía sin ruta: los que entrarían en la hoja. */
+  /** Por repartir, geocodificados y todavía sin ruta: los que entrarían en la hoja. */
   geocoded: number;
   /** Ya están en otra ruta activa. */
   routed: number;
@@ -67,10 +67,10 @@ function dateLabel(iso: string): string {
   );
 }
 
-/** "Rutas" (Operación): operators propose a route for a site+date — every CONFIRMED, geocoded
- * order due that day gets auto-sequenced by the route optimizer — then reorder/assign/publish it.
- * Nothing reaches the delivery app (`/delivery`) until publish (DELIVERY_AND_ROUTES.md:
- * "optimización asistida, decisión humana"). */
+/** "Rutas" (Operación): se propone una hoja para una ciudad, una fecha y opcionalmente una zona; el
+ * optimizador secuencia todo pedido por repartir —confirmado o listo— con domicilio geocodificado,
+ * y después se reordena, se asigna y se publica. Nada llega a la app de reparto (`/delivery`) hasta
+ * publicar (DELIVERY_AND_ROUTES.md: "optimización asistida, decisión humana"). */
 export function RoutesPage() {
   const { failed, logout, profile } = useDashboardProfile();
   /*
@@ -194,7 +194,7 @@ export function RoutesPage() {
     setMessage(
       route.stops.length > 0
         ? `Ruta creada con ${String(route.stops.length)} paradas.`
-        : 'Ruta creada, pero sin paradas: no hay pedidos confirmados y geocodificados para ese día en esa zona.',
+        : 'Ruta creada, pero sin paradas: no hay pedidos por repartir ese día en esa zona.',
     );
   }
 
@@ -405,7 +405,7 @@ export function RoutesPage() {
                   ))}
                 </select>
               ) : (
-                <input disabled placeholder="No hay pedidos confirmados para rutear" />
+                <input disabled placeholder="No hay pedidos por repartir" />
               )}
             </label>
             <label className="field">
@@ -426,9 +426,9 @@ export function RoutesPage() {
              */}
             {routableDates.length === 0 ? (
               <p className="text-sm text-ink-muted sm:col-span-3">
-                No hay pedidos confirmados en esta ciudad
+                No hay pedidos por repartir en esta ciudad
                 {zoneId ? ' y esta zona' : ''}. Un pedido entra en una hoja de ruta cuando está
-                confirmado y su domicilio está geocodificado.
+                confirmado o listo, y su domicilio está geocodificado.
               </p>
             ) : (
               <p className="text-sm text-ink-muted sm:col-span-3">
@@ -436,8 +436,8 @@ export function RoutesPage() {
                   (total, date) => total + date.total - date.geocoded - date.routed,
                   0,
                 ) > 0
-                  ? `Hay ${String(routableDates.reduce((total, date) => total + date.total - date.geocoded - date.routed, 0))} pedidos confirmados que no entran en ninguna hoja porque su domicilio no está geocodificado.`
-                  : 'Todos los pedidos confirmados tienen domicilio geocodificado.'}
+                  ? `Hay ${String(routableDates.reduce((total, date) => total + date.total - date.geocoded - date.routed, 0))} pedidos por repartir que no entran en ninguna hoja porque su domicilio no está geocodificado.`
+                  : 'Todos los pedidos por repartir tienen domicilio geocodificado.'}
               </p>
             )}
           </form>
@@ -591,7 +591,7 @@ export function RoutesPage() {
                     ))}
                     {selectedRoute.stops.length === 0 ? (
                       <p className="text-ink-muted">
-                        No hay pedidos confirmados y geocodificados para esa fecha y esa zona.
+                        No hay pedidos por repartir en esa fecha y esa zona.
                       </p>
                     ) : null}
                   </ol>

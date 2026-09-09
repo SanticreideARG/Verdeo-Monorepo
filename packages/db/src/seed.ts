@@ -1,4 +1,4 @@
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, notExists, sql } from 'drizzle-orm';
 
 import { initialPermissionCatalog } from '@verdeo/rbac';
 
@@ -230,7 +230,35 @@ try {
         .onConflictDoNothing();
     }
 
-    const customerRows = await transaction.select({ customerId: customers.id }).from(customers);
+    /*
+     * Sólo los clientes que no tienen NINGUNA ciudad asignada.
+     *
+     * Antes esto asignaba Neuquén a todos los clientes de la base. Corrido sobre una instalación
+     * nueva es correcto —los únicos clientes son los de demostración, y son de Neuquén—, pero
+     * corrido sobre una base ya poblada le agrega una membresía a Neuquén a cada cliente existente:
+     * pasó en producción y dejó 220 clientes de Mendoza y Buenos Aires apareciendo también en la
+     * lista de Neuquén. La lista de clientes filtra por membresía, así que un cliente asignado a dos
+     * ciudades aparece en las dos.
+     *
+     * `onConflictDoNothing` no alcanzaba, porque no había conflicto: era una fila legítimamente
+     * nueva para una ciudad distinta.
+     */
+    const customerRows = await transaction
+      .select({ customerId: customers.id })
+      .from(customers)
+      .where(
+        notExists(
+          transaction
+            .select({ one: sql`1` })
+            .from(customerOperatingSites)
+            .where(
+              and(
+                eq(customerOperatingSites.customerId, customers.id),
+                eq(customerOperatingSites.status, 'active'),
+              ),
+            ),
+        ),
+      );
     if (customerRows.length > 0) {
       await transaction
         .insert(customerOperatingSites)

@@ -86,7 +86,7 @@ determinista sin dependencias externas que camina desde el origen configurado de
 por repartidor — es el reemplazo temporal del "motor determinista (Google Route Optimization,
 OR-Tools u otro adapter)" que pide este documento; los llamadores solo conocen la interfaz.
 
-- **`createRoute` propone, nunca publica**: toma todo pedido `CONFIRMED` con dirección geocodificada
+- **`createRoute` propone, nunca publica**: toma todo pedido por repartir —`CONFIRMED` o `READY`; marcar un pedido listo es cocina avisando que ya lo produjo, no que salga del reparto— con dirección geocodificada
   para ese sitio/fecha que no esté ya en una ruta activa, lo secuencia con el optimizador y crea la
   ruta en `draft`. Un pedido sin coordenadas queda afuera — "puede existir pedido sin delivery como
   excepción" — un operador lo maneja a mano. Nada llega a la app de reparto hasta `publish`.

@@ -8,6 +8,7 @@ import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus
 import { DataTable } from '../components/DataTable.js';
 import { DraftNotice } from '../components/DraftNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
+import { deliveryDateFor, deliveryDateLabel } from '../lib/deliveryDate.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { maskSurname, readMaskSurnames, writeMaskSurnames } from '../lib/maskName.js';
 import {
@@ -34,16 +35,6 @@ import {
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { useOrderFormSettings } from '../lib/useOrderFormSettings.js';
 import { useFormDraft } from '../lib/useFormDraft.js';
-
-// The delivery date is fixed to the período's own close date — not a free pick — so it lives here,
-// not as an editable form field.
-function dateOnly(iso: string): string {
-  return iso.slice(0, 10);
-}
-
-function dateLabel(iso: string): string {
-  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'long' }).format(new Date(dateOnly(iso)));
-}
 
 /**
  * Qué se ve de cada pedido en la cola de trabajo.
@@ -316,7 +307,7 @@ export function OrderIntakePage() {
       const createdOrder = await mutate('/api/v1/orders', {
         customerId,
         deliveryAddress: formText(form, 'deliveryAddress'),
-        deliveryDate: selectedMenu ? dateOnly(selectedMenu.cycle.closeAt) : '',
+        deliveryDate: selectedMenu ? deliveryDateFor(selectedMenu.cycle.closeAt) : '',
         dietaryInstructions: formText(form, 'dietaryInstructions')
           .split('\n')
           .map((value) => value.trim())
@@ -741,7 +732,7 @@ export function OrderIntakePage() {
               <div className="field">
                 Entrega
                 <p className="field-static">
-                  {selectedMenu ? dateLabel(selectedMenu.cycle.closeAt) : '—'}
+                  {selectedMenu ? deliveryDateLabel(selectedMenu.cycle.closeAt) : '—'}
                 </p>
               </div>
               <label className="field field-wide">
