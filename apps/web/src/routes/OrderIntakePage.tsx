@@ -8,12 +8,13 @@ import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus
 import { DataTable } from '../components/DataTable.js';
 import { DraftNotice } from '../components/DraftNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
-import { deliveryDateFor, deliveryDateLabel } from '../lib/deliveryDate.js';
+import { deliveryDateFor, deliveryDateLabel } from '../lib/dates.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { maskSurname, readMaskSurnames, writeMaskSurnames } from '../lib/maskName.js';
 import {
   buildOrderColumns,
   ORDER_COLUMNS,
+  orderRowTone,
   readStoredColumns,
   writeStoredColumns,
   type OrderColumn,
@@ -887,6 +888,7 @@ export function OrderIntakePage() {
             columns={intakeColumns.filter((column) => visibleColumns.includes(column.key))}
             empty="Ningún pedido pendiente de acción."
             rowKey={(order) => order.id}
+            rowTone={orderRowTone}
             rows={orders}
           />
         </div>

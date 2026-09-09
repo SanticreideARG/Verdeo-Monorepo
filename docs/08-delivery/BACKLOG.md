@@ -53,6 +53,9 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [x] Ocultar apellidos en pantalla y en la exportación (`maskSurnames=1`).
 - [x] Eliminar clientes: borra el que no tiene pedidos, archiva el que sí.
 - [x] Ordenar la lista por cualquier columna.
+- [x] Un solo formato de fecha en toda la aplicación (`lib/dates.ts`), con nombre de mes.
+- [x] Estados de cliente en castellano y elegidos de una lista, no escritos a mano.
+- [x] La fila de la cola muestra su estado en la forma, no sólo en una columna de texto.
 
 ## P0 - Operational capture
 
@@ -180,3 +183,26 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
       daría la operación por buena sin dejar rastro— y que el logger tape tokens, claves y headers
       de autorización. Para poder comprobar lo segundo, `createLogger` acepta un destino opcional:
       por defecto pino escribe al descriptor 1 y lo que sale no se puede leer desde un test.
+
+## Interfaz: lo que queda del análisis
+
+Del relevamiento del 9 de septiembre de 2026 (19 hallazgos). Hechos: fechas unificadas, estados de
+cliente traducidos, teléfonos formateados en la ficha, tono de fila por estado, hover de fila, la
+semana en la ficha del pedido, y el vacío de "Ver pedidos" con botón para limpiar filtros.
+
+- [ ] **Los errores dicen qué hacer.** Hoy se muestra el mensaje del servidor tal cual. Falta separar
+      los tres casos que hoy se ven iguales —sin permiso, sin conexión, rechazado por una regla— y
+      dar el botón que resuelve cuando lo hay.
+- [ ] **Un solo patrón de confirmación.** Conviven modal, dos toques y nada; el más liviano quedó en
+      las acciones más difíciles de deshacer. Criterio: si afecta a más de un pedido, o sale del
+      sistema, se pregunta, y el texto dice a cuántas cosas.
+- [ ] **`<ActionButton>`**: deshabilitar y mostrar el gerundio mientras corre. El patrón ya existe en
+      dos pantallas; falta que sea el único.
+- [ ] **`<EmptyState>`** con título, explicación y acción, para que ninguna pantalla escriba el suyo.
+- [ ] **Totales al pie** de la tabla de pedidos, respetando el filtro puesto.
+- [ ] **Normalizar los nombres de menú al guardar**: la mayúscula sostenida se lee peor y ya partió
+      un informe en dos.
+- [ ] Cambiar de ciudad sin recargar la aplicación entera.
+- [ ] Agrupar la navegación por momento del ciclo semanal y no por módulo.
+- [ ] Barra fija con guardar y total en formularios largos, en pantallas angostas.
+- [ ] Búsqueda global con `Ctrl+K`. No urgente: vale cuando el equipo pase de tres personas.

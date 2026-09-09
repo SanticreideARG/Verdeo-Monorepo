@@ -392,6 +392,31 @@ export function orderStatusLabel(status: string): string {
 }
 
 /**
+ * El estado de un cliente, en castellano.
+ *
+ * La ficha y la lista mostraban el valor de la columna —`active`, y desde el borrado también
+ * `archived`— dentro de un chip. Un chip que dice "archived" no le explica a nadie que ese cliente
+ * fue dado de baja pero conserva su historial de venta, que es exactamente lo que significa.
+ *
+ * Un estado desconocido se muestra tal cual, como en los pedidos: es un campo configurable, y
+ * esconder un valor que alguien cargó sería peor que mostrarlo sin traducir.
+ */
+const CUSTOMER_STATUS_LABELS: Record<string, string> = {
+  active: 'Activo',
+  archived: 'Archivado',
+  blocked: 'Bloqueado',
+  inactive: 'Inactivo',
+  prospect: 'Prospecto',
+};
+
+export function customerStatusLabel(status: string): string {
+  return CUSTOMER_STATUS_LABELS[status] ?? status;
+}
+
+/** Los estados que ofrece el formulario. Escribir uno a mano creaba estados que nada entiende. */
+export const CUSTOMER_STATUSES = Object.keys(CUSTOMER_STATUS_LABELS);
+
+/**
  * Las variedades como se eligen: el Intuitivo último.
  *
  * El Intuitivo no es una variedad más —hay que armarlo, eligiendo cinco platos— y apareciendo

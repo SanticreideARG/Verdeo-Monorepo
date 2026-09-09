@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
+import { formatDay, formatDayLong } from '../lib/dates.js';
 import { maskSurname } from '../lib/maskName.js';
 import { errorMessage, formatMoney } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
@@ -59,12 +60,6 @@ interface RoutableDate {
   /** Ya están en otra ruta activa. */
   routed: number;
   total: number;
-}
-
-function dateLabel(iso: string): string {
-  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'long', timeZone: 'UTC' }).format(
-    new Date(`${iso}T00:00:00Z`),
-  );
 }
 
 /** "Rutas" (Operación): se propone una hoja para una ciudad, una fecha y opcionalmente una zona; el
@@ -225,7 +220,7 @@ export function RoutesPage() {
    * pensarlo; el nombre de pila alcanza de sobra para saber a quién se le entrega.
    */
   function routeMessage(route: RouteDetail): string {
-    const header = `Reparto ${route.deliveryDate}${route.label ? ` · ${route.label}` : ''} — ${String(route.stops.length)} paradas`;
+    const header = `Reparto ${formatDay(route.deliveryDate)}${route.label ? ` · ${route.label}` : ''} — ${String(route.stops.length)} paradas`;
     const lines = route.stops.map((stop) =>
       [
         `${String(stop.sequence)}. ${maskSurname(stop.customerDisplayName)}`,
@@ -263,7 +258,7 @@ export function RoutesPage() {
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = `ruta-${route.deliveryDate}.csv`;
+    link.download = `ruta-${formatDay(route.deliveryDate)}.csv`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
   }
@@ -399,7 +394,7 @@ export function RoutesPage() {
                 <select name="deliveryDate" required>
                   {routableDates.map((date) => (
                     <option key={date.deliveryDate} value={date.deliveryDate}>
-                      {dateLabel(date.deliveryDate)} · {String(date.geocoded)} para rutear
+                      {formatDayLong(date.deliveryDate)} · {String(date.geocoded)} para rutear
                       {date.routed > 0 ? ` (${String(date.routed)} ya en ruta)` : ''}
                     </option>
                   ))}
@@ -460,7 +455,7 @@ export function RoutesPage() {
                     type="button"
                   >
                     <p className="font-semibold text-forest">
-                      {route.deliveryDate} {route.label ? `· ${route.label}` : ''}
+                      {formatDay(route.deliveryDate)} {route.label ? `· ${route.label}` : ''}
                     </p>
                     <p className="text-xs text-ink-muted">
                       {route.stopCount} paradas ·{' '}
@@ -485,7 +480,7 @@ export function RoutesPage() {
                 <>
                   <div className="flex items-center justify-between">
                     <p className="font-semibold text-forest">
-                      {selectedRoute.deliveryDate}{' '}
+                      {formatDay(selectedRoute.deliveryDate)}{' '}
                       {selectedRoute.label ? `· ${selectedRoute.label}` : ''}
                     </p>
                     <div className="flex flex-wrap gap-2">

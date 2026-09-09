@@ -5626,3 +5626,66 @@ a.order-card-phone:focus-visible {
 .public-footer-legal a:hover {
   color: var(--color-forest);
 }
+
+/*
+ * El estado de una fila, en la forma y no sólo en el texto.
+ *
+ * En una cola de sesenta pedidos, "cuál espera una decisión mía" se contestaba leyendo la columna
+ * Estado en el medio de cada renglón. La barra al inicio se ve sin leer: pendiente destaca, en curso
+ * apenas, y lo terminado se apaga para que deje de competir por la atención.
+ */
+.data-table tbody tr > td:first-child {
+  position: relative;
+  padding-left: 0.7rem;
+}
+.data-table tbody tr[data-tone] > td:first-child::before {
+  content: '';
+  position: absolute;
+  top: 0.35rem;
+  bottom: 0.35rem;
+  left: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: transparent;
+}
+.data-table tbody tr[data-tone='pendiente'] > td:first-child::before {
+  background: var(--color-lime, #d7e979);
+}
+.data-table tbody tr[data-tone='en-curso'] > td:first-child::before {
+  background: color-mix(in srgb, var(--db-muted, #5d6f68) 55%, transparent);
+}
+.data-table tbody tr[data-tone='listo'] > td:first-child::before {
+  background: color-mix(in srgb, var(--color-forest, #174c3c) 35%, transparent);
+}
+.data-table tbody tr[data-tone='inactivo'] {
+  opacity: 0.62;
+}
+
+/* Con ocho columnas, seguir un renglón hasta el final dependía del pulso. */
+.data-table tbody tr:hover > td {
+  background: color-mix(in srgb, var(--db-muted, #5d6f68) 8%, transparent);
+}
+
+/* La misma señal en las tarjetas del teléfono, donde no hay filas que recorrer. */
+.data-cards li[data-tone='pendiente'] {
+  border-left: 3px solid var(--color-lime, #d7e979);
+}
+.data-cards li[data-tone='inactivo'] {
+  opacity: 0.62;
+}
+
+/* Un botón que es una acción y no una navegación, pero que se lee como un enlace: va dentro de una
+   frase, y un botón con borde ahí cortaría la oración al medio. */
+.link-button {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.link-button:hover {
+  color: var(--color-forest, #174c3c);
+}

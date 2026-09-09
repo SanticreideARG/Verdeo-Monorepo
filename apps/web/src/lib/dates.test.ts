@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { deliveryDateFor, deliveryDateLabel } from './deliveryDate.js';
+import {
+  deliveryDateFor,
+  deliveryDateLabel,
+  formatDay,
+  formatDayLong,
+  formatMoment,
+} from './dates.js';
 
 describe('deliveryDateFor', () => {
   it('devuelve el día argentino de un cierre que en UTC ya es el día siguiente', () => {
@@ -27,5 +33,36 @@ describe('deliveryDateLabel', () => {
     // Si se separaran, el formulario mostraría un día y guardaría otro.
     expect(deliveryDateLabel('2026-09-14T02:15:00.000Z')).toContain('13');
     expect(deliveryDateLabel('2026-09-14T02:15:00.000Z')).toContain('septiembre');
+  });
+});
+
+describe('formatDay', () => {
+  it('escribe el mes con nombre y no con número', () => {
+    /*
+     * "13/9" y "9/13" son la misma cadena para dos personas distintas, y estas planillas se
+     * reenvían. El nombre del mes elimina la ambigüedad sin ocupar mucho más.
+     */
+    expect(formatDay('2026-09-13')).toBe('13 sep 2026');
+  });
+
+  it('no corre el día de una fecha sin hora', () => {
+    // Pasarla por `new Date()` la lee como medianoche UTC, que acá es el día anterior a las 21.
+    expect(formatDay('2026-01-01')).toBe('1 ene 2026');
+  });
+
+  it('lleva un instante al día que era en Argentina', () => {
+    expect(formatDay('2026-09-14T02:15:00.000Z')).toBe('13 sep 2026');
+  });
+});
+
+describe('formatDayLong', () => {
+  it('se lee de corrido', () => {
+    expect(formatDayLong('2026-09-13')).toBe('13 de septiembre de 2026');
+  });
+});
+
+describe('formatMoment', () => {
+  it('suma la hora local cuando la hora es parte del dato', () => {
+    expect(formatMoment('2026-09-14T02:15:00.000Z')).toMatch(/^13 sep 2026, \d{2}:\d{2}$/);
   });
 });

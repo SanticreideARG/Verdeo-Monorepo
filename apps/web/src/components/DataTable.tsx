@@ -42,6 +42,7 @@ export function DataTable<T>({
   empty,
   rowKey,
   rows,
+  rowTone,
 }: {
   /** Para lectores de pantalla: qué contiene la tabla. */
   caption: string;
@@ -49,6 +50,14 @@ export function DataTable<T>({
   empty: string;
   rowKey: (row: T) => string;
   rows: readonly T[];
+  /**
+   * El estado de la fila, codificado en la forma y no sólo en una columna de texto.
+   *
+   * En una cola de sesenta filas, "cuál espera una decisión mía" se contestaba leyendo la columna
+   * Estado en el medio de cada renglón. Una barra de color al inicio se ve sin leer. Es opcional:
+   * una tabla donde todas las filas son iguales no la necesita.
+   */
+  rowTone?: (row: T) => 'pendiente' | 'en-curso' | 'listo' | 'inactivo' | undefined;
 }) {
   const narrow = useNarrowViewport();
   const [sort, setSort] = useState<SortState | null>(null);
@@ -103,7 +112,7 @@ export function DataTable<T>({
         ) : null}
         <ul aria-label={caption} className="data-cards">
           {sorted.map((row) => (
-            <li key={rowKey(row)}>
+            <li data-tone={rowTone?.(row)} key={rowKey(row)}>
               <p className="data-cards-title">{primary?.render(row)}</p>
               <dl>
                 {rest.map((column) => (
@@ -162,7 +171,7 @@ export function DataTable<T>({
         </thead>
         <tbody>
           {sorted.map((row) => (
-            <tr key={rowKey(row)}>
+            <tr data-tone={rowTone?.(row)} key={rowKey(row)}>
               {columns.map((column) => (
                 <td className={column.emphasis ? 'is-emphasis' : undefined} key={column.key}>
                   {column.render(row)}

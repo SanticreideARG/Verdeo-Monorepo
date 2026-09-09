@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 
 import type { DataColumn } from '../components/DataTable.js';
+import { formatDay } from './dates.js';
 import { maskSurname } from './maskName.js';
 import { formatMoney, orderStatusLabel, type OrderSummary } from './operations.js';
 import { formatArgentinePhone, whatsappHref } from './phone.js';
@@ -36,10 +37,6 @@ export function sourceLabel(source: string): string {
   return SOURCE_LABELS[source] ?? source;
 }
 
-export function shortDate(iso: string): string {
-  return new Intl.DateTimeFormat('es-AR').format(new Date(iso));
-}
-
 /**
  * En qué orden se trabaja un pedido, para ordenar por estado.
  *
@@ -53,6 +50,22 @@ const STATUS_RANK: Record<string, number> = {
   DRAFT: 1,
   READY: 3,
 };
+
+/**
+ * De qué color es la barrita al inicio de la fila.
+ *
+ * Un borrador espera una decisión y por eso destaca; un confirmado está en curso; uno listo o
+ * entregado ya no necesita a nadie, y un cancelado se apaga del todo para que deje de competir por
+ * la atención en una lista larga.
+ */
+export function orderRowTone(
+  order: OrderSummary,
+): 'pendiente' | 'en-curso' | 'listo' | 'inactivo' | undefined {
+  if (order.status === 'DRAFT') return 'pendiente';
+  if (order.status === 'CONFIRMED') return 'en-curso';
+  if (order.status === 'CANCELLED') return 'inactivo';
+  return 'listo';
+}
 
 /** El pedido como texto comparable: ordena por tipo de menú y tamaño, no por lo que se ve. */
 function orderKind(order: OrderSummary): string {
@@ -155,7 +168,7 @@ export function buildOrderColumns(options: { maskSurnames?: boolean } = {}): Ord
     {
       key: 'entrega',
       label: 'Entrega',
-      render: (order) => shortDate(order.deliveryDate),
+      render: (order) => formatDay(order.deliveryDate),
       sortValue: (order) => order.deliveryDate,
     },
     {
@@ -184,7 +197,7 @@ export function buildOrderColumns(options: { maskSurnames?: boolean } = {}): Ord
        * permiso y una función que recargue la lista; acá el catálogo no tiene ni una cosa ni la
        * otra.
        */
-      render: (order) => (order.paidAt ? `Sí · ${shortDate(order.paidAt)}` : 'No'),
+      render: (order) => (order.paidAt ? `Sí · ${formatDay(order.paidAt)}` : 'No'),
       sortValue: (order) => (order.paidAt ? 1 : 0),
     },
     {
@@ -216,7 +229,7 @@ export function buildOrderColumns(options: { maskSurnames?: boolean } = {}): Ord
     {
       key: 'creado',
       label: 'Creado',
-      render: (order) => shortDate(order.createdAt),
+      render: (order) => formatDay(order.createdAt),
       sortValue: (order) => order.createdAt,
     },
   ];

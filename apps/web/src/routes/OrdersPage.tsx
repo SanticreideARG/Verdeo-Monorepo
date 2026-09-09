@@ -16,6 +16,7 @@ import { maskSurname, readMaskSurnames, writeMaskSurnames } from '../lib/maskNam
 import {
   buildOrderColumns,
   ORDER_COLUMNS,
+  orderRowTone,
   readStoredColumns,
   writeStoredColumns,
 } from '../lib/orderColumns.js';
@@ -88,8 +89,13 @@ export function OrdersPage() {
          * acá con su número—, y ese pedido puede ser de cualquier semana. Abrir filtrado por el
          * período actual haría que el enlace no encontrara nada justamente cuando apunta a algo
          * viejo, que es cuando más se usa.
+         *
+         * Con `?cycleId=` es lo contrario: se viene desde un pedido a ver el resto de su semana,
+         * así que ésa es la semana que hay que abrir, sea o no la actual.
          */
-        setCycleId(searchParams.get('search') ? '' : (currentPeriod(list)?.id ?? ''));
+        const requestedCycle = searchParams.get('cycleId');
+        if (requestedCycle) setCycleId(requestedCycle);
+        else setCycleId(searchParams.get('search') ? '' : (currentPeriod(list)?.id ?? ''));
       })
       .catch(() => {
         if (active) setCycleId('');
@@ -274,6 +280,26 @@ export function OrdersPage() {
             <p className="text-sm text-ink-muted" role="status">
               {orders.length === 1 ? '1 pedido' : String(orders.length) + ' pedidos'}
               {nextCursor ? ' cargados · hay más, seguí bajando' : ''}
+              {/*
+               * El vacío casi nunca es el estado real: es un filtro puesto de más. Sin un botón
+               * para deshacerlo, la salida es acordarse de qué se tocó.
+               */}
+              {orders.length === 0 && (status || search.trim() || cycleId) ? (
+                <>
+                  {' · '}
+                  <button
+                    className="link-button"
+                    onClick={() => {
+                      setStatus('');
+                      setSearch('');
+                      setCycleId('');
+                    }}
+                    type="button"
+                  >
+                    Limpiar los filtros
+                  </button>
+                </>
+              ) : null}
             </p>
             {/*
              * Tabla en escritorio, una tarjeta por pedido en teléfono — lo resuelve DataTable con
@@ -309,6 +335,7 @@ export function OrdersPage() {
                   : 'No hay pedidos para este filtro.'
               }
               rowKey={(order) => order.id}
+              rowTone={orderRowTone}
               rows={orders}
             />
             {nextCursor ? (

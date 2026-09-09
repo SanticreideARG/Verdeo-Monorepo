@@ -6,6 +6,7 @@ import { CancelOrderDialog } from '../components/CancelOrderDialog.js';
 import { DeliveryMap } from '../components/DeliveryMap.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
+import { formatDayLong, formatMoment } from '../lib/dates.js';
 import {
   OrderItemsEditor,
   itemsFromOrder,
@@ -34,19 +35,6 @@ function formText(form: FormData, key: string): string {
 
 function statusLabel(status: OrderSummary['status'] | null): string {
   return status ? orderStatusLabel(status) : '—';
-}
-
-/** deliveryDate is a plain date; parsed as UTC so it never shifts a day by timezone. */
-function dateLabel(value: string): string {
-  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'long', timeZone: 'UTC' }).format(
-    new Date(`${value}T00:00:00Z`),
-  );
-}
-
-function timeLabel(value: string): string {
-  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(
-    new Date(value),
-  );
 }
 
 async function printLabels(orderId: string): Promise<string | null> {
@@ -89,6 +77,14 @@ export function OrderDetailPage() {
   const [items, setItems] = useState<EditableItem[]>([]);
   const [offerings, setOfferings] = useState<MenuOffering[]>([]);
   /*
+   * A qué semana pertenece el pedido.
+   *
+   * La ficha mostraba cliente, contacto, domicilio, entrega y pago, pero no la semana — que es la
+   * que determina qué menú se le pudo vender y si todavía se puede editar. Sale del mismo pedido de
+   * menús que ya se hace para poder editar los ítems, así que no cuesta una consulta más.
+   */
+  const [cycle, setCycle] = useState<{ alias: string; id: string } | null>(null);
+  /*
    * Si se piden indicaciones alimentarias. Apagado saca el campo del formulario, no el dato: un
    * pedido viejo que las tiene las sigue mostrando más abajo, porque eso fue lo que pasó.
    */
@@ -121,7 +117,9 @@ export function OrderDetailPage() {
       .then(async (response) => {
         if (!response.ok) return;
         const menus = ((await response.json()) as { items: WeeklyMenu[] }).items;
-        setOfferings(menus.find((menu) => menu.id === loaded.menuId)?.offerings ?? []);
+        const menu = menus.find((candidate) => candidate.id === loaded.menuId);
+        setOfferings(menu?.offerings ?? []);
+        setCycle(menu ? { alias: menu.cycle.alias, id: menu.cycle.id } : null);
       })
       .catch(() => undefined);
     if (historyResponse.ok) {
@@ -468,8 +466,20 @@ export function OrderDetailPage() {
             ) : null}
             <div>
               <dt>Entrega</dt>
-              <dd>{dateLabel(order.deliveryDate)}</dd>
+              <dd>{formatDayLong(order.deliveryDate)}</dd>
             </div>
+            {cycle ? (
+              <div>
+                <dt>Semana</dt>
+                <dd>
+                  {/* Enlazada a la lista filtrada por esa semana: desde un pedido, el resto de su
+                      semana es la pregunta que sigue. */}
+                  <Link className="underline" to={`/app/pedidos?cycleId=${cycle.id}`}>
+                    {cycle.alias}
+                  </Link>
+                </dd>
+              </div>
+            ) : null}
             <div>
               <dt>Pago esperado</dt>
               <dd>{order.paymentExpectation}</dd>
@@ -538,7 +548,7 @@ export function OrderDetailPage() {
           <h2 className="text-sm font-bold text-forest">Historial de estado</h2>
           {history.map((entry) => (
             <p className="text-sm text-ink-muted" key={entry.id}>
-              {timeLabel(entry.createdAt)} · {statusLabel(entry.fromStatus)} →{' '}
+              {formatMoment(entry.createdAt)} · {statusLabel(entry.fromStatus)} →{' '}
               {orderStatusLabel(entry.toStatus)}
               {entry.reason ? ` · ${entry.reason}` : ''}
             </p>
@@ -551,7 +561,8 @@ export function OrderDetailPage() {
             <h2 className="text-sm font-bold text-forest">Historial de ediciones</h2>
             {revisions.map((revision) => (
               <p className="text-sm text-ink-muted" key={revision.id}>
-                {timeLabel(revision.createdAt)} · revisión #{revision.revision} · {revision.reason}
+                {formatMoment(revision.createdAt)} · revisión #{revision.revision} ·{' '}
+                {revision.reason}
               </p>
             ))}
           </div>

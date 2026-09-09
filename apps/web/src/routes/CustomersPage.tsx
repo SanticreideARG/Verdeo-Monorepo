@@ -10,9 +10,12 @@ import { DashboardShell, type DashboardProfile } from '../components/DashboardSh
 import { BrandLoading } from '../components/BrandLoading.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { cachedProfile, rememberProfile } from '../lib/useDashboardProfile.js';
+import { formatArgentinePhone } from '../lib/phone.js';
 import { showToast } from '../lib/toast.js';
 import { useFormDraft } from '../lib/useFormDraft.js';
 import {
+  CUSTOMER_STATUSES,
+  customerStatusLabel,
   errorMessage,
   formatMoney,
   orderStatusLabel,
@@ -636,7 +639,7 @@ export function CustomersPage() {
                     <strong>{customer.displayName}</strong>
                     <small>{contactLabel(customer)}</small>
                   </div>
-                  <i>{customer.status}</i>
+                  <i>{customerStatusLabel(customer.status)}</i>
                 </button>
               ))}
               {customers.length === 0 ? <p>No hay clientes para esta búsqueda.</p> : null}
@@ -767,7 +770,7 @@ export function CustomersPage() {
                     {detail.displayName.slice(0, 1).toLocaleUpperCase('es-AR')}
                   </div>
                   <div>
-                    <span className="status-chip">{detail.status}</span>
+                    <span className="status-chip">{customerStatusLabel(detail.status)}</span>
                     <h2>{detail.displayName}</h2>
                     <p>
                       Cliente desde{' '}
@@ -812,7 +815,20 @@ export function CustomersPage() {
                         </label>
                         <label className="field">
                           Estado
-                          <input defaultValue={detail.status} name="status" required />
+                          {/* Desplegable y no texto libre: un tipeo creaba un estado nuevo que
+                              ninguna otra pantalla sabe interpretar. */}
+                          <select defaultValue={detail.status} name="status" required>
+                            {CUSTOMER_STATUSES.map((status) => (
+                              <option key={status} value={status}>
+                                {customerStatusLabel(status)}
+                              </option>
+                            ))}
+                            {/* Un estado cargado a mano antes de esto sigue siendo elegible, para
+                                que guardar la ficha no lo cambie sin querer. */}
+                            {CUSTOMER_STATUSES.includes(detail.status) ? null : (
+                              <option value={detail.status}>{detail.status}</option>
+                            )}
+                          </select>
                         </label>
                         <label className="field field-wide">
                           Notas internas
@@ -852,7 +868,17 @@ export function CustomersPage() {
                     {detail.identities?.map((identity) => (
                       <article key={identity.id}>
                         <span>{identity.type}</span>
-                        <strong>{identity.value}</strong>
+                        {/*
+                         * El mismo número que la tabla de pedidos muestra como
+                         * "(011) 15 5573 4841" aparecía acá como "+54926155720045": quince
+                         * dígitos corridos no se leen, se descifran, y no hay forma de comparar
+                         * dos contactos ni de dictar uno.
+                         */}
+                        <strong>
+                          {identity.type === 'phone' || identity.type === 'whatsapp'
+                            ? formatArgentinePhone(identity.value)
+                            : identity.value}
+                        </strong>
                         <small>
                           {identity.primary ? 'Principal' : 'Alternativo'} ·{' '}
                           {identity.verified ? 'verificado' : 'sin verificar'}

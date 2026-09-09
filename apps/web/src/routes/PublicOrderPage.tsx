@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { DraftNotice } from '../components/DraftNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
 import { BrandLoading } from '../components/BrandLoading.js';
-import { deliveryDateFor, deliveryDateLabel } from '../lib/deliveryDate.js';
+import { deliveryDateFor, deliveryDateLabel } from '../lib/dates.js';
 import { apiRequest } from '../lib/api.js';
 import { useFormDraft } from '../lib/useFormDraft.js';
 import { useOrderFormSettings } from '../lib/useOrderFormSettings.js';
