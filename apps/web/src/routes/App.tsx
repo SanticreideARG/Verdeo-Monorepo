@@ -19,6 +19,8 @@ import { GeographySettingsPage } from './GeographySettingsPage.js';
 import { MenuCatalogSettingsPage } from './MenuCatalogSettingsPage.js';
 import { HelpPage } from './HelpPage.js';
 import { KitchenPage } from './KitchenPage.js';
+import { PrivacyPolicyPage } from './PrivacyPolicyPage.js';
+import { TermsPage } from './TermsPage.js';
 import { LabelSettingsPage } from './LabelSettingsPage.js';
 import { BrandLoading } from '../components/BrandLoading.js';
 import { CalendarPage } from './CalendarPage.js';
@@ -91,6 +93,13 @@ function PublicFooter() {
         <p className="public-footer-brand">
           Verdeo SCA <span>· comidas listas para tu semana</span>
         </p>
+
+        {/* En el pie de todas las páginas públicas: un revisor de Google tiene que poder llegar a
+            la política desde el sitio, no sólo por la URL directa. */}
+        <nav aria-label="Legales" className="public-footer-legal">
+          <Link to="/privacidad">Política de privacidad</Link>
+          <Link to="/terminos">Términos y condiciones</Link>
+        </nav>
 
         <nav aria-label="Equipo" className="public-footer-staff">
           <Link rel="nofollow" to="/login">
@@ -270,6 +279,14 @@ export function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/pedido" element={<PublicOrderPage />} />
       <Route path="/seguimiento" element={<TrackOrderPage />} />
+      {/*
+       * Los dos documentos legales, como rutas propias y públicas.
+       *
+       * Google verifica la pantalla de consentimiento de OAuth abriendo estas URLs sin sesión, desde
+       * afuera: tienen que responder siempre, en este dominio, sin login de por medio.
+       */}
+      <Route path="/privacidad" element={<PrivacyPolicyPage />} />
+      <Route path="/terminos" element={<TermsPage />} />
       <Route path="/public/survey/:token" element={<PublicSurveyPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/acceso" element={<AccessTokenLoginPage />} />

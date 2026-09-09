@@ -108,7 +108,22 @@ prefijo `VITE_`.
    - email de soporte;
    - dominios autorizados cuando exista el dominio final;
    - contactos técnicos;
-   - audiencia interna o externa según la política real de cuentas.
+   - audiencia interna o externa según la política real de cuentas;
+   - **enlace a la política de privacidad**: `https://<dominio-final>/privacidad`;
+   - **enlace a las condiciones del servicio**: `https://<dominio-final>/terminos`.
+
+   Las dos páginas son rutas propias de la aplicación web (`PrivacyPolicyPage`, `TermsPage`), no
+   páginas del CMS: se abren sin sesión, viven en el mismo dominio que la aplicación y su texto está
+   versionado en git, que es lo que permite probar qué decía cada día. Google verifica que la URL
+   responda, que esté en un dominio autorizado y que el texto describa qué se hace con los datos de
+   la cuenta de Google; esa parte es la sección "Datos obtenidos de Google al iniciar sesión" de
+   `/privacidad`.
+
+   Verdeo pide sólo `openid`, `email` y `profile`, que Google clasifica como scopes no sensibles:
+   la verificación es la básica —marca, dominio y enlaces legales—, sin evaluación de seguridad de
+   terceros. Pedir un scope sensible o restringido (Gmail, Drive, Calendar) cambiaría eso por
+   completo; si alguna vez hace falta, se decide aparte.
+
 3. Durante pruebas, agregá las cuentas autorizadas como test users si Google mantiene la aplicación en modo
    de prueba.
 4. Creá una credencial **OAuth client ID** de tipo **Web application**.

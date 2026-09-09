@@ -5514,3 +5514,115 @@ a.order-card-phone:focus-visible {
 .permission-overrides details[open] {
   padding-bottom: 0.5rem;
 }
+
+/*
+ * Documentos legales: privacidad y condiciones.
+ *
+ * Una sola columna angosta y tipografía grande. Son textos que se leen de verdad —o que un revisor
+ * de Google recorre buscando un punto concreto— y la medida de línea corta es lo único que hace que
+ * un documento así se pueda leer sin perder el renglón.
+ */
+.legal-page {
+  min-height: 100vh;
+  background: #fff;
+  color: var(--color-ink);
+}
+.legal-page-header {
+  border-bottom: 1px solid var(--border-hairline);
+  padding: 1.1rem 1.25rem;
+}
+.legal-page-body {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 4rem;
+  font-size: 1rem;
+  line-height: 1.65;
+}
+@media (min-width: 640px) {
+  .legal-page-header,
+  .legal-page-body {
+    padding-inline: 2rem;
+  }
+}
+.legal-page-kicker {
+  margin: 0;
+  color: #637420;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.legal-page-body h1 {
+  margin: 0.35rem 0 0.5rem;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--color-forest);
+}
+.legal-page-updated {
+  margin: 0 0 1.75rem;
+  color: var(--color-ink-muted);
+  font-size: 0.9rem;
+}
+.legal-page-body h2 {
+  margin: 2.25rem 0 0.6rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-forest);
+  /* Para que el ancla del índice no deje el título pegado al borde superior. */
+  scroll-margin-top: 1.5rem;
+}
+.legal-page-body p {
+  margin: 0 0 0.9rem;
+}
+.legal-page-body ul {
+  margin: 0 0 1rem;
+  padding-left: 1.2rem;
+  list-style: disc;
+}
+.legal-page-body li {
+  margin-bottom: 0.35rem;
+}
+.legal-page-index {
+  margin: 1.75rem 0 0.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border-hairline);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--color-cream) 45%, #fff);
+}
+.legal-page-index p {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ink-muted);
+}
+.legal-page-index ol {
+  margin: 0;
+  padding-left: 1.3rem;
+  font-size: 0.95rem;
+}
+.legal-page-index li {
+  margin-bottom: 0.25rem;
+}
+.legal-page-footer-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-top: 3rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border-hairline);
+  font-size: 0.9rem;
+}
+.public-footer-legal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.1rem;
+  font-size: 0.82rem;
+}
+.public-footer-legal a {
+  color: var(--color-ink-muted);
+}
+.public-footer-legal a:hover {
+  color: var(--color-forest);
+}
