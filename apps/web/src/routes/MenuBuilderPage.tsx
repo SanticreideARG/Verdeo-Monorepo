@@ -257,6 +257,33 @@ export function MenuBuilderPage() {
       });
       if (!response.ok) {
         showToast('La semana se publicó, pero no llegó a las localidades. Revisá "Periodos".');
+        return;
+      }
+
+      /*
+       * Distribuir crea la revisión de cada ciudad en borrador, y un borrador no se puede vender:
+       * el formulario de pedidos sólo ofrece menús publicados. La semana llegaba a las tres
+       * ciudades y en ninguna se podía tomar un pedido, que es lo contrario de lo que "publicar"
+       * promete.
+       *
+       * Se publica cada una. Una que falle no frena a las otras: son ciudades independientes y es
+       * mejor tener dos vendiendo que ninguna.
+       */
+      const { results } = (await response.json()) as {
+        results: { outcome: string; weeklyMenuId: string }[];
+      };
+      const created = results.filter((result) => result.outcome === 'CREATED');
+      const failed: string[] = [];
+      for (const result of created) {
+        const published = await apiRequest(`/api/v1/menus/${result.weeklyMenuId}/publish`, {
+          method: 'POST',
+        });
+        if (!published.ok) failed.push(result.weeklyMenuId);
+      }
+      if (failed.length > 0) {
+        showToast(
+          `La semana llegó a las localidades, pero ${String(failed.length)} quedó sin publicar. Publicala desde "Periodos".`,
+        );
       }
     } catch {
       showToast('La semana se publicó, pero no llegó a las localidades. Revisá "Periodos".');
