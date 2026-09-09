@@ -12,7 +12,13 @@ import {
   type OrderSummary,
   type WeeklyMenu,
 } from '../lib/operations.js';
-import { ORDER_COLUMNS, readStoredColumns, writeStoredColumns } from '../lib/orderColumns.js';
+import { maskSurname, readMaskSurnames, writeMaskSurnames } from '../lib/maskName.js';
+import {
+  buildOrderColumns,
+  ORDER_COLUMNS,
+  readStoredColumns,
+  writeStoredColumns,
+} from '../lib/orderColumns.js';
 import { PeriodPicker } from '../components/PeriodPicker.js';
 import { currentPeriod, periodsFromMenus, type Period } from '../lib/periods.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
@@ -50,6 +56,14 @@ export function OrdersPage() {
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() =>
     readStoredColumns(COLUMNS_KEY, DEFAULT_COLUMNS, ORDER_COLUMNS),
   );
+  /*
+   * Tapar apellidos.
+   *
+   * Esta pantalla se proyecta y se fotografía, y la planilla que sale de acá se reenvía. El nombre
+   * de pila alcanza para saber de quién es cada pedido. Queda guardado porque quien lo necesita lo
+   * necesita siempre, no una vez.
+   */
+  const [maskSurnames, setMaskSurnames] = useState(readMaskSurnames);
 
   /*
    * Los períodos salen de los menús: todo pedido referencia un menú, así que un ciclo sin menú
@@ -135,13 +149,22 @@ export function OrdersPage() {
     );
   }
 
-  async function exportCsv() {
+  /**
+   * Bajar lo que se está mirando.
+   *
+   * Los dos formatos salen de la misma ruta con los mismos filtros: el CSV para meter los pedidos
+   * en otra herramienta, la planilla para abrirla, mirarla y reenviarla. Y con los apellidos
+   * tapados si así se está mirando la pantalla — un archivo se reenvía todavía más fácil.
+   */
+  async function exportOrders(format: 'csv' | 'xlsx') {
     setMessage('');
     const params = new URLSearchParams();
     if (status) params.set('status', status);
     if (search.trim()) params.set('search', search.trim());
-    // El CSV exporta lo que se está mirando, no el histórico entero.
+    // Se exporta lo que se está mirando, no el histórico entero.
     if (cycleId) params.set('cycleId', cycleId);
+    if (format === 'xlsx') params.set('format', 'xlsx');
+    if (maskSurnames) params.set('maskSurnames', '1');
     const response = await apiRequest(`/api/v1/orders/export?${params.toString()}`);
     if (!response.ok) {
       setMessage(await errorMessage(response));
@@ -151,7 +174,7 @@ export function OrdersPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'verdeo-pedidos.csv';
+    link.download = `verdeo-pedidos.${format === 'xlsx' ? 'xlsx' : 'csv'}`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -207,9 +230,27 @@ export function OrdersPage() {
               }}
               visible={visibleColumns}
             />
+            <label className="field-inline">
+              <input
+                checked={maskSurnames}
+                onChange={(event) => {
+                  setMaskSurnames(event.target.checked);
+                  writeMaskSurnames(event.target.checked);
+                }}
+                type="checkbox"
+              />
+              Ocultar apellidos
+            </label>
             <button
               className="button button-secondary"
-              onClick={() => void exportCsv()}
+              onClick={() => void exportOrders('xlsx')}
+              type="button"
+            >
+              Exportar Excel
+            </button>
+            <button
+              className="button button-secondary"
+              onClick={() => void exportOrders('csv')}
               type="button"
             >
               Exportar CSV
@@ -233,26 +274,28 @@ export function OrdersPage() {
              */}
             <DataTable
               caption="Pedidos"
-              columns={ORDER_COLUMNS.filter((column) => visibleColumns.includes(column.key)).map(
-                // "Cobrado" se vuelve un tilde que se puede tocar cuando hay permiso para editar.
-                (column) =>
-                  column.key === 'cobrado' && profile.permissions.includes('orders.edit')
-                    ? {
-                        ...column,
-                        render: (order: OrderSummary) => (
-                          <label className="paid-check">
-                            <input
-                              aria-label={`Marcar ${order.customer.displayName} como cobrado`}
-                              checked={Boolean(order.paidAt)}
-                              onChange={() => void togglePaid(order)}
-                              type="checkbox"
-                            />
-                            <span>{order.paidAt ? 'Cobrado' : 'Pendiente'}</span>
-                          </label>
-                        ),
-                      }
-                    : column,
-              )}
+              columns={buildOrderColumns({ maskSurnames })
+                .filter((column) => visibleColumns.includes(column.key))
+                .map(
+                  // "Cobrado" se vuelve un tilde que se puede tocar cuando hay permiso para editar.
+                  (column) =>
+                    column.key === 'cobrado' && profile.permissions.includes('orders.edit')
+                      ? {
+                          ...column,
+                          render: (order: OrderSummary) => (
+                            <label className="paid-check">
+                              <input
+                                aria-label={`Marcar ${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName} como cobrado`}
+                                checked={Boolean(order.paidAt)}
+                                onChange={() => void togglePaid(order)}
+                                type="checkbox"
+                              />
+                              <span>{order.paidAt ? 'Cobrado' : 'Pendiente'}</span>
+                            </label>
+                          ),
+                        }
+                      : column,
+                )}
               empty={
                 cycleId
                   ? 'No hay pedidos en este período. Probá con "Todos los períodos".'

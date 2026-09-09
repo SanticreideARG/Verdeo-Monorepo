@@ -5382,3 +5382,24 @@ a.order-card-phone:focus-visible {
 .dish-tally strong {
   font-variant-numeric: tabular-nums;
 }
+
+/*
+ * Un tilde suelto en la barra de una pantalla, al lado de los botones.
+ *
+ * `.field` apila etiqueta sobre control, que es lo que quiere un select o un input de texto; un
+ * tilde no: el texto va al lado y a la misma altura que los botones que tiene alrededor.
+ */
+.field-inline {
+  display: inline-flex;
+  gap: 0.45rem;
+  align-items: center;
+  font-size: 0.9rem;
+  color: var(--ink-muted, #5b6b5f);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.field-inline input {
+  /* Mismo tamaño que el tilde de cobrado: se toca sin apuntar. */
+  width: 18px;
+  height: 18px;
+}

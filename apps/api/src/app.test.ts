@@ -58,7 +58,7 @@ const customerOperationsStubs = {
   confirmAddressGeocoding: vi.fn(),
   cycleLabels: vi.fn(),
   exportCustomers: vi.fn(),
-  exportOrdersCsv: vi.fn(),
+  exportOrders: vi.fn(),
   listMergeCandidates: vi.fn(),
   mergeCustomers: vi.fn(),
   generateProductionSnapshot: vi.fn(),
@@ -1175,7 +1175,32 @@ describe('API foundation', () => {
 
   it('forwards validated order filters and exports CSV with safe headers', async () => {
     const listOrders = vi.fn(() => Promise.resolve({ items: [], nextCursor: null }));
-    const exportOrdersCsv = vi.fn(() => Promise.resolve('\uFEFF"numero_pedido"\r\n'));
+    const exportOrders = vi.fn(() =>
+      Promise.resolve({
+        cycleAlias: 'Septiembre 2',
+        rows: [
+          {
+            createdAt: '2026-09-01T10:00:00.000Z',
+            currency: 'ARS',
+            customerDisplayName: 'Ana Isabella Vega',
+            customerWhatsapp: '+542991234567',
+            deliveryAddress: 'Calle 1',
+            deliveryDate: '2026-09-13',
+            deliveryZone: 'Centro',
+            dietaryInstructions: [],
+            items: [
+              { dishSelections: [], productName: 'Keto', quantityUnits: 1, variantName: '250' },
+            ],
+            paidAt: null,
+            paymentExpectation: 'Transferencia',
+            publicNumber: 'NQN-00001',
+            source: 'whatsapp',
+            status: 'CONFIRMED',
+            totalMinor: 12_000,
+          },
+        ],
+      }),
+    );
     const operationsApp = createApp({
       appOrigin: 'http://localhost:5173',
       cookieSameSite: 'Lax',
@@ -1192,7 +1217,7 @@ describe('API foundation', () => {
         setOrderPaid: vi.fn(),
         createPublicOrder: vi.fn(),
         currentPublishedMenu: vi.fn(),
-        exportOrdersCsv,
+        exportOrders,
         kitchenSummary: vi.fn(),
         listCustomers: vi.fn(),
         listMenus: vi.fn(),
@@ -1232,10 +1257,36 @@ describe('API foundation', () => {
     expect(exportResponse.status).toBe(200);
     expect(exportResponse.headers.get('content-type')).toContain('text/csv');
     expect(exportResponse.headers.get('content-disposition')).toContain('verdeo-pedidos.csv');
-    expect(exportOrdersCsv).toHaveBeenCalledWith(
+    expect(exportOrders).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'CONFIRMED', zone: 'Centro' }),
       expect.objectContaining({ actorUserId: '55276601-ec66-4f63-9f2f-edf73904ede0' }),
+      'csv',
     );
+    expect(await exportResponse.text()).toContain('"Ana Isabella Vega"');
+
+    // La misma ruta y los mismos filtros devuelven la planilla: son dos presentaciones del mismo
+    // recorte, no dos exportaciones distintas.
+    const excelResponse = await operationsApp.request(
+      '/api/v1/orders/export?status=CONFIRMED&zone=Centro&format=xlsx',
+      { headers: { cookie } },
+    );
+    expect(excelResponse.status).toBe(200);
+    expect(excelResponse.headers.get('content-type')).toContain('spreadsheetml');
+    expect(excelResponse.headers.get('content-disposition')).toContain('verdeo-pedidos.xlsx');
+    expect((await excelResponse.arrayBuffer()).byteLength).toBeGreaterThan(0);
+    expect(exportOrders).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), 'xlsx');
+
+    /*
+     * Con los apellidos tapados el archivo sale tapado también. Es lo que se pidió: una planilla se
+     * reenvía más fácil que una pantalla, así que si en pantalla no se ve el apellido, en el
+     * archivo tampoco.
+     */
+    const maskedResponse = await operationsApp.request('/api/v1/orders/export?maskSurnames=1', {
+      headers: { cookie },
+    });
+    const masked = await maskedResponse.text();
+    expect(masked).toContain('"Ana I. V."');
+    expect(masked).not.toContain('Vega');
   });
 
   describe('production and surplus', () => {

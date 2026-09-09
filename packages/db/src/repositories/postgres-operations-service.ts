@@ -29,13 +29,13 @@ import {
 } from '@verdeo/geocoding';
 import {
   assertOrderTransitionPolicy,
-  buildOrdersCsv,
   buildKitchenSummary,
   buildLabels,
   calculateLineTotal,
   calculateOrderTotal,
   resolveOrderComposition,
   type KitchenSourceLine,
+  type OrderExportRow,
   type OrderStatus,
 } from '@verdeo/orders';
 
@@ -3487,10 +3487,20 @@ export class PostgresOperationsService {
     };
   }
 
-  public async exportOrdersCsv(
+  /**
+   * Los pedidos que entran en una exportación, ya paginados y con todo lo que las dos salidas
+   * necesitan.
+   *
+   * Devuelve filas y no un archivo a propósito: el CSV y la planilla son dos presentaciones del
+   * mismo recorte, y armar acá una de las dos obligaba a que la capa de datos supiera de formatos.
+   * El alias del ciclo viaja con las filas porque la planilla lo pone de título y consultarlo
+   * aparte, desde el handler, sería una segunda ida a la base para un texto.
+   */
+  public async exportOrders(
     input: Omit<OrderListInput, 'cursor' | 'limit'>,
     context: OperationsContext,
-  ) {
+    format: 'csv' | 'xlsx' = 'csv',
+  ): Promise<{ cycleAlias: string | null; rows: OrderExportRow[] }> {
     const exported: Awaited<ReturnType<PostgresOperationsService['getOrder']>>[] = [];
     let cursor: string | undefined;
     do {
@@ -3509,7 +3519,7 @@ export class PostgresOperationsService {
       await audit.record({
         action: 'orders.exported',
         actor: auditActor(context),
-        after: { count: exported.length, format: 'csv' },
+        after: { count: exported.length, format },
         correlationId: context.correlationId,
         entityId: context.requestId,
         entityType: 'order_collection',
@@ -3525,21 +3535,39 @@ export class PostgresOperationsService {
       });
     });
 
-    return buildOrdersCsv(
-      exported.map((order) => ({
+    const [cycle] = input.cycleId
+      ? await this.database
+          .select({ alias: salesCycles.alias })
+          .from(salesCycles)
+          .where(eq(salesCycles.id, input.cycleId))
+          .limit(1)
+      : [];
+
+    return {
+      cycleAlias: cycle?.alias ?? null,
+      rows: exported.map((order) => ({
         createdAt: order.createdAt,
         currency: order.currency,
         customerDisplayName: order.customer.displayName,
+        customerWhatsapp: order.customer.whatsapp ?? order.customer.phone,
         deliveryAddress: order.deliveryAddress,
         deliveryDate: order.deliveryDate,
         deliveryZone: order.deliveryZone,
+        dietaryInstructions: order.dietaryInstructions,
+        items: order.items.map((item) => ({
+          dishSelections: item.dishSelections,
+          productName: item.productName,
+          quantityUnits: item.quantityUnits,
+          variantName: item.variantName,
+        })),
+        paidAt: order.paidAt,
         paymentExpectation: order.paymentExpectation,
         publicNumber: order.publicNumber,
         source: order.source,
         status: order.status,
         totalMinor: order.totalMinor,
       })),
-    );
+    };
   }
 
   /**

@@ -275,6 +275,8 @@ import { renderEmail, type EmailSender } from '@verdeo/email';
 
 import { ContactImportError, parseContactImport } from './integrations/contact-import.js';
 import { buildLabelsPrintHtml } from './labels-export.js';
+import { buildOrdersExcel } from './orders-excel.js';
+import { buildOrdersCsv, maskSurname, type OrderExportRow } from '@verdeo/orders';
 import {
   buildProductionExcel,
   buildProductionPrintHtml,
@@ -480,10 +482,11 @@ interface OperationsEngine {
     input: ScopedInput<Omit<CustomerListQuery, 'cursor' | 'limit'>>,
     context: OperationsContext,
   ): Promise<CustomerExportRow[]>;
-  exportOrdersCsv(
+  exportOrders(
     input: ScopedInput<Omit<OrderListQuery, 'cursor' | 'limit'>>,
     context: OperationsContext,
-  ): Promise<string>;
+    format: 'csv' | 'xlsx',
+  ): Promise<{ cycleAlias: string | null; rows: OrderExportRow[] }>;
   getCustomer(customerId: string, includeSensitive: boolean): Promise<unknown>;
   getAddressGeocodingRequest(
     customerId: string,
@@ -4191,11 +4194,20 @@ export function createApp(options: CreateAppOptions) {
     return context.json(OrderPageResponseSchema.parse(contractValue(page)));
   });
 
+  /*
+   * Una sola ruta para las dos salidas: el CSV para meter los pedidos en otra herramienta y la
+   * planilla para mirarla y reenviarla. Comparten filtros, recorte y auditoría; cambiarlas por dos
+   * rutas sería sostener dos veces la misma lista de filtros.
+   */
   app.get('/api/v1/orders/export', async (context) => {
     if (!context.get('session').permissions.includes('orders.read')) return forbidden(context);
     const query = OrderListQuerySchema.safeParse(context.req.query());
     if (!query.success)
       return badRequest(context, 'Los filtros de exportación no son válidos.', query.error.issues);
+    const format = context.req.query('format') === 'xlsx' ? 'xlsx' : 'csv';
+    // Tapar apellidos es una decisión de quien exporta, no un permiso: la planilla se reenvía y el
+    // nombre de pila alcanza para saber de quién es cada vianda.
+    const masked = context.req.query('maskSurnames') === '1';
     const filters: Omit<OrderListQuery, 'cursor' | 'limit'> = {
       ...(query.data.customerId ? { customerId: query.data.customerId } : {}),
       ...(query.data.cycleId ? { cycleId: query.data.cycleId } : {}),
@@ -4205,14 +4217,30 @@ export function createApp(options: CreateAppOptions) {
       ...(query.data.to ? { to: query.data.to } : {}),
       ...(query.data.zone ? { zone: query.data.zone } : {}),
     };
-    const csv = await requireOperations().exportOrdersCsv(
+    const exported = await requireOperations().exportOrders(
       scoped(context, filters),
       operationsContext(context),
+      format,
     );
+    const rows = masked
+      ? exported.rows.map((row) => ({
+          ...row,
+          customerDisplayName: maskSurname(row.customerDisplayName),
+        }))
+      : exported.rows;
+
     context.header('cache-control', 'private, no-store');
+    if (format === 'xlsx') {
+      context.header('content-disposition', 'attachment; filename="verdeo-pedidos.xlsx"');
+      context.header(
+        'content-type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      return context.body(buildOrdersExcel(rows, { cycleAlias: exported.cycleAlias }));
+    }
     context.header('content-disposition', 'attachment; filename="verdeo-pedidos.csv"');
     context.header('content-type', 'text/csv; charset=utf-8');
-    return context.body(csv);
+    return context.body(buildOrdersCsv(rows));
   });
 
   app.post('/api/v1/orders', async (context) => {

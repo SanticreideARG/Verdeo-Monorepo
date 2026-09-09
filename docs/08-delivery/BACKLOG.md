@@ -48,7 +48,10 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [x] Filtered order log by status, zone, customer, and date range.
 - [x] Visible order status history.
 - [x] Audited order editing with reason.
-- [x] CSV export and Excel adapter.
+- [x] CSV export and Excel adapter (`GET /orders/export?format=csv|xlsx`; la planilla trae
+      Pedidos, Conciliado y Por zona).
+- [x] Ocultar apellidos en pantalla y en la exportación (`maskSurnames=1`).
+- [x] Ordenar la lista por cualquier columna.
 
 ## P0 - Operational capture
 

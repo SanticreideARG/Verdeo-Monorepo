@@ -9,7 +9,9 @@ import { DataTable } from '../components/DataTable.js';
 import { DraftNotice } from '../components/DraftNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
+import { maskSurname, readMaskSurnames, writeMaskSurnames } from '../lib/maskName.js';
 import {
+  buildOrderColumns,
   ORDER_COLUMNS,
   readStoredColumns,
   writeStoredColumns,
@@ -126,6 +128,13 @@ export function OrderIntakePage() {
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() =>
     readStoredColumns(COLUMNS_KEY, DEFAULT_COLUMNS, INTAKE_CATALOGUE),
   );
+  /*
+   * Tapar apellidos.
+   *
+   * Esta es la pantalla que se proyecta cuando se arma la semana, y la planilla que sale de acá va
+   * a cocina y al repartidor. El nombre de pila alcanza para saber de quién es cada vianda.
+   */
+  const [maskSurnames, setMaskSurnames] = useState(readMaskSurnames);
 
   const loadData = useCallback(async () => {
     if (!profile) return;
@@ -424,6 +433,33 @@ export function OrderIntakePage() {
     await loadData();
   }
 
+  /**
+   * La planilla del período que se está mirando.
+   *
+   * No es el CSV de "Ver pedidos": ahí se baja para meter los pedidos en otra herramienta, acá se
+   * baja para mirar y reenviar. Trae la lista tal como se ve más las dos consolidaciones que si no
+   * hay que hacer a mano —cuántas viandas de cada tipo y cómo se reparten por zona—, y respeta el
+   * tilde de tapar apellidos, porque un archivo se reenvía todavía más fácil que una pantalla.
+   */
+  async function exportPeriod() {
+    setMessage('');
+    const params = new URLSearchParams({ format: 'xlsx' });
+    if (periodId) params.set('cycleId', periodId);
+    if (maskSurnames) params.set('maskSurnames', '1');
+    const response = await apiRequest(`/api/v1/orders/export?${params.toString()}`);
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'verdeo-pedidos.xlsx';
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   if (failed) return <DashboardFailed label="los pedidos" />;
   if (!profile) return <DashboardLoading />;
   if (loading) return <DashboardLoading />;
@@ -453,7 +489,7 @@ export function OrderIntakePage() {
     .sort((left, right) => left.zone.localeCompare(right.zone, 'es-AR'));
 
   const intakeColumns: readonly OrderColumn[] = [
-    ...ORDER_COLUMNS,
+    ...buildOrderColumns({ maskSurnames }),
     {
       key: 'acciones',
       label: 'Acciones',
@@ -513,6 +549,24 @@ export function OrderIntakePage() {
               }}
               visible={visibleColumns}
             />
+            <label className="field-inline">
+              <input
+                checked={maskSurnames}
+                onChange={(event) => {
+                  setMaskSurnames(event.target.checked);
+                  writeMaskSurnames(event.target.checked);
+                }}
+                type="checkbox"
+              />
+              Ocultar apellidos
+            </label>
+            <button
+              className="button button-secondary"
+              onClick={() => void exportPeriod()}
+              type="button"
+            >
+              Exportar Excel
+            </button>
             {permissions.includes('orders.create') ? (
               <button
                 className="button button-primary"
@@ -836,7 +890,7 @@ export function OrderIntakePage() {
         <CancelOrderDialog
           onCancel={() => setCancelling(null)}
           onConfirm={(input) => cancelOrder(cancelling, input)}
-          orderNumber={`el pedido de ${cancelling.customer.displayName}`}
+          orderNumber={`el pedido de ${maskSurnames ? maskSurname(cancelling.customer.displayName) : cancelling.customer.displayName}`}
         />
       ) : null}
 

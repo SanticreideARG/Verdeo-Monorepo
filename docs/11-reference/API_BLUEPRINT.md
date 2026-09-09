@@ -52,7 +52,7 @@ confirmación recibe un candidato persistido o un par latitud/longitud corregido
 - `POST /orders/:id/status`
 - `GET /orders/:id/history`
 - `GET /orders/:id/revisions`
-- `GET /orders/export?format=csv`
+- `GET /orders/export?format=csv|xlsx&maskSurnames=1`
 
 ## Production
 
