@@ -81,7 +81,7 @@ confirmación recibe un candidato persistido o un par latitud/longitud corregido
 ## Routes
 
 - `GET /routes`
-- `POST /routes`
+- `POST /routes` (opcional `geographicZoneId`: una hoja por zona)
 - `POST /routes/:id/optimize`
 - `POST /routes/:id/publish`
 

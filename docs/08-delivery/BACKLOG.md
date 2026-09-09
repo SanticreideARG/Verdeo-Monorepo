@@ -110,6 +110,7 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 ## P1 - Logistics
 
 - [x] Route CRUD.
+- [x] Hoja de ruta por zona (`geographicZoneId` opcional en `POST /routes`).
 - [ ] Time windows.
 - [x] Optimization adapter (`@verdeo/routing` — determinista, sin ventanas horarias; ver
       DELIVERY_AND_ROUTES.md "As built").

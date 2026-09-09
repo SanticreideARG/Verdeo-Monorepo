@@ -83,6 +83,14 @@ export class PostgresDeliveryService {
     deliveryDate: string,
     label: string | undefined,
     context: DeliveryContext,
+    /*
+     * Acotar la hoja a una zona.
+     *
+     * Sin esto se arma con la ciudad entera. Una ciudad con varias zonas reparte por zona —es como
+     * sale el repartidor—, así que una hoja por zona es una hoja que se puede seguir; una sola con
+     * todas las paradas mezcladas obliga a cruzar la ciudad de ida y vuelta.
+     */
+    geographicZoneId?: string,
   ) {
     return this.database.transaction(async (transaction) => {
       const [site] = await transaction
@@ -114,6 +122,9 @@ export class PostgresDeliveryService {
             eq(orders.operatingSiteId, operatingSiteId),
             eq(orders.deliveryDate, deliveryDate),
             eq(orders.status, 'CONFIRMED'),
+            // La zona se filtra por la dirección de entrega y no por el cliente: manda dónde se
+            // entrega (ADR-031), que es lo mismo que decide de qué ciudad es el pedido.
+            ...(geographicZoneId ? [eq(customerAddresses.geographicZoneId, geographicZoneId)] : []),
             ...(alreadyRoutedOrderIds.length > 0
               ? [
                   notInArray(
@@ -168,7 +179,9 @@ export class PostgresDeliveryService {
         actor: context.actorUserId
           ? { type: 'user', userId: context.actorUserId }
           : { type: 'system' },
-        after: { stopCount: geocoded.length },
+        // La zona queda en la auditoría: la ruta no la guarda como columna, así que si no está acá
+        // no hay forma de saber después por qué esa hoja tenía sólo una parte de la ciudad.
+        after: { geographicZoneId: geographicZoneId ?? null, stopCount: geocoded.length },
         correlationId: context.correlationId,
         entityId: route.id,
         entityType: 'delivery_route',

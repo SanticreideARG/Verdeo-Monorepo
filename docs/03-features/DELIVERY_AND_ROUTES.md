@@ -92,6 +92,13 @@ OR-Tools u otro adapter)" que pide este documento; los llamadores solo conocen l
   excepción" — un operador lo maneja a mano. Nada llega a la app de reparto hasta `publish`.
   Reordenar reescribe la secuencia en dos pasadas (todo a valores fuera de rango, después a los
   finales) para no chocar con el índice único `(route, sequence)` a mitad de transacción.
+- **Una hoja por zona**: `createRoute` acepta un `geographicZoneId` opcional y filtra las paradas
+  por la zona de la dirección de entrega —no por la del cliente: manda dónde se entrega (ADR-031),
+  que es lo mismo que decide de qué ciudad es el pedido—. Sin zona toma la ciudad entera, como
+  antes. El formulario ya no pregunta la ciudad: esa la fija el selector de la barra, y volver a
+  preguntarla dejaba abierta la posibilidad de armar una ruta para una ciudad distinta de la que se
+  está mirando. Sin etiqueta escrita, la etiqueta es el nombre de la zona, para que varias hojas del
+  mismo día no queden indistinguibles en la lista.
 - **App de reparto en `/delivery`**, sin el layout del dashboard admin. `listStopsForUser` es
   PII-safe por construcción: la consulta no selecciona teléfono/email/notas/historial, solo nombre
   de pila, dirección, pago esperado y estado.

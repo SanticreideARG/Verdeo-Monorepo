@@ -16,6 +16,14 @@ export const DeliveryTriggerActionSchema = z.enum(['ON_MY_WAY', 'AT_ADDRESS', 'D
 
 export const DeliveryRouteCreateRequestSchema = z.object({
   deliveryDate: z.iso.date(),
+  /*
+   * Sobre qué zona se arma la hoja de ruta.
+   *
+   * Opcional: sin esto se toma la ciudad entera, que es lo que hacía siempre. Con esto, una ciudad
+   * con varias zonas puede repartirse en varias hojas —una por zona, que es como sale el
+   * repartidor— en vez de una sola con todas las paradas mezcladas.
+   */
+  geographicZoneId: UuidSchema.optional(),
   label: z.string().trim().max(120).optional(),
   operatingSiteId: UuidSchema,
 });

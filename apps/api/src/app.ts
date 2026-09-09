@@ -852,6 +852,7 @@ interface DeliveryEngine {
     deliveryDate: string,
     label: string | undefined,
     context: DeliveryContext,
+    geographicZoneId?: string,
   ): Promise<unknown>;
   getRouteDetail(routeId: string): Promise<unknown>;
   listRoutes(operatingSiteId?: string): Promise<unknown>;
@@ -3614,6 +3615,7 @@ export function createApp(options: CreateAppOptions) {
       input.data.deliveryDate,
       input.data.label,
       deliveryContext(context),
+      input.data.geographicZoneId,
     );
     return context.json(DeliveryRouteDetailSchema.parse(contractValue(route)), 201);
   });

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
-import { apiRequest } from '../lib/api.js';
+import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { errorMessage, formatMoney } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
@@ -60,7 +60,13 @@ function tomorrow(): string {
  * "optimización asistida, decisión humana"). */
 export function RoutesPage() {
   const { failed, logout, profile } = useDashboardProfile();
-  const [sites, setSites] = useState<{ displayName: string; id: string }[]>([]);
+  /*
+   * Las zonas de la ciudad que está elegida arriba.
+   *
+   * `/api/v1/zones` ya viene acotado al ámbito de la barra, así que no hace falta filtrar acá; y
+   * cambiar de ciudad recarga la pantalla entera, así que alcanza con pedirlas una vez.
+   */
+  const [zones, setZones] = useState<{ displayName: string; id: string }[]>([]);
   const [users, setUsers] = useState<{ displayName: string; id: string }[]>([]);
   const [routes, setRoutes] = useState<RouteSummary[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteDetail | null>(null);
@@ -89,9 +95,9 @@ export function RoutesPage() {
     }
     void Promise.all([
       loadRoutes(),
-      apiRequest('/api/v1/operating-sites').then(async (response) => {
+      apiRequest('/api/v1/zones').then(async (response) => {
         if (response.ok) {
-          setSites(
+          setZones(
             ((await response.json()) as { items: { displayName: string; id: string }[] }).items,
           );
         }
@@ -117,11 +123,26 @@ export function RoutesPage() {
      */
     const formEl = event.currentTarget;
     const form = new FormData(formEl);
-    const label = formText(form, 'label').trim();
+    const zoneId = formText(form, 'geographicZoneId');
+    /*
+     * Sin etiqueta escrita, la etiqueta es la zona.
+     *
+     * Con varias hojas del mismo día la lista las muestra sólo por fecha, y quedaban tres "2026-09-10"
+     * indistinguibles. El nombre de la zona es exactamente lo que las separa.
+     */
+    const label =
+      formText(form, 'label').trim() || zones.find((zone) => zone.id === zoneId)?.displayName || '';
+    const operatingSiteId = storedOperatingSiteId();
+    if (!operatingSiteId) {
+      setMessage('Elegí una ciudad en el selector de arriba antes de proponer una ruta.');
+      return;
+    }
     const response = await apiRequest('/api/v1/delivery/routes', {
       body: JSON.stringify({
         deliveryDate: formText(form, 'deliveryDate'),
-        operatingSiteId: formText(form, 'operatingSiteId'),
+        // La ciudad sale del selector de la barra, que es el que manda en toda la pantalla.
+        operatingSiteId,
+        ...(zoneId ? { geographicZoneId: zoneId } : {}),
         ...(label ? { label } : {}),
       }),
       method: 'POST',
@@ -138,7 +159,7 @@ export function RoutesPage() {
     setMessage(
       route.stops.length > 0
         ? `Ruta creada con ${String(route.stops.length)} paradas.`
-        : 'Ruta creada, pero sin paradas: no hay pedidos confirmados y geocodificados para ese día y esa ciudad.',
+        : 'Ruta creada, pero sin paradas: no hay pedidos confirmados y geocodificados para ese día en esa zona.',
     );
   }
 
@@ -274,13 +295,19 @@ export function RoutesPage() {
             className="mt-6 grid gap-3 rounded-2xl border border-forest/10 bg-[var(--db-surface)] p-6 sm:grid-cols-3"
             onSubmit={(event) => void createRoute(event)}
           >
+            {/*
+              La ciudad ya está elegida arriba, en el selector de la barra: volver a preguntarla acá
+              es pedir dos veces lo mismo y dejar abierta la posibilidad de armar una ruta para una
+              ciudad distinta de la que se está mirando. Lo que sí hace falta elegir es la zona: el
+              reparto sale por zona, y una hoja por zona es una hoja que se puede seguir.
+            */}
             <label className="field">
-              Ciudad
-              <select name="operatingSiteId" required>
-                <option value="">Elegí una ciudad</option>
-                {sites.map((site) => (
-                  <option key={site.id} value={site.id}>
-                    {site.displayName}
+              Zona
+              <select name="geographicZoneId">
+                <option value="">Toda la ciudad</option>
+                {zones.map((zone) => (
+                  <option key={zone.id} value={zone.id}>
+                    {zone.displayName}
                   </option>
                 ))}
               </select>
@@ -431,7 +458,7 @@ export function RoutesPage() {
                     ))}
                     {selectedRoute.stops.length === 0 ? (
                       <p className="text-ink-muted">
-                        No hay pedidos confirmados y geocodificados para esa fecha y ciudad.
+                        No hay pedidos confirmados y geocodificados para esa fecha y esa zona.
                       </p>
                     ) : null}
                   </ol>

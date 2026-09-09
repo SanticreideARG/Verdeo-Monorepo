@@ -48,6 +48,7 @@ const MENU = 'e0000000-0000-4000-8000-000000000001';
 const ADDRESS_A = '0c000000-0000-4000-8000-000000000001';
 const ADDRESS_B = '0c000000-0000-4000-8000-000000000002';
 const ZONE = '0d000000-0000-4000-8000-000000000001';
+const ZONE_SUR = '0d000000-0000-4000-8000-000000000002';
 const ORDER_A = '0a000000-0000-4000-8000-000000000001';
 const ORDER_B = '0a000000-0000-4000-8000-000000000002';
 const USER_REPARTIDOR = 'f0000000-0000-4000-8000-000000000001';
@@ -56,7 +57,8 @@ const seed = `
   insert into operating_sites (id, slug, display_name, order_prefix, origin_latitude, origin_longitude)
   values ('${SITE}', 'cipolletti', 'Cipolletti', 'CIP', 0, 0);
   insert into geographic_zones (id, operating_site_id, slug, display_name)
-  values ('${ZONE}', '${SITE}', 'centro', 'Centro');
+  values ('${ZONE}', '${SITE}', 'centro', 'Centro'),
+         ('${ZONE_SUR}', '${SITE}', 'sur', 'Sur');
   insert into customers (id, display_name) values
     ('${CUSTOMER_A}', 'Ana Gómez'),
     ('${CUSTOMER_B}', 'Bruno Díaz');
@@ -99,6 +101,7 @@ async function seededService(messaging = stubMessaging()) {
   close = closeDatabase;
   await client.exec(seed);
   return {
+    client,
     db,
     messaging,
     service: new PostgresDeliveryService(db, new NearestNeighborRouteOptimizer(), messaging),
@@ -115,6 +118,35 @@ describe('createRoute', () => {
     expect(route?.stops).toHaveLength(2);
     // Origin is (0,0); B is closer (longitude 1) than A (longitude 3).
     expect(route?.stops.map((stop) => stop.orderId)).toEqual([ORDER_B, ORDER_A]);
+  });
+
+  it('arma la hoja de una zona sola y deja afuera las paradas de las otras', async () => {
+    const { client, service } = await seededService();
+    // Bruno se muda a Sur; Ana se queda en Centro.
+    await client.exec(
+      `update customer_addresses set geographic_zone_id = '${ZONE_SUR}' where id = '${ADDRESS_B}';`,
+    );
+
+    const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT, ZONE);
+
+    /*
+     * El reparto sale por zona: una hoja con toda la ciudad obliga a cruzarla de ida y vuelta. La
+     * zona se toma de la dirección de entrega, no del cliente, que es lo mismo que decide de qué
+     * ciudad es el pedido (ADR-031).
+     */
+    expect(route?.stops.map((stop) => stop.orderId)).toEqual([ORDER_A]);
+  });
+
+  it('sin zona sigue tomando la ciudad entera', async () => {
+    const { client, service } = await seededService();
+    await client.exec(
+      `update customer_addresses set geographic_zone_id = '${ZONE_SUR}' where id = '${ADDRESS_B}';`,
+    );
+
+    // La zona es opcional: quien no la elige arma la hoja como se armaba siempre.
+    const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
+
+    expect(route?.stops).toHaveLength(2);
   });
 
   it('excludes an order already on an active route', async () => {
