@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toDataURL } from 'qrcode';
 
+import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage, type CustomerSummary } from '../lib/operations.js';
+import { showToast } from '../lib/toast.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 interface QuestionDraft {
@@ -20,6 +22,8 @@ interface SurveySummary {
   active: boolean;
   createdAt: string;
   id: string;
+  /** El enlace compartido, ya armado. Null mientras no se haya generado. */
+  publicUrl: string | null;
   responseCount: number;
   sentCount: number;
   title: string;
@@ -74,6 +78,8 @@ export function SurveysPage() {
   const [surveys, setSurveys] = useState<SurveySummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  // La encuesta que se está por eliminar: se pregunta antes, diciendo cuánto se lleva puesto.
+  const [deleting, setDeleting] = useState<SurveySummary | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [title, setTitle] = useState('');
@@ -152,6 +158,49 @@ export function SurveysPage() {
     setIsCreating(false);
     setEditingId(null);
     await load();
+  }
+
+  /**
+   * Generar el enlace público, o rotarlo.
+   *
+   * Rotarlo invalida el anterior, y por eso se pregunta cuando ya existe uno: es la única forma de
+   * cerrar un enlace que se compartió de más, y también la forma de romper el que ya está circulando
+   * sin querer.
+   */
+  async function toggleLink(survey: SurveySummary, enabled: boolean) {
+    const response = await apiRequest(`/api/v1/surveys/${survey.id}/link`, {
+      body: JSON.stringify({ enabled }),
+      method: 'POST',
+    });
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    const body = (await response.json()) as { publicUrl: string | null };
+    await load();
+    if (body.publicUrl) {
+      await navigator.clipboard.writeText(body.publicUrl).catch(() => undefined);
+      showToast('Enlace generado y copiado. Pegalo donde quieras compartirlo.');
+    } else {
+      showToast('Enlace desactivado. Quien lo tenga ya no puede responder.');
+    }
+  }
+
+  async function copyLink(publicUrl: string) {
+    await navigator.clipboard.writeText(publicUrl);
+    showToast('Enlace copiado.');
+  }
+
+  /** Borra la encuesta y todo lo que cuelga de ella. La confirmación dice cuánto se lleva. */
+  async function deleteSurvey(survey: SurveySummary) {
+    const response = await apiRequest(`/api/v1/surveys/${survey.id}`, { method: 'DELETE' });
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    setDeleting(null);
+    await load();
+    showToast(`"${survey.title}" se eliminó.`);
   }
 
   async function searchCustomers() {
@@ -423,6 +472,7 @@ export function SurveysPage() {
                     <p className="text-sm text-ink-muted">
                       {survey.active ? 'Activa' : 'Desactivada'} · {survey.sentCount} enviadas ·{' '}
                       {survey.responseCount} respondidas
+                      {survey.publicUrl ? ' · con enlace público' : ''}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -447,12 +497,44 @@ export function SurveysPage() {
                         Enviar
                       </button>
                     ) : null}
+                    {canManage ? (
+                      <button
+                        className="button button-secondary"
+                        onClick={() =>
+                          survey.publicUrl
+                            ? void copyLink(survey.publicUrl)
+                            : void toggleLink(survey, true)
+                        }
+                        type="button"
+                      >
+                        {survey.publicUrl ? 'Copiar enlace' : 'Crear enlace público'}
+                      </button>
+                    ) : null}
+                    {canManage && survey.publicUrl ? (
+                      <button
+                        className="button button-secondary"
+                        onClick={() => void toggleLink(survey, false)}
+                        title="Quien tenga el enlace deja de poder responder"
+                        type="button"
+                      >
+                        Cerrar enlace
+                      </button>
+                    ) : null}
                     <Link
                       className="button button-secondary"
                       to={`/app/encuestas/${survey.id}/resultados`}
                     >
                       Resultados
                     </Link>
+                    {canManage ? (
+                      <button
+                        className="button button-danger"
+                        onClick={() => setDeleting(survey)}
+                        type="button"
+                      >
+                        Eliminar
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </article>
@@ -461,6 +543,21 @@ export function SurveysPage() {
           </div>
         )}
       </section>
+
+      {deleting ? (
+        <ConfirmDialog
+          confirmLabel="Eliminar la encuesta"
+          detail={
+            deleting.responseCount > 0
+              ? `Se borran la encuesta, sus preguntas y las ${String(deleting.responseCount)} respuestas que ya recibió. Los resultados dejan de existir y no se pueden recuperar.`
+              : 'Se borran la encuesta y sus preguntas. Todavía no recibió respuestas.'
+          }
+          onCancel={() => setDeleting(null)}
+          onConfirm={() => deleteSurvey(deleting)}
+          tone="destructivo"
+          title={`¿Eliminar "${deleting.title}"?`}
+        />
+      ) : null}
     </DashboardShell>
   );
 }

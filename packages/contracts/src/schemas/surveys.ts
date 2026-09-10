@@ -40,6 +40,12 @@ export const SurveySummarySchema = z.object({
   active: z.boolean(),
   createdAt: IsoDateTimeSchema,
   id: UuidSchema,
+  /*
+   * El enlace público, si está generado. Es la URL entera y no el token suelto: la pantalla lo
+   * único que hace con esto es copiarlo al portapapeles, y componer una URL a mano en el navegador
+   * significaría que el dominio queda escrito en dos lugares.
+   */
+  publicUrl: z.string().nullable(),
   responseCount: z.number().int(),
   sentCount: z.number().int(),
   title: z.string(),
@@ -48,6 +54,19 @@ export const SurveySummarySchema = z.object({
 export const SurveyListResponseSchema = z.object({ items: z.array(SurveySummarySchema) });
 
 export const SurveySendRequestSchema = z.object({ customerId: UuidSchema });
+
+/** Generar el enlace público, rotarlo (volviendo a pedirlo) o apagarlo. */
+export const SurveyPublicLinkRequestSchema = z.object({ enabled: z.boolean() });
+
+export const SurveyPublicLinkResponseSchema = z.object({
+  publicUrl: z.string().nullable(),
+});
+
+export const SurveyDeleteResponseSchema = z.object({
+  deleted: z.boolean(),
+  /** Cuántas respuestas se llevó puestas: la pantalla lo dice después, no sólo antes. */
+  responseCount: z.number().int(),
+});
 
 export const SurveySendResponseSchema = z.object({
   publicUrl: z.string(),

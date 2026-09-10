@@ -205,3 +205,140 @@ describe('surveys', () => {
     expect(updated.questions[0]?.prompt).toBe('Reemplazada');
   });
 });
+
+describe('enlace público', () => {
+  async function surveyWithLink(service: PostgresSurveyService) {
+    const survey = await service.createSurvey(
+      {
+        questions: [
+          {
+            allowMultiple: false,
+            options: ['Keto', 'Real'],
+            prompt: '¿Cuál querés?',
+            required: true,
+          },
+        ],
+        title: 'Menú de la semana que viene',
+      },
+      context,
+    );
+    const withLink = (await service.setPublicLink(survey.id, true, context)) as {
+      publicToken: string;
+    };
+    return { survey, token: withLink.publicToken };
+  }
+
+  it('el mismo enlace lo pueden responder varias personas', async () => {
+    const service = await seededService();
+    const { token } = await surveyWithLink(service);
+    const question = (await service.getSurveyByPublicLink(token)).questions[0]!;
+
+    await service.submitPublicResponse(token, [{ questionId: question.id, value: 'Keto' }]);
+    await service.submitPublicResponse(token, [{ questionId: question.id, value: 'Real' }]);
+
+    /*
+     * Ésta es la diferencia con el envío 1:1, que se consume de un uso. Un enlace que se tira en un
+     * grupo tiene que aceptar veinte respuestas, y no puede saber quién es quién.
+     */
+    const results = await service.getSurveyResults((await service.listSurveys())[0]!.id);
+    expect(results.responseCount).toBe(2);
+  });
+
+  it('no guarda quién respondió', async () => {
+    const service = await seededService();
+    const { token } = await surveyWithLink(service);
+    const question = (await service.getSurveyByPublicLink(token)).questions[0]!;
+
+    const response = await service.submitPublicResponse(token, [
+      { questionId: question.id, value: 'Keto' },
+    ]);
+
+    // Anónimo por construcción, no por convención: no hay cliente ni token de envío que mirar.
+    expect(response.customerId).toBeNull();
+    expect(response.tokenId).toBeNull();
+  });
+
+  it('rotar el enlace invalida el anterior', async () => {
+    const service = await seededService();
+    const { survey, token } = await surveyWithLink(service);
+
+    await service.setPublicLink(survey.id, true, context);
+
+    // Es la única forma de cerrar un enlace que se compartió de más.
+    await expect(service.getSurveyByPublicLink(token)).rejects.toThrow();
+  });
+
+  it('apagar el enlace deja de aceptar respuestas', async () => {
+    const service = await seededService();
+    const { survey, token } = await surveyWithLink(service);
+    const question = (await service.getSurveyByPublicLink(token)).questions[0]!;
+
+    await service.setPublicLink(survey.id, false, context);
+
+    await expect(
+      service.submitPublicResponse(token, [{ questionId: question.id, value: 'Keto' }]),
+    ).rejects.toThrow();
+  });
+
+  it('exige las respuestas obligatorias, igual que el envío 1:1', async () => {
+    const service = await seededService();
+    const { token } = await surveyWithLink(service);
+
+    // Una encuesta no puede validar distinto según por dónde llegó la respuesta, o los resultados
+    // dejarían de ser comparables entre sí.
+    await expect(service.submitPublicResponse(token, [])).rejects.toThrow();
+  });
+
+  it('rechaza una respuesta a una pregunta de otra encuesta', async () => {
+    const service = await seededService();
+    const { token } = await surveyWithLink(service);
+    const otra = await service.createSurvey(
+      {
+        questions: [{ allowMultiple: false, options: [], prompt: 'Otra cosa', required: false }],
+        title: 'Otra',
+      },
+      context,
+    );
+
+    await expect(
+      service.submitPublicResponse(token, [
+        { questionId: otra.questions[0]!.id, value: 'lo que sea' },
+      ]),
+    ).rejects.toThrow();
+  });
+});
+
+describe('deleteSurvey', () => {
+  it('se lleva la encuesta y sus respuestas, y dice cuántas eran', async () => {
+    const service = await seededService();
+    const survey = await service.createSurvey(
+      {
+        questions: [{ allowMultiple: false, options: [], prompt: 'Comentario', required: false }],
+        title: 'Para borrar',
+      },
+      context,
+    );
+    const withLink = (await service.setPublicLink(survey.id, true, context)) as {
+      publicToken: string;
+    };
+    const question = (await service.getSurveyByPublicLink(withLink.publicToken)).questions[0]!;
+    await service.submitPublicResponse(withLink.publicToken, [
+      { questionId: question.id, value: 'bien' },
+    ]);
+
+    const result = await service.deleteSurvey(survey.id, context);
+
+    // El número importa: es lo que la pantalla dice antes de preguntar, para que nadie borre a
+    // ciegas una encuesta con respuestas adentro.
+    expect(result).toEqual({ deleted: true, responseCount: 1 });
+    expect(await service.listSurveys()).toHaveLength(0);
+  });
+
+  it('no inventa una encuesta que no existe', async () => {
+    const service = await seededService();
+
+    await expect(
+      service.deleteSurvey('00000000-0000-4000-8000-000000000000', context),
+    ).rejects.toThrow();
+  });
+});

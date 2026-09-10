@@ -247,6 +247,164 @@ export class PostgresSurveyService {
     });
   }
 
+  /**
+   * Genera —o rota, o apaga— el enlace público de una encuesta.
+   *
+   * Uno solo por encuesta, compartible, sin identificar a quien responde: la contracara del envío
+   * 1:1, que sabe a quién le fue y se consume de un uso. "¿Cómo estuvo tu pedido?" se manda a una
+   * persona; "¿qué menú querés la semana que viene?" se tira en un grupo.
+   *
+   * Volver a generarlo invalida el anterior, y es a propósito: es la única forma de cerrar un
+   * enlace que se compartió de más. `enabled: false` lo borra sin dejar reemplazo.
+   */
+  public async setPublicLink(surveyId: string, enabled: boolean, context: SurveyContext) {
+    const [survey] = await this.database
+      .select()
+      .from(surveys)
+      .where(eq(surveys.id, surveyId))
+      .limit(1);
+    if (!survey) throw new SurveyNotFoundError('Survey not found');
+
+    // Veinticuatro bytes: no se adivina, y sigue entrando en un mensaje de chat sin partirse.
+    const publicToken = enabled ? randomBytes(24).toString('base64url') : null;
+
+    return this.database.transaction(async (transaction) => {
+      const [row] = await transaction
+        .update(surveys)
+        .set({ publicToken, updatedAt: new Date() })
+        .where(eq(surveys.id, surveyId))
+        .returning();
+      if (!row) throw new Error('Survey public link update did not return a row');
+
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: enabled ? 'survey.public_link_created' : 'survey.public_link_revoked',
+        actor: auditActor(context),
+        // El token no va a la auditoría: es la credencial de acceso a la encuesta, y un registro de
+        // auditoría lo lee más gente que la que debería poder responder.
+        after: { hadLink: survey.publicToken !== null },
+        correlationId: context.correlationId,
+        entityId: surveyId,
+        entityType: 'survey',
+        requestId: context.requestId,
+        source: context.source,
+      });
+
+      return row;
+    });
+  }
+
+  /**
+   * Borra una encuesta y todo lo que cuelga de ella.
+   *
+   * Preguntas, envíos, respuestas y answers se van por cascada. Es destructivo de verdad —una
+   * encuesta con respuestas se lleva los datos— y por eso la pantalla dice cuántas hay antes de
+   * preguntar. Se borra en vez de archivarse porque una encuesta no es un dato del negocio: no hay
+   * nada contable ni fiscal que obligue a conservarla, a diferencia de un pedido.
+   */
+  public async deleteSurvey(surveyId: string, context: SurveyContext) {
+    return this.database.transaction(async (transaction) => {
+      const [survey] = await transaction
+        .select()
+        .from(surveys)
+        .where(eq(surveys.id, surveyId))
+        .limit(1);
+      if (!survey) throw new SurveyNotFoundError('Survey not found');
+
+      const [counted] = await transaction
+        .select({ total: sql<number>`count(*)` })
+        .from(surveyResponses)
+        .where(eq(surveyResponses.surveyId, surveyId));
+      const responseCount = Number(counted?.total ?? 0);
+
+      // La auditoría va antes del borrado: después la fila ya no está y no queda quién dice qué se
+      // borró, cómo se llamaba ni cuántas respuestas se llevó puestas.
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: 'survey.deleted',
+        actor: auditActor(context),
+        before: { responseCount, title: survey.title },
+        correlationId: context.correlationId,
+        entityId: surveyId,
+        entityType: 'survey',
+        requestId: context.requestId,
+        source: context.source,
+      });
+
+      await transaction.delete(surveys).where(eq(surveys.id, surveyId));
+      return { deleted: true, responseCount };
+    });
+  }
+
+  /**
+   * La encuesta detrás de un enlace público.
+   *
+   * A diferencia del envío 1:1, no se consume: el mismo enlace lo abren veinte personas. Lo único
+   * que la cierra es desactivar la encuesta o rotar el enlace.
+   */
+  public async getSurveyByPublicLink(publicToken: string) {
+    const [row] = await this.database
+      .select({
+        active: surveys.active,
+        description: surveys.description,
+        id: surveys.id,
+        title: surveys.title,
+      })
+      .from(surveys)
+      .where(eq(surveys.publicToken, publicToken))
+      .limit(1);
+    if (!row) throw new SurveyNotFoundError('Survey link not found');
+    if (!row.active) throw new SurveyConflictError('Esta encuesta ya no está disponible.');
+
+    const questions = await this.loadQuestions(this.database, row.id);
+    return {
+      description: row.description,
+      questions: questions.map((question) => ({
+        allowMultiple: question.allowMultiple,
+        id: question.id,
+        options: question.options,
+        prompt: question.prompt,
+        required: question.required,
+      })),
+      title: row.title,
+    };
+  }
+
+  /**
+   * Una respuesta anónima, llegada por el enlace público.
+   *
+   * Sin token de un solo uso y sin cliente: no se sabe quién respondió, y es la definición de lo
+   * que se pidió. Que alguien pueda responder dos veces se frena del lado del navegador, que es
+   * suficiente para el uso real —evitar el doble envío por error— y no pretende ser a prueba de
+   * quien se proponga votar de más. Si algún día hace falta eso, hace falta identificar, que es
+   * exactamente lo que esta modalidad viene a evitar.
+   */
+  public async submitPublicResponse(
+    publicToken: string,
+    answers: readonly { questionId: string; value: string | readonly string[] }[],
+  ) {
+    return this.database.transaction(async (transaction) => {
+      const [survey] = await transaction
+        .select()
+        .from(surveys)
+        .where(eq(surveys.publicToken, publicToken))
+        .limit(1);
+      if (!survey) throw new SurveyNotFoundError('Survey link not found');
+      if (!survey.active) throw new SurveyConflictError('Esta encuesta ya no está disponible.');
+
+      await this.assertAnswersMatchSurvey(transaction, survey.id, answers);
+
+      const [response] = await transaction
+        .insert(surveyResponses)
+        .values({ surveyId: survey.id })
+        .returning();
+      if (!response) throw new Error('Survey response insert did not return a row');
+
+      await this.writeAnswers(transaction, response.id, answers);
+      return response;
+    });
+  }
+
   public async getPublicSurvey(token: string) {
     const [row] = await this.database
       .select({
@@ -291,19 +449,7 @@ export class PostgresSurveyService {
       if (!tokenRow) throw new SurveyNotFoundError('Survey link not found');
       if (tokenRow.usedAt) throw new SurveyConflictError('Esta encuesta ya fue respondida.');
 
-      const questions = await this.loadQuestions(transaction, tokenRow.surveyId);
-      const questionIds = new Set(questions.map((question) => question.id));
-      const requiredIds = new Set(
-        questions.filter((question) => question.required).map((q) => q.id),
-      );
-      const answeredIds = new Set(answers.map((answer) => answer.questionId));
-      for (const id of requiredIds) {
-        if (!answeredIds.has(id)) throw new SurveyConflictError('Faltan respuestas obligatorias.');
-      }
-      for (const answer of answers) {
-        if (!questionIds.has(answer.questionId))
-          throw new SurveyConflictError('Una respuesta no corresponde a esta encuesta.');
-      }
+      await this.assertAnswersMatchSurvey(transaction, tokenRow.surveyId, answers);
 
       const [response] = await transaction
         .insert(surveyResponses)
@@ -315,18 +461,7 @@ export class PostgresSurveyService {
         .returning();
       if (!response) throw new Error('Survey response insert did not return a row');
 
-      for (const answer of answers) {
-        // Array.isArray narrows a custom `readonly string[]` union member poorly (its signature is
-        // `arg is any[]`), so the string/array split is done on typeof instead — the two possible
-        // member types never overlap, so this is a complete and precise discriminator.
-        const value: string | string[] =
-          typeof answer.value === 'string' ? answer.value : [...answer.value];
-        await transaction.insert(surveyAnswers).values({
-          questionId: answer.questionId,
-          responseId: response.id,
-          value,
-        });
-      }
+      await this.writeAnswers(transaction, response.id, answers);
 
       await transaction
         .update(surveyTokens)
@@ -335,6 +470,49 @@ export class PostgresSurveyService {
 
       return response;
     });
+  }
+
+  /**
+   * Que las respuestas correspondan a esta encuesta y estén las obligatorias.
+   *
+   * Lo comparten el envío 1:1 y el enlace público: una encuesta no puede validar distinto según por
+   * dónde llegó la respuesta, o los resultados dejarían de ser comparables entre sí.
+   */
+  private async assertAnswersMatchSurvey(
+    transaction: DatabaseTransaction,
+    surveyId: string,
+    answers: readonly { questionId: string; value: string | readonly string[] }[],
+  ): Promise<void> {
+    const questions = await this.loadQuestions(transaction, surveyId);
+    const questionIds = new Set(questions.map((question) => question.id));
+    const requiredIds = new Set(questions.filter((question) => question.required).map((q) => q.id));
+    const answeredIds = new Set(answers.map((answer) => answer.questionId));
+    for (const id of requiredIds) {
+      if (!answeredIds.has(id)) throw new SurveyConflictError('Faltan respuestas obligatorias.');
+    }
+    for (const answer of answers) {
+      if (!questionIds.has(answer.questionId))
+        throw new SurveyConflictError('Una respuesta no corresponde a esta encuesta.');
+    }
+  }
+
+  private async writeAnswers(
+    transaction: DatabaseTransaction,
+    responseId: string,
+    answers: readonly { questionId: string; value: string | readonly string[] }[],
+  ): Promise<void> {
+    for (const answer of answers) {
+      // `Array.isArray` narrows a custom `readonly string[]` union member poorly (its signature is
+      // `arg is any[]`), so the string/array split is done on typeof instead — the two possible
+      // member types never overlap, so this is a complete and precise discriminator.
+      const value: string | string[] =
+        typeof answer.value === 'string' ? answer.value : [...answer.value];
+      await transaction.insert(surveyAnswers).values({
+        questionId: answer.questionId,
+        responseId,
+        value,
+      });
+    }
   }
 
   public async getSurveyResults(surveyId: string) {

@@ -155,8 +155,14 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [x] Token público por encuesta + ruta `public/survey/:token` (`PublicSurveyPage`).
 - [ ] QR de distribución — el enlace directo ya se genera; falta el QR, igual que en Labels.
 - [x] Pantalla de resultados/estadísticas por encuesta (`SurveyResultsPage`, gateada por permiso).
-- [ ] **Sin decidir**, y bloquea cerrar la fase: si el token es 1:1 con un cliente o anónimo por
-      campaña, y si vence o es de un solo uso. Ver Fase 10 en `IMPLEMENTATION_ROADMAP.md`.
+- [x] **Decidido: los dos modelos conviven.** El envío 1:1 sigue igual —un token por cliente, de un
+      solo uso, y sabe quién respondió— y se le suma un enlace público por encuesta: uno solo,
+      compartible, anónimo, que no se consume. Responden preguntas distintas: "¿cómo estuvo tu
+      pedido?" se le manda a una persona, "¿qué menú querés la semana que viene?" se tira en un
+      grupo. El segundo envío desde el mismo navegador se frena con `localStorage`, que evita el
+      doble envío por error y no pretende ser a prueba de quien se proponga votar de más — impedir
+      eso exige identificar, que es lo que un enlace anónimo viene a evitar.
+- [x] Eliminar encuestas, con sus preguntas y sus respuestas.
 
 ## P2
 

@@ -120,6 +120,20 @@ confirmación recibe un candidato persistido o un par latitud/longitud corregido
 - `GET /ai/usage`
 - `PATCH /ai/providers/:id`
 
+## Encuestas
+
+- `GET /surveys`
+- `POST /surveys`
+- `GET /surveys/:id`
+- `PATCH /surveys/:id`
+- `DELETE /surveys/:id` (se lleva preguntas, envíos y respuestas)
+- `POST /surveys/:id/send` (enlace 1:1 con un cliente, de un solo uso)
+- `POST /surveys/:id/link` (crea, rota o apaga el enlace público compartido)
+- `GET /surveys/:id/results`
+- `GET /public/surveys/:token` · `POST /public/surveys/:token/submit` (el envío 1:1)
+- `GET /public/surveys/link/:token` · `POST /public/surveys/link/:token/submit` (el compartido,
+  anónimo; no se consume)
+
 ## Audit
 
 - `GET /audit`

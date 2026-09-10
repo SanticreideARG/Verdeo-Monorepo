@@ -288,6 +288,8 @@ export function App() {
       <Route path="/privacidad" element={<PrivacyPolicyPage />} />
       <Route path="/terminos" element={<TermsPage />} />
       <Route path="/public/survey/:token" element={<PublicSurveyPage />} />
+      {/* El enlace compartido: corto, para que entre en un mensaje sin ocupar tres renglones. */}
+      <Route path="/encuesta/:token" element={<PublicSurveyPage variant="enlace" />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/acceso" element={<AccessTokenLoginPage />} />
       <Route path="/recuperar" element={<PasswordResetPage />} />

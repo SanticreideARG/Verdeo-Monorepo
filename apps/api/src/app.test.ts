@@ -3144,6 +3144,97 @@ describe('API foundation', () => {
       expect(deniedResponse.status).toBe(403);
     });
 
+    it('arma el enlace público con el dominio de la aplicación, no con el token pelado', async () => {
+      const setPublicLink = vi.fn(() => Promise.resolve({ publicToken: 'abc123' }));
+      const app = buildSurveyApp({ setPublicLink }, ['surveys.manage']);
+
+      const response = await app.request(
+        '/api/v1/surveys/40000000-0000-4000-8000-000000000001/link',
+        {
+          body: JSON.stringify({ enabled: true }),
+          headers: { cookie, 'content-type': 'application/json' },
+          method: 'POST',
+        },
+      );
+
+      /*
+       * La URL entera y no el token: la pantalla lo único que hace es copiarlo al portapapeles, y
+       * componerla en el navegador dejaría el dominio escrito en dos lugares.
+       */
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        publicUrl: 'http://localhost:5173/encuesta/abc123',
+      });
+
+      const denied = buildSurveyApp({ setPublicLink: vi.fn() }, ['surveys.read']);
+      const deniedResponse = await denied.request(
+        '/api/v1/surveys/40000000-0000-4000-8000-000000000001/link',
+        {
+          body: JSON.stringify({ enabled: true }),
+          headers: { cookie, 'content-type': 'application/json' },
+          method: 'POST',
+        },
+      );
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('dice null cuando la encuesta no tiene enlace', async () => {
+      const setPublicLink = vi.fn(() => Promise.resolve({ publicToken: null }));
+      const app = buildSurveyApp({ setPublicLink }, ['surveys.manage']);
+
+      const response = await app.request(
+        '/api/v1/surveys/40000000-0000-4000-8000-000000000001/link',
+        {
+          body: JSON.stringify({ enabled: false }),
+          headers: { cookie, 'content-type': 'application/json' },
+          method: 'POST',
+        },
+      );
+
+      expect(await response.json()).toEqual({ publicUrl: null });
+    });
+
+    it('borra una encuesta con surveys.manage y dice cuántas respuestas se llevó', async () => {
+      const deleteSurvey = vi.fn(() => Promise.resolve({ deleted: true, responseCount: 12 }));
+      const app = buildSurveyApp({ deleteSurvey }, ['surveys.manage']);
+
+      const response = await app.request('/api/v1/surveys/40000000-0000-4000-8000-000000000001', {
+        headers: { cookie },
+        method: 'DELETE',
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ deleted: true, responseCount: 12 });
+
+      // Leer encuestas no alcanza para borrarlas.
+      const denied = buildSurveyApp({ deleteSurvey: vi.fn() }, ['surveys.read']);
+      const deniedResponse = await denied.request(
+        '/api/v1/surveys/40000000-0000-4000-8000-000000000001',
+        { headers: { cookie }, method: 'DELETE' },
+      );
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('responde el enlace público sin sesión, y no confunde "link" con un token', async () => {
+      const getSurveyByPublicLink = vi.fn(() =>
+        Promise.resolve({ description: null, questions: [], title: 'Menú de la semana' }),
+      );
+      const getPublicSurvey = vi.fn(() =>
+        Promise.resolve({ description: null, questions: [], title: 'otra' }),
+      );
+      const app = buildSurveyApp({ getPublicSurvey, getSurveyByPublicLink }, []);
+
+      const response = await app.request('/api/v1/public/surveys/link/abc123');
+
+      /*
+       * La ruta del enlace compartido se registra antes que `/public/surveys/:token`: "link" es un
+       * segmento literal y no puede leerse como el token de un envío 1:1.
+       */
+      expect(response.status).toBe(200);
+      expect(getSurveyByPublicLink).toHaveBeenCalledWith('abc123');
+      expect(getPublicSurvey).not.toHaveBeenCalled();
+    });
+
     it('creates a survey with surveys.manage and denies without it', async () => {
       const createSurvey = vi.fn(() => Promise.resolve(sampleSurvey));
       const app = buildSurveyApp({ createSurvey }, ['surveys.manage']);

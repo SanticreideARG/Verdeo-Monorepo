@@ -145,3 +145,30 @@ siendo la fuente de verdad.
 - Toda edición relevante deja actor, request/correlation ID, before/after y timestamp.
 - Un usuario sin permisos no puede leer contactos ni mutar conversaciones, clientes o pedidos.
 - Cocina sigue consolidando únicamente datos persistidos y confirmados.
+
+## Encuestas: dos formas de preguntar
+
+Conviven dos modalidades, y no es indecisión: responden preguntas distintas.
+
+**Envío 1:1** (`POST /surveys/:id/send`). Un token por cliente, de un solo uso, que sabe quién
+respondió. Es para "¿cómo estuvo tu pedido?": la respuesta vale por estar atada a una persona y a un
+pedido concreto, y una segunda respuesta del mismo cliente ensuciaría el dato.
+
+**Enlace público** (`POST /surveys/:id/link`). Uno solo por encuesta, compartible, anónimo, que no
+se consume: el mismo enlace lo abren veinte personas. Es para "¿qué menú querés la semana que
+viene?", que se tira en un grupo de WhatsApp y donde pedir identificación reduciría la participación
+sin mejorar el dato. Volver a generarlo invalida el anterior — la única forma de cerrar un enlace que
+se compartió de más.
+
+La respuesta anónima deja `customer_id` y `token_id` en nulo. Postgres admite varios nulos en un
+índice único, así que el índice que garantiza que un token 1:1 responda una sola vez sigue vigente
+sin estorbar a las anónimas.
+
+El segundo envío desde el mismo navegador se frena con `localStorage`. Conviene ser explícito sobre
+qué es eso: evita el doble envío por error y el "¿ya lo mandé?" al recargar, que es el problema real.
+No impide que alguien decidido responda dos veces —vaciar el almacenamiento del sitio alcanza— y no
+puede: impedirlo de verdad exige identificar a quien responde, que es exactamente lo que esta
+modalidad viene a evitar. Si alguna vez hace falta un padrón, hace falta el envío 1:1.
+
+El minisitio vive en `/encuesta/:token`: sin menú, sin pie, y con la marca que no navega a ningún
+lado. Se entra por el enlace, se responde, se agradece, y ahí termina la navegación.

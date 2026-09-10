@@ -26,6 +26,17 @@ export const surveys = pgTable('surveys', {
   title: text('title').notNull(),
   description: text('description'),
   active: boolean('active').default(true).notNull(),
+  /*
+   * El enlace público de la encuesta: uno solo, compartible, sin identificar a nadie.
+   *
+   * Convive con `survey_tokens`, que es lo contrario —uno por cliente, de un solo uso, y sabe quién
+   * respondió—. Los dos tienen sentido y responden a preguntas distintas: "¿cómo estuvo tu pedido?"
+   * se manda a una persona, y "¿qué menú querés la semana que viene?" se tira en un grupo.
+   *
+   * Nulo mientras no se haya generado. Se puede regenerar, y eso invalida el anterior: es la única
+   * forma de cerrar un enlace que se compartió de más.
+   */
+  publicToken: text('public_token').unique(),
   createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
   ...timestamps,
 });
@@ -79,12 +90,14 @@ export const surveyResponses = pgTable(
     surveyId: uuid('survey_id')
       .notNull()
       .references(() => surveys.id, { onDelete: 'cascade' }),
-    tokenId: uuid('token_id')
-      .notNull()
-      .references(() => surveyTokens.id, { onDelete: 'cascade' }),
-    customerId: uuid('customer_id')
-      .notNull()
-      .references(() => customers.id, { onDelete: 'cascade' }),
+    /*
+     * Nulos cuando la respuesta llegó por el enlace público, que es anónimo por definición: no hay
+     * token de un solo uso ni cliente detrás. Postgres permite varios nulos en un índice único, así
+     * que el índice de abajo sigue garantizando que un token 1:1 responda una sola vez sin estorbar
+     * a las anónimas.
+     */
+    tokenId: uuid('token_id').references(() => surveyTokens.id, { onDelete: 'cascade' }),
+    customerId: uuid('customer_id').references(() => customers.id, { onDelete: 'cascade' }),
     submittedAt: timestamp('submitted_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

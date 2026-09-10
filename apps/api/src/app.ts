@@ -185,6 +185,9 @@ import {
   SurveyResultsSchema,
   SurveySchema,
   SurveySendRequestSchema,
+  SurveyDeleteResponseSchema,
+  SurveyPublicLinkRequestSchema,
+  SurveyPublicLinkResponseSchema,
   SurveySendResponseSchema,
   SurveySubmitRequestSchema,
   SurveyUpdateRequestSchema,
@@ -671,7 +674,17 @@ interface SurveyEngine {
   getSurvey(surveyId: string): Promise<unknown>;
   getSurveyResults(surveyId: string): Promise<unknown>;
   listSurveys(): Promise<unknown>;
+  deleteSurvey(
+    surveyId: string,
+    context: SurveyContext,
+  ): Promise<{ deleted: boolean; responseCount: number }>;
+  getSurveyByPublicLink(publicToken: string): Promise<unknown>;
   sendSurvey(surveyId: string, customerId: string, context: SurveyContext): Promise<unknown>;
+  setPublicLink(surveyId: string, enabled: boolean, context: SurveyContext): Promise<unknown>;
+  submitPublicResponse(
+    publicToken: string,
+    answers: readonly { questionId: string; value: string | readonly string[] }[],
+  ): Promise<unknown>;
   submitSurveyResponse(token: string, answers: SurveySubmitRequest['answers']): Promise<unknown>;
   updateSurvey(
     surveyId: string,
@@ -1611,6 +1624,25 @@ export function createApp(options: CreateAppOptions) {
 
   // Public survey, token-gated — an unknown token 404s, an already-used or deactivated one 409s
   // (SurveyNotFoundError / SurveyConflictError, translated by the shared error handler below).
+  /*
+   * El minisitio del enlace compartido.
+   *
+   * Registrado antes de `/public/surveys/:token` a propósito: "link" es un segmento literal y no
+   * puede leerse como un token. Los dos caminos existen y responden preguntas distintas — uno sabe
+   * a quién le mandó la encuesta, el otro no sabe ni quiere saber quién contestó.
+   */
+  app.get('/api/v1/public/surveys/link/:token', async (context) => {
+    const survey = await requireSurveys().getSurveyByPublicLink(context.req.param('token'));
+    return context.json(SurveyPublicSchema.parse(contractValue(survey)));
+  });
+
+  app.post('/api/v1/public/surveys/link/:token/submit', async (context) => {
+    const input = SurveySubmitRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success) return badRequest(context, 'Revisá las respuestas.', input.error.issues);
+    await requireSurveys().submitPublicResponse(context.req.param('token'), input.data.answers);
+    return context.json({ ok: true }, 201);
+  });
+
   app.get('/api/v1/public/surveys/:token', async (context) => {
     const token = context.req.param('token');
     const survey = await requireSurveys().getPublicSurvey(token);
@@ -4936,10 +4968,24 @@ export function createApp(options: CreateAppOptions) {
 
   // --- Customer surveys: 1:1 token per customer, single-use ---------------------------------
 
+  /** El enlace público de una encuesta, o null si todavía no se generó. */
+  const surveyPublicUrl = (publicToken: string | null): string | null =>
+    publicToken ? `${options.appOrigin}/encuesta/${publicToken}` : null;
+
   app.get('/api/v1/surveys', async (context) => {
     if (!context.get('session').permissions.includes('surveys.read')) return forbidden(context);
-    const items = await requireSurveys().listSurveys();
-    return context.json(SurveyListResponseSchema.parse({ items: contractValue(items) }));
+    const items = (await requireSurveys().listSurveys()) as readonly {
+      publicToken: string | null;
+    }[];
+    return context.json(
+      SurveyListResponseSchema.parse({
+        // El token se cambia por la URL armada acá: la pantalla no tiene por qué saber cómo se
+        // compone, y el dominio no queda escrito en dos lugares.
+        items: contractValue(
+          items.map((survey) => ({ ...survey, publicUrl: surveyPublicUrl(survey.publicToken) })),
+        ),
+      }),
+    );
   });
 
   app.post('/api/v1/surveys', async (context) => {
@@ -4994,6 +5040,42 @@ export function createApp(options: CreateAppOptions) {
       }),
       201,
     );
+  });
+
+  /*
+   * El enlace público: uno solo por encuesta, compartible, anónimo.
+   *
+   * La contracara de "enviar a un cliente", que es 1:1 y de un solo uso. Volver a pedirlo rota el
+   * enlace e invalida el anterior, que es la única forma de cerrar uno que se compartió de más.
+   */
+  app.post('/api/v1/surveys/:id/link', async (context) => {
+    if (!context.get('session').permissions.includes('surveys.manage')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'Encuesta inválida.', params.error.issues);
+    const input = SurveyPublicLinkRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) return badRequest(context, 'Revisá los datos.', input.error.issues);
+    const survey = (await requireSurveys().setPublicLink(
+      params.data.id,
+      input.data.enabled,
+      surveyContext(context),
+    )) as { publicToken: string | null };
+    return context.json(
+      SurveyPublicLinkResponseSchema.parse({ publicUrl: surveyPublicUrl(survey.publicToken) }),
+    );
+  });
+
+  /*
+   * Borrar una encuesta se lleva sus preguntas, sus envíos y sus respuestas. Se borra en vez de
+   * archivarse porque una encuesta no es un dato contable: no hay nada que obligue a conservarla.
+   */
+  app.delete('/api/v1/surveys/:id', async (context) => {
+    if (!context.get('session').permissions.includes('surveys.manage')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'Encuesta inválida.', params.error.issues);
+    const result = await requireSurveys().deleteSurvey(params.data.id, surveyContext(context));
+    return context.json(SurveyDeleteResponseSchema.parse(result));
   });
 
   app.get('/api/v1/surveys/:id/results', async (context) => {
