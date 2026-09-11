@@ -5991,8 +5991,77 @@ a.order-card-phone:focus-visible {
   border-radius: 2px;
 }
 
-.assistant-panel {
-  bottom: 5.6rem;
+/*
+ * Sólo en escritorio: el panel sube para dejar lugar al lanzador, que ahora es más alto. Sin la
+ * media query esta regla pisaba el `inset: 0` del teléfono y el panel quedaba cortado, con la
+ * página asomando por debajo de las opciones.
+ */
+@media (min-width: 30.0625rem) {
+  .assistant-panel {
+    bottom: 5.6rem;
+  }
+}
+
+/*
+ * En el teléfono el panel ocupa toda la pantalla y ya tiene su × en la cabecera: el lanzador
+ * flotando encima tapaba las opciones y era un segundo botón de cerrar.
+ */
+@media (max-width: 30rem) {
+  .assistant-launcher.is-open {
+    display: none;
+  }
+}
+
+/* Cada variedad del menú se abre para mostrar sus platos. */
+.assistant-block-menu li {
+  display: block;
+}
+.assistant-variety {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.3rem 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.assistant-variety:hover {
+  color: var(--color-forest);
+}
+.assistant-variety-chevron {
+  flex: none;
+  width: 1.4rem;
+  height: 1.4rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-lime) 35%, #fff);
+  color: var(--color-forest);
+  font-weight: 700;
+}
+.assistant-variety-detail {
+  padding: 0.15rem 0 0.55rem;
+  font-size: 0.84rem;
+  color: var(--color-ink-muted);
+}
+.assistant-variety-detail p {
+  margin: 0 0 0.35rem;
+}
+.assistant-variety-detail ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  list-style: disc;
+}
+.assistant-variety-detail ul li {
+  display: list-item;
+  padding: 0.12rem 0;
+  border: 0;
+  color: var(--color-ink);
 }
 
 .assistant-header-identity {
@@ -6040,4 +6109,28 @@ a.order-card-phone:focus-visible {
   .assistant-launcher:hover .assistant-launcher-avatar {
     transform: none;
   }
+}
+
+/*
+ * El logo de cada menú, al lado de su nombre en el asistente: los mismos que usa la landing.
+ * A 36px, que es lo que alcanza para reconocerlos sin que el renglón se vuelva una ficha.
+ */
+.assistant-variety-name {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.assistant-variety-name img {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+.assistant-variety-name span {
+  overflow-wrap: anywhere;
+}
+/* El detalle se alinea con el texto del nombre, no con el logo. */
+.assistant-block-menu .assistant-variety-detail {
+  padding-left: calc(36px + 0.6rem);
 }

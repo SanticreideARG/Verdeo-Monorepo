@@ -78,10 +78,83 @@ function writeSession(session: StoredSession): void {
   }
 }
 
-/** El menú de la semana de una ciudad, tal como lo publica la web. */
-function MenuBlock({ citySlug, showPrices }: { citySlug: string | null; showPrices: boolean }) {
+interface MenuBranding {
+  caption?: string;
+  iconUrl?: string;
+}
+
+/**
+ * El logo y la bajada de cada menú, tal como los muestra la landing.
+ *
+ * Se leen de la sección "Menús de la semana" de la página publicada, y no de un catálogo aparte: es
+ * la misma fuente que la landing, así que el asistente no puede mostrar un logo distinto del que la
+ * persona acaba de ver más arriba. Y la bajada de ahí —"Sin harinas, sin cereales. Con lácteos."—
+ * se lee mucho mejor que la descripción del catálogo, que viene en mayúsculas.
+ *
+ * Una sola petición por visita, compartida entre todos los bloques: se guarda la promesa y no el
+ * resultado, así dos bloques que se dibujan a la vez no disparan dos pedidos.
+ */
+let brandingRequest: Promise<Map<string, MenuBranding>> | null = null;
+
+function brandingKey(name: string): string {
+  // El nombre lo escribe una persona en el CMS y otra en el catálogo: sin caja ni espacios de más.
+  return name.trim().toLowerCase().replace(/s+/g, ' ');
+}
+
+function loadMenuBranding(): Promise<Map<string, MenuBranding>> {
+  brandingRequest ??= apiRequest('/api/v1/public/pages/home')
+    .then(async (response) => {
+      const byName = new Map<string, MenuBranding>();
+      if (!response.ok) return byName;
+      const body = (await response.json()) as {
+        sections?: { families?: { caption?: string; familyName?: string; iconUrl?: string }[] }[];
+      };
+      for (const section of body.sections ?? []) {
+        for (const family of section.families ?? []) {
+          if (!family.familyName) continue;
+          byName.set(brandingKey(family.familyName), {
+            ...(family.caption ? { caption: family.caption } : {}),
+            ...(family.iconUrl ? { iconUrl: family.iconUrl } : {}),
+          });
+        }
+      }
+      return byName;
+    })
+    // Sin logos el bloque sigue funcionando: son un agregado, no una condición para contestar.
+    .catch(() => new Map<string, MenuBranding>());
+  return brandingRequest;
+}
+
+/**
+ * El menú de la semana de una ciudad, tal como lo publica la web.
+ *
+ * Cada variedad se puede abrir para ver sus platos. Una lista de nombres —"Menú Real", "Menú
+ * Keto"— no dice qué se come: lo que decide una compra son los cinco platos de adentro, y ya están
+ * en el menú publicado, así que mostrarlos no cuesta ni una consulta más.
+ */
+function MenuBlock({
+  citySlug,
+  onExpand,
+  showPrices,
+}: {
+  citySlug: string | null;
+  onExpand?: (element: HTMLElement) => void;
+  showPrices: boolean;
+}) {
   const [menu, setMenu] = useState<WeeklyMenu | null>(null);
   const [failed, setFailed] = useState(false);
+  const [openFamily, setOpenFamily] = useState<string | null>(null);
+  const [branding, setBranding] = useState<Map<string, MenuBranding>>(new Map());
+
+  useEffect(() => {
+    let active = true;
+    void loadMenuBranding().then((loaded) => {
+      if (active) setBranding(loaded);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -134,14 +207,82 @@ function MenuBlock({ citySlug, showPrices }: { citySlug: string | null; showPric
     );
   }
 
-  const varieties = [...new Set(menu.offerings.map((offering) => offering.familyName))];
+  /*
+   * Una entrada por variedad y no por oferta: el menú trae cada variedad dos veces, una por tamaño,
+   * con los mismos platos. Los platos y la descripción se toman de la primera.
+   */
+  const families = new Map<
+    string,
+    { composable: boolean; description: string | null; dishes: string[] }
+  >();
+  for (const offering of menu.offerings) {
+    if (!families.has(offering.familyName)) {
+      families.set(offering.familyName, {
+        composable: offering.composable,
+        description: offering.description,
+        dishes: offering.dishes,
+      });
+    }
+  }
+  /*
+   * El Intuitivo no trae platos propios: se arma eligiendo cinco entre los de las demás variedades.
+   * Así que su detalle es ese universo, que es exactamente lo que alguien quiere saber antes de
+   * elegirlo.
+   */
+  const weekDishes = [
+    ...new Set(
+      [...families.values()].filter((family) => !family.composable).flatMap((f) => f.dishes),
+    ),
+  ];
+
   return (
-    <ul className="assistant-block">
-      {varieties.map((variety) => (
-        <li key={variety}>
-          <span>{variety}</span>
-        </li>
-      ))}
+    <ul className="assistant-block assistant-block-menu">
+      {[...families.entries()].map(([name, family]) => {
+        const isOpen = openFamily === name;
+        const dishes = family.composable ? weekDishes : family.dishes;
+        const brand = branding.get(brandingKey(name));
+        // La bajada de la landing si existe; si no, la descripción del catálogo.
+        const blurb = brand?.caption?.replace(/^(|)$/g, '') ?? family.description;
+        return (
+          <li key={name}>
+            <button
+              aria-expanded={isOpen}
+              className="assistant-variety"
+              onClick={(event) => {
+                const item = event.currentTarget.parentElement;
+                setOpenFamily(isOpen ? null : name);
+                if (!isOpen && item) onExpand?.(item);
+              }}
+              type="button"
+            >
+              <span className="assistant-variety-name">
+                {brand?.iconUrl ? (
+                  <img alt="" height="36" loading="lazy" src={brand.iconUrl} width="36" />
+                ) : null}
+                <span>{name}</span>
+              </span>
+              <span aria-hidden="true" className="assistant-variety-chevron">
+                {isOpen ? '−' : '+'}
+              </span>
+            </button>
+            {isOpen ? (
+              <div className="assistant-variety-detail">
+                {blurb ? <p>{blurb}</p> : null}
+                {family.composable ? <p>Elegís cinco platos entre los de esta semana:</p> : null}
+                {dishes.length > 0 ? (
+                  <ul>
+                    {dishes.map((dish) => (
+                      <li key={dish}>{dish}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>Todavía no cargamos los platos de esta variedad.</p>
+                )}
+              </div>
+            ) : null}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -208,8 +349,18 @@ function PaymentsBlock() {
   );
 }
 
-function DataBlock({ block, citySlug }: { block: Block; citySlug: string | null }) {
-  if (block === 'MENU_SEMANA') return <MenuBlock citySlug={citySlug} showPrices={false} />;
+function DataBlock({
+  block,
+  citySlug,
+  onExpand,
+}: {
+  block: Block;
+  citySlug: string | null;
+  onExpand?: (element: HTMLElement) => void;
+}) {
+  if (block === 'MENU_SEMANA') {
+    return <MenuBlock citySlug={citySlug} showPrices={false} {...(onExpand ? { onExpand } : {})} />;
+  }
   if (block === 'PRECIOS') return <MenuBlock citySlug={citySlug} showPrices />;
   if (block === 'ZONAS') return <ZonesBlock citySlug={citySlug} />;
   return <PaymentsBlock />;
@@ -287,10 +438,19 @@ export function LandingAssistant() {
    * después del texto, y al dibujarse empujan la respuesta fuera de la vista. Bajar una sola vez,
    * cuando se agrega el turno, dejaba el precio justo abajo del borde.
    */
+  /*
+   * Pero no cuando lo que creció es una variedad que alguien abrió: ahí bajar al fondo le sacaría de
+   * la vista justo lo que acaba de pedir ver, sobre todo si abrió una de una respuesta anterior. Un
+   * turno nuevo vuelve a enganchar el hilo al fondo; abrir una variedad lo suelta.
+   */
+  const stickToBottom = useRef(true);
+
   useEffect(() => {
     const thread = threadRef.current;
     if (!thread) return;
+    stickToBottom.current = true;
     const toBottom = () => {
+      if (!stickToBottom.current) return;
       thread.scrollTo({ behavior: 'smooth', top: thread.scrollHeight });
     };
     toBottom();
@@ -471,7 +631,17 @@ export function LandingAssistant() {
                   <p className="assistant-turn is-me">{turn.text}</p>
                 ) : null}
                 {turn.block ? (
-                  <DataBlock block={turn.block} citySlug={turn.citySlug ?? citySlug} />
+                  <DataBlock
+                    block={turn.block}
+                    citySlug={turn.citySlug ?? citySlug}
+                    onExpand={(element) => {
+                      stickToBottom.current = false;
+                      // Después de que se dibuje el detalle, para que el navegador sepa cuánto mide.
+                      window.requestAnimationFrame(() =>
+                        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' }),
+                      );
+                    }}
+                  />
                 ) : null}
               </div>
             ))}
