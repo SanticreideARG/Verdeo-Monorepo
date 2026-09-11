@@ -6176,6 +6176,64 @@ body:has(.assistant-launcher.is-operator) .toast-host {
   font-weight: 600;
 }
 
+/*
+ * La ayuda del panel sigue el tema elegido en Apariencia.
+ *
+ * El panel de la landing tiene colores fijos de marca sobre blanco. Adentro del panel eso se rompía
+ * en los temas oscuros: el fondo quedaba blanco pero el texto heredaba el claro del tema, y los
+ * títulos eran casi invisibles. Acá todo sale de las variables `--db-*` del tema, en claro y oscuro.
+ */
+.assistant-panel.is-operator {
+  background: var(--db-surface-solid);
+  color: var(--db-text);
+  border-color: var(--db-border);
+}
+.assistant-panel.is-operator .assistant-header {
+  background: color-mix(in srgb, var(--db-accent) 10%, var(--db-surface-solid));
+  border-bottom-color: var(--db-border);
+}
+.assistant-panel.is-operator .assistant-header p,
+.assistant-panel.is-operator .helpbot-article h3,
+.assistant-panel.is-operator .helpbot-row strong {
+  color: var(--db-text);
+}
+.assistant-panel.is-operator .assistant-plain,
+.assistant-panel.is-operator .assistant-block-empty,
+.assistant-panel.is-operator .helpbot-crumbs,
+.assistant-panel.is-operator .helpbot-row small,
+.assistant-panel.is-operator .helpbot-row > span:last-child {
+  color: var(--db-muted);
+}
+.assistant-panel.is-operator .assistant-plain:hover {
+  color: var(--db-text);
+}
+.assistant-panel.is-operator .assistant-turn.is-bot {
+  background: color-mix(in srgb, var(--db-accent) 14%, var(--db-surface-solid));
+  color: var(--db-text);
+}
+.assistant-panel.is-operator .helpbot-search input {
+  background: var(--db-surface-solid);
+  color: var(--db-text);
+  border-color: var(--db-border);
+}
+.assistant-panel.is-operator .helpbot-search input::placeholder {
+  color: var(--db-muted);
+}
+.assistant-panel.is-operator .helpbot-row,
+.assistant-panel.is-operator .helpbot-footer {
+  border-color: var(--db-border);
+}
+.assistant-panel.is-operator .helpbot-row:hover strong,
+.assistant-panel.is-operator .helpbot-crumb,
+.assistant-panel.is-operator .helpbot-link,
+.assistant-panel.is-operator .helpbot-footer a {
+  color: var(--db-accent);
+}
+.assistant-panel.is-operator .helpbot-count {
+  background: color-mix(in srgb, var(--db-accent) 18%, var(--db-surface-solid));
+  color: var(--db-text);
+}
+
 /* Cada variedad del menú se abre para mostrar sus platos. */
 .assistant-block-menu li {
   display: block;

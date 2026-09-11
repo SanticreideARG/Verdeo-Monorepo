@@ -331,8 +331,8 @@ configuración que alguien ajustó a mano.
 ## Ayuda: la lechuza del panel (as built)
 
 La ayuda se abre desde la lechuza de abajo a la derecha, presente en todas las pantallas del panel,
-con la misma forma que el asistente de la landing (`components/OperatorAssistant.tsx`). La entrada
-"Ayuda" del menú lateral abre ese mismo panel en vez de navegar. Cambió la entrada, no el
+con la misma forma que el asistente de la landing (`components/OperatorAssistant.tsx`). El menú lateral
+ya no tiene entrada "Ayuda": la lechuza es el único acceso, para no tener la ayuda en dos lugares. Cambió la entrada, no el
 contenido: siguen siendo los artículos de `help_articles`, filtrados por permiso en el backend, y se
 siguen editando en `/app/ayuda` (el panel enlaza ahí para quien tiene `help.manage`).
 
