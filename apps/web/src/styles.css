@@ -6012,6 +6012,170 @@ a.order-card-phone:focus-visible {
   }
 }
 
+/*
+ * La ayuda del panel (operadores). Reusa el lanzador y el panel del asistente de la landing; lo
+ * que cambia es que se usa todos los días: el globo sólo aparece al pasar el mouse, y en el
+ * teléfono la lechuza se sienta arriba de la barra inferior en vez de taparla.
+ */
+.assistant-launcher.is-operator .assistant-launcher-bubble {
+  display: none;
+}
+@media (hover: hover) {
+  .assistant-launcher.is-operator:hover .assistant-launcher-bubble {
+    display: block;
+  }
+}
+.assistant-panel.is-operator {
+  width: min(24rem, calc(100vw - 2.2rem));
+  max-height: min(36rem, calc(100vh - 8rem));
+}
+/* Los avisos flotantes viven en la misma esquina: suben para no quedar detrás de la lechuza. */
+body:has(.assistant-launcher.is-operator) .toast-host {
+  bottom: 6rem;
+}
+@media (max-width: 680px) {
+  .assistant-launcher.is-operator {
+    right: 0.9rem;
+    bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+  .assistant-launcher.is-operator .assistant-launcher-avatar {
+    width: 48px;
+    height: 48px;
+  }
+  .assistant-launcher.is-operator .assistant-launcher-avatar img {
+    width: 42px;
+    height: 42px;
+  }
+  .assistant-launcher.is-operator.is-open {
+    display: none;
+  }
+  /* En el teléfono la ayuda ocupa toda la pantalla, por encima de la barra inferior. */
+  .assistant-panel.is-operator {
+    inset: 0;
+    width: 100vw;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+}
+
+.helpbot-search {
+  padding: 0.65rem 1rem 0.35rem;
+}
+.helpbot-search input {
+  width: 100%;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--border-hairline);
+  border-radius: 12px;
+  font: inherit;
+  font-size: 0.9rem;
+}
+.helpbot-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+  padding: 0.2rem 1rem 0.45rem;
+  color: var(--color-ink-muted, #5b6b64);
+  font-size: 0.8rem;
+}
+.helpbot-crumb {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-forest);
+  font: inherit;
+  cursor: pointer;
+}
+.helpbot-crumb:hover {
+  text-decoration: underline;
+}
+.helpbot-thread {
+  flex: 1;
+  min-height: 8rem;
+}
+.helpbot-list {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.helpbot-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.7rem 0.2rem;
+  border: 0;
+  border-bottom: 1px solid var(--border-hairline);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.helpbot-row:hover strong {
+  color: var(--color-forest);
+}
+.helpbot-row span:first-child {
+  display: grid;
+  gap: 0.1rem;
+}
+.helpbot-row strong {
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.helpbot-row small {
+  color: var(--color-ink-muted, #5b6b64);
+  font-size: 0.75rem;
+}
+.helpbot-row.is-branch strong {
+  font-weight: 700;
+}
+.helpbot-count {
+  min-width: 1.6rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-forest) 10%, #fff);
+  color: var(--color-forest);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+}
+.helpbot-article h3 {
+  margin: 0.2rem 0 0.6rem;
+  color: var(--color-forest);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.helpbot-article p {
+  margin: 0 0 0.7rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+.helpbot-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-forest);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.helpbot-footer {
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--border-hairline);
+  font-size: 0.82rem;
+  text-align: right;
+}
+.helpbot-footer a {
+  color: var(--color-forest);
+  font-weight: 600;
+}
+
 /* Cada variedad del menú se abre para mostrar sus platos. */
 .assistant-block-menu li {
   display: block;

@@ -327,3 +327,23 @@ alguien de cocina no lee instrucciones de una sección a la que no entra.
 (`pnpm --filter @verdeo/db db:seed-help`).** El seed completo también escribe permisos, roles y
 concesiones: correrlo en producción sólo para corregir un texto de ayuda arriesga pisar
 configuración que alguien ajustó a mano.
+
+## Ayuda: la lechuza del panel (as built)
+
+La ayuda se abre desde la lechuza de abajo a la derecha, presente en todas las pantallas del panel,
+con la misma forma que el asistente de la landing (`components/OperatorAssistant.tsx`). La entrada
+"Ayuda" del menú lateral abre ese mismo panel en vez de navegar. Cambió la entrada, no el
+contenido: siguen siendo los artículos de `help_articles`, filtrados por permiso en el backend, y se
+siguen editando en `/app/ayuda` (el panel enlaza ahí para quien tiene `help.manage`).
+
+- **Ramas.** La categoría admite subcategorías separadas por `/`: "Pedidos / Editar y cancelar"
+  cuelga de Pedidos. El árbol se arma con lo que ya guarda cada artículo; no hay tabla de
+  categorías aparte.
+- **Búsqueda** por título, categoría y texto, sin tildes ni mayúsculas.
+- **Enlaces dentro del texto:** `[[clave]]` abre otro artículo (y no se muestra si el usuario no
+  puede verlo); `[texto](/app/ruta)` lleva a la pantalla y cierra el panel. Sólo rutas internas.
+- Recuerda dónde quedó mientras dure la pestaña (sessionStorage), así sobrevive a navegar entre
+  pantallas.
+
+Pendiente: respuestas con datos en vivo ("qué me falta para cerrar la semana", "qué falta
+cobrar"), filtradas por la ciudad elegida y los permisos.

@@ -203,11 +203,12 @@ export function HelpPage() {
                     />
                   </label>
                   <label className="field">
-                    Categoría
+                    Categoría (con / para subcategorías)
                     <input
                       onChange={(event) =>
                         setDraft((current) => ({ ...current, category: event.target.value }))
                       }
+                      placeholder="ej. Pedidos / Editar y cancelar"
                       value={draft.category}
                     />
                   </label>

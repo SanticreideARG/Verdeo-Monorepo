@@ -5,6 +5,7 @@ import { apiRequest, storeOperatingSiteId, storedOperatingSiteId } from '../lib/
 import { AppearanceContext, type AppearanceState } from '../lib/appearanceContext.js';
 import { useNarrowViewport } from '../lib/useNarrowViewport.js';
 import { AppearanceMenu, FONT_OPTIONS, SCALE_OPTIONS, type ThemeOption } from './AppearanceMenu.js';
+import { OperatorAssistant, openOperatorAssistant } from './OperatorAssistant.js';
 import { PresenceControl } from './PresenceControl.js';
 import { SETTINGS_TAB_PERMISSIONS } from './SettingsTabs.js';
 import { RequestProgressBar } from './RequestProgressBar.js';
@@ -33,6 +34,7 @@ interface ScopeResponse {
 }
 
 const GLOBAL_OPTION = 'global';
+const HELP_HREF = '/app/ayuda';
 
 type IconName =
   | 'ai'
@@ -77,7 +79,7 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         label: 'Estadísticas',
         permission: 'stats.read',
       },
-      { href: '/app/ayuda', icon: 'help', label: 'Ayuda' },
+      { href: HELP_HREF, icon: 'help', label: 'Ayuda' },
     ],
   },
   {
@@ -747,6 +749,17 @@ export function DashboardShell({
                           <Link
                             className={active ? 'is-active' : ''}
                             key={item.label}
+                            onClick={
+                              item.href === HELP_HREF
+                                ? (event) => {
+                                    // "Ayuda" abre la lechuza en vez de navegar. Sigue siendo un
+                                    // enlace para que abrirlo en otra pestaña lleve al editor.
+                                    event.preventDefault();
+                                    setMenuOpen(false);
+                                    openOperatorAssistant();
+                                  }
+                                : undefined
+                            }
                             title={item.label}
                             to={item.href}
                           >
@@ -877,6 +890,10 @@ export function DashboardShell({
           </header>
           <RequestProgressBar />
           <main className="dashboard-content">{children}</main>
+          <OperatorAssistant
+            canManage={profile.permissions.includes('help.manage')}
+            displayName={profile.user.displayName}
+          />
           {narrow ? (
             <nav aria-label="Accesos del turno" className="dashboard-bottom-nav">
               {shiftNavigation
