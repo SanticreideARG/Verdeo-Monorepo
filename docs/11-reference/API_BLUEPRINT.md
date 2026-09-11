@@ -120,6 +120,13 @@ confirmación recibe un candidato persistido o un par latitud/longitud corregido
 - `GET /ai/usage`
 - `PATCH /ai/providers/:id`
 
+## Asistente de la landing
+
+- `GET /public/assistant` (el árbol publicado, sin sesión)
+- `POST /public/assistant/hit` (suma un toque; anónimo, responde 204 siempre)
+- `GET /assistant` · `PUT /assistant` · `POST /assistant/publish` (borrador y publicación)
+- `GET /assistant/stats` (toques por opción, agregado)
+
 ## Encuestas
 
 - `GET /surveys`

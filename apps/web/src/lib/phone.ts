@@ -16,11 +16,18 @@ const AREA_CODES = ['11', '221', '223', '261', '264', '299', '341', '351', '381'
  * vienen con 54 adelante; a los que no, se les asume Argentina móvil (549) y se les saca el 0 del
  * código de área y el 15 del abonado, que son notación local y sobran en el formato internacional.
  */
-export function whatsappHref(raw: string): string {
+export function whatsappHref(raw: string, message?: string): string {
   const digits = raw.replace(/\D/g, '');
-  if (digits.startsWith('54')) return `https://wa.me/${digits}`;
+  /*
+   * El texto va como parámetro y no en la ruta, y eso permite el caso sin número: `wa.me/?text=…`
+   * abre WhatsApp con el mensaje escrito y deja que la persona elija a quién mandárselo. Es peor
+   * que derivar a un contacto concreto, y bastante mejor que no ofrecer la salida.
+   */
+  const query = message ? `?text=${encodeURIComponent(message)}` : '';
+  if (!digits) return `https://wa.me/${query}`;
+  if (digits.startsWith('54')) return `https://wa.me/${digits}${query}`;
   const local = digits.replace(/^0/, '').replace(/^(\d{2,4})15/, '$1');
-  return `https://wa.me/549${local}`;
+  return `https://wa.me/549${local}${query}`;
 }
 
 export function formatArgentinePhone(raw: string): string {

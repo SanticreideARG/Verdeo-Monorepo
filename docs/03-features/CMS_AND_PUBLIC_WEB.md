@@ -142,3 +142,40 @@ landing, así que no queda encerrado.
 Una PWA instalada **conserva el manifiesto con el que se instaló**. Quien la haya agregado antes de
 que `start_url` cambiara sigue abriendo en `/`; hay que desinstalarla y volver a instalarla para que
 tome el nuevo.
+
+## El asistente de la landing
+
+Abajo a la derecha, un botón abre un panel con opciones. **No es un chat y no pretende serlo**: no
+hay texto libre, no hay modelo de lenguaje, y prometer lo segundo sería peor que no tenerlo. Es un
+árbol de opciones que se toca.
+
+Cada opción hace una de cuatro cosas: **responder** (un texto, y opcionalmente un bloque de datos),
+**preguntar** (abrir otro juego de opciones), **llevar** (navegar a una página del sitio) o **salir**
+(abrir WhatsApp con un mensaje ya escrito). La última es la salida cuando ninguna opción alcanza;
+sin ella el visitante queda golpeando contra un menú que no contesta lo que necesita.
+
+**Las respuestas son híbridas, y ahí está el valor.** El texto lo escribe quien configura y dice el
+_sentido_; el bloque trae el _dato_ en vivo de la misma fuente que la web pública —menú de la
+semana, precios por tamaño, zonas de entrega, medios de pago—. Un texto que enumerara los menús
+quedaría escrito y en seis semanas estaría mintiendo; un bloque no se puede desactualizar.
+
+**Pregunta la ciudad** antes de contestar lo que depende de ella, que son tres de las cuatro
+respuestas iniciales: el menú se distribuye por ciudad y el precio depende del tamaño y de la ciudad
+(ADR-030, ADR-031). Se pregunta una vez y se recuerda por el resto de la visita.
+
+**No guarda conversaciones.** El hilo vive en `sessionStorage` del navegador: sobrevive a un F5
+—perder el hilo por recargar es exasperante— y no reaparece una semana después con las respuestas de
+otro día. Nada de eso viaja al servidor.
+
+Sí se guarda, aparte, **cuántas veces se tocó cada opción**: un contador agregado, sin sesión, sin
+identificador y sin fecha por evento. Contesta "qué le falta a la landing", no "quién la visitó", y
+esa pregunta se contesta con un número.
+
+La configuración vive en `assistant_flows` + `assistant_flow_revisions`, el mismo patrón que una
+página del CMS: se guarda un borrador y se publica aparte, la landing lee sólo lo publicado, y una
+revisión rota se revierte a la anterior. El árbol por defecto se crea la primera vez que se lee el
+asistente, no con una migración de datos: una migración que inserta filas hay que repetirla a mano en
+cada entorno, y esto es configuración que tiene que existir siempre.
+
+El panel **no se abre solo**. Un panel que se despliega sin que nadie lo pida tapa la landing justo
+cuando la persona está leyendo, y en un teléfono la tapa entera.

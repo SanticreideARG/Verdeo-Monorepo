@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link, Route, Routes } from 'react-router-dom';
 
 import { CmsSection, type PageSection } from '../components/CmsSections.js';
+import { LandingAssistant } from '../components/LandingAssistant.js';
 import { apiRequest } from '../lib/api.js';
 import { AccessTokenLoginPage } from './AccessTokenLoginPage.js';
 import { AppearanceSettingsPage } from './AppearanceSettingsPage.js';
+import { AssistantSettingsPage } from './AssistantSettingsPage.js';
 import { AIProvidersPage } from './AIProvidersPage.js';
 import { AIWorkbenchPage } from './AIWorkbenchPage.js';
 import { CmsPagesAdminPage } from './CmsPagesAdminPage.js';
@@ -254,6 +256,12 @@ function HomePage() {
           : null}
         {content.status === 'fallback' ? <DefaultHomeContent /> : null}
       </main>
+      {/*
+       * Sólo en la landing por ahora. En "/pedido" competiría con el formulario, que es
+       * exactamente adonde el asistente manda a la gente; ponerlo ahí sería interrumpir la acción
+       * que se estaba tratando de provocar. Extenderlo después es mover esta línea.
+       */}
+      <LandingAssistant />
     </PublicLayout>
   );
 }
@@ -324,6 +332,7 @@ export function App() {
       <Route path="/app/calendario" element={<CalendarPage />} />
       <Route path="/app/ajustes/correo" element={<EmailSettingsPage />} />
       <Route path="/app/ajustes/apariencia" element={<AppearanceSettingsPage />} />
+      <Route path="/app/ajustes/asistente" element={<AssistantSettingsPage />} />
       <Route path="/app/ajustes/pagos" element={<PaymentMethodsSettingsPage />} />
       <Route path="/app/auditoria" element={<AuditLogPage />} />
       <Route path="/app/ajustes/chat" element={<ChatLinksPage />} />

@@ -185,6 +185,11 @@ import {
   SurveyResultsSchema,
   SurveySchema,
   SurveySendRequestSchema,
+  AssistantFlowDetailSchema,
+  AssistantFlowUpdateRequestSchema,
+  AssistantHitRequestSchema,
+  AssistantPublicSchema,
+  AssistantStatsResponseSchema,
   SurveyDeleteResponseSchema,
   SurveyPublicLinkRequestSchema,
   SurveyPublicLinkResponseSchema,
@@ -668,6 +673,22 @@ interface AuditQueryEngine {
   listFacets(): Promise<unknown>;
 }
 
+/**
+ * El asistente de la landing. Un árbol de opciones con revisiones, más un contador anónimo por
+ * opción: las conversaciones no se guardan, pero qué se pregunta sí se puede saber.
+ */
+interface AssistantEngine {
+  getEditableFlow(): Promise<unknown>;
+  getPublishedFlow(): Promise<unknown>;
+  getStats(): Promise<{ items: { hits: number; optionKey: string }[] }>;
+  publish(context: AssistantContext): Promise<unknown>;
+  recordHit(optionKey: string): Promise<void>;
+  saveDraft(
+    input: { greeting: string; options: unknown[] },
+    context: AssistantContext,
+  ): Promise<unknown>;
+}
+
 interface SurveyEngine {
   createSurvey(input: SurveyCreateRequest, context: SurveyContext): Promise<unknown>;
   getPublicSurvey(token: string): Promise<unknown>;
@@ -694,6 +715,13 @@ interface SurveyEngine {
 }
 
 interface SurveyContext {
+  actorUserId?: string | undefined;
+  correlationId: string;
+  requestId: string;
+  source: string;
+}
+
+interface AssistantContext {
   actorUserId?: string | undefined;
   correlationId: string;
   requestId: string;
@@ -952,6 +980,7 @@ interface CreateAppOptions {
   appOrigin: string;
   accessTokens?: AccessTokenEngine;
   auditQuery?: AuditQueryEngine;
+  assistant?: AssistantEngine;
   surveys?: SurveyEngine;
   help?: HelpEngine;
   avatarStorage?: AvatarStorageEngine;
@@ -1197,6 +1226,18 @@ export function createApp(options: CreateAppOptions) {
     if (!surveys) throw new Error('Survey engine is not configured');
     return surveys;
   };
+
+  const requireAssistant = () => {
+    if (!options.assistant) throw new Error('Assistant engine is not configured');
+    return options.assistant;
+  };
+
+  const assistantContext = (context: Context<{ Variables: AppVariables }>): AssistantContext => ({
+    actorUserId: context.get('session')?.userId,
+    correlationId: context.get('requestId'),
+    requestId: context.get('requestId'),
+    source: 'api',
+  });
 
   const surveyContext = (context: Context<{ Variables: AppVariables }>): SurveyContext => ({
     actorUserId: context.get('session')?.userId,
@@ -1631,6 +1672,37 @@ export function createApp(options: CreateAppOptions) {
    * puede leerse como un token. Los dos caminos existen y responden preguntas distintas — uno sabe
    * a quién le mandó la encuesta, el otro no sabe ni quiere saber quién contestó.
    */
+  /*
+   * El asistente de la landing, tal como lo ve un visitante: sólo lo publicado.
+   *
+   * Público y sin sesión, como todo lo que la landing necesita. Un borrador a medio armar no llega
+   * nunca acá: la lectura pública mira la revisión publicada y ninguna otra.
+   */
+  app.get('/api/v1/public/assistant', async (context) => {
+    const flow = await requireAssistant().getPublishedFlow();
+    return context.json(AssistantPublicSchema.parse(contractValue(flow)));
+  });
+
+  /*
+   * Un toque en una opción.
+   *
+   * Sin sesión, sin identificador y sin cuerpo más allá de cuál fue la opción: no registra quién,
+   * ni cuándo por evento, ni desde dónde. Contesta "qué le falta a la landing", no "quién la
+   * visitó", y esa pregunta se contesta con un número.
+   *
+   * Responde 204 haga lo que haga: una métrica que rompe la interacción de un visitante estaría
+   * cobrando demasiado por un contador.
+   */
+  app.post('/api/v1/public/assistant/hit', async (context) => {
+    const input = AssistantHitRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (input.success) {
+      await requireAssistant()
+        .recordHit(input.data.optionKey)
+        .catch(() => undefined);
+    }
+    return context.body(null, 204);
+  });
+
   app.get('/api/v1/public/surveys/link/:token', async (context) => {
     const survey = await requireSurveys().getSurveyByPublicLink(context.req.param('token'));
     return context.json(SurveyPublicSchema.parse(contractValue(survey)));
@@ -2101,6 +2173,8 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/zones/*', requireAuthentication);
   app.use('/api/v1/chat', requireAuthentication);
   app.use('/api/v1/chat/*', requireAuthentication);
+  app.use('/api/v1/assistant', requireAuthentication);
+  app.use('/api/v1/assistant/*', requireAuthentication);
   app.use('/api/v1/customers', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/customers/*', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/message-templates', requireAuthentication);
@@ -4971,6 +5045,39 @@ export function createApp(options: CreateAppOptions) {
   /** El enlace público de una encuesta, o null si todavía no se generó. */
   const surveyPublicUrl = (publicToken: string | null): string | null =>
     publicToken ? `${options.appOrigin}/encuesta/${publicToken}` : null;
+
+  /* Configurar el asistente: mismo trío que el CMS —leer el borrador, guardarlo, publicarlo—. */
+  app.get('/api/v1/assistant', async (context) => {
+    if (!context.get('session').permissions.includes('cms.read')) return forbidden(context);
+    const flow = await requireAssistant().getEditableFlow();
+    return context.json(AssistantFlowDetailSchema.parse(contractValue(flow)));
+  });
+
+  app.put('/api/v1/assistant', async (context) => {
+    if (!context.get('session').permissions.includes('cms.edit')) return forbidden(context);
+    const input = AssistantFlowUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'Revisá las opciones del asistente.', input.error.issues);
+    await requireAssistant().saveDraft(input.data, assistantContext(context));
+    const flow = await requireAssistant().getEditableFlow();
+    return context.json(AssistantFlowDetailSchema.parse(contractValue(flow)));
+  });
+
+  app.post('/api/v1/assistant/publish', async (context) => {
+    if (!context.get('session').permissions.includes('cms.publish')) return forbidden(context);
+    await requireAssistant().publish(assistantContext(context));
+    const flow = await requireAssistant().getEditableFlow();
+    return context.json(AssistantFlowDetailSchema.parse(contractValue(flow)));
+  });
+
+  /* Qué se pregunta. Agregado por opción, sin nada que identifique a nadie. */
+  app.get('/api/v1/assistant/stats', async (context) => {
+    if (!context.get('session').permissions.includes('cms.read')) return forbidden(context);
+    const stats = await requireAssistant().getStats();
+    return context.json(AssistantStatsResponseSchema.parse(stats));
+  });
 
   app.get('/api/v1/surveys', async (context) => {
     if (!context.get('session').permissions.includes('surveys.read')) return forbidden(context);

@@ -190,6 +190,20 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
       de autorización. Para poder comprobar lo segundo, `createLogger` acepta un destino opcional:
       por defecto pino escribe al descriptor 1 y lo que sale no se puede leer desde un test.
 
+## Asistente de la landing
+
+- [x] Widget abajo a la derecha, con opciones configurables desde Ajustes.
+- [x] Respuestas híbridas: texto escrito más datos en vivo (menú, precios, zonas, medios de pago).
+- [x] Pregunta la ciudad cuando la respuesta depende de ella, y la recuerda por la visita.
+- [x] "Hablar por WhatsApp" como salida cuando ninguna opción alcanza.
+- [x] Conversación en `sessionStorage`: sobrevive a un F5, no reaparece una semana después.
+- [x] Contador anónimo por opción, para saber qué se pregunta sin guardar conversaciones.
+- [ ] Sub-opciones (`preguntar`): el contrato y el widget ya las soportan, la pantalla de
+      configuración todavía no las deja editar. Es lo primero que agregaría si hace falta un
+      segundo nivel.
+- [ ] El widget sólo está en la landing. En `/pedido` competiría con el formulario, que es adonde
+      el asistente manda; extenderlo a otras páginas es mover una línea.
+
 ## Interfaz: lo que queda del análisis
 
 Del relevamiento del 9 de septiembre de 2026 (19 hallazgos). Hechos: fechas unificadas, estados de

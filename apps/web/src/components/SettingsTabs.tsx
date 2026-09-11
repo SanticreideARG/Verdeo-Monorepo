@@ -43,6 +43,7 @@ const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         permission: 'messaging.accounts.manage',
       },
       { href: '/app/ajustes/chat', label: 'Enlaces de chat', permission: 'chat.links.manage' },
+      { href: '/app/ajustes/asistente', label: 'Asistente de la web', permission: 'cms.read' },
       { href: '/app/ia', label: 'IA y plantillas', permission: 'ai.providers.manage' },
     ],
   },

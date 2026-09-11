@@ -35,6 +35,7 @@ import {
   PostgresHelpService,
   PostgresIntegrationCredentialsService,
   PostgresMessagingService,
+  PostgresAssistantService,
   PostgresSurveyService,
   PostgresUserAdminRepository,
   PostgresUserDirectoryRepository,
@@ -141,6 +142,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
   const aiPrompts = new PostgresAIPromptService(database.db);
   const auditQuery = new PostgresAuditQueryService(database.db);
   const surveys = new PostgresSurveyService(database.db);
+  const assistant = new PostgresAssistantService(database.db);
   const help = new PostgresHelpService(database.db);
   const aiTasks = new PostgresAITaskService(
     database.db,
@@ -442,6 +444,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     appOrigin: env.APP_URL,
     accessTokens,
     auditQuery,
+    assistant,
     surveys,
     help,
     cms,
