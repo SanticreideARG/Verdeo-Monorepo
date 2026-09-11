@@ -33,6 +33,7 @@ import {
   buildLabels,
   calculateLineTotal,
   calculateOrderTotal,
+  deliveryDateFor,
   mergeByLooseName,
   normalizeMenuName,
   resolveOrderComposition,
@@ -3211,13 +3212,27 @@ export class PostgresOperationsService {
     context: OperationsContext,
   ) {
     const [menu] = await transaction
-      .select({ salesCycleId: weeklyMenus.salesCycleId, status: weeklyMenus.status })
+      .select({
+        closeAt: salesCycles.closeAt,
+        salesCycleId: weeklyMenus.salesCycleId,
+        status: weeklyMenus.status,
+      })
       .from(weeklyMenus)
+      .innerJoin(salesCycles, eq(salesCycles.id, weeklyMenus.salesCycleId))
       .where(eq(weeklyMenus.id, input.menuId))
       .limit(1);
     if (!menu) throw new OperationsNotFoundError('Weekly menu not found');
     if (menu.status !== 'PUBLISHED')
       throw new OperationsConflictError('Orders require a published menu');
+
+    /*
+     * El día de entrega lo decide el ciclo, no quien llama.
+     *
+     * Antes se guardaba el que mandaba el navegador, y cada pantalla (y cada script) lo calculaba a
+     * su manera: un cálculo en UTC corría un día todos los pedidos de un ciclo que cierra de noche.
+     * La fecha que llega en el pedido se ignora; la fuente es el cierre, en hora de la operación.
+     */
+    const deliveryDate = deliveryDateFor(menu.closeAt);
 
     const [customer] = await transaction
       .select({ id: customers.id })
@@ -3311,7 +3326,7 @@ export class PostgresOperationsService {
         customerId: input.customerId,
         deliveryAddressId: input.deliveryAddressId,
         deliveryAddressSnapshot: deliveryAddress,
-        deliveryDate: input.deliveryDate,
+        deliveryDate,
         deliveryLocationUrlSnapshot: deliveryLocationUrl,
         geographicZoneId,
         notes: input.notes,

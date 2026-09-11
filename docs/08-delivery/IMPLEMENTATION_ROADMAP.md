@@ -11,6 +11,20 @@ propia sección "As built" en el documento de feature correspondiente, con lo di
 Fase 9 (QA/Pilot) es la única que queda: es mayormente trabajo humano (piloto real, migración de
 datos, backups) más que código nuevo.
 
+**Septiembre de 2026: pulido previo a producción.** La app está en pruebas con datos de prueba en la
+base de producción. Lo que se viene cerrando son arreglos de uso real (pedidos, rutas por zona,
+encuestas con enlace abierto, asistente de la landing, ayuda del panel, fechas en hora de la
+operación, aviso de versión nueva). Lo que falta antes de abrir está en `BACKLOG.md`: "Ciudades y
+zonas", "Ayuda del panel", "Interfaz" y los bloqueos externos de abajo.
+
+Bloqueos externos (no son código):
+
+- CUIT y domicilio legal para completar Privacidad y Términos, que habilitan publicar el OAuth.
+- Verificar el dominio de correo en Resend.
+- Confirmar el producto de Zenvia para WhatsApp.
+- Número de WhatsApp para "Hablar con alguien" del asistente de la landing.
+- Limpiar los datos de prueba antes de abrir.
+
 | Fase                             | Estado                                                                        |
 | -------------------------------- | ----------------------------------------------------------------------------- |
 | 0 - Foundation                   | ✅ completa                                                                   |
@@ -23,7 +37,7 @@ datos, backups) más que código nuevo.
 | 7 - Production                   | ✅ completa                                                                   |
 | 8 - Routes / Delivery / Payments | ◐ esqueleto funcional — ver `DELIVERY_AND_ROUTES.md`/`PAYMENTS.md` "As built" |
 | 9 - QA / Pilot                   | ⏳ pendiente                                                                  |
-| 10 - Encuestas de clientes       | ◐ construida; falta decidir el modelo de token y el QR                        |
+| 10 - Encuestas de clientes       | ✅ completa — enlace de un uso con QR y enlace abierto anónimo                |
 
 ## Fase 0 - Foundation (1-2 días)
 

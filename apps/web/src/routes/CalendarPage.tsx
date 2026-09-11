@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
+import { addDaysIso, todayInOperation } from '../lib/dates.js';
 import { errorMessage } from '../lib/operations.js';
 import { showToast } from '../lib/toast.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
@@ -22,10 +23,6 @@ interface CalendarEvent {
 function formText(form: FormData, key: string): string {
   const value = form.get(key);
   return typeof value === 'string' ? value.trim() : '';
-}
-
-function isoDay(date: Date): string {
-  return date.toISOString().slice(0, 10);
 }
 
 /** Parsed as UTC so a day never shifts by timezone on the way to a label. */
@@ -61,10 +58,10 @@ export function CalendarPage() {
   const canUse = profile?.permissions.includes('calendar.use') ?? false;
 
   const load = useCallback(async () => {
-    const from = new Date();
-    const to = new Date();
-    to.setDate(to.getDate() + weeks * 7);
-    const params = new URLSearchParams({ from: isoDay(from), to: isoDay(to) });
+    // Desde hoy en hora de la operación: de noche, el día UTC ya es mañana y se perdía la agenda
+    // del día.
+    const from = todayInOperation();
+    const params = new URLSearchParams({ from, to: addDaysIso(from, weeks * 7) });
     const site = storedOperatingSiteId();
     if (site) params.set('operatingSiteId', site);
 

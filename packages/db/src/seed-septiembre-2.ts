@@ -12,6 +12,7 @@
  * - sólo clientes que ya existen, cada uno con un pedido como mucho;
  * - entre 16 y 33 pedidos por ciudad.
  */
+import { deliveryDateFor } from '@verdeo/orders';
 import { and, eq } from 'drizzle-orm';
 
 import { createDatabase } from './index.js';
@@ -125,7 +126,7 @@ try {
           customerId: buyer.id,
           deliveryAddress: buyer.address,
           deliveryAddressId: buyer.addressId,
-          deliveryDate: new Date(menu.cycle.closeAt).toISOString().slice(0, 10),
+          deliveryDate: deliveryDateFor(menu.cycle.closeAt),
           // Sin indicaciones, como se pidió.
           dietaryInstructions: [],
           // Tres de cada cuatro confirmados: la cola de trabajo queda con algo que hacer y la

@@ -15,7 +15,7 @@
  *   pnpm --filter @verdeo/db exec tsx src/validate-workflows.ts
  */
 import { LocationLinkGeocodingProvider } from '@verdeo/geocoding';
-import type { OrderStatus } from '@verdeo/orders';
+import { deliveryDateFor, type OrderStatus } from '@verdeo/orders';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import { createDatabase, type Database } from './index.js';
@@ -236,7 +236,7 @@ async function main() {
         {
           customerId,
           deliveryAddress: `Av. Siempreviva 742, ${zone!.displayName}`,
-          deliveryDate: new Date(menu.cycle.closeAt).toISOString().slice(0, 10),
+          deliveryDate: deliveryDateFor(menu.cycle.closeAt),
           dietaryInstructions: ['Sin cebolla'],
           initialStatus: 'CONFIRMED',
           items: [{ offeringId: offering!.id, quantityUnits: 2 }],
@@ -276,7 +276,7 @@ async function main() {
           {
             customerId,
             deliveryAddress: 'Dirección de prueba 1',
-            deliveryDate: new Date(menu.cycle.closeAt).toISOString().slice(0, 10),
+            deliveryDate: deliveryDateFor(menu.cycle.closeAt),
             dietaryInstructions: [],
             items: [
               { offeringId: composable.id, quantityUnits: 1, selectedDishNames: ['Uno', 'Dos'] },

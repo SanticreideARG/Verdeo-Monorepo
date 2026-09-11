@@ -13,6 +13,7 @@
  *   pnpm --filter @verdeo/db exec tsx src/seed-load-test.ts
  */
 import { LocationLinkGeocodingProvider } from '@verdeo/geocoding';
+import { deliveryDateFor } from '@verdeo/orders';
 import { eq } from 'drizzle-orm';
 
 import { createDatabase } from './index.js';
@@ -355,7 +356,7 @@ async function main() {
               deliveryAddress: buyer.address,
               // The service returns cycle dates as Date objects, not the ISO strings the
               // contract layer later serializes them into.
-              deliveryDate: new Date(menu.cycle.closeAt).toISOString().slice(0, 10),
+              deliveryDate: deliveryDateFor(menu.cycle.closeAt),
               dietaryInstructions: DIETARY[i % DIETARY.length]!,
               initialStatus: i % 3 === 0 ? 'DRAFT' : 'CONFIRMED',
               items: [

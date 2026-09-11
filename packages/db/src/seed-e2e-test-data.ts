@@ -12,6 +12,7 @@
  * Run with: pnpm --filter @verdeo/db exec tsx src/seed-e2e-test-data.ts
  */
 import { LocationLinkGeocodingProvider } from '@verdeo/geocoding';
+import { deliveryDateFor } from '@verdeo/orders';
 import { eq } from 'drizzle-orm';
 
 import { createDatabase } from './index.js';
@@ -341,7 +342,7 @@ async function main() {
           {
             customerId: customer.id,
             deliveryAddress: `${address}, ${zone.displayName}, ${site.displayName}`,
-            deliveryDate: CLOSE_AT.toISOString().slice(0, 10),
+            deliveryDate: deliveryDateFor(CLOSE_AT),
             dietaryInstructions: [],
             initialStatus: 'CONFIRMED',
             items: [

@@ -12,6 +12,7 @@ import { MobileDashboard } from '../components/MobileDashboard.js';
 import { BrandLoading } from '../components/BrandLoading.js';
 import { useNarrowViewport } from '../lib/useNarrowViewport.js';
 import { apiRequest } from '../lib/api.js';
+import { addDaysIso, todayInOperation } from '../lib/dates.js';
 import { cachedProfile, rememberProfile } from '../lib/useDashboardProfile.js';
 
 const modules = [
@@ -110,7 +111,7 @@ export function DashboardPage() {
           permissions.includes('chat.use'),
         ),
         load<{ items: { day: string; kind: string; title: string }[] }>(
-          `/api/v1/calendar?from=${new Date().toISOString().slice(0, 10)}&to=${new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10)}`,
+          `/api/v1/calendar?from=${todayInOperation()}&to=${addDaysIso(todayInOperation(), 30)}`,
           permissions.includes('calendar.use'),
         ),
       ]);

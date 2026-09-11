@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
 
+import { todayInOperation } from '../lib/dates.js';
+
 export interface MobileDashboardData {
   /** Si ya llegaron los datos. Antes de eso no se puede afirmar que no haya nada esperando. */
   loaded: boolean;
@@ -34,7 +36,7 @@ function short(count: number): string {
  * cuántas cosas hay, no que cada una luzca.
  */
 export function MobileDashboard({ data }: { data: MobileDashboardData }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayInOperation();
   const dueToday = data.reminders.filter((reminder) => reminder.day <= today);
 
   const waiting: WaitingItem[] = [

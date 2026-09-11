@@ -22,6 +22,29 @@
 export const OPERATION_TIME_ZONE = 'America/Argentina/Buenos_Aires';
 
 /**
+ * El día de hoy en la operación, como `2026-09-13`.
+ *
+ * No `new Date().toISOString().slice(0, 10)`: eso es el día en UTC, que en Argentina ya es mañana
+ * desde las 21. Una pantalla abierta de noche mostraba los recordatorios y la agenda del día
+ * siguiente.
+ */
+export function todayInOperation(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: OPERATION_TIME_ZONE,
+    year: 'numeric',
+  }).format(new Date());
+}
+
+/** Una fecha sin hora corrida `days` días, sin pasar por la zona del navegador. */
+export function addDaysIso(day: string, days: number): string {
+  const moved = new Date(`${day}T12:00:00Z`);
+  moved.setUTCDate(moved.getUTCDate() + days);
+  return moved.toISOString().slice(0, 10);
+}
+
+/**
  * Una fecha sin hora —`2026-09-13`— no es un instante y no se convierte a uno.
  *
  * Pasarla por `new Date()` la interpreta como medianoche UTC, que en Argentina es el día anterior a

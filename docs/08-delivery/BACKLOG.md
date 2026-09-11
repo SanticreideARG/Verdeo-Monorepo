@@ -189,6 +189,13 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
       daría la operación por buena sin dejar rastro— y que el logger tape tokens, claves y headers
       de autorización. Para poder comprobar lo segundo, `createLogger` acepta un destino opcional:
       por defecto pino escribe al descriptor 1 y lo que sale no se puede leer desde un test.
+- [x] **La fecha de entrega salía corrida un día** en todo ciclo que cierra después de las 21:00
+      (el de septiembre cierra el domingo 13 a las 23:15, que en UTC ya es lunes 14). Se tomaba la
+      fecha UTC del cierre. Ahora la decide el servidor a partir del cierre del ciclo, en hora de
+      la operación (`deliveryDateFor` en `@verdeo/orders`), e ignora la que manda el navegador; los
+      scripts de datos de prueba usan la misma función. Las pantallas que calculaban "hoy" en UTC
+      —tablero del teléfono, agenda del tablero, calendario— usan `todayInOperation()` y ya no se
+      adelantan un día de noche.
 
 ## Asistente de la landing
 
@@ -232,3 +239,39 @@ semana en la ficha del pedido, y el vacío de "Ver pedidos" con botón para limp
 - [ ] Agrupar la navegación por momento del ciclo semanal y no por módulo.
 - [ ] Barra fija con guardar y total en formularios largos, en pantallas angostas.
 - [ ] Búsqueda global con `Ctrl+K`. No urgente: vale cuando el equipo pase de tres personas.
+- [x] **Imágenes de marca livianas** (`lib/images.ts`): logos de menú, ícono, logo del hero y
+      lechuza en WebP al doble del tamaño en que se muestran. La PWA ya no precarga los originales
+      (precache de más de 5 MB a 1,3 MB).
+- [x] **Aviso de versión nueva** (`UpdatePrompt`, `registerType: 'prompt'`): después de un deploy
+      aparece "Hay una versión nueva" con Actualizar / Después, y se busca versión cada 30 minutos.
+- [ ] `EmptyState` y `ActionButton` en el resto de las pantallas (ver arriba).
+- [ ] Ícono _maskable_ para Android (ver PWA en `MVP_DASHBOARD_ACCESS.md`).
+
+## Ayuda del panel (la lechuza de los operadores)
+
+- [x] La lechuza abajo a la derecha en todo el panel; es el único acceso a la ayuda (el menú
+      lateral ya no tiene "Ayuda"). El editor de artículos sigue en `/app/ayuda`.
+- [x] Ramas por categoría con `/`, búsqueda sin tildes, enlaces entre artículos y a pantallas.
+- [x] Colores del tema elegido en Apariencia, claro y oscuro.
+- [x] 31 artículos, gateados por permiso.
+- [ ] Revisar con alguien de la operación dos artículos escritos sin confirmación en el código:
+      "Pedidos que llegan por la web" (que entran pendientes de confirmar) y "Usuarios, roles y
+      permisos" (dónde están las excepciones).
+- [ ] Respuestas con datos en vivo: "¿qué me falta para cerrar la semana?" (borradores sin
+      confirmar, domicilios sin geocodificar, pedidos sin ruta), "¿qué falta cobrar?", "¿cómo va la
+      semana?". Cada una respeta la ciudad elegida y los permisos.
+
+## Ciudades y zonas
+
+La landing anuncia más cobertura de la que el sistema tiene cargada.
+
+- [ ] **Córdoba**: crearla (prefijo sugerido `CBA`, zona Centro, WhatsApp 351 300 7925), distribuirle
+      el menú y cargar sus precios. Queda a cargo de la operación.
+- [ ] **Río Negro** está activa pero sin menús: no puede vender. Además "Cipolleti" está mal
+      escrito y faltan Fernández Oro y Villa Regina.
+- [ ] **Buenos Aires** tiene una sola zona ("Zona General"); la landing nombra 5 barrios de CABA y 6
+      localidades de Zona Norte.
+- [ ] **Mendoza**: faltan Godoy Cruz, Guaymallén y Luján de Cuyo; decidir si San Rafael sigue.
+- [ ] WhatsApp público de cada ciudad (hoy vacío en todas) y punto de partida del reparto (hoy
+      ninguna lo tiene: el optimizador arranca desde la primera parada).
+- [ ] Bahía Blanca: postergada.
