@@ -6134,3 +6134,61 @@ a.order-card-phone:focus-visible {
 .assistant-block-menu .assistant-variety-detail {
   padding-left: calc(36px + 0.6rem);
 }
+
+/*
+ * El selector de tamaño del formulario de pedido.
+ *
+ * Una fila de opciones segmentadas en lugar de repetir cada variedad dos veces: cinco tarjetas de
+ * variedad y, abajo, dos tamaños con su precio. Mismo lenguaje que las tarjetas —borde verde y fondo
+ * lima al elegir— para que se lea como la misma decisión en dos pasos.
+ */
+.size-picker {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.size-picker legend {
+  padding: 0;
+  margin-bottom: 0.5rem;
+}
+.size-picker-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.6rem;
+}
+.size-option {
+  display: grid;
+  gap: 0.1rem;
+  border: 1.5px solid color-mix(in srgb, var(--color-forest) 15%, transparent);
+  border-radius: 0.85rem;
+  padding: 0.75rem 1rem;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: center;
+}
+.size-option:hover {
+  border-color: color-mix(in srgb, var(--color-forest) 40%, transparent);
+}
+.size-option.is-selected {
+  border-color: var(--color-forest);
+  background: color-mix(in srgb, var(--color-lime) 22%, #ffffff);
+}
+.size-option:has(input:focus-visible) {
+  outline: 2px solid var(--color-forest);
+  outline-offset: 2px;
+}
+/* Una variedad que no se ofrece en ese tamaño: se ve, pero no se puede elegir. */
+.size-option.is-unavailable {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.size-option-name {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-forest);
+}
+.size-option-price {
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}

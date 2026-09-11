@@ -12,6 +12,7 @@ import {
   errorMessage,
   formatMoney,
   offeringsForPicking,
+  type MenuOffering,
   type OrderSummary,
   type WeeklyMenu,
 } from '../lib/operations.js';
@@ -80,7 +81,7 @@ export function PublicOrderPage() {
         if (!response.ok) throw new Error(await errorMessage(response));
         const loaded = (await response.json()) as WeeklyMenu;
         setMenu(loaded);
-        setOfferingId(loaded.offerings[0]?.id ?? '');
+        setOfferingId(offeringsForPicking(loaded.offerings)[0]?.id ?? '');
       })
       .catch((error: unknown) =>
         setMessage(error instanceof Error ? error.message : 'No pudimos cargar el menú.'),
@@ -92,6 +93,58 @@ export function PublicOrderPage() {
     () => menu?.offerings.find((candidate) => candidate.id === offeringId),
     [menu, offeringId],
   );
+
+  /*
+   * Variedad y tamaño, elegidos por separado.
+   *
+   * El menú trae una oferta por cada combinación —cinco variedades por dos tamaños— y el formulario
+   * las mostraba las diez como si fueran diez cosas distintas, cuando son cinco elecciones y una
+   * segunda de dos. Ahora son cinco tarjetas y un selector de tamaño; por dentro sigue habiendo una
+   * sola oferta elegida, que es lo que se envía, así que la API no se entera del cambio.
+   */
+  const families = useMemo(() => {
+    const firstByFamily = new Map<string, MenuOffering>();
+    for (const item of offeringsForPicking(menu?.offerings ?? [])) {
+      if (!firstByFamily.has(item.familyName)) firstByFamily.set(item.familyName, item);
+    }
+    return [...firstByFamily.values()];
+  }, [menu]);
+
+  const sizes = useMemo(
+    () =>
+      [...new Set((menu?.offerings ?? []).map((item) => item.variantName))].sort((left, right) =>
+        left.localeCompare(right, 'es-AR', { numeric: true }),
+      ),
+    [menu],
+  );
+
+  function findOffering(familyName: string, variantName: string): MenuOffering | undefined {
+    return menu?.offerings.find(
+      (candidate) => candidate.familyName === familyName && candidate.variantName === variantName,
+    );
+  }
+
+  /*
+   * Al cambiar de variedad se conserva el tamaño; si esa variedad no lo tiene, se toma el primero
+   * que tenga. Los platos de un Intuitivo sólo se vacían si cambia la variedad: cambiar el tamaño
+   * de un Intuitivo no cambia qué platos se eligieron, y borrarlos obligaba a elegirlos de nuevo.
+   */
+  function choose(next: MenuOffering | undefined) {
+    if (!next) return;
+    if (next.familyName !== offering?.familyName) setSelectedDishes([]);
+    setOfferingId(next.id);
+  }
+
+  function chooseFamily(familyName: string) {
+    choose(
+      findOffering(familyName, offering?.variantName ?? '') ??
+        menu?.offerings.find((candidate) => candidate.familyName === familyName),
+    );
+  }
+
+  function chooseSize(variantName: string) {
+    choose(findOffering(offering?.familyName ?? '', variantName));
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -229,33 +282,64 @@ export function PublicOrderPage() {
             {draft.restored ? <DraftNotice onDiscard={draft.dismissNotice} /> : null}
             <div className="form-grid">
               <fieldset className="field field-wide offering-picker">
-                <legend>Variedad y tamaño</legend>
+                <legend>Variedad</legend>
                 <div className="offering-picker-grid">
-                  {offeringsForPicking(menu.offerings).map((item) => (
-                    <label
-                      className={`offering-card ${item.id === offeringId ? 'is-selected' : ''}`}
-                      key={item.id}
-                    >
-                      <input
-                        checked={item.id === offeringId}
-                        className="sr-only"
-                        name="offering"
-                        onChange={() => {
-                          setOfferingId(item.id);
-                          setSelectedDishes([]);
-                        }}
-                        type="radio"
-                      />
-                      <span className="offering-card-name">{item.familyName}</span>
-                      <span className="offering-card-size">{item.variantName}</span>
-                      <span className="offering-card-price">
-                        {formatMoney(item.unitPriceMinor, item.currency)}
-                      </span>
-                      {item.composable ? (
-                        <span className="offering-card-note">Armás tus cinco platos</span>
-                      ) : null}
-                    </label>
-                  ))}
+                  {families.map((item) => {
+                    const selected = item.familyName === offering?.familyName;
+                    return (
+                      <label
+                        className={`offering-card ${selected ? 'is-selected' : ''}`}
+                        key={item.familyName}
+                      >
+                        <input
+                          checked={selected}
+                          className="sr-only"
+                          name="variety"
+                          onChange={() => chooseFamily(item.familyName)}
+                          type="radio"
+                        />
+                        <span className="offering-card-name">{item.familyName}</span>
+                        {item.composable ? (
+                          <span className="offering-card-note">Armás tus cinco platos</span>
+                        ) : null}
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+              {/*
+               * El precio va con el tamaño y no en cada tarjeta: depende del tamaño, no de la
+               * variedad (ADR-030), y repetirlo cinco veces no dice nada que no diga una. Se toma de
+               * la variedad elegida, así que un precio especial de una variedad se ve igual.
+               */}
+              <fieldset className="field field-wide size-picker">
+                <legend>Tamaño</legend>
+                <div className="size-picker-options">
+                  {sizes.map((size) => {
+                    const sized = findOffering(offering?.familyName ?? '', size);
+                    const selected = offering?.variantName === size;
+                    return (
+                      <label
+                        className={`size-option ${selected ? 'is-selected' : ''} ${sized ? '' : 'is-unavailable'}`}
+                        key={size}
+                      >
+                        <input
+                          checked={selected}
+                          className="sr-only"
+                          disabled={!sized}
+                          name="size"
+                          onChange={() => chooseSize(size)}
+                          type="radio"
+                        />
+                        <span className="size-option-name">{size}</span>
+                        <span className="size-option-price">
+                          {sized
+                            ? formatMoney(sized.unitPriceMinor, sized.currency)
+                            : 'No disponible'}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
               </fieldset>
               <label className="field">
