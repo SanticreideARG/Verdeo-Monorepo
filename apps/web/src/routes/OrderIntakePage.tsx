@@ -61,14 +61,14 @@ const INTAKE_CATALOGUE: readonly { key: string; locked?: boolean }[] = [
  * Cómo se llama cada campo para una persona.
  *
  * Un aviso que dice "deliveryAddress" no ayuda a nadie. Se declara acá y no se lee del DOM porque
- * la etiqueta de un `select` incluye su valor y saldría "Pago esperado Transferencia".
+ * la etiqueta de un `select` incluye su valor y saldría "Medio de pago Transferencia".
  */
 const FIELD_LABELS: Record<string, string> = {
   deliveryAddress: 'la dirección de entrega',
   menuId: 'el período',
   newCustomerDisplayName: 'el nombre del cliente nuevo',
   offeringId: 'la variedad',
-  paymentExpectation: 'el pago esperado',
+  paymentExpectation: 'el medio de pago',
   quantityUnits: 'las unidades',
   source: 'el origen del pedido',
 };
@@ -755,7 +755,7 @@ export function OrderIntakePage() {
               <label className="field">
                 Origen
                 {/*
-                 * Sin opción por defecto, igual que "Pago esperado" acá al lado. "Manual" era la
+                 * Sin opción por defecto, igual que "Medio de pago" acá al lado. "Manual" era la
                  * primera y la preseleccionada, así que nadie la cambiaba nunca: los 230 pedidos
                  * cargados decían "Manual" y el campo no informaba absolutamente nada. Obligar a
                  * elegir es lo que lo vuelve un dato.
@@ -774,7 +774,7 @@ export function OrderIntakePage() {
                 </select>
               </label>
               <label className="field">
-                Pago esperado
+                Medio de pago
                 {paymentMethods.length > 0 ? (
                   <select defaultValue="" name="paymentExpectation" required>
                     <option disabled value="">

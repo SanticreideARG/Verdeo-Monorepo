@@ -46,7 +46,7 @@ const SECTIONS: readonly LegalSection[] = [
         'Nombre y apellido, para identificar el pedido y la vianda.',
         'Teléfono, WhatsApp y correo electrónico, para coordinar el pedido y la entrega.',
         'Domicilio de entrega, la zona a la que corresponde y, si la compartís o si se geocodifica, su ubicación aproximada en el mapa; también las indicaciones de acceso que escribas.',
-        'El detalle de lo que pediste, la fecha de entrega, el medio de pago esperado y el estado del pedido a lo largo de la semana.',
+        'El detalle de lo que pediste, la fecha de entrega, el medio de pago y el estado del pedido a lo largo de la semana.',
         'Las preferencias o restricciones alimentarias que nos informes, cuando decidas informarlas.',
         'Las respuestas que envíes a una encuesta, si respondés alguna.',
       ],

@@ -205,7 +205,7 @@ export function buildOrderColumns(options: { maskSurnames?: boolean } = {}): Ord
     },
     {
       key: 'pago',
-      label: 'Pago esperado',
+      label: 'Medio de pago',
       render: (order) => order.paymentExpectation || '—',
       sortValue: (order) => order.paymentExpectation,
     },

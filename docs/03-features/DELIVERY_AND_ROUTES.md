@@ -101,7 +101,7 @@ OR-Tools u otro adapter)" que pide este documento; los llamadores solo conocen l
   mismo día no queden indistinguibles en la lista.
 - **App de reparto en `/delivery`**, sin el layout del dashboard admin. `listStopsForUser` es
   PII-safe por construcción: la consulta no selecciona teléfono/email/notas/historial, solo nombre
-  de pila, dirección, pago esperado y estado.
+  de pila, dirección, medio de pago y estado.
 - **Confirmar entrega** también transiciona el pedido a `DELIVERED` directamente (no pasa por la
   política de transición pensada para ediciones administrativas) y registra
   `order_status_history`.

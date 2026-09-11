@@ -343,7 +343,7 @@ export function OrderDetailPage() {
                 <input defaultValue={order.deliveryDate} name="deliveryDate" required type="date" />
               </label>
               <label className="field">
-                Pago esperado
+                Medio de pago
                 <input defaultValue={order.paymentExpectation} name="paymentExpectation" required />
               </label>
               <label className="field field-wide">
@@ -482,7 +482,7 @@ export function OrderDetailPage() {
               </div>
             ) : null}
             <div>
-              <dt>Pago esperado</dt>
+              <dt>Medio de pago</dt>
               <dd>{order.paymentExpectation}</dd>
             </div>
             <div>

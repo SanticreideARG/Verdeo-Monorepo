@@ -303,7 +303,7 @@ export function PublicOrderPage() {
                 />
               </label>
               <label className="field field-wide">
-                Pago esperado
+                Medio de pago
                 {paymentMethods.length > 0 ? (
                   <select name="paymentExpectation" required>
                     {paymentMethods.map((method) => (

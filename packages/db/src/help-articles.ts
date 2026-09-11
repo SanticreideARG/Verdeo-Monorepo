@@ -130,7 +130,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Paso 5 — Armar y publicar la ruta',
   },
   {
-    body: 'En "Ver pedidos" hay una columna "Cobrado" con un tilde. Es todo el circuito de cobro: se marca cuando entró la plata, y queda registrado quién lo marcó y cuándo.\n\nEl "Pago esperado" de cada pedido es otra cosa: es cómo se acordó cobrar (efectivo, transferencia), y se elige al tomar el pedido. Que esté acordado no quiere decir que esté cobrado.\n\nSi la columna no se ve, activala desde el botón "Columnas".',
+    body: 'En "Ver pedidos" hay una columna "Cobrado" con un tilde. Es todo el circuito de cobro: se marca cuando entró la plata, y queda registrado quién lo marcó y cuándo.\n\nEl "Medio de pago" de cada pedido es otra cosa: es cómo se acordó cobrar (efectivo, transferencia), y se elige al tomar el pedido. Que esté acordado no quiere decir que esté cobrado.\n\nSi la columna no se ve, activala desde el botón "Columnas".',
     category: 'Ciclo semanal',
     key: 'ciclo-6-cobrar',
     ordinal: 6,

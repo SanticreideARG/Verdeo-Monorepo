@@ -94,7 +94,7 @@ export function buildOrdersCsv(rows: readonly OrderExportRow[]): string {
     'zona',
     'moneda',
     'total_unidad_minima',
-    'pago_esperado',
+    'medio_de_pago',
     'cobrado',
     'indicaciones',
     'origen',

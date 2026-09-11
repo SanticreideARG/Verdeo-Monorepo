@@ -236,7 +236,7 @@ export function RoutesPage() {
         `${String(stop.sequence)}. ${maskSurname(stop.customerDisplayName)}`,
         stop.deliveryAddress,
         stopMapLink(stop),
-        // El pago esperado va en la parada: es lo que el repartidor tiene que cobrar ahí.
+        // El medio de pago va en la parada: es lo que el repartidor tiene que cobrar ahí.
         `${stop.paymentExpectation} · ${formatMoney(stop.totalMinor, 'ARS')}`,
       ].join('\n'),
     );
@@ -252,7 +252,7 @@ export function RoutesPage() {
   function downloadRouteCsv(route: RouteDetail) {
     const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
     const rows = [
-      ['Orden', 'Cliente', 'Dirección', 'Ubicación', 'Pago esperado', 'Total', 'N° de pedido'],
+      ['Orden', 'Cliente', 'Dirección', 'Ubicación', 'Medio de pago', 'Total', 'N° de pedido'],
       ...route.stops.map((stop) => [
         String(stop.sequence),
         maskSurname(stop.customerDisplayName),

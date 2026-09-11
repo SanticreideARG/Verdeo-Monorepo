@@ -261,7 +261,7 @@ La usan hoy el excedente de Cocina y **Ver pedidos**. Un barrido de las nueve pa
 
 **Ver pedidos elige sus columnas.** Un pedido tiene catorce datos que alguien puede querer ver y
 ninguna combinación sirve para todos: quien arma las rutas quiere domicilio y zona, quien concilia
-quiere total y pago esperado, quien atiende el teléfono quiere el teléfono. Mostrarlos todos vuelve
+quiere total y medio de pago, quien atiende el teléfono quiere el teléfono. Mostrarlos todos vuelve
 la tabla ilegible y elegir siete por nosotros deja a los otros dos trabajos exportando a CSV para
 leer algo que ya estaba en pantalla. El selector guarda la elección en el navegador de cada persona
 (`verdeo-orders-columns`): es una preferencia de lectura, no un dato del negocio, y no justifica una

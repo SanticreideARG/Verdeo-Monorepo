@@ -1516,7 +1516,7 @@ export function createApp(options: CreateAppOptions) {
   /*
    * Los métodos de pago que el formulario público ofrece.
    *
-   * Sin esto, "Pago esperado" era un campo de texto libre y cada quien escribía lo que quería:
+   * Sin esto, "Medio de pago" era un campo de texto libre y cada quien escribía lo que quería:
    * "transf", "Transferencia", "efvo". Después eso hay que conciliarlo a mano, y el mismo pedido
    * dice una cosa distinta según quién lo cargó. Público a propósito —quien pide no tiene sesión— y
    * sólo los activos, con lo que hace falta para mostrarlos: acá no hay nada sensible.

@@ -89,7 +89,7 @@ export function buildOrdersExcel(
         Domicilio: row.deliveryAddress,
         // En pesos y como número: exportar centavos obliga a dividir a mano antes de sumar.
         Total: row.totalMinor / 100,
-        'Pago esperado': row.paymentExpectation,
+        'Medio de pago': row.paymentExpectation,
         Cobrado: row.paidAt ? 'Sí' : 'No',
         Indicaciones: (row.dietaryInstructions ?? []).join(' · '),
         Origen: SOURCE_LABELS[row.source] ?? row.source,

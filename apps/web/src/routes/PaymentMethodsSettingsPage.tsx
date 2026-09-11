@@ -24,7 +24,7 @@ function toDraft(method: PaymentMethod): MethodDraft {
 }
 
 /**
- * Ajustes → Métodos de pago: el catálogo detrás del "Pago esperado" al tomar un pedido.
+ * Ajustes → Métodos de pago: el catálogo detrás del "Medio de pago" al tomar un pedido.
  *
  * Sobrevivió a la sección Pagos, que se reemplazó por un tilde de "Cobrado" en la lista de pedidos:
  * qué se espera cobrar y si se cobró son dos cosas distintas, y la primera se sigue eligiendo acá.

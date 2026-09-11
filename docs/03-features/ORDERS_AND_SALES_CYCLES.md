@@ -25,7 +25,7 @@ Pasos:
 4. datos cliente;
 5. dirección/geocoding;
 6. disponibilidad;
-7. pago esperado;
+7. medio de pago;
 8. resumen;
 9. confirmar.
 
