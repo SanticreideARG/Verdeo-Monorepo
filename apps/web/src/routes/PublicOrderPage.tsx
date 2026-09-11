@@ -6,6 +6,7 @@ import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
 import { BrandLoading } from '../components/BrandLoading.js';
 import { deliveryDateFor, deliveryDateLabel } from '../lib/dates.js';
 import { apiRequest } from '../lib/api.js';
+import { brandingKey, useMenuBranding } from '../lib/menuBranding.js';
 import { useFormDraft } from '../lib/useFormDraft.js';
 import { useOrderFormSettings } from '../lib/useOrderFormSettings.js';
 import {
@@ -102,6 +103,13 @@ export function PublicOrderPage() {
    * segunda de dos. Ahora son cinco tarjetas y un selector de tamaño; por dentro sigue habiendo una
    * sola oferta elegida, que es lo que se envía, así que la API no se entera del cambio.
    */
+  /*
+   * El logo de cada menú en su tarjeta: los mismos que la portada y el asistente, leídos de la
+   * misma sección. Quien llega desde la landing reconoce el menú por el dibujo antes que por el
+   * nombre, y sin el logo el formulario era el único lugar donde no estaba.
+   */
+  const branding = useMenuBranding();
+
   const families = useMemo(() => {
     const firstByFamily = new Map<string, MenuOffering>();
     for (const item of offeringsForPicking(menu?.offerings ?? [])) {
@@ -286,6 +294,7 @@ export function PublicOrderPage() {
                 <div className="offering-picker-grid">
                   {families.map((item) => {
                     const selected = item.familyName === offering?.familyName;
+                    const icon = branding.get(brandingKey(item.familyName))?.iconUrl;
                     return (
                       <label
                         className={`offering-card ${selected ? 'is-selected' : ''}`}
@@ -298,10 +307,22 @@ export function PublicOrderPage() {
                           onChange={() => chooseFamily(item.familyName)}
                           type="radio"
                         />
-                        <span className="offering-card-name">{item.familyName}</span>
-                        {item.composable ? (
-                          <span className="offering-card-note">Armás tus cinco platos</span>
+                        {icon ? (
+                          <img
+                            alt=""
+                            className="offering-card-icon"
+                            height="56"
+                            loading="lazy"
+                            src={icon}
+                            width="56"
+                          />
                         ) : null}
+                        <span className="offering-card-text">
+                          <span className="offering-card-name">{item.familyName}</span>
+                          {item.composable ? (
+                            <span className="offering-card-note">Armás tus cinco platos</span>
+                          ) : null}
+                        </span>
                       </label>
                     );
                   })}
