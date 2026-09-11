@@ -39,7 +39,9 @@ export default defineConfig(({ mode }) => {
        */
       VitePWA({
         manifest: false,
-        registerType: 'autoUpdate',
+        // 'prompt' y no 'autoUpdate': la versión nueva espera y se avisa (components/UpdatePrompt.tsx).
+        // Con 'autoUpdate' se instalaba en silencio y la pestaña abierta seguía con el código viejo.
+        registerType: 'prompt',
         // En desarrollo estorba: cachea y después no se entiende por qué no se ve un cambio.
         devOptions: { enabled: false },
         workbox: {

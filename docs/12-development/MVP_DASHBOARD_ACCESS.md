@@ -219,6 +219,14 @@ ruta y a tomar un pedido.
 activo, y quién ve qué dato viejo es una decisión de negocio, no una opción de build. El offline real
 —la hoja de ruta del repartidor, con su fecha a la vista— queda para después del piloto.
 
+**Versión nueva: se avisa, no se instala en silencio** (`registerType: 'prompt'`,
+`components/UpdatePrompt.tsx`). Con `autoUpdate` el service worker nuevo se instalaba, pero la
+pestaña abierta seguía con el código viejo hasta cerrarla del todo, y después de cada deploy alguien
+veía la pantalla anterior sin saberlo. Ahora aparece arriba "Hay una versión nueva de Verdeo" con
+"Actualizar" (activa y recarga) y "Después" (queda para la próxima apertura, así nadie pierde un
+pedido a medio cargar). La app pregunta por una versión nueva cada 30 minutos, para quien la deja
+abierta todo el día.
+
 **Pendiente de diseño:** un ícono _maskable_. El actual es un círculo casi a sangre, así que
 declararlo como tal haría que Android le recorte el anillo verde con su propia máscara. Hace falta
 una versión con el logo al 80% dentro del lienzo.

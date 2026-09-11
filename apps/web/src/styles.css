@@ -6234,6 +6234,60 @@ body:has(.assistant-launcher.is-operator) .toast-host {
   color: var(--db-text);
 }
 
+/*
+ * El aviso de versión nueva. Arriba y al centro: abajo compite con la lechuza, los avisos
+ * flotantes y la barra del teléfono, y un aviso que se tapa es un aviso que no existe.
+ */
+.update-prompt {
+  position: fixed;
+  top: calc(0.75rem + env(safe-area-inset-top, 0px));
+  left: 50%;
+  z-index: 80;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem 1rem;
+  width: max-content;
+  max-width: calc(100vw - 1.5rem);
+  padding: 0.6rem 0.75rem 0.6rem 1.1rem;
+  border-radius: 16px;
+  background: var(--color-forest);
+  color: #fff;
+  box-shadow: 0 12px 30px rgba(23, 76, 60, 0.3);
+  transform: translateX(-50%);
+}
+.update-prompt p {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.update-prompt-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+.update-prompt-actions button {
+  min-height: 36px;
+  padding: 0 0.9rem;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.update-prompt-later {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+}
+.update-prompt-later:hover {
+  color: #fff;
+}
+.update-prompt-go {
+  background: #fff;
+  color: var(--color-forest);
+}
+
 /* Cada variedad del menú se abre para mostrar sus platos. */
 .assistant-block-menu li {
   display: block;

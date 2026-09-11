@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 
+import { UpdatePrompt } from './components/UpdatePrompt.js';
 import { App } from './routes/App.js';
 import './styles.css';
 
@@ -14,5 +15,6 @@ createRoot(root).render(
     <BrowserRouter>
       <App />
     </BrowserRouter>
+    <UpdatePrompt />
   </StrictMode>,
 );
