@@ -159,7 +159,7 @@ export function PublicSurveyPage({ variant = 'envio' }: { variant?: Variant }) {
 
   const brand = (
     <>
-      <img className="brand-icon" src="/brand/verdeo-icon.png" alt="" width="36" height="36" />
+      <img className="brand-icon" src="/brand/verdeo-icon-128.webp" alt="" width="36" height="36" />
       verdeo<span>.</span>
     </>
   );

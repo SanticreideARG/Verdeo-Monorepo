@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { apiRequest } from '../lib/api.js';
+import { lightImage } from '../lib/images.js';
 import { formatArgentinePhone } from '../lib/phone.js';
 import { formatMoney, type WeeklyMenu } from '../lib/operations.js';
 
@@ -84,7 +85,13 @@ function MenuFamiliesSection({
               <article key={family.familyName}>
                 <h3>{family.title}</h3>
                 {family.iconUrl ? (
-                  <img alt="" height="96" loading="lazy" src={family.iconUrl} width="96" />
+                  <img
+                    alt=""
+                    height="96"
+                    loading="lazy"
+                    src={lightImage(family.iconUrl)}
+                    width="96"
+                  />
                 ) : null}
                 {family.caption ? <p className="menu-families-caption">{family.caption}</p> : null}
                 {dishes.length > 0 ? (
@@ -224,7 +231,7 @@ function HeroRotatorSection({ section }: { section: PageSection }) {
           <img
             alt="Verdeo"
             className="hero-logo"
-            src={section.logoUrl as string}
+            src={lightImage(section.logoUrl as string)}
             // Fixed intrinsic size so the layout does not jump while the image loads.
             width={220}
             height={220}

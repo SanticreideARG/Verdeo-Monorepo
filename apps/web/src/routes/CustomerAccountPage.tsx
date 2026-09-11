@@ -231,7 +231,7 @@ export function CustomerAccountPage() {
             <Link className="brand" to="/" aria-label="Verdeo, inicio">
               <img
                 className="brand-icon"
-                src="/brand/verdeo-icon.png"
+                src="/brand/verdeo-icon-128.webp"
                 alt=""
                 width="36"
                 height="36"
@@ -339,7 +339,13 @@ export function CustomerAccountPage() {
     <div className="min-h-screen bg-cream text-ink">
       <header className="mx-auto flex w-full max-w-4xl items-center justify-between px-5 py-5 sm:px-8">
         <Link className="brand" to="/">
-          <img className="brand-icon" src="/brand/verdeo-icon.png" alt="" width="36" height="36" />
+          <img
+            className="brand-icon"
+            src="/brand/verdeo-icon-128.webp"
+            alt=""
+            width="36"
+            height="36"
+          />
           verdeo<span>.</span>
         </Link>
         <button className="button button-secondary" onClick={() => void logout()} type="button">

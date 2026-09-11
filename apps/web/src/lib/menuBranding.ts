@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { apiRequest } from './api.js';
+import { lightImage } from './images.js';
 
 export interface MenuBranding {
   caption?: string;
@@ -44,7 +45,7 @@ export function loadMenuBranding(): Promise<Map<string, MenuBranding>> {
           if (!family.familyName) continue;
           byName.set(brandingKey(family.familyName), {
             ...(family.caption ? { caption: family.caption } : {}),
-            ...(family.iconUrl ? { iconUrl: family.iconUrl } : {}),
+            ...(family.iconUrl ? { iconUrl: lightImage(family.iconUrl) } : {}),
           });
         }
       }

@@ -68,7 +68,7 @@ export function AccessTokenLoginPage() {
           <Link className="brand" to="/" aria-label="Verdeo, inicio">
             <img
               className="brand-icon"
-              src="/brand/verdeo-icon.png"
+              src="/brand/verdeo-icon-128.webp"
               alt=""
               width="36"
               height="36"

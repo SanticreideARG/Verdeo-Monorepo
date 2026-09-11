@@ -522,7 +522,7 @@ export function LandingAssistant() {
               ×
             </span>
           ) : (
-            <img alt="" height="56" src="/brand/verdeo-buho-192.png" width="56" />
+            <img alt="" height="56" src="/brand/verdeo-buho-112.webp" width="56" />
           )}
         </span>
       </button>
@@ -536,7 +536,7 @@ export function LandingAssistant() {
         >
           <header className="assistant-header">
             <div className="assistant-header-identity">
-              <img alt="" height="32" src="/brand/verdeo-buho-192.png" width="32" />
+              <img alt="" height="32" src="/brand/verdeo-buho-112.webp" width="32" />
               <p>Asistente de Verdeo</p>
             </div>
             <div className="assistant-header-actions">
@@ -559,7 +559,7 @@ export function LandingAssistant() {
           <div className="assistant-thread" ref={threadRef}>
             {flow ? (
               <div className="assistant-bot-row">
-                <img alt="" height="28" src="/brand/verdeo-buho-192.png" width="28" />
+                <img alt="" height="28" src="/brand/verdeo-buho-112.webp" width="28" />
                 <p className="assistant-turn is-bot">{flow.greeting}</p>
               </div>
             ) : null}
@@ -567,7 +567,7 @@ export function LandingAssistant() {
               <div key={turn.id}>
                 {turn.text && turn.de === 'bot' ? (
                   <div className="assistant-bot-row">
-                    <img alt="" height="28" src="/brand/verdeo-buho-192.png" width="28" />
+                    <img alt="" height="28" src="/brand/verdeo-buho-112.webp" width="28" />
                     <p className="assistant-turn is-bot">{turn.text}</p>
                   </div>
                 ) : null}

@@ -43,7 +43,16 @@ export default defineConfig(({ mode }) => {
         // En desarrollo estorba: cachea y después no se entiende por qué no se ve un cambio.
         devOptions: { enabled: false },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+          globPatterns: ['**/*.{js,css,html,png,svg,webp,woff2}'],
+          // Los originales de marca (hasta 1,7 MB) no se precargan: en pantalla se usan sus versiones
+          // livianas en WebP (lib/images.ts), y precargarlos le costaba varios MB a cada instalación.
+          globIgnores: [
+            'menus/*.png',
+            'brand/verdeo-logo.png',
+            'brand/verdeo-icon.png',
+            'brand/verdeo-help-owl.png',
+            'brand/verdeo-buho-512.png',
+          ],
           navigateFallback: '/index.html',
           // Una ruta de API que caiga en el fallback devolvería el HTML de la app como si fuera
           // una respuesta JSON, y el error resultante no se parece en nada a la causa.

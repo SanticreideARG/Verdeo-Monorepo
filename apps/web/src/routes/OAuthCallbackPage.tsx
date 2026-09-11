@@ -48,7 +48,13 @@ export function OAuthCallbackPage() {
     <main className="flex min-h-screen items-center justify-center bg-cream px-5 py-12">
       <section className="w-full max-w-md rounded-3xl border border-forest/10 bg-white p-8 text-center shadow-sm">
         <Link className="brand justify-center" to="/" aria-label="Verdeo, inicio">
-          <img className="brand-icon" src="/brand/verdeo-icon.png" alt="" width="36" height="36" />
+          <img
+            className="brand-icon"
+            src="/brand/verdeo-icon-128.webp"
+            alt=""
+            width="36"
+            height="36"
+          />
           verdeo<span>.</span>
         </Link>
 

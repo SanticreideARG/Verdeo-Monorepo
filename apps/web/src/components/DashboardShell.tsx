@@ -705,7 +705,7 @@ export function DashboardShell({
         />
         <aside className={`dashboard-sidebar ${menuOpen ? 'is-open' : ''}`}>
           <Link className="dashboard-brand" to="/app" aria-label="Verdeo SCA, dashboard">
-            <img src="/brand/verdeo-icon.png" alt="" width="38" height="38" />
+            <img src="/brand/verdeo-icon-128.webp" alt="" width="38" height="38" />
             <span>
               verdeo<strong>.</strong>
             </span>

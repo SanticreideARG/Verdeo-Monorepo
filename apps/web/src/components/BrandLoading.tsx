@@ -10,7 +10,7 @@
 export function BrandLoading({ message = 'Cargando…' }: { message?: string }) {
   return (
     <main aria-live="polite" className="brand-loading">
-      <img alt="" height="54" src="/brand/verdeo-icon.png" width="54" />
+      <img alt="" height="54" src="/brand/verdeo-icon-128.webp" width="54" />
       <p>{message}</p>
     </main>
   );
