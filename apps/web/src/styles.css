@@ -5917,3 +5917,127 @@ a.order-card-phone:focus-visible {
 .assistant-option:hover {
   background: color-mix(in srgb, var(--color-lime) 30%, #fff);
 }
+
+/*
+ * La lechuza del asistente.
+ *
+ * El lanzador pasa de píldora de texto a avatar redondo con un globo de diálogo al costado. El globo
+ * dice qué es el botón antes de tocarlo; la lechuza sola, a 56px, podría ser cualquier cosa.
+ */
+.assistant-launcher {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 0;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
+.assistant-launcher:hover {
+  background: none;
+}
+.assistant-launcher-avatar {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 999px;
+  background: var(--color-cream);
+  border: 2px solid var(--color-forest);
+  box-shadow: 0 10px 24px rgba(23, 76, 60, 0.28);
+  overflow: hidden;
+  transition: transform 150ms ease;
+}
+.assistant-launcher:hover .assistant-launcher-avatar {
+  transform: translateY(-2px);
+}
+.assistant-launcher-avatar img {
+  width: 52px;
+  height: 52px;
+  /* La lechuza tiene los pies abajo: se sube un poco para que la cara quede al centro del círculo. */
+  object-fit: cover;
+  object-position: center 30%;
+}
+.assistant-launcher-close {
+  color: var(--color-forest);
+  font-size: 1.6rem;
+  line-height: 1;
+}
+.assistant-launcher.is-open .assistant-launcher-avatar {
+  background: #fff;
+}
+
+/* El globo, con su colita apuntando a la lechuza. */
+.assistant-launcher-bubble {
+  position: relative;
+  padding: 0.55rem 0.85rem;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--color-forest);
+  font-size: 0.9rem;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 8px 20px rgba(23, 76, 60, 0.18);
+}
+.assistant-launcher-bubble::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -6px;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  transform: translateY(-50%) rotate(45deg);
+  border-radius: 2px;
+}
+
+.assistant-panel {
+  bottom: 5.6rem;
+}
+
+.assistant-header-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.assistant-header-identity img {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: #fff;
+  object-fit: cover;
+  object-position: center 30%;
+}
+
+/* Cada respuesta del bot lleva la lechuza al costado: se lee quién habla sin rotular nada. */
+.assistant-bot-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.45rem;
+}
+.assistant-bot-row img {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-cream) 70%, #fff);
+  object-fit: cover;
+  object-position: center 30%;
+}
+
+@media (max-width: 30rem) {
+  /* En el teléfono el globo se achica pero no desaparece: es lo que explica el botón. */
+  .assistant-launcher-bubble {
+    font-size: 0.82rem;
+    padding: 0.45rem 0.7rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-launcher-avatar {
+    transition: none;
+  }
+  .assistant-launcher:hover .assistant-launcher-avatar {
+    transform: none;
+  }
+}

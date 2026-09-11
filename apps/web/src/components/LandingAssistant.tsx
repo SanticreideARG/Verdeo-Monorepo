@@ -393,14 +393,34 @@ export function LandingAssistant() {
 
   return (
     <>
+      {/*
+       * El lanzador: la lechuza con su globo de diálogo.
+       *
+       * El globo dice qué es antes de tocarlo —un botón redondo con una cara sola podría ser
+       * cualquier cosa—, y se esconde con el panel abierto, cuando la lechuza ya se presentó adentro.
+       * Todo el conjunto es un solo botón: el globo no es decoración que haya que apuntar aparte.
+       */}
       <button
         aria-expanded={open}
         aria-label={open ? 'Cerrar el asistente' : 'Abrir el asistente'}
-        className="assistant-launcher"
+        className={`assistant-launcher ${open ? 'is-open' : ''}`}
         onClick={() => setOpen((value) => !value)}
         type="button"
       >
-        {open ? '×' : '¿Te ayudo?'}
+        {open ? null : (
+          <span aria-hidden="true" className="assistant-launcher-bubble">
+            ¿Te ayudo?
+          </span>
+        )}
+        <span className="assistant-launcher-avatar">
+          {open ? (
+            <span aria-hidden="true" className="assistant-launcher-close">
+              ×
+            </span>
+          ) : (
+            <img alt="" height="56" src="/brand/verdeo-buho-192.png" width="56" />
+          )}
+        </span>
       </button>
 
       {open ? (
@@ -411,7 +431,10 @@ export function LandingAssistant() {
           role="dialog"
         >
           <header className="assistant-header">
-            <p>Asistente de Verdeo</p>
+            <div className="assistant-header-identity">
+              <img alt="" height="32" src="/brand/verdeo-buho-192.png" width="32" />
+              <p>Asistente de Verdeo</p>
+            </div>
             <div className="assistant-header-actions">
               {turns.length > 0 ? (
                 <button className="assistant-plain" onClick={restart} type="button">
@@ -430,13 +453,22 @@ export function LandingAssistant() {
           </header>
 
           <div className="assistant-thread" ref={threadRef}>
-            {flow ? <p className="assistant-turn is-bot">{flow.greeting}</p> : null}
+            {flow ? (
+              <div className="assistant-bot-row">
+                <img alt="" height="28" src="/brand/verdeo-buho-192.png" width="28" />
+                <p className="assistant-turn is-bot">{flow.greeting}</p>
+              </div>
+            ) : null}
             {turns.map((turn) => (
               <div key={turn.id}>
-                {turn.text ? (
-                  <p className={`assistant-turn ${turn.de === 'bot' ? 'is-bot' : 'is-me'}`}>
-                    {turn.text}
-                  </p>
+                {turn.text && turn.de === 'bot' ? (
+                  <div className="assistant-bot-row">
+                    <img alt="" height="28" src="/brand/verdeo-buho-192.png" width="28" />
+                    <p className="assistant-turn is-bot">{turn.text}</p>
+                  </div>
+                ) : null}
+                {turn.text && turn.de === 'yo' ? (
+                  <p className="assistant-turn is-me">{turn.text}</p>
                 ) : null}
                 {turn.block ? (
                   <DataBlock block={turn.block} citySlug={turn.citySlug ?? citySlug} />
