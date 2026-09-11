@@ -67,7 +67,9 @@ const FIELD_LABELS: Record<string, string> = {
   deliveryAddress: 'la dirección de entrega',
   menuId: 'el período',
   newCustomerDisplayName: 'el nombre del cliente nuevo',
+  offeringFamily: 'la variedad',
   offeringId: 'la variedad',
+  offeringSize: 'el tamaño',
   paymentExpectation: 'el medio de pago',
   quantityUnits: 'las unidades',
   source: 'el origen del pedido',
@@ -218,6 +220,54 @@ export function OrderIntakePage() {
   const selectedMenu = menus.find((menu) => menu.id === selectedMenuId) ?? null;
   const selectedOffering =
     selectedMenu?.offerings.find((offering) => offering.id === selectedOfferingId) ?? null;
+
+  /*
+   * Variedad y tamaño, en dos desplegables.
+   *
+   * Era uno solo con las diez combinaciones —"Menú Real 250 · $70.000", "Menú Real 400 · $85.000"—,
+   * que obliga a leer diez renglones para tomar dos decisiones. Por dentro sigue habiendo una sola
+   * oferta elegida, que viaja en el campo oculto `offeringId`: el guardado no cambia.
+   */
+  const intakeFamilies = [
+    ...new Map(
+      offeringsForPicking(selectedMenu?.offerings ?? []).map(
+        (offering) => [offering.familyName, offering] as const,
+      ),
+    ).keys(),
+  ];
+  const intakeSizes = [
+    ...new Set((selectedMenu?.offerings ?? []).map((offering) => offering.variantName)),
+  ].sort((left, right) => left.localeCompare(right, 'es-AR', { numeric: true }));
+
+  function findIntakeOffering(familyName: string, variantName: string) {
+    return selectedMenu?.offerings.find(
+      (offering) => offering.familyName === familyName && offering.variantName === variantName,
+    );
+  }
+
+  /*
+   * Elegir una variedad completa el tamaño solo —el que ya estaba, o el primero que esa variedad
+   * tenga—, así nunca queda una variedad elegida sin tamaño a medio camino. Los platos de un
+   * Intuitivo se vacían sólo si cambia la variedad, no si cambia el tamaño.
+   */
+  function chooseIntakeFamily(familyName: string) {
+    if (!familyName) {
+      setSelectedOfferingId('');
+      setSelectedDishes([]);
+      return;
+    }
+    const next =
+      findIntakeOffering(familyName, selectedOffering?.variantName ?? '') ??
+      selectedMenu?.offerings.find((offering) => offering.familyName === familyName);
+    if (!next) return;
+    if (next.familyName !== selectedOffering?.familyName) setSelectedDishes([]);
+    setSelectedOfferingId(next.id);
+  }
+
+  function chooseIntakeSize(variantName: string) {
+    const next = findIntakeOffering(selectedOffering?.familyName ?? '', variantName);
+    if (next) setSelectedOfferingId(next.id);
+  }
 
   async function mutate(path: string, payload?: unknown) {
     setMessage('');
@@ -718,26 +768,48 @@ export function OrderIntakePage() {
                   ))}
                 </select>
               </label>
-              <label className="field field-wide">
+              <label className="field">
                 Variedad
                 <select
-                  name="offeringId"
-                  onChange={(event) => {
-                    setSelectedOfferingId(event.target.value);
-                    setSelectedDishes([]);
-                  }}
+                  name="offeringFamily"
+                  onChange={(event) => chooseIntakeFamily(event.target.value)}
                   required
-                  value={selectedOfferingId}
+                  value={selectedOffering?.familyName ?? ''}
                 >
                   <option value="">Seleccionar</option>
-                  {offeringsForPicking(selectedMenu?.offerings ?? []).map((offering) => (
-                    <option key={offering.id} value={offering.id}>
-                      {offering.familyName} {offering.variantName} ·{' '}
-                      {formatMoney(offering.unitPriceMinor, offering.currency)}
+                  {intakeFamilies.map((familyName) => (
+                    <option key={familyName} value={familyName}>
+                      {familyName}
                     </option>
                   ))}
                 </select>
               </label>
+              <label className="field">
+                Tamaño
+                {/* El precio va con el tamaño: depende de él y no de la variedad (ADR-030). */}
+                <select
+                  disabled={!selectedOffering}
+                  name="offeringSize"
+                  onChange={(event) => chooseIntakeSize(event.target.value)}
+                  required
+                  value={selectedOffering?.variantName ?? ''}
+                >
+                  <option value="">Seleccionar</option>
+                  {intakeSizes.map((size) => {
+                    const sized = findIntakeOffering(selectedOffering?.familyName ?? '', size);
+                    return (
+                      <option disabled={!sized} key={size} value={size}>
+                        {size}
+                        {sized
+                          ? ` · ${formatMoney(sized.unitPriceMinor, sized.currency)}`
+                          : ' · no disponible'}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+              {/* Lo que se envía: la oferta concreta, igual que antes de partir el desplegable. */}
+              <input name="offeringId" type="hidden" value={selectedOfferingId} />
               <label className="field">
                 Unidades
                 <input defaultValue="1" min="1" name="quantityUnits" required type="number" />
