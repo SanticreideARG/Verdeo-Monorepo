@@ -280,9 +280,23 @@ export function LandingAssistant() {
     if (turns.length > 0) writeSession({ citySlug, turns });
   }, [citySlug, turns]);
 
-  // El hilo baja solo al último turno: si no, una respuesta larga aparece fuera de la vista.
+  /*
+   * El hilo baja solo al último turno.
+   *
+   * Con un `ResizeObserver` y no sólo al agregarse un turno: los bloques de datos llegan de la red
+   * después del texto, y al dibujarse empujan la respuesta fuera de la vista. Bajar una sola vez,
+   * cuando se agrega el turno, dejaba el precio justo abajo del borde.
+   */
   useEffect(() => {
-    threadRef.current?.scrollTo({ behavior: 'smooth', top: threadRef.current.scrollHeight });
+    const thread = threadRef.current;
+    if (!thread) return;
+    const toBottom = () => {
+      thread.scrollTo({ behavior: 'smooth', top: thread.scrollHeight });
+    };
+    toBottom();
+    const observer = new ResizeObserver(toBottom);
+    for (const child of thread.children) observer.observe(child);
+    return () => observer.disconnect();
   }, [turns, awaitingCity]);
 
   useEffect(() => {
