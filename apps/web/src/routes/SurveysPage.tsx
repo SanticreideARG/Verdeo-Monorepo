@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toDataURL } from 'qrcode';
 
+import { AnalysisTabs } from '../components/AnalysisTabs.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
 import { DashboardShell } from '../components/DashboardShell.js';
@@ -252,10 +253,11 @@ export function SurveysPage() {
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
       <DeskWorkNotice can="podés ver resultados; armar una encuesta pide varios campos a la vez." />
+      <AnalysisTabs permissions={profile.permissions} />
       <section className="dashboard-panel">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="dashboard-kicker">Clientes</p>
+            <p className="dashboard-kicker">Decisiones</p>
             <h1 className="text-2xl font-semibold text-forest">Encuestas</h1>
           </div>
           {canManage ? (

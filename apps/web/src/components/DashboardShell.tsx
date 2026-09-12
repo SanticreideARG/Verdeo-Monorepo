@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 
 import { apiRequest, storeOperatingSiteId, storedOperatingSiteId } from '../lib/api.js';
 import { AppearanceContext, type AppearanceState } from '../lib/appearanceContext.js';
+import { ANALYSIS_TAB_PERMISSIONS } from './AnalysisTabs.js';
 import { useNarrowViewport } from '../lib/useNarrowViewport.js';
 import { AppearanceMenu, FONT_OPTIONS, SCALE_OPTIONS, type ThemeOption } from './AppearanceMenu.js';
 import { OperatorAssistant } from './OperatorAssistant.js';
@@ -73,10 +74,12 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
     items: [
       { href: '/app', icon: 'dashboard', label: 'Dashboard' },
       {
+        // Encuestas cuelga de acá: son las dos pantallas con las que se mira el conjunto, no una
+        // persona. La entrada aparece con cualquiera de los dos permisos.
         href: '/app/estadisticas',
         icon: 'stats',
         label: 'Estadísticas',
-        permission: 'stats.read',
+        permissions: ANALYSIS_TAB_PERMISSIONS,
       },
     ],
   },
@@ -95,12 +98,9 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
   {
     label: 'Menús',
     items: [
-      {
-        href: '/app/menus/nuevo',
-        icon: 'menusNew',
-        label: 'Configurar la semana',
-        permission: 'production.generate',
-      },
+      // Sin entrada a "Configurar la semana": el botón para armarla vive dentro de Periodos, que es
+      // donde se mira qué semanas hay antes de crear una nueva. Dos accesos a lo mismo, uno al lado
+      // del otro, sólo obligan a elegir.
       { href: '/app/menus', icon: 'menus', label: 'Periodos', permission: 'production.read' },
     ],
   },
@@ -117,12 +117,6 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         icon: 'customers',
         label: 'Clientes',
         permission: 'customers.read',
-      },
-      {
-        href: '/app/encuestas',
-        icon: 'survey',
-        label: 'Encuestas',
-        permission: 'surveys.read',
       },
     ],
   },
@@ -417,14 +411,6 @@ export function DashboardShell({
   const [textScale, setTextScale] = useState<string>(() =>
     known(window.localStorage.getItem('verdeo-text-scale'), SCALE_KEYS, 'normal'),
   );
-  const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(() => {
-    try {
-      const saved = window.localStorage.getItem('verdeo-nav-collapsed-clusters');
-      return new Set(saved ? (JSON.parse(saved) as string[]) : []);
-    } catch {
-      return new Set();
-    }
-  });
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1_000);
@@ -527,22 +513,6 @@ export function DashboardShell({
   useEffect(() => {
     window.localStorage.setItem('verdeo-sidebar-collapsed', String(sidebarCollapsed));
   }, [sidebarCollapsed]);
-
-  useEffect(() => {
-    window.localStorage.setItem(
-      'verdeo-nav-collapsed-clusters',
-      JSON.stringify([...collapsedClusters]),
-    );
-  }, [collapsedClusters]);
-
-  function toggleCluster(label: string) {
-    setCollapsedClusters((current) => {
-      const next = new Set(current);
-      if (next.has(label)) next.delete(label);
-      else next.add(label);
-      return next;
-    });
-  }
 
   // The stored selection is validated against the server on every mount: a user who lost access to
   // an operation falls back to their default instead of sending a header that would answer 403.
@@ -713,51 +683,35 @@ export function DashboardShell({
           </Link>
 
           <nav className="dashboard-navigation" aria-label="Navegación del dashboard">
+            {/*
+             * Los grupos ya no llevan título ni se pliegan: con el nombre de cada pantalla a la
+             * vista, el rótulo en gris ("GENERAL", "PEDIDOS") era una palabra más para saltear en
+             * cada mirada. Queda la línea que los separa, que es lo que agrupaba de verdad. El
+             * `aria-label` de cada grupo conserva esa agrupación para los lectores de pantalla.
+             */}
             {visibleClusters.map((cluster) => {
-              const collapsed = collapsedClusters.has(cluster.label);
               return (
                 <section
-                  className={`dashboard-nav-cluster ${collapsed ? 'is-collapsed' : ''}`}
+                  aria-label={cluster.label}
+                  className="dashboard-nav-cluster"
                   key={cluster.label}
                 >
-                  <button
-                    aria-expanded={!collapsed}
-                    onClick={() => toggleCluster(cluster.label)}
-                    type="button"
-                  >
-                    <span>{cluster.label}</span>
-                    <svg
-                      aria-hidden="true"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                  {!collapsed
-                    ? cluster.items.map((item) => {
-                        const active = isNavigationActive(
-                          location.pathname,
-                          location.hash,
-                          item.href,
-                        );
-                        return (
-                          <Link
-                            className={active ? 'is-active' : ''}
-                            key={item.label}
-                            title={item.label}
-                            to={item.href}
-                          >
-                            <NavIcon name={item.icon} />
-                            <span>{item.label}</span>
-                            {navBadge(item.href, pendingOrders, unreadChat)}
-                            {active ? <i aria-hidden="true" /> : null}
-                          </Link>
-                        );
-                      })
-                    : null}
+                  {cluster.items.map((item) => {
+                    const active = isNavigationActive(location.pathname, location.hash, item.href);
+                    return (
+                      <Link
+                        className={active ? 'is-active' : ''}
+                        key={item.label}
+                        title={item.label}
+                        to={item.href}
+                      >
+                        <NavIcon name={item.icon} />
+                        <span>{item.label}</span>
+                        {navBadge(item.href, pendingOrders, unreadChat)}
+                        {active ? <i aria-hidden="true" /> : null}
+                      </Link>
+                    );
+                  })}
                 </section>
               );
             })}

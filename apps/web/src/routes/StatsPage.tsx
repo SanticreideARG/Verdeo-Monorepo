@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { AnalysisTabs } from '../components/AnalysisTabs.js';
 import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
@@ -152,6 +153,7 @@ export function StatsPage() {
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
       <DeskWorkNotice can="podés mirar los totales; comparar períodos necesita los gráficos completos." />
+      <AnalysisTabs permissions={profile.permissions} />
       <section className="dashboard-panel">
         <header>
           <p className="dashboard-kicker">Decisiones</p>
