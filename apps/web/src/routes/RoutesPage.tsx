@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { DashboardShell } from '../components/DashboardShell.js';
+import { RouteMap } from '../components/RouteMap.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { formatDay, formatDayLong } from '../lib/dates.js';
@@ -450,8 +451,13 @@ export function RoutesPage() {
         {loading ? (
           <p className="mt-6 text-ink-muted">Cargando…</p>
         ) : (
-          <div className="mt-6 grid gap-4 lg:grid-cols-[0.35fr_0.65fr]">
-            <ul className="grid gap-2">
+          <div className="routes-layout mt-6">
+            {/*
+             * `content-start` es el arreglo de la lista rota: la columna mide lo que mide el visor
+             * de al lado —que con veinte paradas es larguísimo— y sin esto cada tarjeta se repartía
+             * ese alto, quedando fichas gigantes y casi vacías.
+             */}
+            <ul className="routes-list grid content-start gap-2">
               {routes.map((route) => (
                 <li key={route.id}>
                   <button
@@ -536,66 +542,73 @@ export function RoutesPage() {
                       ) : null}
                     </div>
                   </div>
-                  <ol className="mt-4 grid gap-2">
-                    {selectedRoute.stops.map((stop, index) => (
-                      <li className="rounded-xl border border-forest/10 p-3" key={stop.id}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-semibold text-forest">
-                              {stop.sequence}. {stop.customerDisplayName} — {stop.publicNumber}
-                            </p>
-                            <p className="text-sm text-ink-muted">{stop.deliveryAddress}</p>
-                            <p className="text-xs text-ink-muted">
-                              {formatMoney(stop.totalMinor, 'ARS')} · {stop.paymentExpectation} ·{' '}
-                              {STOP_STATUS_LABELS[stop.status] ?? stop.status}
-                            </p>
-                          </div>
-                          {canManage ? (
-                            <div className="flex flex-col items-end gap-1">
-                              <div className="flex gap-1">
-                                <button
-                                  className="button button-secondary"
-                                  disabled={index === 0}
-                                  onClick={() => void move(index, -1)}
-                                  type="button"
-                                >
-                                  ↑
-                                </button>
-                                <button
-                                  className="button button-secondary"
-                                  disabled={index === selectedRoute.stops.length - 1}
-                                  onClick={() => void move(index, 1)}
-                                  type="button"
-                                >
-                                  ↓
-                                </button>
-                              </div>
-                              <select
-                                onChange={(event) => void assign(stop.id, event.target.value)}
-                                value={stop.assignedUserId ?? ''}
-                              >
-                                <option value="">Sin asignar</option>
-                                {users.map((user) => (
-                                  <option key={user.id} value={user.id}>
-                                    {user.displayName}
-                                  </option>
-                                ))}
-                              </select>
+                  <div className="routes-viewer mt-4">
+                    <ol className="routes-stops grid content-start gap-2">
+                      {selectedRoute.stops.map((stop, index) => (
+                        <li className="rounded-xl border border-forest/10 p-3" key={stop.id}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold text-forest">
+                                {stop.sequence}. {stop.customerDisplayName} — {stop.publicNumber}
+                              </p>
+                              <p className="text-sm text-ink-muted">{stop.deliveryAddress}</p>
+                              <p className="text-xs text-ink-muted">
+                                {formatMoney(stop.totalMinor, 'ARS')} · {stop.paymentExpectation} ·{' '}
+                                {STOP_STATUS_LABELS[stop.status] ?? stop.status}
+                              </p>
                             </div>
-                          ) : (
-                            <p className="text-sm text-ink-muted">
-                              {stop.assignedUserDisplayName ?? 'Sin asignar'}
-                            </p>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                    {selectedRoute.stops.length === 0 ? (
-                      <p className="text-ink-muted">
-                        No hay pedidos por repartir en esa fecha y esa zona.
-                      </p>
+                            {canManage ? (
+                              <div className="flex flex-col items-end gap-1">
+                                <div className="flex gap-1">
+                                  <button
+                                    className="button button-secondary"
+                                    disabled={index === 0}
+                                    onClick={() => void move(index, -1)}
+                                    type="button"
+                                  >
+                                    ↑
+                                  </button>
+                                  <button
+                                    className="button button-secondary"
+                                    disabled={index === selectedRoute.stops.length - 1}
+                                    onClick={() => void move(index, 1)}
+                                    type="button"
+                                  >
+                                    ↓
+                                  </button>
+                                </div>
+                                <select
+                                  onChange={(event) => void assign(stop.id, event.target.value)}
+                                  value={stop.assignedUserId ?? ''}
+                                >
+                                  <option value="">Sin asignar</option>
+                                  {users.map((user) => (
+                                    <option key={user.id} value={user.id}>
+                                      {user.displayName}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-ink-muted">
+                                {stop.assignedUserDisplayName ?? 'Sin asignar'}
+                              </p>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                      {selectedRoute.stops.length === 0 ? (
+                        <p className="text-ink-muted">
+                          No hay pedidos por repartir en esa fecha y esa zona.
+                        </p>
+                      ) : null}
+                    </ol>
+                    {/* Todas las paradas juntas: es la única forma de ver si el orden propuesto
+                      tiene sentido antes de publicarlo. */}
+                    {selectedRoute.stops.length > 0 ? (
+                      <RouteMap stops={selectedRoute.stops} />
                     ) : null}
-                  </ol>
+                  </div>
                 </>
               )}
             </div>

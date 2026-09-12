@@ -6601,3 +6601,74 @@ body:has(.assistant-launcher.is-operator) .toast-host {
   margin: 0;
   white-space: pre-line;
 }
+
+/*
+ * Rutas de reparto: la lista de rutas, las paradas y el mapa.
+ *
+ * Las tres columnas tienen su propio scroll y no el de la página: la hoja de una zona grande mide
+ * dos pantallas, y con el scroll de la página había que bajar hasta el final para volver a tocar
+ * "Publicar", que vive arriba.
+ */
+.routes-layout {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+}
+@media (min-width: 1024px) {
+  .routes-layout {
+    grid-template-columns: minmax(14rem, 0.3fr) minmax(0, 0.7fr);
+  }
+}
+.routes-list {
+  max-height: min(70vh, 44rem);
+  overflow-y: auto;
+}
+.routes-viewer {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+}
+@media (min-width: 1280px) {
+  /* El mapa a la derecha de las paradas; abajo en pantallas angostas. */
+  .routes-viewer {
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.8fr);
+  }
+}
+.routes-stops {
+  max-height: min(70vh, 44rem);
+  overflow-y: auto;
+  /* Aire para que la última parada no quede pegada al borde del scroll. */
+  padding-right: 0.35rem;
+}
+.route-map {
+  position: sticky;
+  top: 1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+.route-map-canvas {
+  height: min(70vh, 44rem);
+  border-radius: 16px;
+  border: 1px solid var(--db-border, rgba(23, 76, 60, 0.15));
+  /* Leaflet dibuja sus capas y controles por encima de todo si no se lo acota. */
+  z-index: 0;
+}
+.route-map-note {
+  margin: 0;
+  color: var(--db-muted, #5b6b64);
+  font-size: 0.8rem;
+}
+/* El número de cada parada, en vez del pin azul de Leaflet. */
+.route-pin span {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  background: var(--color-forest, #174c3c);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
