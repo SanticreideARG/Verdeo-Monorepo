@@ -3011,6 +3011,22 @@ a {
   background-position: center;
   background-size: cover;
 }
+/*
+ * En el teléfono el pie es alto y angosto, y `cover` agranda una ilustración apaisada hasta que
+ * cada hoja ocupa media pantalla: se pierde el dibujo. Entra el ancho completo —las hojas quedan
+ * en su tamaño— y se repite hacia abajo para cubrir el alto.
+ */
+@media (max-width: 640px) {
+  .cms-footer::before {
+    background-position:
+      center,
+      top center;
+    background-size:
+      cover,
+      100% auto;
+    background-repeat: no-repeat, repeat-y;
+  }
+}
 
 .cms-footer-inner {
   width: 100%;
