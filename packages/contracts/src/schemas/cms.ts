@@ -195,6 +195,32 @@ const CustomSectionSchema = SectionBaseSchema.extend({
   type: z.literal('CUSTOM'),
 });
 
+/**
+ * Consejos para pedir: tarjetas cortas con lo que conviene saber antes de encargar.
+ *
+ * Reemplaza a la lista de precios por variedad y tamaño, que repetía lo que ya cuentan las
+ * variedades de arriba y el propio formulario de pedido. Acá va lo que no se deduce mirando el
+ * menú: que el envío está incluido, por dónde se puede pedir, cómo se elige el tamaño.
+ */
+const TipsSectionSchema = SectionBaseSchema.extend({
+  eyebrow: z.string().trim().max(120).optional(),
+  heading: z.string().trim().min(1).max(200),
+  intro: z.string().trim().max(600).optional(),
+  tips: z
+    .array(
+      z.object({
+        body: z.string().trim().max(400).optional(),
+        // Lo que se muestra al abrir la tarjeta: los consejos para descongelar, por ejemplo. Una
+        // tarjeta con detalle se abre; una sin detalle es sólo un dato y no invita a tocarla.
+        details: z.string().trim().max(1_200).optional(),
+        title: z.string().trim().min(1).max(120),
+      }),
+    )
+    .min(1)
+    .max(12),
+  type: z.literal('TIPS'),
+});
+
 export const PageSectionSchema = z.discriminatedUnion('type', [
   HeroSectionSchema,
   HeroRotatorSectionSchema,
@@ -210,6 +236,7 @@ export const PageSectionSchema = z.discriminatedUnion('type', [
   ContactSectionSchema,
   GallerySectionSchema,
   CustomSectionSchema,
+  TipsSectionSchema,
 ]);
 
 export const PageSectionsSchema = z.array(PageSectionSchema).max(60);

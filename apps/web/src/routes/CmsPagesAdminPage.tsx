@@ -43,6 +43,7 @@ const SECTION_TYPES = [
   'CAROUSEL',
   'WEEKLY_MENU',
   'MENU_FAMILIES',
+  'TIPS',
   'CTA',
   'FAQ',
   'DELIVERY_ZONES',
@@ -79,6 +80,13 @@ function newSection(type: string): Section {
         ],
         heading: 'Menús de la semana',
         id,
+        type,
+      };
+    case 'TIPS':
+      return {
+        heading: 'Antes de pedir',
+        id,
+        tips: [{ body: '', title: 'Consejo' }],
         type,
       };
     case 'CTA':
@@ -1012,6 +1020,31 @@ function SectionFields({
           placeholder="01|Elegí|Encontrá tu variedad"
           rows={4}
           value={steps.map((step) => `${step.number}|${step.title}|${step.body}`).join('\n')}
+        />
+      );
+    }
+    case 'TIPS': {
+      const tips = Array.isArray(section.tips)
+        ? (section.tips as { body: string; details?: string; title: string }[])
+        : [];
+      return (
+        <textarea
+          className="mt-3 w-full font-mono text-xs"
+          disabled={disabled}
+          onChange={(event) =>
+            onChange({
+              tips: event.target.value
+                .split('\n')
+                .filter(Boolean)
+                .map((line) => {
+                  const [title, body, details] = line.split('|');
+                  return { body: body ?? '', details: details ?? '', title: title ?? '' };
+                }),
+            })
+          }
+          placeholder="Título|Texto corto|Texto largo que se abre (opcional)"
+          rows={6}
+          value={tips.map((tip) => `${tip.title}|${tip.body}|${tip.details ?? ''}`).join('\n')}
         />
       );
     }

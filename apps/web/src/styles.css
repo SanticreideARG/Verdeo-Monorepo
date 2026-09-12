@@ -3037,9 +3037,16 @@ a {
   position: absolute;
   inset: 0;
   z-index: -1;
-  opacity: 0.5;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320' viewBox='0 0 320 320'%3E%3Cg fill='none' stroke='%234e7a3a' stroke-width='7' stroke-linecap='round' opacity='.55'%3E%3Cpath d='M20 300 L110 170'/%3E%3Cpath d='M55 305 L150 200'/%3E%3Cpath d='M0 250 L95 150'/%3E%3Cpath d='M160 20 L250 140'/%3E%3Cpath d='M200 10 L290 120'/%3E%3Cpath d='M240 0 L320 95'/%3E%3Cpath d='M300 200 L210 300'/%3E%3Cpath d='M320 240 L245 320'/%3E%3C/g%3E%3Cg fill='none' stroke='%23b9c94a' stroke-width='5' stroke-linecap='round' opacity='.4'%3E%3Cpath d='M40 320 L120 210'/%3E%3Cpath d='M180 0 L255 100'/%3E%3Cpath d='M290 175 L215 265'/%3E%3C/g%3E%3Cg fill='none' stroke='%23879a8f' stroke-width='4' stroke-linecap='round' opacity='.3'%3E%3Cpath d='M0 190 L70 120'/%3E%3Cpath d='M130 45 L195 130'/%3E%3Cpath d='M255 235 L190 310'/%3E%3C/g%3E%3C/svg%3E");
-  background-size: 340px 340px;
+  /*
+   * Las hojas de Verdeo, las mismas de "Nosotros", en vez del patrón de rayas que dibujábamos con
+   * un SVG embebido. El velo oscuro va en la misma capa y no en otra: el texto del pie es blanco y
+   * la ilustración tiene zonas claras donde, sin velo, se pierde.
+   */
+  background-image:
+    linear-gradient(rgba(8, 37, 20, 0.62), rgba(8, 37, 20, 0.72)),
+    url('/brand/verdeo-hojas-1600.webp');
+  background-position: center;
+  background-size: cover;
 }
 
 .cms-footer-inner {
@@ -6491,4 +6498,106 @@ body:has(.assistant-launcher.is-operator) .toast-host {
   display: grid;
   gap: 0.15rem;
   min-width: 0;
+}
+
+/*
+ * "Antes de pedir": tarjetas sueltas, escalonadas.
+ *
+ * Reemplazan a la lista de precios por variedad y tamaño, que repetía las variedades de arriba y
+ * el formulario de pedido. Van en columnas tipo mampostería y con alturas distintas a propósito:
+ * son datos sueltos que se leen en cualquier orden, y una grilla pareja los haría parecer pasos.
+ */
+.tips-section {
+  padding: 3.5rem 1.25rem;
+  background: color-mix(in srgb, var(--color-cream) 55%, #fff);
+}
+.tips-inner {
+  width: 100%;
+  max-width: 64rem;
+  margin: 0 auto;
+}
+.tips-head h2 {
+  margin: 0.35rem 0 0;
+  color: var(--color-forest);
+  font-size: 1.9rem;
+  font-weight: 600;
+}
+.tips-eyebrow {
+  margin: 0;
+  color: var(--color-forest);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.tips-intro {
+  max-width: 38rem;
+  margin: 0.6rem 0 0;
+  color: var(--color-ink-muted);
+}
+.tips-grid {
+  margin-top: 2rem;
+  column-gap: 1.1rem;
+}
+@media (min-width: 640px) {
+  .tips-grid {
+    columns: 2;
+  }
+}
+@media (min-width: 1024px) {
+  .tips-grid {
+    columns: 3;
+  }
+}
+.tip-card {
+  /* Una tarjeta no puede partirse entre dos columnas. */
+  break-inside: avoid;
+  margin: 0 0 1.1rem;
+  padding: 1.15rem 1.25rem;
+  border: 1px solid color-mix(in srgb, var(--color-forest) 14%, transparent);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(23, 76, 60, 0.06);
+}
+/* El escalonado: cada tercera tarjeta se corre un poco y se inclina apenas. */
+.tip-card:nth-child(3n + 2) {
+  transform: rotate(-0.6deg);
+}
+.tip-card:nth-child(3n) {
+  transform: rotate(0.5deg);
+  background: color-mix(in srgb, var(--color-cream) 45%, #fff);
+}
+.tip-card h3 {
+  margin: 0;
+  color: var(--color-forest);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.tip-card p {
+  margin: 0.45rem 0 0;
+  color: var(--color-ink-muted);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tip-card {
+    transform: none;
+  }
+}
+
+.tip-details {
+  margin-top: 0.7rem;
+}
+.tip-details summary {
+  color: var(--color-forest);
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tip-details[open] summary {
+  margin-bottom: 0.4rem;
+}
+.tip-details p {
+  margin: 0;
+  white-space: pre-line;
 }

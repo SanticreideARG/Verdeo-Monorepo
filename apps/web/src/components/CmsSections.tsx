@@ -198,6 +198,60 @@ function DeliveryZonesSection({
   );
 }
 
+interface TipBlock {
+  body?: string | undefined;
+  details?: string | undefined;
+  title: string;
+}
+
+/**
+ * Los consejos para pedir, en tarjetas.
+ *
+ * Van escalonadas y no en una grilla prolija a propósito: son cosas sueltas que se leen en
+ * cualquier orden, y una grilla de filas parejas las hace parecer pasos de un proceso.
+ */
+function TipsSection({
+  anchorId,
+  eyebrow,
+  heading,
+  intro,
+  tips,
+}: {
+  anchorId?: string | undefined;
+  eyebrow?: string | undefined;
+  heading: string;
+  intro?: string | undefined;
+  tips: readonly TipBlock[];
+}) {
+  return (
+    <section className="tips-section" id={anchorId}>
+      <div className="tips-inner">
+        <header className="tips-head">
+          {eyebrow ? <p className="tips-eyebrow">{eyebrow}</p> : null}
+          <h2>{heading}</h2>
+          {intro ? <p className="tips-intro">{intro}</p> : null}
+        </header>
+        <div className="tips-grid">
+          {tips.map((tip) => (
+            <article className="tip-card" key={tip.title}>
+              <h3>{tip.title}</h3>
+              {tip.body ? <p>{tip.body}</p> : null}
+              {/* Con `details` nativo: se abre sin JavaScript, con teclado y con lector de
+                  pantalla, y el buscador igual encuentra el texto de adentro. */}
+              {tip.details ? (
+                <details className="tip-details">
+                  <summary>Ver cómo</summary>
+                  <p>{tip.details}</p>
+                </details>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /** New section type: a rotating-word hero. `words` cycles on a fade, same beat as the reference
  * site's ("cuida tu salud" / "desde la alimentación" / "comidas saludables"), just no external
  * plugin — a plain interval + CSS transition. */
@@ -435,6 +489,16 @@ export function CmsSection({ section }: { section: PageSection }) {
           footnote={section.footnote as string | undefined}
           heading={(section.heading as string | undefined) ?? 'Menús de la semana'}
           intro={section.intro as string | undefined}
+        />
+      );
+    case 'TIPS':
+      return (
+        <TipsSection
+          anchorId={anchorId}
+          eyebrow={section.eyebrow as string | undefined}
+          heading={(section.heading as string | undefined) ?? 'Antes de pedir'}
+          intro={section.intro as string | undefined}
+          tips={(section.tips as TipBlock[] | undefined) ?? []}
         />
       );
     case 'CTA':
