@@ -806,6 +806,24 @@ export const OrderListQuerySchema = z
     limit: z.coerce.number().int().min(1).max(100).default(30),
     search: z.string().trim().max(100).optional(),
     status: OrderStatusSchema.optional(),
+    /*
+     * Varios estados a la vez, separados por coma.
+     *
+     * "Pendientes de acción" son tres estados (borrador, confirmado y listo), y filtrarlos en el
+     * navegador rompe el paginado: la página siguiente puede venir entera de entregados y la
+     * pantalla se queda sin filas que mostrar aunque haya trabajo esperando.
+     */
+    statuses: z
+      .string()
+      .trim()
+      .transform((value) =>
+        value
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean),
+      )
+      .pipe(z.array(OrderStatusSchema).min(1).max(6))
+      .optional(),
     to: z.iso.datetime({ offset: true }).optional(),
     zone: z.string().trim().max(120).optional(),
   })

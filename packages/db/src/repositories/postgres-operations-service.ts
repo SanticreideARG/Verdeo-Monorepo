@@ -283,6 +283,9 @@ export interface OrderListInput {
   limit: number;
   search?: string | undefined;
   status?: OrderStatus | undefined;
+  // Varios estados a la vez: "pendientes de acción" son tres, y filtrarlos después de paginar
+  // dejaba páginas enteras vacías.
+  statuses?: readonly OrderStatus[] | undefined;
   to?: string | undefined;
   zone?: string | undefined;
 }
@@ -3534,6 +3537,9 @@ export class PostgresOperationsService {
       // A concrete operation restricts the page; the global view leaves it unfiltered.
       ...(input.operatingSiteId ? [eq(orders.operatingSiteId, input.operatingSiteId)] : []),
       ...(input.status ? [eq(orders.status, input.status)] : []),
+      ...(input.statuses && input.statuses.length > 0
+        ? [inArray(orders.status, [...input.statuses])]
+        : []),
       ...(input.customerId ? [eq(orders.customerId, input.customerId)] : []),
       ...(input.cycleId ? [eq(orders.salesCycleId, input.cycleId)] : []),
       ...(input.from ? [gte(orders.createdAt, new Date(input.from))] : []),

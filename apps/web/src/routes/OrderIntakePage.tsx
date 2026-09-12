@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { ActionButton } from '../components/ActionButton.js';
 import { AfterSaveDialog } from '../components/AfterSaveDialog.js';
@@ -9,9 +10,11 @@ import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { DataTable } from '../components/DataTable.js';
 import { DraftNotice } from '../components/DraftNotice.js';
+import { ErrorNotice } from '../components/ErrorNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
 import { deliveryDateFor, deliveryDateLabel } from '../lib/dates.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
+import { describeResponse, type AppError } from '../lib/errors.js';
 import { maskSurname, readMaskSurnames, writeMaskSurnames } from '../lib/maskName.js';
 import {
   buildOrderColumns,
@@ -47,7 +50,16 @@ import { useFormDraft } from '../lib/useFormDraft.js';
  * identifica la fila es el nombre, y lo que se necesita a mano para terminar de acordarlo es el
  * WhatsApp.
  */
-const DEFAULT_COLUMNS = ['cliente', 'whatsapp', 'pedido', 'estado', 'total', 'acciones'];
+const DEFAULT_COLUMNS = [
+  'cliente',
+  'whatsapp',
+  'pedido',
+  'estado',
+  'total',
+  'cobrado',
+  'entrega',
+  'acciones',
+];
 
 const COLUMNS_KEY = 'verdeo-intake-columns';
 
@@ -83,14 +95,38 @@ function formText(form: FormData, key: string): string {
 /** "Tomar y confirmar pedidos": the operational screen — a compact intake form plus every order
  * still in motion (draft through ready) with its next action. Browsing the full history lives in
  * "Ver pedidos" instead, so this screen stays short. */
-export function OrderIntakePage() {
+/**
+ * Los estados que esperan que alguien haga algo.
+ *
+ * Es el recorte con el que se trabaja durante la semana, y ahora lo resuelve el servidor: filtrarlo
+ * acá después de paginar dejaba páginas enteras vacías —de treinta pedidos traídos podían ser
+ * treinta entregados— y escondía trabajo pendiente.
+ */
+const PENDING_STATUSES = 'DRAFT,CONFIRMED,READY';
+const PENDING_FILTER = 'PENDIENTES';
+const STATUS_OPTIONS = ['DRAFT', 'CONFIRMED', 'READY', 'DELIVERED', 'CANCELLED'] as const;
+
+/**
+ * "Pedidos": una sola pantalla para tomar, confirmar, buscar y cobrar.
+ *
+ * Eran dos —"Tomar y confirmar pedidos" y "Ver pedidos"— con la misma tabla, las mismas columnas
+ * configurables y el mismo Excel, y cada una con la mitad de las herramientas: en una se confirmaba
+ * pero no se podía buscar, en la otra se buscaba pero no se podía confirmar el borrador que estabas
+ * viendo. Ahora es la misma pantalla con dos puntos de entrada: la cola de la semana (con el
+ * formulario a mano) y el historial completo.
+ *
+ * `?search=` sigue funcionando como enlace directo a un pedido —una tarjeta de chat apunta acá con
+ * su número—, y `?cycleId=` abre una semana puntual.
+ */
+export function OrderIntakePage({ queue = false }: { queue?: boolean } = {}) {
   const { failed, logout, profile } = useDashboardProfile();
+  const [searchParams] = useSearchParams();
   const [permissions, setPermissions] = useState<string[]>([]);
   const [menus, setMenus] = useState<WeeklyMenu[]>([]);
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [message, setMessage] = useState('');
-  const [formOpen, setFormOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(queue);
   const formRef = useRef<HTMLFormElement>(null);
   const draft = useFormDraft(formRef, 'order-intake', formOpen);
   const [selectedMenuId, setSelectedMenuId] = useState('');
@@ -133,6 +169,16 @@ export function OrderIntakePage() {
    */
   const [periods, setPeriods] = useState<Period[]>([]);
   const [periodId, setPeriodId] = useState<string | null>(null);
+  // El filtro de estado: vacío es todos, PENDIENTES es el recorte de trabajo, o un estado puntual.
+  const [statusFilter, setStatusFilter] = useState(() =>
+    searchParams.get('search') ? '' : queue ? PENDING_FILTER : '',
+  );
+  const [searchInput, setSearchInput] = useState(() => searchParams.get('search') ?? '');
+  // Lo que se tipea y lo que se consulta son dos cosas: sin el retardo, cada tecla es un pedido.
+  const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  // Qué pasó, qué hacer y si tiene sentido reintentar, separado de las confirmaciones.
+  const [error, setError] = useState<AppError | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() =>
     readStoredColumns(COLUMNS_KEY, DEFAULT_COLUMNS, INTAKE_CATALOGUE),
   );
@@ -179,25 +225,43 @@ export function OrderIntakePage() {
       );
       const list = periodsFromMenus(allMenus);
       setPeriods(list);
-      // La primera carga elige el período actual; después manda lo que el operador haya elegido.
-      queueCycleId ??= currentPeriod(list)?.id ?? '';
+      /*
+       * La primera carga elige el período actual; después manda lo que el operador haya elegido.
+       * `?cycleId=` gana: se llega ahí desde un pedido para ver el resto de su semana, sea o no la
+       * actual.
+       */
+      queueCycleId ??= searchParams.get('cycleId') ?? currentPeriod(list)?.id ?? '';
       setPeriodId(queueCycleId);
     }
 
+    /*
+     * Un pedido puntual puede ser de cualquier semana: llegar buscando abre el histórico entero,
+     * porque si no el enlace no encuentra nada justo cuando apunta a algo viejo.
+     */
+    const params = new URLSearchParams();
+    if (queueCycleId && !search.trim()) params.set('cycleId', queueCycleId);
+    if (search.trim()) params.set('search', search.trim());
+    if (statusFilter === PENDING_FILTER) params.set('statuses', PENDING_STATUSES);
+    else if (statusFilter) params.set('status', statusFilter);
+
     const [orderResponse, methodsResponse] = await Promise.all([
       profile.permissions.includes('orders.read')
-        ? apiRequest(`/api/v1/orders${queueCycleId ? `?cycleId=${queueCycleId}` : ''}`)
+        ? apiRequest(`/api/v1/orders?${params.toString()}`)
         : null,
       // Optional: staff without payments.read (e.g. cocina) still create orders fine — "Pago
       // esperado" just falls back to free text for them instead of the method picker.
       profile.permissions.includes('payments.read') ? apiRequest('/api/v1/payments/methods') : null,
     ]);
     if (orderResponse?.ok) {
-      const items = ((await orderResponse.json()) as { items: OrderSummary[] }).items;
-      // Only what still needs someone's attention; delivered and cancelled belong to "Ver pedidos".
-      setOrders(
-        items.filter((order) => order.status !== 'DELIVERED' && order.status !== 'CANCELLED'),
-      );
+      const body = (await orderResponse.json()) as {
+        items: OrderSummary[];
+        nextCursor: string | null;
+      };
+      setOrders(body.items);
+      setNextCursor(body.nextCursor);
+      setError(null);
+    } else if (orderResponse) {
+      setError(await describeResponse(orderResponse));
     }
     if (methodsResponse?.ok) {
       const active = ((await methodsResponse.json()) as { items: PaymentMethod[] }).items.filter(
@@ -207,7 +271,12 @@ export function OrderIntakePage() {
     }
     loadedOnce.current = true;
     setLoading(false);
-  }, [periodId, profile]);
+  }, [periodId, profile, search, searchParams, statusFilter]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearch(searchInput), 350);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
 
   useEffect(() => {
     void loadData().catch((error: unknown) => {
@@ -215,6 +284,45 @@ export function OrderIntakePage() {
       setMessage(error instanceof Error ? error.message : 'No pudimos cargar los pedidos.');
     });
   }, [loadData]);
+
+  /**
+   * La página siguiente, agregada abajo.
+   *
+   * Con `cursor` el servidor sigue desde el último pedido traído; las filas ya cargadas se
+   * conservan para no perder de vista la fila donde estabas.
+   */
+  async function loadMore(cursor: string) {
+    const params = new URLSearchParams({ cursor });
+    if (periodId && !search.trim()) params.set('cycleId', periodId);
+    if (search.trim()) params.set('search', search.trim());
+    if (statusFilter === PENDING_FILTER) params.set('statuses', PENDING_STATUSES);
+    else if (statusFilter) params.set('status', statusFilter);
+    const response = await apiRequest(`/api/v1/orders?${params.toString()}`);
+    if (!response.ok) {
+      setError(await describeResponse(response));
+      return;
+    }
+    const body = (await response.json()) as { items: OrderSummary[]; nextCursor: string | null };
+    setOrders((current) => [...current, ...body.items]);
+    setNextCursor(body.nextCursor);
+  }
+
+  /** El tilde de cobrado, en la misma lista. Actualiza la fila en el lugar: recargar la lista
+   * paginada devolvería al principio y perdería de vista justo la fila recién tildada. */
+  async function togglePaid(order: OrderSummary) {
+    const response = await apiRequest(`/api/v1/orders/${order.id}/paid`, {
+      body: JSON.stringify({ paid: !order.paidAt }),
+      method: 'POST',
+    });
+    if (!response.ok) {
+      setError(await describeResponse(response));
+      return;
+    }
+    const updated = (await response.json()) as OrderSummary;
+    setOrders((current) =>
+      current.map((row) => (row.id === updated.id ? { ...row, paidAt: updated.paidAt } : row)),
+    );
+  }
 
   const publishedMenus = menus.filter((menu) => menu.status === 'PUBLISHED');
   const selectedMenu = menus.find((menu) => menu.id === selectedMenuId) ?? null;
@@ -501,8 +609,11 @@ export function OrderIntakePage() {
    */
   async function exportPeriod() {
     setMessage('');
+    // Se exporta lo que se está mirando: los mismos filtros que la tabla, no el histórico entero.
     const params = new URLSearchParams({ format: 'xlsx' });
-    if (periodId) params.set('cycleId', periodId);
+    if (periodId && !search.trim()) params.set('cycleId', periodId);
+    if (search.trim()) params.set('search', search.trim());
+    if (statusFilter && statusFilter !== PENDING_FILTER) params.set('status', statusFilter);
     if (maskSurnames) params.set('maskSurnames', '1');
     const response = await apiRequest(`/api/v1/orders/export?${params.toString()}`);
     if (!response.ok) {
@@ -593,12 +704,41 @@ export function OrderIntakePage() {
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="dashboard-kicker">Pedidos</p>
-            <h1 className="text-2xl font-semibold text-forest">Tomar y confirmar pedidos</h1>
+            <h1 className="text-2xl font-semibold text-forest">Pedidos</h1>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {/* Sin "todos los períodos": esto es la cola de esta semana, no un archivo. Para
-                buscar en el histórico está "Ver pedidos". */}
-            <PeriodPicker onChange={setPeriodId} periods={periods} value={periodId ?? ''} />
+            <label className="field">
+              Buscar
+              <input
+                onChange={(event) => setSearchInput(event.target.value)}
+                placeholder="N° de pedido o cliente"
+                value={searchInput}
+              />
+            </label>
+            {/* Con "Todos los períodos" incluido: la misma pantalla es la cola de esta semana y el
+                historial completo, según lo que se elija acá y en Estado. */}
+            <PeriodPicker
+              allowAll
+              onChange={setPeriodId}
+              periods={periods}
+              value={periodId ?? ''}
+            />
+            <label className="field">
+              Estado
+              <select
+                onChange={(event) => setStatusFilter(event.target.value)}
+                value={statusFilter}
+              >
+                {/* Primero el recorte de trabajo: es con el que se entra todos los días. */}
+                <option value={PENDING_FILTER}>Pendientes de acción</option>
+                <option value="">Todos</option>
+                {STATUS_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {orderStatusLabel(option)}
+                  </option>
+                ))}
+              </select>
+            </label>
             <ColumnPicker
               columns={intakeColumns}
               extras={[
@@ -643,6 +783,12 @@ export function OrderIntakePage() {
           <p className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
             {message}
           </p>
+        ) : null}
+
+        {error ? (
+          <div className="mt-5">
+            <ErrorNotice error={error} onRetry={() => void loadData()} />
+          </div>
         ) : null}
 
         {formOpen && permissions.includes('orders.create') ? (
@@ -963,18 +1109,70 @@ export function OrderIntakePage() {
           {/* Cuántos pedidos hay en la cola: una lista sin número no dice si es un rato de
               trabajo o una tarde. */}
           <p className="mb-3 text-sm text-ink-muted" role="status">
-            {orders.length === 1
-              ? '1 pedido pendiente de acción'
-              : String(orders.length) + ' pedidos pendientes de acción'}
+            {orders.length === 1 ? '1 pedido' : String(orders.length) + ' pedidos'}
+            {/* Con la lista paginada no se puede contar mirando: si quedan más, se dice, para que
+                "30" no se lea como "hay treinta y se terminó". */}
+            {nextCursor ? ' cargados · hay más' : ''}
+            {/* El vacío casi nunca es el estado real: es un filtro puesto de más. */}
+            {orders.length === 0 && (statusFilter || search.trim() || periodId) ? (
+              <>
+                {' · '}
+                <button
+                  className="link-button"
+                  onClick={() => {
+                    setStatusFilter('');
+                    setSearchInput('');
+                    setPeriodId('');
+                  }}
+                  type="button"
+                >
+                  Limpiar los filtros
+                </button>
+              </>
+            ) : null}
           </p>
           <DataTable
-            caption="Pedidos pendientes de acción"
-            columns={intakeColumns.filter((column) => visibleColumns.includes(column.key))}
-            empty="Ningún pedido pendiente de acción."
+            caption="Pedidos"
+            columns={intakeColumns
+              .filter((column) => visibleColumns.includes(column.key))
+              .map(
+                // "Cobrado" es un tilde que se puede tocar cuando hay permiso para editar.
+                (column) =>
+                  column.key === 'cobrado' && permissions.includes('orders.edit')
+                    ? {
+                        ...column,
+                        render: (order: OrderSummary) => (
+                          <label className="paid-check">
+                            <input
+                              aria-label={`Marcar ${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName} como cobrado`}
+                              checked={Boolean(order.paidAt)}
+                              onChange={() => void togglePaid(order)}
+                              type="checkbox"
+                            />
+                            <span>{order.paidAt ? 'Cobrado' : 'Pendiente'}</span>
+                          </label>
+                        ),
+                      }
+                    : column,
+              )}
+            empty={
+              periodId
+                ? 'No hay pedidos con este filtro. Probá con "Todos los períodos".'
+                : 'No hay pedidos para este filtro.'
+            }
             rowKey={(order) => order.id}
             rowTone={orderRowTone}
             rows={orders}
           />
+          {nextCursor ? (
+            <button
+              className="button button-secondary mt-4"
+              onClick={() => void loadMore(nextCursor)}
+              type="button"
+            >
+              Cargar más
+            </button>
+          ) : null}
         </div>
       </section>
 

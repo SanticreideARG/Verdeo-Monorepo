@@ -39,7 +39,6 @@ import { MessagingInboxPage } from './MessagingInboxPage.js';
 import { OAuthCallbackPage } from './OAuthCallbackPage.js';
 import { OrderDetailPage } from './OrderDetailPage.js';
 import { OrderIntakePage } from './OrderIntakePage.js';
-import { OrdersPage } from './OrdersPage.js';
 import { ProfilePage } from './ProfilePage.js';
 import { PublicOrderPage } from './PublicOrderPage.js';
 import { PublicSurveyPage } from './PublicSurveyPage.js';
@@ -307,9 +306,11 @@ export function App() {
       <Route path="/app/clientes" element={<CustomersPage />} />
       <Route path="/app/encuestas" element={<SurveysPage />} />
       <Route path="/app/encuestas/:id/resultados" element={<SurveyResultsPage />} />
-      <Route path="/app/pedidos/nuevo" element={<OrderIntakePage />} />
+      <Route path="/app/pedidos/nuevo" element={<OrderIntakePage queue />} />
       <Route path="/app/pedidos/:id" element={<OrderDetailPage />} />
-      <Route path="/app/pedidos" element={<OrdersPage />} />
+      {/* La misma pantalla con dos entradas: la cola de la semana (con el formulario abierto) y
+          el historial completo. Los enlaces viejos a las dos siguen funcionando. */}
+      <Route path="/app/pedidos" element={<OrderIntakePage />} />
       <Route path="/app/menus/nuevo" element={<MenuBuilderPage />} />
       <Route path="/app/menus/:id/editar" element={<MenuBuilderPage />} />
       <Route path="/app/menus" element={<MenusPage />} />
