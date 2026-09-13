@@ -124,6 +124,12 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         label: 'Cocina',
         permission: 'production.read',
       },
+      {
+        href: '/app/etiquetas',
+        icon: 'menusNew',
+        label: 'Etiquetas',
+        permission: 'production.read',
+      },
       { href: '/app/reparto/rutas', icon: 'delivery', label: 'Rutas', permission: 'routes.read' },
     ],
   },
@@ -204,8 +210,7 @@ const shiftNavigation: readonly NavigationItem[] = [
  * badge nobody reads, so these are the two that mean "someone is waiting on you".
  */
 function navBadge(href: string, pendingOrders: number, unreadChat: number): ReactNode {
-  const count =
-    href === '/app/pedidos' ? pendingOrders : href === '/app/chat' ? unreadChat : 0;
+  const count = href === '/app/pedidos' ? pendingOrders : href === '/app/chat' ? unreadChat : 0;
   if (count <= 0) return null;
   return (
     <b className="nav-badge" title={`${count} sin ver`}>

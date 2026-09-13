@@ -23,7 +23,7 @@ import { HelpPage } from './HelpPage.js';
 import { KitchenPage } from './KitchenPage.js';
 import { PrivacyPolicyPage } from './PrivacyPolicyPage.js';
 import { TermsPage } from './TermsPage.js';
-import { LabelSettingsPage } from './LabelSettingsPage.js';
+import { LabelsPage } from './LabelsPage.js';
 import { BrandLoading } from '../components/BrandLoading.js';
 import { CalendarPage } from './CalendarPage.js';
 import { EmailSettingsPage } from './EmailSettingsPage.js';
@@ -329,7 +329,10 @@ export function App() {
       <Route path="/app/contenidos" element={<CmsPagesAdminPage />} />
       <Route path="/app/ajustes/zonas" element={<GeographySettingsPage />} />
       <Route path="/app/ajustes/menu" element={<MenuCatalogSettingsPage />} />
-      <Route path="/app/ajustes/etiquetas" element={<LabelSettingsPage />} />
+      {/* Etiquetas dejó de ser una pestaña de Ajustes: el formato y la generación viven juntos en su
+          propia sección. La ruta vieja redirige. */}
+      <Route path="/app/ajustes/etiquetas" element={<Navigate replace to="/app/etiquetas" />} />
+      <Route path="/app/etiquetas" element={<LabelsPage />} />
       <Route path="/app/calendario" element={<CalendarPage />} />
       <Route path="/app/ajustes/correo" element={<EmailSettingsPage />} />
       <Route path="/app/ajustes/apariencia" element={<AppearanceSettingsPage />} />

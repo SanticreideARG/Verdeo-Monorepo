@@ -1,31 +1,11 @@
 import type { Label, LabelField, LabelSettings } from '@verdeo/contracts';
+import { labelCanvas } from '@verdeo/orders';
 
 /**
  * Same adapter choice as production-export.ts: "PDF" is a print-ready HTML page, not a generated
  * binary — the browser's print dialog is the PDF adapter, so no PDF-rendering library ever enters
  * the Vercel Function bundle for this either.
  */
-
-const GRID_BY_LABELS_PER_PAGE: Record<number, { columns: number; rows: number }> = {
-  4: { columns: 2, rows: 2 },
-  5: { columns: 3, rows: 2 },
-  6: { columns: 2, rows: 3 },
-  7: { columns: 3, rows: 3 },
-  8: { columns: 2, rows: 4 },
-  9: { columns: 3, rows: 3 },
-  10: { columns: 2, rows: 5 },
-  11: { columns: 3, rows: 4 },
-  12: { columns: 3, rows: 4 },
-};
-
-function labelGrid(labelsPerPage: number): { columns: number; rows: number } {
-  return (
-    GRID_BY_LABELS_PER_PAGE[labelsPerPage] ?? {
-      columns: Math.ceil(Math.sqrt(labelsPerPage)),
-      rows: Math.ceil(labelsPerPage / Math.ceil(Math.sqrt(labelsPerPage))),
-    }
-  );
-}
 
 function escape(value: string): string {
   return value.replace(
@@ -94,13 +74,29 @@ export function buildLabelsPrintHtml(
     | 'fields'
     | 'fontFamily'
     | 'fontScale'
+    | 'labelGapMm'
     | 'labelsPerPage'
+    | 'sheetHeightMm'
+    | 'sheetMarginMm'
+    | 'sheetWidthMm'
     | 'showBorders'
     | 'uppercaseName'
   >,
   title: string,
 ): string {
-  const { columns, rows } = labelGrid(settings.labelsPerPage);
+  /*
+   * El lienzo real de cada etiqueta: hoja menos márgenes, dividido por la grilla. Antes la hoja era
+   * A4 escrita acá adentro (297 - 24), así que cambiar de hoja obligaba a tocar el código.
+   */
+  const canvas = labelCanvas(
+    {
+      gapMm: settings.labelGapMm,
+      heightMm: settings.sheetHeightMm,
+      marginMm: settings.sheetMarginMm,
+      widthMm: settings.sheetWidthMm,
+    },
+    settings.labelsPerPage,
+  );
   /*
    * El fondo va en la hoja de estilos, no en un atributo `style` de cada etiqueta.
    *
@@ -149,12 +145,13 @@ export function buildLabelsPrintHtml(
 <title>${escape(title)}</title>
 <style>
   * { box-sizing: border-box; }
-  body { font-family: ${fontStack}; margin: 0; padding: 12mm; color: #111; }
+  body { font-family: ${fontStack}; margin: 0; padding: ${settings.sheetMarginMm}mm; color: #111; }
   .grid {
     display: grid;
-    grid-template-columns: repeat(${columns}, 1fr);
-    grid-auto-rows: ${(297 - 24) / rows}mm;
-    gap: 4mm;
+    grid-template-columns: repeat(${canvas.columns}, ${canvas.widthMm.toFixed(2)}mm);
+    grid-auto-rows: ${canvas.heightMm.toFixed(2)}mm;
+    gap: ${settings.labelGapMm}mm;
+    justify-content: center;
   }
   .label {
     border: ${settings.showBorders ? '1px dashed #999' : 'none'};
@@ -184,12 +181,15 @@ export function buildLabelsPrintHtml(
   .menor { font-size: ${(10 * scale).toFixed(1)}px; color: #555; margin: 1mm 0 0; }
   .label:nth-child(${settings.labelsPerPage}n) { break-after: page; }
   @media print {
-    body { padding: 8mm; }
+    /* El mismo margen que en pantalla: con 8 mm fijos, la hoja impresa no coincidía con la que se
+       había configurado y las etiquetas salían corridas respecto de la vista previa. */
+    body { padding: ${settings.sheetMarginMm}mm; }
     /* Punteado en pantalla, sólido al imprimir — pero sólo si hay borde: con el recuadro apagado,
        forzarlo acá lo hacía reaparecer justo en el papel. */
     ${settings.showBorders ? '.label { border-style: solid; }' : ''}
   }
-  @page { size: A4; margin: 8mm; }
+  /* La hoja configurada, y el margen ya lo pone el cuerpo: duplicarlo acá corría todo hacia adentro. */
+  @page { size: ${settings.sheetWidthMm}mm ${settings.sheetHeightMm}mm; margin: 0; }
 </style>
 </head>
 <body>

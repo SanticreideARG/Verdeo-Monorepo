@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
@@ -56,18 +57,6 @@ async function downloadExport(cycleId: string, kind: 'final' | 'partial', format
     link.click();
   }
   URL.revokeObjectURL(url);
-}
-
-async function printLabels(cycleId: string): Promise<string | null> {
-  const response = await apiRequest(`/api/v1/production/${cycleId}/labels/export`);
-  if (!response.ok) return errorMessage(response);
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  window.open(url, '_blank', 'noopener,noreferrer');
-  // Revocar en el mismo turno corre carrera con la pestaña que recién se abre: a veces se queda
-  // sin nada que cargar. Se libera un segundo después, ya con la página leída.
-  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
-  return null;
 }
 
 async function copyWhatsAppText(cycleId: string, kind: 'final' | 'partial') {
@@ -331,19 +320,12 @@ export function KitchenPage() {
               >
                 Generar salida
               </button>
-              <button
-                className="button button-secondary"
-                disabled={!selectedMenu}
-                onClick={() =>
-                  selectedMenu &&
-                  void printLabels(selectedMenu.cycle.id).then(
-                    (error) => error && setMessage(error),
-                  )
-                }
-                type="button"
-              >
-                Generar etiquetas
-              </button>
+              {/* Las etiquetas tienen su propia sección: ahí se elige la tanda, se ve cómo van a
+                  salir y recién entonces se imprime. Acá quedaba un botón que mandaba a la
+                  impresora sin mostrar nada. */}
+              <Link className="button button-secondary" to="/app/etiquetas">
+                Etiquetas
+              </Link>
               {/*
                * Los tres formatos del consolidado que está en pantalla. Existían sólo para
                * snapshots ya tomados, así que pasarle la producción a cocina obligaba a congelar

@@ -375,3 +375,22 @@ las tarjetas de chat.
 - "Venta de oportunidad" sale de los orígenes ofrecidos. El valor sigue en el contrato: los pedidos
   viejos que lo tienen se siguen leyendo, y la consolidación de cocina lo sigue informando.
 
+## Etiquetas: una sección, no dos mitades (as built)
+
+El formato vivía en Ajustes y la generación en Cocina, así que comprobar si un fondo entraba era
+configurarlo en un lado, ir al otro, imprimir y volver. Ahora es `/app/etiquetas` (`LabelsPage`),
+con entrada propia en el menú; `/app/ajustes/etiquetas` redirige y la pestaña sale de Ajustes.
+
+- **La hoja es configurable** (`sheet_width_mm`, `sheet_height_mm`, `sheet_margin_mm`,
+  `label_gap_mm`, migración 0046). Era A4 escrita a mano dentro del generador de la impresión.
+- **El lienzo de una etiqueta** —hoja menos márgenes, dividido por la grilla— lo calcula
+  `labelCanvas`, en `@verdeo/orders/label-sheet.ts` para la impresión y espejado en
+  `apps/web/src/lib/labelSheet.ts` para la vista previa (la web no depende de los paquetes
+  internos). Si cambia una, tiene que cambiar la otra: la previa existe para mostrar lo que sale.
+- **La vista previa** muestra la hoja entera con su grilla y una etiqueta **en milímetros**, que es
+  como imprime el navegador: se puede apoyar la etiqueta impresa contra la pantalla.
+- **La tanda** se elige por período y, opcionalmente, por zona (`?zone=` en los dos endpoints de
+  etiquetas del ciclo). Cocina termina por zona, y esa es la tanda que se imprime.
+- **No hay PDF generado en el servidor**: se abre la hoja imprimible y el diálogo del navegador
+  imprime o guarda como PDF. Meter una librería de PDF en la función sería el único modo de
+  prometer un archivo, y el resultado con fondos de imagen es peor.

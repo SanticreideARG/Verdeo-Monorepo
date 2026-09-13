@@ -961,6 +961,20 @@ export const LabelFieldSchema = z.enum([
 
 export const LabelAlignmentSchema = z.enum(['center', 'left']);
 
+/*
+ * La hoja, en milímetros.
+ *
+ * Era A4 fija, escrita en el generador de la impresión. Se guarda porque de la hoja sale el tamaño
+ * real de cada etiqueta —hoja menos márgenes, dividido por la grilla—, y ese tamaño es lo que hay
+ * que ver antes de mandar a imprimir cien.
+ */
+export const LabelSheetSchema = z.object({
+  labelGapMm: z.number().int().min(0).max(20),
+  sheetHeightMm: z.number().int().min(80).max(600),
+  sheetMarginMm: z.number().int().min(0).max(40),
+  sheetWidthMm: z.number().int().min(80).max(420),
+});
+
 export const LabelSettingsSchema = z.object({
   alignment: LabelAlignmentSchema,
   backgroundImageUrl: z.string().nullable(),
@@ -968,7 +982,11 @@ export const LabelSettingsSchema = z.object({
   fontFamily: LabelFontSchema,
   fontScale: z.number().int().min(60).max(200),
   id: UuidSchema.nullable(),
-  labelsPerPage: z.number().int().min(4).max(12),
+  labelGapMm: z.number().int().min(0).max(20),
+  labelsPerPage: z.number().int().min(1).max(12),
+  sheetHeightMm: z.number().int().min(80).max(600),
+  sheetMarginMm: z.number().int().min(0).max(40),
+  sheetWidthMm: z.number().int().min(80).max(420),
   showBorders: z.boolean(),
   updatedAt: IsoDateTimeSchema.nullable(),
   updatedByUserId: UuidSchema.nullable(),
@@ -981,7 +999,11 @@ export const LabelSettingsUpdateRequestSchema = z.object({
   fields: z.array(LabelFieldSchema).max(7).optional(),
   fontFamily: LabelFontSchema.optional(),
   fontScale: z.number().int().min(60).max(200).optional(),
-  labelsPerPage: z.number().int().min(4).max(12),
+  labelGapMm: z.number().int().min(0).max(20).optional(),
+  labelsPerPage: z.number().int().min(1).max(12),
+  sheetHeightMm: z.number().int().min(80).max(600).optional(),
+  sheetMarginMm: z.number().int().min(0).max(40).optional(),
+  sheetWidthMm: z.number().int().min(80).max(420).optional(),
   showBorders: z.boolean().optional(),
   uppercaseName: z.boolean().optional(),
 });

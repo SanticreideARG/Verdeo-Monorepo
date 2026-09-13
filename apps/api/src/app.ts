@@ -512,7 +512,7 @@ interface OperationsEngine {
     operatingSiteId?: string | undefined;
     to?: string | undefined;
   }): Promise<unknown>;
-  cycleLabels(cycleId: string, operatingSiteId: string | null): Promise<unknown>;
+  cycleLabels(cycleId: string, operatingSiteId: string | null, zone?: string): Promise<unknown>;
   getLabelSettings(): Promise<unknown>;
   kitchenSummary(cycleId: string, operatingSiteId: string | null): Promise<unknown>;
   listCustomers(input: ScopedInput<CustomerListQuery>, includeSensitive: boolean): Promise<unknown>;
@@ -4948,9 +4948,12 @@ export function createApp(options: CreateAppOptions) {
     if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
     const params = CycleIdParamSchema.safeParse(context.req.param());
     if (!params.success) return badRequest(context, 'El ciclo indicado no es válido.');
+    // `zone` recorta la tanda a una zona de reparto, que es como cocina termina de producir.
+    const zone = context.req.query('zone')?.trim();
     const items = await requireOperations().cycleLabels(
       params.data.cycleId,
       context.get('scope')?.operatingSiteId ?? null,
+      zone || undefined,
     );
     return context.json(LabelListResponseSchema.parse({ items: contractValue(items) }));
   });
@@ -4963,6 +4966,7 @@ export function createApp(options: CreateAppOptions) {
       requireOperations().cycleLabels(
         params.data.cycleId,
         context.get('scope')?.operatingSiteId ?? null,
+        context.req.query('zone')?.trim() || undefined,
       ),
       requireOperations().getLabelSettings(),
     ]);

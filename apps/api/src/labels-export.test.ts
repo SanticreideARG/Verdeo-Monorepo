@@ -22,7 +22,11 @@ const settings: Pick<
   | 'fields'
   | 'fontFamily'
   | 'fontScale'
+  | 'labelGapMm'
   | 'labelsPerPage'
+  | 'sheetHeightMm'
+  | 'sheetMarginMm'
+  | 'sheetWidthMm'
   | 'showBorders'
   | 'uppercaseName'
 > = {
@@ -31,7 +35,11 @@ const settings: Pick<
   fields: ['tamano', 'numero'],
   fontFamily: 'system',
   fontScale: 100,
+  labelGapMm: 4,
   labelsPerPage: 8,
+  sheetHeightMm: 297,
+  sheetMarginMm: 12,
+  sheetWidthMm: 210,
   showBorders: true,
   uppercaseName: false,
 };

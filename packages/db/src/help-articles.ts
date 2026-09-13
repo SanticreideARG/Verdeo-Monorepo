@@ -99,7 +99,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Cierre de pedidos y producción',
   },
   {
-    body: 'El botón "Generar etiquetas" abre una página imprimible con una etiqueta por unidad física del ciclo (o de un pedido puntual, desde su detalle).\n\nEl formato de hoja, qué dice cada etiqueta y el fondo se configuran una sola vez en [Ajustes → Etiquetas](/app/ajustes/etiquetas). Más detalle en [[ciclo-4-etiquetas]].',
+    body: 'La sección "Etiquetas" arma la tanda: elegís el período y, si querés, una zona; dice cuántas etiquetas y cuántas hojas salen, y muestra a la derecha la hoja completa y una etiqueta a tamaño real antes de imprimir.\n\nEl tamaño de hoja, los márgenes, cuántas entran, qué dice cada etiqueta y el fondo se configuran en la misma pantalla: [Ir a Etiquetas](/app/etiquetas). Más detalle en [[ciclo-4-etiquetas]].',
     category: 'Cocina',
     key: 'cocina-etiquetas',
     ordinal: 1,
@@ -260,7 +260,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Paso 3 — Cerrar y consolidar producción',
   },
   {
-    body: 'Desde "Cocina" → "Generar etiquetas" sale una hoja imprimible con una etiqueta por unidad física de todo el ciclo. Es el camino normal: por lote, no de a un pedido.\n\nQué dice cada etiqueta se configura una sola vez en [Ajustes → Etiquetas](/app/ajustes/etiquetas): el nombre del cliente va siempre, y elegís qué más se imprime (tamaño, variedad, unidad, número de pedido, zona, fecha, indicaciones alimentarias). También la tipografía, el tamaño de letra, la alineación y el fondo.\n\nSi el fondo no sale impreso, revisá que en el diálogo de impresión estén activados los gráficos de fondo.\n\nDesde la ficha de un pedido podés reimprimir sólo esas etiquetas, para una vianda suelta.\n\nSigue: [[ciclo-5-rutas]]',
+    body: 'En "Etiquetas" sale una hoja imprimible con una etiqueta por unidad física. Podés imprimir el ciclo entero o sólo una zona, que es como cocina termina de producir.\n\nQué dice cada etiqueta se configura en la sección [Etiquetas](/app/etiquetas): el nombre del cliente va siempre, y elegís qué más se imprime (tamaño, variedad, unidad, número de pedido, zona, fecha, indicaciones alimentarias). También la hoja y sus márgenes, la tipografía, el tamaño de letra, la alineación y el fondo. La vista previa de la derecha muestra la etiqueta a tamaño real, así que se puede comprobar sin gastar papel.\n\nSi el fondo no sale impreso, revisá que en el diálogo de impresión estén activados los gráficos de fondo.\n\nDesde la ficha de un pedido podés reimprimir sólo esas etiquetas, para una vianda suelta.\n\nNo hay un PDF generado por el sistema: se abre la hoja lista para imprimir y el navegador la manda a la impresora o la guarda como PDF desde su propio diálogo.\n\nSigue: [[ciclo-5-rutas]]',
     category: 'Ciclo semanal',
     key: 'ciclo-4-etiquetas',
     ordinal: 4,

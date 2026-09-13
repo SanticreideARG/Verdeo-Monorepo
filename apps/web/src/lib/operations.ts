@@ -319,6 +319,11 @@ export interface Label {
 export interface LabelSettings {
   alignment: 'center' | 'left';
   backgroundImageUrl: string | null;
+  /** La hoja, en milímetros: de acá sale el lienzo real de cada etiqueta. */
+  labelGapMm: number;
+  sheetHeightMm: number;
+  sheetMarginMm: number;
+  sheetWidthMm: number;
   /** Qué campos, además del nombre, se imprimen — en el orden en que salen. */
   fields: ('entrega' | 'numero' | 'restricciones' | 'tamano' | 'unidad' | 'variedad' | 'zona')[];
   fontFamily: 'condensed' | 'mono' | 'rounded' | 'serif' | 'system';

@@ -340,7 +340,11 @@ const LABEL_SETTINGS_FALLBACK = {
   fontFamily: 'system',
   fontScale: 100,
   id: null,
+  labelGapMm: 4,
   labelsPerPage: 8,
+  sheetHeightMm: 297,
+  sheetMarginMm: 12,
+  sheetWidthMm: 210,
   showBorders: true,
   updatedAt: null,
   updatedByUserId: null,
@@ -4276,7 +4280,9 @@ export class PostgresOperationsService {
   // to a single order for the per-order "reimprimir etiquetas" flow; `cycleId`/`operatingSiteId`
   // narrow to a whole production run, same bounding as ADR-028.
   private async loadKitchenLines(
-    filter: { cycleId: string; operatingSiteId?: string | null | undefined } | { orderId: string },
+    filter:
+      | { cycleId: string; operatingSiteId?: string | null | undefined; zone?: string | undefined }
+      | { orderId: string },
   ): Promise<readonly KitchenSourceLine[]> {
     const lines = await this.database
       .select({
@@ -4309,6 +4315,9 @@ export class PostgresOperationsService {
               ...(filter.operatingSiteId
                 ? [eq(orders.operatingSiteId, filter.operatingSiteId)]
                 : []),
+              // Imprimir por zona: cocina termina una zona entera y la etiqueta de esa tanda es lo
+              // único que hace falta, no las ciento cincuenta del ciclo.
+              ...(filter.zone ? [eq(customerAddresses.operationalZone, filter.zone)] : []),
               inArray(orders.status, ['CONFIRMED', 'READY', 'DELIVERED']),
             ),
       )
@@ -4372,14 +4381,16 @@ export class PostgresOperationsService {
 
   // --- Kitchen labels: one entry per physical unit, one per order/cycle print run ----------------
 
-  public async cycleLabels(cycleId: string, operatingSiteId?: string | null) {
+  public async cycleLabels(cycleId: string, operatingSiteId?: string | null, zone?: string) {
     const [cycle] = await this.database
       .select({ id: salesCycles.id })
       .from(salesCycles)
       .where(eq(salesCycles.id, cycleId))
       .limit(1);
     if (!cycle) throw new OperationsNotFoundError('Sales cycle not found');
-    return buildLabels(await this.loadKitchenLines({ cycleId, operatingSiteId }));
+    return buildLabels(
+      await this.loadKitchenLines({ cycleId, operatingSiteId, ...(zone ? { zone } : {}) }),
+    );
   }
 
   public async orderLabels(orderId: string) {
@@ -4405,7 +4416,11 @@ export class PostgresOperationsService {
       fields?: readonly string[] | undefined;
       fontFamily?: string | undefined;
       fontScale?: number | undefined;
+      labelGapMm?: number | undefined;
       labelsPerPage: number;
+      sheetHeightMm?: number | undefined;
+      sheetMarginMm?: number | undefined;
+      sheetWidthMm?: number | undefined;
       showBorders?: boolean | undefined;
       uppercaseName?: boolean | undefined;
     },
@@ -4429,7 +4444,11 @@ export class PostgresOperationsService {
           fields: (input.fields ?? parseLabelFields(existing?.fields)).join(','),
           fontFamily: input.fontFamily ?? existing?.fontFamily ?? 'system',
           fontScale: input.fontScale ?? existing?.fontScale ?? 100,
+          labelGapMm: input.labelGapMm ?? existing?.labelGapMm ?? 4,
           labelsPerPage: input.labelsPerPage,
+          sheetHeightMm: input.sheetHeightMm ?? existing?.sheetHeightMm ?? 297,
+          sheetMarginMm: input.sheetMarginMm ?? existing?.sheetMarginMm ?? 12,
+          sheetWidthMm: input.sheetWidthMm ?? existing?.sheetWidthMm ?? 210,
           showBorders: input.showBorders ?? existing?.showBorders ?? true,
           updatedByUserId: context.actorUserId ?? null,
           uppercaseName: input.uppercaseName ?? existing?.uppercaseName ?? false,

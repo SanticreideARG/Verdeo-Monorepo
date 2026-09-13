@@ -6682,3 +6682,74 @@ textarea.sr-only {
   overflow: hidden;
 }
 
+/*
+ * Etiquetas: los controles a la izquierda, la vista previa a la derecha.
+ *
+ * La previa es lo que evita gastar una hoja para descubrir que el nombre no entra, así que en
+ * escritorio queda fija a la vista mientras se toca cualquier control de la izquierda.
+ */
+.labels-layout {
+  display: grid;
+  gap: 1.25rem;
+  align-items: start;
+}
+@media (min-width: 1100px) {
+  .labels-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(20rem, 26rem);
+  }
+  .labels-preview {
+    position: sticky;
+    top: 1rem;
+  }
+}
+.labels-preview {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+.labels-preview-card {
+  display: grid;
+  gap: 0.4rem;
+  padding: 1rem;
+  border: 1px solid var(--db-border, rgba(23, 76, 60, 0.15));
+  border-radius: 16px;
+  background: var(--db-surface, #fff);
+}
+.labels-preview-title {
+  margin: 0;
+  color: var(--db-text, var(--color-forest));
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+/* La hoja en miniatura: proporciones reales, con la grilla que sale impresa. */
+.labels-sheet {
+  display: grid;
+  width: 100%;
+  margin-top: 0.35rem;
+  border: 1px solid var(--db-border, rgba(23, 76, 60, 0.2));
+  border-radius: 4px;
+  background: #fff;
+}
+.labels-sheet-cell {
+  border: 1px dashed rgba(23, 76, 60, 0.35);
+  border-radius: 2px;
+  background-position: center;
+  background-size: cover;
+}
+/* Una celda que en esta tanda no se va a usar: la hoja sale con ese lugar en blanco. */
+.labels-sheet-cell:not(.is-used) {
+  opacity: 0.25;
+}
+/*
+ * La etiqueta a tamaño real. Va en milímetros —los mismos que el navegador usa al imprimir— y no
+ * escalada a la caja: el punto es poder apoyar la etiqueta impresa contra la pantalla.
+ */
+.labels-real-scale {
+  display: flex;
+  justify-content: center;
+  overflow: auto;
+  padding: 0.5rem;
+  border-radius: 10px;
+  background: repeating-conic-gradient(rgba(0, 0, 0, 0.04) 0% 25%, transparent 0% 50%) 50% / 16px
+    16px;
+}

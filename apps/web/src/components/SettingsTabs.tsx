@@ -29,7 +29,6 @@ const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     tabs: [
       { href: '/app/ajustes/zonas', label: 'Zonas geográficas', permission: 'sites.read' },
       { href: '/app/ajustes/menu', label: 'Menú personalizado', permission: 'production.read' },
-      { href: '/app/ajustes/etiquetas', label: 'Etiquetas', permission: 'production.read' },
       { href: '/app/ajustes/pagos', label: 'Métodos de pago', permission: 'payments.read' },
     ],
   },

@@ -125,6 +125,12 @@ export const labelSettings = pgTable(
   {
     id: uuid('id').defaultRandom().primaryKey(),
     labelsPerPage: integer('labels_per_page').default(8).notNull(),
+    // La hoja, en milímetros: A4 por defecto, con 12 mm de margen y 4 mm entre etiquetas, que es
+    // exactamente lo que estaba escrito a mano en el generador de la impresión.
+    sheetWidthMm: integer('sheet_width_mm').default(210).notNull(),
+    sheetHeightMm: integer('sheet_height_mm').default(297).notNull(),
+    sheetMarginMm: integer('sheet_margin_mm').default(12).notNull(),
+    labelGapMm: integer('label_gap_mm').default(4).notNull(),
     backgroundImageUrl: text('background_image_url'),
     // Tipografía y tamaño de la etiqueta impresa. Se guardan como texto porque van derecho a un
     // `font-family` y a un multiplicador de CSS: acotar el juego con un enum en la base obligaría a
