@@ -295,10 +295,11 @@ export function KitchenPage() {
           </p>
         ) : null}
 
-        {loading ? (
+        {loading && menus.length === 0 ? (
           <p className="mt-6 text-ink-muted">Cargando menús…</p>
         ) : (
-          <>
+          // Cambiar de ciclo atenúa lo que hay en vez de vaciarlo.
+          <div className={loading ? 'is-refreshing' : undefined}>
             <div className="operation-card mt-6 flex flex-col gap-3 sm:flex-row sm:items-end">
               <label className="field grow">
                 Ciclo
@@ -600,7 +601,7 @@ export function KitchenPage() {
                 Elegí un ciclo para calcular la producción desde pedidos confirmados.
               </p>
             )}
-          </>
+          </div>
         )}
       </section>
     </DashboardShell>

@@ -176,12 +176,14 @@ export function AuditLogPage() {
           </button>
         </form>
 
-        {loading ? (
+        {/* Con contenido a la vista, cargar lo atenúa en vez de vaciarlo: cambiar un filtro no
+            tiene por qué hacer desaparecer la lista que se estaba leyendo. */}
+        {loading && events.length === 0 ? (
           <p className="mt-6 text-ink-muted">Cargando…</p>
         ) : events.length === 0 ? (
           <p className="mt-6 text-ink-muted">No hay eventos para estos filtros.</p>
         ) : (
-          <>
+          <div className={loading ? 'is-refreshing' : undefined}>
             <ul className="mt-6 grid gap-2">
               {events.map((event) => (
                 <li
@@ -245,7 +247,7 @@ export function AuditLogPage() {
                 {loadingMore ? 'Cargando…' : 'Cargar más'}
               </button>
             ) : null}
-          </>
+          </div>
         )}
       </section>
     </DashboardShell>

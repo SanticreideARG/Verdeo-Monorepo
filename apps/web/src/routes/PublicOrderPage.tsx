@@ -38,6 +38,7 @@ export function PublicOrderPage() {
   const [sites, setSites] = useState<{ displayName: string; slug: string }[]>([]);
   const [siteSlug, setSiteSlug] = useState(() => searchParams.get('ciudad') ?? '');
   const [selectedDishes, setSelectedDishes] = useState<string[]>([]);
+  const [units, setUnits] = useState(1);
   /*
    * Los métodos de pago configurados en Ajustes.
    *
@@ -380,7 +381,14 @@ export function PublicOrderPage() {
               </fieldset>
               <label className="field">
                 Cantidad de unidades
-                <input name="quantityUnits" type="number" min="1" defaultValue="1" required />
+                <input
+                  min="1"
+                  name="quantityUnits"
+                  onChange={(event) => setUnits(Math.max(1, Number(event.target.value) || 1))}
+                  required
+                  type="number"
+                  value={units}
+                />
               </label>
               <div className="field">
                 Fecha de entrega
@@ -466,9 +474,19 @@ export function PublicOrderPage() {
                 {message}
               </p>
             ) : null}
-            <button className="button button-primary button-large mt-6 w-full" type="submit">
-              Confirmar pedido
-            </button>
+            {/* El total y el botón, juntos y a mano: el formulario es largo y en el teléfono el
+                precio quedaba arriba de todo, fuera de la pantalla, justo cuando hay que decidir. */}
+            <div className="form-actions form-actions-sticky mt-6">
+              {offering ? (
+                <p className="form-actions-total">
+                  Total{' '}
+                  <strong>{formatMoney(offering.unitPriceMinor * units, offering.currency)}</strong>
+                </p>
+              ) : null}
+              <button className="button button-primary button-large" type="submit">
+                Confirmar pedido
+              </button>
+            </div>
           </form>
         ) : (
           <section className="rounded-3xl bg-white p-8">

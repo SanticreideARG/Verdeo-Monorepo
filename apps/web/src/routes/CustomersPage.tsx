@@ -947,11 +947,19 @@ export function CustomersPage() {
                             </i>
                           </div>
                           <h3>{address.writtenAddress}</h3>
-                          <p>
-                            {[address.unit, address.city, address.sector, address.operationalZone]
-                              .filter(Boolean)
-                              .join(' · ') || 'Sin datos territoriales adicionales'}
-                          </p>
+                          {/* Un renglón vacío no se anuncia: decía "Sin datos territoriales
+                              adicionales", que informa la ausencia de un campo opcional. Lo que sí
+                              importa —un domicilio sin geocodificar, que deja el pedido afuera del
+                              reparto— ya lo dice el estado de arriba. */}
+                          {[address.unit, address.city, address.sector, address.operationalZone]
+                            .filter(Boolean)
+                            .join(' · ') ? (
+                            <p>
+                              {[address.unit, address.city, address.sector, address.operationalZone]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </p>
+                          ) : null}
                           {address.accessNotes ? (
                             <p className="crm-address-note">Acceso: {address.accessNotes}</p>
                           ) : null}

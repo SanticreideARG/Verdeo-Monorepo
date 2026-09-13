@@ -250,7 +250,12 @@ semana en la ficha del pedido, y el vacío de "Ver pedidos" con botón para limp
       medio llenar con un cliente de Neuquén no se guarda como pedido de Mendoza—, pero ya no se
       vuelve a bajar la aplicación ni a revalidar la sesión.
 - [ ] Agrupar la navegación por momento del ciclo semanal y no por módulo.
-- [ ] Barra fija con guardar y total en formularios largos, en pantallas angostas.
+- [x] **Barra fija con guardar y total** en los dos formularios de pedido, en pantallas angostas.
+      En el panel se apoya arriba de la barra de accesos del turno para no taparla.
+- [x] **Cargar atenúa lo que hay en vez de vaciarlo** (`.is-refreshing`): auditoría, cocina y
+      etiquetas conservan la lista mientras llegan los datos del filtro nuevo.
+- [x] **Los vacíos no se anuncian**: la ficha de un domicilio ya no escribe "Sin datos territoriales
+      adicionales"; lo que sí importa —sin geocodificar— lo dice el estado de arriba.
 - [ ] Búsqueda global con `Ctrl+K`. No urgente: vale cuando el equipo pase de tres personas.
 - [x] **Imágenes de marca livianas** (`lib/images.ts`): logos de menú, ícono, logo del hero y
       lechuza en WebP al doble del tamaño en que se muestran. La PWA ya no precarga los originales

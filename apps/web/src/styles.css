@@ -6789,3 +6789,62 @@ textarea.sr-only {
   justify-content: center;
   gap: 0.5rem;
 }
+
+/*
+ * Lo que ya estaba en pantalla mientras llega lo nuevo.
+ *
+ * Antes cambiar un filtro vaciaba la lista y la volvía a llenar: se pierde el lugar y se percibe
+ * más lento aunque tarde lo mismo. Atenuado y sin responder a los clics se entiende que está en
+ * camino, y el renglón que se estaba leyendo sigue ahí.
+ */
+.is-refreshing {
+  opacity: 0.55;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .is-refreshing {
+    transition: none;
+  }
+}
+
+/*
+ * La barra de guardar, a mano en el teléfono.
+ *
+ * Los formularios de pedido son largos: después de elegir los cinco platos de un Intuitivo, el
+ * botón quedaba a varias pantallas de distancia, y el total —el otro dato que hace falta para
+ * decidir— arriba de todo. En pantallas angostas los dos quedan pegados abajo mientras se completa.
+ */
+.form-actions-total {
+  margin: 0;
+  margin-right: auto;
+  color: var(--color-ink-muted, #5b6b64);
+  font-size: 0.85rem;
+}
+.form-actions-total strong {
+  display: block;
+  color: var(--color-forest);
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 680px) {
+  .form-actions-sticky {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    align-items: center;
+    /* Ocupa el ancho de la tarjeta que la contiene, para que el fondo llegue a los dos bordes. */
+    margin-inline: -1rem;
+    margin-bottom: -1rem;
+    padding: 0.7rem 1rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--border-hairline, rgba(23, 76, 60, 0.15));
+    background: var(--db-surface-solid, #fff);
+  }
+  .form-actions-sticky .button {
+    flex: 1;
+  }
+  /* En el panel, arriba de la barra de accesos del turno, que también vive abajo. */
+  .dashboard-shell .form-actions-sticky {
+    bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  }
+}

@@ -133,6 +133,8 @@ export function OrderIntakePage() {
   const [selectedMenuId, setSelectedMenuId] = useState('');
   const [selectedOfferingId, setSelectedOfferingId] = useState('');
   const [selectedDishes, setSelectedDishes] = useState<string[]>([]);
+  /* Las unidades, en el estado: sin esto no hay total que mostrar al pie del formulario. */
+  const [units, setUnits] = useState(1);
   // Número del pedido recién guardado: mientras haya uno, el diálogo pregunta qué sigue.
   const [savedNumber, setSavedNumber] = useState<string | null>(null);
 
@@ -1000,7 +1002,14 @@ export function OrderIntakePage() {
               <input name="offeringId" type="hidden" value={selectedOfferingId} />
               <label className="field">
                 Unidades
-                <input defaultValue="1" min="1" name="quantityUnits" required type="number" />
+                <input
+                  min="1"
+                  name="quantityUnits"
+                  onChange={(event) => setUnits(Math.max(1, Number(event.target.value) || 1))}
+                  required
+                  type="number"
+                  value={units}
+                />
               </label>
               <div className="field">
                 Entrega
@@ -1100,7 +1109,21 @@ export function OrderIntakePage() {
               </p>
             ) : null}
 
-            <div className="form-actions mt-4">
+            {/* En el teléfono queda fija abajo: el formulario es largo y, después de elegir los
+                cinco platos de un Intuitivo, guardar quedaba a varias pantallas de distancia. El
+                total va acá por lo mismo — era el otro dato que había que ir a buscar. */}
+            <div className="form-actions form-actions-sticky mt-4">
+              {selectedOffering ? (
+                <p className="form-actions-total">
+                  Total{' '}
+                  <strong>
+                    {formatMoney(
+                      selectedOffering.unitPriceMinor * units,
+                      selectedOffering.currency,
+                    )}
+                  </strong>
+                </p>
+              ) : null}
               <button className="button button-primary" type="submit">
                 Registrar borrador
               </button>
@@ -1115,6 +1138,7 @@ export function OrderIntakePage() {
                   setCustomerResults([]);
                   setSelectedOfferingId('');
                   setSelectedDishes([]);
+                  setUnits(1);
                 }}
                 type="button"
               >

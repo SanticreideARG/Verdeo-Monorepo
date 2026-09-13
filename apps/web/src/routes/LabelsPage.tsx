@@ -342,10 +342,10 @@ export function LabelsPage() {
           </p>
         ) : null}
 
-        {loading ? (
+        {loading && !settings ? (
           <p className="mt-6 text-ink-muted">Cargando…</p>
         ) : (
-          <div className="labels-layout mt-6">
+          <div className={`labels-layout mt-6 ${loading ? 'is-refreshing' : ''}`}>
             <div className="grid content-start gap-5">
               <div className="operation-card grid gap-4">
                 <p className="text-sm font-semibold text-forest">Qué imprimir</p>
