@@ -926,6 +926,7 @@ export const KitchenSummaryResponseSchema = z.object({
 // customerDisplayName is set only for composable (Intuitivo) units; a fixed variety's label never
 // carries a name, per the "solo nombre + variedad/tamaño" decision.
 export const LabelSchema = z.object({
+  composable: z.boolean(),
   customerDisplayName: z.string(),
   deliveryDate: z.iso.date(),
   deliveryZone: z.string().nullable(),
@@ -941,7 +942,28 @@ export const LabelListResponseSchema = z.object({ items: z.array(LabelSchema) })
 
 /** Las tipografías que la etiqueta puede usar. Se resuelven a un `font-family` en el HTML de
  * impresión: son familias de sistema, así que no dependen de descargar nada al imprimir. */
-export const LabelFontSchema = z.enum(['system', 'serif', 'mono', 'rounded', 'condensed']);
+/*
+ * Las tipografías de la etiqueta.
+ *
+ * Todas se resuelven a familias que el sistema ya tiene: la hoja se imprime sin depender de bajar
+ * una fuente, que en una cocina sin buena conexión es la diferencia entre imprimir y no imprimir.
+ * Cada valor es una intención ("manuscrita", "titular") y no una fuente concreta, así que la lista
+ * de respaldo puede cambiar sin migrar nada.
+ */
+export const LabelFontSchema = z.enum([
+  'system',
+  'serif',
+  'mono',
+  'rounded',
+  'condensed',
+  'humanist',
+  'grotesque',
+  'clasica',
+  'elegante',
+  'manuscrita',
+  'titular',
+  'maquina',
+]);
 
 /**
  * Todo lo que una etiqueta puede mostrar.
@@ -981,8 +1003,17 @@ export const LabelSettingsSchema = z.object({
   fields: z.array(LabelFieldSchema),
   fontFamily: LabelFontSchema,
   fontScale: z.number().int().min(60).max(200),
+  /*
+   * Qué tanto nombre lleva la etiqueta.
+   *
+   * `hideSurname` deja el nombre de pila y las iniciales. `nameOnlyForComposable` saca el nombre
+   * de todas menos las Intuitivo, que son las únicas donde hace falta: una vianda estándar se
+   * identifica por variedad y tamaño, pero dos Intuitivo del mismo tamaño son platos distintos.
+   */
+  hideSurname: z.boolean(),
   id: UuidSchema.nullable(),
   labelGapMm: z.number().int().min(0).max(20),
+  nameOnlyForComposable: z.boolean(),
   labelsPerPage: z.number().int().min(1).max(12),
   sheetHeightMm: z.number().int().min(80).max(600),
   sheetMarginMm: z.number().int().min(0).max(40),
@@ -999,7 +1030,9 @@ export const LabelSettingsUpdateRequestSchema = z.object({
   fields: z.array(LabelFieldSchema).max(7).optional(),
   fontFamily: LabelFontSchema.optional(),
   fontScale: z.number().int().min(60).max(200).optional(),
+  hideSurname: z.boolean().optional(),
   labelGapMm: z.number().int().min(0).max(20).optional(),
+  nameOnlyForComposable: z.boolean().optional(),
   labelsPerPage: z.number().int().min(1).max(12),
   sheetHeightMm: z.number().int().min(80).max(600).optional(),
   sheetMarginMm: z.number().int().min(0).max(40).optional(),

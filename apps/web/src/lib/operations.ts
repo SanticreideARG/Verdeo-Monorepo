@@ -319,14 +319,30 @@ export interface Label {
 export interface LabelSettings {
   alignment: 'center' | 'left';
   backgroundImageUrl: string | null;
+  /** Nombre de pila e iniciales, en vez del nombre completo. */
+  hideSurname: boolean;
   /** La hoja, en milímetros: de acá sale el lienzo real de cada etiqueta. */
   labelGapMm: number;
+  /** El nombre sólo en las Intuitivo, que son las que no se identifican por variedad y tamaño. */
+  nameOnlyForComposable: boolean;
   sheetHeightMm: number;
   sheetMarginMm: number;
   sheetWidthMm: number;
   /** Qué campos, además del nombre, se imprimen — en el orden en que salen. */
   fields: ('entrega' | 'numero' | 'restricciones' | 'tamano' | 'unidad' | 'variedad' | 'zona')[];
-  fontFamily: 'condensed' | 'mono' | 'rounded' | 'serif' | 'system';
+  fontFamily:
+    | 'clasica'
+    | 'condensed'
+    | 'elegante'
+    | 'grotesque'
+    | 'humanist'
+    | 'manuscrita'
+    | 'maquina'
+    | 'mono'
+    | 'rounded'
+    | 'serif'
+    | 'system'
+    | 'titular';
   /** Porcentaje sobre el tamaño base de la etiqueta, entre 60 y 200. */
   fontScale: number;
   id: string | null;

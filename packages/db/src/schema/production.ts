@@ -131,6 +131,10 @@ export const labelSettings = pgTable(
     sheetHeightMm: integer('sheet_height_mm').default(297).notNull(),
     sheetMarginMm: integer('sheet_margin_mm').default(12).notNull(),
     labelGapMm: integer('label_gap_mm').default(4).notNull(),
+    /** Nombre de pila e iniciales, en vez del nombre completo. */
+    hideSurname: boolean('hide_surname').default(false).notNull(),
+    /** El nombre sólo en las Intuitivo, que son las que no se identifican por variedad y tamaño. */
+    nameOnlyForComposable: boolean('name_only_for_composable').default(false).notNull(),
     backgroundImageUrl: text('background_image_url'),
     // Tipografía y tamaño de la etiqueta impresa. Se guardan como texto porque van derecho a un
     // `font-family` y a un multiplicador de CSS: acotar el juego con un enum en la base obligaría a

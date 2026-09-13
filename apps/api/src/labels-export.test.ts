@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { buildLabelsPrintHtml } from './labels-export.js';
 
 const label: Label = {
+  composable: false,
   customerDisplayName: 'Ana Isabella Vega',
   deliveryDate: '2026-08-28',
   deliveryZone: 'Centro',
@@ -22,7 +23,9 @@ const settings: Pick<
   | 'fields'
   | 'fontFamily'
   | 'fontScale'
+  | 'hideSurname'
   | 'labelGapMm'
+  | 'nameOnlyForComposable'
   | 'labelsPerPage'
   | 'sheetHeightMm'
   | 'sheetMarginMm'
@@ -35,7 +38,9 @@ const settings: Pick<
   fields: ['tamano', 'numero'],
   fontFamily: 'system',
   fontScale: 100,
+  hideSurname: false,
   labelGapMm: 4,
+  nameOnlyForComposable: false,
   labelsPerPage: 8,
   sheetHeightMm: 297,
   sheetMarginMm: 12,
@@ -49,6 +54,30 @@ function render(overrides: Partial<typeof settings> = {}, one: Label = label): s
 }
 
 describe('buildLabelsPrintHtml', () => {
+  it('recorta el apellido cuando se pidió sin apellido', () => {
+    const html = render({ hideSurname: true });
+
+    expect(html).toContain('Ana I. V.');
+    expect(html).not.toContain('Ana Isabella Vega');
+  });
+
+  it('saca el nombre de las estándar y lo deja en las Intuitivo', () => {
+    // Una vianda estándar se identifica por variedad y tamaño; dos Intuitivo del mismo tamaño son
+    // combinaciones de platos distintas, así que ahí el nombre es lo único que las separa.
+    const estandar = render({ nameOnlyForComposable: true });
+    const intuitivo = render({ nameOnlyForComposable: true }, { ...label, composable: true });
+
+    expect(estandar).not.toContain('Ana');
+    expect(intuitivo).toContain('Ana Isabella Vega');
+  });
+
+  it('combina las dos: iniciales en las Intuitivo, sin nombre en el resto', () => {
+    const opciones = { hideSurname: true, nameOnlyForComposable: true };
+
+    expect(render(opciones)).not.toContain('Ana');
+    expect(render(opciones, { ...label, composable: true })).toContain('Ana I. V.');
+  });
+
   it('imprime el nombre aunque no se haya elegido ningún campo', () => {
     const html = render({ fields: [] });
 

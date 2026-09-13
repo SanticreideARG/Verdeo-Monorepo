@@ -1627,6 +1627,7 @@ describe('API foundation', () => {
     const sampleLabels = [
       {
         customerDisplayName: 'Rosa',
+        composable: false,
         deliveryDate: '2026-08-28',
         deliveryZone: 'Centro',
         dietaryInstructions: [],
@@ -1637,6 +1638,7 @@ describe('API foundation', () => {
         variantName: '250',
       },
       {
+        composable: true,
         customerDisplayName: 'Lola',
         deliveryDate: '2026-08-28',
         deliveryZone: null,
@@ -1654,8 +1656,10 @@ describe('API foundation', () => {
       fields: ['tamano', 'numero'],
       fontFamily: 'system',
       fontScale: 100,
+      hideSurname: false,
       id: null,
       labelGapMm: 4,
+      nameOnlyForComposable: false,
       labelsPerPage: 8,
       sheetHeightMm: 297,
       sheetMarginMm: 12,

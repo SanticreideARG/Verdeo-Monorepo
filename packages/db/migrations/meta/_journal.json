@@ -330,6 +330,13 @@
       "when": 1789255029921,
       "tag": "0046_amusing_skreet",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1789267474496,
+      "tag": "0047_striped_havok",
+      "breakpoints": true
     }
   ]
 }

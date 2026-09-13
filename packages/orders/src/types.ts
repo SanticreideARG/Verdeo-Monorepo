@@ -67,6 +67,8 @@ export interface KitchenSummary {
  * viaja hasta acá no se puede activar después sin tocar el backend.
  */
 export interface Label {
+  /** Si la vianda es un Intuitivo: sin el nombre no se sabe de quién es esa combinación de platos. */
+  composable: boolean;
   customerDisplayName: string;
   deliveryDate: string;
   deliveryZone: string | null;

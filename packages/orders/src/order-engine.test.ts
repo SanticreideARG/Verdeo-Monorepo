@@ -226,9 +226,10 @@ describe('order engine', () => {
     ]);
 
     expect(labels).toHaveLength(3);
-    // El nombre va en todas y no sólo en las del Intuitivo: es lo que se lee para saber a quién va
-    // cada vianda, así que una etiqueta sin nombre no sirve para repartir.
+    // El nombre viaja en todas: qué tanto se imprime —completo, con iniciales o nada— lo decide el
+    // formato de la etiqueta, y para eso cada una dice además si es un Intuitivo.
     const rosa = {
+      composable: false,
       customerDisplayName: 'Rosa',
       deliveryDate: '2026-08-28',
       deliveryZone: 'Centro',
@@ -246,6 +247,7 @@ describe('order engine', () => {
     ]);
     // Una sola unidad igual se numera, y el renderizador decide no imprimirla.
     expect(labels.find((label) => label.orderPublicNumber === 'N00455')).toEqual({
+      composable: true,
       customerDisplayName: 'Lola',
       deliveryDate: '2026-08-28',
       deliveryZone: 'Centro',

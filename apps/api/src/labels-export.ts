@@ -1,5 +1,23 @@
 import type { Label, LabelField, LabelSettings } from '@verdeo/contracts';
-import { labelCanvas } from '@verdeo/orders';
+import { labelCanvas, maskSurname } from '@verdeo/orders';
+
+/**
+ * Qué nombre lleva esta etiqueta, según lo que se haya parametrizado.
+ *
+ * Una vianda estándar se identifica por variedad y tamaño; una Intuitivo no, porque dos del mismo
+ * tamaño son combinaciones de platos distintas y sin el nombre no hay forma de saber cuál es cuál.
+ * Por eso "sólo en las Intuitivo" es una opción y no un descuido: saca el dato personal de las
+ * etiquetas donde no hace falta y lo conserva donde sí.
+ *
+ * Cadena vacía significa que la etiqueta sale sin renglón de nombre, no con uno en blanco.
+ */
+function labelName(
+  label: Pick<Label, 'composable' | 'customerDisplayName'>,
+  settings: Pick<LabelSettings, 'hideSurname' | 'nameOnlyForComposable'>,
+): string {
+  if (settings.nameOnlyForComposable && !label.composable) return '';
+  return settings.hideSurname ? maskSurname(label.customerDisplayName) : label.customerDisplayName;
+}
 
 /**
  * Same adapter choice as production-export.ts: "PDF" is a print-ready HTML page, not a generated
@@ -21,11 +39,18 @@ export function labelsExportFilenameBase(scopeLabel: string): string {
 
 /** Familias de sistema: la etiqueta se imprime sin depender de descargar una fuente. */
 const FONT_STACKS: Record<LabelSettings['fontFamily'], string> = {
+  clasica: '"Times New Roman", Times, "Liberation Serif", serif',
   condensed: '"Arial Narrow", "Roboto Condensed", "Liberation Sans Narrow", sans-serif',
+  elegante: 'Garamond, "Palatino Linotype", Palatino, "Book Antiqua", serif',
+  grotesque: '"Trebuchet MS", "Segoe UI", Tahoma, sans-serif',
+  humanist: 'Verdana, Geneva, "DejaVu Sans", sans-serif',
+  manuscrita: '"Segoe Script", "Brush Script MT", "Comic Sans MS", cursive',
+  maquina: '"Courier New", Courier, "Liberation Mono", monospace',
   mono: 'ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace',
   rounded: '"SF Pro Rounded", "Nunito", "Segoe UI", system-ui, sans-serif',
   serif: 'Georgia, "Times New Roman", serif',
   system: 'system-ui, sans-serif',
+  titular: 'Impact, Haettenschweiler, "Arial Black", sans-serif',
 };
 
 function shortDate(iso: string): string {
@@ -74,7 +99,9 @@ export function buildLabelsPrintHtml(
     | 'fields'
     | 'fontFamily'
     | 'fontScale'
+    | 'hideSurname'
     | 'labelGapMm'
+    | 'nameOnlyForComposable'
     | 'labelsPerPage'
     | 'sheetHeightMm'
     | 'sheetMarginMm'
@@ -118,9 +145,8 @@ export function buildLabelsPrintHtml(
   const fontStack = FONT_STACKS[settings.fontFamily] ?? FONT_STACKS.system;
 
   /*
-   * El nombre encabeza siempre y no se puede apagar: es lo único que responde de quién es la vianda,
-   * que es la pregunta que la etiqueta existe para contestar. Lo demás sale de Ajustes, en el orden
-   * en que se guardó.
+   * El nombre encabeza la etiqueta. Cuánto nombre —completo, con iniciales, o ninguno— lo decide
+   * el formato; el resto de los campos sale en el orden en que se guardaron.
    */
   const cards = labels
     .map((label) => {
@@ -131,8 +157,9 @@ export function buildLabelsPrintHtml(
           return value === null ? '' : `<p class="${spec.weight}">${escape(value)}</p>`;
         })
         .join('');
+      const name = labelName(label, settings);
       return `<div class="label">
-        <p class="customer">${escape(label.customerDisplayName)}</p>
+        ${name ? `<p class="customer">${escape(name)}</p>` : ''}
         ${extras}
       </div>`;
     })

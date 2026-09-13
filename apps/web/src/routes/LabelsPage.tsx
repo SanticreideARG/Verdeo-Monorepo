@@ -6,11 +6,13 @@ import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus
 import { PeriodPicker } from '../components/PeriodPicker.js';
 import { apiRequest } from '../lib/api.js';
 import { labelCanvas, SHEET_PRESETS } from '../lib/labelSheet.js';
+import { maskSurname } from '../lib/maskName.js';
 import { errorMessage, type LabelSettings, type WeeklyMenu } from '../lib/operations.js';
 import { currentPeriod, periodsFromMenus, type Period } from '../lib/periods.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 interface Label {
+  composable: boolean;
   customerDisplayName: string;
   deliveryDate: string;
   deliveryZone: string | null;
@@ -27,18 +29,34 @@ const LABELS_PER_PAGE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 /** Familias de sistema: la etiqueta se imprime sin depender de descargar una fuente. */
 const FONT_OPTIONS = [
   { key: 'system', label: 'Del sistema' },
+  { key: 'humanist', label: 'Legible (Verdana)' },
+  { key: 'grotesque', label: 'Neutra (Trebuchet)' },
   { key: 'rounded', label: 'Redondeada' },
-  { key: 'serif', label: 'Con serifa' },
-  { key: 'condensed', label: 'Condensada' },
+  { key: 'condensed', label: 'Condensada · entra más texto' },
+  { key: 'titular', label: 'Titular · bien gruesa' },
+  { key: 'serif', label: 'Con serifa (Georgia)' },
+  { key: 'clasica', label: 'Clásica (Times)' },
+  { key: 'elegante', label: 'Elegante (Garamond)' },
+  { key: 'manuscrita', label: 'Manuscrita' },
+  { key: 'maquina', label: 'Máquina de escribir' },
   { key: 'mono', label: 'Monoespaciada' },
 ] as const;
 
+/* Las mismas listas de respaldo que usa la impresión (apps/api/src/labels-export.ts): la vista
+   previa tiene que mostrar la fuente que va a salir en el papel. */
 const FONT_STACKS: Record<LabelSettings['fontFamily'], string> = {
-  condensed: '"Arial Narrow", sans-serif',
-  mono: 'ui-monospace, monospace',
-  rounded: '"Nunito", system-ui, sans-serif',
-  serif: 'Georgia, serif',
+  clasica: '"Times New Roman", Times, "Liberation Serif", serif',
+  condensed: '"Arial Narrow", "Roboto Condensed", "Liberation Sans Narrow", sans-serif',
+  elegante: 'Garamond, "Palatino Linotype", Palatino, "Book Antiqua", serif',
+  grotesque: '"Trebuchet MS", "Segoe UI", Tahoma, sans-serif',
+  humanist: 'Verdana, Geneva, "DejaVu Sans", sans-serif',
+  manuscrita: '"Segoe Script", "Brush Script MT", "Comic Sans MS", cursive',
+  maquina: '"Courier New", Courier, "Liberation Mono", monospace',
+  mono: 'ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace',
+  rounded: '"SF Pro Rounded", "Nunito", "Segoe UI", system-ui, sans-serif',
+  serif: 'Georgia, "Times New Roman", serif',
   system: 'system-ui, sans-serif',
+  titular: 'Impact, Haettenschweiler, "Arial Black", sans-serif',
 };
 
 /**
@@ -64,6 +82,7 @@ const EMPHASISED = new Set<LabelField>(['tamano', 'variedad', 'restricciones']);
 
 /** Con qué se dibuja la vista previa cuando la tanda todavía no tiene etiquetas. */
 const SAMPLE: Label = {
+  composable: false,
   customerDisplayName: 'Ana Isabella Vega',
   deliveryDate: '2026-09-13',
   deliveryZone: 'Centro',
@@ -113,6 +132,8 @@ export function LabelsPage() {
   const [alignment, setAlignment] = useState<'center' | 'left'>('center');
   const [uppercaseName, setUppercaseName] = useState(false);
   const [showBorders, setShowBorders] = useState(true);
+  const [hideSurname, setHideSurname] = useState(false);
+  const [nameOnlyForComposable, setNameOnlyForComposable] = useState(false);
   const [sheetWidthMm, setSheetWidthMm] = useState(210);
   const [sheetHeightMm, setSheetHeightMm] = useState(297);
   const [sheetMarginMm, setSheetMarginMm] = useState(12);
@@ -147,6 +168,8 @@ export function LabelsPage() {
       setAlignment(body.alignment);
       setUppercaseName(body.uppercaseName);
       setShowBorders(body.showBorders);
+      setHideSurname(body.hideSurname);
+      setNameOnlyForComposable(body.nameOnlyForComposable);
       setSheetWidthMm(body.sheetWidthMm);
       setSheetHeightMm(body.sheetHeightMm);
       setSheetMarginMm(body.sheetMarginMm);
@@ -202,7 +225,9 @@ export function LabelsPage() {
         fields,
         fontFamily,
         fontScale,
+        hideSurname,
         labelGapMm,
+        nameOnlyForComposable,
         labelsPerPage,
         sheetHeightMm,
         sheetMarginMm,
@@ -286,6 +311,17 @@ export function LabelsPage() {
     : labels;
   const sheets = Math.ceil(selected.length / labelsPerPage);
   const sample = selected[0] ?? SAMPLE;
+  /*
+   * El nombre tal como va a salir. La misma regla que aplica la impresión
+   * (apps/api/src/labels-export.ts): sin nombre en las estándar cuando se pidió sólo en las
+   * Intuitivo, y con iniciales cuando se pidió sin apellido.
+   */
+  const previewName =
+    nameOnlyForComposable && !sample.composable
+      ? ''
+      : hideSurname
+        ? maskSurname(sample.customerDisplayName)
+        : sample.customerDisplayName;
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
@@ -487,8 +523,14 @@ export function LabelsPage() {
                       }
                       value={fontFamily}
                     >
+                      {/* Cada opción escrita con su propia fuente: elegir "Elegante" sin verla es
+                          adivinar, y la vista previa recién la muestra después de elegir. */}
                       {FONT_OPTIONS.map((option) => (
-                        <option key={option.key} value={option.key}>
+                        <option
+                          key={option.key}
+                          style={{ fontFamily: FONT_STACKS[option.key] }}
+                          value={option.key}
+                        >
                           {option.label}
                         </option>
                       ))}
@@ -527,6 +569,35 @@ export function LabelsPage() {
                   />
                   Recuadro de corte
                 </label>
+                <label className="label-switch">
+                  <input
+                    checked={hideSurname}
+                    disabled={!canWrite}
+                    onChange={(event) => setHideSurname(event.target.checked)}
+                    type="checkbox"
+                  />
+                  Sin apellido (nombre e iniciales)
+                </label>
+                <label className="label-switch">
+                  <input
+                    checked={nameOnlyForComposable}
+                    disabled={!canWrite}
+                    onChange={(event) => setNameOnlyForComposable(event.target.checked)}
+                    type="checkbox"
+                  />
+                  Nombre sólo en las Intuitivo
+                </label>
+                <p className="field-hint">
+                  {/* Dos interruptores que se combinan, y la combinación no es obvia: conviene
+                      decir qué va a salir en vez de dejar que se descubra imprimiendo. */}
+                  {nameOnlyForComposable
+                    ? hideSurname
+                      ? 'Las Intuitivo salen con nombre e iniciales; el resto, sin nombre.'
+                      : 'Las Intuitivo salen con el nombre completo; el resto, sin nombre.'
+                    : hideSurname
+                      ? 'Todas salen con nombre e iniciales.'
+                      : 'Todas salen con el nombre completo.'}
+                </p>
 
                 <div>
                   <p className="text-sm font-semibold text-forest">Fondo de etiqueta</p>
@@ -636,15 +707,17 @@ export function LabelsPage() {
                         : {}),
                     }}
                   >
-                    <p
-                      style={{
-                        fontSize: `${String(20 * (fontScale / 100))}px`,
-                        fontWeight: 700,
-                        textTransform: uppercaseName ? 'uppercase' : 'none',
-                      }}
-                    >
-                      {sample.customerDisplayName}
-                    </p>
+                    {previewName ? (
+                      <p
+                        style={{
+                          fontSize: `${String(20 * (fontScale / 100))}px`,
+                          fontWeight: 700,
+                          textTransform: uppercaseName ? 'uppercase' : 'none',
+                        }}
+                      >
+                        {previewName}
+                      </p>
+                    ) : null}
                     {fields.map((field) => {
                       const value = fieldValue(sample, field);
                       if (value === null) return null;

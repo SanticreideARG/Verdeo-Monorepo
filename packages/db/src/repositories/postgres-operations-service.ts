@@ -339,8 +339,10 @@ const LABEL_SETTINGS_FALLBACK = {
   backgroundImageUrl: null,
   fontFamily: 'system',
   fontScale: 100,
+  hideSurname: false,
   id: null,
   labelGapMm: 4,
+  nameOnlyForComposable: false,
   labelsPerPage: 8,
   sheetHeightMm: 297,
   sheetMarginMm: 12,
@@ -4416,7 +4418,9 @@ export class PostgresOperationsService {
       fields?: readonly string[] | undefined;
       fontFamily?: string | undefined;
       fontScale?: number | undefined;
+      hideSurname?: boolean | undefined;
       labelGapMm?: number | undefined;
+      nameOnlyForComposable?: boolean | undefined;
       labelsPerPage: number;
       sheetHeightMm?: number | undefined;
       sheetMarginMm?: number | undefined;
@@ -4444,7 +4448,10 @@ export class PostgresOperationsService {
           fields: (input.fields ?? parseLabelFields(existing?.fields)).join(','),
           fontFamily: input.fontFamily ?? existing?.fontFamily ?? 'system',
           fontScale: input.fontScale ?? existing?.fontScale ?? 100,
+          hideSurname: input.hideSurname ?? existing?.hideSurname ?? false,
           labelGapMm: input.labelGapMm ?? existing?.labelGapMm ?? 4,
+          nameOnlyForComposable:
+            input.nameOnlyForComposable ?? existing?.nameOnlyForComposable ?? false,
           labelsPerPage: input.labelsPerPage,
           sheetHeightMm: input.sheetHeightMm ?? existing?.sheetHeightMm ?? 297,
           sheetMarginMm: input.sheetMarginMm ?? existing?.sheetMarginMm ?? 12,

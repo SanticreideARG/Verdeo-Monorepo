@@ -1,0 +1,2 @@
+ALTER TABLE "label_settings" ADD COLUMN "hide_surname" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "label_settings" ADD COLUMN "name_only_for_composable" boolean DEFAULT false NOT NULL;

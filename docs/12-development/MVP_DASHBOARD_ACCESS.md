@@ -391,6 +391,12 @@ con entrada propia en el menú; `/app/ajustes/etiquetas` redirige y la pestaña 
   como imprime el navegador: se puede apoyar la etiqueta impresa contra la pantalla.
 - **La tanda** se elige por período y, opcionalmente, por zona (`?zone=` en los dos endpoints de
   etiquetas del ciclo). Cocina termina por zona, y esa es la tanda que se imprime.
+- **Cuánto nombre lleva la etiqueta** son dos interruptores que se combinan: `hide_surname` deja
+  nombre e iniciales, y `name_only_for_composable` saca el nombre de todas menos las Intuitivo
+  (migración 0047). Una vianda estándar se identifica por variedad y tamaño; dos Intuitivo del
+  mismo tamaño son combinaciones de platos distintas, así que ahí el nombre es lo único que las
+  separa. Con las dos activadas: Intuitivo con iniciales, el resto sin nombre. Para saberlo cada
+  etiqueta viaja con `composable`, y la pantalla enuncia la combinación en una línea.
 - **No hay PDF generado en el servidor**: se abre la hoja imprimible y el diálogo del navegador
   imprime o guarda como PDF. Meter una librería de PDF en la función sería el único modo de
   prometer un archivo, y el resultado con fondos de imagen es peor.
