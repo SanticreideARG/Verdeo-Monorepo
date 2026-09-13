@@ -15,6 +15,7 @@ import {
   type WeeklyMenu,
 } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { showToast } from '../lib/toast.js';
 
 function formText(form: FormData, key: string): string {
   const value = form.get(key);
@@ -137,7 +138,7 @@ export function KitchenPage() {
       return;
     }
     await navigator.clipboard.writeText(await response.text());
-    setMessage('Producción copiada. Pegala en el chat de cocina.');
+    showToast('Producción copiada. Pegala en el chat de cocina.');
   }
 
   async function downloadProduction(format: 'pdf' | 'xlsx') {
@@ -206,7 +207,7 @@ export function KitchenPage() {
       setMessage(await errorMessage(response));
       return;
     }
-    setMessage('Producción real informada.');
+    showToast('Producción real informada.');
     await loadSurplus(selectedMenu.cycle.id);
   }
 
@@ -289,7 +290,7 @@ export function KitchenPage() {
         </header>
 
         {message ? (
-          <p className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
+          <p className="screen-notice mt-5" role="alert">
             {message}
           </p>
         ) : null}
@@ -549,7 +550,7 @@ export function KitchenPage() {
                                 className="button button-secondary"
                                 onClick={() =>
                                   void copyWhatsAppText(selectedMenu?.cycle.id ?? '', kind).then(
-                                    () => setMessage('Texto copiado al portapapeles.'),
+                                    () => showToast('Texto copiado al portapapeles.'),
                                   )
                                 }
                                 type="button"

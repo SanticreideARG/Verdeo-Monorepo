@@ -6753,3 +6753,39 @@ textarea.sr-only {
   background: repeating-conic-gradient(rgba(0, 0, 0, 0.04) 0% 25%, transparent 0% 50%) 50% / 16px
     16px;
 }
+
+/*
+ * El renglón que pide una corrección.
+ *
+ * Antes las confirmaciones y los problemas compartían el mismo recuadro verde, así que se aprendía
+ * a ignorarlo y un error de verdad se leía como el "listo" de siempre. Ahora el éxito va al aviso
+ * flotante y acá queda sólo lo que hay que resolver: barra ámbar al costado, sin gritar.
+ *
+ * El color del texto se hereda a propósito: este renglón aparece tanto en el panel (con nueve temas,
+ * claros y oscuros) como en las pantallas públicas, y una tinta fija quedaba ilegible en la mitad.
+ */
+.screen-notice {
+  padding: 0.75rem 1rem;
+  border-left: 3px solid #b45309;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, #b45309 12%, transparent);
+  font-size: 0.875rem;
+}
+
+/* El vacío con salida: título, explicación y la acción que lo deshace o lo llena. */
+.empty-state-title {
+  margin: 0;
+  color: var(--db-text, var(--color-forest));
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.empty-state-body {
+  margin: 0.4rem auto 0;
+  max-width: 34rem;
+}
+.empty-state-action {
+  margin-top: 0.9rem;
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}

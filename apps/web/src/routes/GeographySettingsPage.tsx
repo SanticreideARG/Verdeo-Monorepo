@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { ActionButton } from '../components/ActionButton.js';
 import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { SettingsTabs } from '../components/SettingsTabs.js';
 import { BrandLoading } from '../components/BrandLoading.js';
 import { apiRequest } from '../lib/api.js';
 import { cachedProfile, rememberProfile } from '../lib/useDashboardProfile.js';
+import { showToast } from '../lib/toast.js';
 
 export interface OperatingSite {
   active: boolean;
@@ -206,7 +208,7 @@ export function GeographySettingsPage() {
     }
     const updated = (await response.json()) as GeographicZone;
     setZones((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-    setMessage('Datos de la zona actualizados.');
+    showToast('Datos de la zona actualizados.');
   }
 
   async function issueRepartidorToken(event: FormEvent<HTMLFormElement>) {
@@ -266,7 +268,7 @@ export function GeographySettingsPage() {
     const created = (await response.json()) as OperatingSite;
     setSiteDraft(emptySiteDraft);
     setSelectedSiteId(created.id);
-    setMessage(`Operación "${created.displayName}" creada.`);
+    showToast(`Operación "${created.displayName}" creada.`);
     await loadSites();
   }
 
@@ -316,7 +318,7 @@ export function GeographySettingsPage() {
     const created = (await response.json()) as GeographicZone;
     setZones((current) => [...current, created]);
     setZoneDraft(emptyZoneDraft);
-    setMessage(`Zona "${created.displayName}" creada.`);
+    showToast(`Zona "${created.displayName}" creada.`);
     await loadSites();
   }
 
@@ -334,7 +336,7 @@ export function GeographySettingsPage() {
     }
     const updated = (await response.json()) as GeographicZone;
     setZones((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-    setMessage(`Zona "${updated.displayName}" ${updated.active ? 'activada' : 'desactivada'}.`);
+    showToast(`Zona "${updated.displayName}" ${updated.active ? 'activada' : 'desactivada'}.`);
   }
 
   if (failed) {
@@ -386,7 +388,7 @@ export function GeographySettingsPage() {
         </header>
 
         {message ? (
-          <p className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
+          <p className="screen-notice mt-5" role="alert">
             {message}
           </p>
         ) : null}
@@ -613,14 +615,14 @@ export function GeographySettingsPage() {
                           />
                         </label>
                         {canManageZones ? (
-                          <button
+                          <ActionButton
                             className="button button-secondary justify-self-start"
                             disabled={busy}
-                            onClick={() => void saveZoneDetails()}
-                            type="button"
+                            onClick={saveZoneDetails}
+                            pendingLabel="Guardando…"
                           >
                             Guardar
-                          </button>
+                          </ActionButton>
                         ) : null}
                       </div>
 

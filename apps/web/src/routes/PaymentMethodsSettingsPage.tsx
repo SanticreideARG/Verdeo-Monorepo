@@ -6,6 +6,7 @@ import { SettingsTabs } from '../components/SettingsTabs.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage, type PaymentMethod } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { showToast } from '../lib/toast.js';
 
 interface MethodDraft {
   active: boolean;
@@ -98,7 +99,7 @@ export function PaymentMethodsSettingsPage() {
       }
       const body = (await response.json()) as { items: PaymentMethod[] };
       setDrafts(body.items.map(toDraft));
-      setMessage('Métodos de pago actualizados.');
+      showToast('Métodos de pago actualizados.');
     } finally {
       setSaving(false);
     }
@@ -132,7 +133,7 @@ export function PaymentMethodsSettingsPage() {
         </header>
 
         {message ? (
-          <p className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
+          <p className="screen-notice mt-5" role="alert">
             {message}
           </p>
         ) : null}

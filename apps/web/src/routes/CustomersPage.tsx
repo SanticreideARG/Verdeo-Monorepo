@@ -677,7 +677,7 @@ export function CustomersPage() {
                   <DraftNotice onDiscard={createDraft.dismissNotice} />
                 ) : null}
                 {!storedOperatingSiteId() ? (
-                  <p className="mb-4 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest">
+                  <p className="screen-notice mb-4" role="alert">
                     Elegí una ciudad en la barra superior antes de cargar un cliente: todo cliente
                     pertenece a una operación.
                   </p>
@@ -685,7 +685,7 @@ export function CustomersPage() {
                   // A city with no zones silently blocks the alta: a domicilio requires a zone, so
                   // the form would fail on save with nothing explaining why. Say so up front and
                   // point at where it gets fixed.
-                  <p className="mb-4 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest">
+                  <p className="screen-notice mb-4" role="alert">
                     Esta ciudad todavía no tiene zonas geográficas cargadas, así que no se le puede
                     asignar un domicilio. Creá una en Ajustes → Zonas geográficas y volvé.
                   </p>

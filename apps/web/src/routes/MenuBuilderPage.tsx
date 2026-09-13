@@ -450,11 +450,7 @@ export function MenuBuilderPage() {
         </header>
 
         {message ? (
-          <p
-            className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest"
-            ref={messageRef}
-            role="status"
-          >
+          <p className="screen-notice mt-5" ref={messageRef} role="alert">
             {message}
           </p>
         ) : null}

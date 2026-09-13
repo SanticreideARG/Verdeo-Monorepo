@@ -225,9 +225,18 @@ semana en la ficha del pedido, y el vacío de "Ver pedidos" con botón para limp
       ruta, descartar una propuesta y eliminar un cliente. El texto dice qué va a pasar y a cuántas
       cosas. Queda afuera el diálogo de cancelar un pedido, que además del sí/no pide un motivo de
       una lista: no es la misma pregunta.
-- [x] **`<ActionButton>`**: puesto en exportar y en generar etiquetas, que son las acciones que más
-      tardan. Falta llevarlo al resto de los botones que guardan.
-- [ ] **`<EmptyState>`** con título, explicación y acción, para que ninguna pantalla escriba el suyo.
+- [x] **`<ActionButton>`** en los botones que guardan o publican: exportar, etiquetas, guardar
+      borrador y publicar en Contenidos, zonas, ayuda, formato de etiqueta, publicar menús y
+      revisiones, encuestas, roles y excepciones. Deshabilitar mientras corre es además la única
+      defensa contra el doble clic en rutas que no son idempotentes.
+- [x] **El éxito se avisa por una sola vía**: 22 confirmaciones que usaban el renglón de los errores
+      pasaron al aviso flotante, que es la regla que el código ya tenía escrita. El renglón quedó
+      para lo que hay que resolver, con aspecto de aviso (`.screen-notice`) y no de confirmación:
+      compartir recuadro entrenaba a ignorarlo, y ahí después aparece un error de verdad.
+- [x] **`<EmptyState>`** con título, explicación y acción. La tabla acepta un vacío con contenido y
+      no sólo una frase. Puesto donde el vacío suele ser un filtro de más —Pedidos, con el botón que
+      lo limpia— y donde es real —Rutas y Encuestas, con la acción que lo llena. Quedan vacíos
+      sueltos en Contenidos, Usuarios y Mi cuenta.
 - [x] **Totales al pie** de la tabla de pedidos: cuántos, cuántas unidades, cuánta plata y cuántos
       cobrados, sobre lo filtrado y no sobre el histórico. Una columna declara su propio total, así
       que las que no suman nada dejan la celda vacía en vez de mostrar ruido.

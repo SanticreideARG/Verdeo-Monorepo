@@ -244,7 +244,7 @@ export function AssistantSettingsPage() {
         {message ? <p className="mt-4 text-sm text-red-600">{message}</p> : null}
 
         {flow?.unpublishedChanges ? (
-          <p className="mt-4 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
+          <p className="screen-notice mt-4" role="alert">
             Hay cambios guardados que todavía no se publicaron. La landing sigue mostrando la
             versión anterior.
           </p>

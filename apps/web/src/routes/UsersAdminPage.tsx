@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useEffect, useState, type FormEvent } from 'react';
 
+import { ActionButton } from '../components/ActionButton.js';
 import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
@@ -297,7 +298,7 @@ export function UsersAdminPage() {
       setMessage(await errorMessage(response));
       return;
     }
-    setMessage('Estado actualizado.');
+    showToast('Estado actualizado.');
     await loadDetail(detail.id);
     await loadUsers();
   }
@@ -312,7 +313,7 @@ export function UsersAdminPage() {
       setMessage(await errorMessage(response));
       return;
     }
-    setMessage('Roles actualizados.');
+    showToast('Roles actualizados.');
     await loadDetail(detail.id);
   }
 
@@ -329,7 +330,7 @@ export function UsersAdminPage() {
       setMessage(await errorMessage(response));
       return;
     }
-    setMessage('Excepciones de permisos actualizadas.');
+    showToast('Excepciones de permisos actualizadas.');
     await loadDetail(detail.id);
   }
 
@@ -405,7 +406,7 @@ export function UsersAdminPage() {
         </header>
 
         {message ? (
-          <p className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
+          <p className="screen-notice mt-5" role="alert">
             {message}
           </p>
         ) : null}
@@ -648,13 +649,13 @@ export function UsersAdminPage() {
                       ))}
                     </div>
                     {canManage ? (
-                      <button
+                      <ActionButton
                         className="button button-secondary mt-3"
-                        onClick={() => void saveRoles()}
-                        type="button"
+                        onClick={saveRoles}
+                        pendingLabel="Guardando…"
                       >
                         Guardar roles
-                      </button>
+                      </ActionButton>
                     ) : null}
                   </article>
 
@@ -719,13 +720,13 @@ export function UsersAdminPage() {
                         ))}
                       </div>
                       {canOverride ? (
-                        <button
+                        <ActionButton
                           className="button button-secondary mt-3"
-                          onClick={() => void saveOverrides()}
-                          type="button"
+                          onClick={saveOverrides}
+                          pendingLabel="Guardando…"
                         >
                           Guardar excepciones
-                        </button>
+                        </ActionButton>
                       ) : null}
                     </details>
                   </article>

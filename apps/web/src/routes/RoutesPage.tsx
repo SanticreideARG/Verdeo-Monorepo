@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { DashboardShell } from '../components/DashboardShell.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { RouteMap } from '../components/RouteMap.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
@@ -9,6 +10,7 @@ import { formatDay, formatDayLong } from '../lib/dates.js';
 import { maskSurname } from '../lib/maskName.js';
 import { errorMessage, formatMoney } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { showToast } from '../lib/toast.js';
 
 interface RouteSummary {
   deliveryDate: string;
@@ -246,7 +248,7 @@ export function RoutesPage() {
 
   async function copyRoute(route: RouteDetail) {
     await navigator.clipboard.writeText(routeMessage(route));
-    setMessage('Mensaje de la ruta copiado. Pegalo en el chat del repartidor.');
+    showToast('Mensaje de la ruta copiado. Pegalo en el chat del repartidor.');
   }
 
   /** La misma ruta como planilla, para quien prefiere abrirla en Excel. */
@@ -288,7 +290,7 @@ export function RoutesPage() {
     }
     if (selectedRoute?.id === routeId) setSelectedRoute(null);
     await loadRoutes();
-    setMessage('Propuesta descartada.');
+    showToast('Propuesta descartada.');
   }
 
   async function publish(routeId: string) {
@@ -484,7 +486,21 @@ export function RoutesPage() {
                 </li>
               ))}
               {routes.length === 0 ? (
-                <p className="text-ink-muted">Todavía no se propuso ninguna ruta.</p>
+                <EmptyState
+                  action={
+                    canManage ? (
+                      <button
+                        className="button button-primary"
+                        onClick={() => setFormOpen(true)}
+                        type="button"
+                      >
+                        + Proponer ruta
+                      </button>
+                    ) : null
+                  }
+                  body="Se arma con los pedidos por repartir de una zona y una fecha, y no sale a la app del repartidor hasta que la publiques."
+                  title="Todavía no hay ninguna ruta"
+                />
               ) : null}
             </ul>
 

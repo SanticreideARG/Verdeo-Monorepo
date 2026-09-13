@@ -152,7 +152,7 @@ export function OrderDetailPage() {
       setMessage(await errorMessage(response));
       return;
     }
-    setMessage(`Pedido actualizado a ${status}.`);
+    showToast(`Pedido actualizado a ${status}.`);
     await load();
   }
 
@@ -227,7 +227,7 @@ export function OrderDetailPage() {
       setMessage(await errorMessage(response));
       return;
     }
-    setMessage('Pedido actualizado.');
+    showToast('Pedido actualizado.');
     setEditing(false);
     await load();
   }
@@ -284,7 +284,7 @@ export function OrderDetailPage() {
         </header>
 
         {message ? (
-          <p className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
+          <p className="screen-notice mt-5" role="alert">
             {message}
           </p>
         ) : null}

@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toDataURL } from 'qrcode';
 
+import { ActionButton } from '../components/ActionButton.js';
 import { AnalysisTabs } from '../components/AnalysisTabs.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
 import { DashboardShell } from '../components/DashboardShell.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage, type CustomerSummary } from '../lib/operations.js';
@@ -268,7 +270,7 @@ export function SurveysPage() {
         </header>
 
         {message ? (
-          <p className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
+          <p className="screen-notice mt-5" role="alert">
             {message}
           </p>
         ) : null}
@@ -388,9 +390,9 @@ export function SurveysPage() {
             </div>
 
             <div className="flex gap-2">
-              <button className="button button-primary" onClick={() => void save()} type="button">
+              <ActionButton onClick={save} pendingLabel="Guardando…">
                 Guardar
-              </button>
+              </ActionButton>
               <button
                 className="button button-secondary"
                 onClick={() => {
@@ -541,7 +543,19 @@ export function SurveysPage() {
                 </div>
               </article>
             ))}
-            {surveys.length === 0 ? <p className="empty-state">Todavía no hay encuestas.</p> : null}
+            {surveys.length === 0 ? (
+              <EmptyState
+                action={
+                  canManage ? (
+                    <button className="button button-primary" onClick={startCreate} type="button">
+                      Nueva encuesta
+                    </button>
+                  ) : null
+                }
+                body="Una encuesta se manda a un cliente puntual con un enlace de un solo uso, o se comparte con un enlace abierto."
+                title="Todavía no hay encuestas"
+              />
+            ) : null}
           </div>
         )}
       </section>

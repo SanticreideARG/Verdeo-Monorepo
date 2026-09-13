@@ -10,6 +10,7 @@ import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { DataTable } from '../components/DataTable.js';
 import { DraftNotice } from '../components/DraftNotice.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { ErrorNotice } from '../components/ErrorNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
 import { deliveryDateFor, deliveryDateLabel } from '../lib/dates.js';
@@ -811,7 +812,7 @@ export function OrderIntakePage() {
         </header>
 
         {message ? (
-          <p className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
+          <p className="screen-notice mt-5" role="alert">
             {message}
           </p>
         ) : null}
@@ -1208,9 +1209,41 @@ export function OrderIntakePage() {
                     : column,
               )}
             empty={
-              periodId
-                ? 'No hay pedidos con este filtro. Probá con "Todos los períodos".'
-                : 'No hay pedidos para este filtro.'
+              <EmptyState
+                action={
+                  statusFilter || search.trim() || periodId ? (
+                    <button
+                      className="button button-secondary"
+                      onClick={() => {
+                        setStatusFilter('');
+                        setSearchInput('');
+                        setPeriodId('');
+                      }}
+                      type="button"
+                    >
+                      Limpiar los filtros
+                    </button>
+                  ) : permissions.includes('orders.create') ? (
+                    <button
+                      className="button button-primary"
+                      onClick={() => setFormOpen(true)}
+                      type="button"
+                    >
+                      + Nuevo pedido
+                    </button>
+                  ) : null
+                }
+                body={
+                  statusFilter || search.trim() || periodId
+                    ? 'Puede ser el recorte y no la semana: probá con "Todos los períodos" o con el estado en "Todos".'
+                    : 'Cuando entre el primero, aparece acá.'
+                }
+                title={
+                  statusFilter || search.trim() || periodId
+                    ? 'Ningún pedido coincide con este filtro'
+                    : 'Todavía no hay pedidos'
+                }
+              />
             }
             rowKey={(order) => order.id}
             rowTone={orderRowTone}

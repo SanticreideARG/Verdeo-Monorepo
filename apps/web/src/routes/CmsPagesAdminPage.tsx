@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type DragEvent, type FormEvent } from 'react';
 
+import { ActionButton } from '../components/ActionButton.js';
 import { CmsSection } from '../components/CmsSections.js';
 import { CmsImageField } from '../components/CmsImageField.js';
 import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
@@ -8,6 +9,7 @@ import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus
 import { apiRequest } from '../lib/api.js';
 import { errorMessage } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { showToast } from '../lib/toast.js';
 
 type Section = { id: string; type: string } & Record<string, unknown>;
 
@@ -200,7 +202,7 @@ export function CmsPagesAdminPage() {
       setMessage(await errorMessage(response));
       return;
     }
-    setMessage('Borrador guardado.');
+    showToast('Borrador guardado.');
     await loadDetail(selectedSlug);
   }
 
@@ -215,7 +217,7 @@ export function CmsPagesAdminPage() {
       setMessage(await errorMessage(response));
       return;
     }
-    setMessage('Página publicada.');
+    showToast('Página publicada.');
     await loadDetail(selectedSlug);
     await loadPages();
   }
@@ -288,7 +290,7 @@ export function CmsPagesAdminPage() {
         </header>
 
         {message ? (
-          <p className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
+          <p className="screen-notice mt-5" role="alert">
             {message}
           </p>
         ) : null}
@@ -374,13 +376,13 @@ export function CmsPagesAdminPage() {
                         {previewOpen ? 'Ocultar vista previa' : 'Vista previa'}
                       </button>
                       {canEdit ? (
-                        <button
+                        <ActionButton
                           className="button button-secondary"
-                          onClick={() => void saveDraft()}
-                          type="button"
+                          onClick={saveDraft}
+                          pendingLabel="Guardando…"
                         >
                           Guardar borrador
-                        </button>
+                        </ActionButton>
                       ) : null}
                     </div>
                   </div>
@@ -504,14 +506,14 @@ export function CmsPagesAdminPage() {
                               {revision.createdByDisplayName ?? 'Sistema'}
                               {detail.published?.id === revision.id ? ' · publicada' : ''}
                             </span>
-                            <button
+                            <ActionButton
                               className="button button-secondary"
                               disabled={detail.published?.id === revision.id}
-                              onClick={() => void publishRevision(revision.id)}
-                              type="button"
+                              onClick={() => publishRevision(revision.id)}
+                              pendingLabel="Publicando…"
                             >
                               {detail.published?.id === revision.id ? 'Publicada' : 'Publicar'}
-                            </button>
+                            </ActionButton>
                           </div>
                         ))}
                       </div>

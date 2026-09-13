@@ -6,6 +6,7 @@ import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus
 import { apiRequest } from '../lib/api.js';
 import { errorMessage, formatMoney, type WeeklyMenu } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { showToast } from '../lib/toast.js';
 
 /** "Precios por ubicación": cada ciudad ya tiene su propio precio por tamaño desde la distribución
  * del menú (`weekly_menu_prices`, per site) — esta pantalla junta esa información y permite
@@ -75,7 +76,7 @@ export function PriceByLocationPage() {
     const updated = (await response.json()) as WeeklyMenu;
     setMenus((current) => current.map((menu) => (menu.id === updated.id ? updated : menu)));
     setEditingMenuId(null);
-    setMessage('Precios actualizados.');
+    showToast('Precios actualizados.');
   }
 
   if (failed) return <DashboardFailed label="los precios por ubicación" />;
@@ -127,7 +128,7 @@ export function PriceByLocationPage() {
         </p>
 
         {message ? (
-          <p className="mt-4 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
+          <p className="screen-notice mt-4" role="alert">
             {message}
           </p>
         ) : null}

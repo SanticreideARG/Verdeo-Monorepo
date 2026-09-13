@@ -6,6 +6,7 @@ import { apiRequest } from '../lib/api.js';
 import { ChangePasswordForm } from '../components/ChangePasswordForm.js';
 import { errorMessage } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { showToast } from '../lib/toast.js';
 
 const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 const AVATAR_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -49,7 +50,7 @@ export function ProfilePage() {
     }
     const user = (await response.json()) as DashboardProfile['user'];
     setProfile((current) => (current ? { ...current, user } : current));
-    setMessage('Perfil actualizado.');
+    showToast('Perfil actualizado.');
   }
 
   async function uploadAvatar(event: ChangeEvent<HTMLInputElement>) {
@@ -78,7 +79,7 @@ export function ProfilePage() {
     }
     const user = (await response.json()) as DashboardProfile['user'];
     setProfile((current) => (current ? { ...current, user } : current));
-    setMessage('Foto de perfil actualizada.');
+    showToast('Foto de perfil actualizada.');
   }
 
   if (failed) return <DashboardFailed label="tu perfil" />;
@@ -95,7 +96,7 @@ export function ProfilePage() {
         </header>
 
         {message ? (
-          <p className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
+          <p className="screen-notice mt-5" role="alert">
             {message}
           </p>
         ) : null}

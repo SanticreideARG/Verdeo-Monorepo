@@ -58,7 +58,8 @@ export function DataTable<T>({
   /** Para lectores de pantalla: qué contiene la tabla. */
   caption: string;
   columns: readonly DataColumn<T>[];
-  empty: string;
+  /** Texto, o un <EmptyState> con la salida: un vacío por filtro tiene que poder deshacerse. */
+  empty: ReactNode;
   rowKey: (row: T) => string;
   rows: readonly T[];
   /**

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { ActionButton } from '../components/ActionButton.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { DataTable, type DataColumn } from '../components/DataTable.js';
@@ -296,7 +297,7 @@ export function MenusPage() {
         ) : null}
 
         {message ? (
-          <p className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
+          <p className="screen-notice mt-5" role="alert">
             {message}
           </p>
         ) : null}
@@ -335,13 +336,12 @@ export function MenusPage() {
                       Editar la semana
                     </Link>
                     {detailMaster.status === 'DRAFT' ? (
-                      <button
-                        className="button button-primary"
-                        onClick={() => void publish(detailMaster.id)}
-                        type="button"
+                      <ActionButton
+                        onClick={() => publish(detailMaster.id)}
+                        pendingLabel="Publicando…"
                       >
                         Publicar
-                      </button>
+                      </ActionButton>
                     ) : null}
                     <button
                       className="button button-secondary"
@@ -386,13 +386,13 @@ export function MenusPage() {
                           </Link>
                         ) : null}
                         {distributed.status === 'DRAFT' && canEdit ? (
-                          <button
+                          <ActionButton
                             className="button button-secondary"
-                            onClick={() => void publish(distributed.id)}
-                            type="button"
+                            onClick={() => publish(distributed.id)}
+                            pendingLabel="Publicando…"
                           >
                             Publicar
-                          </button>
+                          </ActionButton>
                         ) : null}
                       </span>
                     ) : (

@@ -155,7 +155,7 @@ export function AIProvidersPage() {
       setEncryptionConfigured(result.encryptionConfigured);
       setProviders(result.items);
       event.currentTarget.reset();
-      setMessage('Proveedor de IA guardado sin exponer la clave.');
+      showToast('Proveedor de IA guardado sin exponer la clave.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos guardar el proveedor.');
     }
@@ -193,7 +193,7 @@ export function AIProvidersPage() {
         </header>
 
         {message ? (
-          <p className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
+          <p className="screen-notice mt-5" role="alert">
             {message}
           </p>
         ) : null}
@@ -327,7 +327,7 @@ export function AIProvidersPage() {
         </header>
 
         {mapsMessage ? (
-          <p className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
+          <p className="screen-notice mt-5" role="alert">
             {mapsMessage}
           </p>
         ) : null}

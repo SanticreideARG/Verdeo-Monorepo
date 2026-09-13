@@ -10,6 +10,7 @@ import { maskSurname } from '../lib/maskName.js';
 import { errorMessage, type LabelSettings, type WeeklyMenu } from '../lib/operations.js';
 import { currentPeriod, periodsFromMenus, type Period } from '../lib/periods.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { showToast } from '../lib/toast.js';
 
 interface Label {
   composable: boolean;
@@ -242,7 +243,7 @@ export function LabelsPage() {
       return;
     }
     setSettings((await response.json()) as LabelSettings);
-    setMessage('Formato guardado.');
+    showToast('Formato guardado.');
   }
 
   async function uploadBackground(event: ChangeEvent<HTMLInputElement>) {
@@ -336,7 +337,7 @@ export function LabelsPage() {
         </header>
 
         {message ? (
-          <p className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
+          <p className="screen-notice mt-5" role="alert">
             {message}
           </p>
         ) : null}
@@ -627,26 +628,26 @@ export function LabelsPage() {
                         Subir fondo (PNG o JPG)
                       </button>
                       {settings?.backgroundImageUrl ? (
-                        <button
+                        <ActionButton
                           className="button button-secondary"
-                          onClick={() => void save(null)}
-                          type="button"
+                          onClick={() => save(null)}
+                          pendingLabel="Quitando…"
                         >
                           Quitar fondo
-                        </button>
+                        </ActionButton>
                       ) : null}
                     </div>
                   ) : null}
                 </div>
 
                 {canWrite ? (
-                  <button
+                  <ActionButton
                     className="button button-primary justify-self-start"
-                    onClick={() => void save()}
-                    type="button"
+                    onClick={() => save()}
+                    pendingLabel="Guardando…"
                   >
                     Guardar formato
-                  </button>
+                  </ActionButton>
                 ) : null}
               </div>
             </div>

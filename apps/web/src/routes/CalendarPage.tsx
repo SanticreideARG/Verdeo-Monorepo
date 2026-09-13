@@ -186,7 +186,7 @@ export function CalendarPage() {
         </header>
 
         {message ? (
-          <p className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="alert">
+          <p className="screen-notice mt-5" role="alert">
             {message}
           </p>
         ) : null}

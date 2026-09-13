@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { ActionButton } from '../components/ActionButton.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
@@ -176,7 +177,7 @@ export function HelpPage() {
         </header>
 
         {message ? (
-          <p className="mt-5 rounded-xl bg-forest/5 px-4 py-3 text-sm text-forest" role="status">
+          <p className="screen-notice mt-5" role="alert">
             {message}
           </p>
         ) : null}
@@ -269,13 +270,9 @@ export function HelpPage() {
                   Activo
                 </label>
                 <div className="flex gap-2">
-                  <button
-                    className="button button-primary"
-                    onClick={() => void saveDraft()}
-                    type="button"
-                  >
+                  <ActionButton onClick={saveDraft} pendingLabel="Guardando…">
                     Guardar
-                  </button>
+                  </ActionButton>
                   <button
                     className="button button-secondary"
                     onClick={() => {
