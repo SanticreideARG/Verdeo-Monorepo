@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, Route, Routes } from 'react-router-dom';
 
+import { useOperatingSiteId } from '../lib/useOperatingSite.js';
+
 import { CmsSection, type PageSection } from '../components/CmsSections.js';
 import { LandingAssistant } from '../components/LandingAssistant.js';
 import { apiRequest } from '../lib/api.js';
@@ -281,8 +283,21 @@ function PlaceholderPage({ title, copy }: { title: string; copy: string }) {
 }
 
 export function App() {
+  /*
+   * Cambiar de ciudad vuelve a montar la pantalla en curso.
+   *
+   * El `key` es todo el mecanismo: React desmonta lo que había y monta una pantalla nueva, que pide
+   * sus datos con la ciudad nueva. Antes esto era un `window.location.reload()` por la misma razón
+   * —ninguna vista puede quedar mostrando datos de una ciudad bajo el rótulo de otra— y costaba un
+   * segundo largo, el scroll y el formulario a medio llenar. Esto cuesta un pedido de datos.
+   *
+   * Se pierde igual lo que había en pantalla, y eso es deliberado: un formulario a medio llenar con
+   * un cliente de Neuquén no se puede guardar como pedido de Mendoza.
+   */
+  const operatingSiteId = useOperatingSiteId();
+
   return (
-    <Routes>
+    <Routes key={operatingSiteId ?? 'global'}>
       <Route path="/" element={<HomePage />} />
       <Route path="/pedido" element={<PublicOrderPage />} />
       <Route path="/seguimiento" element={<TrackOrderPage />} />

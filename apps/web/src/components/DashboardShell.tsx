@@ -545,11 +545,16 @@ export function DashboardShell({
 
   function selectScope(value: string) {
     const next = value === GLOBAL_OPTION ? null : value;
-    storeOperatingSiteId(next);
     setSelectedSiteId(next);
-    // Every open view holds data for the previous operation, so reload rather than leave a screen
-    // showing one operation's data under another operation's label.
-    window.location.reload();
+    /*
+     * Guardar avisa, y la pantalla en curso se vuelve a montar sola (ver App.tsx).
+     *
+     * Sigue vigente la razón por la que antes esto recargaba: cada vista abierta tiene datos de la
+     * ciudad anterior, y mostrarlos bajo el rótulo de otra es peor que perderlos. Lo que cambia es
+     * el precio: volver a montar la pantalla vuelve a pedir sus datos sin volver a bajar la
+     * aplicación, sin pasar por el login y sin la pantalla en blanco.
+     */
+    storeOperatingSiteId(next);
   }
 
   const visibleClusters = useMemo(

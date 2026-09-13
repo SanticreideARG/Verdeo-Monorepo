@@ -12,9 +12,24 @@ export function storedOperatingSiteId(): string | null {
   return window.localStorage.getItem(SCOPE_STORAGE_KEY);
 }
 
+/*
+ * Quién quiere enterarse de un cambio de ciudad.
+ *
+ * Antes no hacía falta: cambiar de ciudad recargaba la aplicación entera. Eso costaba un segundo
+ * largo, el scroll y el formulario a medio llenar, cada vez, y comparar dos ciudades se pagaba en
+ * cada ida y vuelta.
+ */
+const scopeListeners = new Set<() => void>();
+
+export function subscribeToOperatingSite(listener: () => void): () => void {
+  scopeListeners.add(listener);
+  return () => scopeListeners.delete(listener);
+}
+
 export function storeOperatingSiteId(operatingSiteId: string | null): void {
   if (operatingSiteId) window.localStorage.setItem(SCOPE_STORAGE_KEY, operatingSiteId);
   else window.localStorage.removeItem(SCOPE_STORAGE_KEY);
+  for (const listener of scopeListeners) listener();
 }
 
 /**

@@ -244,7 +244,11 @@ semana en la ficha del pedido, y el vacío de "Ver pedidos" con botón para limp
       estaban gritados corregidos en producción. La regla sólo interviene si el texto está
       enteramente en mayúsculas: "Menú KETO" escrito así a propósito se conserva. Los snapshots de
       los pedidos vendidos no se tocan — eso decía la etiqueta ese día.
-- [ ] Cambiar de ciudad sin recargar la aplicación entera.
+- [x] **Cambiar de ciudad sin recargar la aplicación entera.** El selector guarda y avisa; la
+      pantalla en curso se vuelve a montar (un `key` en el árbol de rutas) y pide sus datos con la
+      ciudad nueva. Se sigue perdiendo lo que había en pantalla, que es deliberado —un formulario a
+      medio llenar con un cliente de Neuquén no se guarda como pedido de Mendoza—, pero ya no se
+      vuelve a bajar la aplicación ni a revalidar la sesión.
 - [ ] Agrupar la navegación por momento del ciclo semanal y no por módulo.
 - [ ] Barra fija con guardar y total en formularios largos, en pantallas angostas.
 - [ ] Búsqueda global con `Ctrl+K`. No urgente: vale cuando el equipo pase de tres personas.
