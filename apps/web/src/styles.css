@@ -3005,9 +3005,14 @@ a {
    * un SVG embebido. El velo oscuro va en la misma capa y no en otra: el texto del pie es blanco y
    * la ilustración tiene zonas claras donde, sin velo, se pierde.
    */
+  /*
+   * Velo apenas presente: con 0.62 la ilustración quedaba apagada y no se distinguían las hojas,
+   * que es lo contrario de lo que hace el sitio original. La legibilidad del texto la sostienen
+   * las tarjetas, que son vidrio oscuro, y no el fondo entero.
+   */
   background-image:
-    linear-gradient(rgba(8, 37, 20, 0.62), rgba(8, 37, 20, 0.72)),
-    url('/brand/verdeo-hojas-1600.webp');
+    linear-gradient(rgba(6, 30, 16, 0.3), rgba(6, 30, 16, 0.42)),
+    url('/brand/verdeo-hojas-1903.webp');
   background-position: center;
   background-size: cover;
 }
@@ -3082,8 +3087,8 @@ a {
   border: 1px solid rgb(255 255 255 / 10%);
   border-radius: 0.25rem;
   padding: 2rem 1.75rem;
-  background: rgb(255 255 255 / 6%);
-  backdrop-filter: blur(2px);
+  background: rgb(6 30 16 / 52%);
+  backdrop-filter: blur(3px);
 }
 
 .cms-footer-panel h3 {
@@ -6654,5 +6659,26 @@ body:has(.assistant-launcher.is-operator) .toast-host {
   margin-top: 0.25rem;
   color: var(--db-muted, #5b6b64);
   font-size: 0.75rem;
+}
+
+/*
+ * Los controles que sólo existen para lectores de pantalla.
+ *
+ * `sr-only` los saca del flujo y los recorta, pero nuestras reglas de formulario les seguían dando
+ * el ancho y el alto de un campo: posicionados en absoluto, cada radio invisible medía el ancho del
+ * formulario y estiraba la página a lo ancho (2419 px sobre una ventana de 1430). Van últimos en la
+ * hoja para ganarle a cualquier regla de campo.
+ */
+input.sr-only,
+select.sr-only,
+textarea.sr-only {
+  width: 1px;
+  min-width: 0;
+  height: 1px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  margin: -1px;
+  overflow: hidden;
 }
 

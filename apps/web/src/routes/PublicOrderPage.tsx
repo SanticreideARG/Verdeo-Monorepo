@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import { DraftNotice } from '../components/DraftNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
@@ -24,13 +24,19 @@ function formText(form: FormData, key: string): string {
 }
 
 export function PublicOrderPage() {
+  /*
+   * La ciudad puede venir elegida desde la portada: los chips de "Dónde entregamos" son la primera
+   * decisión que toma quien llega, y volvérsela a preguntar acá la hacía dos veces. Si el enlace no
+   * la trae, se elige la primera como siempre.
+   */
+  const [searchParams] = useSearchParams();
   const [menu, setMenu] = useState<WeeklyMenu | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [createdOrder, setCreatedOrder] = useState<OrderSummary | null>(null);
   const [offeringId, setOfferingId] = useState('');
   const [sites, setSites] = useState<{ displayName: string; slug: string }[]>([]);
-  const [siteSlug, setSiteSlug] = useState('');
+  const [siteSlug, setSiteSlug] = useState(() => searchParams.get('ciudad') ?? '');
   const [selectedDishes, setSelectedDishes] = useState<string[]>([]);
   /*
    * Los métodos de pago configurados en Ajustes.
@@ -69,7 +75,10 @@ export function PublicOrderPage() {
           items: { displayName: string; slug: string }[];
         };
         setSites(body.items);
-        setSiteSlug((current) => current || (body.items[0]?.slug ?? ''));
+        // Una ciudad del enlace que ya no existe no deja el formulario sin ciudad: cae a la primera.
+        setSiteSlug((current) =>
+          body.items.some((site) => site.slug === current) ? current : (body.items[0]?.slug ?? ''),
+        );
       })
       .catch(() => setSites([]));
   }, []);

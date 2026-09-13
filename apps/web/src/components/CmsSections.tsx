@@ -189,7 +189,11 @@ function DeliveryZonesSection({
           selection lives inside it rather than needing a page per city. */}
       <div className="mt-6 flex flex-wrap gap-3">
         {sites.map((site) => (
-          <Link className="status-chip" key={site.slug} to="/pedido">
+          <Link
+            className="status-chip"
+            key={site.slug}
+            to={`/pedido?ciudad=${encodeURIComponent(site.slug)}`}
+          >
             {site.displayName}
           </Link>
         ))}
