@@ -86,13 +86,8 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
   {
     label: 'Pedidos',
     items: [
-      {
-        href: '/app/pedidos/nuevo',
-        icon: 'ordersNew',
-        label: 'Tomar y confirmar pedidos',
-        permission: 'orders.read',
-      },
-      { href: '/app/pedidos', icon: 'orders', label: 'Ver pedidos', permission: 'orders.read' },
+      // Una sola entrada: tomar, confirmar, buscar y cobrar pasaron a ser la misma pantalla.
+      { href: '/app/pedidos', icon: 'orders', label: 'Pedidos', permission: 'orders.read' },
     ],
   },
   {
@@ -196,7 +191,7 @@ function known(value: string | null | undefined, allowed: Set<string>, fallback:
  * vez y desde un escritorio. Lo que no entra se alcanza por "Más", que abre el mismo cajón.
  */
 const shiftNavigation: readonly NavigationItem[] = [
-  { href: '/app/pedidos/nuevo', icon: 'ordersNew', label: 'Pedidos', permission: 'orders.read' },
+  { href: '/app/pedidos', icon: 'ordersNew', label: 'Pedidos', permission: 'orders.read' },
   { href: '/app/cocina', icon: 'kitchen', label: 'Cocina', permission: 'production.read' },
   { href: '/app/reparto/rutas', icon: 'delivery', label: 'Rutas', permission: 'routes.read' },
   { href: '/app/chat', icon: 'chat', label: 'Chat', permission: 'chat.use' },
@@ -210,7 +205,7 @@ const shiftNavigation: readonly NavigationItem[] = [
  */
 function navBadge(href: string, pendingOrders: number, unreadChat: number): ReactNode {
   const count =
-    href === '/app/pedidos/nuevo' ? pendingOrders : href === '/app/chat' ? unreadChat : 0;
+    href === '/app/pedidos' ? pendingOrders : href === '/app/chat' ? unreadChat : 0;
   if (count <= 0) return null;
   return (
     <b className="nav-badge" title={`${count} sin ver`}>

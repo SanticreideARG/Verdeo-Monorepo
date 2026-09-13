@@ -355,3 +355,23 @@ siguen editando en `/app/ayuda` (el panel enlaza ahí para quien tiene `help.man
 
 Pendiente: respuestas con datos en vivo ("qué me falta para cerrar la semana", "qué falta
 cobrar"), filtradas por la ciudad elegida y los permisos.
+
+## Pedidos: una sola pantalla (as built)
+
+"Tomar y confirmar pedidos" y "Ver pedidos" eran dos pantallas con la misma tabla y la mitad de las
+herramientas cada una: en la cola se confirmaba pero no se podía buscar; en la otra se buscaba pero
+no se podía confirmar el borrador que estabas viendo. Ahora son `OrderIntakePage` en `/app/pedidos`,
+con una sola entrada en el menú. `/app/pedidos/nuevo` redirige, para no romper enlaces guardados ni
+las tarjetas de chat.
+
+- Abre filtrada por lo pendiente de acción (borrador, confirmado y listo). Ese recorte lo resuelve
+  el servidor con `statuses=`: filtrarlo en el navegador después de paginar dejaba páginas enteras
+  vacías y escondía trabajo pendiente.
+- Llegar con `?search=` abre el histórico completo: se llega ahí buscando un pedido puntual, que
+  puede ser de cualquier semana.
+- El formulario no pregunta el período —hay uno abierto por vez; vuelve el desplegable si alguna
+  vez hay dos publicados— y completa el domicilio del cliente elegido, que se puede pisar a mano
+  para una entrega puntual.
+- "Venta de oportunidad" sale de los orígenes ofrecidos. El valor sigue en el contrato: los pedidos
+  viejos que lo tienen se siguen leyendo, y la consolidación de cocina lo sigue informando.
+

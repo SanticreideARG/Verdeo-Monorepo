@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, Route, Routes } from 'react-router-dom';
+import { Link, Navigate, Route, Routes } from 'react-router-dom';
 
 import { CmsSection, type PageSection } from '../components/CmsSections.js';
 import { LandingAssistant } from '../components/LandingAssistant.js';
@@ -306,10 +306,10 @@ export function App() {
       <Route path="/app/clientes" element={<CustomersPage />} />
       <Route path="/app/encuestas" element={<SurveysPage />} />
       <Route path="/app/encuestas/:id/resultados" element={<SurveyResultsPage />} />
-      <Route path="/app/pedidos/nuevo" element={<OrderIntakePage queue />} />
+      {/* La pantalla de tomar pedidos se fusionó con la de verlos: la ruta vieja redirige para
+          que los enlaces guardados y las tarjetas de chat sigan llevando a algún lado. */}
+      <Route path="/app/pedidos/nuevo" element={<Navigate replace to="/app/pedidos" />} />
       <Route path="/app/pedidos/:id" element={<OrderDetailPage />} />
-      {/* La misma pantalla con dos entradas: la cola de la semana (con el formulario abierto) y
-          el historial completo. Los enlaces viejos a las dos siguen funcionando. */}
       <Route path="/app/pedidos" element={<OrderIntakePage />} />
       <Route path="/app/menus/nuevo" element={<MenuBuilderPage />} />
       <Route path="/app/menus/:id/editar" element={<MenuBuilderPage />} />

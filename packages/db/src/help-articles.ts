@@ -33,7 +33,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
 
   // --- Pedidos ---------------------------------------------------------------------------------
   {
-    body: '"Tomar y confirmar pedidos" ofrece dos formas de elegir cliente: "Buscar cliente" (por nombre o número, para clientes existentes) y "Nuevo cliente" (alta rápida con nombre y teléfono).\n\nDespués elegís la variedad y el tamaño. El precio depende del tamaño, no de la variedad. El medio de pago sale de la lista configurada en [Ajustes → Métodos de pago](/app/ajustes/pagos).\n\nElegí el origen del pedido con cuidado: algunos orígenes (como "Venta de oportunidad") activan validaciones extra contra el excedente disponible.\n\nEl pedido queda como borrador hasta que lo confirmás: ver [[ciclo-2-pedidos]].\n\n[Ir a Tomar y confirmar pedidos](/app/pedidos/nuevo)',
+    body: '"Pedidos" es la unica pantalla de pedidos: se toman, se confirman, se buscan y se cobran en el mismo lugar. El boton "+ Nuevo pedido" abre el formulario, que ofrece dos formas de elegir cliente: "Buscar cliente" (por nombre o número, para clientes existentes) y "Nuevo cliente" (alta rápida con nombre y teléfono).\n\nDespués elegís la variedad y el tamaño. El precio depende del tamaño, no de la variedad. El medio de pago sale de la lista configurada en [Ajustes → Métodos de pago](/app/ajustes/pagos).\n\nAl elegir un cliente que ya existe, su domicilio se completa solo, y se puede cambiar para esa entrega. El período no se pregunta: hay uno abierto por vez.\n\nEl pedido queda como borrador hasta que lo confirmás: ver [[ciclo-2-pedidos]].\n\n[Ir a Pedidos](/app/pedidos)',
     category: 'Pedidos / Tomar pedidos',
     key: 'pedidos-tomar-pedido',
     ordinal: 0,
@@ -41,7 +41,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Tomar un pedido nuevo',
   },
   {
-    body: 'Los clientes también pueden pedir solos desde el formulario de la web (la página /pedido): eligen la variedad con su logo, el tamaño con su precio y el medio de pago.\n\nEsos pedidos entran pendientes de confirmar. El número junto a "Tomar y confirmar pedidos", en el menú lateral, dice cuántos están esperando.\n\nQué campos pide el formulario se ajusta por ciudad: ver [[ajustes-indicaciones]].',
+    body: 'Los clientes también pueden pedir solos desde el formulario de la web (la página /pedido): eligen la variedad con su logo, el tamaño con su precio y el medio de pago.\n\nEsos pedidos entran pendientes de confirmar. El número junto a "Pedidos", en el menú lateral, dice cuántos están esperando.\n\nQué campos pide el formulario se ajusta por ciudad: ver [[ajustes-indicaciones]].',
     category: 'Pedidos / Tomar pedidos',
     key: 'pedidos-formulario-web',
     ordinal: 1,
@@ -49,7 +49,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Pedidos que llegan por la web',
   },
   {
-    body: 'En "Ver pedidos" podés filtrar por estado y buscar por número o cliente. Arriba de la tabla se ve cuántos pedidos coinciden, y al pie los totales.\n\nPara ordenar, tocá el encabezado de una columna: Estado agrupa por estado, Pedido por tipo de pedido, y así con cada una.\n\nEl botón "Columnas" elige qué se ve en la tabla. "Exportar a Excel" baja exactamente lo filtrado.\n\n[Ir a Ver pedidos](/app/pedidos)',
+    body: 'En "Pedidos" podés filtrar por estado y buscar por número o cliente. Arriba de la tabla se ve cuántos pedidos coinciden, y al pie los totales.\n\nPara ordenar, tocá el encabezado de una columna: Estado agrupa por estado, Pedido por tipo de pedido, y así con cada una.\n\nEl botón "Columnas" elige qué se ve en la tabla. "Exportar a Excel" baja exactamente lo filtrado.\n\n[Ir a Pedidos](/app/pedidos)',
     category: 'Pedidos / Ver y exportar',
     key: 'pedidos-ver-pedidos',
     ordinal: 0,
@@ -57,7 +57,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Buscar, ordenar y exportar pedidos',
   },
   {
-    body: 'En "Ver pedidos", dentro del botón "Columnas", está "Mostrar apellidos". Si lo desactivás, los apellidos se ven tapados en la tabla y en el Excel que exportes.\n\nSirve para compartir la planilla con alguien de afuera, o proyectarla, sin exponer datos de los clientes.',
+    body: 'En "Pedidos", dentro del botón "Columnas", está "Mostrar apellidos". Si lo desactivás, los apellidos se ven tapados en la tabla y en el Excel que exportes.\n\nSirve para compartir la planilla con alguien de afuera, o proyectarla, sin exponer datos de los clientes.',
     category: 'Pedidos / Ver y exportar',
     key: 'pedidos-apellidos',
     ordinal: 1,
@@ -81,7 +81,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Cancelar un pedido',
   },
   {
-    body: 'El cobro se marca con el tilde de la columna "Cobrado", en "Ver pedidos". El paso a paso está en [[ciclo-6-cobrar]].',
+    body: 'El cobro se marca con el tilde de la columna "Cobrado", en "Pedidos". El paso a paso está en [[ciclo-6-cobrar]].',
     category: 'Pedidos / Cobros',
     key: 'pedidos-cobros',
     ordinal: 0,
@@ -244,7 +244,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Paso 1 — Configurar y publicar la semana',
   },
   {
-    body: 'Los pedidos entran en "Tomar y confirmar pedidos". Cada uno arranca como borrador: queda guardado pero todavía no cuenta como demanda.\n\nConfirmarlo es lo que lo mete en la producción de la semana. Hasta que no lo confirmes, cocina no lo ve y la ruta no lo levanta.\n\nSe puede editar todo —incluidos los ítems— tanto en borrador como confirmado: ver [[pedidos-editar]]. Cancelar pide un motivo de la lista: ver [[pedidos-cancelar]].\n\n[Ir a Tomar y confirmar pedidos](/app/pedidos/nuevo) · Sigue: [[ciclo-3-cocina]]',
+    body: 'Los pedidos entran en "Pedidos", con el botón "+ Nuevo pedido". Cada uno arranca como borrador: queda guardado pero todavía no cuenta como demanda.\n\nConfirmarlo es lo que lo mete en la producción de la semana. Hasta que no lo confirmes, cocina no lo ve y la ruta no lo levanta.\n\nSe puede editar todo —incluidos los ítems— tanto en borrador como confirmado: ver [[pedidos-editar]]. Cancelar pide un motivo de la lista: ver [[pedidos-cancelar]].\n\n[Ir a Pedidos](/app/pedidos) · Sigue: [[ciclo-3-cocina]]',
     category: 'Ciclo semanal',
     key: 'ciclo-2-pedidos',
     ordinal: 2,
@@ -276,7 +276,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Paso 5 — Armar y publicar la ruta',
   },
   {
-    body: 'En "Ver pedidos" hay una columna "Cobrado" con un tilde. Es todo el circuito de cobro: se marca cuando entró la plata, y queda registrado quién lo marcó y cuándo.\n\nEl "Medio de pago" de cada pedido es otra cosa: es cómo se acordó cobrar (efectivo, transferencia), y se elige al tomar el pedido. Que esté acordado no quiere decir que esté cobrado.\n\nSi la columna no se ve, activala desde el botón "Columnas".\n\n[Ir a Ver pedidos](/app/pedidos)',
+    body: 'En "Pedidos" hay una columna "Cobrado" con un tilde. Es todo el circuito de cobro: se marca cuando entró la plata, y queda registrado quién lo marcó y cuándo.\n\nEl "Medio de pago" de cada pedido es otra cosa: es cómo se acordó cobrar (efectivo, transferencia), y se elige al tomar el pedido. Que esté acordado no quiere decir que esté cobrado.\n\nSi la columna no se ve, activala desde el botón "Columnas".\n\n[Ir a Pedidos](/app/pedidos)',
     category: 'Ciclo semanal',
     key: 'ciclo-6-cobrar',
     ordinal: 6,

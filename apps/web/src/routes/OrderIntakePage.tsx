@@ -118,7 +118,7 @@ const STATUS_OPTIONS = ['DRAFT', 'CONFIRMED', 'READY', 'DELIVERED', 'CANCELLED']
  * `?search=` sigue funcionando como enlace directo a un pedido —una tarjeta de chat apunta acá con
  * su número—, y `?cycleId=` abre una semana puntual.
  */
-export function OrderIntakePage({ queue = false }: { queue?: boolean } = {}) {
+export function OrderIntakePage() {
   const { failed, logout, profile } = useDashboardProfile();
   const [searchParams] = useSearchParams();
   const [permissions, setPermissions] = useState<string[]>([]);
@@ -126,7 +126,7 @@ export function OrderIntakePage({ queue = false }: { queue?: boolean } = {}) {
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [message, setMessage] = useState('');
-  const [formOpen, setFormOpen] = useState(queue);
+  const [formOpen, setFormOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const draft = useFormDraft(formRef, 'order-intake', formOpen);
   const [selectedMenuId, setSelectedMenuId] = useState('');
@@ -142,6 +142,13 @@ export function OrderIntakePage({ queue = false }: { queue?: boolean } = {}) {
   const [customerResults, setCustomerResults] = useState<CustomerSummary[]>([]);
   const [customerSearching, setCustomerSearching] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerSummary | null>(null);
+  /*
+   * El domicilio, en el estado y no suelto en el formulario: al elegir un cliente se completa con
+   * el que ya tiene cargado. Se puede pisar a mano —una entrega puntual a otra dirección— y por eso
+   * es un campo de texto y no una lista cerrada.
+   */
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [addressHint, setAddressHint] = useState('');
 
   const loadedOnce = useRef(false);
   const [loading, setLoading] = useState(true);
@@ -170,8 +177,9 @@ export function OrderIntakePage({ queue = false }: { queue?: boolean } = {}) {
   const [periods, setPeriods] = useState<Period[]>([]);
   const [periodId, setPeriodId] = useState<string | null>(null);
   // El filtro de estado: vacío es todos, PENDIENTES es el recorte de trabajo, o un estado puntual.
+  // Abre por lo que espera trabajo; llegar con ?search= abre el histórico, que es lo que se busca.
   const [statusFilter, setStatusFilter] = useState(() =>
-    searchParams.get('search') ? '' : queue ? PENDING_FILTER : '',
+    searchParams.get('search') ? '' : PENDING_FILTER,
   );
   const [searchInput, setSearchInput] = useState(() => searchParams.get('search') ?? '');
   // Lo que se tipea y lo que se consulta son dos cosas: sin el retardo, cada tecla es un pedido.
@@ -375,6 +383,29 @@ export function OrderIntakePage({ queue = false }: { queue?: boolean } = {}) {
   function chooseIntakeSize(variantName: string) {
     const next = findIntakeOffering(selectedOffering?.familyName ?? '', variantName);
     if (next) setSelectedOfferingId(next.id);
+  }
+
+  /**
+   * Completa el domicilio con el del cliente elegido.
+   *
+   * El principal activo si lo hay; si no, el primero activo. Sin domicilio cargado no pasa nada: el
+   * campo queda vacío y se escribe, que es lo que se hacía siempre.
+   */
+  async function fillAddressFor(customerId: string) {
+    setAddressHint('');
+    const response = await apiRequest(`/api/v1/customers/${customerId}`);
+    if (!response.ok) return;
+    const detail = (await response.json()) as {
+      addresses?: { active: boolean; primary: boolean; writtenAddress: string }[];
+    };
+    const active = (detail.addresses ?? []).filter((address) => address.active);
+    const chosen = active.find((address) => address.primary) ?? active[0];
+    if (!chosen) {
+      setAddressHint('Este cliente no tiene domicilio cargado.');
+      return;
+    }
+    setDeliveryAddress(chosen.writtenAddress);
+    setAddressHint('Domicilio del cliente. Podés cambiarlo para esta entrega.');
   }
 
   async function mutate(path: string, payload?: unknown) {
@@ -867,6 +898,7 @@ export function OrderIntakePage({ queue = false }: { queue?: boolean } = {}) {
                                 onClick={() => {
                                   setSelectedCustomer(customer);
                                   setCustomerResults([]);
+                                  void fillAddressFor(customer.id);
                                 }}
                                 type="button"
                               >
@@ -895,25 +927,34 @@ export function OrderIntakePage({ queue = false }: { queue?: boolean } = {}) {
             </fieldset>
 
             <div className="form-grid form-grid-wide">
-              <label className="field">
-                Período
-                <select
-                  name="menuId"
-                  onChange={(event) => {
-                    setSelectedMenuId(event.target.value);
-                    setSelectedOfferingId('');
-                  }}
-                  required
-                  value={selectedMenuId}
-                >
-                  <option value="">Seleccionar</option>
-                  {publishedMenus.map((menu) => (
-                    <option key={menu.id} value={menu.id}>
-                      {menu.cycle.alias}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {/*
+               * El período no se pregunta: hay uno abierto por vez, y elegirlo era confirmar lo
+               * único posible. Si alguna vez hay dos publicados a la vez vuelve el desplegable,
+               * porque ahí sí hay una decisión que tomar.
+               */}
+              {publishedMenus.length > 1 ? (
+                <label className="field">
+                  Período
+                  <select
+                    name="menuId"
+                    onChange={(event) => {
+                      setSelectedMenuId(event.target.value);
+                      setSelectedOfferingId('');
+                    }}
+                    required
+                    value={selectedMenuId}
+                  >
+                    <option value="">Seleccionar</option>
+                    {publishedMenus.map((menu) => (
+                      <option key={menu.id} value={menu.id}>
+                        {menu.cycle.alias}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <input name="menuId" type="hidden" value={selectedMenuId} />
+              )}
               <label className="field">
                 Variedad
                 <select
@@ -965,10 +1006,20 @@ export function OrderIntakePage({ queue = false }: { queue?: boolean } = {}) {
                 <p className="field-static">
                   {selectedMenu ? deliveryDateLabel(selectedMenu.cycle.closeAt) : '—'}
                 </p>
+                {selectedMenu ? (
+                  <small className="field-hint">{selectedMenu.cycle.alias}</small>
+                ) : null}
               </div>
               <label className="field field-wide">
                 Dirección
-                <input minLength={4} name="deliveryAddress" required />
+                <input
+                  minLength={4}
+                  name="deliveryAddress"
+                  onChange={(event) => setDeliveryAddress(event.target.value)}
+                  required
+                  value={deliveryAddress}
+                />
+                {addressHint ? <small className="field-hint">{addressHint}</small> : null}
               </label>
               <label className="field">
                 Origen
@@ -988,7 +1039,6 @@ export function OrderIntakePage({ queue = false }: { queue?: boolean } = {}) {
                   <option value="facebook">Facebook</option>
                   <option value="email">Email</option>
                   <option value="referral">Recomendación</option>
-                  <option value="opportunity_sale">Venta de oportunidad (excedente)</option>
                 </select>
               </label>
               <label className="field">
@@ -1058,6 +1108,8 @@ export function OrderIntakePage({ queue = false }: { queue?: boolean } = {}) {
                 onClick={() => {
                   draft.clear();
                   setSelectedCustomer(null);
+                  setDeliveryAddress('');
+                  setAddressHint('');
                   setCustomerQuery('');
                   setCustomerResults([]);
                   setSelectedOfferingId('');
