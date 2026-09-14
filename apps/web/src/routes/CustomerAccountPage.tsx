@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
 import { BrandLoading } from '../components/BrandLoading.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage, formatMoney, orderStatusLabel } from '../lib/operations.js';
 import { startGoogleOAuth } from '../lib/oauth.js';
@@ -477,7 +478,15 @@ export function CustomerAccountPage() {
               </div>
             ))}
             {orders.length === 0 ? (
-              <p className="empty-state">Todavía no hiciste ningún pedido.</p>
+              <EmptyState
+                action={
+                  <Link className="button button-primary" to="/pedido">
+                    Hacer un pedido
+                  </Link>
+                }
+                body="Cuando hagas el primero, va a aparecer acá con su estado."
+                title="Todavía no hiciste ningún pedido"
+              />
             ) : null}
           </div>
         </section>

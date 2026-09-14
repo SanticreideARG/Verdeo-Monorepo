@@ -11,6 +11,7 @@ import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus
 import { DataTable } from '../components/DataTable.js';
 import { DraftNotice } from '../components/DraftNotice.js';
 import { EmptyState } from '../components/EmptyState.js';
+import { ReasonDialog } from '../components/ReasonDialog.js';
 import { ErrorNotice } from '../components/ErrorNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
 import { deliveryDateFor, deliveryDateLabel } from '../lib/dates.js';
@@ -157,6 +158,13 @@ export function OrderIntakePage() {
   const [loading, setLoading] = useState(true);
   // El pedido que se está por cancelar: mientras haya uno, el diálogo pide el motivo.
   const [cancelling, setCancelling] = useState<OrderSummary | null>(null);
+  /*
+   * El pedido que se está por revertir.
+   *
+   * Marcar listo un lote es la acción más fácil de disparar de más, y hasta ahora volver atrás una
+   * fila pedía tocar la base. El permiso existía desde el principio; lo que faltaba era el botón.
+   */
+  const [reverting, setReverting] = useState<OrderSummary | null>(null);
   // La zona cuyo lote se está marcando: deshabilita todos los botones mientras corre, para que dos
   // clics seguidos no manden la misma tanda dos veces.
   const [markingZone, setMarkingZone] = useState<string | null>(null);
@@ -576,6 +584,31 @@ export function OrderIntakePage() {
   }
 
   /**
+   * Vuelve un pedido al estado anterior, con su motivo.
+   *
+   * El servidor exige las dos cosas —la confirmación explícita y el motivo— y tiene razón: una
+   * vuelta atrás cambia lo que cocina y reparto ya dieron por hecho, y sin motivo el historial no
+   * explica nada tres semanas después.
+   */
+  async function revert(order: OrderSummary, reason: string) {
+    const previous = order.status === 'DELIVERED' ? 'READY' : 'CONFIRMED';
+    try {
+      await mutate(`/api/v1/orders/${order.id}/status`, {
+        confirmedReversal: true,
+        reason,
+        status: previous,
+      });
+      setReverting(null);
+      showToast(
+        `Pedido ${order.publicNumber} vuelto a ${orderStatusLabel(previous).toLowerCase()}.`,
+      );
+      await loadData();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'No pudimos revertir el pedido.');
+    }
+  }
+
+  /**
    * Pasa a "listo" todos los confirmados de una zona.
    *
    * Manda los ids que están a la vista y no un filtro: el servidor transiciona exactamente lo que
@@ -715,6 +748,16 @@ export function OrderIntakePage() {
               type="button"
             >
               Marcar listo
+            </button>
+          ) : null}
+          {['READY', 'DELIVERED'].includes(order.status) &&
+          permissions.includes('orders.revert_status') ? (
+            <button
+              className="button button-secondary"
+              onClick={() => setReverting(order)}
+              type="button"
+            >
+              Revertir
             </button>
           ) : null}
           {['DRAFT', 'CONFIRMED'].includes(order.status) &&
@@ -1298,6 +1341,17 @@ export function OrderIntakePage() {
             await markZoneReady(batch.zone, batch.orders);
           }}
           title={`¿Marcar listos los pedidos de ${confirmingBatch.zone}?`}
+        />
+      ) : null}
+
+      {reverting ? (
+        <ReasonDialog
+          confirmLabel="Revertir"
+          detail={`Vuelve a ${reverting.status === 'DELIVERED' ? 'listo para entregar' : 'confirmado'}. Queda en el historial del pedido, con el motivo.`}
+          onCancel={() => setReverting(null)}
+          onConfirm={(reason) => revert(reverting, reason)}
+          placeholder="Ej. se marcó listo por error"
+          title={`¿Revertir el pedido ${reverting.publicNumber}?`}
         />
       ) : null}
 

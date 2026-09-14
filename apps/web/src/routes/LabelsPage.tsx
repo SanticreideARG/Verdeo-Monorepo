@@ -12,6 +12,13 @@ import { currentPeriod, periodsFromMenus, type Period } from '../lib/periods.js'
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { showToast } from '../lib/toast.js';
 
+interface OrderHit {
+  customer: { displayName: string };
+  id: string;
+  publicNumber: string;
+  status: string;
+}
+
 interface Label {
   composable: boolean;
   customerDisplayName: string;
@@ -144,6 +151,15 @@ export function LabelsPage() {
   const [cycleId, setCycleId] = useState('');
   const [zone, setZone] = useState('');
   const [labels, setLabels] = useState<Label[]>([]);
+  /*
+   * Reimprimir un pedido suelto.
+   *
+   * Vivía sólo en la ficha del pedido, que es donde se lo busca cuando ya se lo tiene delante. Acá
+   * hace falta por lo contrario: cuando se rompió una etiqueta en la cocina y lo único que se sabe
+   * es el número.
+   */
+  const [orderQuery, setOrderQuery] = useState('');
+  const [orderHits, setOrderHits] = useState<OrderHit[]>([]);
   const [labelsLoading, setLabelsLoading] = useState(false);
 
   const [loading, setLoading] = useState(true);
@@ -216,6 +232,42 @@ export function LabelsPage() {
       active = false;
     };
   }, [canRead, cycleId]);
+
+  // Busca a los 350 ms de dejar de tipear, y desde dos caracteres: con uno, la lista no dice nada.
+  useEffect(() => {
+    const trimmed = orderQuery.trim();
+    if (!canRead || trimmed.length < 2) {
+      setOrderHits([]);
+      return;
+    }
+    let active = true;
+    const timer = window.setTimeout(() => {
+      void apiRequest(`/api/v1/orders?search=${encodeURIComponent(trimmed)}&limit=5`).then(
+        async (response) => {
+          if (!active || !response.ok) return;
+          setOrderHits(((await response.json()) as { items: OrderHit[] }).items);
+        },
+      );
+    }, 350);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [canRead, orderQuery]);
+
+  /** La hoja de un pedido solo: las etiquetas de sus unidades, con el mismo formato. */
+  async function printOrder(orderId: string) {
+    setMessage('');
+    const response = await apiRequest(`/api/v1/orders/${orderId}/labels/export`);
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank', 'noopener,noreferrer');
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  }
 
   async function save(backgroundImageUrl?: string | null) {
     setMessage('');
@@ -380,6 +432,34 @@ export function LabelsPage() {
                   Se abre la hoja lista para imprimir. Para guardarla, elegí «Guardar como PDF» en
                   el destino del diálogo de impresión.
                 </p>
+
+                <label className="field">
+                  O un pedido suelto
+                  <input
+                    onChange={(event) => setOrderQuery(event.target.value)}
+                    placeholder="N° de pedido o cliente"
+                    value={orderQuery}
+                  />
+                </label>
+                {orderHits.length > 0 ? (
+                  <ul className="grid gap-1">
+                    {orderHits.map((hit) => (
+                      <li key={hit.id}>
+                        <button
+                          className="helpbot-row"
+                          onClick={() => void printOrder(hit.id)}
+                          type="button"
+                        >
+                          <span>
+                            <strong>{hit.publicNumber}</strong>
+                            <small>{hit.customer.displayName}</small>
+                          </span>
+                          <span aria-hidden="true">Imprimir</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
 
               <div className="operation-card grid gap-4">

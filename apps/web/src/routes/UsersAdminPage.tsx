@@ -3,6 +3,7 @@ import { useCallback, useMemo, useEffect, useState, type FormEvent } from 'react
 import { ActionButton } from '../components/ActionButton.js';
 import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
 import { DashboardShell } from '../components/DashboardShell.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage } from '../lib/operations.js';
@@ -573,7 +574,18 @@ export function UsersAdminPage() {
                 })}
                 {users.length === 0 ? <p className="empty-state">Sin usuarios.</p> : null}
                 {groupedUsers.length === 0 && users.length > 0 ? (
-                  <p className="empty-state">Ningún usuario coincide con la búsqueda.</p>
+                  <EmptyState
+                    action={
+                      <button
+                        className="button button-secondary"
+                        onClick={() => setSearch('')}
+                        type="button"
+                      >
+                        Limpiar la búsqueda
+                      </button>
+                    }
+                    title="Ningún usuario coincide con la búsqueda"
+                  />
                 ) : null}
               </div>
             </div>

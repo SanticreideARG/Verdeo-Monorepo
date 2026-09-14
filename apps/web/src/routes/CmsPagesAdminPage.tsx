@@ -4,6 +4,7 @@ import { ActionButton } from '../components/ActionButton.js';
 import { CmsSection } from '../components/CmsSections.js';
 import { CmsImageField } from '../components/CmsImageField.js';
 import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
@@ -463,7 +464,10 @@ export function CmsPagesAdminPage() {
                       </article>
                     ))}
                     {sections.length === 0 ? (
-                      <p className="empty-state">Sin secciones. Agregá la primera abajo.</p>
+                      <EmptyState
+                        body="Se agregan abajo, eligiendo el tipo. El orden en que quedan es el orden en que se ven."
+                        title="Esta página todavía no tiene secciones"
+                      />
                     ) : null}
                   </div>
 
