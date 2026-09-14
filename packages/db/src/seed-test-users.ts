@@ -12,7 +12,6 @@ const testUsers = [
   { displayName: 'Test Superadmin', email: 'superadmin@verdeo.test', roleKey: 'superadmin' },
   { displayName: 'Test Operador', email: 'operador@verdeo.test', roleKey: 'operador' },
   { displayName: 'Test Repartidor', email: 'repartidor@verdeo.test', roleKey: 'repartidor' },
-  { displayName: 'Test Cocina', email: 'cocina@verdeo.test', roleKey: 'cocina' },
   { displayName: 'Test Cliente', email: 'cliente@verdeo.test', roleKey: 'cliente' },
 ] as const;
 

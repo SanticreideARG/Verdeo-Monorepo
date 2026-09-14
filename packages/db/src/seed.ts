@@ -27,7 +27,6 @@ const initialRoles = [
   { key: 'superadmin', name: 'Superadmin', description: 'Administración completa del sistema' },
   { key: 'operador', name: 'Operador', description: 'Operación comercial configurable' },
   { key: 'repartidor', name: 'Repartidor', description: 'Operación de reparto configurable' },
-  { key: 'cocina', name: 'Cocina', description: 'Rol reservado para operación de cocina' },
   { key: 'cliente', name: 'Cliente', description: 'Acceso del cliente a sus propios recursos' },
 ] as const;
 
@@ -269,28 +268,6 @@ try {
           })),
         )
         .onConflictDoNothing();
-    }
-
-    // "Cocina informa cuántos productos salieron" (WEEKLY_MENU_AND_PRODUCTION.md) — the one
-    // production.* permission the spec names a role for. `production.read`/`production.generate`
-    // and `production.adjust_surplus` stay superadmin-only until a role is chosen for them.
-    const [reportPermission] = await transaction
-      .select({ id: permissions.id })
-      .from(permissions)
-      .where(eq(permissions.key, 'production.report'))
-      .limit(1);
-    if (reportPermission) {
-      const [cocinaRole] = await transaction
-        .select({ id: roles.id })
-        .from(roles)
-        .where(eq(roles.key, 'cocina'))
-        .limit(1);
-      if (cocinaRole) {
-        await transaction
-          .insert(rolePermissions)
-          .values({ permissionId: reportPermission.id, roleId: cocinaRole.id })
-          .onConflictDoNothing();
-      }
     }
 
     // The V1 coefficient is a single global row with no natural unique key to upsert on, so this

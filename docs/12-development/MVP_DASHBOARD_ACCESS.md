@@ -50,7 +50,7 @@ $env:ALLOW_TEST_USER_SEED = 'true'
 pnpm auth:seed-test-users
 ```
 
-This provisions one account for each seeded role: `superadmin`, `operador`, `repartidor`, `cocina`, and
+This provisions one account for each seeded role: `superadmin`, `operador`, `repartidor` y
 `cliente`. Existing accounts are skipped. Generated passwords appear only in the command output. Never set
 `ALLOW_TEST_USER_SEED` in Production or point this command at the production database.
 
@@ -400,3 +400,17 @@ con entrada propia en el menú; `/app/ajustes/etiquetas` redirige y la pestaña 
 - **No hay PDF generado en el servidor**: se abre la hoja imprimible y el diálogo del navegador
   imprime o guarda como PDF. Meter una librería de PDF en la función sería el único modo de
   prometer un archivo, y el resultado con fondos de imagen es peor.
+
+## Sin rol de cocina (as built)
+
+Cocina **no entra al panel**: recibe lo que necesita como información ya generada —el consolidado y
+las etiquetas, que alguien exporta o imprime y le pasa—. Por eso el rol `cocina` se eliminó en vez
+de completarlo.
+
+El rol existía con un permiso solo (`production.report`) y la pantalla de Cocina pide
+`production.read`: quien entrara con ese rol no veía el consolidado ni podía imprimir, así que el rol
+prometía un acceso que no daba. La alternativa era darle los permisos que le faltaban; se eligió la
+contraria, que además saca una cuenta más de un sistema que maneja datos de clientes.
+
+`production.report` sigue existiendo como permiso: informar producción real es algo que hace quien
+administra la semana, y puede concederse a una persona puntual como excepción.
