@@ -165,6 +165,14 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         permissions: SETTINGS_TAB_PERMISSIONS,
       },
       { href: '/app/auditoria', icon: 'audit', label: 'Auditoría', permission: 'audit.read' },
+      // Invisible salvo para quien tenga el permiso, que no viene con ningún rol: la descarga se
+      // lleva los datos de todos los clientes en un archivo.
+      {
+        href: '/app/respaldos',
+        icon: 'settings',
+        label: 'Respaldos',
+        permission: 'backups.manage',
+      },
     ],
   },
 ];

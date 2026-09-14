@@ -32,6 +32,7 @@ import {
   PostgresPaymentsService,
   PostgresSessionRepository,
   PostgresCmsService,
+  PostgresBackupService,
   PostgresHelpService,
   PostgresIntegrationCredentialsService,
   PostgresMessagingService,
@@ -144,6 +145,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
   const surveys = new PostgresSurveyService(database.db);
   const assistant = new PostgresAssistantService(database.db);
   const help = new PostgresHelpService(database.db);
+  const backups = new PostgresBackupService(database.db, options.version);
   const aiTasks = new PostgresAITaskService(
     database.db,
     aiPrompts,
@@ -446,6 +448,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     auditQuery,
     assistant,
     surveys,
+    backups,
     help,
     cms,
     ...(avatarStorage ? { avatarStorage } : {}),

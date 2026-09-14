@@ -102,4 +102,12 @@ export const initialPermissionCatalog: readonly PermissionDefinition[] = [
   { key: 'help.manage', group: 'help', description: 'Editar artículos de ayuda' },
   { key: 'stats.read', group: 'stats', description: 'Ver estadísticas' },
   { key: 'calendar.use', group: 'general', description: 'Ver y anotar en el calendario' },
+  /*
+   * Descargar y restaurar respaldos.
+   *
+   * Uno solo para las dos mitades y ningún rol lo trae de fábrica: la descarga se lleva los datos
+   * de todos los clientes en un archivo, y la restauración puede pisar la base entera. Es un
+   * permiso que se concede a una persona, no a un puesto.
+   */
+  { key: 'backups.manage', group: 'general', description: 'Descargar y restaurar respaldos' },
 ];

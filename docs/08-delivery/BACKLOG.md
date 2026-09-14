@@ -174,6 +174,21 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [x] Advanced analytics (Estadísticas: por zona, semana, tamaño, variedad y día).
 - [ ] Recommendation learning.
 
+## Respaldos y restauración
+
+- [x] **Descarga del respaldo en JSON** (`/app/respaldos`, permiso `backups.manage`, que no viene
+      con ningún rol). Diez grupos elegibles, recorte por ciudad y por período, y un manifiesto con
+      la fecha, la versión de la aplicación, cuántas migraciones tiene la base y cuántas filas trae
+      cada tabla. Las ciudades y las zonas viajan siempre que se lleve algo que las referencia.
+- [x] **Lo que nunca sale**: contraseñas, sesiones, tokens y credenciales. Tampoco usuarios y roles
+      (decisión explícita), ni la auditoría, ni las estadísticas —se recalculan de los pedidos, y un
+      número guardado que ya no coincide con sus datos es peor que no tenerlo.
+- [ ] **Restauración**: simulación obligatoria que informe qué se crearía y qué se pisaría,
+      confirmación escrita, transacción única y registro en auditoría. Dos modos: sólo lo que falta
+      y reemplazar. Se niega ante un archivo de otro esquema (para eso está el manifiesto).
+- [ ] Auditoría de visibilidad de secciones por rol: qué ve cada puesto hoy y si algo quedó
+      accesible de más. Pedido explícito al agregar el permiso de respaldos.
+
 ## Deuda encontrada, sin resolver
 
 - [x] **`updateMenu` borraba y recreaba todas las ofertas de la semana**, dejando sin vínculo a los

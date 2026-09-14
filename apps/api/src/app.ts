@@ -973,6 +973,14 @@ interface PaymentsEngine {
   ): Promise<unknown>;
 }
 
+interface BackupEngine {
+  exportBackup(options: {
+    cycleId?: string | undefined;
+    operatingSiteId?: string | undefined;
+    parts: readonly string[];
+  }): Promise<{ data: Record<string, unknown[]>; manifest: unknown }>;
+}
+
 interface CreateAppOptions {
   aiConfiguration?: AIConfigurationEngine;
   aiPrompts?: AIPromptEngine;
@@ -980,6 +988,8 @@ interface CreateAppOptions {
   appOrigin: string;
   accessTokens?: AccessTokenEngine;
   auditQuery?: AuditQueryEngine;
+  /** Descarga del respaldo en JSON. Opcional: sin esto configurado el endpoint responde 500. */
+  backups?: BackupEngine;
   assistant?: AssistantEngine;
   surveys?: SurveyEngine;
   help?: HelpEngine;
@@ -5199,6 +5209,41 @@ export function createApp(options: CreateAppOptions) {
 
   // --- Ayuda modularizada: every signed-in user sees only articles with no permission gate or
   // one they actually hold; the editor (help.manage) sees and edits everything. ---------------
+
+  /**
+   * El respaldo, como archivo JSON.
+   *
+   * Un permiso propio y de nadie por defecto: la descarga se lleva los datos de todos los clientes
+   * en un archivo. No hay versión "por si acaso" sin permiso.
+   *
+   * Va como descarga y no como respuesta para mirar: son varios megas y el navegador no tiene por
+   * qué intentar pintarlos.
+   */
+  app.get('/api/v1/backups/export', async (context) => {
+    if (!context.get('session').permissions.includes('backups.manage')) return forbidden(context);
+    const backups = options.backups;
+    if (!backups) throw new Error('Backup engine is not configured');
+
+    const requested = (context.req.query('parts') ?? '')
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (requested.length === 0)
+      return badRequest(context, 'Elegí al menos un grupo para respaldar.');
+
+    const backup = await backups.exportBackup({
+      ...(context.req.query('cycleId') ? { cycleId: context.req.query('cycleId') } : {}),
+      ...(context.req.query('operatingSiteId')
+        ? { operatingSiteId: context.req.query('operatingSiteId') }
+        : {}),
+      parts: requested,
+    });
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    context.header('content-type', 'application/json; charset=utf-8');
+    context.header('content-disposition', `attachment; filename="verdeo-respaldo-${stamp}.json"`);
+    return context.body(JSON.stringify(backup, null, 2));
+  });
 
   app.get('/api/v1/help', async (context) => {
     const items = await requireHelp().listVisible(context.get('session').permissions);

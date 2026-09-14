@@ -19,6 +19,7 @@ import { ChatPage } from './ChatPage.js';
 import { CustomersPage } from './CustomersPage.js';
 import { DeliveryAppPage } from './DeliveryAppPage.js';
 import { AuditLogPage } from './AuditLogPage.js';
+import { BackupsPage } from './BackupsPage.js';
 import { GeographySettingsPage } from './GeographySettingsPage.js';
 import { MenuCatalogSettingsPage } from './MenuCatalogSettingsPage.js';
 import { HelpPage } from './HelpPage.js';
@@ -354,6 +355,7 @@ export function App() {
       <Route path="/app/ajustes/asistente" element={<AssistantSettingsPage />} />
       <Route path="/app/ajustes/pagos" element={<PaymentMethodsSettingsPage />} />
       <Route path="/app/auditoria" element={<AuditLogPage />} />
+      <Route path="/app/respaldos" element={<BackupsPage />} />
       <Route path="/app/ajustes/chat" element={<ChatLinksPage />} />
       <Route path="/app/ayuda" element={<HelpPage />} />
       <Route
