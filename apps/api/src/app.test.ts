@@ -2632,6 +2632,20 @@ describe('API foundation', () => {
         appOrigin: 'http://localhost:5173',
         cookieSameSite: 'Lax',
         credentials: emptyCredentials,
+        /*
+         * Estadísticas y cobros ahora cruzan la ciudad pedida contra las de la sesión, así que estos
+         * endpoints dependen de geografía. Este doble responde el ámbito de un superadmin: alcanza la
+         * ciudad de los filtros y puede mirar todas juntas.
+         */
+        geography: {
+          listActiveZones: () => Promise.resolve([]),
+          resolveScope: () =>
+            Promise.resolve({
+              canSelectGlobal: true,
+              defaultSiteId: '90000000-0000-4000-8000-000000000001',
+              sites: [{ id: '90000000-0000-4000-8000-000000000001' }],
+            }),
+        } as never,
         logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
         operations: operations as never,
         sessions: {
@@ -2728,6 +2742,21 @@ describe('API foundation', () => {
     function buildPaymentsApp(payments: Record<string, unknown>, permissions: string[]) {
       return createApp({
         appOrigin: 'http://localhost:5173',
+        /*
+         * Estadísticas y cobros ahora cruzan la ciudad pedida contra las de la sesión, así que estos
+         * endpoints dependen de geografía. Este doble responde el ámbito de un superadmin: alcanza la
+         * ciudad de los filtros y puede mirar todas juntas.
+         */
+        geography: {
+          listActiveZones: () => Promise.resolve([]),
+          resolveScope: () =>
+            Promise.resolve({
+              canSelectGlobal: true,
+              defaultSiteId: '90000000-0000-4000-8000-000000000001',
+              sites: [{ id: '90000000-0000-4000-8000-000000000001' }],
+            }),
+        } as never,
+
         cookieSameSite: 'Lax',
         credentials: emptyCredentials,
         logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),

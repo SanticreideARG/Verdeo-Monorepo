@@ -186,8 +186,13 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [ ] **Restauración**: simulación obligatoria que informe qué se crearía y qué se pisaría,
       confirmación escrita, transacción única y registro en auditoría. Dos modos: sólo lo que falta
       y reemplazar. Se niega ante un archivo de otro esquema (para eso está el manifiesto).
-- [ ] Auditoría de visibilidad de secciones por rol: qué ve cada puesto hoy y si algo quedó
-      accesible de más. Pedido explícito al agregar el permiso de respaldos.
+- [x] **Auditoría de visibilidad por rol.** Tres roles reales (superadmin, operador, repartidor),
+      tres usuarios y ninguna excepción en uso. Resultados: el rol `cocina` se eliminó —cocina recibe
+      información, no entra al panel—, y cinco endpoints tomaban la ciudad del parámetro sin
+      cruzarla con las de la sesión (estadísticas, rutas, cobros, calendario y respaldos): cerrado
+      con `resolveSiteQuery`, con tests que lo fijan.
+- [ ] **El rol operador no puede tomar pedidos**: no tiene ningún permiso de `orders.*` ni de
+      `customers.*`. Completarlo o eliminarlo como se hizo con cocina.
 
 ## Deuda encontrada, sin resolver
 

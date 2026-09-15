@@ -1322,6 +1322,34 @@ export function createApp(options: CreateAppOptions) {
     await next();
   };
 
+  /**
+   * La ciudad efectiva de una consulta que la recibe por parámetro, cruzada con las del usuario.
+   *
+   * El middleware de arriba resuelve esto para pedidos, clientes, producción y zonas. Cinco
+   * endpoints quedaban afuera y tomaban `operatingSiteId` tal como venía del navegador: alguien con
+   * permiso de lectura y acceso a una sola ciudad podía leer las otras cambiando un parámetro.
+   *
+   * Sin ciudad pedida vale lo mismo que en el middleware: global sólo para quien puede, y si no, su
+   * ciudad por defecto. Una ciudad que la sesión no alcanza responde 403 y no una lista vacía: la
+   * lista vacía se lee como "no hay datos" y esconde que faltaba permiso.
+   */
+  const resolveSiteQuery = async (
+    context: Context<{ Variables: AppVariables }>,
+    requested?: string,
+  ): Promise<{ operatingSiteId: string | null } | null> => {
+    const session = context.get('session');
+    const scope = await requireGeography().resolveScope(
+      session.userId,
+      session.permissions.includes('sites.access_all'),
+    );
+    const wanted = (requested ?? context.req.header(SITE_SCOPE_HEADER))?.trim();
+    if (!wanted || wanted.toLowerCase() === 'global') {
+      return { operatingSiteId: scope.canSelectGlobal ? null : scope.defaultSiteId };
+    }
+    if (!scope.sites.some((site) => site.id === wanted)) return null;
+    return { operatingSiteId: wanted };
+  };
+
   const scoped = <T>(context: Context<{ Variables: AppVariables }>, input: T): ScopedInput<T> => ({
     ...input,
     operatingSiteId: context.get('scope')?.operatingSiteId ?? null,
@@ -3806,7 +3834,9 @@ export function createApp(options: CreateAppOptions) {
 
   app.get('/api/v1/delivery/routes', async (context) => {
     if (!context.get('session').permissions.includes('routes.read')) return forbidden(context);
-    const items = await requireDelivery().listRoutes(context.req.query('operatingSiteId'));
+    const site = await resolveSiteQuery(context, context.req.query('operatingSiteId'));
+    if (!site) return forbidden(context);
+    const items = await requireDelivery().listRoutes(site.operatingSiteId ?? undefined);
     return context.json(DeliveryRouteListResponseSchema.parse({ items: contractValue(items) }));
   });
 
@@ -3994,7 +4024,12 @@ export function createApp(options: CreateAppOptions) {
     if (!context.get('session').permissions.includes('stats.read')) return forbidden(context);
     const query = StatsQuerySchema.safeParse(context.req.query());
     if (!query.success) return badRequest(context, 'Revisá el filtro.', query.error.issues);
-    const overview = await requireOperations().getStatsOverview(query.data);
+    const site = await resolveSiteQuery(context, query.data.operatingSiteId);
+    if (!site) return forbidden(context);
+    const overview = await requireOperations().getStatsOverview({
+      ...query.data,
+      ...(site.operatingSiteId ? { operatingSiteId: site.operatingSiteId } : {}),
+    });
     return context.json(StatsOverviewSchema.parse(contractValue(overview)));
   });
 
@@ -4006,7 +4041,9 @@ export function createApp(options: CreateAppOptions) {
 
   app.get('/api/v1/payments/dashboard', async (context) => {
     if (!context.get('session').permissions.includes('payments.read')) return forbidden(context);
-    const dashboard = await requirePayments().dashboard(context.req.query('operatingSiteId'));
+    const site = await resolveSiteQuery(context, context.req.query('operatingSiteId'));
+    if (!site) return forbidden(context);
+    const dashboard = await requirePayments().dashboard(site.operatingSiteId ?? undefined);
     return context.json(PaymentsDashboardSchema.parse(contractValue(dashboard)));
   });
 
@@ -4134,9 +4171,11 @@ export function createApp(options: CreateAppOptions) {
     const to = context.req.query('to');
     if (!from || !to) return badRequest(context, 'Indicá el rango de fechas.');
 
+    const site = await resolveSiteQuery(context, context.req.query('operatingSiteId'));
+    if (!site) return forbidden(context);
     const items = await options.calendar.listEvents({
       from,
-      operatingSiteId: context.req.query('operatingSiteId') ?? null,
+      operatingSiteId: site.operatingSiteId,
       to,
       // Personal reminders are filtered by the service against this, not by the caller.
       viewerUserId: session.userId,
@@ -5231,11 +5270,17 @@ export function createApp(options: CreateAppOptions) {
     if (requested.length === 0)
       return badRequest(context, 'Elegí al menos un grupo para respaldar.');
 
+    /*
+     * La ciudad del respaldo también se cruza con las del usuario. Hoy el permiso lo tiene sólo el
+     * superadmin, que las alcanza todas; el día que se le conceda a alguien de una ciudad, esto es
+     * lo que evita que se lleve las demás en un archivo.
+     */
+    const site = await resolveSiteQuery(context, context.req.query('operatingSiteId'));
+    if (!site) return forbidden(context);
+
     const backup = await backups.exportBackup({
       ...(context.req.query('cycleId') ? { cycleId: context.req.query('cycleId') } : {}),
-      ...(context.req.query('operatingSiteId')
-        ? { operatingSiteId: context.req.query('operatingSiteId') }
-        : {}),
+      ...(site.operatingSiteId ? { operatingSiteId: site.operatingSiteId } : {}),
       parts: requested,
     });
 

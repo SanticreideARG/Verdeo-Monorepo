@@ -137,6 +137,58 @@ describe('Operating scope selection', () => {
     expect(geography.resolveScope.mock.calls[0]?.[1]).toBe(true);
   });
 
+  /*
+   * Los cinco endpoints que tomaban la ciudad del parámetro sin cruzarla con la sesión.
+   *
+   * No los cubre el middleware —aplicarlo en bloque a /delivery/* ya rompió el reparto una vez—,
+   * así que lo resuelven llamando a `resolveSiteQuery`. Estos tests son lo que evita que el próximo
+   * endpoint con `operatingSiteId` en la query se olvide de hacerlo.
+   */
+  it('no deja pedir estadísticas de una ciudad ajena por parámetro', async () => {
+    const getStatsOverview = vi.fn();
+    const { app } = scopedApp(
+      ['stats.read'],
+      { canSelectGlobal: false, defaultSiteId: neuquen.id, sites: [neuquen] },
+      vi.fn(),
+      { getStatsOverview },
+    );
+
+    const response = await app.request(`/api/v1/stats?operatingSiteId=${bariloche.id}`, {
+      headers: sessionCookie,
+    });
+
+    expect(response.status).toBe(403);
+    expect(getStatsOverview).not.toHaveBeenCalled();
+  });
+
+  it('acota las estadísticas a la ciudad de la sesión cuando no se pide ninguna', async () => {
+    const getStatsOverview = vi.fn().mockResolvedValue({
+      byDay: [],
+      bySize: [],
+      byVariety: [],
+      byWeek: [],
+      byZone: [],
+      global: {
+        averageOrderValueMinor: 0,
+        currency: 'ARS',
+        orders: 0,
+        revenueMinor: 0,
+        statuses: [],
+        units: 0,
+      },
+    });
+    const { app } = scopedApp(
+      ['stats.read'],
+      { canSelectGlobal: false, defaultSiteId: neuquen.id, sites: [neuquen] },
+      vi.fn(),
+      { getStatsOverview },
+    );
+
+    await app.request('/api/v1/stats', { headers: sessionCookie });
+
+    expect(getStatsOverview.mock.calls[0]?.[0]).toMatchObject({ operatingSiteId: neuquen.id });
+  });
+
   it('rejects an operation the session has no membership for', async () => {
     const listCustomers = vi.fn().mockResolvedValue({ items: [], nextCursor: null });
     const { app } = scopedApp(
