@@ -391,6 +391,9 @@ function CarouselSection({ section }: { section: PageSection }) {
 }
 
 export function CmsSection({ section }: { section: PageSection }) {
+  // Una sección apagada no se dibuja. Vale también para la vista previa del editor, que existe para
+  // mostrar lo que ve el visitante y no lo que hay guardado.
+  if (section.hidden === true) return null;
   const anchorId = section.anchorId as string | undefined;
   switch (section.type) {
     case 'HERO_ROTATOR':

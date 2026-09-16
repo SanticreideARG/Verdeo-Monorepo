@@ -979,6 +979,10 @@ interface BackupEngine {
     operatingSiteId?: string | undefined;
     parts: readonly string[];
   }): Promise<{ data: Record<string, unknown[]>; manifest: unknown }>;
+  restoreBackup(
+    paquete: { data: Record<string, unknown[]>; manifest: { schemaVersion: string } },
+    options: { dryRun: boolean; mode: 'faltantes' | 'reemplazar' },
+  ): Promise<unknown>;
 }
 
 interface CreateAppOptions {
@@ -5288,6 +5292,47 @@ export function createApp(options: CreateAppOptions) {
     context.header('content-type', 'application/json; charset=utf-8');
     context.header('content-disposition', `attachment; filename="verdeo-respaldo-${stamp}.json"`);
     return context.body(JSON.stringify(backup, null, 2));
+  });
+
+  /**
+   * Restaurar un paquete, o simular la restauración.
+   *
+   * La simulación no es una cortesía de la pantalla: es un modo del servicio que lee la base y no
+   * la toca. Quien restaura tiene que poder ver cuántas filas se crearían y cuántas se pisarían
+   * antes de decidir, porque lo segundo no se deshace.
+   *
+   * Un archivo de otro esquema se rechaza con 409 y no con 500: no es un fallo del servidor, es una
+   * regla del negocio —ese archivo no corresponde a esta base— y la pantalla tiene que poder
+   * explicarlo.
+   */
+  app.post('/api/v1/backups/restore', async (context) => {
+    if (!context.get('session').permissions.includes('backups.manage')) return forbidden(context);
+    const backups = options.backups;
+    if (!backups) throw new Error('Backup engine is not configured');
+
+    const body = (await context.req.json().catch(() => null)) as {
+      data?: Record<string, unknown[]>;
+      dryRun?: boolean;
+      manifest?: { schemaVersion?: string };
+      mode?: string;
+    } | null;
+    if (!body?.data || !body.manifest?.schemaVersion) {
+      return badRequest(context, 'El archivo no parece un respaldo de Verdeo.');
+    }
+    const mode = body.mode === 'reemplazar' ? 'reemplazar' : 'faltantes';
+
+    try {
+      const report = await backups.restoreBackup(
+        { data: body.data, manifest: { schemaVersion: body.manifest.schemaVersion } },
+        { dryRun: body.dryRun !== false, mode },
+      );
+      return context.json(contractValue(report));
+    } catch (error) {
+      if (error instanceof Error && error.name === 'RestoreSchemaMismatchError') {
+        return context.json({ error: { code: 'CONFLICT', message: error.message } }, 409);
+      }
+      throw error;
+    }
   });
 
   app.get('/api/v1/help', async (context) => {

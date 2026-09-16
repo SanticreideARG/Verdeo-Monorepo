@@ -183,9 +183,12 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [x] **Lo que nunca sale**: contraseñas, sesiones, tokens y credenciales. Tampoco usuarios y roles
       (decisión explícita), ni la auditoría, ni las estadísticas —se recalculan de los pedidos, y un
       número guardado que ya no coincide con sus datos es peor que no tenerlo.
-- [ ] **Restauración**: simulación obligatoria que informe qué se crearía y qué se pisaría,
-      confirmación escrita, transacción única y registro en auditoría. Dos modos: sólo lo que falta
-      y reemplazar. Se niega ante un archivo de otro esquema (para eso está el manifiesto).
+- [x] **Restauración** con cuatro frenos: cargar el archivo, elegir modo, **simular** (un modo del
+      servicio que lee y no escribe) y escribir la palabra. Dos modos —sólo lo que falta y
+      reemplazar—, transacción única, y rechazo de un archivo de otro esquema. **Nunca borra**: una
+      fila que está en la base y no en el archivo se queda. Seis tests en  fijan
+      todo eso.
+- [ ] Registrar la restauración en auditoría (hoy queda el informe en pantalla, no en el registro).
 - [x] **Auditoría de visibilidad por rol.** Tres roles reales (superadmin, operador, repartidor),
       tres usuarios y ninguna excepción en uso. Resultados: el rol `cocina` se eliminó —cocina recibe
       información, no entra al panel—, y cinco endpoints tomaban la ciudad del parámetro sin

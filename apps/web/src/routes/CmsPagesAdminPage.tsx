@@ -391,7 +391,7 @@ export function CmsPagesAdminPage() {
                   <div className="mt-4 grid gap-3">
                     {sections.map((section, index) => (
                       <article
-                        className={`operation-card ${draggedId === section.id ? 'is-dragging' : ''}`}
+                        className={`operation-card ${draggedId === section.id ? 'is-dragging' : ''} ${section.hidden === true ? 'is-hidden-section' : ''}`}
                         draggable={canEdit}
                         key={section.id}
                         onDragEnd={() => setDraggedId(null)}
@@ -416,6 +416,9 @@ export function CmsPagesAdminPage() {
                               </span>
                             ) : null}
                             <strong>{section.type}</strong>
+                            {section.hidden === true ? (
+                              <span className="status-chip">Oculta</span>
+                            ) : null}
                           </span>
                           {canEdit ? (
                             <div className="flex gap-2">
@@ -434,6 +437,17 @@ export function CmsPagesAdminPage() {
                                 type="button"
                               >
                                 ↓
+                              </button>
+                              {/* Apagar no es quitar: la sección se queda con su contenido y su
+                                  lugar, fuera del sitio, hasta que vuelva a hacer falta. */}
+                              <button
+                                className="button button-secondary"
+                                onClick={() =>
+                                  updateSection(section.id, { hidden: section.hidden !== true })
+                                }
+                                type="button"
+                              >
+                                {section.hidden === true ? 'Mostrar' : 'Ocultar'}
                               </button>
                               <button
                                 className="button button-secondary"

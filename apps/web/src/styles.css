@@ -6848,3 +6848,9 @@ textarea.sr-only {
     bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
   }
 }
+
+/* Una sección apagada: se ve que está y que no sale publicada. */
+.is-hidden-section {
+  opacity: 0.6;
+  border-style: dashed;
+}

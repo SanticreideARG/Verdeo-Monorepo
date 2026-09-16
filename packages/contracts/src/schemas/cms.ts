@@ -11,6 +11,14 @@ import { IsoDateTimeSchema, UuidSchema } from './common.js';
 // endpoints instead.
 const SectionBaseSchema = z.object({
   anchorId: z.string().trim().max(80).optional(),
+  /*
+   * Guardada pero fuera del sitio.
+   *
+   * Sin esto, sacar una sección de la portada por dos semanas —una promoción que terminó, unas
+   * zonas que no están entregando— obligaba a borrarla y a volver a cargar todo su contenido
+   * después. Se conserva con su texto, sus imágenes y su lugar en el orden.
+   */
+  hidden: z.boolean().optional(),
   id: z.string().min(1),
 });
 
