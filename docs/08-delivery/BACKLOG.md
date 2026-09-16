@@ -186,7 +186,7 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [x] **Restauración** con cuatro frenos: cargar el archivo, elegir modo, **simular** (un modo del
       servicio que lee y no escribe) y escribir la palabra. Dos modos —sólo lo que falta y
       reemplazar—, transacción única, y rechazo de un archivo de otro esquema. **Nunca borra**: una
-      fila que está en la base y no en el archivo se queda. Seis tests en  fijan
+      fila que está en la base y no en el archivo se queda. Seis tests en `backup.test.ts` fijan
       todo eso.
 - [ ] Registrar la restauración en auditoría (hoy queda el informe en pantalla, no en el registro).
 - [x] **Auditoría de visibilidad por rol.** Tres roles reales (superadmin, operador, repartidor),
