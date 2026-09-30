@@ -102,13 +102,29 @@ No usar `if role === ...` como autorización.
 
 Todos los permisos.
 
+La lista exacta de cada rol es data, en `packages/db/src/role-defaults.ts`, y la aplica
+`pnpm db:seed-permissions` —que concede lo que falta y nunca quita, porque un permiso dado a mano
+desde la pantalla de roles es una decisión de la operación—. Lo de abajo describe el criterio; lo
+que manda es ese archivo.
+
 ### operador
 
-CRM, pedidos, mensajes, producción, rutas, pagos y contenido según configuración. Puede recibir gestión de usuarios.
+Quien atiende la semana: clientes (leer, crear, editar), pedidos (leer, crear, editar, confirmar,
+cancelar), mensajes y plantillas, lo que cocina tiene que producir y su informe, distribuir el menú,
+armar y publicar rutas, registrar y conciliar cobros, estadísticas, calendario, chat interno y el
+redactado con IA del catálogo V1.
+
+Queda afuera a propósito: usuarios, roles y excepciones; crear ciudades y zonas; borrar, fusionar o
+restringir un cliente y ver sus datos sensibles; revertir un estado o forzar un ciclo cerrado; editar
+y publicar el landing; la auditoría; los respaldos; los artículos de ayuda; proveedores,
+presupuestos y prompts de IA; reemplazar un menú ya distribuido; ajustar excedentes; y forzar un
+cobro.
 
 ### repartidor
 
-Sólo su operación de delivery, cobro y triggers permitidos.
+Sus propias paradas y los mensajes de entrega. Nunca `routes.manage`/`routes.publish` —no se
+reasigna paradas— ni nada de `payments.*`: en la app de reparto ve si el pedido está pagado o
+cuánto cobrar, y con eso alcanza. Tampoco `customers.read`.
 
 ### cliente
 
@@ -116,4 +132,4 @@ Sólo su perfil/pedidos públicos autenticados.
 
 ### cocina
 
-Reservado. Inicialmente sin cuenta.
+Eliminado (septiembre de 2026). Cocina recibe información exportada; no entra al panel.

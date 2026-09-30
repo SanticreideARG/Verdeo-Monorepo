@@ -7,6 +7,8 @@ import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 interface MyStop {
   customerFirstName: string;
   deliveryAddress: string;
+  /** Qué entregar acá, ya escrito por el servidor: "Menú Keto 400", "Intuitivo 250 · Ana". */
+  detail: string;
   deliveryLocationUrl: string | null;
   id: string;
   paymentExpectation: string;
@@ -172,6 +174,11 @@ export function DeliveryAppPage() {
                   <h2 className="text-xl font-semibold text-forest">{stop.customerFirstName}</h2>
                 </div>
               </div>
+              {/* Qué entregar, antes que dónde: el repartidor busca la vianda en la caja y después
+                  maneja. Es la misma línea que ve el operador en la hoja de ruta. */}
+              {stop.detail ? (
+                <p className="mt-2 text-base font-semibold text-forest">{stop.detail}</p>
+              ) : null}
               <p className="mt-2 text-lg leading-6 text-ink">{stop.deliveryAddress}</p>
 
               {/* What to collect is the thing that must not be got wrong, so it is stated plainly

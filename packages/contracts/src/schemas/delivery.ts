@@ -36,6 +36,14 @@ export const DeliveryStopSchema = z.object({
   deliveryAddress: z.string(),
   // Coordenadas del domicilio: con esto la lista que se le pasa al repartidor lleva un enlace de
   // mapa aunque nadie haya compartido una ubicación por chat.
+  /*
+   * Qué hay que entregar acá, ya escrito: "Menú Keto 400", "Intuitivo 250 · Ana".
+   *
+   * Lo arma el servidor y no cada pantalla, porque la misma línea va a la vista, al mensaje de
+   * WhatsApp, a la planilla y a la app del repartidor: cuatro formas distintas de decir lo mismo
+   * es cómo se termina entregando la vianda equivocada.
+   */
+  detail: z.string(),
   deliveryLatitude: z.number().nullable(),
   deliveryLocationUrl: z.string().nullable(),
   deliveryLongitude: z.number().nullable(),
@@ -97,6 +105,8 @@ export const DeliveryTriggerResponseSchema = z.object({
 export const DeliveryMyStopSchema = z.object({
   customerFirstName: z.string(),
   deliveryAddress: z.string(),
+  /** Qué entregar en esta parada. La misma línea que ve quien arma la ruta. */
+  detail: z.string(),
   deliveryLocationUrl: z.string().nullable(),
   id: UuidSchema,
   paymentExpectation: z.string(),

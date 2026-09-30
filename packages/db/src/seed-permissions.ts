@@ -3,8 +3,9 @@
  *
  * `seed.ts` inserta el catálogo, pero también carga datos de demostración: no es algo que se pueda
  * volver a correr contra producción cada vez que se agrega un permiso. Esto hace sólo la parte que
- * hace falta —las filas de `permissions` y la concesión al superadmin, que por definición los tiene
- * todos— y es idempotente: correrlo dos veces no cambia nada la segunda.
+ * hace falta —las filas de `permissions`, la concesión al superadmin, que por definición los tiene
+ * todos, y los permisos por defecto de los demás roles (`role-defaults.ts`)— y es idempotente:
+ * correrlo dos veces no cambia nada la segunda, y nunca quita un permiso.
  *
  * Sin esto, un permiso nuevo existe en el código y no en la base, así que la pantalla que lo pide
  * queda invisible para todo el mundo, incluido el superadmin.
@@ -14,6 +15,7 @@ import { eq } from 'drizzle-orm';
 import { initialPermissionCatalog } from '@verdeo/rbac';
 
 import { createDatabase } from './index.js';
+import { applyRoleDefaults } from './role-defaults.js';
 import { permissions, rolePermissions, roles } from './schema/index.js';
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -48,6 +50,12 @@ try {
       .onConflictDoNothing()
       .returning({ permissionId: rolePermissions.permissionId });
     console.log(`Concesiones nuevas al superadmin: ${String(granted.length)}.`);
+
+    // Los otros roles también: un permiso nuevo que les corresponde no llega solo, y acá se arrastra
+    // además lo que nunca se les concedió. No quita nada (ver `role-defaults.ts`).
+    for (const [rol, cantidad] of Object.entries(await applyRoleDefaults(transaction))) {
+      console.log(`Concesiones nuevas a ${rol}: ${String(cantidad)}.`);
+    }
   });
 } finally {
   await client.end();

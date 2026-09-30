@@ -1,7 +1,10 @@
 import { and, eq, getTableColumns, inArray, sql, type AnyColumn } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
 
+import { AuditService } from '@verdeo/audit';
+
 import type { Database } from '../index.js';
+import { PostgresAuditSink } from './postgres-audit-sink.js';
 
 /** La base o una transacción sobre ella: la restauración corre igual en las dos. */
 type Ejecutor = Database | Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -92,6 +95,14 @@ export interface RestoreOptions {
   /** Sin escribir nada: informa qué pasaría. Es obligatorio antes de restaurar de verdad. */
   dryRun: boolean;
   mode: RestoreMode;
+}
+
+/** Quién restauró y en qué pedido, para el registro. */
+export interface RestoreContext {
+  actorUserId?: string | undefined;
+  correlationId: string;
+  requestId: string;
+  source: string;
 }
 
 export interface RestoreLine {
@@ -476,6 +487,7 @@ export class PostgresBackupService {
   public async restoreBackup(
     paquete: BackupPackage,
     options: RestoreOptions,
+    context?: RestoreContext,
   ): Promise<RestoreReport> {
     const actual = await this.readSchemaVersion();
     if (paquete.manifest.schemaVersion !== actual) {
@@ -519,7 +531,38 @@ export class PostgresBackupService {
     };
 
     if (options.dryRun) await aplicar(this.database);
-    else await this.database.transaction(async (transaction) => aplicar(transaction));
+    else
+      await this.database.transaction(async (transaction) => {
+        await aplicar(transaction);
+        // En la misma transacción que la escritura: si el registro falla, la restauración no queda
+        // hecha sin rastro. Es el único movimiento del sistema que puede reescribir filas de
+        // cualquier tabla, así que tener que reconstruirlo después de memoria no es una opción.
+        // Una simulación no se registra: no escribió nada.
+        await new AuditService(new PostgresAuditSink(transaction)).record({
+          action: 'backups.restored',
+          actor: context?.actorUserId
+            ? { type: 'user', userId: context.actorUserId }
+            : { type: 'system' },
+          after: {
+            lineas: lineas.map((linea) => ({ ...linea })),
+            mode: options.mode,
+            totalActualizar: lineas.reduce((total, linea) => total + linea.actualizar, 0),
+            totalCrear: lineas.reduce((total, linea) => total + linea.crear, 0),
+          },
+          correlationId: context?.correlationId ?? 'restore',
+          // El archivo no tiene id en la base; lo que lo identifica es cuándo se generó y con qué
+          // versión de la aplicación.
+          entityId: paquete.manifest.generatedAt,
+          entityType: 'backup',
+          metadata: {
+            appVersion: paquete.manifest.appVersion,
+            generatedAt: paquete.manifest.generatedAt,
+            schemaVersion: paquete.manifest.schemaVersion,
+          },
+          requestId: context?.requestId ?? 'restore',
+          source: context?.source ?? 'system',
+        });
+      });
 
     return {
       dryRun: options.dryRun,

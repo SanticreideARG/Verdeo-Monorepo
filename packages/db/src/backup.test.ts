@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { PostgresBackupService } from './repositories/postgres-backup-service.js';
 import type { Database } from './index.js';
-import { geographicZones, operatingSites } from './schema/index.js';
+import { auditEvents, geographicZones, operatingSites } from './schema/index.js';
 import * as schema from './schema/index.js';
 
 const migrationsFolder = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
@@ -113,6 +113,29 @@ describe('respaldo y restauración', () => {
     await expect(
       servicio.restoreBackup(paquete, { dryRun: true, mode: 'faltantes' }),
     ).rejects.toThrow(/esquema|migraciones/i);
+  });
+
+  it('deja la restauración en el registro, y la simulación no', async () => {
+    const { db, servicio } = await baseConCiudad();
+    const paquete = await servicio.exportBackup({ parts: ['operacion'] });
+    const contexto = {
+      correlationId: 'corr-1',
+      requestId: 'req-1',
+      source: 'test',
+    };
+
+    await servicio.restoreBackup(paquete, { dryRun: true, mode: 'reemplazar' }, contexto);
+    expect(await db.select().from(auditEvents)).toHaveLength(0);
+
+    await servicio.restoreBackup(paquete, { dryRun: false, mode: 'reemplazar' }, contexto);
+
+    const [evento] = await db
+      .select()
+      .from(auditEvents)
+      .where(eq(auditEvents.action, 'backups.restored'));
+    expect(evento?.entityType).toBe('backup');
+    expect((evento?.after as { mode: string }).mode).toBe('reemplazar');
+    expect((evento?.metadata as { appVersion: string }).appVersion).toBe('test');
   });
 
   it('nunca borra lo que está en la base y no en el archivo', async () => {

@@ -8,8 +8,10 @@ import type { Database } from '../index.js';
 import {
   auditEvents,
   authIdentities,
+  operatingSites,
   passwordCredentials,
   roles,
+  userOperatingSites,
   userRoles,
   users,
 } from '../schema/index.js';
@@ -23,6 +25,14 @@ export interface ProvisionPasswordUserInput {
    */
   password?: string | undefined;
   roleKey: string;
+  /**
+   * La ciudad de la persona, por slug.
+   *
+   * Sin esto un operador entra al panel y no ve nada: el alcance sale de `user_operating_sites`, y
+   * sin una fila ahí no tiene ninguna ciudad. Sólo un superadmin —que tiene `sites.access_all`—
+   * trabaja sin asignación, y por eso esto es opcional y no obligatorio.
+   */
+  siteSlug?: string | undefined;
   /** Who is doing this, so the audit trail names a person rather than "the system". */
   actorUserId?: string | undefined;
   /** Where from: the CLI or the admin screen. */
@@ -140,6 +150,21 @@ export class PostgresPasswordUserProvisioner {
         roleId: role.id,
         userId: createdUser.id,
       });
+
+      if (input.siteSlug) {
+        const [site] = await transaction
+          .select({ id: operatingSites.id })
+          .from(operatingSites)
+          .where(eq(operatingSites.slug, input.siteSlug))
+          .limit(1);
+        if (!site) throw new Error(`Operating site not found: ${input.siteSlug}`);
+        await transaction.insert(userOperatingSites).values({
+          active: true,
+          defaultSite: true,
+          operatingSiteId: site.id,
+          userId: createdUser.id,
+        });
+      }
 
       const correlationId = randomUUID();
       await transaction.insert(auditEvents).values({

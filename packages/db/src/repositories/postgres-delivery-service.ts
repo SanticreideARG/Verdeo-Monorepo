@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 
 import { AuditService } from '@verdeo/audit';
+import { deliveryDetail } from '@verdeo/orders';
 import type { RouteOptimizer } from '@verdeo/routing';
 
 import type { Database } from '../index.js';
@@ -12,8 +13,11 @@ import {
   deliveryStops,
   messageTemplates,
   operatingSites,
+  orderItems,
   orderStatusHistory,
   orders,
+  productFamilies,
+  productVariants,
   payments,
   users,
 } from '../schema/index.js';
@@ -330,10 +334,19 @@ export class PostgresDeliveryService {
       .where(eq(deliveryStops.routeId, routeId))
       .orderBy(asc(deliveryStops.sequence));
 
+    const detalles = await this.itemDetails(
+      database,
+      stops.map((stop) => ({
+        customerDisplayName: stop.customerDisplayName,
+        orderId: stop.orderId,
+      })),
+    );
+
     return {
       ...route,
       stops: stops.map((stop) => ({
         ...stop,
+        detail: detalles.get(stop.orderId) ?? '',
         // `numeric` llega como texto desde Postgres; el contrato pide números.
         deliveryLatitude: stop.deliveryLatitude === null ? null : Number(stop.deliveryLatitude),
         deliveryLongitude: stop.deliveryLongitude === null ? null : Number(stop.deliveryLongitude),
@@ -504,6 +517,7 @@ export class PostgresDeliveryService {
         deliveryAddress: orders.deliveryAddressSnapshot,
         deliveryLocationUrl: orders.deliveryLocationUrlSnapshot,
         id: deliveryStops.id,
+        orderId: deliveryStops.orderId,
         paymentExpectation: orders.paymentExpectation,
         // Whether the money is already in — nothing about how, when, or by whom. A repartidor needs
         // to know not to ask for cash; the reconciliation detail is none of their business, and
@@ -529,10 +543,65 @@ export class PostgresDeliveryService {
       )
       .orderBy(asc(deliveryStops.sequence));
 
-    return rows.map(({ customerDisplayName, ...row }) => ({
+    const detalles = await this.itemDetails(
+      this.database,
+      rows.map((row) => ({ customerDisplayName: row.customerDisplayName, orderId: row.orderId })),
+    );
+
+    return rows.map(({ customerDisplayName, orderId, ...row }) => ({
       ...row,
       customerFirstName: customerDisplayName.split(' ')[0] ?? customerDisplayName,
+      detail: detalles.get(orderId) ?? '',
     }));
+  }
+
+  /**
+   * Qué lleva cada pedido, ya escrito y listo para mostrar.
+   *
+   * Una consulta para todas las paradas y no una por parada: una hoja de ruta de veinte paradas
+   * son veinte viajes a la base que se resuelven con uno.
+   */
+  private async itemDetails(
+    database: Database | DatabaseTransaction,
+    paradas: readonly { customerDisplayName: string; orderId: string }[],
+  ): Promise<Map<string, string>> {
+    const detalles = new Map<string, string>();
+    if (paradas.length === 0) return detalles;
+
+    const lineas = await database
+      .select({
+        // Sale del catálogo y no de comparar el nombre: una variedad que después se renombró sigue
+        // reconociéndose como Intuitivo.
+        composable: sql<boolean>`coalesce(${productFamilies.kind} = 'COMPOSABLE', false)`,
+        familyName: orderItems.productNameSnapshot,
+        orderId: orderItems.orderId,
+        quantityUnits: orderItems.quantityUnits,
+        variantName: orderItems.variantSnapshot,
+      })
+      .from(orderItems)
+      .leftJoin(productVariants, eq(productVariants.id, orderItems.productVariantId))
+      .leftJoin(productFamilies, eq(productFamilies.id, productVariants.productFamilyId))
+      .where(
+        inArray(
+          orderItems.orderId,
+          paradas.map((parada) => parada.orderId),
+        ),
+      )
+      // Sin orden explícito la línea de un pedido de dos viandas puede cambiar entre lecturas, y
+      // el operador que compara la hoja de ruta con el mensaje de WhatsApp ve dos textos distintos.
+      .orderBy(orderItems.createdAt, orderItems.productNameSnapshot);
+
+    for (const parada of paradas) {
+      const nombre = parada.customerDisplayName.split(' ')[0] ?? parada.customerDisplayName;
+      detalles.set(
+        parada.orderId,
+        deliveryDetail(
+          lineas.filter((linea) => linea.orderId === parada.orderId),
+          nombre,
+        ),
+      );
+    }
+    return detalles;
   }
 
   public async updateStopStatus(

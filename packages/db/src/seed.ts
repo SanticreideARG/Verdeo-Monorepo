@@ -1,9 +1,10 @@
-import { and, eq, inArray, notExists, sql } from 'drizzle-orm';
+import { and, eq, notExists, sql } from 'drizzle-orm';
 
 import { initialPermissionCatalog } from '@verdeo/rbac';
 
 import { DEFAULT_HELP_ARTICLES } from './help-articles.js';
 import { createDatabase } from './index.js';
+import { applyRoleDefaults } from './role-defaults.js';
 import {
   customerOperatingSites,
   customers,
@@ -60,122 +61,10 @@ try {
         .onConflictDoNothing();
     }
 
-    // Chat reaches operators, superadmins and drivers. Superadmin already holds every permission,
-    // so only the other two need an explicit grant. Expressed as data: no code checks a role name.
-    const chatPermissions = await transaction
-      .select({ id: permissions.id })
-      .from(permissions)
-      .where(inArray(permissions.key, ['chat.use', 'chat.presence.read']));
-    if (chatPermissions.length > 0) {
-      const chatRoles = await transaction
-        .select({ id: roles.id })
-        .from(roles)
-        .where(inArray(roles.key, ['operador', 'repartidor']));
-      if (chatRoles.length > 0) {
-        await transaction
-          .insert(rolePermissions)
-          .values(
-            chatRoles.flatMap(({ id }) =>
-              chatPermissions.map((permission) => ({ permissionId: permission.id, roleId: id })),
-            ),
-          )
-          .onConflictDoNothing();
-      }
-    }
-
-    // Sharing a customer reference is a PII disclosure (ADR-032), so it defaults to operators only.
-    // A reference still resolves to "no disponible" for a viewer without customers.read regardless,
-    // but not handing a driver the ability to point colleagues at customer records in the first
-    // place is the more conservative default the seed can pick.
-    const [shareReferencePermission] = await transaction
-      .select({ id: permissions.id })
-      .from(permissions)
-      .where(eq(permissions.key, 'chat.share_reference'))
-      .limit(1);
-    if (shareReferencePermission) {
-      const [operadorRole] = await transaction
-        .select({ id: roles.id })
-        .from(roles)
-        .where(eq(roles.key, 'operador'))
-        .limit(1);
-      if (operadorRole) {
-        await transaction
-          .insert(rolePermissions)
-          .values({ permissionId: shareReferencePermission.id, roleId: operadorRole.id })
-          .onConflictDoNothing();
-      }
-    }
-
-    // Fase 8 defaults: operators build/publish routes and handle the money side; drivers only
-    // execute their own assigned stops and trigger the semantic delivery messages — never
-    // routes.manage/payments.*, so a driver can't reassign stops or touch payment records.
-    const operadorPermissions = await transaction
-      .select({ id: permissions.id })
-      .from(permissions)
-      .where(
-        inArray(permissions.key, [
-          'routes.read',
-          'routes.manage',
-          'routes.publish',
-          'payments.read',
-          'payments.record',
-          'payments.settle',
-        ]),
-      );
-    const repartidorPermissions = await transaction
-      .select({ id: permissions.id })
-      .from(permissions)
-      .where(
-        inArray(permissions.key, ['routes.read', 'delivery.execute', 'delivery.trigger_messages']),
-      );
-    const [operadorRoleForDelivery] = await transaction
-      .select({ id: roles.id })
-      .from(roles)
-      .where(eq(roles.key, 'operador'))
-      .limit(1);
-    const [repartidorRole] = await transaction
-      .select({ id: roles.id })
-      .from(roles)
-      .where(eq(roles.key, 'repartidor'))
-      .limit(1);
-    if (operadorRoleForDelivery && operadorPermissions.length > 0) {
-      await transaction
-        .insert(rolePermissions)
-        .values(
-          operadorPermissions.map((permission) => ({
-            permissionId: permission.id,
-            roleId: operadorRoleForDelivery.id,
-          })),
-        )
-        .onConflictDoNothing();
-    }
-    if (repartidorRole && repartidorPermissions.length > 0) {
-      await transaction
-        .insert(rolePermissions)
-        .values(
-          repartidorPermissions.map((permission) => ({
-            permissionId: permission.id,
-            roleId: repartidorRole.id,
-          })),
-        )
-        .onConflictDoNothing();
-    }
-
-    // Fase 6 default: only staff can run AI tasks (`ai.use`), and only for the operational
-    // drafting the V1 catalog covers — rewriting a message, extracting a candidate order,
-    // summarizing kitchen data. `ai.prompts.manage`/`ai.providers.manage`/`ai.budgets.manage`
-    // stay superadmin-only (Gisela's controls per AI_CORE.md), not granted here.
-    const [aiUsePermission] = await transaction
-      .select({ id: permissions.id })
-      .from(permissions)
-      .where(eq(permissions.key, 'ai.use'))
-      .limit(1);
-    if (aiUsePermission && operadorRoleForDelivery) {
-      await transaction
-        .insert(rolePermissions)
-        .values({ permissionId: aiUsePermission.id, roleId: operadorRoleForDelivery.id })
-        .onConflictDoNothing();
-    }
+    // Lo que puede hacer cada rol recién creado vive en `role-defaults.ts`, que es lo mismo que
+    // aplica `db:seed-permissions` contra una base ya en uso. Tenerlo acá suelto fue lo que dejó al
+    // operador sin permisos de pedidos en producción.
+    await applyRoleDefaults(transaction);
 
     const [neuquenSite] = await transaction
       .insert(operatingSites)

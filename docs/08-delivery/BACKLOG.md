@@ -126,6 +126,12 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [x] Delivery PWA.
 - [x] Message triggers.
 - [x] Delivery confirmation.
+- [x] **Qué entregar en cada parada** (`deliveryDetail` en `@verdeo/orders`): una vianda estándar se
+      nombra por variedad y tamaño —"Menú Keto 400"—, que es lo que dice su etiqueta; un Intuitivo,
+      por el nombre de quien lo pidió —"Intuitivo 250 · Ana"—, porque dos Intuitivo del mismo tamaño
+      son combinaciones distintas y eso es lo único que los separa. Las unidades se escriben sólo
+      cuando son más de una. Lo arma el servidor una vez por ruta, así que la vista, el mensaje de
+      WhatsApp, el CSV (columna "Qué entregar") y la app del repartidor dicen exactamente lo mismo.
 
 ## P1 - Payments
 
@@ -153,7 +159,8 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 
 - [x] Survey editor/engine (`SurveysPage`, preguntas configurables).
 - [x] Token público por encuesta + ruta `public/survey/:token` (`PublicSurveyPage`).
-- [ ] QR de distribución — el enlace directo ya se genera; falta el QR, igual que en Labels.
+- [x] QR de distribución de la encuesta (se genera en la pantalla, junto al enlace público). En
+      Labels sigue faltando.
 - [x] Pantalla de resultados/estadísticas por encuesta (`SurveyResultsPage`, gateada por permiso).
 - [x] **Decidido: los dos modelos conviven.** El envío 1:1 sigue igual —un token por cliente, de un
       solo uso, y sabe quién respondió— y se le suma un enlace público por encuesta: uno solo,
@@ -188,14 +195,23 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
       reemplazar—, transacción única, y rechazo de un archivo de otro esquema. **Nunca borra**: una
       fila que está en la base y no en el archivo se queda. Seis tests en `backup.test.ts` fijan
       todo eso.
-- [ ] Registrar la restauración en auditoría (hoy queda el informe en pantalla, no en el registro).
+- [x] **La restauración queda en auditoría** (`backups.restored`), en la misma transacción que la
+      escritura: si el registro falla, la restauración no queda hecha sin rastro. Guarda quién,
+      en qué modo, cuántas filas por tabla y de qué archivo (fecha, versión de la aplicación y del
+      esquema). Una simulación no se registra: no escribió nada.
 - [x] **Auditoría de visibilidad por rol.** Tres roles reales (superadmin, operador, repartidor),
       tres usuarios y ninguna excepción en uso. Resultados: el rol `cocina` se eliminó —cocina recibe
       información, no entra al panel—, y cinco endpoints tomaban la ciudad del parámetro sin
       cruzarla con las de la sesión (estadísticas, rutas, cobros, calendario y respaldos): cerrado
       con `resolveSiteQuery`, con tests que lo fijan.
-- [ ] **El rol operador no puede tomar pedidos**: no tiene ningún permiso de `orders.*` ni de
-      `customers.*`. Completarlo o eliminarlo como se hizo con cocina.
+- [x] **El rol operador ya puede trabajar la semana.** No tenía ningún permiso de `orders.*` ni de
+      `customers.*`: armó rutas y registró cobros desde el primer día, pero no podía tomar un pedido.
+      Lo que le toca a cada rol pasó a ser data en un solo lugar (`role-defaults.ts`) —estaba
+      repartido en cuatro bloques de `seed.ts`, que carga datos de demostración y por eso nunca se
+      volvió a correr contra producción— y lo aplica `pnpm db:seed-permissions`, que sí se puede
+      correr contra una base en uso. Concede y nunca quita: un permiso dado a mano desde la pantalla
+      de roles es una decisión de la operación. Cuatro tests lo fijan.
+      **Queda por correr contra producción**: `DATABASE_URL=<prod> pnpm db:seed-permissions`.
 
 ## Deuda encontrada, sin resolver
 
@@ -316,3 +332,14 @@ La landing anuncia más cobertura de la que el sistema tiene cargada.
 - [ ] WhatsApp público de cada ciudad (hoy vacío en todas) y punto de partida del reparto (hoy
       ninguna lo tiene: el optimizador arranca desde la primera parada).
 - [ ] Bahía Blanca: postergada.
+
+## Entrega final
+
+Ver `docs/12-development/ENTREGA_FINAL.md`: qué bloquea abrir (usuarios de producción, permisos del
+operador en la base, limpieza de datos de prueba, ciudades y zonas, externos) y qué queda afuera a
+propósito.
+
+- [x] **`--site` en `auth:provision-user`**: sin ciudad asignada, quien no sea superadmin entra al
+      panel y no ve nada, porque el alcance sale de `user_operating_sites` y el script no escribía
+      ninguna fila ahí. El camino recomendado sigue siendo la invitación desde Usuarios, que ya ata
+      rol y ciudad y deja que la persona elija su clave.

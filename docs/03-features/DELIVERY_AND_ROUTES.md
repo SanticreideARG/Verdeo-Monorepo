@@ -99,6 +99,17 @@ OR-Tools u otro adapter)" que pide este documento; los llamadores solo conocen l
   preguntarla dejaba abierta la posibilidad de armar una ruta para una ciudad distinta de la que se
   está mirando. Sin etiqueta escrita, la etiqueta es el nombre de la zona, para que varias hojas del
   mismo día no queden indistinguibles en la lista.
+- **Qué entregar en cada parada**: la hoja decía a quién y dónde, pero no qué, así que el repartidor
+  llegaba con la caja y adivinaba cuál de las viandas era de esa parada. `deliveryDetail`
+  (`@verdeo/orders`) escribe la línea: una vianda estándar por variedad y tamaño —"Menú Keto
+  400"—, que es lo que dice su etiqueta; un Intuitivo por el nombre de quien lo pidió —"Intuitivo
+  250 · Ana"—, porque dos Intuitivo del mismo tamaño son combinaciones distintas y el nombre
+  impreso es lo único que los separa. Las unidades sólo cuando son más de una ("×3"), que es la
+  diferencia que hace que falte una al llegar. Lo arma el servidor —una consulta por hoja, no una
+  por parada— y viaja en el contrato, así que la vista, el mensaje de WhatsApp, el CSV (columna "Qué
+  entregar") y la app del repartidor dicen exactamente lo mismo. Se toma de los snapshots del
+  pedido, no del catálogo de hoy; que sea Intuitivo o no sale del catálogo (`kind = 'COMPOSABLE'`) y
+  no de comparar nombres, para que una variedad renombrada siga reconociéndose.
 - **App de reparto en `/delivery`**, sin el layout del dashboard admin. `listStopsForUser` es
   PII-safe por construcción: la consulta no selecciona teléfono/email/notas/historial, solo nombre
   de pila, dirección, medio de pago y estado.

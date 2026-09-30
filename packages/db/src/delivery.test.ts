@@ -52,6 +52,11 @@ const ZONE_SUR = '0d000000-0000-4000-8000-000000000002';
 const ORDER_A = '0a000000-0000-4000-8000-000000000001';
 const ORDER_B = '0a000000-0000-4000-8000-000000000002';
 const USER_REPARTIDOR = 'f0000000-0000-4000-8000-000000000001';
+const FAMILY_KETO = '0b000000-0000-4000-8000-000000000001';
+const FAMILY_INTUITIVO = '0b000000-0000-4000-8000-000000000002';
+const SIZE = '0e000000-0000-4000-8000-000000000001';
+const VARIANT_KETO = '0f000000-0000-4000-8000-000000000001';
+const VARIANT_INTUITIVO = '0f000000-0000-4000-8000-000000000002';
 
 const seed = `
   insert into operating_sites (id, slug, display_name, order_prefix, origin_latitude, origin_longitude)
@@ -81,6 +86,19 @@ const seed = `
      '2026-08-26', '${ADDRESS_A}', 'Calle 1', 'efectivo', 25000, '${SITE}'),
     ('${ORDER_B}', 'CIP-00002', '${CUSTOMER_B}', '${CYCLE}', '${MENU}', 'web', 'CONFIRMED',
      '2026-08-26', '${ADDRESS_B}', 'Calle 2', 'transferencia', 30000, '${SITE}');
+
+  insert into product_families (id, code, display_name, kind) values
+    ('${FAMILY_KETO}', 'keto', 'Menú Keto', 'FIXED'),
+    ('${FAMILY_INTUITIVO}', 'intuitivo', 'Intuitivo', 'COMPOSABLE');
+  insert into product_sizes (id, code, display_name) values ('${SIZE}', '400', '400 g');
+  insert into product_variants (id, product_family_id, product_size_id, code, display_name) values
+    ('${VARIANT_KETO}', '${FAMILY_KETO}', '${SIZE}', 'keto-400', 'Keto 400'),
+    ('${VARIANT_INTUITIVO}', '${FAMILY_INTUITIVO}', '${SIZE}', 'int-400', 'Intuitivo 400');
+  insert into order_items (order_id, product_variant_id, product_name_snapshot, variant_snapshot,
+                           quantity_units, unit_price_minor, total_minor)
+  values
+    ('${ORDER_A}', '${VARIANT_INTUITIVO}', 'Intuitivo', '250', 1, 25000, 25000),
+    ('${ORDER_B}', '${VARIANT_KETO}', 'Menú Keto', '400', 2, 15000, 30000);
 `;
 
 const CONTEXT = { correlationId: 'test', requestId: 'test', source: 'test' };
@@ -118,6 +136,12 @@ describe('createRoute', () => {
     expect(route?.stops).toHaveLength(2);
     // Origin is (0,0); B is closer (longitude 1) than A (longitude 3).
     expect(route?.stops.map((stop) => stop.orderId)).toEqual([ORDER_B, ORDER_A]);
+    // Un Intuitivo se identifica por el nombre impreso en la etiqueta; una vianda estándar, por su
+    // variedad y tamaño. La hoja de ruta dice exactamente lo que el repartidor busca en la caja.
+    expect(route?.stops.map((stop) => stop.detail)).toEqual([
+      'Menú Keto 400 ×2',
+      'Intuitivo 250 · Ana',
+    ]);
   });
 
   it('arma la hoja de una zona sola y deja afuera las paradas de las otras', async () => {
@@ -185,6 +209,8 @@ describe('stop assignment and status', () => {
 
     expect(stops).toHaveLength(1);
     expect(stops[0]).toHaveProperty('customerFirstName');
+    // Qué entregar, no sólo a quién: sin esto el repartidor abre la caja y adivina.
+    expect(stops[0]?.detail).toBe('Menú Keto 400 ×2');
     expect(JSON.stringify(stops[0])).not.toContain('Gómez');
     expect(JSON.stringify(stops[0])).not.toContain('Díaz');
   });

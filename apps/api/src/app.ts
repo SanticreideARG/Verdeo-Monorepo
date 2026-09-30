@@ -980,8 +980,17 @@ interface BackupEngine {
     parts: readonly string[];
   }): Promise<{ data: Record<string, unknown[]>; manifest: unknown }>;
   restoreBackup(
-    paquete: { data: Record<string, unknown[]>; manifest: { schemaVersion: string } },
+    paquete: {
+      data: Record<string, unknown[]>;
+      manifest: { appVersion: string; generatedAt: string; schemaVersion: string };
+    },
     options: { dryRun: boolean; mode: 'faltantes' | 'reemplazar' },
+    context: {
+      actorUserId?: string | undefined;
+      correlationId: string;
+      requestId: string;
+      source: string;
+    },
   ): Promise<unknown>;
 }
 
@@ -5313,7 +5322,7 @@ export function createApp(options: CreateAppOptions) {
     const body = (await context.req.json().catch(() => null)) as {
       data?: Record<string, unknown[]>;
       dryRun?: boolean;
-      manifest?: { schemaVersion?: string };
+      manifest?: { appVersion?: string; generatedAt?: string; schemaVersion?: string };
       mode?: string;
     } | null;
     if (!body?.data || !body.manifest?.schemaVersion) {
@@ -5323,8 +5332,21 @@ export function createApp(options: CreateAppOptions) {
 
     try {
       const report = await backups.restoreBackup(
-        { data: body.data, manifest: { schemaVersion: body.manifest.schemaVersion } },
+        {
+          data: body.data,
+          manifest: {
+            appVersion: body.manifest.appVersion ?? 'desconocida',
+            generatedAt: body.manifest.generatedAt ?? new Date().toISOString(),
+            schemaVersion: body.manifest.schemaVersion,
+          },
+        },
         { dryRun: body.dryRun !== false, mode },
+        {
+          actorUserId: context.get('session').userId,
+          correlationId: context.get('requestId'),
+          requestId: context.get('requestId'),
+          source: 'api',
+        },
       );
       return context.json(contractValue(report));
     } catch (error) {

@@ -28,6 +28,8 @@ interface RouteStop {
   customerDisplayName: string;
   deliveryAddress: string;
   deliveryLatitude: number | null;
+  /** Qué entregar acá, ya escrito por el servidor: "Menú Keto 400", "Intuitivo 250 · Ana". */
+  detail: string;
   deliveryLocationUrl: string | null;
   deliveryLongitude: number | null;
   id: string;
@@ -237,6 +239,8 @@ export function RoutesPage() {
     const lines = route.stops.map((stop) =>
       [
         `${String(stop.sequence)}. ${maskSurname(stop.customerDisplayName)}`,
+        // Qué entregar, antes que dónde: es lo que se busca en la caja al bajar del auto.
+        ...(stop.detail ? [stop.detail] : []),
         stop.deliveryAddress,
         stopMapLink(stop),
         // El medio de pago va en la parada: es lo que el repartidor tiene que cobrar ahí.
@@ -255,10 +259,20 @@ export function RoutesPage() {
   function downloadRouteCsv(route: RouteDetail) {
     const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
     const rows = [
-      ['Orden', 'Cliente', 'Dirección', 'Ubicación', 'Medio de pago', 'Total', 'N° de pedido'],
+      [
+        'Orden',
+        'Cliente',
+        'Qué entregar',
+        'Dirección',
+        'Ubicación',
+        'Medio de pago',
+        'Total',
+        'N° de pedido',
+      ],
       ...route.stops.map((stop) => [
         String(stop.sequence),
         maskSurname(stop.customerDisplayName),
+        stop.detail,
         stop.deliveryAddress,
         stopMapLink(stop),
         stop.paymentExpectation,
@@ -567,6 +581,9 @@ export function RoutesPage() {
                               <p className="font-semibold text-forest">
                                 {stop.sequence}. {stop.customerDisplayName} — {stop.publicNumber}
                               </p>
+                              {stop.detail ? (
+                                <p className="text-sm font-semibold text-forest">{stop.detail}</p>
+                              ) : null}
                               <p className="text-sm text-ink-muted">{stop.deliveryAddress}</p>
                               <p className="text-xs text-ink-muted">
                                 {formatMoney(stop.totalMinor, 'ARS')} · {stop.paymentExpectation} ·{' '}
