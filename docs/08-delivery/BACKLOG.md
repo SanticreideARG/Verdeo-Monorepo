@@ -225,7 +225,7 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
       volvió a correr contra producción— y lo aplica `pnpm db:seed-permissions`, que sí se puede
       correr contra una base en uso. Concede y nunca quita: un permiso dado a mano desde la pantalla
       de roles es una decisión de la operación. Cuatro tests lo fijan.
-      **Queda por correr contra producción**: `DATABASE_URL=<prod> pnpm db:seed-permissions`.
+      **Corrido contra producción el 1 de octubre de 2026**: 18 concesiones nuevas al operador.
 
 ## Deuda encontrada, sin resolver
 

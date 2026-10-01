@@ -15,6 +15,7 @@
     "db:generate": "pnpm --filter @verdeo/db db:generate",
     "db:migrate": "pnpm --filter @verdeo/db db:migrate",
     "db:seed": "pnpm --filter @verdeo/db db:seed",
+    "db:seed-permissions": "pnpm --filter @verdeo/db db:seed-permissions",
     "db:studio": "pnpm --filter @verdeo/db db:studio",
     "db:verify-scope": "pnpm --filter @verdeo/db db:verify-scope",
     "dev": "pnpm --parallel --filter @verdeo/api --filter @verdeo/web dev",

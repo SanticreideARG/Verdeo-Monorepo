@@ -31,17 +31,21 @@ Ordenado por lo que frena a lo demás.
      `pnpm auth:provision-user -- --email … --role … --display-name … --site <slug>`.
      **`--site` es nuevo**: sin ciudad asignada, quien no sea superadmin entra al panel y no ve
      nada, porque el alcance sale de `user_operating_sites`.
-2. **Correr `pnpm db:seed-permissions` contra producción.** El rol `operador` salió sin permisos de
-   pedidos ni de clientes; esto los concede (y nunca quita nada). Sin esto, un operador nuevo no
-   puede tomar un pedido.
-3. **Limpiar los datos de prueba**: ~335 clientes y ~305 pedidos que no son reales. Conviene hacerlo
+2. ~~Correr `pnpm db:seed-permissions` contra producción.~~ **Hecho el 1 de octubre de 2026**: 18
+   concesiones nuevas al rol `operador`, que había salido sin ningún permiso de `orders.*` ni de
+   `customers.*`. El script es idempotente, así que volver a correrlo no cambia nada.
+3. **Aplicar las migraciones pendientes a producción** (`pnpm db:migrate` con el `DATABASE_URL` de
+   producción). El deploy de Vercel no las corre, así que una versión que agrega columnas queda
+   desplegada contra una base que no las tiene. Es lo primero a revisar cuando algo funciona en
+   local y falla en producción.
+4. **Limpiar los datos de prueba**: ~335 clientes y ~305 pedidos que no son reales. Conviene hacerlo
    con el respaldo descargado antes (`/app/respaldos`), que es reversible, y no a mano.
-4. **Ciudades y zonas.** La landing anuncia más cobertura de la que el sistema tiene cargada:
+5. **Ciudades y zonas.** La landing anuncia más cobertura de la que el sistema tiene cargada:
    Córdoba no tiene zonas ni menús, Río Negro no tiene menús, Buenos Aires tiene una sola zona
    genérica, y ninguna ciudad tiene WhatsApp público ni punto de partida de reparto —sin eso el
    optimizador arranca desde la primera parada en vez de desde la cocina—. Es carga de la operación;
    el detalle está en `BACKLOG.md`, sección "Ciudades y zonas".
-5. **Externos, no son código**: CUIT y domicilio legal para cerrar Privacidad y Términos —que
+6. **Externos, no son código**: CUIT y domicilio legal para cerrar Privacidad y Términos —que
    habilitan publicar el OAuth de Google—, verificar el dominio de correo en Resend, confirmar el
    producto de Zenvia para WhatsApp, y el número de WhatsApp de "Hablar con alguien" del asistente.
 
