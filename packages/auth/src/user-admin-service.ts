@@ -8,6 +8,8 @@
 export interface RoleSummary {
   active: boolean;
   description: string | null;
+  /** Si el rol trae `sites.access_all`, y por lo tanto trabaja sin ciudad asignada. */
+  grantsAllSites: boolean;
   id: string;
   key: string;
   name: string;

@@ -17,7 +17,7 @@ import { DashboardPage } from './DashboardPage.js';
 import { ChatLinksPage } from './ChatLinksPage.js';
 import { ChatPage } from './ChatPage.js';
 import { CustomersPage } from './CustomersPage.js';
-import { DeliveryAppPage } from './DeliveryAppPage.js';
+import { DeliverySheetPage } from './DeliverySheetPage.js';
 import { AuditLogPage } from './AuditLogPage.js';
 import { BackupsPage } from './BackupsPage.js';
 import { GeographySettingsPage } from './GeographySettingsPage.js';
@@ -338,7 +338,9 @@ export function App() {
       <Route path="/app/mensajes" element={<MessagingInboxPage />} />
       <Route path="/app/ajustes/mensajes" element={<MessagingAccountsPage />} />
       <Route path="/app/reparto/rutas" element={<RoutesPage />} />
-      <Route path="/delivery" element={<DeliveryAppPage />} />
+      {/* El sitio de reparto: sin sesión, la credencial es el enlace. Reemplaza a `/delivery`,
+          que necesitaba una cuenta de repartidor. */}
+      <Route path="/reparto/:token" element={<DeliverySheetPage />} />
       <Route path="/app/perfil" element={<ProfilePage />} />
       <Route path="/app/usuarios" element={<UsersAdminPage />} />
       <Route path="/app/estadisticas" element={<StatsPage />} />

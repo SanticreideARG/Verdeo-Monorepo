@@ -1,57 +1,34 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { BrandLoading } from '../components/BrandLoading.js';
+import { ChatReferenceCard } from '../components/ChatReferenceCard.js';
 import { apiRequest } from '../lib/api.js';
+import {
+  CHAT_POLL_ACTIVE_MS,
+  CHAT_POLL_HIDDEN_MS,
+  PRESENCE_LABELS,
+  chatMapsUrl as mapsUrl,
+  chatTimeLabel as timeLabel,
+  conversationName,
+  type ChatContact,
+  type ChatConversation,
+  type ChatMessage,
+  type ChatPresence,
+  type ChatReferenceType,
+} from '../lib/chat.js';
 import { cachedProfile, rememberProfile } from '../lib/useDashboardProfile.js';
-import { errorMessage, formatMoney, orderStatusLabel } from '../lib/operations.js';
+import { errorMessage } from '../lib/operations.js';
 
-interface ChatContact {
-  displayName: string;
-  id: string;
-}
+/** Las funciones no sostienen un socket, así que la conversación se consulta mientras se mira. */
+const POLL_ACTIVE_MS = CHAT_POLL_ACTIVE_MS;
+const POLL_HIDDEN_MS = CHAT_POLL_HIDDEN_MS;
 
-interface ChatConversation {
-  id: string;
-  kind: string;
-  lastMessageAt: string | null;
-  participants: ChatContact[];
-  title: string | null;
-  unreadCount: number;
-}
-
-interface ChatPresence {
-  connected: boolean;
-  status: string;
-  statusMessage: string | null;
-  userId: string;
-}
-
-interface ChatLocation {
-  label: string | null;
-  latitude: number;
-  longitude: number;
-}
-
-type ChatReferenceType = 'customer' | 'order';
-
-interface ChatReference {
-  resourceId: string;
-  resourceType: ChatReferenceType;
-}
-
-interface ChatMessage {
-  authorDisplayName: string | null;
-  authorUserId: string | null;
-  body: string | null;
-  createdAt: string;
-  deletedAt: string | null;
-  editedAt: string | null;
-  id: string;
-  kind: string;
-  location: ChatLocation | null;
-  reference: ChatReference | null;
+function PresenceDot({ entry }: { entry: ChatPresence | undefined }) {
+  const status = entry?.status ?? 'offline';
+  const label = PRESENCE_LABELS[status] ?? status;
+  return <i aria-label={label} className={`chat-presence-dot is-${status}`} title={label} />;
 }
 
 /** Search result shape used by the reference picker — the same fields exist on both the customer
@@ -59,97 +36,6 @@ interface ChatMessage {
 interface ReferenceCandidate {
   id: string;
   label: string;
-}
-
-/** Serverless functions cannot hold a socket, so the transcript is polled while the tab is open. */
-const POLL_ACTIVE_MS = 5_000;
-const POLL_HIDDEN_MS = 30_000;
-
-function conversationName(conversation: ChatConversation): string {
-  if (conversation.title) return conversation.title;
-  return conversation.participants.map((person) => person.displayName).join(', ') || 'Conversación';
-}
-
-function PresenceDot({ entry }: { entry: ChatPresence | undefined }) {
-  const status = entry?.status ?? 'offline';
-  const label =
-    { available: 'Disponible', away: 'Ausente', busy: 'Ocupado', offline: 'Desconectado' }[
-      status
-    ] ?? status;
-  return <i aria-label={label} className={`chat-presence-dot is-${status}`} title={label} />;
-}
-
-function timeLabel(value: string): string {
-  return new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit' }).format(
-    new Date(value),
-  );
-}
-
-function mapsUrl(location: ChatLocation): string {
-  return `https://www.google.com/maps?q=${location.latitude},${location.longitude}`;
-}
-
-/** Resolves a shared pointer through the viewer's own session and permissions — never a copy of the
- * data, always a live lookup, so a viewer without access sees "no disponible" instead of stale PII. */
-function ReferenceCard({ reference }: { reference: ChatReference }) {
-  const [state, setState] = useState<'loading' | 'ok' | 'denied'>('loading');
-  const [summary, setSummary] = useState<{ href: string; title: string; subtitle: string } | null>(
-    null,
-  );
-
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      const response = await apiRequest(
-        reference.resourceType === 'customer'
-          ? `/api/v1/customers/${reference.resourceId}`
-          : `/api/v1/orders/${reference.resourceId}`,
-      );
-      if (!active) return;
-      if (!response.ok) {
-        setState('denied');
-        return;
-      }
-      if (reference.resourceType === 'customer') {
-        const customer = (await response.json()) as { displayName: string; id: string };
-        setSummary({
-          href: `/app/clientes?customerId=${customer.id}`,
-          subtitle: 'Cliente',
-          title: customer.displayName,
-        });
-      } else {
-        const order = (await response.json()) as {
-          currency: string;
-          publicNumber: string;
-          status: string;
-          totalMinor: number;
-        };
-        setSummary({
-          href: `/app/pedidos?search=${encodeURIComponent(order.publicNumber)}`,
-          subtitle: `${orderStatusLabel(order.status)} · ${formatMoney(order.totalMinor, order.currency)}`,
-          title: order.publicNumber,
-        });
-      }
-      setState('ok');
-    };
-    void load().catch(() => {
-      if (active) setState('denied');
-    });
-    return () => {
-      active = false;
-    };
-  }, [reference.resourceId, reference.resourceType]);
-
-  if (state === 'loading')
-    return <p className="chat-reference-card text-sm text-ink-muted">Cargando…</p>;
-  if (state === 'denied' || !summary)
-    return <p className="chat-reference-card text-sm text-ink-muted">Referencia no disponible.</p>;
-  return (
-    <Link className="chat-reference-card" to={summary.href}>
-      <strong>{summary.title}</strong>
-      <span>{summary.subtitle}</span>
-    </Link>
-  );
 }
 
 export function ChatPage() {
@@ -526,7 +412,7 @@ export function ChatPage() {
                           📍 {entry.location.label ?? 'Ubicación compartida'}
                         </a>
                       ) : entry.kind === 'reference' && entry.reference ? (
-                        <ReferenceCard reference={entry.reference} />
+                        <ChatReferenceCard reference={entry.reference} />
                       ) : (
                         <p>{entry.body}</p>
                       )}

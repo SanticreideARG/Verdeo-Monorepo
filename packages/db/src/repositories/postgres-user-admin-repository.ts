@@ -1,4 +1,4 @@
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 
 import { AuditService } from '@verdeo/audit';
 import {
@@ -20,6 +20,20 @@ import {
   userRoles,
   users,
 } from '../schema/index.js';
+
+/**
+ * Si un rol ve todas las ciudades.
+ *
+ * Por permiso y no por nombre: la pantalla de alta decide con esto si la ciudad es obligatoria, y
+ * un rol nuevo al que alguien le conceda `sites.access_all` tiene que contar igual que el
+ * superadmin.
+ */
+const GRANTS_ALL_SITES = sql<boolean>`exists (
+  select 1 from ${rolePermissions}
+  join ${permissions} on ${permissions.id} = ${rolePermissions.permissionId}
+  where ${rolePermissions.roleId} = ${roles.id}
+    and ${permissions.key} = 'sites.access_all'
+)`;
 import { PostgresAuditSink } from './postgres-audit-sink.js';
 
 type DatabaseTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -48,6 +62,7 @@ export class PostgresUserAdminRepository implements UserAdminRepository {
       .select({
         active: roles.active,
         description: roles.description,
+        grantsAllSites: GRANTS_ALL_SITES,
         id: roles.id,
         key: roles.key,
         name: roles.name,
@@ -108,6 +123,10 @@ export class PostgresUserAdminRepository implements UserAdminRepository {
       .select({
         active: roles.active,
         description: roles.description,
+        // Por permiso y no por nombre: la pantalla de alta necesita saber si este rol puede quedar
+        // sin ciudad, y un rol nuevo que alguien cree con `sites.access_all` tiene que contar igual
+        // que el superadmin.
+        grantsAllSites: GRANTS_ALL_SITES,
         id: roles.id,
         key: roles.key,
         name: roles.name,

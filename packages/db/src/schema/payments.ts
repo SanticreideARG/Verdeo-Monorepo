@@ -12,6 +12,7 @@ import {
 
 import { users } from './auth.js';
 import { orders } from './operations.js';
+import { deliveryRoutes } from './delivery.js';
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -57,12 +58,29 @@ export const cashCollections = pgTable(
       .references(() => orders.id, { onDelete: 'restrict' }),
     amountMinor: integer('amount_minor').notNull(),
     method: text('method').notNull(),
-    collectedByUserId: uuid('collected_by_user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'restrict' }),
+    /*
+     * Quién cobró: una persona del equipo, o una ruta.
+     *
+     * Dejó de ser obligatorio cuando el reparto dejó de hacerse con usuarios. Lo que cobra en la
+     * calle hoy es quien tiene el enlace de una ruta, que no es una cuenta del sistema; lo que
+     * identifica esa plata es la ruta del día. Una de las dos columnas siempre está, y eso lo fija
+     * el check: una cobranza sin dueño no se puede rendir.
+     */
+    collectedByUserId: uuid('collected_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    deliveryRouteId: uuid('delivery_route_id').references(() => deliveryRoutes.id, {
+      onDelete: 'set null',
+    }),
     collectedAt: timestamp('collected_at', { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [check('cash_collections_amount_check', sql`${table.amountMinor} > 0`)],
+  (table) => [
+    check('cash_collections_amount_check', sql`${table.amountMinor} > 0`),
+    check(
+      'cash_collections_origin_check',
+      sql`${table.collectedByUserId} is not null or ${table.deliveryRouteId} is not null`,
+    ),
+  ],
 );
 
 /**

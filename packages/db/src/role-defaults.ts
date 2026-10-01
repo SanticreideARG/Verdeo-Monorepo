@@ -2,9 +2,8 @@
  * Qué puede hacer cada rol recién creado.
  *
  * Los permisos del superadmin no se enumeran: por definición tiene todos, y cualquier lista sería
- * una segunda fuente de verdad que se desactualiza con el próximo permiso nuevo. Los otros dos roles
- * sí se enumeran, porque lo que no está acá es deliberado: un repartidor no ve la plata, un operador
- * no toca usuarios ni auditoría.
+ * una segunda fuente de verdad que se desactualiza con el próximo permiso nuevo. El operador sí se
+ * enumera, porque lo que no está acá es deliberado: no toca usuarios ni auditoría.
  *
  * Esto vivía repartido en cuatro bloques de `seed.ts`, que carga además datos de demostración y por
  * eso no se puede volver a correr contra producción. La consecuencia fue que el rol `operador` salió
@@ -42,8 +41,7 @@ const OPERADOR = [
   'orders.cancel',
   'chat.use',
   'chat.presence.read',
-  // Compartir la referencia de un cliente es revelar datos personales (ADR-032), así que es del
-  // operador y no del repartidor.
+  // Compartir la referencia de un cliente es revelar datos personales (ADR-032).
   'chat.share_reference',
   'messages.read',
   'messages.send',
@@ -65,22 +63,15 @@ const OPERADOR = [
   'ai.use',
 ] as const;
 
-/**
- * El repartidor ejecuta sus propias paradas y dispara los mensajes de entrega. Nunca
- * `routes.manage`/`routes.publish` —no se reasigna paradas a sí mismo— ni nada de `payments.*`: en
- * la app de reparto ve si el pedido está pagado o cuánto cobrar, y con eso alcanza.
+/*
+ * No hay rol de repartidor.
+ *
+ * El reparto dejó de gestionarse con cuentas: quien reparte abre el enlace de la ruta del día
+ * (`/reparto/:token`), que vence y no es un usuario del sistema. Un rol que no usa nadie es un rol
+ * que alguien termina asignando "por las dudas", y entonces sí hay una cuenta más que mantener.
  */
-const REPARTIDOR = [
-  'routes.read',
-  'delivery.execute',
-  'delivery.trigger_messages',
-  'chat.use',
-  'chat.presence.read',
-] as const;
-
 export const ROLE_DEFAULT_PERMISSIONS: Readonly<Record<string, readonly string[]>> = {
   operador: OPERADOR,
-  repartidor: REPARTIDOR,
 };
 
 /**

@@ -62,9 +62,16 @@ function groupUsersByRole(users: readonly UserRow[], search: string): [string, U
 interface RoleSummary {
   active: boolean;
   description: string | null;
+  /** Si el rol ve todas las ciudades por sí mismo; lo dice el servidor, por permiso y no por nombre. */
+  grantsAllSites: boolean;
   id: string;
   key: string;
   name: string;
+}
+
+interface ScopeSite {
+  displayName: string;
+  id: string;
 }
 
 interface PermissionCatalogEntry {
@@ -127,6 +134,17 @@ export function UsersAdminPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [roles, setRoles] = useState<RoleSummary[]>([]);
+  const [sites, setSites] = useState<ScopeSite[]>([]);
+  /* El rol elegido en el alta: de él depende si la ciudad hace falta y qué explica el formulario. */
+  const [newRoleKey, setNewRoleKey] = useState('');
+  /*
+   * Generar la contraseña es el valor por defecto, y el campo manual ni se dibuja hasta pedirlo.
+   *
+   * Antes era un input suelto con "vacío = la generamos" de ayuda, y el navegador lo rellenaba con
+   * la contraseña guardada de quien estaba creando la cuenta: se daba de alta a alguien con la
+   * clave del administrador sin que nadie lo viera.
+   */
+  const [choosePassword, setChoosePassword] = useState(false);
   const [search, setSearch] = useState('');
   const [provisioning, setProvisioning] = useState(false);
   const [issued, setIssued] = useState<{ email: string; password: string } | null>(null);
@@ -155,6 +173,32 @@ export function UsersAdminPage() {
   const canCreate = profile?.permissions.includes('users.create') ?? false;
   const canResetPassword = profile?.permissions.includes('users.edit') ?? false;
   const groupedUsers = useMemo(() => groupUsersByRole(users, search), [search, users]);
+  const newRole = roles.find((role) => role.key === newRoleKey);
+  /* Un rol con `sites.access_all` trabaja sin ciudad; para el resto es obligatoria. */
+  const siteOptional = newRole?.grantsAllSites ?? false;
+
+  /*
+   * Los permisos que este usuario tiene de verdad, agrupados y descritos con el catálogo.
+   *
+   * Una clave que el catálogo no conozca se muestra igual, con su nombre crudo y bajo "Otros": es
+   * un permiso que existe en la base y no en el código, y esconderlo sería justo lo contrario de
+   * lo que esta lista tiene que hacer.
+   */
+  const effectiveByGroup = useMemo(() => {
+    const porClave = new Map(catalog.map((entry) => [entry.key, entry]));
+    const grupos = new Map<string, { description: string; key: string }[]>();
+    for (const key of detail?.effectivePermissions ?? []) {
+      const entrada = porClave.get(key);
+      const grupo = entrada?.group ?? 'Otros';
+      const bucket = grupos.get(grupo) ?? [];
+      bucket.push({ description: entrada?.description ?? key, key });
+      grupos.set(grupo, bucket);
+    }
+    for (const bucket of grupos.values()) {
+      bucket.sort((left, right) => left.description.localeCompare(right.description, 'es-AR'));
+    }
+    return [...grupos.entries()].sort(([left], [right]) => left.localeCompare(right, 'es-AR'));
+  }, [catalog, detail]);
   const canOverride = profile?.permissions.includes('permissions.override') ?? false;
   const canDisable = profile?.permissions.includes('users.disable') ?? false;
   const canIssueTokens = profile?.permissions.includes('access_tokens.manage') ?? false;
@@ -190,6 +234,10 @@ export function UsersAdminPage() {
         }
       }),
       loadTokens(),
+      // Las ciudades que esta sesión puede repartir: las mismas que ofrece el selector de la barra.
+      apiRequest('/api/v1/scope').then(async (response) => {
+        if (response.ok) setSites(((await response.json()) as { sites: ScopeSite[] }).sites);
+      }),
     ]).finally(() => setLoading(false));
   }, [loadTokens, loadUsers, profile]);
 
@@ -212,6 +260,7 @@ export function UsersAdminPage() {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const password = formText(form, 'password');
+    const operatingSiteId = formText(form, 'operatingSiteId');
     setProvisioning(true);
     setMessage('');
     setIssued(null);
@@ -220,6 +269,7 @@ export function UsersAdminPage() {
         body: JSON.stringify({
           displayName: formText(form, 'displayName'),
           email: formText(form, 'email'),
+          ...(operatingSiteId ? { operatingSiteId } : {}),
           // Omitted rather than empty: blank means "generate one", and an empty string would fail
           // the minimum-length rule instead.
           ...(password ? { password } : {}),
@@ -234,6 +284,8 @@ export function UsersAdminPage() {
       const created = (await response.json()) as { email: string; password: string };
       setIssued(created);
       event.currentTarget.reset();
+      setNewRoleKey('');
+      setChoosePassword(false);
       showToast('Usuario creado.');
       await loadUsers();
     } finally {
@@ -342,6 +394,7 @@ export function UsersAdminPage() {
     const ttlHours = Number(formText(form, 'ttlHours'));
     const boundUserId = formText(form, 'boundUserId');
     const roleId = formText(form, 'roleId');
+    const operatingSiteId = formText(form, 'operatingSiteId');
     if (!label || !ttlHours) return;
     setMessage('');
     const response = await apiRequest('/api/v1/access-tokens', {
@@ -349,6 +402,7 @@ export function UsersAdminPage() {
         ...(boundUserId ? { boundUserId } : {}),
         kind: tokenKind,
         label,
+        ...(operatingSiteId ? { operatingSiteId } : {}),
         ...(roleId ? { roleId } : {}),
         ttlHours,
       }),
@@ -421,19 +475,30 @@ export function UsersAdminPage() {
               Queda activo al instante, sin invitación ni verificación. La contraseña se muestra una
               sola vez — se guarda cifrada y no hay forma de volver a verla.
             </p>
-            <form className="mt-4" onSubmit={(event) => void provisionUser(event)}>
+            {/* `autoComplete="off"` en el formulario entero: el navegador ve campos de alta de
+                cuenta y ofrece rellenarlos con los datos de quien está sentado ahí. */}
+            <form
+              autoComplete="off"
+              className="mt-4 user-create"
+              onSubmit={(event) => void provisionUser(event)}
+            >
               <div className="form-grid">
                 <label className="field">
                   Nombre
-                  <input name="displayName" required />
+                  <input autoComplete="off" name="displayName" required />
                 </label>
                 <label className="field">
                   Correo
-                  <input name="email" required type="email" />
+                  <input autoComplete="off" name="email" required type="email" />
                 </label>
                 <label className="field">
                   Rol
-                  <select name="roleKey" required defaultValue="">
+                  <select
+                    name="roleKey"
+                    onChange={(event) => setNewRoleKey(event.target.value)}
+                    required
+                    value={newRoleKey}
+                  >
                     <option disabled value="">
                       Elegir
                     </option>
@@ -445,17 +510,68 @@ export function UsersAdminPage() {
                         </option>
                       ))}
                   </select>
+                  {newRole?.description ? <small>{newRole.description}</small> : null}
                 </label>
                 <label className="field">
-                  Contraseña (opcional)
-                  <input
-                    minLength={12}
-                    name="password"
-                    placeholder="Vacío = la generamos"
-                    type="password"
-                  />
+                  Ciudad
+                  <select name="operatingSiteId" required={!siteOptional} defaultValue="">
+                    <option value="">{siteOptional ? 'Todas' : 'Elegir'}</option>
+                    {sites.map((site) => (
+                      <option key={site.id} value={site.id}>
+                        {site.displayName}
+                      </option>
+                    ))}
+                  </select>
+                  {/* La ciudad no es un dato administrativo: es lo que decide si al entrar ven la
+                      operación o una pantalla vacía. */}
+                  <small>
+                    {siteOptional
+                      ? 'Este rol ve todas las ciudades, así que puede quedar sin asignar.'
+                      : 'Sin ciudad, esta persona entra al panel y no ve nada.'}
+                  </small>
                 </label>
               </div>
+
+              <fieldset className="user-create-password">
+                <legend>Contraseña</legend>
+                <label>
+                  <input
+                    checked={!choosePassword}
+                    name="passwordMode"
+                    onChange={() => setChoosePassword(false)}
+                    type="radio"
+                  />
+                  <span>
+                    Generarla y mostrarla una vez
+                    <small>
+                      Se muestra acá al crear la cuenta y no hay forma de volver a verla.
+                    </small>
+                  </span>
+                </label>
+                <label>
+                  <input
+                    checked={choosePassword}
+                    name="passwordMode"
+                    onChange={() => setChoosePassword(true)}
+                    type="radio"
+                  />
+                  <span>
+                    Escribirla yo
+                    <small>Al menos 12 caracteres. Igual hay que hacerla llegar.</small>
+                  </span>
+                </label>
+                {choosePassword ? (
+                  <input
+                    aria-label="Contraseña"
+                    autoComplete="new-password"
+                    minLength={12}
+                    name="password"
+                    required
+                    type="password"
+                  />
+                ) : null}
+              </fieldset>
+
               <button className="button button-primary mt-4" disabled={provisioning} type="submit">
                 {provisioning ? 'Creando…' : 'Crear usuario'}
               </button>
@@ -633,9 +749,45 @@ export function UsersAdminPage() {
                         ) : null}
                       </div>
                     </div>
-                    <p className="mt-3 text-sm text-ink-muted">
-                      Permisos efectivos: {detail.effectivePermissions.join(', ') || 'ninguno'}
-                    </p>
+                    {/*
+                     * Los permisos efectivos eran una línea de sesenta claves separadas por comas,
+                     * en `snake_case`: para saber si alguien podía confirmar un pedido había que
+                     * leerla entera buscando `orders.confirm`. Van agrupados como el catálogo y
+                     * dichos en castellano, y cerrados de entrada porque la pregunta habitual es
+                     * "¿qué rol tiene?", no "¿qué sesenta permisos tiene?".
+                     */}
+                    <details className="effective-permissions mt-3">
+                      <summary>
+                        <span>Permisos efectivos</span>
+                        <small>
+                          {detail.effectivePermissions.length === 0
+                            ? 'ninguno'
+                            : detail.effectivePermissions.length === 1
+                              ? '1 permiso'
+                              : String(detail.effectivePermissions.length) + ' permisos'}
+                        </small>
+                      </summary>
+                      {effectiveByGroup.length === 0 ? (
+                        <p className="text-sm text-ink-muted">
+                          Sin permisos. Esta persona entra y no puede hacer nada: revisá sus roles.
+                        </p>
+                      ) : (
+                        <div className="effective-permissions-groups">
+                          {effectiveByGroup.map(([group, entries]) => (
+                            <section key={group}>
+                              <h4>{group}</h4>
+                              <ul>
+                                {entries.map((entry) => (
+                                  <li key={entry.key} title={entry.key}>
+                                    {entry.description}
+                                  </li>
+                                ))}
+                              </ul>
+                            </section>
+                          ))}
+                        </div>
+                      )}
+                    </details>
                   </article>
 
                   <article className="operation-card">
@@ -797,17 +949,34 @@ export function UsersAdminPage() {
                         </select>
                       </label>
                     ) : (
-                      <label className="field">
-                        Rol a asignar
-                        <select name="roleId" required>
-                          <option value="">Seleccionar</option>
-                          {roles.map((role) => (
-                            <option key={role.id} value={role.id}>
-                              {role.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                      <>
+                        <label className="field">
+                          Rol a asignar
+                          <select name="roleId" required>
+                            <option value="">Seleccionar</option>
+                            {roles.map((role) => (
+                              <option key={role.id} value={role.id}>
+                                {role.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="field">
+                          Ciudad
+                          <select name="operatingSiteId" defaultValue="">
+                            <option value="">Sin asignar</option>
+                            {sites.map((site) => (
+                              <option key={site.id} value={site.id}>
+                                {site.displayName}
+                              </option>
+                            ))}
+                          </select>
+                          <small>
+                            La cuenta que se cree con esta invitación queda en esa ciudad. Sin
+                            asignar sólo sirve para un rol que vea todas.
+                          </small>
+                        </label>
+                      </>
                     )}
                     <label className="field">
                       Duración (horas)

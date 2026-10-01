@@ -27,7 +27,6 @@ if (!databaseUrl) throw new Error('DATABASE_URL is required');
 const initialRoles = [
   { key: 'superadmin', name: 'Superadmin', description: 'Administración completa del sistema' },
   { key: 'operador', name: 'Operador', description: 'Operación comercial configurable' },
-  { key: 'repartidor', name: 'Repartidor', description: 'Operación de reparto configurable' },
   { key: 'cliente', name: 'Cliente', description: 'Acceso del cliente a sus propios recursos' },
 ] as const;
 

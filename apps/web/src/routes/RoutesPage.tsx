@@ -23,8 +23,6 @@ interface RouteSummary {
 }
 
 interface RouteStop {
-  assignedUserDisplayName: string | null;
-  assignedUserId: string | null;
   customerDisplayName: string;
   deliveryAddress: string;
   deliveryLatitude: number | null;
@@ -90,7 +88,6 @@ export function RoutesPage() {
    */
   const [routableDates, setRoutableDates] = useState<RoutableDate[]>([]);
   const [zoneId, setZoneId] = useState('');
-  const [users, setUsers] = useState<{ displayName: string; id: string }[]>([]);
   const [routes, setRoutes] = useState<RouteSummary[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteDetail | null>(null);
   const [message, setMessage] = useState('');
@@ -106,6 +103,16 @@ export function RoutesPage() {
     kind: 'descartar' | 'publicar';
     routeId: string;
   } | null>(null);
+  /* El enlace recién generado. Se muestra una vez: el token no se puede volver a leer, sólo
+     generar otro — y generar otro da de baja el anterior. */
+  const [issuedLink, setIssuedLink] = useState<{ expiresAt: string; url: string } | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [progress, setProgress] = useState<{
+    collectedMinor: number;
+    deliveredCount: number;
+    pendingCollectionMinor: number;
+    stopCount: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const canRead = profile?.permissions.includes('routes.read') ?? false;
@@ -119,7 +126,27 @@ export function RoutesPage() {
 
   const loadRouteDetail = useCallback(async (routeId: string) => {
     const response = await apiRequest(`/api/v1/delivery/routes/${routeId}`);
-    if (response.ok) setSelectedRoute((await response.json()) as RouteDetail);
+    if (!response.ok) return;
+    const detail = (await response.json()) as RouteDetail;
+    setSelectedRoute(detail);
+    // El enlace que se mostró es de la ruta anterior: dejarlo en pantalla sería ofrecer el enlace
+    // de una hoja mirando otra.
+    setIssuedLink(null);
+    setProgress(null);
+    if (detail.status !== 'published') return;
+    // Cómo va la ruta mientras alguien la está haciendo. Sólo para una ruta publicada: un borrador
+    // no lo está repartiendo nadie.
+    const avance = await apiRequest(`/api/v1/delivery/routes/${routeId}/progress`);
+    if (avance.ok) {
+      setProgress(
+        (await avance.json()) as {
+          collectedMinor: number;
+          deliveredCount: number;
+          pendingCollectionMinor: number;
+          stopCount: number;
+        },
+      );
+    }
   }, []);
 
   useEffect(() => {
@@ -132,13 +159,6 @@ export function RoutesPage() {
       apiRequest('/api/v1/zones').then(async (response) => {
         if (response.ok) {
           setZones(
-            ((await response.json()) as { items: { displayName: string; id: string }[] }).items,
-          );
-        }
-      }),
-      apiRequest('/api/v1/users?limit=100').then(async (response) => {
-        if (response.ok) {
-          setUsers(
             ((await response.json()) as { items: { displayName: string; id: string }[] }).items,
           );
         }
@@ -319,17 +339,32 @@ export function RoutesPage() {
     await loadRouteDetail(routeId);
   }
 
-  async function assign(stopId: string, assignedUserId: string) {
-    if (!selectedRoute) return;
-    const response = await apiRequest(`/api/v1/delivery/stops/${stopId}/assign`, {
-      body: JSON.stringify({ assignedUserId: assignedUserId || null }),
-      method: 'PATCH',
+  async function issueLink(routeId: string) {
+    setLinkBusy(true);
+    setMessage('');
+    const response = await apiRequest(`/api/v1/delivery/routes/${routeId}/link`, {
+      body: JSON.stringify({}),
+      method: 'POST',
+    });
+    setLinkBusy(false);
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    setIssuedLink((await response.json()) as { expiresAt: string; url: string });
+    showToast('Enlace generado. Pasáselo a quien reparte.');
+  }
+
+  async function revokeLink(routeId: string) {
+    const response = await apiRequest(`/api/v1/delivery/routes/${routeId}/link`, {
+      method: 'DELETE',
     });
     if (!response.ok) {
       setMessage(await errorMessage(response));
       return;
     }
-    await loadRouteDetail(selectedRoute.id);
+    setIssuedLink(null);
+    showToast('El enlace dejó de servir.');
   }
 
   async function move(index: number, direction: -1 | 1) {
@@ -523,6 +558,46 @@ export function RoutesPage() {
                 <p className="text-ink-muted">Elegí una ruta para ver sus paradas.</p>
               ) : (
                 <>
+                  {/* Cómo va la ruta: lo mismo que ve quien reparte. Que las dos pantallas
+                      discrepen sobre cuánta plata hay en la calle sería peor que no mostrarlo. */}
+                  {progress && selectedRoute.status === 'published' ? (
+                    <p className="route-progress">
+                      <span>
+                        {progress.deliveredCount} de {progress.stopCount} entregadas
+                      </span>
+                      <span>Cobrado {formatMoney(progress.collectedMinor, 'ARS')}</span>
+                      {progress.pendingCollectionMinor > 0 ? (
+                        <span>
+                          Falta cobrar {formatMoney(progress.pendingCollectionMinor, 'ARS')}
+                        </span>
+                      ) : null}
+                    </p>
+                  ) : null}
+
+                  {issuedLink ? (
+                    <div className="route-link">
+                      <p>
+                        Pasale este enlace a quien reparte. Abre la hoja del día en el teléfono, sin
+                        clave. Vence el {new Date(issuedLink.expiresAt).toLocaleString('es-AR')}.
+                      </p>
+                      <code>{issuedLink.url}</code>
+                      <div>
+                        <button
+                          onClick={() => void navigator.clipboard.writeText(issuedLink.url)}
+                          type="button"
+                        >
+                          Copiar
+                        </button>
+                        <button onClick={() => void revokeLink(selectedRoute.id)} type="button">
+                          Dar de baja el enlace
+                        </button>
+                        <button onClick={() => setIssuedLink(null)} type="button">
+                          Listo
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div className="flex items-center justify-between">
                     <p className="font-semibold text-forest">
                       {formatDay(selectedRoute.deliveryDate)}{' '}
@@ -546,6 +621,19 @@ export function RoutesPage() {
                           >
                             Descargar planilla
                           </button>
+                          {/* El enlace del repartidor. Sólo con la ruta publicada: un borrador se
+                              puede reordenar, y una hoja que cambia debajo de quien ya salió es
+                              peor que no tener hoja. */}
+                          {canPublish && selectedRoute.status === 'published' ? (
+                            <button
+                              className="button button-primary"
+                              disabled={linkBusy}
+                              onClick={() => void issueLink(selectedRoute.id)}
+                              type="button"
+                            >
+                              {linkBusy ? 'Generando…' : 'Enlace para el repartidor'}
+                            </button>
+                          ) : null}
                         </>
                       ) : null}
                       {canPublish && selectedRoute.status === 'draft' ? (
@@ -610,23 +698,15 @@ export function RoutesPage() {
                                     ↓
                                   </button>
                                 </div>
-                                <select
-                                  onChange={(event) => void assign(stop.id, event.target.value)}
-                                  value={stop.assignedUserId ?? ''}
-                                >
-                                  <option value="">Sin asignar</option>
-                                  {users.map((user) => (
-                                    <option key={user.id} value={user.id}>
-                                      {user.displayName}
-                                    </option>
-                                  ))}
-                                </select>
                               </div>
-                            ) : (
-                              <p className="text-sm text-ink-muted">
-                                {stop.assignedUserDisplayName ?? 'Sin asignar'}
-                              </p>
-                            )}
+                            ) : null}
+                            {/* Lo que reportó quien está repartiendo. Antes acá decía a qué
+                                usuario estaba asignada la parada; ahora no hay usuario, hay una
+                                ruta con un enlace, y lo que importa es si esta parada ya se
+                                entregó. */}
+                            {stop.status === 'delivered' ? (
+                              <p className="text-sm font-semibold text-forest">Entregada</p>
+                            ) : null}
                           </div>
                         </li>
                       ))}

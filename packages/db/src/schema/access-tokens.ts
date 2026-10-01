@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { check, index, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 import { roles, users } from './auth.js';
+import { deliveryRoutes } from './delivery.js';
 import { operatingSites } from './geography.js';
 
 /**
@@ -25,6 +26,17 @@ export const accessTokens = pgTable(
     }),
     // Set at generation for repartidor_access; set on redemption for user_invite.
     boundUserId: uuid('bound_user_id').references(() => users.id, { onDelete: 'cascade' }),
+    /*
+     * La ruta a la que da acceso, para `route_access`.
+     *
+     * El reparto dejó de gestionarse con usuarios: no hay cuenta de repartidor que crear, dar de
+     * baja ni recordar. Lo que se reparte es una ruta de un día, y el acceso es a esa ruta —se
+     * genera, se manda por WhatsApp y vence con el día—. Si el token se filtra, lo que expone es la
+     * hoja de un día y no una cuenta del sistema.
+     */
+    deliveryRouteId: uuid('delivery_route_id').references(() => deliveryRoutes.id, {
+      onDelete: 'cascade',
+    }),
     createdByUserId: uuid('created_by_user_id').references(() => users.id, {
       onDelete: 'set null',
     }),
@@ -39,7 +51,10 @@ export const accessTokens = pgTable(
     index('access_tokens_kind_idx').on(table.kind),
     index('access_tokens_expires_idx').on(table.expiresAt),
     index('access_tokens_operating_site_idx').on(table.operatingSiteId),
-    check('access_tokens_kind_check', sql`${table.kind} in ('repartidor_access', 'user_invite')`),
+    check(
+      'access_tokens_kind_check',
+      sql`${table.kind} in ('repartidor_access', 'user_invite', 'route_access')`,
+    ),
     check('access_tokens_use_count_check', sql`${table.useCount} >= 0`),
   ],
 );

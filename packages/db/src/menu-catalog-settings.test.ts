@@ -11,6 +11,7 @@ import { PostgresOperationsService } from './repositories/postgres-operations-se
 import type { Database } from './index.js';
 import {
   menuCatalogSettings,
+  salesCycles,
   productFamilies,
   weeklyMenuItems,
   weeklyMenuOfferings,
@@ -378,6 +379,21 @@ describe('updateMenuPrices', () => {
         CONTEXT,
       ),
     ).rejects.toThrow();
+  });
+
+  it('no deja tocar el precio de un período cerrado', async () => {
+    const { db, service } = await seededService();
+    const created = await service.createMenu(
+      { ...menuInputBase, offerings: [fixedOffering('Real')] },
+      CONTEXT,
+    );
+    await db.update(salesCycles).set({ status: 'CLOSED' });
+
+    // Ese precio es lo que se cobró: los pedidos de esa semana ya guardaron el suyo, y cambiarlo
+    // no corrige nada de lo vendido.
+    await expect(
+      service.updateMenuPrices(created.id, [{ sizeName: '250', unitPriceMinor: 30_000 }], CONTEXT),
+    ).rejects.toThrow(/cerrado/i);
   });
 
   it('404s updating prices on an unknown menu', async () => {

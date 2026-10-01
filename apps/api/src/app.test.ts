@@ -1761,6 +1761,9 @@ describe('API foundation', () => {
         {
           active: true,
           description: null,
+          // Lo dice el servidor por permiso y no por nombre: el alta lo usa para decidir si la
+          // ciudad es obligatoria.
+          grantsAllSites: false,
           id: '70000000-0000-4000-8000-000000000001',
           key: 'operador',
           name: 'Operador',
@@ -2589,18 +2592,55 @@ describe('API foundation', () => {
       expect(response.status).toBe(409);
     });
 
-    it('lists my-stops with delivery.execute and denies without it', async () => {
-      const listStopsForUser = vi.fn(() => Promise.resolve([]));
-      const app = buildDeliveryApp({ listStopsForUser }, ['delivery.execute']);
+    it('emite el enlace de la ruta con routes.publish y lo niega sin ese permiso', async () => {
+      const issueRouteLink = vi.fn(() =>
+        Promise.resolve({ expiresAt: new Date('2026-09-01T12:00:00.000Z'), token: 'abc123' }),
+      );
+      const app = buildDeliveryApp({ issueRouteLink }, ['routes.publish']);
+      const routeId = '90000000-0000-4000-8000-000000000001';
 
-      const response = await app.request('/api/v1/delivery/my-stops', { headers: { cookie } });
-      expect(response.status).toBe(200);
+      const response = await app.request(`/api/v1/delivery/routes/${routeId}/link`, {
+        body: JSON.stringify({}),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(201);
+      // El enlace es la credencial: la url tiene que traer el token, no el id de la ruta.
+      expect(((await response.json()) as { url: string }).url).toContain('/reparto/abc123');
 
-      const denied = buildDeliveryApp({ listStopsForUser: vi.fn() }, []);
-      const deniedResponse = await denied.request('/api/v1/delivery/my-stops', {
-        headers: { cookie },
+      const denied = buildDeliveryApp({ issueRouteLink: vi.fn() }, ['routes.read']);
+      const deniedResponse = await denied.request(`/api/v1/delivery/routes/${routeId}/link`, {
+        body: JSON.stringify({}),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
       });
       expect(deniedResponse.status).toBe(403);
+    });
+
+    it('la hoja pública no necesita sesión y un enlace inválido responde 404', async () => {
+      const routeSheetByToken = vi.fn((token: string) =>
+        Promise.resolve(
+          token === 'bueno'
+            ? {
+                collectedMinor: 0,
+                deliveredCount: 0,
+                deliveryDate: '2026-08-26',
+                label: null,
+                originLatitude: null,
+                originLongitude: null,
+                pendingCollectionMinor: 0,
+                siteName: 'Neuquén',
+                stopCount: 0,
+                stops: [],
+              }
+            : null,
+        ),
+      );
+      const app = buildDeliveryApp({ routeSheetByToken }, []);
+
+      // Sin cookie: la credencial es el enlace.
+      expect((await app.request('/api/v1/public/delivery/bueno')).status).toBe(200);
+      expect((await app.request('/api/v1/public/delivery/malo')).status).toBe(404);
     });
 
     it('triggers a delivery message with delivery.trigger_messages and denies without it', async () => {

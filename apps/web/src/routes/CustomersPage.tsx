@@ -454,14 +454,29 @@ export function CustomersPage() {
     }
   }
 
-  async function confirmCandidate(address: CustomerAddress, candidateId: string) {
+  /**
+   * Confirmar la ubicación encontrada.
+   *
+   * Además de las coordenadas, deja escrita la dirección como la devolvió el geocodificador. Lo que
+   * se escribe al tomar un pedido es lo que dictó el cliente por teléfono —"san martin 1234 dpto
+   * 2"— y es lo que después lee quien reparte, parado en la vereda. Si el geocodificador ya resolvió
+   * que eso es "Av. San Martín 1234", conviene que quede así.
+   */
+  async function confirmCandidate(
+    address: CustomerAddress,
+    candidateId: string,
+    formattedAddress: string,
+  ) {
     const request = geocoding[address.id];
     if (!detail || !request) return;
     try {
       await responseJson<CustomerAddress>(
         await apiRequest(
           `/api/v1/customers/${detail.id}/addresses/${address.id}/geocoding/${request.id}/confirm`,
-          { body: JSON.stringify({ candidateId }), method: 'POST' },
+          {
+            body: JSON.stringify({ candidateId, writtenAddress: formattedAddress }),
+            method: 'POST',
+          },
         ),
       );
       setGeocoding((current) => {
@@ -982,8 +997,15 @@ export function CustomersPage() {
                               </a>
                             ) : null}
                             {canEdit && address.geocodingStatus !== 'CONFIRMED' ? (
-                              <button onClick={() => void startGeocoding(address)} type="button">
-                                Validar ubicación
+                              <button
+                                className="is-primary"
+                                onClick={() => void startGeocoding(address)}
+                                type="button"
+                              >
+                                {/* "Validar" no decía qué pasaba al tocarlo. Busca la dirección,
+                                    propone la ubicación y, al aceptarla, deja la dirección escrita
+                                    como corresponde. */}
+                                Actualizar ubicación
                               </button>
                             ) : null}
                           </div>
@@ -994,6 +1016,12 @@ export function CustomersPage() {
                                   ? 'Ubicaciones encontradas'
                                   : 'Corrección manual'}
                               </strong>
+                              {request.status === 'CANDIDATES' ? (
+                                <p className="crm-geocoding-hint">
+                                  Al elegir una queda la ubicación cargada y la dirección escrita
+                                  como figura acá.
+                                </p>
+                              ) : null}
                               {request.candidates.map((candidate) => (
                                 <div className="crm-candidate" key={candidate.id}>
                                   <div>
@@ -1012,10 +1040,16 @@ export function CustomersPage() {
                                     />
                                   </div>
                                   <button
-                                    onClick={() => void confirmCandidate(address, candidate.id)}
+                                    onClick={() =>
+                                      void confirmCandidate(
+                                        address,
+                                        candidate.id,
+                                        candidate.formattedAddress,
+                                      )
+                                    }
                                     type="button"
                                   >
-                                    Confirmar
+                                    Usar esta
                                   </button>
                                 </div>
                               ))}

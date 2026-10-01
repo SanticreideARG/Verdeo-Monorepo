@@ -66,6 +66,8 @@ export const deliveryStops = pgTable(
     assignedUserId: uuid('assigned_user_id').references(() => users.id, { onDelete: 'set null' }),
     status: text('status').default('pending').notNull(),
     deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+    /** Lo que pasó en la puerta: "no estaba, dejé con el vecino". Lo escribe quien reparte. */
+    deliveryNote: text('delivery_note'),
     ...timestamps,
   },
   (table) => [

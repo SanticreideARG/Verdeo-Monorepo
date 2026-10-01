@@ -38,22 +38,9 @@ export function AccessTokenLoginPage() {
         return;
       }
 
-      // A repartidor's token used to land on the full dashboard, which is neither useful to them
-      // nor what they were given the token for. Where they belong is decided by what they can
-      // actually do — someone who can execute deliveries but cannot read orders has exactly one
-      // screen, so send them straight to it.
-      const permissions: string[] = await apiRequest('/api/v1/me')
-        .then(async (meResponse) =>
-          meResponse.ok
-            ? (((await meResponse.json()) as { permissions?: string[] }).permissions ?? [])
-            : [],
-        )
-        // Routing is a nicety; a failed lookup falls back to the dashboard rather than blocking.
-        .catch(() => []);
-      const deliveryOnly =
-        permissions.includes('delivery.execute') && !permissions.includes('orders.read');
-
-      await navigate(deliveryOnly ? '/delivery' : '/app', { replace: true });
+      // Un token de acceso es siempre de alguien del equipo: el reparto ya no se hace con cuentas,
+      // se hace con el enlace de la ruta (`/reparto/:token`), que no pasa por acá.
+      await navigate('/app', { replace: true });
     } catch {
       setError('No pudimos conectarnos con Verdeo. Revisá la conexión e intentá nuevamente.');
     } finally {

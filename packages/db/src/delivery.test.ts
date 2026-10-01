@@ -398,3 +398,93 @@ describe('un pedido marcado listo sigue siendo ruteable', () => {
     expect(route?.stops).toHaveLength(0);
   });
 });
+
+describe('el enlace de la ruta', () => {
+  it('no se genera para un borrador', async () => {
+    const { service } = await seededService();
+    const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
+
+    // Una hoja que cambia debajo de quien ya salió es peor que no tener hoja.
+    await expect(service.issueRouteLink(route!.id, 24, CONTEXT)).rejects.toThrow(/borrador/i);
+  });
+
+  it('abre la hoja del día con lo que hace falta para entregar', async () => {
+    const { service } = await seededService();
+    const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
+    await service.publishRoute(route!.id, CONTEXT);
+
+    const { token } = await service.issueRouteLink(route!.id, 24, CONTEXT);
+    const sheet = await service.routeSheetByToken(token);
+
+    expect(sheet?.stops).toHaveLength(2);
+    expect(sheet?.stops[0]?.detail).toBe('Menú Keto 400 ×2');
+    expect(sheet?.stopCount).toBe(2);
+    // Nombre de pila y nada más: el enlace viaja por WhatsApp y puede terminar en cualquier lado.
+    expect(JSON.stringify(sheet)).not.toContain('Gómez');
+    expect(JSON.stringify(sheet)).not.toContain('Díaz');
+  });
+
+  it('generar uno nuevo da de baja el anterior', async () => {
+    const { service } = await seededService();
+    const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
+    await service.publishRoute(route!.id, CONTEXT);
+    const primero = await service.issueRouteLink(route!.id, 24, CONTEXT);
+
+    await service.issueRouteLink(route!.id, 24, CONTEXT);
+
+    // Dos enlaces vivos de la misma ruta es alguien repartiendo con una hoja que ya no vale.
+    expect(await service.routeSheetByToken(primero.token)).toBeNull();
+  });
+
+  it('un enlace dado de baja deja de abrir', async () => {
+    const { service } = await seededService();
+    const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
+    await service.publishRoute(route!.id, CONTEXT);
+    const { token } = await service.issueRouteLink(route!.id, 24, CONTEXT);
+
+    await service.revokeRouteLink(route!.id, CONTEXT);
+
+    expect(await service.routeSheetByToken(token)).toBeNull();
+  });
+
+  it('confirmar entrega y cobro mueve el pedido y deja la plata para rendir', async () => {
+    const { db, service } = await seededService();
+    const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
+    await service.publishRoute(route!.id, CONTEXT);
+    const { token } = await service.issueRouteLink(route!.id, 24, CONTEXT);
+    const sheet = await service.routeSheetByToken(token);
+    const parada = sheet!.stops[0]!;
+
+    await service.confirmStopByToken(token, parada.id, { collected: true }, CONTEXT);
+
+    const [order] = await db
+      .select({ status: schema.orders.status })
+      .from(schema.orders)
+      .where(eq(schema.orders.id, parada.publicNumber === 'CIP-00001' ? ORDER_A : ORDER_B));
+    expect(order?.status).toBe('DELIVERED');
+
+    const cobranzas = await db.select().from(schema.cashCollections);
+    expect(cobranzas).toHaveLength(1);
+    // La cobranza es de la ruta y no de un usuario: no hay usuario.
+    expect(cobranzas[0]?.collectedByUserId).toBeNull();
+    expect(cobranzas[0]?.deliveryRouteId).toBe(route!.id);
+
+    const despues = await service.routeSheetByToken(token);
+    expect(despues?.deliveredCount).toBe(1);
+    expect(despues?.collectedMinor).toBe(parada.totalMinor);
+  });
+
+  it('no confirma dos veces la misma parada', async () => {
+    const { service } = await seededService();
+    const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
+    await service.publishRoute(route!.id, CONTEXT);
+    const { token } = await service.issueRouteLink(route!.id, 24, CONTEXT);
+    const sheet = await service.routeSheetByToken(token);
+    const parada = sheet!.stops[0]!;
+    await service.confirmStopByToken(token, parada.id, { collected: false }, CONTEXT);
+
+    await expect(
+      service.confirmStopByToken(token, parada.id, { collected: true }, CONTEXT),
+    ).rejects.toThrow(/ya está confirmada/i);
+  });
+});

@@ -122,9 +122,9 @@ cobro.
 
 ### repartidor
 
-Sus propias paradas y los mensajes de entrega. Nunca `routes.manage`/`routes.publish` —no se
-reasigna paradas— ni nada de `payments.*`: en la app de reparto ve si el pedido está pagado o
-cuánto cobrar, y con eso alcanza. Tampoco `customers.read`.
+Eliminado (septiembre de 2026). El reparto no se gestiona con cuentas: quien reparte abre el enlace
+de la ruta del día (`/reparto/:token`), que vence, no es un usuario del sistema y no da acceso al
+panel. Lo que ese enlace puede hacer está fijado por el contrato de la hoja, no por permisos.
 
 ### cliente
 

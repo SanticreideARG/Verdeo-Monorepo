@@ -24,6 +24,14 @@ export const UserListResponseSchema = z.object({
 export const RoleSummarySchema = z.object({
   active: z.boolean(),
   description: z.string().nullable(),
+  /**
+   * Si este rol ve todas las ciudades por sí mismo.
+   *
+   * Sale de los permisos del rol (`sites.access_all`) y no de su nombre: el alta necesita saber si
+   * puede dejar la ciudad vacía, y preguntarle al rol "¿te llamás superadmin?" es exactamente la
+   * clase de chequeo por nombre que el sistema evita.
+   */
+  grantsAllSites: z.boolean(),
   id: UuidSchema,
   key: z.string(),
   name: z.string(),
@@ -101,6 +109,14 @@ export type UserPermissionOverridesUpdateRequest = z.infer<
 export const UserProvisionRequestSchema = z.object({
   displayName: z.string().trim().min(1).max(120),
   email: z.string().trim().email().max(320),
+  /**
+   * La ciudad de la persona.
+   *
+   * Opcional porque un rol con `sites.access_all` trabaja sin asignación, pero para todos los demás
+   * es lo que decide si al entrar ven la operación o una pantalla vacía: el alcance sale de
+   * `user_operating_sites`, y sin una fila ahí no tienen ninguna.
+   */
+  operatingSiteId: UuidSchema.optional(),
   password: z.string().min(12).max(256).optional(),
   roleKey: z.string().trim().min(1).max(60),
 });

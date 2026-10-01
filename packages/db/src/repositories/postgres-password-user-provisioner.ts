@@ -33,6 +33,8 @@ export interface ProvisionPasswordUserInput {
    * trabaja sin asignación, y por eso esto es opcional y no obligatorio.
    */
   siteSlug?: string | undefined;
+  /** Lo mismo, por id: es lo que tiene a mano la pantalla de alta, que ya lista las ciudades. */
+  operatingSiteId?: string | undefined;
   /** Who is doing this, so the audit trail names a person rather than "the system". */
   actorUserId?: string | undefined;
   /** Where from: the CLI or the admin screen. */
@@ -151,17 +153,23 @@ export class PostgresPasswordUserProvisioner {
         userId: createdUser.id,
       });
 
-      if (input.siteSlug) {
-        const [site] = await transaction
-          .select({ id: operatingSites.id })
-          .from(operatingSites)
-          .where(eq(operatingSites.slug, input.siteSlug))
-          .limit(1);
-        if (!site) throw new Error(`Operating site not found: ${input.siteSlug}`);
+      const siteId = input.siteSlug
+        ? (
+            await transaction
+              .select({ id: operatingSites.id })
+              .from(operatingSites)
+              .where(eq(operatingSites.slug, input.siteSlug))
+              .limit(1)
+          )[0]?.id
+        : input.operatingSiteId;
+      if (input.siteSlug && !siteId) {
+        throw new Error(`Operating site not found: ${input.siteSlug}`);
+      }
+      if (siteId) {
         await transaction.insert(userOperatingSites).values({
           active: true,
           defaultSite: true,
-          operatingSiteId: site.id,
+          operatingSiteId: siteId,
           userId: createdUser.id,
         });
       }

@@ -125,12 +125,29 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Descartar una propuesta',
   },
   {
-    body: '"Copiar para el repartidor" arma un mensaje con las paradas en orden, listo para mandar por WhatsApp: el nombre de cada cliente sin apellido, la dirección y el enlace para abrirla en el mapa.\n\n"Descargar planilla" es lo mismo en Excel.',
+    body:
+      'La ruta publicada tiene un botón "Enlace para el repartidor". Genera una dirección web que abre la hoja del día en cualquier teléfono, sin usuario ni contraseña: se la mandás por WhatsApp a quien reparte y listo.' +
+      '\n\nNo hay cuentas de repartidor. Quien reparte hoy puede no ser quien reparte mañana, así que lo que se entrega es el acceso a una ruta, no a un usuario del sistema. El enlace vence en 24 horas, y generar uno nuevo da de baja el anterior — si se lo pasaste a la persona equivocada, generá otro y el primero deja de abrir. "Dar de baja el enlace" lo corta sin tocar la ruta.' +
+      '\n\nSólo se puede generar sobre una ruta publicada: un borrador todavía se puede reordenar, y una hoja que cambia debajo de quien ya salió es peor que no tener hoja.' +
+      '\n\nVer [[reparto-sitio]] para qué ve y qué puede hacer desde ahí.',
     category: 'Reparto / Rutas',
     key: 'reparto-mensaje',
     ordinal: 2,
     requiredPermission: 'routes.read',
-    title: 'Pasarle la ruta a un repartidor',
+    title: 'El enlace para el repartidor',
+  },
+  {
+    body:
+      'El enlace abre una hoja pensada para un teléfono en una mano y una caja en la otra: una parada por tarjeta, en orden.' +
+      '\n\nCada parada dice qué entregar (por ejemplo "Menú Keto 400" o "Intuitivo 250 · Ana"), la dirección, cómo entrar si el domicilio tiene indicaciones, en qué horario recibe ese cliente, y cuánto cobrar o que ya está pagado. Arriba está el mapa con todas las paradas y, siempre a la vista, cuánto lleva cobrado: es lo que hay que rendir al volver.' +
+      '\n\nAl confirmar una parada se elige "Entregada y cobrada" o "Entregada sin cobrar", y se puede dejar una nota ("no estaba, dejé con el vecino"). Lo cobrado queda registrado en el acto: el pedido pasa a entregado y la plata en efectivo queda para rendir.' +
+      '\n\nNo muestra apellidos, teléfonos ni el historial del cliente — el enlace viaja por WhatsApp y puede terminar en cualquier lado.' +
+      '\n\nDesde el panel, mirando la ruta, ves cómo va: cuántas entregó, cuánto cobró y cuánto falta.',
+    category: 'Reparto / Rutas',
+    key: 'reparto-sitio',
+    ordinal: 3,
+    requiredPermission: 'routes.read',
+    title: 'Qué ve quien reparte',
   },
 
   // --- Clientes --------------------------------------------------------------------------------

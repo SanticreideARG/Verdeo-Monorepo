@@ -12,7 +12,14 @@ import { showToast } from '../lib/toast.js';
  * del menú (`weekly_menu_prices`, per site) — esta pantalla junta esa información y permite
  * editarla directamente. Un precio editado acá queda marcado `customized`, así que una futura
  * distribución sin "Reemplazar" nunca lo pisa (mismo criterio que ya protege los platos
- * personalizados de un menú regional). */
+ * personalizados de un menú regional).
+ *
+ * **Sólo el período en curso.** Antes mostraba una tarjeta por ciudad y por período, así que la
+ * pantalla ofrecía editar el precio de semanas ya cobradas: seis tarjetas donde había dos ciudades.
+ * El precio de una semana cerrada no es un dato editable, es lo que se cobró —los pedidos ya
+ * guardaron el suyo—, y cambiarlo no corrige nada de lo vendido: sólo hace que el informe de una
+ * semana vieja cambie solo. El servidor rechaza igual un período cerrado; esto es que la pantalla
+ * no lo ofrezca. */
 export function PriceByLocationPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const [menus, setMenus] = useState<WeeklyMenu[]>([]);
@@ -93,8 +100,21 @@ export function PriceByLocationPage() {
     );
   }
 
+  /*
+   * El período actual, y nada más.
+   *
+   * Hay uno abierto por vez, así que ése manda. Cuando todavía no se abrió ninguno —la semana que
+   * se está armando— vale el más reciente sin cerrar: ahí es justamente cuando se cargan los
+   * precios. Lo cerrado nunca aparece.
+   */
+  const currentCycle = menus
+    .filter((menu) => menu.cycle.status !== 'CLOSED')
+    .sort((a, b) => {
+      if (a.cycle.status !== b.cycle.status) return a.cycle.status === 'OPEN' ? -1 : 1;
+      return b.cycle.openAt.localeCompare(a.cycle.openAt);
+    })[0]?.cycle;
   const regionalMenus = menus
-    .filter((menu) => menu.operatingSiteId !== null)
+    .filter((menu) => menu.operatingSiteId !== null && menu.cycle.id === currentCycle?.id)
     .sort((a, b) => (a.operatingSiteName ?? '').localeCompare(b.operatingSiteName ?? ''));
   const sizesBySite = regionalMenus.map((menu) => {
     const bySize = new Map<string, { currency: string; unitPriceMinor: number }>();
@@ -124,8 +144,16 @@ export function PriceByLocationPage() {
 
         <p className="mt-3 max-w-xl text-sm text-ink-muted">
           Cada ciudad tiene su propio precio por tamaño desde la distribución del menú.
-          {canManage ? ' Editalo directamente desde acá.' : ''}
+          {canManage ? ' Editalo directamente desde acá.' : ''} Sólo el período en curso: el precio
+          de una semana cerrada es lo que ya se cobró.
         </p>
+
+        {currentCycle ? (
+          <p className="mt-4 text-sm font-semibold text-forest">
+            Período {currentCycle.alias}
+            {currentCycle.status === 'OPEN' ? '' : ' · sin abrir todavía'}
+          </p>
+        ) : null}
 
         {message ? (
           <p className="screen-notice mt-4" role="alert">
@@ -137,7 +165,9 @@ export function PriceByLocationPage() {
           <p className="mt-6 text-ink-muted">Cargando…</p>
         ) : sizesBySite.length === 0 ? (
           <p className="mt-6 text-ink-muted">
-            Ninguna operación tiene un menú distribuido todavía.
+            {currentCycle === undefined
+              ? 'No hay ningún período en curso. Creá uno desde Períodos para poder cargar precios.'
+              : `Ninguna ciudad tiene distribuido el menú de ${currentCycle.alias} todavía.`}
           </p>
         ) : (
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -149,10 +179,9 @@ export function PriceByLocationPage() {
                   key={menu.id}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-forest">{menu.operatingSiteName}</p>
-                      <p className="text-xs text-ink-muted">{menu.cycle.alias}</p>
-                    </div>
+                    {/* El período ya está dicho arriba, una vez: repetirlo en cada tarjeta era
+                        lo que hacía ver seis tarjetas donde hay dos ciudades. */}
+                    <p className="font-semibold text-forest">{menu.operatingSiteName}</p>
                     {canManage && !isEditing ? (
                       <button
                         className="button button-secondary"

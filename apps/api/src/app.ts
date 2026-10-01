@@ -81,8 +81,12 @@ import {
   CashCollectionRequestSchema,
   CashCollectionSchema,
   CashSettlementRequestSchema,
-  DeliveryMyStopListResponseSchema,
   DeliveryRouteCreateRequestSchema,
+  DeliveryRouteLinkRequestSchema,
+  DeliveryRouteLinkResponseSchema,
+  DeliveryRouteProgressSchema,
+  DeliveryRouteSheetSchema,
+  DeliverySheetConfirmRequestSchema,
   DeliveryRouteDetailSchema,
   DeliveryRouteListResponseSchema,
   DeliveryStopAssignRequestSchema,
@@ -910,8 +914,21 @@ interface DeliveryEngine {
   ): Promise<{ deliveryDate: string; geocoded: number; routed: number; total: number }[]>;
   getRouteDetail(routeId: string): Promise<unknown>;
   listRoutes(operatingSiteId?: string): Promise<unknown>;
-  listStopsForUser(userId: string): Promise<unknown>;
   publishRoute(routeId: string, context: DeliveryContext): Promise<unknown>;
+  issueRouteLink(
+    routeId: string,
+    ttlHours: number,
+    context: DeliveryContext,
+  ): Promise<{ expiresAt: Date; token: string }>;
+  revokeRouteLink(routeId: string, context: DeliveryContext): Promise<unknown>;
+  routeSheetByToken(token: string): Promise<unknown>;
+  routeProgress(routeId: string): Promise<unknown>;
+  confirmStopByToken(
+    token: string,
+    stopId: string,
+    input: { collected: boolean; note?: string | undefined },
+    context: DeliveryContext,
+  ): Promise<unknown>;
   reorderStops(routeId: string, orderedStopIds: readonly string[]): Promise<unknown>;
   triggerMessage(
     stopId: string,
@@ -1029,6 +1046,7 @@ interface CreateAppOptions {
       actorUserId?: string | undefined;
       displayName: string;
       email: string;
+      operatingSiteId?: string | undefined;
       password?: string | undefined;
       roleKey: string;
       source?: string | undefined;
@@ -1752,6 +1770,49 @@ export function createApp(options: CreateAppOptions) {
         .catch(() => undefined);
     }
     return context.body(null, 204);
+  });
+
+  /**
+   * La hoja de reparto, sin sesión.
+   *
+   * El enlace es la credencial, así que no hay login: quien reparte abre el mensaje de WhatsApp y
+   * trabaja. Un enlace vencido, revocado o inventado responde 404 sin decir cuál de las tres cosas
+   * pasó — a quien lo tiene le sirve lo mismo "pedí uno nuevo".
+   */
+  app.get('/api/v1/public/delivery/:token', async (context) => {
+    const sheet = await requireDelivery().routeSheetByToken(context.req.param('token'));
+    if (!sheet)
+      return context.json({ error: { code: 'NOT_FOUND', message: 'Enlace no válido.' } }, 404);
+    return context.json(DeliveryRouteSheetSchema.parse(contractValue(sheet)));
+  });
+
+  app.post('/api/v1/public/delivery/:token/stops/:stopId/confirm', async (context) => {
+    const input = DeliverySheetConfirmRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) return badRequest(context, 'Revisá la confirmación.', input.error.issues);
+    try {
+      await requireDelivery().confirmStopByToken(
+        context.req.param('token'),
+        context.req.param('stopId'),
+        { collected: input.data.collected, ...(input.data.note ? { note: input.data.note } : {}) },
+        {
+          correlationId: context.get('requestId'),
+          requestId: context.get('requestId'),
+          source: 'reparto-link',
+        },
+      );
+    } catch (error) {
+      if (error instanceof Error && error.name === 'DeliveryNotFoundError') {
+        return context.json({ error: { code: 'NOT_FOUND', message: 'Enlace no válido.' } }, 404);
+      }
+      if (error instanceof Error && error.name === 'DeliveryConflictError') {
+        return context.json({ error: { code: 'CONFLICT', message: error.message } }, 409);
+      }
+      throw error;
+    }
+    const sheet = await requireDelivery().routeSheetByToken(context.req.param('token'));
+    return context.json(DeliveryRouteSheetSchema.parse(contractValue(sheet)));
   });
 
   app.get('/api/v1/public/surveys/link/:token', async (context) => {
@@ -2603,6 +2664,9 @@ export function createApp(options: CreateAppOptions) {
         actorUserId: session.userId,
         displayName: input.data.displayName,
         email: input.data.email,
+        // Sin ciudad, quien no tenga `sites.access_all` entra y no ve nada: el alcance sale de
+        // `user_operating_sites`. La pantalla lo pide salvo que el rol vea todas.
+        ...(input.data.operatingSiteId ? { operatingSiteId: input.data.operatingSiteId } : {}),
         ...(input.data.password ? { password: input.data.password } : {}),
         roleKey: input.data.roleKey,
         source: 'api',
@@ -3908,6 +3972,45 @@ export function createApp(options: CreateAppOptions) {
     return context.json(result as Record<string, unknown>);
   });
 
+  /**
+   * El enlace para quien reparte.
+   *
+   * Reemplaza a la cuenta de repartidor: no hay usuario que crear ni que dar de baja, hay una ruta
+   * de un día y un enlace que vence. Generar uno nuevo revoca el anterior.
+   */
+  app.post('/api/v1/delivery/routes/:id/link', async (context) => {
+    if (!context.get('session').permissions.includes('routes.publish')) return forbidden(context);
+    const input = DeliveryRouteLinkRequestSchema.safeParse(
+      await context.req.json().catch(() => ({})),
+    );
+    if (!input.success) return badRequest(context, 'Revisá la duración.', input.error.issues);
+    const issued = await requireDelivery().issueRouteLink(
+      context.req.param('id'),
+      input.data.ttlHours ?? 24,
+      deliveryContext(context),
+    );
+    return context.json(
+      DeliveryRouteLinkResponseSchema.parse({
+        expiresAt: issued.expiresAt.toISOString(),
+        url: `${options.appOrigin}/reparto/${issued.token}`,
+      }),
+      201,
+    );
+  });
+
+  app.delete('/api/v1/delivery/routes/:id/link', async (context) => {
+    if (!context.get('session').permissions.includes('routes.publish')) return forbidden(context);
+    await requireDelivery().revokeRouteLink(context.req.param('id'), deliveryContext(context));
+    return context.body(null, 204);
+  });
+
+  /** Cómo va la ruta: lo mismo que ve quien reparte, para quien la mira desde el panel. */
+  app.get('/api/v1/delivery/routes/:id/progress', async (context) => {
+    if (!context.get('session').permissions.includes('routes.read')) return forbidden(context);
+    const progress = await requireDelivery().routeProgress(context.req.param('id'));
+    return context.json(DeliveryRouteProgressSchema.parse(contractValue(progress)));
+  });
+
   app.post('/api/v1/delivery/routes/:id/publish', async (context) => {
     if (!context.get('session').permissions.includes('routes.publish')) return forbidden(context);
     const params = IdParamSchema.safeParse({ id: context.req.param('id') });
@@ -4024,13 +4127,6 @@ export function createApp(options: CreateAppOptions) {
       deliveryContext(context),
     );
     return context.json(DeliveryTriggerResponseSchema.parse(result));
-  });
-
-  app.get('/api/v1/delivery/my-stops', async (context) => {
-    if (!context.get('session').permissions.includes('delivery.execute')) return forbidden(context);
-    const session = context.get('session');
-    const items = await requireDelivery().listStopsForUser(session.userId);
-    return context.json(DeliveryMyStopListResponseSchema.parse({ items: contractValue(items) }));
   });
 
   app.get('/api/v1/stats', async (context) => {

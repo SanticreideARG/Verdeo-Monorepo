@@ -6,6 +6,7 @@ import { AppearanceContext, type AppearanceState } from '../lib/appearanceContex
 import { ANALYSIS_TAB_PERMISSIONS } from './AnalysisTabs.js';
 import { useNarrowViewport } from '../lib/useNarrowViewport.js';
 import { AppearanceMenu, FONT_OPTIONS, SCALE_OPTIONS, type ThemeOption } from './AppearanceMenu.js';
+import { ChatDock } from './ChatDock.js';
 import { OperatorAssistant } from './OperatorAssistant.js';
 import { PresenceControl } from './PresenceControl.js';
 import { SETTINGS_TAB_PERMISSIONS } from './SettingsTabs.js';
@@ -136,7 +137,8 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
   {
     label: 'Mensajería',
     items: [
-      { href: '/app/chat', icon: 'chat', label: 'Chat', permission: 'chat.use' },
+      // El chat interno ya no está acá: vive en la barra de arriba (`ChatDock`), donde se puede
+      // contestar sin irse de lo que se esté haciendo. Esta sección es la mensajería con clientes.
       { href: '/app/mensajes', icon: 'whatsapp', label: 'Mensajes', permission: 'messages.read' },
     ],
   },
@@ -208,17 +210,17 @@ const shiftNavigation: readonly NavigationItem[] = [
   { href: '/app/pedidos', icon: 'ordersNew', label: 'Pedidos', permission: 'orders.read' },
   { href: '/app/cocina', icon: 'kitchen', label: 'Cocina', permission: 'production.read' },
   { href: '/app/reparto/rutas', icon: 'delivery', label: 'Rutas', permission: 'routes.read' },
-  { href: '/app/chat', icon: 'chat', label: 'Chat', permission: 'chat.use' },
+  { href: '/app/clientes', icon: 'customers', label: 'Clientes', permission: 'customers.read' },
 ];
 
 /**
  * The count that belongs on a nav item, or nothing.
  *
- * Deliberately only two: orders nobody has confirmed, and unread chat. A badge on every entry is a
- * badge nobody reads, so these are the two that mean "someone is waiting on you".
+ * Deliberadamente uno solo: los pedidos que nadie confirmó. Un número en cada entrada es un número
+ * que nadie lee. El de mensajes sin leer se mudó al ícono de la barra, junto al chat.
  */
-function navBadge(href: string, pendingOrders: number, unreadChat: number): ReactNode {
-  const count = href === '/app/pedidos' ? pendingOrders : href === '/app/chat' ? unreadChat : 0;
+function navBadge(href: string, pendingOrders: number): ReactNode {
+  const count = href === '/app/pedidos' ? pendingOrders : 0;
   if (count <= 0) return null;
   return (
     <b className="nav-badge" title={`${count} sin ver`}>
@@ -395,7 +397,6 @@ export function DashboardShell({
   const narrow = useNarrowViewport();
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingOrders, setPendingOrders] = useState(0);
-  const [unreadChat, setUnreadChat] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => window.localStorage.getItem('verdeo-sidebar-collapsed') === 'true',
   );
@@ -446,25 +447,6 @@ export function DashboardShell({
         if (!response.ok || !active) return;
         const body = (await response.json()) as { items: unknown[] };
         if (active) setPendingOrders(body.items.length);
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [profile.permissions]);
-
-  // The chat already tracks unread per conversation against last_read_at, so this is a sum rather
-  // than new bookkeeping.
-  useEffect(() => {
-    if (!profile.permissions.includes('chat.use')) return;
-    let active = true;
-    void apiRequest('/api/v1/chat/conversations')
-      .then(async (response) => {
-        if (!response.ok || !active) return;
-        const body = (await response.json()) as { items: { unreadCount: number }[] };
-        if (active) {
-          setUnreadChat(body.items.reduce((total, item) => total + item.unreadCount, 0));
-        }
       })
       .catch(() => undefined);
     return () => {
@@ -720,7 +702,7 @@ export function DashboardShell({
                       >
                         <NavIcon name={item.icon} />
                         <span>{item.label}</span>
-                        {navBadge(item.href, pendingOrders, unreadChat)}
+                        {navBadge(item.href, pendingOrders)}
                         {active ? <i aria-hidden="true" /> : null}
                       </Link>
                     );
@@ -827,6 +809,14 @@ export function DashboardShell({
                   </select>
                 </label>
               ) : null}
+              {profile.permissions.includes('chat.use') ? (
+                <ChatDock
+                  canSeePresence={profile.permissions.includes('chat.presence.read')}
+                  canShareReference={profile.permissions.includes('chat.share_reference')}
+                  narrow={narrow}
+                  viewerUserId={profile.user.id}
+                />
+              ) : null}
               <WeatherWidget cityName={weatherCityName} />
               <div className="dashboard-clock">
                 <span>{timeLabel}</span>
@@ -860,7 +850,7 @@ export function DashboardShell({
                   >
                     <NavIcon name={item.icon} />
                     <span>{item.label}</span>
-                    {navBadge(item.href, pendingOrders, unreadChat)}
+                    {navBadge(item.href, pendingOrders)}
                   </Link>
                 ))}
               <button aria-label="Más secciones" onClick={() => setMenuOpen(true)} type="button">

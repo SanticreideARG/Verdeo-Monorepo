@@ -110,9 +110,29 @@ OR-Tools u otro adapter)" que pide este documento; los llamadores solo conocen l
   entregar") y la app del repartidor dicen exactamente lo mismo. Se toma de los snapshots del
   pedido, no del catálogo de hoy; que sea Intuitivo o no sale del catálogo (`kind = 'COMPOSABLE'`) y
   no de comparar nombres, para que una variedad renombrada siga reconociéndose.
-- **App de reparto en `/delivery`**, sin el layout del dashboard admin. `listStopsForUser` es
-  PII-safe por construcción: la consulta no selecciona teléfono/email/notas/historial, solo nombre
-  de pila, dirección, medio de pago y estado.
+- **El sitio de reparto (`/reparto/:token`), sin cuentas.** El reparto dejó de gestionarse con
+  usuarios: no hay cuenta de repartidor que crear, asignar ni dar de baja. Quien reparte hoy puede
+  no ser quien reparte mañana, y pedirle al equipo que administre usuarios para eso era una gestión
+  que nadie iba a hacer. Lo que existe de verdad es una ruta de un día, así que el acceso es a esa
+  ruta: `POST /delivery/routes/:id/link` devuelve un enlace que se manda por WhatsApp y vence
+  (24 h por defecto). Generar uno nuevo revoca el anterior — dos enlaces vivos de la misma ruta es
+  alguien repartiendo con una hoja que ya no vale— y `DELETE` lo corta sin tocar la ruta. El token
+  se guarda hasheado, como todos, y sólo se puede emitir sobre una ruta publicada.
+  La hoja lleva lo mínimo para entregar y nada más: nombre de pila, dirección, cómo entrar
+  (`access_notes`), en qué horario recibe (`customer_addresses.delivery_window`), qué dejar
+  (`deliveryDetail`), cuánto cobrar y con qué medio. Sin apellido, sin teléfono, sin historial: la
+  consulta no los selecciona y el contrato no los admite, así que no hay nada ahí que se pueda
+  filtrar por error. Si el enlace se filtra, lo que expone es la hoja de un día, no una cuenta.
+- **Entregar y cobrar son un solo movimiento**, en la misma transacción: una entrega marcada sin su
+  cobro es plata que nadie sabe que está en la calle. Lo cobrado se registra como una cobranza de la
+  ruta —`cash_collections.delivery_route_id`, con `collected_by_user_id` nulo, porque no hay
+  usuario— y el pedido queda `TO_SETTLE` si el medio es efectivo. "Entregada sin cobrar" existe y
+  está a la vista: esconderlo haría que se marque cobrado lo que no se cobró. Arriba de la hoja,
+  siempre visible, cuánto lleva cobrado: es lo que hay que rendir al volver.
+- **Desde el panel se ve cómo va la ruta** (`GET /delivery/routes/:id/progress`): cuántas paradas
+  entregadas, cuánto cobrado y cuánto falta cobrar. Es la misma cuenta que ve quien reparte, no una
+  segunda — que las dos pantallas discrepen sobre cuánta plata hay en la calle sería peor que no
+  mostrarlo.
 - **Confirmar entrega** también transiciona el pedido a `DELIVERED` directamente (no pasa por la
   política de transición pensada para ediciones administrativas) y registra
   `order_status_history`.

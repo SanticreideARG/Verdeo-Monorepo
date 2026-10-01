@@ -564,12 +564,12 @@ a {
 
 /* Dashboard shell — ported from Verdeo TALL's multi-theme layout. */
 .dashboard-shell {
-  --db-bg: #0b1828;
-  --db-bg-2: #0f2035;
-  --db-surface: rgb(15 32 53 / 76%);
-  --db-surface-solid: #10243b;
-  --db-sidebar: linear-gradient(180deg, rgb(8 20 34 / 98%), rgb(11 30 48 / 96%));
-  --db-topbar: rgb(11 24 40 / 76%);
+  --db-bg: #050d17;
+  --db-bg-2: #091628;
+  --db-surface: rgb(13 28 47 / 82%);
+  --db-surface-solid: #0c1e33;
+  --db-sidebar: linear-gradient(180deg, rgb(4 10 18 / 98%), rgb(7 20 34 / 96%));
+  --db-topbar: rgb(5 13 23 / 84%);
   --db-text: #f2f6f1;
   --db-text-soft: rgb(242 246 241 / 76%);
   --db-muted: rgb(242 246 241 / 52%);
@@ -592,12 +592,12 @@ a {
 }
 
 .dashboard-shell[data-theme='natural'] {
-  --db-bg: #f4f7f3;
-  --db-bg-2: #e9f0e7;
-  --db-surface: rgb(255 255 255 / 88%);
-  --db-surface-solid: #fff;
-  --db-sidebar: linear-gradient(180deg, rgb(255 255 255 / 98%), rgb(242 248 240 / 96%));
-  --db-topbar: rgb(255 255 255 / 82%);
+  --db-bg: #e7ede4;
+  --db-bg-2: #dde6da;
+  --db-surface: rgb(247 250 245 / 92%);
+  --db-surface-solid: #f7faf5;
+  --db-sidebar: linear-gradient(180deg, rgb(244 248 242 / 98%), rgb(234 241 231 / 96%));
+  --db-topbar: rgb(244 248 242 / 88%);
   --db-text: #18351f;
   --db-text-soft: rgb(24 53 31 / 76%);
   --db-muted: rgb(24 53 31 / 54%);
@@ -613,12 +613,12 @@ a {
 }
 
 .dashboard-shell[data-theme='cielo'] {
-  --db-bg: #f0f4f8;
-  --db-bg-2: #e1eaf4;
-  --db-surface: rgb(255 255 255 / 88%);
-  --db-surface-solid: #fff;
-  --db-sidebar: linear-gradient(180deg, rgb(255 255 255 / 98%), rgb(239 246 255 / 96%));
-  --db-topbar: rgb(248 251 255 / 84%);
+  --db-bg: #e4ebf3;
+  --db-bg-2: #d9e3ef;
+  --db-surface: rgb(246 249 253 / 92%);
+  --db-surface-solid: #f6f9fd;
+  --db-sidebar: linear-gradient(180deg, rgb(243 247 252 / 98%), rgb(232 240 249 / 96%));
+  --db-topbar: rgb(243 247 252 / 88%);
   --db-text: #10223f;
   --db-text-soft: rgb(16 34 63 / 75%);
   --db-muted: rgb(16 34 63 / 52%);
@@ -634,12 +634,12 @@ a {
 }
 
 .dashboard-shell[data-theme='aurora'] {
-  --db-bg: #0f0b1e;
-  --db-bg-2: #1a1333;
-  --db-surface: rgb(26 19 51 / 78%);
-  --db-surface-solid: #1b1434;
-  --db-sidebar: linear-gradient(180deg, rgb(15 11 30 / 98%), rgb(28 20 54 / 96%));
-  --db-topbar: rgb(15 11 30 / 78%);
+  --db-bg: #080513;
+  --db-bg-2: #120d26;
+  --db-surface: rgb(22 16 44 / 84%);
+  --db-surface-solid: #15102a;
+  --db-sidebar: linear-gradient(180deg, rgb(7 4 16 / 98%), rgb(19 13 39 / 96%));
+  --db-topbar: rgb(8 5 19 / 86%);
   --db-text: #f3efff;
   --db-text-soft: rgb(243 239 255 / 76%);
   --db-muted: rgb(243 239 255 / 52%);
@@ -655,12 +655,12 @@ a {
 }
 
 .dashboard-shell[data-theme='carbon'] {
-  --db-bg: #111827;
-  --db-bg-2: #1f2937;
-  --db-surface: rgb(31 41 55 / 82%);
-  --db-surface-solid: #202b3a;
-  --db-sidebar: linear-gradient(180deg, rgb(17 24 39 / 98%), rgb(31 41 55 / 96%));
-  --db-topbar: rgb(17 24 39 / 78%);
+  --db-bg: #080c14;
+  --db-bg-2: #121a26;
+  --db-surface: rgb(26 35 48 / 86%);
+  --db-surface-solid: #18212e;
+  --db-sidebar: linear-gradient(180deg, rgb(6 9 15 / 98%), rgb(18 26 38 / 96%));
+  --db-topbar: rgb(8 12 20 / 86%);
   --db-text: #f3f4f6;
   --db-text-soft: rgb(243 244 246 / 76%);
   --db-muted: rgb(243 244 246 / 52%);
@@ -678,12 +678,12 @@ a {
 /* Arena — claro cálido. La contracara de Cielo: mismo nivel de contraste, temperatura opuesta,
    para quien encuentra fríos los grises azulados en pantallas muy iluminadas. */
 .dashboard-shell[data-theme='arena'] {
-  --db-bg: #faf6ef;
-  --db-bg-2: #f2e9db;
-  --db-surface: rgb(255 253 249 / 90%);
-  --db-surface-solid: #fffdf9;
-  --db-sidebar: linear-gradient(180deg, rgb(255 253 249 / 98%), rgb(246 238 226 / 96%));
-  --db-topbar: rgb(255 253 249 / 84%);
+  --db-bg: #f0e8da;
+  --db-bg-2: #e7dcc8;
+  --db-surface: rgb(252 247 238 / 93%);
+  --db-surface-solid: #fcf7ee;
+  --db-sidebar: linear-gradient(180deg, rgb(250 245 235 / 98%), rgb(241 233 218 / 96%));
+  --db-topbar: rgb(250 245 235 / 88%);
   --db-text: #3a2c1c;
   --db-text-soft: rgb(58 44 28 / 76%);
   --db-muted: rgb(58 44 28 / 54%);
@@ -701,13 +701,13 @@ a {
 /* Papel — claro de contraste alto, casi sin color. Para trabajar a pleno sol, para pantallas
    pobres, y para cuando los fondos translúcidos de los otros temas cansan la vista. */
 .dashboard-shell[data-theme='papel'] {
-  --db-bg: #fff;
-  --db-bg-2: #f4f4f5;
-  --db-surface: rgb(255 255 255 / 100%);
-  --db-surface-solid: #fff;
-  --db-sidebar: linear-gradient(180deg, #fff, #f7f7f8);
-  --db-topbar: rgb(255 255 255 / 96%);
-  --db-text: #111;
+  --db-bg: #eeeeec;
+  --db-bg-2: #e4e4e2;
+  --db-surface: rgb(252 252 251 / 100%);
+  --db-surface-solid: #fcfcfb;
+  --db-sidebar: linear-gradient(180deg, #f8f8f7, #efefed);
+  --db-topbar: rgb(248 248 247 / 96%);
+  --db-text: #15150f;
   --db-text-soft: rgb(17 17 17 / 82%);
   --db-muted: rgb(17 17 17 / 62%);
   --db-muted-2: rgb(17 17 17 / 42%);
@@ -722,12 +722,12 @@ a {
 
 /* Cacao — oscuro cálido. Aurora y Carbón son fríos; este es el oscuro que no vira a azul. */
 .dashboard-shell[data-theme='cacao'] {
-  --db-bg: #1a1310;
-  --db-bg-2: #251b16;
-  --db-surface: rgb(37 27 22 / 80%);
-  --db-surface-solid: #261c17;
-  --db-sidebar: linear-gradient(180deg, rgb(20 15 12 / 98%), rgb(38 28 23 / 96%));
-  --db-topbar: rgb(20 15 12 / 78%);
+  --db-bg: #110c0a;
+  --db-bg-2: #1b1410;
+  --db-surface: rgb(32 23 19 / 86%);
+  --db-surface-solid: #1d1511;
+  --db-sidebar: linear-gradient(180deg, rgb(13 9 7 / 98%), rgb(28 20 16 / 96%));
+  --db-topbar: rgb(13 9 7 / 86%);
   --db-text: #f6efe6;
   --db-text-soft: rgb(246 239 230 / 76%);
   --db-muted: rgb(246 239 230 / 52%);
@@ -744,12 +744,12 @@ a {
 
 /* Marea — oscuro frío verde-azulado, el más cercano a Bosque sin ser verde. */
 .dashboard-shell[data-theme='marea'] {
-  --db-bg: #071a1e;
-  --db-bg-2: #0c272d;
-  --db-surface: rgb(12 39 45 / 80%);
-  --db-surface-solid: #0d2a31;
-  --db-sidebar: linear-gradient(180deg, rgb(5 20 23 / 98%), rgb(12 41 47 / 96%));
-  --db-topbar: rgb(5 20 23 / 78%);
+  --db-bg: #031013;
+  --db-bg-2: #071d22;
+  --db-surface: rgb(9 32 38 / 86%);
+  --db-surface-solid: #0a2127;
+  --db-sidebar: linear-gradient(180deg, rgb(2 11 13 / 98%), rgb(8 30 35 / 96%));
+  --db-topbar: rgb(3 14 17 / 86%);
   --db-text: #e8f6f5;
   --db-text-soft: rgb(232 246 245 / 76%);
   --db-muted: rgb(232 246 245 / 52%);
@@ -2778,6 +2778,580 @@ a {
   background: #c8a030;
 }
 
+/* --- Sitio de reparto --------------------------------------------------------------------------
+   La hoja del día de quien está en la calle: sin sesión, sin menú lateral, sin nada del panel. Un
+   teléfono en una mano y una caja en la otra, así que todo es grande y hay una parada por tarjeta.
+   Vive fuera de `.dashboard-shell`, así que no hereda sus variables: colores propios, claros, que
+   es lo que se lee a pleno sol. */
+.delivery-sheet {
+  min-height: 100vh;
+  padding: 1rem 1rem 3rem;
+  background: #f3f5f0;
+  color: #16301d;
+  font-family: var(--font-sans);
+}
+.delivery-sheet-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.delivery-sheet-head h1 {
+  margin: 0.1rem 0 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+.delivery-sheet-progress {
+  margin: 0.2rem 0 0;
+  font-size: 0.9rem;
+  color: #4a6052;
+}
+.delivery-sheet-money {
+  display: grid;
+  gap: 0.1rem;
+  border-radius: 0.8rem;
+  padding: 0.6rem 0.9rem;
+  background: #16301d;
+  color: #f3f5f0;
+  text-align: right;
+}
+.delivery-sheet-money span {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+.delivery-sheet-money strong {
+  font-size: 1.3rem;
+  font-variant-numeric: tabular-nums;
+}
+.delivery-sheet-money small {
+  font-size: 0.72rem;
+  opacity: 0.75;
+}
+.delivery-sheet-map {
+  margin-bottom: 1rem;
+  border-radius: 0.9rem;
+  overflow: hidden;
+}
+.delivery-sheet-stops {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.delivery-sheet-stops article {
+  border: 1px solid rgb(22 48 29 / 12%);
+  border-radius: 0.9rem;
+  padding: 0.9rem;
+  background: #fff;
+}
+.delivery-sheet-stops li.is-done article {
+  opacity: 0.62;
+}
+.delivery-sheet-stops header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.delivery-sheet-stops h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.delivery-sheet-seq {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  border-radius: 999px;
+  background: #16301d;
+  color: #f3f5f0;
+  font-weight: 700;
+}
+.delivery-sheet-number {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7f72;
+}
+.delivery-sheet-done {
+  margin-left: auto;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  background: #dfeedd;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+/* Qué entregar, arriba de la dirección: es lo que se busca en la caja antes de arrancar. */
+.delivery-sheet-detail {
+  margin: 0.6rem 0 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.delivery-sheet-address {
+  margin: 0.2rem 0 0;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+.delivery-sheet-window,
+.delivery-sheet-access {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: #4a6052;
+}
+.delivery-sheet-collect,
+.delivery-sheet-paid {
+  margin: 0.6rem 0 0;
+  border-radius: 0.6rem;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.delivery-sheet-collect {
+  background: #fdf0d8;
+  color: #6b4a08;
+}
+.delivery-sheet-paid {
+  background: #e3efe2;
+  color: #2c5a35;
+}
+.delivery-sheet-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.delivery-sheet-actions a,
+.delivery-sheet-actions button {
+  flex: 1;
+  border: 1px solid rgb(22 48 29 / 18%);
+  border-radius: 0.6rem;
+  padding: 0.6rem;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+.delivery-sheet-confirm {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  border-top: 1px solid rgb(22 48 29 / 12%);
+  padding-top: 0.75rem;
+}
+.delivery-sheet-confirm label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.delivery-sheet-confirm input {
+  border: 1px solid rgb(22 48 29 / 18%);
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+}
+.delivery-sheet-confirm > div {
+  display: grid;
+  gap: 0.4rem;
+}
+.delivery-sheet-confirm button {
+  border: 1px solid rgb(22 48 29 / 18%);
+  border-radius: 0.6rem;
+  padding: 0.7rem;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.delivery-sheet-confirm button.is-primary {
+  border-color: #16301d;
+  background: #16301d;
+  color: #f3f5f0;
+}
+.delivery-sheet-empty {
+  display: grid;
+  place-items: center;
+  gap: 0.4rem;
+  min-height: 60vh;
+  text-align: center;
+}
+.delivery-sheet-error {
+  margin: 0 0 0.75rem;
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  background: #fbe3dd;
+  color: #7a2e18;
+  font-size: 0.9rem;
+}
+.delivery-sheet-finished {
+  margin-top: 1.25rem;
+  border-radius: 0.8rem;
+  padding: 0.9rem;
+  background: #16301d;
+  color: #f3f5f0;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Cómo va la ruta y el enlace, en el panel. */
+.route-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--db-text-soft);
+}
+.route-link {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--db-accent);
+  border-radius: 0.7rem;
+  padding: 0.75rem 0.9rem;
+  background: color-mix(in srgb, var(--db-accent) 8%, transparent);
+}
+.route-link p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+.route-link code {
+  padding: 0.5rem 0.7rem;
+  border-radius: 0.4rem;
+  background: var(--db-bg);
+  font-family: ui-monospace, 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.route-link > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.route-link button {
+  border: 1px solid var(--db-border);
+  border-radius: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  background: none;
+  color: var(--db-text);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* --- Muelle de mensajería ---------------------------------------------------------------------
+   El chat dejó de ser una pantalla del menú y pasó a la barra: un ícono, un panel con la gente, y
+   ventanitas acopladas abajo a la derecha que se abren sobre lo que haya en pantalla. Contestar ya
+   no obliga a irse de un pedido a medio cargar. */
+.chat-dock-trigger {
+  position: relative;
+  display: flex;
+}
+.chat-dock-badge {
+  position: absolute;
+  top: -0.3rem;
+  right: -0.3rem;
+  min-width: 1.05rem;
+  border-radius: 999px;
+  padding: 0 0.25rem;
+  background: var(--db-accent);
+  color: var(--db-bg);
+  font-size: 0.62rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05rem;
+  text-align: center;
+}
+.chat-dock-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 58;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+.chat-dock-panel {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 60;
+  display: grid;
+  gap: 0.5rem;
+  width: min(20rem, calc(100vw - 2rem));
+  max-height: min(26rem, 70vh);
+  border: 1px solid var(--db-border);
+  border-radius: 0.9rem;
+  padding: 0.75rem;
+  background: var(--db-surface-solid);
+  box-shadow: 0 18px 40px rgb(0 0 0 / 22%);
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+.chat-dock-panel header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.chat-dock-panel h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--db-text);
+}
+.chat-dock-panel header a {
+  font-size: 0.75rem;
+  color: var(--db-accent);
+  text-decoration: none;
+}
+.chat-dock-panel input[type='search'] {
+  width: 100%;
+}
+.chat-dock-panel-scroll {
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 0.1rem;
+}
+.chat-dock-panel h3 {
+  margin: 0.5rem 0 0.2rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--db-text-soft);
+}
+.chat-dock-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  border: 0;
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.5rem;
+  background: none;
+  color: var(--db-text);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-dock-row:hover {
+  background: var(--db-bg-2);
+}
+.chat-dock-row b {
+  min-width: 1.15rem;
+  border-radius: 999px;
+  padding: 0 0.3rem;
+  background: var(--db-accent);
+  color: var(--db-bg);
+  font-size: 0.65rem;
+  line-height: 1.15rem;
+  text-align: center;
+}
+.chat-dock-row small {
+  font-size: 0.7rem;
+  color: var(--db-muted);
+}
+.chat-dock-empty {
+  margin: 0.5rem 0;
+  font-size: 0.8rem;
+  color: var(--db-muted);
+}
+
+/* Las ventanas. Fijas abajo a la derecha, en fila, sin tapar la barra inferior del teléfono. */
+.chat-dock {
+  position: fixed;
+  right: 1rem;
+  bottom: 0;
+  z-index: 55;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  pointer-events: none;
+}
+.chat-dock > * {
+  pointer-events: auto;
+}
+.chat-window {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: 20rem;
+  height: 26rem;
+  border: 1px solid var(--db-border);
+  border-bottom: 0;
+  border-radius: 0.8rem 0.8rem 0 0;
+  background: var(--db-surface-solid);
+  box-shadow: 0 18px 40px rgb(0 0 0 / 24%);
+  overflow: hidden;
+}
+.chat-window.is-minimized {
+  grid-template-rows: auto;
+  height: auto;
+}
+.chat-window > header {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--db-bg-2);
+  border-bottom: 1px solid var(--db-border-soft);
+}
+.chat-window-title {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--db-text);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-window-title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-window-unread {
+  flex: none;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--db-accent);
+}
+.chat-window > header button:not(.chat-window-title) {
+  border: 0;
+  border-radius: 0.3rem;
+  padding: 0.15rem 0.35rem;
+  background: none;
+  color: var(--db-text-soft);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.chat-window > header button:not(.chat-window-title):hover {
+  background: var(--db-surface);
+  color: var(--db-text);
+}
+.chat-window-transcript {
+  display: grid;
+  align-content: start;
+  gap: 0.4rem;
+  overflow-y: auto;
+  padding: 0.6rem;
+  color: var(--db-text);
+}
+.chat-window-transcript .chat-bubble {
+  max-width: 85%;
+  font-size: 0.85rem;
+}
+.chat-window-error {
+  margin: 0;
+  padding: 0 0.6rem 0.4rem;
+  font-size: 0.75rem;
+  color: #c0562f;
+}
+.chat-window-picker {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0 0.6rem 0.4rem;
+}
+.chat-window-picker > div {
+  display: flex;
+  gap: 0.35rem;
+}
+.chat-window-picker select,
+.chat-window-picker input {
+  min-width: 0;
+  font-size: 0.8rem;
+}
+.chat-window-picker > button {
+  border: 1px solid var(--db-border-soft);
+  border-radius: 0.4rem;
+  padding: 0.3rem 0.45rem;
+  background: none;
+  color: var(--db-text);
+  font: inherit;
+  font-size: 0.78rem;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-window-composer {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.45rem;
+  border-top: 1px solid var(--db-border-soft);
+}
+.chat-window-composer input {
+  flex: 1;
+  min-width: 0;
+  min-height: 2rem;
+  border: 1px solid var(--db-border-soft);
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  background: var(--db-bg-2);
+  color: var(--db-text);
+  font: inherit;
+  font-size: 0.85rem;
+}
+.chat-window-composer button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.3rem 0.5rem;
+  background: none;
+  color: var(--db-text-soft);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.chat-window-composer .chat-window-send {
+  padding: 0.3rem 0.7rem;
+  background: var(--db-accent);
+  color: var(--db-bg);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.chat-window-composer .chat-window-send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* En el teléfono no hay muelle: una conversación, a pantalla completa, por encima de la barra
+   inferior. Tres ventanitas de 20rem sobre 375px no son tres ventanas, son una pantalla rota. */
+.chat-dock.is-narrow {
+  right: 0;
+  left: 0;
+  bottom: 0;
+  gap: 0;
+}
+.chat-dock.is-narrow .chat-window {
+  width: 100%;
+  height: min(32rem, 70vh);
+  border-radius: 0.8rem 0.8rem 0 0;
+  margin-bottom: 4.2rem;
+}
+.chat-dock.is-narrow .chat-window.is-minimized {
+  height: auto;
+}
+
 /* Estadísticas charts. Hand-drawn inline SVG rather than a charting library, so everything here
    inherits the dashboard's own theme tokens and works in light and dark without a second palette. */
 .stats-chart svg {
@@ -3379,6 +3953,99 @@ a {
 }
 .user-status.is-off {
   color: var(--db-text-faint, var(--db-text-soft));
+}
+
+/* Alta de usuario. El modo de contraseña es una decisión de dos opciones, no un campo que se
+   deja vacío: "vacío = la generamos" obligaba a saber la convención, y dejaba un input de
+   contraseña suelto que el navegador rellenaba con la clave de quien estaba creando la cuenta. */
+.user-create .field small {
+  font-weight: 500;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--db-text-soft);
+}
+.user-create-password {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 1rem;
+  border: 1px solid var(--db-border);
+  border-radius: 0.7rem;
+  padding: 0.85rem 1rem;
+}
+.user-create-password legend {
+  padding: 0 0.35rem;
+  color: var(--color-forest);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+.dashboard-shell .user-create-password legend {
+  color: var(--db-text);
+}
+.user-create-password label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: start;
+  cursor: pointer;
+}
+.user-create-password label span {
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.85rem;
+}
+.user-create-password label small {
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--db-text-soft);
+}
+.user-create-password input[type='password'] {
+  width: 100%;
+}
+
+/* Permisos efectivos. Eran sesenta claves en una sola línea; acá van por grupo y en castellano,
+   en columnas cuando hay ancho y en una sola cuando no. */
+.effective-permissions > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--db-text, var(--color-forest));
+}
+.effective-permissions > summary small {
+  font-weight: 500;
+  color: var(--db-text-soft);
+}
+.effective-permissions-groups {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 0.75rem;
+}
+@media (min-width: 48rem) {
+  .effective-permissions-groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.effective-permissions-groups h4 {
+  margin: 0 0 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--db-text-soft);
+}
+.effective-permissions-groups ul {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.effective-permissions-groups li {
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--db-text, inherit);
 }
 
 /* Count of orders waiting for someone to confirm them. Caps at "+10": past that the exact number
@@ -6853,4 +7520,17 @@ textarea.sr-only {
 .is-hidden-section {
   opacity: 0.6;
   border-style: dashed;
+}
+
+/* Qué pasa al elegir una ubicación encontrada: cargar la ubicación y, de paso, dejar la dirección
+   escrita como corresponde. Decirlo antes evita la duda de si "Usar esta" pisa algo. */
+.crm-geocoding-hint {
+  margin: 0.15rem 0 0.4rem;
+  font-size: 0.78rem;
+  color: var(--db-text-soft);
+}
+.crm-address-actions button.is-primary {
+  border-color: var(--db-accent);
+  background: color-mix(in srgb, var(--db-accent) 14%, transparent);
+  font-weight: 700;
 }

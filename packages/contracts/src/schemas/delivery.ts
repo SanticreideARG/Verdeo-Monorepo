@@ -130,3 +130,74 @@ export type DeliveryTriggerRequest = z.infer<typeof DeliveryTriggerRequestSchema
 export const DeliveryStopFailedRequestSchema = z.object({
   cancellationReasonId: UuidSchema,
 });
+
+/**
+ * La hoja que abre el enlace del repartidor.
+ *
+ * Lo mínimo para entregar: nombre de pila, dónde, cómo entrar, en qué horario recibe, qué dejar y
+ * qué cobrar. Sin apellido, sin teléfono, sin historial — lo que no está en este esquema no sale
+ * del servidor, y eso es deliberado: el enlace se manda por WhatsApp y puede terminar en cualquier
+ * lado.
+ */
+export const DeliverySheetStopSchema = z.object({
+  accessNotes: z.string().nullable(),
+  collectedMinor: z.number().int(),
+  customerFirstName: z.string(),
+  deliveryAddress: z.string(),
+  deliveryLatitude: z.number().nullable(),
+  deliveryLocationUrl: z.string().nullable(),
+  deliveryLongitude: z.number().nullable(),
+  deliveryNote: z.string().nullable(),
+  /** Cuándo recibe: "después de las 18", "de 9 a 13". Texto libre, lo lee una persona. */
+  deliveryWindow: z.string().nullable(),
+  detail: z.string(),
+  id: UuidSchema,
+  paymentExpectation: z.string(),
+  prepaid: z.boolean(),
+  publicNumber: z.string(),
+  sequence: z.number().int(),
+  status: z.string(),
+  totalMinor: z.number().int(),
+});
+
+export const DeliveryRouteSheetSchema = z.object({
+  collectedMinor: z.number().int(),
+  deliveredCount: z.number().int(),
+  deliveryDate: z.string(),
+  label: z.string().nullable(),
+  originLatitude: z.number().nullable(),
+  originLongitude: z.number().nullable(),
+  /** Lo que todavía hay que cobrar en la calle. */
+  pendingCollectionMinor: z.number().int(),
+  siteName: z.string(),
+  stopCount: z.number().int(),
+  stops: z.array(DeliverySheetStopSchema),
+});
+
+export const DeliveryRouteProgressSchema = z.object({
+  collectedMinor: z.number().int(),
+  deliveredCount: z.number().int(),
+  pendingCollectionMinor: z.number().int(),
+  stopCount: z.number().int(),
+});
+
+export const DeliveryRouteLinkRequestSchema = z.object({
+  /** Cuánto vive el enlace. Por defecto un día: una ruta es de un día. */
+  ttlHours: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 14)
+    .optional(),
+});
+
+export const DeliveryRouteLinkResponseSchema = z.object({
+  expiresAt: IsoDateTimeSchema,
+  url: z.string(),
+});
+
+export const DeliverySheetConfirmRequestSchema = z.object({
+  /** Si además de entregar, cobró. */
+  collected: z.boolean(),
+  note: z.string().trim().max(500).optional(),
+});

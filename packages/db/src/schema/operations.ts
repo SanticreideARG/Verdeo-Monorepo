@@ -148,6 +148,15 @@ export const customerAddresses = pgTable(
     propertyType: text('property_type'),
     unit: text('unit'),
     accessNotes: text('access_notes'),
+    /*
+     * Cuándo se puede entregar acá: "después de las 18", "de 9 a 13", "tocar timbre 2".
+     *
+     * Vive con el domicilio y no con el cliente porque es una propiedad del lugar: el mismo cliente
+     * recibe en su casa a la tarde y en el trabajo al mediodía. Texto libre a propósito — la
+     * realidad de cada cliente no entra en un par de horas de un selector, y quien lee esto es una
+     * persona manejando, no una función de ruteo.
+     */
+    deliveryWindow: text('delivery_window'),
     locationUrl: text('location_url'),
     latitude: numeric('latitude', { precision: 9, scale: 6 }),
     longitude: numeric('longitude', { precision: 9, scale: 6 }),

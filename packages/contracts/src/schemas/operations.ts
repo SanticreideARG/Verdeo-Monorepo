@@ -287,6 +287,16 @@ export const AddressGeocodingConfirmRequestSchema = z
     longitude: z.number().min(-180).max(180).optional(),
     operationalZone: z.string().trim().min(1).max(120).nullable().optional(),
     sector: z.string().trim().max(120).nullable().optional(),
+    /**
+     * La dirección tal como la devolvió el geocodificador.
+     *
+     * Lo que escribe quien toma el pedido es lo que dictó el cliente por teléfono: "san martin 1234
+     * dpto 2", sin tildes, con la calle a medias. El geocodificador ya resolvió cuál es, así que al
+     * confirmar se puede dejar escrita su versión —"Av. San Martín 1234, Neuquén"—, que es la que
+     * después lee quien reparte. Opcional: si quien confirma prefiere su propia redacción, no se
+     * toca.
+     */
+    writtenAddress: z.string().trim().min(4).max(500).optional(),
   })
   .refine(
     (value) =>

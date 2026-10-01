@@ -1,12 +1,15 @@
 import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 
 import { AuditService } from '@verdeo/audit';
+import { createAccessToken, hashAccessToken } from '@verdeo/auth';
 import { deliveryDetail } from '@verdeo/orders';
 import type { RouteOptimizer } from '@verdeo/routing';
 
 import type { Database } from '../index.js';
 import {
+  accessTokens,
   cancellationReasons,
+  cashCollections,
   customerAddresses,
   customers,
   deliveryRoutes,
@@ -16,6 +19,7 @@ import {
   orderItems,
   orderStatusHistory,
   orders,
+  paymentMethods,
   productFamilies,
   productVariants,
   payments,
@@ -602,6 +606,353 @@ export class PostgresDeliveryService {
       );
     }
     return detalles;
+  }
+
+  /**
+   * El enlace del repartidor.
+   *
+   * No hay cuenta que crear: quien reparte hoy puede no ser quien reparte mañana, y pedirle al
+   * equipo que dé de alta y de baja usuarios para eso era una gestión que nadie iba a hacer. Lo que
+   * existe de verdad es una ruta de un día, así que el acceso es a esa ruta: se genera, se manda
+   * por WhatsApp y vence. Si se filtra, lo que expone es la hoja de un día —nombres de pila,
+   * direcciones y qué cobrar— y no una cuenta del sistema.
+   *
+   * El token se guarda hasheado, como todos: si la base se filtra, los enlaces vivos no viajan con
+   * ella. Generar uno nuevo revoca el anterior — dos enlaces vivos de la misma ruta es alguien
+   * repartiendo con una hoja que ya no vale.
+   */
+  public async issueRouteLink(
+    routeId: string,
+    ttlHours: number,
+    context: DeliveryContext,
+  ): Promise<{ expiresAt: Date; token: string }> {
+    return this.database.transaction(async (transaction) => {
+      const [route] = await transaction
+        .select({ deliveryDate: deliveryRoutes.deliveryDate, status: deliveryRoutes.status })
+        .from(deliveryRoutes)
+        .where(eq(deliveryRoutes.id, routeId))
+        .limit(1);
+      if (!route) throw new DeliveryNotFoundError('Route not found');
+      if (route.status !== 'published') {
+        throw new DeliveryConflictError(
+          'La ruta todavía es un borrador. Publicala antes de pasarle el enlace a alguien.',
+        );
+      }
+
+      await transaction
+        .update(accessTokens)
+        .set({ revokedAt: new Date() })
+        .where(and(eq(accessTokens.deliveryRouteId, routeId), isNull(accessTokens.revokedAt)));
+
+      const token = createAccessToken();
+      const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
+      await transaction.insert(accessTokens).values({
+        createdByUserId: context.actorUserId ?? null,
+        deliveryRouteId: routeId,
+        expiresAt,
+        kind: 'route_access',
+        label: `Reparto ${route.deliveryDate}`,
+        tokenHash: hashAccessToken(token),
+      });
+
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: 'delivery.route_link_issued',
+        actor: context.actorUserId
+          ? { type: 'user', userId: context.actorUserId }
+          : { type: 'system' },
+        after: { expiresAt: expiresAt.toISOString() },
+        correlationId: context.correlationId,
+        entityId: routeId,
+        entityType: 'delivery_route',
+        requestId: context.requestId,
+        source: context.source,
+      });
+
+      return { expiresAt, token };
+    });
+  }
+
+  /** Cortar el acceso de un enlace ya entregado, sin tocar la ruta. */
+  public async revokeRouteLink(routeId: string, context: DeliveryContext) {
+    await this.database
+      .update(accessTokens)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(accessTokens.deliveryRouteId, routeId), isNull(accessTokens.revokedAt)));
+    await new AuditService(new PostgresAuditSink(this.database)).record({
+      action: 'delivery.route_link_revoked',
+      actor: context.actorUserId
+        ? { type: 'user', userId: context.actorUserId }
+        : { type: 'system' },
+      correlationId: context.correlationId,
+      entityId: routeId,
+      entityType: 'delivery_route',
+      requestId: context.requestId,
+      source: context.source,
+    });
+  }
+
+  /**
+   * La ruta que abre un enlace, o nada si el enlace no sirve.
+   *
+   * Nunca dice por qué: a quien tiene un enlace vencido le sirve lo mismo "pedí uno nuevo", y un
+   * mensaje distinto por cada causa le contaría a quien lo encontró de casualidad qué tan cerca
+   * estuvo.
+   */
+  private async routeIdForToken(rawToken: string): Promise<string | null> {
+    const [record] = await this.database
+      .select({
+        deliveryRouteId: accessTokens.deliveryRouteId,
+        expiresAt: accessTokens.expiresAt,
+        id: accessTokens.id,
+        revokedAt: accessTokens.revokedAt,
+      })
+      .from(accessTokens)
+      .where(
+        and(
+          eq(accessTokens.tokenHash, hashAccessToken(rawToken)),
+          eq(accessTokens.kind, 'route_access'),
+        ),
+      )
+      .limit(1);
+    if (!record?.deliveryRouteId) return null;
+    if (record.revokedAt || record.expiresAt <= new Date()) return null;
+    await this.database
+      .update(accessTokens)
+      .set({ lastUsedAt: new Date(), useCount: sql`${accessTokens.useCount} + 1` })
+      .where(eq(accessTokens.id, record.id));
+    return record.deliveryRouteId;
+  }
+
+  /**
+   * La hoja de reparto que ve quien tiene el enlace.
+   *
+   * Lleva lo que hace falta para entregar y nada más: nombre de pila, dirección, cómo entrar, en
+   * qué horario recibe, qué entregar, cuánto cobrar y con qué medio. Sin teléfono, sin apellido,
+   * sin historial — la consulta directamente no los selecciona, así que no hay nada acá que se
+   * pueda filtrar por error.
+   */
+  public async routeSheetByToken(rawToken: string) {
+    const routeId = await this.routeIdForToken(rawToken);
+    if (!routeId) return null;
+
+    const [route] = await this.database
+      .select({
+        deliveryDate: deliveryRoutes.deliveryDate,
+        id: deliveryRoutes.id,
+        label: deliveryRoutes.label,
+        originLatitude: operatingSites.originLatitude,
+        originLongitude: operatingSites.originLongitude,
+        siteName: operatingSites.displayName,
+        status: deliveryRoutes.status,
+      })
+      .from(deliveryRoutes)
+      .innerJoin(operatingSites, eq(operatingSites.id, deliveryRoutes.operatingSiteId))
+      .where(eq(deliveryRoutes.id, routeId))
+      .limit(1);
+    if (!route) return null;
+
+    const stops = await this.sheetStops(routeId);
+    return {
+      deliveryDate: route.deliveryDate,
+      label: route.label,
+      originLatitude: route.originLatitude === null ? null : Number(route.originLatitude),
+      originLongitude: route.originLongitude === null ? null : Number(route.originLongitude),
+      siteName: route.siteName,
+      stops,
+      ...this.sheetTotals(stops),
+    };
+  }
+
+  /** Las paradas de una ruta con todo lo que hace falta para entregarlas. */
+  private async sheetStops(routeId: string) {
+    const rows = await this.database
+      .select({
+        accessNotes: customerAddresses.accessNotes,
+        collectedMinor: sql<number>`coalesce((
+          select sum(c.amount_minor) from cash_collections c where c.order_id = ${orders.id}
+        ), 0)`,
+        customerDisplayName: customers.displayName,
+        deliveryAddress: orders.deliveryAddressSnapshot,
+        deliveryLatitude: customerAddresses.latitude,
+        deliveryLocationUrl: orders.deliveryLocationUrlSnapshot,
+        deliveryLongitude: customerAddresses.longitude,
+        deliveryNote: deliveryStops.deliveryNote,
+        deliveryWindow: customerAddresses.deliveryWindow,
+        id: deliveryStops.id,
+        orderId: deliveryStops.orderId,
+        paymentExpectation: orders.paymentExpectation,
+        prepaid: sql<boolean>`coalesce(${payments.status} = 'PAID', false)`,
+        publicNumber: orders.publicNumber,
+        sequence: deliveryStops.sequence,
+        status: deliveryStops.status,
+        totalMinor: orders.totalMinor,
+      })
+      .from(deliveryStops)
+      .innerJoin(orders, eq(orders.id, deliveryStops.orderId))
+      .innerJoin(customers, eq(customers.id, orders.customerId))
+      .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+      .leftJoin(payments, eq(payments.orderId, orders.id))
+      .where(eq(deliveryStops.routeId, routeId))
+      .orderBy(asc(deliveryStops.sequence));
+
+    const detalles = await this.itemDetails(
+      this.database,
+      rows.map((row) => ({ customerDisplayName: row.customerDisplayName, orderId: row.orderId })),
+    );
+
+    return rows.map(({ customerDisplayName, orderId, ...row }) => ({
+      ...row,
+      collectedMinor: Number(row.collectedMinor),
+      customerFirstName: customerDisplayName.split(' ')[0] ?? customerDisplayName,
+      deliveryLatitude: row.deliveryLatitude === null ? null : Number(row.deliveryLatitude),
+      deliveryLongitude: row.deliveryLongitude === null ? null : Number(row.deliveryLongitude),
+      detail: detalles.get(orderId) ?? '',
+    }));
+  }
+
+  /**
+   * Cómo va la ruta, para quien la mira desde el panel.
+   *
+   * Es la misma cuenta que ve quien reparte, no una segunda: cuántas entregó, cuánta plata levantó
+   * y cuánta falta. Que las dos pantallas discrepen sobre cuánto hay en la calle sería peor que no
+   * mostrarlo.
+   */
+  public async routeProgress(routeId: string) {
+    const stops = await this.sheetStops(routeId);
+    return this.sheetTotals(stops);
+  }
+
+  /** Lo que hay que rendir y lo que falta entregar, calculado una vez para toda la hoja. */
+  private sheetTotals(
+    stops: readonly {
+      collectedMinor: number;
+      prepaid: boolean;
+      status: string;
+      totalMinor: number;
+    }[],
+  ) {
+    return {
+      collectedMinor: stops.reduce((total, stop) => total + stop.collectedMinor, 0),
+      deliveredCount: stops.filter((stop) => stop.status === 'delivered').length,
+      pendingCollectionMinor: stops
+        .filter((stop) => stop.status !== 'delivered' && !stop.prepaid)
+        .reduce((total, stop) => total + stop.totalMinor, 0),
+      stopCount: stops.length,
+    };
+  }
+
+  /**
+   * Confirmar una entrega desde el enlace.
+   *
+   * Cobrar es parte de entregar, así que va en el mismo movimiento y en la misma transacción: una
+   * entrega marcada sin su cobro es plata que nadie sabe que está en la calle. Lo cobrado se
+   * registra como una cobranza de la ruta —no de un usuario, porque no hay usuario— y el pedido
+   * queda `TO_SETTLE` si el medio es efectivo, que es lo que después se rinde.
+   */
+  public async confirmStopByToken(
+    rawToken: string,
+    stopId: string,
+    input: { collected: boolean; note?: string | undefined },
+    context: DeliveryContext,
+  ) {
+    const routeId = await this.routeIdForToken(rawToken);
+    if (!routeId) throw new DeliveryNotFoundError('Route link is not valid');
+
+    return this.database.transaction(async (transaction) => {
+      const [stop] = await transaction
+        .select({
+          orderId: deliveryStops.orderId,
+          paymentExpectation: orders.paymentExpectation,
+          prepaid: sql<boolean>`coalesce(${payments.status} = 'PAID', false)`,
+          routeId: deliveryStops.routeId,
+          status: deliveryStops.status,
+          totalMinor: orders.totalMinor,
+        })
+        .from(deliveryStops)
+        .innerJoin(orders, eq(orders.id, deliveryStops.orderId))
+        .leftJoin(payments, eq(payments.orderId, orders.id))
+        .where(eq(deliveryStops.id, stopId))
+        .limit(1);
+      if (!stop || stop.routeId !== routeId) throw new DeliveryNotFoundError('Stop not found');
+      if (stop.status === 'delivered') {
+        throw new DeliveryConflictError('Esa parada ya está confirmada.');
+      }
+
+      await transaction
+        .update(deliveryStops)
+        .set({
+          deliveredAt: new Date(),
+          deliveryNote: input.note?.trim() ? input.note.trim() : null,
+          status: 'delivered',
+          updatedAt: new Date(),
+        })
+        .where(eq(deliveryStops.id, stopId));
+
+      const [order] = await transaction
+        .select({ status: orders.status })
+        .from(orders)
+        .where(eq(orders.id, stop.orderId))
+        .limit(1);
+      if (order && order.status !== 'DELIVERED') {
+        await transaction
+          .update(orders)
+          .set({ status: 'DELIVERED', updatedAt: new Date() })
+          .where(eq(orders.id, stop.orderId));
+        await transaction.insert(orderStatusHistory).values({
+          actorUserId: null,
+          fromStatus: order.status,
+          orderId: stop.orderId,
+          reason: 'Entrega confirmada desde el enlace de la ruta',
+          toStatus: 'DELIVERED',
+        });
+      }
+
+      if (input.collected && !stop.prepaid) {
+        await transaction
+          .insert(payments)
+          .values({
+            amountMinor: stop.totalMinor,
+            expectedMethod: stop.paymentExpectation,
+            orderId: stop.orderId,
+            status: 'PENDING',
+          })
+          .onConflictDoNothing();
+        await transaction.insert(cashCollections).values({
+          amountMinor: stop.totalMinor,
+          deliveryRouteId: routeId,
+          method: stop.paymentExpectation,
+          orderId: stop.orderId,
+        });
+        const [method] = await transaction
+          .select({ isCash: paymentMethods.isCash })
+          .from(paymentMethods)
+          .where(eq(paymentMethods.code, stop.paymentExpectation))
+          .limit(1);
+        // Lo que se cobró en mano queda para rendir; lo demás ya está en la cuenta.
+        const enMano = method?.isCash ?? /efectivo/i.test(stop.paymentExpectation);
+        await transaction
+          .update(payments)
+          .set({ status: enMano ? 'TO_SETTLE' : 'PAID', updatedAt: new Date() })
+          .where(eq(payments.orderId, stop.orderId));
+      }
+
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: 'delivery.stop_confirmed_by_link',
+        actor: { type: 'system' },
+        after: { collected: input.collected, status: 'delivered' },
+        before: { status: stop.status },
+        correlationId: context.correlationId,
+        entityId: stopId,
+        entityType: 'delivery_stop',
+        metadata: { routeId },
+        requestId: context.requestId,
+        source: context.source,
+      });
+
+      return { id: stopId, status: 'delivered' as const };
+    });
   }
 
   public async updateStopStatus(

@@ -48,6 +48,7 @@ async function baseConRoles(): Promise<Database> {
     .values([
       { key: 'superadmin', name: 'Superadmin' },
       { key: 'operador', name: 'Operador' },
+      // Se sigue sembrando para comprobar que no recibe nada.
       { key: 'repartidor', name: 'Repartidor' },
     ])
     .onConflictDoNothing();
@@ -79,16 +80,15 @@ describe('applyRoleDefaults', () => {
     expect(permisos).toEqual([...ROLE_DEFAULT_PERMISSIONS.operador!].sort());
   });
 
-  it('no le da al repartidor ni la plata ni la administración de rutas', async () => {
+  it('no inventa un rol de repartidor', async () => {
     const db = await baseConRoles();
 
     await applyRoleDefaults(db);
 
-    const permisos = await permisosDe(db, 'repartidor');
-    expect(permisos).toContain('delivery.execute');
-    expect(permisos.filter((key) => key.startsWith('payments.'))).toEqual([]);
-    expect(permisos).not.toContain('routes.manage');
-    expect(permisos).not.toContain('customers.read');
+    // El reparto se hace con el enlace de la ruta, no con una cuenta. Un rol vacío que nadie usa es
+    // un rol que alguien termina asignando "por las dudas".
+    expect(await permisosDe(db, 'repartidor')).toEqual([]);
+    expect(Object.keys(ROLE_DEFAULT_PERMISSIONS)).toEqual(['operador']);
   });
 
   it('no toca al superadmin ni le inventa una lista', async () => {
@@ -119,7 +119,7 @@ describe('applyRoleDefaults', () => {
     const segunda = await applyRoleDefaults(db);
 
     expect(primera.operador).toBeGreaterThan(0);
-    expect(segunda).toEqual({ operador: 0, repartidor: 0 });
+    expect(segunda).toEqual({ operador: 0 });
     // La concesión a mano es una decisión de la operación; correr esto no la revierte.
     expect(await permisosDe(db, 'operador')).toContain('audit.read');
   });

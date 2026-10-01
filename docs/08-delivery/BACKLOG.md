@@ -126,6 +126,14 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [x] Delivery PWA.
 - [x] Message triggers.
 - [x] Delivery confirmation.
+- [x] **El sitio de reparto (`/reparto/:token`) reemplaza a la app y a las cuentas de repartidor.**
+      Se genera un enlace por ruta publicada, vence, y generar uno nuevo da de baja el anterior.
+      Lleva el mapa, el horario en que recibe cada cliente, cómo entrar, qué entregar y qué cobrar;
+      confirma entrega y cobro en un solo movimiento y lleva a la vista cuánto hay para rendir.
+      Desde el panel se ve cómo va la ruta con la misma cuenta. El rol `repartidor`, la app
+      `/delivery` y la asignación de paradas a usuarios se eliminaron.
+- [ ] Cargar la franja horaria de cada domicilio (`delivery_window`): el campo existe y la hoja ya
+      lo muestra, falta editarlo desde la ficha del cliente.
 - [x] **Qué entregar en cada parada** (`deliveryDetail` en `@verdeo/orders`): una vianda estándar se
       nombra por variedad y tamaño —"Menú Keto 400"—, que es lo que dice su etiqueta; un Intuitivo,
       por el nombre de quien lo pidió —"Intuitivo 250 · Ana"—, porque dos Intuitivo del mismo tamaño

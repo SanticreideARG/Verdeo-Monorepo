@@ -165,6 +165,8 @@ export interface AddressGeocodingConfirmInput {
   longitude?: number | undefined;
   operationalZone?: string | null | undefined;
   sector?: string | null | undefined;
+  /** La dirección como la devolvió el geocodificador, cuando quien confirma la adopta. */
+  writtenAddress?: string | undefined;
 }
 
 export interface CustomerUpdateInput {
@@ -1478,6 +1480,8 @@ export class PostgresOperationsService {
             input.operationalZone !== undefined ? input.operationalZone : address.operationalZone,
           sector: input.sector !== undefined ? input.sector : (candidate?.sector ?? address.sector),
           updatedAt: new Date(),
+          // La dirección normalizada sólo pisa lo escrito si quien confirma lo pidió.
+          writtenAddress: input.writtenAddress ?? address.writtenAddress,
         })
         .where(eq(customerAddresses.id, addressId))
         .returning();
@@ -2352,6 +2356,11 @@ export class PostgresOperationsService {
   // without resubmitting its whole offering list the way updateMenu requires. Marks each touched
   // row `customized` — the same flag copyMenuContent already respects (a later non-REPLACE
   // distribution from master never overwrites a price an operator edited here).
+  //
+  // Una semana cerrada no se toca. Su precio no es un dato editable: es lo que se cobró. Los
+  // pedidos de esa semana ya guardaron el suyo, así que cambiarlo no corrige nada de lo vendido
+  // —sólo hace que el informe de una semana vieja cambie solo meses después—. Un período todavía
+  // sin abrir sí se edita: es justamente cuando se arman los precios.
   public async updateMenuPrices(
     menuId: string,
     prices: readonly { sizeName: string; unitPriceMinor: number }[],
@@ -2360,11 +2369,17 @@ export class PostgresOperationsService {
     return this.database
       .transaction(async (transaction) => {
         const [menu] = await transaction
-          .select({ id: weeklyMenus.id })
+          .select({ cycleAlias: salesCycles.alias, cycleStatus: salesCycles.status })
           .from(weeklyMenus)
+          .innerJoin(salesCycles, eq(salesCycles.id, weeklyMenus.salesCycleId))
           .where(eq(weeklyMenus.id, menuId))
           .limit(1);
         if (!menu) throw new OperationsNotFoundError('Weekly menu not found');
+        if (menu.cycleStatus === 'CLOSED') {
+          throw new OperationsConflictError(
+            `"${menu.cycleAlias}" ya está cerrado: ese precio es lo que se cobró y no se edita.`,
+          );
+        }
 
         const before: Record<string, number> = {};
         const after: Record<string, number> = {};

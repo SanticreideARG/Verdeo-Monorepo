@@ -337,6 +337,13 @@
       "when": 1789267474496,
       "tag": "0047_striped_havok",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1790821796886,
+      "tag": "0048_shiny_quasar",
+      "breakpoints": true
     }
   ]
 }
