@@ -2625,6 +2625,7 @@ describe('API foundation', () => {
                 collectedMinor: 0,
                 deliveredCount: 0,
                 deliveryDate: '2026-08-26',
+                failureReasons: [],
                 label: null,
                 originLatitude: null,
                 originLongitude: null,

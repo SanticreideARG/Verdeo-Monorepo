@@ -81,16 +81,8 @@ export const DeliveryRouteListResponseSchema = z.object({
   items: z.array(DeliveryRouteSummarySchema),
 });
 
-export const DeliveryStopAssignRequestSchema = z.object({
-  assignedUserId: UuidSchema.nullable(),
-});
-
 export const DeliveryStopReorderRequestSchema = z.object({
   stopIds: z.array(UuidSchema).min(1),
-});
-
-export const DeliveryStopStatusUpdateRequestSchema = z.object({
-  status: DeliveryStopStatusSchema,
 });
 
 export const DeliveryTriggerRequestSchema = z.object({
@@ -102,29 +94,8 @@ export const DeliveryTriggerResponseSchema = z.object({
   sent: z.boolean(),
 });
 
-export const DeliveryMyStopSchema = z.object({
-  customerFirstName: z.string(),
-  deliveryAddress: z.string(),
-  /** Qué entregar en esta parada. La misma línea que ve quien arma la ruta. */
-  detail: z.string(),
-  deliveryLocationUrl: z.string().nullable(),
-  id: UuidSchema,
-  paymentExpectation: z.string(),
-  publicNumber: z.string(),
-  routeId: UuidSchema,
-  sequence: z.number().int(),
-  status: DeliveryStopStatusSchema,
-  totalMinor: z.number().int(),
-});
-
-export const DeliveryMyStopListResponseSchema = z.object({
-  items: z.array(DeliveryMyStopSchema),
-});
-
 export type DeliveryRouteCreateRequest = z.infer<typeof DeliveryRouteCreateRequestSchema>;
-export type DeliveryStopAssignRequest = z.infer<typeof DeliveryStopAssignRequestSchema>;
 export type DeliveryStopReorderRequest = z.infer<typeof DeliveryStopReorderRequestSchema>;
-export type DeliveryStopStatusUpdateRequest = z.infer<typeof DeliveryStopStatusUpdateRequestSchema>;
 export type DeliveryTriggerRequest = z.infer<typeof DeliveryTriggerRequestSchema>;
 
 export const DeliveryStopFailedRequestSchema = z.object({
@@ -169,6 +140,8 @@ export const DeliveryRouteSheetSchema = z.object({
   originLongitude: z.number().nullable(),
   /** Lo que todavía hay que cobrar en la calle. */
   pendingCollectionMinor: z.number().int(),
+  /** La lista cerrada de por qué una entrega puede fallar; la misma que usa el panel. */
+  failureReasons: z.array(z.object({ displayName: z.string(), id: UuidSchema })),
   siteName: z.string(),
   stopCount: z.number().int(),
   stops: z.array(DeliverySheetStopSchema),
@@ -200,4 +173,8 @@ export const DeliverySheetConfirmRequestSchema = z.object({
   /** Si además de entregar, cobró. */
   collected: z.boolean(),
   note: z.string().trim().max(500).optional(),
+});
+
+export const DeliverySheetTriggerRequestSchema = z.object({
+  action: z.enum(['ON_MY_WAY', 'AT_ADDRESS', 'DELIVERED_THANKS']),
 });

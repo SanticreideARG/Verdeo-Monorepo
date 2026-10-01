@@ -163,9 +163,16 @@ export function UsersAdminPage() {
   );
   const [tokens, setTokens] = useState<AccessTokenSummary[]>([]);
   const [issuedToken, setIssuedToken] = useState<{ expiresAt: string; token: string } | null>(null);
-  const [tokenKind, setTokenKind] = useState<'repartidor_access' | 'user_invite'>(
-    'repartidor_access',
-  );
+  /*
+   * Sólo queda la invitación.
+   *
+   * El "acceso de repartidor" era un token atado a una cuenta de repartidor, y esas cuentas ya no
+   * existen: el reparto se hace con el enlace de la ruta del día (Rutas → "Enlace para el
+   * repartidor"), que no es un usuario del sistema. El tipo sigue siendo válido del lado del
+   * servidor para que los tokens ya entregados no dejen de andar antes de vencer, pero no se emiten
+   * más.
+   */
+  const tokenKind = 'user_invite' as const;
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -903,8 +910,8 @@ export function UsersAdminPage() {
                 <article className="operation-card">
                   <h3 className="font-semibold text-forest">Tokens de acceso</h3>
                   <p className="mt-1 text-sm text-ink-muted">
-                    Repartidor: acceso reutilizable atado a un usuario existente, sin contraseña.
-                    Invitación: crea un usuario nuevo la primera vez que se usa.
+                    Una invitación crea el usuario la primera vez que se usa, con el rol y la ciudad
+                    que elijas acá. Para el reparto no hace falta: va con el enlace de la ruta.
                   </p>
 
                   {issuedToken ? (
@@ -921,63 +928,37 @@ export function UsersAdminPage() {
 
                   <form className="mt-4 grid gap-3" onSubmit={(event) => void issueToken(event)}>
                     <label className="field">
-                      Tipo
-                      <select
-                        onChange={(event) =>
-                          setTokenKind(event.target.value as 'repartidor_access' | 'user_invite')
-                        }
-                        value={tokenKind}
-                      >
-                        <option value="repartidor_access">Acceso de repartidor</option>
-                        <option value="user_invite">Invitación de usuario</option>
-                      </select>
-                    </label>
-                    <label className="field">
                       Etiqueta
                       <input name="label" placeholder="Repartidor turno tarde" required />
                     </label>
-                    {tokenKind === 'repartidor_access' ? (
+                    <>
                       <label className="field">
-                        Repartidor
-                        <select name="boundUserId" required>
+                        Rol a asignar
+                        <select name="roleId" required>
                           <option value="">Seleccionar</option>
-                          {users.map((user) => (
-                            <option key={user.id} value={user.id}>
-                              {user.displayName}
+                          {roles.map((role) => (
+                            <option key={role.id} value={role.id}>
+                              {role.name}
                             </option>
                           ))}
                         </select>
                       </label>
-                    ) : (
-                      <>
-                        <label className="field">
-                          Rol a asignar
-                          <select name="roleId" required>
-                            <option value="">Seleccionar</option>
-                            {roles.map((role) => (
-                              <option key={role.id} value={role.id}>
-                                {role.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="field">
-                          Ciudad
-                          <select name="operatingSiteId" defaultValue="">
-                            <option value="">Sin asignar</option>
-                            {sites.map((site) => (
-                              <option key={site.id} value={site.id}>
-                                {site.displayName}
-                              </option>
-                            ))}
-                          </select>
-                          <small>
-                            La cuenta que se cree con esta invitación queda en esa ciudad. Sin
-                            asignar sólo sirve para un rol que vea todas.
-                          </small>
-                        </label>
-                      </>
-                    )}
+                      <label className="field">
+                        Ciudad
+                        <select name="operatingSiteId" defaultValue="">
+                          <option value="">Sin asignar</option>
+                          {sites.map((site) => (
+                            <option key={site.id} value={site.id}>
+                              {site.displayName}
+                            </option>
+                          ))}
+                        </select>
+                        <small>
+                          La cuenta que se cree con esta invitación queda en esa ciudad. Sin asignar
+                          sólo sirve para un rol que vea todas.
+                        </small>
+                      </label>
+                    </>
                     <label className="field">
                       Duración (horas)
                       <input defaultValue={48} min="1" name="ttlHours" required type="number" />

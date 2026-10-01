@@ -7534,3 +7534,47 @@ textarea.sr-only {
   background: color-mix(in srgb, var(--db-accent) 14%, transparent);
   font-weight: 700;
 }
+
+/* Avisos al cliente y motivo de entrega fallida, dentro de la parada abierta. */
+.delivery-sheet-notify {
+  display: flex;
+  gap: 0.4rem;
+}
+.delivery-sheet-notify button {
+  flex: 1;
+  border: 1px solid rgb(22 48 29 / 18%);
+  border-radius: 0.6rem;
+  padding: 0.55rem;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.delivery-sheet-notify button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.delivery-sheet-failed {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.delivery-sheet-failed select {
+  border: 1px solid rgb(22 48 29 / 18%);
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.7rem;
+  background: #fff;
+  font: inherit;
+}
+.delivery-sheet-skipped {
+  margin-left: auto;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  background: #f7e0d8;
+  color: #7a2e18;
+  font-size: 0.72rem;
+  font-weight: 700;
+}

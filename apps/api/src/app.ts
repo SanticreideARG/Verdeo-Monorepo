@@ -86,13 +86,12 @@ import {
   DeliveryRouteLinkResponseSchema,
   DeliveryRouteProgressSchema,
   DeliveryRouteSheetSchema,
+  DeliveryStopFailedRequestSchema,
+  DeliverySheetTriggerRequestSchema,
   DeliverySheetConfirmRequestSchema,
   DeliveryRouteDetailSchema,
   DeliveryRouteListResponseSchema,
-  DeliveryStopAssignRequestSchema,
   DeliveryStopReorderRequestSchema,
-  DeliveryStopFailedRequestSchema,
-  DeliveryStopStatusUpdateRequestSchema,
   DeliveryTriggerRequestSchema,
   DeliveryTriggerResponseSchema,
   HealthResponseSchema,
@@ -895,11 +894,6 @@ interface DeliveryContext {
 }
 
 interface DeliveryEngine {
-  assignStop(
-    stopId: string,
-    assignedUserId: string | null,
-    context: DeliveryContext,
-  ): Promise<unknown>;
   createRoute(
     operatingSiteId: string,
     deliveryDate: string,
@@ -923,6 +917,18 @@ interface DeliveryEngine {
   revokeRouteLink(routeId: string, context: DeliveryContext): Promise<unknown>;
   routeSheetByToken(token: string): Promise<unknown>;
   routeProgress(routeId: string): Promise<unknown>;
+  reportFailedByToken(
+    token: string,
+    stopId: string,
+    cancellationReasonId: string,
+    context: DeliveryContext,
+  ): Promise<unknown>;
+  triggerMessageByToken(
+    token: string,
+    stopId: string,
+    action: 'ON_MY_WAY' | 'AT_ADDRESS' | 'DELIVERED_THANKS',
+    context: DeliveryContext,
+  ): Promise<{ reason?: string; sent: boolean }>;
   confirmStopByToken(
     token: string,
     stopId: string,
@@ -1813,6 +1819,65 @@ export function createApp(options: CreateAppOptions) {
     }
     const sheet = await requireDelivery().routeSheetByToken(context.req.param('token'));
     return context.json(DeliveryRouteSheetSchema.parse(contractValue(sheet)));
+  });
+
+  /**
+   * "No se pudo entregar", desde el enlace.
+   *
+   * Quien está en la puerta es quien sabe que la entrega falló. Sin esto, la parada que no se pudo
+   * entregar quedaba pendiente para siempre o se marcaba entregada, que es peor. El motivo sale de
+   * la lista cerrada que viaja en la hoja, porque después se cuenta cuántas fallaron y por qué.
+   */
+  app.post('/api/v1/public/delivery/:token/stops/:stopId/failed', async (context) => {
+    const input = DeliveryStopFailedRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) return badRequest(context, 'Elegí un motivo.', input.error.issues);
+    try {
+      await requireDelivery().reportFailedByToken(
+        context.req.param('token'),
+        context.req.param('stopId'),
+        input.data.cancellationReasonId,
+        {
+          correlationId: context.get('requestId'),
+          requestId: context.get('requestId'),
+          source: 'reparto-link',
+        },
+      );
+    } catch (error) {
+      if (error instanceof Error && error.name === 'DeliveryNotFoundError') {
+        return context.json({ error: { code: 'NOT_FOUND', message: 'Enlace no válido.' } }, 404);
+      }
+      throw error;
+    }
+    const sheet = await requireDelivery().routeSheetByToken(context.req.param('token'));
+    return context.json(DeliveryRouteSheetSchema.parse(contractValue(sheet)));
+  });
+
+  /** Los tres avisos al cliente, desde el enlace: voy en camino, llegué, entregado. */
+  app.post('/api/v1/public/delivery/:token/stops/:stopId/trigger', async (context) => {
+    const input = DeliverySheetTriggerRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) return badRequest(context, 'Aviso inválido.', input.error.issues);
+    try {
+      const result = await requireDelivery().triggerMessageByToken(
+        context.req.param('token'),
+        context.req.param('stopId'),
+        input.data.action,
+        {
+          correlationId: context.get('requestId'),
+          requestId: context.get('requestId'),
+          source: 'reparto-link',
+        },
+      );
+      return context.json(DeliveryTriggerResponseSchema.parse(result));
+    } catch (error) {
+      if (error instanceof Error && error.name === 'DeliveryNotFoundError') {
+        return context.json({ error: { code: 'NOT_FOUND', message: 'Enlace no válido.' } }, 404);
+      }
+      throw error;
+    }
   });
 
   app.get('/api/v1/public/surveys/link/:token', async (context) => {
@@ -4034,77 +4099,6 @@ export function createApp(options: CreateAppOptions) {
       );
     const route = await requireDelivery().reorderStops(params.data.id, input.data.stopIds);
     return context.json(DeliveryRouteDetailSchema.parse(contractValue(route)));
-  });
-
-  app.patch('/api/v1/delivery/stops/:id/assign', async (context) => {
-    if (!context.get('session').permissions.includes('routes.manage')) return forbidden(context);
-    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
-    const input = DeliveryStopAssignRequestSchema.safeParse(
-      await context.req.json().catch(() => null),
-    );
-    if (!params.success || !input.success)
-      return badRequest(
-        context,
-        'Revisá la asignación.',
-        (!params.success ? params.error.issues : undefined) ??
-          (!input.success ? input.error.issues : undefined),
-      );
-    const stop = await requireDelivery().assignStop(
-      params.data.id,
-      input.data.assignedUserId,
-      deliveryContext(context),
-    );
-    return context.json(contractValue(stop));
-  });
-
-  /**
-   * Gated on delivery.execute rather than orders.cancel: the repartidor is the one who knows the
-   * delivery failed, but has no business holding the permission to cancel arbitrary orders. The
-   * service resolves which order the stop belongs to, so no order id reaches this client.
-   */
-  app.post('/api/v1/delivery/stops/:id/failed', async (context) => {
-    const session = context.get('session');
-    if (!session.permissions.includes('delivery.execute')) return forbidden(context);
-    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
-    const input = DeliveryStopFailedRequestSchema.safeParse(
-      await context.req.json().catch(() => null),
-    );
-    if (!params.success || !input.success)
-      return badRequest(context, 'Revisá el motivo de la entrega fallida.', [
-        ...(params.error?.issues ?? []),
-        ...(input.error?.issues ?? []),
-      ]);
-
-    const stop = await requireDelivery().reportFailedDelivery(
-      params.data.id,
-      input.data.cancellationReasonId,
-      session.userId,
-      deliveryContext(context),
-    );
-    return context.json(contractValue(stop));
-  });
-
-  app.patch('/api/v1/delivery/stops/:id/status', async (context) => {
-    if (!context.get('session').permissions.includes('delivery.execute')) return forbidden(context);
-    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
-    const input = DeliveryStopStatusUpdateRequestSchema.safeParse(
-      await context.req.json().catch(() => null),
-    );
-    if (!params.success || !input.success)
-      return badRequest(
-        context,
-        'Revisá el estado de la parada.',
-        (!params.success ? params.error.issues : undefined) ??
-          (!input.success ? input.error.issues : undefined),
-      );
-    const session = context.get('session');
-    const stop = await requireDelivery().updateStopStatus(
-      params.data.id,
-      input.data.status,
-      session.userId,
-      deliveryContext(context),
-    );
-    return context.json(contractValue(stop));
   });
 
   app.post('/api/v1/delivery/stops/:id/trigger', async (context) => {

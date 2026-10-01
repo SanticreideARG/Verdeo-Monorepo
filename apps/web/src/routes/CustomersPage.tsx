@@ -410,6 +410,7 @@ export function CustomersPage() {
         await apiRequest(`/api/v1/customers/${detail.id}/addresses`, {
           body: JSON.stringify({
             accessNotes: optional(formText(form, 'accessNotes')),
+            deliveryWindow: optional(formText(form, 'deliveryWindow')),
             geographicZoneId: formText(form, 'geographicZoneId'),
             label: formText(form, 'label'),
             locationUrl: optional(formText(form, 'locationUrl')),
@@ -978,6 +979,9 @@ export function CustomersPage() {
                           {address.accessNotes ? (
                             <p className="crm-address-note">Acceso: {address.accessNotes}</p>
                           ) : null}
+                          {address.deliveryWindow ? (
+                            <p className="crm-address-note">Recibe: {address.deliveryWindow}</p>
+                          ) : null}
                           {address.latitude !== null && address.longitude !== null ? (
                             <>
                               <code>
@@ -1164,6 +1168,13 @@ export function CustomersPage() {
                         <label className="field">
                           Unidad / piso
                           <input name="unit" />
+                        </label>
+                        <label className="field">
+                          Horario en que recibe
+                          {/* Texto libre: la realidad de cada cliente no entra en un selector de
+                              horas, y quien lo lee es una persona manejando. Va en la hoja de
+                              reparto, debajo de la dirección. */}
+                          <input name="deliveryWindow" placeholder="Después de las 18" />
                         </label>
                         <label className="field field-wide">
                           Indicaciones de acceso

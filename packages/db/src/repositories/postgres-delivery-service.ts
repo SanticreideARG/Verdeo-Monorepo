@@ -441,40 +441,6 @@ export class PostgresDeliveryService {
     });
   }
 
-  public async assignStop(stopId: string, assignedUserId: string | null, context: DeliveryContext) {
-    return this.database.transaction(async (transaction) => {
-      const [current] = await transaction
-        .select({ assignedUserId: deliveryStops.assignedUserId })
-        .from(deliveryStops)
-        .where(eq(deliveryStops.id, stopId))
-        .limit(1);
-      if (!current) throw new DeliveryNotFoundError('Stop not found');
-
-      const [updated] = await transaction
-        .update(deliveryStops)
-        .set({ assignedUserId, updatedAt: new Date() })
-        .where(eq(deliveryStops.id, stopId))
-        .returning();
-
-      const audit = new AuditService(new PostgresAuditSink(transaction));
-      await audit.record({
-        action: 'delivery.stop_assigned',
-        actor: context.actorUserId
-          ? { type: 'user', userId: context.actorUserId }
-          : { type: 'system' },
-        after: { assignedUserId },
-        before: { assignedUserId: current.assignedUserId },
-        correlationId: context.correlationId,
-        entityId: stopId,
-        entityType: 'delivery_stop',
-        requestId: context.requestId,
-        source: context.source,
-      });
-
-      return updated;
-    });
-  }
-
   /** Two-pass sequence rewrite: every stop first moves to a value outside the real 1..n range, then
    * down to its final position, so the unique (routeId, sequence) index never sees a collision
    * mid-transaction. */
@@ -507,56 +473,6 @@ export class PostgresDeliveryService {
 
       return this.loadRouteDetail(transaction, routeId);
     });
-  }
-
-  /**
-   * PII-safe stop list for the delivery app (DELIVERY_AND_ROUTES.md "Delivery App"): first name
-   * only, no phone/email/notes/history. Only published routes and only this repartidor's assigned
-   * stops — a driver never sees another driver's list.
-   */
-  public async listStopsForUser(userId: string) {
-    const rows = await this.database
-      .select({
-        customerDisplayName: customers.displayName,
-        deliveryAddress: orders.deliveryAddressSnapshot,
-        deliveryLocationUrl: orders.deliveryLocationUrlSnapshot,
-        id: deliveryStops.id,
-        orderId: deliveryStops.orderId,
-        paymentExpectation: orders.paymentExpectation,
-        // Whether the money is already in — nothing about how, when, or by whom. A repartidor needs
-        // to know not to ask for cash; the reconciliation detail is none of their business, and
-        // keeping it out preserves the PII-safe shape of this query.
-        prepaid: sql<boolean>`coalesce(${payments.status} = 'PAID', false)`,
-        publicNumber: orders.publicNumber,
-        routeId: deliveryStops.routeId,
-        sequence: deliveryStops.sequence,
-        status: deliveryStops.status,
-        totalMinor: orders.totalMinor,
-      })
-      .from(deliveryStops)
-      .innerJoin(deliveryRoutes, eq(deliveryRoutes.id, deliveryStops.routeId))
-      .innerJoin(orders, eq(orders.id, deliveryStops.orderId))
-      .innerJoin(customers, eq(customers.id, orders.customerId))
-      .leftJoin(payments, eq(payments.orderId, orders.id))
-      .where(
-        and(
-          eq(deliveryStops.assignedUserId, userId),
-          eq(deliveryRoutes.status, 'published'),
-          isNull(deliveryStops.deliveredAt),
-        ),
-      )
-      .orderBy(asc(deliveryStops.sequence));
-
-    const detalles = await this.itemDetails(
-      this.database,
-      rows.map((row) => ({ customerDisplayName: row.customerDisplayName, orderId: row.orderId })),
-    );
-
-    return rows.map(({ customerDisplayName, orderId, ...row }) => ({
-      ...row,
-      customerFirstName: customerDisplayName.split(' ')[0] ?? customerDisplayName,
-      detail: detalles.get(orderId) ?? '',
-    }));
   }
 
   /**
@@ -758,10 +674,58 @@ export class PostgresDeliveryService {
       label: route.label,
       originLatitude: route.originLatitude === null ? null : Number(route.originLatitude),
       originLongitude: route.originLongitude === null ? null : Number(route.originLongitude),
+      failureReasons: await this.database
+        .select({ displayName: cancellationReasons.displayName, id: cancellationReasons.id })
+        .from(cancellationReasons)
+        .where(eq(cancellationReasons.active, true))
+        .orderBy(asc(cancellationReasons.sortOrder)),
       siteName: route.siteName,
       stops,
       ...this.sheetTotals(stops),
     };
+  }
+
+  /** Que la parada sea de la ruta de ese enlace. Sin esto, con un enlace válido se podría tocar
+   * cualquier parada del sistema pasando otro id. */
+  private async stopInTokenRoute(rawToken: string, stopId: string): Promise<string> {
+    const routeId = await this.routeIdForToken(rawToken);
+    if (!routeId) throw new DeliveryNotFoundError('Route link is not valid');
+    const [stop] = await this.database
+      .select({ routeId: deliveryStops.routeId })
+      .from(deliveryStops)
+      .where(eq(deliveryStops.id, stopId))
+      .limit(1);
+    if (!stop || stop.routeId !== routeId) throw new DeliveryNotFoundError('Stop not found');
+    return routeId;
+  }
+
+  /**
+   * "No se pudo entregar", desde el enlace.
+   *
+   * Quien está en la puerta es quien sabe que la entrega falló, y era lo único que la app de
+   * reparto hacía y el sitio no: sin esto, una parada que no se pudo entregar quedaba pendiente
+   * para siempre o se marcaba entregada, que es peor. El motivo sale de la misma lista cerrada que
+   * usa el panel, porque después se cuenta cuántas entregas fallaron y por qué.
+   */
+  public async reportFailedByToken(
+    rawToken: string,
+    stopId: string,
+    cancellationReasonId: string,
+    context: DeliveryContext,
+  ) {
+    await this.stopInTokenRoute(rawToken, stopId);
+    return this.reportFailedDelivery(stopId, cancellationReasonId, undefined, context);
+  }
+
+  /** Los tres avisos al cliente, desde el enlace: voy en camino, llegué, entregado. */
+  public async triggerMessageByToken(
+    rawToken: string,
+    stopId: string,
+    action: TriggerAction,
+    context: DeliveryContext,
+  ) {
+    await this.stopInTokenRoute(rawToken, stopId);
+    return this.triggerMessage(stopId, action, context);
   }
 
   /** Las paradas de una ruta con todo lo que hace falta para entregarlas. */

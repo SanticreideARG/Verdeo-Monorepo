@@ -36,6 +36,7 @@ export interface CustomerIdentity {
 
 export interface CustomerAddress {
   accessNotes: string | null;
+  deliveryWindow: string | null;
   active: boolean;
   city: string | null;
   createdAt: string;

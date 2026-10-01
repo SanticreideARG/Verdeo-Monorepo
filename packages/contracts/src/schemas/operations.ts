@@ -50,6 +50,8 @@ export const CustomerIdentityUpdateRequestSchema = z
 
 const CustomerAddressFieldsSchema = z.object({
   accessNotes: z.string().trim().max(1_000).optional(),
+  /** Cuándo recibe en este domicilio: "después de las 18", "de 9 a 13". Lo lee quien reparte. */
+  deliveryWindow: z.string().trim().max(200).optional(),
   // Written locality: descriptive, and may name a town other than the operation itself.
   city: z.string().trim().max(120).optional(),
   geocodingStatus: ConfigurableKeySchema.default('NEEDS_LOCATION'),
@@ -78,6 +80,7 @@ export const CustomerAddressCreateRequestSchema = CustomerAddressFieldsSchema.re
 export const CustomerAddressUpdateRequestSchema = z
   .object({
     accessNotes: z.string().trim().max(1_000).nullable().optional(),
+    deliveryWindow: z.string().trim().max(200).nullable().optional(),
     active: z.boolean().optional(),
     city: z.string().trim().max(120).nullable().optional(),
     geocodingStatus: ConfigurableKeySchema.optional(),
@@ -223,6 +226,7 @@ export const CustomerIdentitySchema = z.object({
 
 export const CustomerAddressSchema = z.object({
   accessNotes: z.string().nullable(),
+  deliveryWindow: z.string().nullable(),
   active: z.boolean(),
   city: z.string().nullable(),
   createdAt: IsoDateTimeSchema,

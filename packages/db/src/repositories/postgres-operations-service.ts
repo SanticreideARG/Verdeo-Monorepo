@@ -122,6 +122,7 @@ export interface CustomerIdentityUpdateInput {
 
 export interface CustomerAddressInput {
   accessNotes?: string | undefined;
+  deliveryWindow?: string | undefined;
   // Mandatory operational anchor. The written locality may differ from the operation name.
   geographicZoneId: string;
   city?: string | undefined;
@@ -141,6 +142,7 @@ export interface CustomerAddressInput {
 
 export interface CustomerAddressUpdateInput {
   accessNotes?: string | null | undefined;
+  deliveryWindow?: string | null | undefined;
   active?: boolean | undefined;
   city?: string | null | undefined;
   geocodingStatus?: string | undefined;
@@ -677,6 +679,7 @@ export class PostgresOperationsService {
       this.database
         .select({
           accessNotes: customerAddresses.accessNotes,
+          deliveryWindow: customerAddresses.deliveryWindow,
           active: customerAddresses.active,
           city: customerAddresses.city,
           createdAt: customerAddresses.createdAt,

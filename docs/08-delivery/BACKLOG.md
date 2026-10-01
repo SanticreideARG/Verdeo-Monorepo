@@ -132,8 +132,14 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
       confirma entrega y cobro en un solo movimiento y lleva a la vista cuánto hay para rendir.
       Desde el panel se ve cómo va la ruta con la misma cuenta. El rol `repartidor`, la app
       `/delivery` y la asignación de paradas a usuarios se eliminaron.
-- [ ] Cargar la franja horaria de cada domicilio (`delivery_window`): el campo existe y la hoja ya
-      lo muestra, falta editarlo desde la ficha del cliente.
+- [x] **La franja horaria del domicilio** (`delivery_window`) se carga desde la ficha del cliente y
+      se ve en la hoja de reparto, debajo de la dirección. Texto libre: la realidad de cada cliente
+      no entra en un selector de horas, y quien lo lee es una persona manejando.
+- [x] **Entrega fallida y avisos al cliente, desde el enlace.** Estaban detrás de permisos que, con
+      el rol eliminado, no tiene nadie: la operación había perdido la capacidad de registrar una
+      entrega fallida. El motivo sale de la lista cerrada de siempre.
+- [ ] El tipo de token `repartidor_access` ya no se emite, pero sigue aceptado para no cortar los
+      que están en la calle. Sacarlo del contrato cuando hayan vencido todos.
 - [x] **Qué entregar en cada parada** (`deliveryDetail` en `@verdeo/orders`): una vianda estándar se
       nombra por variedad y tamaño —"Menú Keto 400"—, que es lo que dice su etiqueta; un Intuitivo,
       por el nombre de quien lo pidió —"Intuitivo 250 · Ana"—, porque dos Intuitivo del mismo tamaño

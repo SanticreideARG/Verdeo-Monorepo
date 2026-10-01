@@ -129,6 +129,17 @@ OR-Tools u otro adapter)" que pide este documento; los llamadores solo conocen l
   usuario— y el pedido queda `TO_SETTLE` si el medio es efectivo. "Entregada sin cobrar" existe y
   está a la vista: esconderlo haría que se marque cobrado lo que no se cobró. Arriba de la hoja,
   siempre visible, cuánto lleva cobrado: es lo que hay que rendir al volver.
+- **"No se pudo entregar" y los tres avisos viven en el sitio**, no en el panel. Estaban detrás de
+  `delivery.execute` y `delivery.trigger_messages`, permisos que con el rol eliminado no tiene
+  nadie: los endpoints quedaron inalcanzables y la operación perdió la capacidad de registrar una
+  entrega fallida. Ahora son dos endpoints públicos más, con la misma regla que el resto —la parada
+  tiene que ser de la ruta de ese enlace, si no 404—, y el motivo sale de la lista cerrada de
+  `cancellation_reasons` que viaja con la hoja, porque después se cuenta cuántas fallaron y por qué.
+- **Se eliminó el resto del modelo por usuario**: `assignStop` y su endpoint, `listStopsForUser`,
+  `DeliveryMyStopSchema`, y los dos endpoints autenticados de estado y entrega fallida. El tipo de
+  token `repartidor_access` ya no se emite desde ninguna pantalla (Usuarios y Ajustes → Zonas lo
+  ofrecían); el servidor lo sigue aceptando para que un token ya entregado no deje de andar antes de
+  vencer.
 - **Desde el panel se ve cómo va la ruta** (`GET /delivery/routes/:id/progress`): cuántas paradas
   entregadas, cuánto cobrado y cuánto falta cobrar. Es la misma cuenta que ve quien reparte, no una
   segunda — que las dos pantallas discrepen sobre cuánta plata hay en la calle sería peor que no

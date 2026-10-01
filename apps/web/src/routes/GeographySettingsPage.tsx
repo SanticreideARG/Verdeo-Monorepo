@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ActionButton } from '../components/ActionButton.js';
@@ -65,17 +65,6 @@ async function readError(response: Response, fallback: string): Promise<string> 
   return body?.error?.message ?? fallback;
 }
 
-function formText(form: FormData, key: string): string {
-  const value = form.get(key);
-  return typeof value === 'string' ? value : '';
-}
-
-function timeLabel(value: string): string {
-  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(
-    new Date(value),
-  );
-}
-
 export function GeographySettingsPage() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<DashboardProfile | null>(cachedProfile);
@@ -94,12 +83,9 @@ export function GeographySettingsPage() {
     managerName: '',
     publicPhoneOverride: '',
   });
-  const [repartidores, setRepartidores] = useState<{ displayName: string; id: string }[]>([]);
-  const [issuedToken, setIssuedToken] = useState<{ expiresAt: string; token: string } | null>(null);
 
   const canManageSites = profile?.permissions.includes('sites.manage') ?? false;
   const canManageZones = profile?.permissions.includes('zones.manage') ?? false;
-  const canIssueTokens = profile?.permissions.includes('access_tokens.manage') ?? false;
 
   useEffect(() => {
     let active = true;
@@ -175,19 +161,7 @@ export function GeographySettingsPage() {
       managerName: selectedZone.managerName ?? '',
       publicPhoneOverride: selectedZone.publicPhoneOverride ?? '',
     });
-    setIssuedToken(null);
   }, [selectedZone]);
-
-  useEffect(() => {
-    if (!canIssueTokens) return;
-    void apiRequest('/api/v1/users?limit=100')
-      .then(async (response) => {
-        if (!response.ok) return;
-        const body = (await response.json()) as { items: { displayName: string; id: string }[] };
-        setRepartidores(body.items);
-      })
-      .catch(() => undefined);
-  }, [canIssueTokens]);
 
   async function saveZoneDetails() {
     if (!selectedZone) return;
@@ -209,34 +183,6 @@ export function GeographySettingsPage() {
     const updated = (await response.json()) as GeographicZone;
     setZones((current) => current.map((item) => (item.id === updated.id ? updated : item)));
     showToast('Datos de la zona actualizados.');
-  }
-
-  async function issueRepartidorToken(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selectedSite) return;
-    const form = new FormData(event.currentTarget);
-    const boundUserId = formText(form, 'boundUserId');
-    const ttlHours = Number(formText(form, 'ttlHours'));
-    if (!boundUserId || !ttlHours) return;
-    setBusy(true);
-    setMessage(null);
-    const response = await apiRequest('/api/v1/access-tokens', {
-      body: JSON.stringify({
-        boundUserId,
-        kind: 'repartidor_access',
-        label: `Repartidor ${selectedSite.displayName}`,
-        operatingSiteId: selectedSite.id,
-        ttlHours,
-      }),
-      method: 'POST',
-    });
-    setBusy(false);
-    if (!response.ok) {
-      setMessage(await readError(response, 'No pudimos generar el token.'));
-      return;
-    }
-    const created = (await response.json()) as { expiresAt: string; token: string };
-    setIssuedToken(created);
   }
 
   async function logout() {
@@ -625,59 +571,6 @@ export function GeographySettingsPage() {
                           </ActionButton>
                         ) : null}
                       </div>
-
-                      {canIssueTokens ? (
-                        <div className="mt-5 border-t border-forest/10 pt-4">
-                          <h4 className="text-sm font-semibold text-forest">
-                            Generar token para repartidor
-                          </h4>
-                          {issuedToken ? (
-                            <div className="mt-2 rounded-lg border border-forest/10 bg-white/60 p-3 text-sm">
-                              <p className="font-semibold text-forest">
-                                Copiá este token ahora: no se puede volver a mostrar.
-                              </p>
-                              <code className="mt-1 block break-all">{issuedToken.token}</code>
-                              <p className="mt-1 text-ink-muted">
-                                Vence: {timeLabel(issuedToken.expiresAt)}
-                              </p>
-                            </div>
-                          ) : null}
-                          <form
-                            className="mt-3 flex flex-wrap items-end gap-3"
-                            onSubmit={(event) => void issueRepartidorToken(event)}
-                          >
-                            <label className="block text-sm">
-                              Repartidor
-                              <select
-                                className="mt-1 rounded-lg border border-forest/10 px-3 py-2"
-                                name="boundUserId"
-                                required
-                              >
-                                <option value="">Seleccionar</option>
-                                {repartidores.map((user) => (
-                                  <option key={user.id} value={user.id}>
-                                    {user.displayName}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label className="block text-sm">
-                              Duración (hs)
-                              <input
-                                className="mt-1 w-24 rounded-lg border border-forest/10 px-3 py-2"
-                                defaultValue={48}
-                                min="1"
-                                name="ttlHours"
-                                required
-                                type="number"
-                              />
-                            </label>
-                            <button className="button button-primary" disabled={busy} type="submit">
-                              Generar
-                            </button>
-                          </form>
-                        </div>
-                      ) : null}
                     </li>
                   ) : null}
                 </ul>

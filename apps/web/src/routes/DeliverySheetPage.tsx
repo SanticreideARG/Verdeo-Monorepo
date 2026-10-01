@@ -28,6 +28,7 @@ interface SheetStop {
 interface Sheet {
   collectedMinor: number;
   deliveredCount: number;
+  failureReasons: { displayName: string; id: string }[];
   deliveryDate: string;
   label: string | null;
   originLatitude: number | null;
@@ -82,6 +83,8 @@ export function DeliverySheetPage() {
   const [openStopId, setOpenStopId] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [failed, setFailed] = useState('');
+  /* Qué avisos ya se mandaron en esta sesión, para no mandar "voy en camino" tres veces. */
+  const [avisado, setAvisado] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -97,6 +100,41 @@ export function DeliverySheetPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /** Los tres avisos al cliente. No bloquean nada: si el mensaje no sale, la entrega sigue. */
+  async function avisar(stop: SheetStop, action: 'ON_MY_WAY' | 'AT_ADDRESS') {
+    if (!token) return;
+    setFailed('');
+    const response = await apiRequest(`/api/v1/public/delivery/${token}/stops/${stop.id}/trigger`, {
+      body: JSON.stringify({ action }),
+      method: 'POST',
+    });
+    setFailed(
+      response.ok
+        ? ''
+        : 'No se pudo mandar el aviso. La entrega sigue igual: podés confirmarla lo mismo.',
+    );
+    if (response.ok) setAvisado((current) => [...current, `${stop.id}:${action}`]);
+  }
+
+  /** No se pudo entregar: el motivo sale de la lista cerrada que viaja con la hoja. */
+  async function noEntregada(stop: SheetStop, cancellationReasonId: string) {
+    if (!token) return;
+    setBusyStopId(stop.id);
+    setFailed('');
+    const response = await apiRequest(`/api/v1/public/delivery/${token}/stops/${stop.id}/failed`, {
+      body: JSON.stringify({ cancellationReasonId }),
+      method: 'POST',
+    });
+    setBusyStopId(null);
+    if (!response.ok) {
+      setFailed('No se pudo registrar. Revisá la señal y probá de nuevo.');
+      return;
+    }
+    setSheet((await response.json()) as Sheet);
+    setOpenStopId(null);
+    setNote('');
+  }
 
   async function confirm(stop: SheetStop, collected: boolean) {
     if (!token) return;
@@ -137,7 +175,9 @@ export function DeliverySheetPage() {
     );
   }
 
-  const pendientes = sheet.stops.filter((stop) => stop.status !== 'delivered');
+  const pendientes = sheet.stops.filter(
+    (stop) => stop.status !== 'delivered' && stop.status !== 'skipped',
+  );
   // El mapa es el mismo componente que usa la hoja de ruta del panel: una sola forma de dibujar
   // una ruta, y lo que ve quien reparte es lo que vio quien la armó.
   const puntos = sheet.stops.map((stop) => ({
@@ -182,9 +222,10 @@ export function DeliverySheetPage() {
       <ol className="delivery-sheet-stops">
         {sheet.stops.map((stop) => {
           const entregada = stop.status === 'delivered';
+          const cerrada = entregada || stop.status === 'skipped';
           const abierta = openStopId === stop.id;
           return (
-            <li className={entregada ? 'is-done' : ''} key={stop.id}>
+            <li className={cerrada ? 'is-done' : ''} key={stop.id}>
               <article>
                 <header>
                   <span className="delivery-sheet-seq">{stop.sequence}</span>
@@ -192,7 +233,11 @@ export function DeliverySheetPage() {
                     <h2>{stop.customerFirstName}</h2>
                     <p className="delivery-sheet-number">{stop.publicNumber}</p>
                   </div>
-                  {entregada ? <span className="delivery-sheet-done">Entregada</span> : null}
+                  {entregada ? (
+                    <span className="delivery-sheet-done">Entregada</span>
+                  ) : stop.status === 'skipped' ? (
+                    <span className="delivery-sheet-skipped">No entregada</span>
+                  ) : null}
                 </header>
 
                 {stop.detail ? <p className="delivery-sheet-detail">{stop.detail}</p> : null}
@@ -217,14 +262,14 @@ export function DeliverySheetPage() {
                   <a href={mapLink(stop)} rel="noreferrer" target="_blank">
                     Abrir en el mapa
                   </a>
-                  {entregada ? null : abierta ? null : (
+                  {cerrada || abierta ? null : (
                     <button onClick={() => setOpenStopId(stop.id)} type="button">
                       Confirmar
                     </button>
                   )}
                 </div>
 
-                {abierta && !entregada ? (
+                {abierta && !cerrada ? (
                   <div className="delivery-sheet-confirm">
                     <label>
                       Nota (opcional)
@@ -268,6 +313,43 @@ export function DeliverySheetPage() {
                         Cancelar
                       </button>
                     </div>
+                    {/* Avisarle al cliente es parte de la parada, no una pantalla aparte: se avisa
+                        al salir hacia ahí y al llegar. Si el mensaje no sale, la entrega sigue. */}
+                    <div className="delivery-sheet-notify">
+                      <button
+                        disabled={avisado.includes(`${stop.id}:ON_MY_WAY`)}
+                        onClick={() => void avisar(stop, 'ON_MY_WAY')}
+                        type="button"
+                      >
+                        Avisar que voy
+                      </button>
+                      <button
+                        disabled={avisado.includes(`${stop.id}:AT_ADDRESS`)}
+                        onClick={() => void avisar(stop, 'AT_ADDRESS')}
+                        type="button"
+                      >
+                        Avisar que llegué
+                      </button>
+                    </div>
+                    {/* Una parada que no se pudo entregar tiene que poder decirse acá: si no, queda
+                        pendiente para siempre o se marca entregada, que es peor. */}
+                    <label className="delivery-sheet-failed">
+                      No se pudo entregar
+                      <select
+                        defaultValue=""
+                        disabled={busyStopId === stop.id}
+                        onChange={(event) => {
+                          if (event.target.value) void noEntregada(stop, event.target.value);
+                        }}
+                      >
+                        <option value="">Elegí el motivo…</option>
+                        {sheet.failureReasons.map((reason) => (
+                          <option key={reason.id} value={reason.id}>
+                            {reason.displayName}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
                 ) : null}
               </article>

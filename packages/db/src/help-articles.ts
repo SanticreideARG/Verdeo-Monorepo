@@ -141,6 +141,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
       'El enlace abre una hoja pensada para un teléfono en una mano y una caja en la otra: una parada por tarjeta, en orden.' +
       '\n\nCada parada dice qué entregar (por ejemplo "Menú Keto 400" o "Intuitivo 250 · Ana"), la dirección, cómo entrar si el domicilio tiene indicaciones, en qué horario recibe ese cliente, y cuánto cobrar o que ya está pagado. Arriba está el mapa con todas las paradas y, siempre a la vista, cuánto lleva cobrado: es lo que hay que rendir al volver.' +
       '\n\nAl confirmar una parada se elige "Entregada y cobrada" o "Entregada sin cobrar", y se puede dejar una nota ("no estaba, dejé con el vecino"). Lo cobrado queda registrado en el acto: el pedido pasa a entregado y la plata en efectivo queda para rendir.' +
+      '\n\nTambién puede avisarle al cliente que va en camino o que llegó, y marcar "No se pudo entregar" eligiendo el motivo de la lista. Una parada que no se pudo entregar tiene que poder decirse ahí: si no, queda pendiente para siempre o se marca entregada, que es peor.' +
       '\n\nNo muestra apellidos, teléfonos ni el historial del cliente — el enlace viaja por WhatsApp y puede terminar en cualquier lado.' +
       '\n\nDesde el panel, mirando la ruta, ves cómo va: cuántas entregó, cuánto cobró y cuánto falta.',
     category: 'Reparto / Rutas',

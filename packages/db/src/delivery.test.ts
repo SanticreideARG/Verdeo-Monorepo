@@ -195,26 +195,7 @@ describe('publishRoute', () => {
   });
 });
 
-describe('stop assignment and status', () => {
-  it('assigns a stop and exposes it in the assignee PII-safe list once published', async () => {
-    const { service } = await seededService();
-    const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
-    const stop = route!.stops[0]!;
-    await service.assignStop(stop.id, USER_REPARTIDOR, CONTEXT);
-
-    expect(await service.listStopsForUser(USER_REPARTIDOR)).toHaveLength(0); // not published yet
-
-    await service.publishRoute(route!.id, CONTEXT);
-    const stops = await service.listStopsForUser(USER_REPARTIDOR);
-
-    expect(stops).toHaveLength(1);
-    expect(stops[0]).toHaveProperty('customerFirstName');
-    // Qué entregar, no sólo a quién: sin esto el repartidor abre la caja y adivina.
-    expect(stops[0]?.detail).toBe('Menú Keto 400 ×2');
-    expect(JSON.stringify(stops[0])).not.toContain('Gómez');
-    expect(JSON.stringify(stops[0])).not.toContain('Díaz');
-  });
-
+describe('estado de una parada', () => {
   it('marks a stop delivered and transitions the underlying order', async () => {
     const { db, service } = await seededService();
     const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
