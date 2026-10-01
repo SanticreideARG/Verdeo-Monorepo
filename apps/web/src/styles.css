@@ -5277,46 +5277,106 @@ main .operation-card {
   padding: 0;
   list-style: none;
 }
+/* Una tarjeta es una fila de una cola de trabajo, no una ficha: tiene que entrar varias veces en
+   la pantalla. Tres capas —quién y en qué estado, los números, el resto— y los botones al pie. */
 .data-cards > li {
+  position: relative;
+  display: grid;
+  gap: 0.3rem;
   border: 1px solid var(--db-border, var(--border-hairline));
   border-radius: 0.7rem;
-  padding: 0.75rem 0.85rem;
+  padding: 0.7rem 0.8rem;
   background: var(--db-surface, #fff);
 }
+/* El enlace cubre la tarjeta y queda por debajo de todo lo demás, así que un botón o un teléfono
+   siguen siendo tocables y el resto de la superficie abre el detalle. */
+.data-cards-link {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+}
+.data-cards > li.is-linked > *:not(.data-cards-link) {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+.data-cards > li.is-linked a,
+.data-cards > li.is-linked button,
+.data-cards > li.is-linked select {
+  pointer-events: auto;
+}
+.data-cards > li.is-linked:active {
+  background: var(--db-bg-2, #f3f3f3);
+}
+.data-cards-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
 .data-cards-title {
-  margin: 0 0 0.5rem;
-  font-size: 0.98rem;
+  margin: 0;
+  min-width: 0;
+  font-size: 1rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+/* El estado, arriba y a la derecha: es lo que decide si esta fila pide algo. */
+.data-cards-chip {
+  flex: none;
+  border-radius: 999px;
+  padding: 0.12rem 0.55rem;
+  background: var(--db-bg-2, #eee);
+  color: var(--db-text-soft, inherit);
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* Los números que resumen la fila, en un solo renglón y sin etiquetas: "$ 65.000" y un teléfono no
+   necesitan que les digan qué son. */
+.data-cards-highlights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.data-cards-highlights > span:not(:first-child) {
   font-weight: 600;
+  color: var(--db-text-soft, inherit);
+}
+.data-cards-highlights small {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--db-muted, var(--color-ink-muted));
 }
 .data-cards dl {
   display: grid;
-  gap: 0.3rem 0.9rem;
+  gap: 0.15rem 0.9rem;
   margin: 0;
-  /* Dos por fila: siete pares en una sola columna serían una tarjeta más alta que la pantalla. */
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .data-cards dl > div {
-  display: flex;
-  gap: 0.4rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.45rem;
   align-items: baseline;
-  justify-content: space-between;
   font-size: 0.82rem;
+  line-height: 1.35;
 }
 .data-cards dt {
   color: var(--db-muted, var(--color-ink-muted));
 }
 .data-cards dd {
   margin: 0;
-  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
-/* La que resume la fila ocupa el ancho entero y se separa del resto. */
-.data-cards dl > div.is-emphasis {
-  grid-column: 1 / -1;
+.data-cards-actions {
   margin-top: 0.15rem;
-  padding-top: 0.4rem;
+  padding-top: 0.5rem;
   border-top: 1px solid var(--db-border-soft, var(--border-hairline));
-  font-size: 0.9rem;
-  font-weight: 700;
 }
 
 /* Aviso de trabajo de escritorio. Informa y no bloquea: quien esté en la calle sin otra opción
@@ -7577,4 +7637,112 @@ textarea.sr-only {
   color: #7a2e18;
   font-size: 0.72rem;
   font-weight: 700;
+}
+
+/* --- Filtros de pantalla ------------------------------------------------------------------------
+   Buscar y la acción principal quedan siempre a la vista; el resto se pliega. En un teléfono, siete
+   controles apilados son una pantalla entera que hay que recorrer antes de ver la primera fila, y
+   eso se paga en cada entrada a la pantalla. */
+.screen-filters {
+  display: grid;
+  gap: 0.6rem;
+  width: 100%;
+}
+.screen-filters-main {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.6rem;
+}
+.screen-filters-main .field {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.screen-filters-main .button {
+  flex: none;
+  white-space: nowrap;
+}
+.screen-filters-more > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  width: fit-content;
+  border: 1px solid var(--db-border, var(--border-hairline));
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  color: var(--db-text, inherit);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+.screen-filters-more > summary::-webkit-details-marker {
+  display: none;
+}
+.screen-filters-more > summary::after {
+  content: '▾';
+  font-size: 0.7rem;
+}
+.screen-filters-more[open] > summary::after {
+  content: '▴';
+}
+/* Cuántos filtros están cambiados: plegarlos no puede esconder un recorte activo. */
+.screen-filters-more > summary span {
+  color: var(--db-muted, var(--color-ink-muted));
+  font-weight: 500;
+}
+.screen-filters-more > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+/* Con ancho, los filtros no se pliegan: están todos a la vista y el desplegable es sólo un grupo
+   más de la misma fila. */
+@media (min-width: 60rem) {
+  .screen-filters {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+  .screen-filters-more > summary {
+    display: none;
+  }
+  .screen-filters-more > div {
+    margin-top: 0;
+  }
+}
+
+/* En el teléfono, elegir una ruta la trae al frente: la lista se esconde en vez de empujar la hoja
+   media pantalla hacia abajo. Con ancho siguen estando las dos a la vez, que es como se compara una
+   propuesta con las demás. */
+.routes-layout.is-detail .routes-list {
+  display: none;
+}
+.routes-back {
+  justify-self: start;
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--db-border);
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  background: none;
+  color: var(--db-text);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+/* "Ver las anteriores": las rutas de semanas pasadas están, pero no estorbando. */
+.routes-older {
+  width: 100%;
+  margin-top: 0.35rem;
+  border: 1px dashed var(--db-border);
+  border-radius: 0.7rem;
+  padding: 0.5rem;
+  background: none;
+  color: var(--db-text-soft);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
 }

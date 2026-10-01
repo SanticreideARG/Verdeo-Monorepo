@@ -108,7 +108,6 @@ export function buildOrderColumns(options: { maskSurnames?: boolean } = {}): Ord
       total: (rows) => `${String(rows.length)} ${rows.length === 1 ? 'pedido' : 'pedidos'}`,
     },
     {
-      emphasis: true,
       key: 'whatsapp',
       label: 'WhatsApp',
       /*
@@ -150,6 +149,8 @@ export function buildOrderColumns(options: { maskSurnames?: boolean } = {}): Ord
       },
     },
     {
+      /* En la tarjeta va arriba, al lado del nombre: es lo que decide si esta fila pide algo. */
+      chip: true,
       key: 'estado',
       label: 'Estado',
       render: (order) => orderStatusLabel(order.status),

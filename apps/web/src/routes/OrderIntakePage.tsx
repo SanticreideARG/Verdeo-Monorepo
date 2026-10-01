@@ -29,6 +29,7 @@ import {
 import { PeriodPicker } from '../components/PeriodPicker.js';
 import { currentPeriod, periodsFromMenus, type Period } from '../lib/periods.js';
 import { showToast } from '../lib/toast.js';
+import { useNarrowViewport } from '../lib/useNarrowViewport.js';
 import {
   errorMessage,
   formatMoney,
@@ -122,6 +123,7 @@ const STATUS_OPTIONS = ['DRAFT', 'CONFIRMED', 'READY', 'DELIVERED', 'CANCELLED']
  */
 export function OrderIntakePage() {
   const { failed, logout, profile } = useDashboardProfile();
+  const narrow = useNarrowViewport();
   const [searchParams] = useSearchParams();
   const [permissions, setPermissions] = useState<string[]>([]);
   const [menus, setMenus] = useState<WeeklyMenu[]>([]);
@@ -724,9 +726,29 @@ export function OrderIntakePage() {
     .map(([zone, zoneOrders]) => ({ orders: zoneOrders, zone }))
     .sort((left, right) => left.zone.localeCompare(right.zone, 'es-AR'));
 
+  /*
+   * Qué dice el botón de filtros cuando está plegado.
+   *
+   * "Pendientes de acción" y el período abierto son el estado de entrada, así que no cuentan: si
+   * contaran, el botón diría "2 filtros" siempre y el número dejaría de significar algo.
+   */
+  const filtrosPuestos = [
+    statusFilter !== PENDING_FILTER,
+    periodId !== null && periodId !== periods[0]?.id,
+    visibleColumns.length !== DEFAULT_COLUMNS.length,
+  ].filter(Boolean).length;
+  const filterSummary =
+    filtrosPuestos === 0
+      ? 'por defecto'
+      : filtrosPuestos === 1
+        ? '1 cambiado'
+        : `${String(filtrosPuestos)} cambiados`;
+
   const intakeColumns: readonly OrderColumn[] = [
     ...buildOrderColumns({ maskSurnames }),
     {
+      /* Al pie de la tarjeta y sin rótulo: "Acciones" encima de un botón no dice nada. */
+      actions: true,
       key: 'acciones',
       label: 'Acciones',
       locked: true,
@@ -783,76 +805,98 @@ export function OrderIntakePage() {
             <p className="dashboard-kicker">Pedidos</p>
             <h1 className="text-2xl font-semibold text-forest">Pedidos</h1>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="field">
-              Buscar
-              <input
-                onChange={(event) => setSearchInput(event.target.value)}
-                placeholder="N° de pedido o cliente"
-                value={searchInput}
-              />
-            </label>
-            {/* Con "Todos los períodos" incluido: la misma pantalla es la cola de esta semana y el
-                historial completo, según lo que se elija acá y en Estado. */}
-            <PeriodPicker
-              allowAll
-              onChange={setPeriodId}
-              periods={periods}
-              value={periodId ?? ''}
-            />
-            <label className="field">
-              Estado
-              <select
-                onChange={(event) => setStatusFilter(event.target.value)}
-                value={statusFilter}
-              >
-                {/* Primero el recorte de trabajo: es con el que se entra todos los días. */}
-                <option value={PENDING_FILTER}>Pendientes de acción</option>
-                <option value="">Todos</option>
-                {STATUS_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {orderStatusLabel(option)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <ColumnPicker
-              columns={intakeColumns}
-              extras={[
-                {
-                  checked: maskSurnames,
-                  key: 'ocultar-apellidos',
-                  label: 'Ocultar apellidos',
-                  onToggle: () => {
-                    setMaskSurnames((current) => {
-                      writeMaskSurnames(!current);
-                      return !current;
-                    });
-                  },
-                },
-              ]}
-              onChange={(next) => {
-                setVisibleColumns(next);
-                writeStoredColumns(COLUMNS_KEY, next);
-              }}
-              visible={visibleColumns}
-            />
-            <ActionButton
-              className="button button-secondary"
-              onClick={exportPeriod}
-              pendingLabel="Preparando…"
-            >
-              Exportar Excel
-            </ActionButton>
-            {permissions.includes('orders.create') ? (
-              <button
-                className="button button-primary"
-                onClick={() => setFormOpen((current) => !current)}
-                type="button"
-              >
-                {formOpen ? 'Cerrar formulario' : '+ Nuevo pedido'}
-              </button>
-            ) : null}
+          {/*
+           * En el teléfono los filtros se pliegan.
+           *
+           * Eran siete controles apilados —buscar, período, estado, columnas, exportar, alta, y el
+           * orden— que ocupaban una pantalla entera: había que scrollear todo eso antes de ver el
+           * primer pedido, cada vez. Lo que queda afuera es lo que se usa a cada rato: buscar y
+           * cargar un pedido. El resto entra en "Filtros", que dice cuántos hay puestos para que
+           * plegarlos no esconda un recorte activo.
+           */}
+          <div className="screen-filters">
+            <div className="screen-filters-main">
+              <label className="field">
+                Buscar
+                <input
+                  onChange={(event) => setSearchInput(event.target.value)}
+                  placeholder="N° de pedido o cliente"
+                  value={searchInput}
+                />
+              </label>
+              {permissions.includes('orders.create') ? (
+                <button
+                  className="button button-primary"
+                  onClick={() => setFormOpen((current) => !current)}
+                  type="button"
+                >
+                  {formOpen ? 'Cerrar' : '+ Nuevo pedido'}
+                </button>
+              ) : null}
+            </div>
+
+            {/* Con ancho se abre y el resumen se esconde: el plegado es una respuesta al teléfono, no una
+                preferencia. */}
+            <details className="screen-filters-more" open={!narrow}>
+              <summary>
+                Filtros
+                <span>{filterSummary}</span>
+              </summary>
+              <div>
+                {/* Con "Todos los períodos" incluido: la misma pantalla es la cola de esta semana y
+                    el historial completo, según lo que se elija acá y en Estado. */}
+                <PeriodPicker
+                  allowAll
+                  onChange={setPeriodId}
+                  periods={periods}
+                  value={periodId ?? ''}
+                />
+                <label className="field">
+                  Estado
+                  <select
+                    onChange={(event) => setStatusFilter(event.target.value)}
+                    value={statusFilter}
+                  >
+                    {/* Primero el recorte de trabajo: es con el que se entra todos los días. */}
+                    <option value={PENDING_FILTER}>Pendientes de acción</option>
+                    <option value="">Todos</option>
+                    {STATUS_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {orderStatusLabel(option)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <ColumnPicker
+                  columns={intakeColumns}
+                  extras={[
+                    {
+                      checked: maskSurnames,
+                      key: 'ocultar-apellidos',
+                      label: 'Ocultar apellidos',
+                      onToggle: () => {
+                        setMaskSurnames((current) => {
+                          writeMaskSurnames(!current);
+                          return !current;
+                        });
+                      },
+                    },
+                  ]}
+                  onChange={(next) => {
+                    setVisibleColumns(next);
+                    writeStoredColumns(COLUMNS_KEY, next);
+                  }}
+                  visible={visibleColumns}
+                />
+                <ActionButton
+                  className="button button-secondary"
+                  onClick={exportPeriod}
+                  pendingLabel="Preparando…"
+                >
+                  Exportar Excel
+                </ActionButton>
+              </div>
+            </details>
           </div>
         </header>
 
@@ -1252,6 +1296,10 @@ export function OrderIntakePage() {
             ) : null}
           </p>
           <DataTable
+            // Tocar la tarjeta abre el pedido. En escritorio la fila no es un enlace —seleccionar
+            // texto terminaría navegando— pero en un teléfono se toca, y que no pase nada es el
+            // reflejo roto.
+            rowHref={(order) => `/app/pedidos/${order.id}`}
             caption="Pedidos"
             columns={intakeColumns
               .filter((column) => visibleColumns.includes(column.key))

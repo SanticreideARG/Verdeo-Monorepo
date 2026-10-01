@@ -1,8 +1,23 @@
 import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 
 import { useNarrowViewport } from '../lib/useNarrowViewport.js';
 
 export interface DataColumn<T> {
+  /**
+   * Los botones de la fila.
+   *
+   * En la tarjeta van abajo de todo y sin etiqueta: "Acciones" como título de una fila de botones
+   * es una palabra que no agrega nada, y empujaba el único botón de la tarjeta media pantalla
+   * hacia abajo.
+   */
+  actions?: boolean;
+  /**
+   * Un dato corto que califica la fila —el estado, la zona— y que en la tarjeta va arriba, al lado
+   * del nombre, en vez de abajo como un par etiqueta/valor. Es lo que se mira para decidir si la
+   * fila importa, así que tiene que estar en el primer renglón.
+   */
+  chip?: boolean;
   /** Se destaca dentro de la tarjeta: el número que se mira primero. */
   emphasis?: boolean;
   key: string;
@@ -51,6 +66,7 @@ export function DataTable<T>({
   caption,
   columns,
   empty,
+  rowHref,
   rowKey,
   rows,
   rowTone,
@@ -60,6 +76,16 @@ export function DataTable<T>({
   columns: readonly DataColumn<T>[];
   /** Texto, o un <EmptyState> con la salida: un vacío por filtro tiene que poder deshacerse. */
   empty: ReactNode;
+  /**
+   * Adónde lleva tocar la tarjeta, en el teléfono.
+   *
+   * En escritorio la fila no es un enlace a propósito: con quince columnas posibles, una fila-enlace
+   * convierte cualquier intento de seleccionar un texto en una navegación accidental. En un teléfono
+   * no se selecciona texto de una tabla, se toca — y tocar una tarjeta y que no pase nada es el
+   * reflejo roto. El enlace se dibuja por encima de la tarjeta pero por debajo de los botones, así
+   * que las acciones siguen siendo acciones.
+   */
+  rowHref?: (row: T) => string;
   rowKey: (row: T) => string;
   rows: readonly T[];
   /**
@@ -97,7 +123,27 @@ export function DataTable<T>({
 
   if (narrow) {
     const primary = columns.find((column) => column.primary) ?? columns[0];
-    const rest = columns.filter((column) => column !== primary);
+    const chip = columns.find((column) => column.chip);
+    const actions = columns.find((column) => column.actions);
+    /*
+     * Tres capas en vez de una lista plana.
+     *
+     * La tarjeta era el nombre y después todas las columnas visibles como pares etiqueta/valor, con
+     * los botones adentro de un par rotulado "Acciones". En un teléfono eso daba media pantalla por
+     * pedido para decir un nombre y un teléfono: había que scrollear tres pantallas para ver cinco
+     * pedidos, que es justo lo que una cola de trabajo no puede costar.
+     *
+     * Ahora: arriba el nombre con el estado al lado —lo que se mira para decidir si la fila
+     * importa—, después los números destacados en una línea, después el resto, y los botones al pie
+     * sin rótulo.
+     */
+    const highlights = columns.filter(
+      (column) => column.emphasis && column !== primary && column !== chip,
+    );
+    const rest = columns.filter(
+      (column) =>
+        column !== primary && column !== chip && column !== actions && !highlights.includes(column),
+    );
 
     const sortables = columns.filter((column) => column.sortValue);
 
@@ -124,16 +170,40 @@ export function DataTable<T>({
         ) : null}
         <ul aria-label={caption} className="data-cards">
           {sorted.map((row) => (
-            <li data-tone={rowTone?.(row)} key={rowKey(row)}>
-              <p className="data-cards-title">{primary?.render(row)}</p>
-              <dl>
-                {rest.map((column) => (
-                  <div className={column.emphasis ? 'is-emphasis' : undefined} key={column.key}>
-                    <dt>{column.label}</dt>
-                    <dd>{column.render(row)}</dd>
-                  </div>
-                ))}
-              </dl>
+            <li
+              className={rowHref ? 'is-linked' : undefined}
+              data-tone={rowTone?.(row)}
+              key={rowKey(row)}
+            >
+              {rowHref ? (
+                <Link aria-label="Ver detalle" className="data-cards-link" to={rowHref(row)} />
+              ) : null}
+              <div className="data-cards-head">
+                <p className="data-cards-title">{primary?.render(row)}</p>
+                {chip ? <span className="data-cards-chip">{chip.render(row)}</span> : null}
+              </div>
+              {highlights.length > 0 ? (
+                <p className="data-cards-highlights">
+                  {highlights.map((column) => (
+                    <span key={column.key}>
+                      {/* Con su etiqueta, en chico: "6" suelto no dice 6 de qué, y una columna que
+                          alguien eligió mostrar no puede quedar sin nombre en la tarjeta. */}
+                      <small>{column.label}</small> {column.render(row)}
+                    </span>
+                  ))}
+                </p>
+              ) : null}
+              {rest.length > 0 ? (
+                <dl>
+                  {rest.map((column) => (
+                    <div key={column.key}>
+                      <dt>{column.label}</dt>
+                      <dd>{column.render(row)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
+              {actions ? <div className="data-cards-actions">{actions.render(row)}</div> : null}
             </li>
           ))}
         </ul>

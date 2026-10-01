@@ -6,10 +6,11 @@ import { EmptyState } from '../components/EmptyState.js';
 import { RouteMap } from '../components/RouteMap.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
-import { formatDay, formatDayLong } from '../lib/dates.js';
+import { formatDay, formatDayLong, todayInOperation } from '../lib/dates.js';
 import { maskSurname } from '../lib/maskName.js';
 import { errorMessage, formatMoney } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { useNarrowViewport } from '../lib/useNarrowViewport.js';
 import { showToast } from '../lib/toast.js';
 
 interface RouteSummary {
@@ -72,6 +73,7 @@ interface RoutableDate {
  * publicar (DELIVERY_AND_ROUTES.md: "optimización asistida, decisión humana"). */
 export function RoutesPage() {
   const { failed, logout, profile } = useDashboardProfile();
+  const narrow = useNarrowViewport();
   /*
    * Las zonas de la ciudad que está elegida arriba.
    *
@@ -107,6 +109,8 @@ export function RoutesPage() {
      generar otro — y generar otro da de baja el anterior. */
   const [issuedLink, setIssuedLink] = useState<{ expiresAt: string; url: string } | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
+  /* Las rutas de semanas pasadas están, pero no estorbando: se piden. */
+  const [mostrarViejas, setMostrarViejas] = useState(false);
   const [progress, setProgress] = useState<{
     collectedMinor: number;
     deliveredCount: number;
@@ -114,6 +118,26 @@ export function RoutesPage() {
     stopCount: number;
   } | null>(null);
   const [loading, setLoading] = useState(true);
+
+  /*
+   * Las rutas que importan hoy, primero la más próxima.
+   *
+   * La lista venía en el orden que la devolvía el servidor y con el histórico entero adentro: para
+   * encontrar la ruta de mañana había que pasar por las de agosto. Lo que se reparte es de esta
+   * semana en adelante, así que eso es lo que se muestra; lo anterior sigue estando, a un toque.
+   *
+   * El corte es la fecha de hoy en la operación, no "el período abierto": una ruta es de un día.
+   */
+  const hoy = todayInOperation();
+  const rutasVigentes = routes.filter((route) => route.deliveryDate >= hoy);
+  const rutasViejas = routes.filter((route) => route.deliveryDate < hoy);
+  const rutasVisibles = [...(mostrarViejas ? routes : rutasVigentes)].sort((left, right) =>
+    // Cronológico de verdad: la de mañana arriba. Entre dos del mismo día manda la etiqueta, para
+    // que dos hojas de la misma fecha no bailen de lugar entre recargas.
+    left.deliveryDate === right.deliveryDate
+      ? (left.label ?? '').localeCompare(right.label ?? '', 'es-AR')
+      : left.deliveryDate.localeCompare(right.deliveryDate),
+  );
 
   const canRead = profile?.permissions.includes('routes.read') ?? false;
   const canManage = profile?.permissions.includes('routes.manage') ?? false;
@@ -502,14 +526,14 @@ export function RoutesPage() {
         {loading ? (
           <p className="mt-6 text-ink-muted">Cargando…</p>
         ) : (
-          <div className="routes-layout mt-6">
+          <div className={`routes-layout mt-6 ${narrow && selectedRoute ? 'is-detail' : ''}`}>
             {/*
              * `content-start` es el arreglo de la lista rota: la columna mide lo que mide el visor
              * de al lado —que con veinte paradas es larguísimo— y sin esto cada tarjeta se repartía
              * ese alto, quedando fichas gigantes y casi vacías.
              */}
             <ul className="routes-list grid content-start gap-2">
-              {routes.map((route) => (
+              {rutasVisibles.map((route) => (
                 <li key={route.id}>
                   <button
                     className={`w-full rounded-xl border px-4 py-3 text-left ${
@@ -534,7 +558,20 @@ export function RoutesPage() {
                   </button>
                 </li>
               ))}
-              {routes.length === 0 ? (
+              {rutasViejas.length > 0 ? (
+                <li>
+                  <button
+                    className="routes-older"
+                    onClick={() => setMostrarViejas((current) => !current)}
+                    type="button"
+                  >
+                    {mostrarViejas
+                      ? 'Ocultar las anteriores'
+                      : `Ver ${String(rutasViejas.length)} anteriores`}
+                  </button>
+                </li>
+              ) : null}
+              {rutasVisibles.length === 0 ? (
                 <EmptyState
                   action={
                     canManage ? (
@@ -558,6 +595,18 @@ export function RoutesPage() {
                 <p className="text-ink-muted">Elegí una ruta para ver sus paradas.</p>
               ) : (
                 <>
+                  {/* En el teléfono el detalle reemplaza a la lista, así que hay que poder
+                      volver. En escritorio están los dos a la vez y este botón no existe. */}
+                  {narrow ? (
+                    <button
+                      className="routes-back"
+                      onClick={() => setSelectedRoute(null)}
+                      type="button"
+                    >
+                      ← Todas las rutas
+                    </button>
+                  ) : null}
+
                   {/* Cómo va la ruta: lo mismo que ve quien reparte. Que las dos pantallas
                       discrepen sobre cuánta plata hay en la calle sería peor que no mostrarlo. */}
                   {progress && selectedRoute.status === 'published' ? (
