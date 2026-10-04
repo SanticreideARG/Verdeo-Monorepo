@@ -5,6 +5,7 @@ import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
+import { SettingsTabs } from '../components/SettingsTabs.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage } from '../lib/operations.js';
 import { showToast } from '../lib/toast.js';
@@ -462,8 +463,9 @@ export function UsersAdminPage() {
     <DashboardShell profile={profile} onLogout={() => void logout()}>
       <DeskWorkNotice can="podés consultar quién es quién; repartir permisos conviene con la grilla entera a la vista." />
       <section className="dashboard-panel">
+        <SettingsTabs permissions={profile.permissions} />
         <header>
-          <p className="dashboard-kicker">Administración</p>
+          <p className="dashboard-kicker">Panel de control</p>
           <h1 className="text-2xl font-semibold text-forest">Usuarios</h1>
         </header>
 

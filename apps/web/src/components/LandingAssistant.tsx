@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiRequest } from '../lib/api.js';
 import { brandingKey, useMenuBranding } from '../lib/menuBranding.js';
 import { formatMoney, type WeeklyMenu } from '../lib/operations.js';
+import { deliveryDateLabel } from '../lib/dates.js';
 import { whatsappHref } from '../lib/phone.js';
 
 type Behaviour = 'responder' | 'preguntar' | 'llevar' | 'salir';
@@ -231,8 +232,21 @@ function MenuBlock({
   );
 }
 
-function ZonesBlock({ citySlug }: { citySlug: string | null }) {
+/**
+ * Cuándo y dónde entregamos.
+ *
+ * Dos arreglos sobre lo que había. El primero: la fecha. "El día de cierre de cada semana" no es
+ * una respuesta para quien pregunta cuándo le llega la vianda — la fecha existe, sale del ciclo del
+ * menú publicado, y es lo único que la persona quería saber.
+ *
+ * El segundo: las zonas. Una ciudad con una sola zona llamada "Zona General" mostraba justamente
+ * eso, una línea que no informa nada y que encima suena a que falta algo. Con una sola zona la
+ * respuesta honesta es que se entrega en toda la ciudad; la lista tiene sentido recién cuando hay
+ * varias y la persona puede buscar la suya.
+ */
+function ZonesBlock({ cityName, citySlug }: { cityName: string | null; citySlug: string | null }) {
   const [zones, setZones] = useState<string[] | null>(null);
+  const [deliveryDate, setDeliveryDate] = useState<string | null>(null);
 
   useEffect(() => {
     if (!citySlug) return;
@@ -244,23 +258,57 @@ function ZonesBlock({ citySlug }: { citySlug: string | null }) {
         setZones(body.items.map((zone) => zone.displayName));
       })
       .catch(() => undefined);
+    // La fecha sale del ciclo del menú publicado para esa ciudad, con la misma función que usa el
+    // formulario de pedido: si las dos dijeran fechas distintas, una estaría mintiendo.
+    void apiRequest(`/api/v1/public/menu/current?site=${encodeURIComponent(citySlug)}`)
+      .then(async (response) => {
+        if (!active || !response.ok) return;
+        const body = (await response.json()) as { cycle: { closeAt: string } };
+        setDeliveryDate(deliveryDateLabel(body.cycle.closeAt));
+      })
+      .catch(() => undefined);
     return () => {
       active = false;
     };
   }, [citySlug]);
 
-  if (!zones) return <p className="assistant-block-empty">Buscando las zonas…</p>;
+  if (!zones) return <p className="assistant-block-empty">Buscando los datos de entrega…</p>;
+
+  const fecha = deliveryDate ? (
+    <p className="assistant-block-highlight">Próxima entrega: {deliveryDate}</p>
+  ) : null;
+
   if (zones.length === 0) {
-    return <p className="assistant-block-empty">Escribinos y coordinamos la entrega con vos.</p>;
+    return (
+      <>
+        {fecha}
+        <p className="assistant-block-empty">Escribinos y coordinamos la entrega con vos.</p>
+      </>
+    );
   }
+
+  if (zones.length === 1) {
+    return (
+      <>
+        {fecha}
+        <p className="assistant-block-empty">
+          Entregamos en toda {cityName ? `la ciudad de ${cityName}` : 'la ciudad'} y alrededores.
+        </p>
+      </>
+    );
+  }
+
   return (
-    <ul className="assistant-block">
-      {zones.map((zone) => (
-        <li key={zone}>
-          <span>{zone}</span>
-        </li>
-      ))}
-    </ul>
+    <>
+      {fecha}
+      <ul className="assistant-block">
+        {zones.map((zone) => (
+          <li key={zone}>
+            <span>{zone}</span>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 
@@ -295,10 +343,12 @@ function PaymentsBlock() {
 
 function DataBlock({
   block,
+  cityName,
   citySlug,
   onExpand,
 }: {
   block: Block;
+  cityName: string | null;
   citySlug: string | null;
   onExpand?: (element: HTMLElement) => void;
 }) {
@@ -306,7 +356,7 @@ function DataBlock({
     return <MenuBlock citySlug={citySlug} showPrices={false} {...(onExpand ? { onExpand } : {})} />;
   }
   if (block === 'PRECIOS') return <MenuBlock citySlug={citySlug} showPrices />;
-  if (block === 'ZONAS') return <ZonesBlock citySlug={citySlug} />;
+  if (block === 'ZONAS') return <ZonesBlock cityName={cityName} citySlug={citySlug} />;
   return <PaymentsBlock />;
 }
 
@@ -331,8 +381,16 @@ export function LandingAssistant() {
   const [sites, setSites] = useState<Site[]>([]);
   const [citySlug, setCitySlug] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
-  /** La opción que espera que se elija una ciudad. Null cuando no hay nada pendiente. */
-  const [awaitingCity, setAwaitingCity] = useState<AssistantOption | null>(null);
+  /**
+   * Qué espera una ciudad: una opción concreta, o la conversación entera al empezar.
+   *
+   * `'inicio'` es la pregunta de apertura. Antes la ciudad se preguntaba recién cuando alguna
+   * opción la necesitaba, así que alguien podía recorrer medio árbol y terminar en WhatsApp sin que
+   * supiéramos de dónde escribe — y del otro lado, la primera pregunta de quien atiende es siempre
+   * ésa. Preguntarla al principio cuesta un toque y hace que todo lo que venga después —el menú,
+   * los precios, la fecha de entrega, el mensaje de WhatsApp— ya salga con la ciudad puesta.
+   */
+  const [awaitingCity, setAwaitingCity] = useState<AssistantOption | 'inicio' | null>(null);
   /** El nivel en el que está la conversación: null es la raíz. */
   const [branch, setBranch] = useState<AssistantOption | null>(null);
   const nextId = useRef(1);
@@ -370,6 +428,23 @@ export function LandingAssistant() {
   useEffect(() => {
     if (open) void load();
   }, [load, open]);
+
+  /*
+   * La primera pregunta es de dónde escribe.
+   *
+   * Sólo al abrir una conversación nueva, sólo si no la sabemos ya de esta visita, y sólo si hay
+   * más de una ciudad: preguntarle la ciudad a alguien cuando operamos en una sola es un toque que
+   * no decide nada. Lo que se gana es que el menú, los precios, la fecha de entrega y el mensaje de
+   * WhatsApp salgan con la ciudad puesta sin volver a preguntar.
+   */
+  useEffect(() => {
+    if (!open || !flow || citySlug || awaitingCity) return;
+    if (sites.length < 2 || turns.length > 0) return;
+    setAwaitingCity('inicio');
+    say({ de: 'bot', text: '¿De qué ciudad sos? Así te doy los datos que te sirven.' });
+    // Lo que dispara esto es abrir con el árbol y las ciudades ya cargados; el resto de lo que
+    // mira son guardas, y ponerlas en las dependencias haría que la pregunta se repita sola.
+  }, [open, flow, sites.length]);
 
   useEffect(() => {
     if (turns.length > 0) writeSession({ citySlug, turns });
@@ -450,7 +525,9 @@ export function LandingAssistant() {
     if (option.behaviour === 'salir') {
       const site = sites.find((candidate) => candidate.slug === city);
       const message = option.whatsappMessage ?? 'Hola, quería hacer una consulta.';
-      const text = site ? `${message} (${site.displayName})` : message;
+      // La ciudad va en una frase y no entre paréntesis: lo lee una persona, y "(Neuquén)" colgando
+      // al final de un saludo parece un error de copiado.
+      const text = site ? `${message} Soy de ${site.displayName}.` : message;
       // Sin número configurado no se inventa uno: WhatsApp abre igual con el mensaje escrito y la
       // persona elige a quién mandárselo.
       window.open(whatsappHref(option.whatsappNumber ?? '', text), '_blank', 'noopener,noreferrer');
@@ -479,6 +556,10 @@ export function LandingAssistant() {
     say({ de: 'yo', text: site.displayName });
     const pending = awaitingCity;
     setAwaitingCity(null);
+    if (pending === 'inicio') {
+      say({ de: 'bot', text: `Listo, ${site.displayName}. ¿Con qué te doy una mano?` });
+      return;
+    }
     if (pending) answer(pending, site.slug);
   }
 
@@ -577,6 +658,10 @@ export function LandingAssistant() {
                 {turn.block ? (
                   <DataBlock
                     block={turn.block}
+                    cityName={
+                      sites.find((site) => site.slug === (turn.citySlug ?? citySlug))
+                        ?.displayName ?? null
+                    }
                     citySlug={turn.citySlug ?? citySlug}
                     onExpand={(element) => {
                       stickToBottom.current = false;

@@ -83,6 +83,9 @@ export function AIWorkbenchPage() {
     setSelectedTaskKey(taskKey);
     setRunResult(null);
     setMessage('');
+    // Se limpia antes de pedir: mientras llega el detalle nuevo, lo que había en pantalla era el
+    // prompt de la tarea anterior, y guardar desde ahí lo escribía en la tarea equivocada.
+    setDetail(null);
     void loadDetail(taskKey);
   }
 
@@ -200,16 +203,33 @@ export function AIWorkbenchPage() {
             </ul>
 
             <div className="grid gap-6">
-              {!selectedTaskKey || !detail ? (
+              {!selectedTaskKey ? (
                 <p className="text-ink-muted">Elegí una tarea para configurarla.</p>
+              ) : !detail ? (
+                // Mientras llega el detalle: decir que está cargando y no que no hay nada elegido,
+                // que es lo que parecía al limpiar la tarea anterior.
+                <p className="text-ink-muted">Cargando la tarea…</p>
               ) : (
                 <>
                   <p className="text-sm text-ink-muted">
                     {prompts.find((p) => p.taskKey === selectedTaskKey)?.description}
                   </p>
 
+                  {/*
+                   * El `key` es el arreglo, no un detalle.
+                   *
+                   * Los campos son no controlados —`defaultValue`— y eso sólo se aplica al montar.
+                   * Al cambiar de tarea React reutilizaba el mismo textarea, así que las tres
+                   * tareas mostraban el prompt de la primera que se hubiera abierto. Y como el
+                   * formulario guarda contra `selectedTaskKey`, apretar "Guardar versión" después
+                   * de cambiar de tarea escribía ese texto en la tarea equivocada.
+                   *
+                   * Cambiar la clave fuerza un formulario nuevo: por tarea y por versión activa,
+                   * así que guardar o volver a una versión anterior también refresca lo que se ve.
+                   */}
                   <form
                     className="grid gap-3 rounded-2xl border border-forest/10 bg-[var(--db-surface)] p-6"
+                    key={`${selectedTaskKey}:${detail.activeVersionId ?? 'sin-version'}`}
                     onSubmit={(event) => void saveVersion(event)}
                   >
                     <p className="text-sm font-semibold text-forest">Nueva versión del prompt</p>

@@ -22,9 +22,9 @@
 import { sql } from 'drizzle-orm';
 
 import { createDatabase } from './index.js';
+import { requireDatabaseUrl } from './require-database-url.js';
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error('DATABASE_URL is required');
+const databaseUrl = requireDatabaseUrl('--filter @verdeo/db tsx src/repair-site-memberships.ts');
 
 const dryRun = process.argv.includes('--dry-run');
 

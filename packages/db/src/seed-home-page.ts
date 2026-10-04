@@ -11,9 +11,9 @@
  */
 import { createDatabase } from './index.js';
 import { PostgresCmsService } from './repositories/postgres-cms-service.js';
+import { requireDatabaseUrl } from './require-database-url.js';
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error('DATABASE_URL is required');
+const databaseUrl = requireDatabaseUrl('db:seed-home');
 
 const CONTEXT = { correlationId: 'seed-home-page', requestId: 'seed-home-page', source: 'seed' };
 

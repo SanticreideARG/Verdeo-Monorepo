@@ -37,7 +37,7 @@ function chatStubs() {
       .mockResolvedValue({ connected: true, status: 'available', statusMessage: null, userId: ME }),
     listContacts: vi
       .fn<(userId: string) => Promise<unknown>>()
-      .mockResolvedValue([{ displayName: 'Tamara', id: OTHER }]),
+      .mockResolvedValue([{ avatarUrl: null, displayName: 'Tamara', id: OTHER }]),
     listConversations: vi.fn<(userId: string) => Promise<unknown>>().mockResolvedValue([]),
     listPresence: vi
       .fn<(userId: string) => Promise<unknown>>()

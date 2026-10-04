@@ -20,6 +20,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import { createDatabase, type Database } from './index.js';
 import { PostgresOperationsService } from './repositories/postgres-operations-service.js';
+import { requireDatabaseUrl } from './require-database-url.js';
 import {
   customerAddresses,
   customerIdentities,
@@ -32,8 +33,7 @@ import {
   weeklyMenus,
 } from './schema/index.js';
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error('DATABASE_URL is required');
+const databaseUrl = requireDatabaseUrl('--filter @verdeo/db tsx src/validate-workflows.ts');
 
 const CONTEXT = {
   correlationId: 'validate-workflows',
@@ -74,7 +74,7 @@ function assert(condition: boolean, message: string): void {
 }
 
 async function main() {
-  const { client, db } = createDatabase(databaseUrl!);
+  const { client, db } = createDatabase(databaseUrl);
   const operations = new PostgresOperationsService(db, new LocationLinkGeocodingProvider());
   const createdCustomerIds: string[] = [];
   const createdOrderIds: string[] = [];

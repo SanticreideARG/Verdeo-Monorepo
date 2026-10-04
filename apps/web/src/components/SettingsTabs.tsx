@@ -1,5 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 
+import { useNarrowViewport } from '../lib/useNarrowViewport.js';
+
 interface SettingsTab {
   href: string;
   label: string;
@@ -13,14 +15,20 @@ interface SettingsGroup {
 }
 
 /**
- * Las pantallas chicas de configuración, agrupadas por a qué pregunta contestan.
+ * El Panel de control: todo lo que se configura o se audita, agrupado por a qué pregunta contesta.
  *
- * Eran nueve pestañas en una tira plana, ordenadas por cuándo se fueron construyendo: "Zonas
- * geográficas" al lado de "Apariencia" al lado de "Correo". Con nueve, encontrar la que se busca
- * era leerlas todas. Los tres grupos separan lo que se cambia cuando cambia el negocio, lo que se
- * toca una vez al conectar un servicio de afuera, y lo que es preferencia de uno mismo.
+ * Antes esto era "Ajustes" y convivía en el menú lateral con Usuarios, Auditoría y Respaldos, cuatro
+ * entradas distintas para cosas que se tocan en el mismo momento y casi nunca: cuando se da de alta
+ * a alguien, cuando se conecta un servicio, cuando hay que mirar qué pasó. Cuatro entradas en el
+ * menú de todos los días por algo que se usa una vez por mes es espacio mal gastado en lo que más
+ * se mira.
  *
- * Cada pestaña sigue siendo su propia ruta —una carga real al hacer clic, no un cambio blando de
+ * Los grupos separan por pregunta y no por tecnología: qué y dónde vendemos, quién trabaja acá, con
+ * qué nos conectamos, qué queda registrado, y lo que es preferencia de uno mismo. Usuarios va
+ * aparte de Integraciones y de Sistema a propósito — dar de alta a alguien es una decisión del
+ * negocio, no una configuración técnica ni un registro.
+ *
+ * Cada sección sigue siendo su propia ruta —una carga real al hacer clic, no un cambio blando de
  * SPA—, que es lo que mantiene intacta la lógica de permisos y de carga de cada página.
  */
 const SETTINGS_GROUPS: readonly SettingsGroup[] = [
@@ -31,6 +39,10 @@ const SETTINGS_GROUPS: readonly SettingsGroup[] = [
       { href: '/app/ajustes/menu', label: 'Menú personalizado', permission: 'production.read' },
       { href: '/app/ajustes/pagos', label: 'Métodos de pago', permission: 'payments.read' },
     ],
+  },
+  {
+    label: 'Equipo',
+    tabs: [{ href: '/app/usuarios', label: 'Usuarios', permission: 'users.read' }],
   },
   {
     label: 'Integraciones',
@@ -44,6 +56,14 @@ const SETTINGS_GROUPS: readonly SettingsGroup[] = [
       { href: '/app/ajustes/chat', label: 'Enlaces de chat', permission: 'chat.links.manage' },
       { href: '/app/ajustes/asistente', label: 'Asistente de la web', permission: 'cms.read' },
       { href: '/app/ia', label: 'IA y plantillas', permission: 'ai.providers.manage' },
+    ],
+  },
+  {
+    label: 'Sistema',
+    tabs: [
+      { href: '/app/auditoria', label: 'Auditoría', permission: 'audit.read' },
+      // El permiso no viene con ningún rol: la descarga se lleva los datos de todos los clientes.
+      { href: '/app/respaldos', label: 'Respaldos', permission: 'backups.manage' },
     ],
   },
   {
@@ -64,6 +84,7 @@ export const SETTINGS_TAB_PERMISSIONS: readonly string[] = SETTINGS_TABS.map(
 
 export function SettingsTabs({ permissions }: { permissions: string[] }) {
   const location = useLocation();
+  const narrow = useNarrowViewport();
   // Una pestaña sin permiso la ve cualquiera que haya llegado hasta acá.
   const groups = SETTINGS_GROUPS.map((group) => ({
     ...group,
@@ -73,12 +94,28 @@ export function SettingsTabs({ permissions }: { permissions: string[] }) {
 
   if (groups.flatMap((group) => group.tabs).length <= 1) return null;
 
+  const actual = groups
+    .flatMap((group) => group.tabs)
+    .find((tab) => location.pathname === tab.href);
+
+  /*
+   * A la izquierda en escritorio, plegada en el teléfono.
+   *
+   * Con trece secciones, la tira horizontal se iba a dos renglones y había que leerla entera para
+   * encontrar una. En columna se barre con la vista y los títulos de grupo hacen de índice. En un
+   * teléfono una columna de trece renglones es media pantalla antes de ver la configuración que se
+   * vino a cambiar, así que ahí se pliega y el resumen dice en cuál estás.
+   */
   return (
-    <nav aria-label="Secciones de Ajustes" className="settings-tabs">
-      {groups.map((group) => (
-        <div className="settings-tabs-group" key={group.label}>
-          <p className="settings-tabs-label">{group.label}</p>
-          <div className="settings-tabs-row">
+    <details className="settings-nav" open={!narrow}>
+      <summary>
+        <span>Panel de control</span>
+        <small>{actual?.label ?? 'Elegí una sección'}</small>
+      </summary>
+      <nav aria-label="Secciones del panel de control">
+        {groups.map((group) => (
+          <div className="settings-nav-group" key={group.label}>
+            <p className="settings-nav-label">{group.label}</p>
             {group.tabs.map((tab) => (
               <Link
                 className={location.pathname === tab.href ? 'is-active' : ''}
@@ -89,8 +126,8 @@ export function SettingsTabs({ permissions }: { permissions: string[] }) {
               </Link>
             ))}
           </div>
-        </div>
-      ))}
-    </nav>
+        ))}
+      </nav>
+    </details>
   );
 }

@@ -5,6 +5,7 @@ import { initialPermissionCatalog } from '@verdeo/rbac';
 import { DEFAULT_HELP_ARTICLES } from './help-articles.js';
 import { createDatabase } from './index.js';
 import { applyRoleDefaults } from './role-defaults.js';
+import { requireDatabaseUrl } from './require-database-url.js';
 import {
   customerOperatingSites,
   customers,
@@ -20,9 +21,7 @@ import {
   userRoles,
 } from './schema/index.js';
 
-const databaseUrl = process.env.DATABASE_URL;
-
-if (!databaseUrl) throw new Error('DATABASE_URL is required');
+const databaseUrl = requireDatabaseUrl('db:seed');
 
 const initialRoles = [
   { key: 'superadmin', name: 'Superadmin', description: 'Administración completa del sistema' },

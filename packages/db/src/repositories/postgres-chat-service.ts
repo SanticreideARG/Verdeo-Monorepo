@@ -90,9 +90,10 @@ export class PostgresChatService {
    */
   private async participants(
     database: Database | DatabaseTransaction,
-  ): Promise<Map<string, ChatParticipant & { displayName: string }>> {
+  ): Promise<Map<string, ChatParticipant & { avatarUrl: string | null; displayName: string }>> {
     const rows = await database
       .select({
+        avatarUrl: users.avatarUrl,
         displayName: users.displayName,
         roleId: userRoles.roleId,
         userId: users.id,
@@ -127,7 +128,10 @@ export class PostgresChatService {
       else canUse.add(override.userId);
     }
 
-    const byUser = new Map<string, ChatParticipant & { displayName: string }>();
+    const byUser = new Map<
+      string,
+      ChatParticipant & { avatarUrl: string | null; displayName: string }
+    >();
     for (const row of rows) {
       const current = byUser.get(row.userId);
       if (current) {
@@ -135,6 +139,7 @@ export class PostgresChatService {
         continue;
       }
       byUser.set(row.userId, {
+        avatarUrl: row.avatarUrl,
         canUseChat: canUse.has(row.userId),
         displayName: row.displayName,
         roleIds: row.roleId ? [row.roleId] : [],
@@ -348,7 +353,11 @@ export class PostgresChatService {
 
     return [...people.values()]
       .filter((candidate) => resolveChatLink(subject, candidate, policy).allowed)
-      .map((candidate) => ({ displayName: candidate.displayName, id: candidate.userId }))
+      .map((candidate) => ({
+        avatarUrl: candidate.avatarUrl,
+        displayName: candidate.displayName,
+        id: candidate.userId,
+      }))
       .sort((left, right) => left.displayName.localeCompare(right.displayName));
   }
 

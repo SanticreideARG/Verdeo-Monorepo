@@ -157,23 +157,18 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
   {
     label: 'Administración',
     items: [
-      { href: '/app/usuarios', icon: 'users', label: 'Usuarios', permission: 'users.read' },
-      // The six settings screens that used to each have their own entry here now live as tabs of
-      // one another — see SettingsTabs.tsx. One entry, gated on being able to reach any of them.
+      /*
+       * Una entrada para todo lo que se configura o se audita.
+       *
+       * Eran cuatro —Usuarios, Ajustes, Auditoría, Respaldos— para cosas que se tocan en el mismo
+       * momento y casi nunca. El menú lateral es de lo que se usa todos los días; esto se usa una
+       * vez por mes y adentro tiene su propia navegación.
+       */
       {
         href: '/app/ajustes/zonas',
         icon: 'settings',
-        label: 'Ajustes',
+        label: 'Panel de control',
         permissions: SETTINGS_TAB_PERMISSIONS,
-      },
-      { href: '/app/auditoria', icon: 'audit', label: 'Auditoría', permission: 'audit.read' },
-      // Invisible salvo para quien tenga el permiso, que no viene con ningún rol: la descarga se
-      // lleva los datos de todos los clientes en un archivo.
-      {
-        href: '/app/respaldos',
-        icon: 'settings',
-        label: 'Respaldos',
-        permission: 'backups.manage',
       },
     ],
   },

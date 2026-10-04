@@ -1,4 +1,5 @@
 import postgres from 'postgres';
+import { requireDatabaseUrl } from './require-database-url.js';
 
 /**
  * Post-migration verification for 0008 and 0009, runnable without psql:
@@ -10,8 +11,7 @@ import postgres from 'postgres';
  * snapshot rather than patch forward.
  */
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error('DATABASE_URL is required');
+const databaseUrl = requireDatabaseUrl('db:verify-scope');
 
 const sql = postgres(databaseUrl, { max: 1, onnotice: () => undefined });
 

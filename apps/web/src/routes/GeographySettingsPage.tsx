@@ -324,7 +324,7 @@ export function GeographySettingsPage() {
       <SettingsTabs permissions={profile.permissions} />
       <section className="dashboard-panel">
         <header>
-          <p className="dashboard-kicker">Ajustes</p>
+          <p className="dashboard-kicker">Panel de control</p>
           <h1 className="text-2xl font-semibold text-forest">Zonas geográficas</h1>
           <p className="mt-2 max-w-3xl text-ink-muted">
             Una operación es el límite de pedidos, cocina y reparto. Cada operación cubre un área

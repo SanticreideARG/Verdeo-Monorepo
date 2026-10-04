@@ -20,6 +20,7 @@ import {
   type ChatMessage,
   type ChatPresence,
 } from '../lib/chat.js';
+import { ChatAvatar } from './ChatAvatar.js';
 import { ChatReferenceCard } from './ChatReferenceCard.js';
 
 /** Cuántas ventanas caben abiertas a la vez en escritorio. Más que esto y cada una queda demasiado
@@ -259,8 +260,14 @@ export function ChatDock({
                     onClick={() => void startWith(contact)}
                     type="button"
                   >
-                    <span>
-                      {canSeePresence ? <PresenceDot entry={presence.get(contact.id)} /> : null}
+                    <span className="chat-contact">
+                      <ChatAvatar
+                        avatarUrl={contact.avatarUrl}
+                        displayName={contact.displayName}
+                        {...(canSeePresence
+                          ? { presence: presence.get(contact.id)?.status ?? 'offline' }
+                          : {})}
+                      />
                       {contact.displayName}
                     </span>
                   </button>

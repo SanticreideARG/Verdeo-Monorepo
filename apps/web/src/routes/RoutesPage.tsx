@@ -712,49 +712,55 @@ export function RoutesPage() {
                   <div className="routes-viewer mt-4">
                     <ol className="routes-stops grid content-start gap-2">
                       {selectedRoute.stops.map((stop, index) => (
-                        <li className="rounded-xl border border-forest/10 p-3" key={stop.id}>
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-semibold text-forest">
-                                {stop.sequence}. {stop.customerDisplayName} — {stop.publicNumber}
-                              </p>
-                              {stop.detail ? (
-                                <p className="text-sm font-semibold text-forest">{stop.detail}</p>
-                              ) : null}
-                              <p className="text-sm text-ink-muted">{stop.deliveryAddress}</p>
-                              <p className="text-xs text-ink-muted">
-                                {formatMoney(stop.totalMinor, 'ARS')} · {stop.paymentExpectation} ·{' '}
-                                {STOP_STATUS_LABELS[stop.status] ?? stop.status}
-                              </p>
-                            </div>
+                        <li className="routes-stop" key={stop.id}>
+                          {/*
+                           * El número de parada va en su propia columna, fija.
+                           *
+                           * Estaba adentro del párrafo del nombre, así que al angostarse la
+                           * columna "1. Sofía Romero — NQN-00012" se partía en cuatro renglones y
+                           * el orden de la ruta —que es lo único que se lee de corrido— dejaba de
+                           * leerse. Afuera y en ancho fijo, el número siempre está donde se lo
+                           * busca.
+                           */}
+                          <span className="routes-stop-seq">{stop.sequence}</span>
+                          <div className="routes-stop-body">
+                            <p className="routes-stop-name">{stop.customerDisplayName}</p>
+                            <p className="routes-stop-number">{stop.publicNumber}</p>
+                            {stop.detail ? (
+                              <p className="routes-stop-detail">{stop.detail}</p>
+                            ) : null}
+                            <p className="routes-stop-address">{stop.deliveryAddress}</p>
+                            <p className="routes-stop-facts">
+                              {formatMoney(stop.totalMinor, 'ARS')} · {stop.paymentExpectation} ·{' '}
+                              {STOP_STATUS_LABELS[stop.status] ?? stop.status}
+                            </p>
+                          </div>
+                          {/* Reordenar y el estado, en una columna angosta que no empuja al texto:
+                              dos botones de flecha no pueden costarle la mitad del ancho al
+                              nombre del cliente. */}
+                          <div className="routes-stop-aside">
                             {canManage ? (
-                              <div className="flex flex-col items-end gap-1">
-                                <div className="flex gap-1">
-                                  <button
-                                    className="button button-secondary"
-                                    disabled={index === 0}
-                                    onClick={() => void move(index, -1)}
-                                    type="button"
-                                  >
-                                    ↑
-                                  </button>
-                                  <button
-                                    className="button button-secondary"
-                                    disabled={index === selectedRoute.stops.length - 1}
-                                    onClick={() => void move(index, 1)}
-                                    type="button"
-                                  >
-                                    ↓
-                                  </button>
-                                </div>
+                              <div className="routes-stop-move">
+                                <button
+                                  aria-label="Subir esta parada"
+                                  disabled={index === 0}
+                                  onClick={() => void move(index, -1)}
+                                  type="button"
+                                >
+                                  ↑
+                                </button>
+                                <button
+                                  aria-label="Bajar esta parada"
+                                  disabled={index === selectedRoute.stops.length - 1}
+                                  onClick={() => void move(index, 1)}
+                                  type="button"
+                                >
+                                  ↓
+                                </button>
                               </div>
                             ) : null}
-                            {/* Lo que reportó quien está repartiendo. Antes acá decía a qué
-                                usuario estaba asignada la parada; ahora no hay usuario, hay una
-                                ruta con un enlace, y lo que importa es si esta parada ya se
-                                entregó. */}
                             {stop.status === 'delivered' ? (
-                              <p className="text-sm font-semibold text-forest">Entregada</p>
+                              <span className="routes-stop-done">Entregada</span>
                             ) : null}
                           </div>
                         </li>

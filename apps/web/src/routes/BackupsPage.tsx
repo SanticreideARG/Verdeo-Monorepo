@@ -4,6 +4,7 @@ import { ActionButton } from '../components/ActionButton.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { PeriodPicker } from '../components/PeriodPicker.js';
+import { SettingsTabs } from '../components/SettingsTabs.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage, type WeeklyMenu } from '../lib/operations.js';
 import { periodsFromMenus, type Period } from '../lib/periods.js';
@@ -221,8 +222,9 @@ export function BackupsPage() {
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
       <section className="dashboard-panel">
+        <SettingsTabs permissions={profile.permissions} />
         <header>
-          <p className="dashboard-kicker">Administración</p>
+          <p className="dashboard-kicker">Panel de control</p>
           <h1 className="text-2xl font-semibold text-forest">Respaldos</h1>
           <p className="mt-2 max-w-3xl text-sm text-ink-muted">
             Un archivo con los datos y sus relaciones intactas, del que se puede volver. Las

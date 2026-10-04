@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
+import { SettingsTabs } from '../components/SettingsTabs.js';
 import { apiRequest } from '../lib/api.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
@@ -126,8 +127,9 @@ export function AuditLogPage() {
     <DashboardShell profile={profile} onLogout={() => void logout()}>
       <DeskWorkNotice can="podés buscar un evento; leer la traza entera pide más ancho." />
       <section className="dashboard-panel">
+        <SettingsTabs permissions={profile.permissions} />
         <header>
-          <p className="dashboard-kicker">Administración</p>
+          <p className="dashboard-kicker">Panel de control</p>
           <h1 className="text-2xl font-semibold text-forest">Auditoría</h1>
         </header>
 

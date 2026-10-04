@@ -19,9 +19,9 @@ import { createDatabase } from './index.js';
 import { PostgresGeographyService } from './repositories/postgres-geography-service.js';
 import { PostgresOperationsService } from './repositories/postgres-operations-service.js';
 import { geographicZones, operatingSites } from './schema/index.js';
+import { requireDatabaseUrl } from './require-database-url.js';
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error('DATABASE_URL is required');
+const databaseUrl = requireDatabaseUrl('db:seed-e2e-test-data');
 
 const CONTEXT = { correlationId: 'seed-e2e-test', requestId: 'seed-e2e-test', source: 'seed' };
 
@@ -180,7 +180,7 @@ function phone(siteIndex: number, index: number): string {
 }
 
 async function main() {
-  const { client, db } = createDatabase(databaseUrl!);
+  const { client, db } = createDatabase(databaseUrl);
   const operations = new PostgresOperationsService(db, new LocationLinkGeocodingProvider());
   const geography = new PostgresGeographyService(db);
 

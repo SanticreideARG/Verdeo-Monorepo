@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router-dom';
 
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { BrandLoading } from '../components/BrandLoading.js';
+import { ChatAvatar } from '../components/ChatAvatar.js';
 import { ChatReferenceCard } from '../components/ChatReferenceCard.js';
 import { apiRequest } from '../lib/api.js';
 import {
   CHAT_POLL_ACTIVE_MS,
   CHAT_POLL_HIDDEN_MS,
-  PRESENCE_LABELS,
   chatMapsUrl as mapsUrl,
   chatTimeLabel as timeLabel,
   conversationName,
@@ -24,12 +24,6 @@ import { errorMessage } from '../lib/operations.js';
 /** Las funciones no sostienen un socket, así que la conversación se consulta mientras se mira. */
 const POLL_ACTIVE_MS = CHAT_POLL_ACTIVE_MS;
 const POLL_HIDDEN_MS = CHAT_POLL_HIDDEN_MS;
-
-function PresenceDot({ entry }: { entry: ChatPresence | undefined }) {
-  const status = entry?.status ?? 'offline';
-  const label = PRESENCE_LABELS[status] ?? status;
-  return <i aria-label={label} className={`chat-presence-dot is-${status}`} title={label} />;
-}
 
 /** Search result shape used by the reference picker — the same fields exist on both the customer
  * and order list endpoints, just under a different label field, so we normalize to this locally. */
@@ -365,8 +359,14 @@ export function ChatPage() {
                     onClick={() => void openWith(contact)}
                     type="button"
                   >
-                    <span>
-                      {canSeePresence ? <PresenceDot entry={presence.get(contact.id)} /> : null}
+                    <span className="chat-contact">
+                      <ChatAvatar
+                        avatarUrl={contact.avatarUrl}
+                        displayName={contact.displayName}
+                        {...(canSeePresence
+                          ? { presence: presence.get(contact.id)?.status ?? 'offline' }
+                          : {})}
+                      />
                       {contact.displayName}
                     </span>
                   </button>

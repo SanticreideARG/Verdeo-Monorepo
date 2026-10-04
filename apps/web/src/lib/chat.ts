@@ -10,6 +10,7 @@ import { apiRequest } from './api.js';
  */
 
 export interface ChatContact {
+  avatarUrl: string | null;
   displayName: string;
   id: string;
 }
@@ -83,7 +84,7 @@ export const PRESENCE_LABELS: Record<string, string> = {
 };
 
 export async function fetchConversations(): Promise<ChatConversation[]> {
-  const response = await apiRequest('/api/v1/chat/conversations');
+  const response = await apiRequest('/api/v1/chat/conversations', { background: true });
   if (!response.ok) return [];
   return ((await response.json()) as { items: ChatConversation[] }).items;
 }
@@ -95,19 +96,34 @@ export async function fetchContacts(): Promise<ChatContact[]> {
 }
 
 export async function fetchPresence(): Promise<ChatPresence[]> {
-  const response = await apiRequest('/api/v1/chat/presence');
+  const response = await apiRequest('/api/v1/chat/presence', { background: true });
   if (!response.ok) return [];
   return ((await response.json()) as { items: ChatPresence[] }).items;
 }
 
-/** Lee la conversación y la marca leída: mirarla es haberla leído. */
-export async function fetchMessages(conversationId: string): Promise<ChatMessage[]> {
+/**
+ * Lee la conversación y, si había algo sin leer, la marca leída: mirarla es haberla leído.
+ *
+ * `markRead` existe porque esto se llama cada cinco segundos mientras el hilo está abierto, y
+ * marcar leído lo que ya estaba leído es una escritura por consulta: tres mil por día con una
+ * pestaña abierta, cada una con su aviso y su parpadeo de la barra de carga.
+ */
+export async function fetchMessages(
+  conversationId: string,
+  markRead = true,
+): Promise<ChatMessage[]> {
   const response = await apiRequest(
     `/api/v1/chat/conversations/${conversationId}/messages?limit=100`,
+    { background: true },
   );
   if (!response.ok) return [];
   const items = ((await response.json()) as { items: ChatMessage[] }).items;
-  await apiRequest(`/api/v1/chat/conversations/${conversationId}/read`, { method: 'POST' });
+  if (markRead) {
+    await apiRequest(`/api/v1/chat/conversations/${conversationId}/read`, {
+      background: true,
+      method: 'POST',
+    });
+  }
   return items;
 }
 
@@ -123,4 +139,9 @@ export async function openConversationWith(userId: string): Promise<string | nul
 
 export function unreadTotal(conversations: readonly ChatConversation[]): number {
   return conversations.reduce((total, conversation) => total + conversation.unreadCount, 0);
+}
+
+/** La inicial que va en la burbuja cuando no hay foto. Una letra, en mayúscula, y nunca vacía. */
+export function chatInitial(displayName: string): string {
+  return displayName.trim().slice(0, 1).toLocaleUpperCase('es-AR') || '?';
 }

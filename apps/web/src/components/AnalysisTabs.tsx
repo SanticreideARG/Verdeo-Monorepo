@@ -34,19 +34,17 @@ export function AnalysisTabs({ permissions }: { permissions: readonly string[] }
   if (tabs.length <= 1) return null;
 
   return (
-    <nav aria-label="Secciones de Estadísticas" className="settings-tabs">
-      <div className="settings-tabs-group">
-        <div className="settings-tabs-row">
-          {tabs.map((tab) => (
-            <Link
-              className={location.pathname.startsWith(tab.href) ? 'is-active' : ''}
-              key={tab.href}
-              to={tab.href}
-            >
-              {tab.label}
-            </Link>
-          ))}
-        </div>
+    <nav aria-label="Secciones de Estadísticas" className="panel-tabs">
+      <div>
+        {tabs.map((tab) => (
+          <Link
+            className={location.pathname.startsWith(tab.href) ? 'is-active' : ''}
+            key={tab.href}
+            to={tab.href}
+          >
+            {tab.label}
+          </Link>
+        ))}
       </div>
     </nav>
   );

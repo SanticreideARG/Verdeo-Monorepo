@@ -1,12 +1,12 @@
 import { createDatabase } from './index.js';
 import { PostgresPasswordUserProvisioner, UserAlreadyExistsError } from './repositories/index.js';
+import { requireDatabaseUrl } from './require-database-url.js';
 
 if (process.env.NODE_ENV === 'production' || process.env.ALLOW_TEST_USER_SEED !== 'true') {
   throw new Error('Test-user seed requires non-production NODE_ENV and ALLOW_TEST_USER_SEED=true');
 }
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error('DATABASE_URL is required');
+const databaseUrl = requireDatabaseUrl('--filter @verdeo/db tsx src/seed-test-users.ts');
 
 const testUsers = [
   { displayName: 'Test Superadmin', email: 'superadmin@verdeo.test', roleKey: 'superadmin' },

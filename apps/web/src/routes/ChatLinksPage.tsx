@@ -189,7 +189,7 @@ export function ChatLinksPage() {
       <SettingsTabs permissions={profile.permissions} />
       <section className="dashboard-panel">
         <header>
-          <p className="dashboard-kicker">Ajustes</p>
+          <p className="dashboard-kicker">Panel de control</p>
           <h1 className="text-2xl font-semibold text-forest">Enlaces de chat</h1>
           <p className="mt-2 max-w-3xl text-ink-muted">
             Marcá qué roles pueden conversar entre sí. Sin ningún enlace nadie puede iniciar una

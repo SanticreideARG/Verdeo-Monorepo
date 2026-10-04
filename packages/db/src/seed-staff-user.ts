@@ -18,9 +18,9 @@ import { eq } from 'drizzle-orm';
 
 import { createDatabase } from './index.js';
 import { passwordCredentials, roles, userRoles, users } from './schema/index.js';
+import { requireDatabaseUrl } from './require-database-url.js';
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error('DATABASE_URL is required');
+const databaseUrl = requireDatabaseUrl('--filter @verdeo/db tsx src/seed-staff-user.ts');
 
 const email = process.env.STAFF_EMAIL?.trim().toLowerCase();
 const password = process.env.STAFF_PASSWORD;
@@ -32,7 +32,7 @@ if (!email || !password) {
 }
 
 async function main() {
-  const { client, db } = createDatabase(databaseUrl!);
+  const { client, db } = createDatabase(databaseUrl);
 
   try {
     const [role] = await db

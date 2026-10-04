@@ -1202,32 +1202,21 @@ a {
 
 /* Tab strip shared by the six consolidated "Ajustes" screens (see SettingsTabs.tsx) — sits above
    the dashboard-panel on each one, a real route link per tab rather than a soft SPA switch. */
-.settings-tabs {
+/* Una tira de pestañas horizontales, para dos o tres secciones hermanas (Estadísticas). Con esa
+   cantidad la tira se lee de un vistazo; es a partir de diez que deja de servir y hay que ir a una
+   columna, que es lo que hace el Panel de control acá abajo. */
+.panel-tabs {
   display: flex;
   flex-wrap: wrap;
-  /* Los grupos se separan más entre sí que las pestañas dentro de uno: es lo que hace que se lean
-     como tres bloques y no como nueve pastillas seguidas. */
-  gap: 0.4rem 1.6rem;
+  gap: 0.4rem;
   margin-bottom: 1.25rem;
 }
-.settings-tabs-group {
-  display: grid;
-  gap: 0.3rem;
-}
-.settings-tabs-label {
-  margin: 0 0 0 0.5rem;
-  color: var(--db-muted);
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-.settings-tabs-row {
+.panel-tabs > div {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
 }
-.settings-tabs a {
+.panel-tabs a {
   border-radius: 999px;
   padding: 0.45rem 0.95rem;
   color: var(--db-muted);
@@ -1238,14 +1227,127 @@ a {
     background-color 0.15s ease,
     color 0.15s ease;
 }
-.settings-tabs a:hover {
+.panel-tabs a:hover {
   background: color-mix(in srgb, var(--db-accent) 10%, transparent);
   color: var(--db-text);
 }
-.settings-tabs a.is-active {
+.panel-tabs a.is-active {
   background: var(--db-accent);
   color: var(--db-accent-contrast, #fff);
 }
+
+/* --- Panel de control ---------------------------------------------------------------------------
+   La navegación de sus trece secciones, en columna a la izquierda.
+
+   Era una tira horizontal de pastillas que con trece se iba a dos renglones y había que leerla
+   entera para encontrar una. En columna se barre con la vista, y los títulos de grupo hacen de
+   índice en vez de ser decoración.
+
+   El `:has()` es lo que permite que la columna exista sin tocar las trece páginas: cada una sigue
+   montando su panel igual que siempre, y el panel que contiene esta navegación se convierte en dos
+   columnas. Sin `:has()` habría que envolver cada pantalla a mano, que es la clase de cambio que se
+   hace mal en una de ellas y nadie lo nota. */
+.settings-nav {
+  margin-bottom: 1.25rem;
+}
+.settings-nav > summary {
+  display: none;
+}
+.settings-nav nav {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+}
+.settings-nav-group {
+  display: grid;
+  gap: 0.15rem;
+}
+.settings-nav-label {
+  margin: 0 0 0.25rem;
+  color: var(--db-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.settings-nav a {
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  color: var(--db-text-soft);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+.settings-nav a:hover {
+  background: color-mix(in srgb, var(--db-accent) 10%, transparent);
+  color: var(--db-text);
+}
+.settings-nav a.is-active {
+  background: var(--db-accent);
+  color: var(--db-accent-contrast, #fff);
+}
+
+@media (min-width: 60rem) {
+  .dashboard-panel:has(> .settings-nav) {
+    display: grid;
+    grid-template-columns: 13rem minmax(0, 1fr);
+    gap: 0 2rem;
+    align-items: start;
+  }
+  /* La navegación ocupa la primera columna entera y acompaña el scroll: en una pantalla larga,
+     cambiar de sección no puede obligar a volver arriba. */
+  .dashboard-panel:has(> .settings-nav) > .settings-nav {
+    position: sticky;
+    top: 1rem;
+    grid-row: 1 / -1;
+    margin-bottom: 0;
+  }
+  .dashboard-panel:has(> .settings-nav) > *:not(.settings-nav) {
+    grid-column: 2;
+  }
+}
+
+/* En el teléfono se pliega: trece renglones antes de la configuración que se vino a cambiar son
+   media pantalla de índice. El resumen dice en cuál sección estás, que es lo que una tira de
+   pestañas mostraba y un desplegable cerrado perdería. */
+@media (max-width: 59.99rem) {
+  .settings-nav > summary {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    border: 1px solid var(--db-border);
+    border-radius: 0.6rem;
+    padding: 0.55rem 0.8rem;
+    cursor: pointer;
+    list-style: none;
+  }
+  .settings-nav > summary::-webkit-details-marker {
+    display: none;
+  }
+  .settings-nav > summary span {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--db-muted);
+  }
+  .settings-nav > summary small {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--db-text);
+  }
+  .settings-nav[open] nav {
+    margin-top: 0.6rem;
+    border: 1px solid var(--db-border-soft);
+    border-radius: 0.6rem;
+    padding: 0.7rem 0.8rem;
+  }
+}
+
 .dashboard-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.7fr);
@@ -5417,7 +5519,26 @@ main .operation-card {
   width: 100%;
   max-width: 72rem;
   margin: 0 auto;
-  padding: 1.6rem 1.25rem;
+  /*
+   * El pie termina antes de donde flota la lechuza.
+   *
+   * El asistente está fijo abajo a la derecha, y el pie alinea sus enlaces con `space-between`, así
+   * que "Acceso del equipo" caía justo debajo. No es un enlace cualquiera: es por donde entra el
+   * equipo al panel, y quedaba tapado exactamente cuando alguien llegaba al final de la página a
+   * buscarlo.
+   *
+   * El espacio se reserva acá y no se mueve el asistente, porque el asistente está donde se lo
+   * busca —abajo a la derecha, como en cualquier sitio— y moverlo para esquivar un enlace sería
+   * arreglar el síntoma en el lado equivocado.
+   */
+  padding: 1.6rem 1.25rem calc(1.6rem + 60px);
+}
+/* En una pantalla ancha el pie se despliega en una sola fila y la lechuza nunca llega a tocar el
+   centro, así que el espacio de más sólo hace falta donde los enlaces se corren a la derecha. */
+@media (min-width: 60rem) {
+  .public-footer-staff {
+    margin-right: 10rem;
+  }
 }
 @media (min-width: 640px) {
   .public-footer-inner {
@@ -7763,4 +7884,163 @@ textarea.sr-only {
 .ai-test-failed {
   color: #c0562f;
   font-weight: 500;
+}
+
+/* --- Una parada de la hoja de ruta -------------------------------------------------------------
+   Tres columnas: el número, el contenido y los controles. El número y los controles tienen ancho
+   fijo, así que lo que se achica al angostar la ventana es el texto —que sabe envolverse— y no el
+   orden de la ruta, que es lo único que se lee de corrido. */
+.routes-stop {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: start;
+  border: 1px solid var(--db-border, var(--border-hairline));
+  border-radius: 0.75rem;
+  padding: 0.7rem 0.8rem;
+}
+.routes-stop-seq {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: var(--db-bg-2);
+  color: var(--db-text);
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.routes-stop-body {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.routes-stop-name {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--db-text);
+  overflow-wrap: anywhere;
+}
+.routes-stop-number {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--db-muted);
+}
+.routes-stop-detail {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 650;
+  color: var(--db-accent);
+}
+.routes-stop-address {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  color: var(--db-text-soft);
+  overflow-wrap: anywhere;
+}
+.routes-stop-facts {
+  margin: 0.15rem 0 0;
+  font-size: 0.78rem;
+  color: var(--db-muted);
+}
+.routes-stop-aside {
+  display: grid;
+  justify-items: end;
+  gap: 0.35rem;
+}
+.routes-stop-move {
+  display: flex;
+  gap: 0.25rem;
+}
+.routes-stop-move button {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--db-border);
+  border-radius: 0.5rem;
+  background: none;
+  color: var(--db-text);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+.routes-stop-move button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.routes-stop-done {
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  background: color-mix(in srgb, var(--db-accent) 16%, transparent);
+  color: var(--db-accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* En un teléfono los controles bajan: con 375px, dos botones a la derecha dejan el nombre en una
+   columna de cuatro letras. */
+@media (max-width: 30rem) {
+  .routes-stop {
+    grid-template-columns: 2rem minmax(0, 1fr);
+  }
+  .routes-stop-aside {
+    grid-column: 2;
+    justify-items: start;
+  }
+}
+
+/* La cara de un compañero en el chat. Seis renglones de texto casi idénticos se leen uno por uno;
+   con la foto —o la inicial de quien no cargó ninguna— se reconoce a quién se le va a escribir sin
+   leer. La presencia pasa a ser un punto sobre la burbuja, que es donde se la busca. */
+.chat-contact {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+.chat-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 999px;
+  background: var(--db-bg-2, #e8e8e6);
+  overflow: visible;
+}
+.chat-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  object-fit: cover;
+}
+.chat-avatar b {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--db-text-soft, inherit);
+}
+.chat-avatar-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 0.6rem;
+  height: 0.6rem;
+  border: 2px solid var(--db-surface-solid, #fff);
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 30%, transparent);
+}
+.chat-avatar-dot.is-available {
+  background: #4e9e5a;
+}
+.chat-avatar-dot.is-busy {
+  background: #c0562f;
+}
+.chat-avatar-dot.is-away {
+  background: #c8a030;
 }

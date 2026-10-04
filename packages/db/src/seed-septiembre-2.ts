@@ -18,9 +18,9 @@ import { and, eq } from 'drizzle-orm';
 import { createDatabase } from './index.js';
 import { PostgresOperationsService } from './repositories/postgres-operations-service.js';
 import { customerAddresses, customers, geographicZones, operatingSites } from './schema/index.js';
+import { requireDatabaseUrl } from './require-database-url.js';
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error('DATABASE_URL is required');
+const databaseUrl = requireDatabaseUrl('--filter @verdeo/db tsx src/seed-septiembre-2.ts');
 
 const CYCLE_ID = process.env.CYCLE_ID;
 if (!CYCLE_ID) throw new Error('CYCLE_ID is required');

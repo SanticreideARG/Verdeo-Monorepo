@@ -86,7 +86,7 @@ export function MenuCatalogSettingsPage() {
       <SettingsTabs permissions={profile.permissions} />
       <section className="dashboard-panel">
         <header>
-          <p className="dashboard-kicker">Administración</p>
+          <p className="dashboard-kicker">Panel de control</p>
           <h1 className="text-2xl font-semibold text-forest">Menú personalizado</h1>
         </header>
 

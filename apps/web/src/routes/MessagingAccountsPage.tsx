@@ -107,7 +107,7 @@ export function MessagingAccountsPage() {
       <section className="dashboard-panel">
         <header className="flex items-center justify-between">
           <div>
-            <p className="dashboard-kicker">Administración</p>
+            <p className="dashboard-kicker">Panel de control</p>
             <h1 className="text-2xl font-semibold text-forest">Cuentas de WhatsApp</h1>
           </div>
           <button

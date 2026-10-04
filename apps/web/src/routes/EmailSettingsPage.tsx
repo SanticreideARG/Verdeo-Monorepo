@@ -160,7 +160,7 @@ export function EmailSettingsPage() {
         <SettingsTabs permissions={profile.permissions} />
 
         <header className="mt-6">
-          <p className="dashboard-kicker">Ajustes</p>
+          <p className="dashboard-kicker">Panel de control</p>
           <h1 className="text-2xl font-semibold text-forest">Correo</h1>
           <p className="mt-2 max-w-2xl text-sm text-ink-muted">
             Verdeo manda correo a través de Resend: confirmaciones de acceso, avisos de pedido y

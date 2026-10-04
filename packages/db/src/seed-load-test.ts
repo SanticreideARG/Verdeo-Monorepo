@@ -19,9 +19,9 @@ import { eq } from 'drizzle-orm';
 import { createDatabase } from './index.js';
 import { PostgresOperationsService } from './repositories/postgres-operations-service.js';
 import { geographicZones, operatingSites } from './schema/index.js';
+import { requireDatabaseUrl } from './require-database-url.js';
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error('DATABASE_URL is required');
+const databaseUrl = requireDatabaseUrl('--filter @verdeo/db tsx src/seed-load-test.ts');
 
 const CONTEXT = { correlationId: 'seed-load-test', requestId: 'seed-load-test', source: 'seed' };
 
@@ -238,7 +238,7 @@ function timed<T>(label: string, run: () => Promise<T>): Promise<{ ms: number; v
 }
 
 async function main() {
-  const { client, db } = createDatabase(databaseUrl!);
+  const { client, db } = createDatabase(databaseUrl);
   const operations = new PostgresOperationsService(db, new LocationLinkGeocodingProvider());
 
   try {

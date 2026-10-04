@@ -1,18 +1,18 @@
 import { createDatabase } from './index.js';
 import { PostgresPasswordUserProvisioner } from './repositories/index.js';
+import { requireDatabaseUrl } from './require-database-url.js';
 
 function readArgument(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
   return index >= 0 ? process.argv[index + 1] : undefined;
 }
 
-const databaseUrl = process.env.DATABASE_URL;
 const email = readArgument('email');
 const roleKey = readArgument('role');
 const displayName = readArgument('display-name');
 const siteSlug = readArgument('site');
 
-if (!databaseUrl) throw new Error('DATABASE_URL is required');
+const databaseUrl = requireDatabaseUrl('auth:provision-user');
 if (!email || !roleKey || !displayName) {
   throw new Error('Usage: --email <email> --role <role-key> --display-name <name> [--site <slug>]');
 }

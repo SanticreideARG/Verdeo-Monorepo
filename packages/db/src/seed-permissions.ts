@@ -17,9 +17,9 @@ import { initialPermissionCatalog } from '@verdeo/rbac';
 import { createDatabase } from './index.js';
 import { applyRoleDefaults } from './role-defaults.js';
 import { permissions, rolePermissions, roles } from './schema/index.js';
+import { requireDatabaseUrl } from './require-database-url.js';
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error('DATABASE_URL is required');
+const databaseUrl = requireDatabaseUrl('db:seed-permissions');
 
 const { client, db } = createDatabase(databaseUrl);
 

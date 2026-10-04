@@ -15,6 +15,7 @@ import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { createAccessToken, hashAccessToken } from '@verdeo/auth';
 
 import { createDatabase } from './index.js';
+import { requireDatabaseUrl } from './require-database-url.js';
 import {
   accessTokens,
   customerAddresses,
@@ -28,8 +29,7 @@ import {
   users,
 } from './schema/index.js';
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error('DATABASE_URL is required');
+const databaseUrl = requireDatabaseUrl('--filter @verdeo/db tsx src/seed-delivery-test.ts');
 
 const APP_ORIGIN = process.env.APP_ORIGIN ?? 'https://verdeo-monorepo-web.vercel.app';
 const REPARTIDOR_EMAIL = 'repartidor.prueba@verdeo.local';
@@ -37,7 +37,7 @@ const TOKEN_TTL_HOURS = 24 * 30;
 const MAX_STOPS = 15;
 
 async function main() {
-  const { client, db } = createDatabase(databaseUrl!);
+  const { client, db } = createDatabase(databaseUrl);
 
   try {
     // --- The repartidor user -------------------------------------------------------------

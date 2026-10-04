@@ -286,7 +286,7 @@ export function CmsPagesAdminPage() {
       <DeskWorkNotice can="podés leer lo publicado; editarlo con la vista previa al lado pide ancho." />
       <section className="dashboard-panel">
         <header>
-          <p className="dashboard-kicker">Administración</p>
+          <p className="dashboard-kicker">Panel de control</p>
           <h1 className="text-2xl font-semibold text-forest">Contenidos</h1>
         </header>
 

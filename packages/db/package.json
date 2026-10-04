@@ -26,6 +26,7 @@
     "db:seed": "tsx src/seed.ts",
     "db:seed-help": "tsx src/seed-help.ts",
     "db:seed-permissions": "tsx src/seed-permissions.ts",
+    "db:retire-repartidor": "tsx src/retire-repartidor.ts",
     "db:seed-e2e-test-data": "tsx src/seed-e2e-test-data.ts",
     "db:seed-home": "tsx src/seed-home-page.ts",
     "db:studio": "drizzle-kit studio",

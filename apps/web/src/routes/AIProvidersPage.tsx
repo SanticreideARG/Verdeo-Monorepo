@@ -210,7 +210,7 @@ export function AIProvidersPage() {
       <section className="dashboard-panel">
         <SettingsTabs permissions={profile.permissions} />
         <header className="mt-6">
-          <p className="dashboard-kicker">Ajustes</p>
+          <p className="dashboard-kicker">Panel de control</p>
           <h1 className="text-2xl font-semibold text-forest">Configuración segura del motor</h1>
           <p className="mt-3 max-w-3xl leading-7 text-ink-muted">
             La clave se cifra en el servidor y nunca vuelve al navegador. Este corte prepara el

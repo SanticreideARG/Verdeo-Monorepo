@@ -64,6 +64,15 @@ const CHANGING_METHODS = new Set(['DELETE', 'PATCH', 'POST', 'PUT']);
 const SILENT_PATHS = [
   /^\/api\/v1\/auth\/(login|logout)$/,
   /^\/api\/v1\/chat\/presence\/heartbeat$/,
+  /*
+   * El chat entero.
+   *
+   * Nada de lo que hace el chat es "guardar algo": abrir una conversación, mandar un mensaje,
+   * compartir una ubicación o marcar leído son acciones cuyo resultado ya se ve en la pantalla —el
+   * mensaje aparece en el hilo, que es la confirmación—. Peor, marcar leído se dispara en cada
+   * consulta: con el hilo abierto salía un cartel "Guardado." cada cinco segundos.
+   */
+  /^\/api\/v1\/chat\/conversations/,
   /^\/api\/v1\/me\/appearance$/,
   /^\/api\/v1\/dashboard\/layout$/,
   /^\/api\/v1\/public\/auth\//,
@@ -95,6 +104,14 @@ function scheduleChangeNotice(method: string): void {
 }
 
 export interface ApiRequestInit extends RequestInit {
+  /**
+   * Una consulta de fondo: no enciende la barra de progreso de arriba.
+   *
+   * Esa barra existe para decir "lo que pediste está en camino". El chat consulta solo cada cinco
+   * segundos, así que la encendía todo el tiempo sin que nadie hubiera pedido nada, y la pantalla
+   * parecía estar recargándose sola. Una barra que parpadea siempre deja de significar algo.
+   */
+  background?: boolean;
   /** `false` para no avisar nada; un texto para reemplazar el genérico. */
   notify?: string | false;
 }
@@ -104,8 +121,11 @@ export async function apiRequest(path: string, init?: ApiRequestInit): Promise<R
   const operatingSiteId = storedOperatingSiteId();
   const method = (init?.method ?? 'GET').toUpperCase();
 
-  inFlight += 1;
-  notifyActivity();
+  const visible = init?.background !== true;
+  if (visible) {
+    inFlight += 1;
+    notifyActivity();
+  }
   try {
     const response = await fetch(`${apiUrl}${path}`, {
       ...init,
@@ -131,7 +151,9 @@ export async function apiRequest(path: string, init?: ApiRequestInit): Promise<R
 
     return response;
   } finally {
-    inFlight -= 1;
-    notifyActivity();
+    if (visible) {
+      inFlight -= 1;
+      notifyActivity();
+    }
   }
 }

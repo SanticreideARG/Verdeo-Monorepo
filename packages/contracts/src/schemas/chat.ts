@@ -47,9 +47,18 @@ export const ChatLinksResponseSchema = z.object({
   ),
 });
 
-/** A contact carries a name and nothing else: it must not become a softer user directory. */
+/**
+ * Un contacto lleva nombre y cara, y nada más.
+ *
+ * El límite sigue siendo el mismo —esto no puede convertirse en un directorio de usuarios blando:
+ * ni correo, ni teléfono, ni rol, ni ciudad— pero la foto de perfil de un compañero al lado de su
+ * nombre, en el chat del equipo, no revela nada que el nombre no revele ya, y es lo que hace que
+ * una lista de seis personas se lea de un vistazo.
+ */
 export const ChatContactListResponseSchema = z.object({
-  items: z.array(z.object({ displayName: z.string(), id: UuidSchema })),
+  items: z.array(
+    z.object({ avatarUrl: z.string().nullable(), displayName: z.string(), id: UuidSchema }),
+  ),
 });
 
 export const ChatConversationOpenRequestSchema = z.object({ userId: UuidSchema });

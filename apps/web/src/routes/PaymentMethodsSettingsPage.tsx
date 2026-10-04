@@ -124,7 +124,7 @@ export function PaymentMethodsSettingsPage() {
       <SettingsTabs permissions={profile.permissions} />
       <section className="dashboard-panel">
         <header>
-          <p className="dashboard-kicker">Ajustes</p>
+          <p className="dashboard-kicker">Panel de control</p>
           <h1 className="text-2xl font-semibold text-forest">Métodos de pago</h1>
           <p className="mt-2 text-sm text-ink-muted">
             Los métodos disponibles al registrar un cobro. "Es efectivo" decide si el cobro queda
