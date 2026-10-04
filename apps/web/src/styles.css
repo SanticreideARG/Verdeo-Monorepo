@@ -8044,3 +8044,137 @@ textarea.sr-only {
 .chat-avatar-dot.is-away {
   background: #c8a030;
 }
+
+/* --- Ficha del pedido ---------------------------------------------------------------------------
+   Todo lo que la lista ya trajo, sin salir de la cola. Es alta: se le pone scroll propio y el
+   encabezado y el pie quedan fijos, porque cerrar no puede depender de haber llegado al final. */
+.modal-panel.order-detail {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0;
+  width: min(34rem, 100%);
+  max-height: min(85vh, 50rem);
+  padding: 0;
+  overflow: hidden;
+}
+.order-detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1.1rem 1.2rem 0.9rem;
+  border-bottom: 1px solid var(--db-border-soft, var(--border-hairline));
+}
+.order-detail-head > div {
+  flex: 1;
+  min-width: 0;
+}
+.order-detail-head h2 {
+  margin: 0.1rem 0 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--db-text, var(--color-forest));
+  overflow-wrap: anywhere;
+}
+.order-detail-head > button {
+  flex: none;
+  border: 0;
+  border-radius: 0.4rem;
+  padding: 0.2rem 0.45rem;
+  background: none;
+  color: var(--db-text-soft, inherit);
+  font: inherit;
+  cursor: pointer;
+}
+.order-detail-status {
+  flex: none;
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  background: var(--db-bg-2, #eee);
+  color: var(--db-text-soft, inherit);
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.order-detail-body {
+  display: grid;
+  gap: 1.1rem;
+  overflow-y: auto;
+  padding: 1rem 1.2rem;
+}
+.order-detail-body h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--db-muted, var(--color-ink-muted));
+}
+.order-detail-body dl {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+}
+.order-detail-body dl > div {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: 0.6rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.order-detail-body dt {
+  color: var(--db-muted, var(--color-ink-muted));
+}
+.order-detail-body dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.order-detail-body p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+.order-detail-body a {
+  color: var(--db-accent, var(--color-forest));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.order-detail-items {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.order-detail-items li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.2rem 0.75rem;
+  font-size: 0.9rem;
+}
+.order-detail-items b {
+  font-variant-numeric: tabular-nums;
+}
+.order-detail-items small {
+  grid-column: 1 / -1;
+  font-size: 0.78rem;
+  color: var(--db-muted, var(--color-ink-muted));
+}
+.order-detail-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--db-border-soft, var(--border-hairline));
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.order-detail-foot {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  padding: 0.85rem 1.2rem;
+  border-top: 1px solid var(--db-border-soft, var(--border-hairline));
+}

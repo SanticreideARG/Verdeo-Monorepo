@@ -9,6 +9,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { DataTable } from '../components/DataTable.js';
+import { OrderDetailDialog } from '../components/OrderDetailDialog.js';
 import { DraftNotice } from '../components/DraftNotice.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { ReasonDialog } from '../components/ReasonDialog.js';
@@ -167,6 +168,8 @@ export function OrderIntakePage() {
    * fila pedía tocar la base. El permiso existía desde el principio; lo que faltaba era el botón.
    */
   const [reverting, setReverting] = useState<OrderSummary | null>(null);
+  /** El pedido que se está mirando en la ficha. Es el de la lista: no se vuelve a pedir nada. */
+  const [viewing, setViewing] = useState<OrderSummary | null>(null);
   // La zona cuyo lote se está marcando: deshabilita todos los botones mientras corre, para que dos
   // clics seguidos no manden la misma tanda dos veces.
   const [markingZone, setMarkingZone] = useState<string | null>(null);
@@ -1296,10 +1299,9 @@ export function OrderIntakePage() {
             ) : null}
           </p>
           <DataTable
-            // Tocar la tarjeta abre el pedido. En escritorio la fila no es un enlace —seleccionar
-            // texto terminaría navegando— pero en un teléfono se toca, y que no pase nada es el
-            // reflejo roto.
-            rowHref={(order) => `/app/pedidos/${order.id}`}
+            // Tocar la tarjeta abre la ficha del pedido sin salir de la cola: con treinta
+            // pedidos cargados, mirar tres seguidos costaba tres viajes de ida y vuelta.
+            onRowSelect={setViewing}
             caption="Pedidos"
             columns={intakeColumns
               .filter((column) => visibleColumns.includes(column.key))
@@ -1431,6 +1433,8 @@ export function OrderIntakePage() {
           title="Pedido registrado"
         />
       ) : null}
+
+      {viewing ? <OrderDetailDialog onClose={() => setViewing(null)} order={viewing} /> : null}
     </DashboardShell>
   );
 }

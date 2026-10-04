@@ -206,6 +206,8 @@ export interface OrderSummary {
   }[];
   menuId: string;
   notes: string | null;
+  /** La ciudad de la operación: la que decide numeración, menú y precios. */
+  operatingSiteName: string | null;
   paidAt: string | null;
   paymentExpectation: string;
   publicNumber: string;

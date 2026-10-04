@@ -4073,6 +4073,9 @@ export class PostgresOperationsService {
         deliveryZone: customerAddresses.operationalZone,
         id: orders.id,
         menuId: orders.weeklyMenuId,
+        // La ciudad de la operación, no la del domicilio: es la que decide numeración, menú y
+        // precios, y la que alguien busca cuando pregunta "¿de dónde era este pedido?".
+        operatingSiteName: operatingSites.displayName,
         notes: orders.notes,
         paidAt: orders.paidAt,
         paymentExpectation: orders.paymentExpectation,
@@ -4085,6 +4088,7 @@ export class PostgresOperationsService {
       .from(orders)
       .innerJoin(customers, eq(customers.id, orders.customerId))
       .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+      .leftJoin(operatingSites, eq(operatingSites.id, orders.operatingSiteId))
       .where(inArray(orders.id, [...orderIds]));
     if (rows.length === 0) return [];
 

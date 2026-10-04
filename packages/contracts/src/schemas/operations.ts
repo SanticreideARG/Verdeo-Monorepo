@@ -758,6 +758,8 @@ export const OrderSchema = z.object({
   deliveryLocationUrl: z.string().nullable(),
   deliveryLongitude: z.number().nullable(),
   deliveryZone: z.string().nullable(),
+  /** La ciudad de la operación: la que decide numeración, menú y precios. */
+  operatingSiteName: z.string().nullable(),
   dietaryInstructions: z.array(z.string()),
   id: UuidSchema,
   items: z.array(

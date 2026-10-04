@@ -1,5 +1,4 @@
 import { useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
 
 import { useNarrowViewport } from '../lib/useNarrowViewport.js';
 
@@ -66,7 +65,7 @@ export function DataTable<T>({
   caption,
   columns,
   empty,
-  rowHref,
+  onRowSelect,
   rowKey,
   rows,
   rowTone,
@@ -77,15 +76,15 @@ export function DataTable<T>({
   /** Texto, o un <EmptyState> con la salida: un vacío por filtro tiene que poder deshacerse. */
   empty: ReactNode;
   /**
-   * Adónde lleva tocar la tarjeta, en el teléfono.
+   * Qué pasa al tocar la tarjeta, en el teléfono.
    *
-   * En escritorio la fila no es un enlace a propósito: con quince columnas posibles, una fila-enlace
-   * convierte cualquier intento de seleccionar un texto en una navegación accidental. En un teléfono
-   * no se selecciona texto de una tabla, se toca — y tocar una tarjeta y que no pase nada es el
-   * reflejo roto. El enlace se dibuja por encima de la tarjeta pero por debajo de los botones, así
-   * que las acciones siguen siendo acciones.
+   * En escritorio la fila no reacciona a propósito: con quince columnas posibles, una fila que
+   * navega convierte cualquier intento de seleccionar un texto en un accidente. En un teléfono no
+   * se selecciona texto de una tabla, se toca — y tocar una tarjeta y que no pase nada es el
+   * reflejo roto. El disparador se dibuja por encima de la tarjeta pero por debajo de los botones,
+   * así que las acciones siguen siendo acciones.
    */
-  rowHref?: (row: T) => string;
+  onRowSelect?: (row: T) => void;
   rowKey: (row: T) => string;
   rows: readonly T[];
   /**
@@ -171,12 +170,17 @@ export function DataTable<T>({
         <ul aria-label={caption} className="data-cards">
           {sorted.map((row) => (
             <li
-              className={rowHref ? 'is-linked' : undefined}
+              className={onRowSelect ? 'is-linked' : undefined}
               data-tone={rowTone?.(row)}
               key={rowKey(row)}
             >
-              {rowHref ? (
-                <Link aria-label="Ver detalle" className="data-cards-link" to={rowHref(row)} />
+              {onRowSelect ? (
+                <button
+                  aria-label="Ver detalle"
+                  className="data-cards-link"
+                  onClick={() => onRowSelect(row)}
+                  type="button"
+                />
               ) : null}
               <div className="data-cards-head">
                 <p className="data-cards-title">{primary?.render(row)}</p>
