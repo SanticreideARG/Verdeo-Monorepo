@@ -6,6 +6,9 @@ import { buildLabelsPrintHtml } from './labels-export.js';
 const label: Label = {
   composable: false,
   customerDisplayName: 'Ana Isabella Vega',
+  dishIndex: 1,
+  dishName: null,
+  dishTotal: 1,
   deliveryDate: '2026-08-28',
   deliveryZone: 'Centro',
   dietaryInstructions: ['Sin cebolla'],
@@ -31,6 +34,7 @@ const settings: Pick<
   | 'sheetMarginMm'
   | 'sheetWidthMm'
   | 'showBorders'
+  | 'showLogo'
   | 'uppercaseName'
 > = {
   alignment: 'center',
@@ -45,6 +49,7 @@ const settings: Pick<
   sheetHeightMm: 297,
   sheetMarginMm: 12,
   sheetWidthMm: 210,
+  showLogo: false,
   showBorders: true,
   uppercaseName: false,
 };

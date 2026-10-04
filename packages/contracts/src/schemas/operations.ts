@@ -944,6 +944,16 @@ export const KitchenSummaryResponseSchema = z.object({
 export const LabelSchema = z.object({
   composable: z.boolean(),
   customerDisplayName: z.string(),
+  /**
+   * El plato que acompaña esta etiqueta, cuando se imprime una por plato.
+   *
+   * `null` en el modo normal, donde la etiqueta es de la vianda entera. Los tres campos de plato
+   * viajan juntos: sin `dishIndex` y `dishTotal`, cinco etiquetas iguales salvo el nombre del plato
+   * no dicen si están las cinco.
+   */
+  dishIndex: z.number().int(),
+  dishName: z.string().nullable(),
+  dishTotal: z.number().int(),
   deliveryDate: z.iso.date(),
   deliveryZone: z.string().nullable(),
   dietaryInstructions: z.array(z.string()),
@@ -988,6 +998,7 @@ export const LabelFontSchema = z.enum([
  * nombre no dice de quién es la vianda, que es lo único que hace falta para repartirla.
  */
 export const LabelFieldSchema = z.enum([
+  'plato',
   'tamano',
   'variedad',
   'unidad',
@@ -1017,6 +1028,10 @@ export const LabelSettingsSchema = z.object({
   alignment: LabelAlignmentSchema,
   backgroundImageUrl: z.string().nullable(),
   fields: z.array(LabelFieldSchema),
+  /** Una etiqueta por plato en vez de una por vianda. */
+  onePerDish: z.boolean(),
+  /** El isotipo de Verdeo impreso en la etiqueta. */
+  showLogo: z.boolean(),
   fontFamily: LabelFontSchema,
   fontScale: z.number().int().min(60).max(200),
   /*
@@ -1044,6 +1059,8 @@ export const LabelSettingsUpdateRequestSchema = z.object({
   alignment: LabelAlignmentSchema.optional(),
   backgroundImageUrl: z.string().url().nullable().optional(),
   fields: z.array(LabelFieldSchema).max(7).optional(),
+  onePerDish: z.boolean().optional(),
+  showLogo: z.boolean().optional(),
   fontFamily: LabelFontSchema.optional(),
   fontScale: z.number().int().min(60).max(200).optional(),
   hideSurname: z.boolean().optional(),

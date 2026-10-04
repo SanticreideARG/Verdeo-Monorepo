@@ -102,6 +102,7 @@ describe('order engine', () => {
         deliveryZone: 'Centro',
         customerDisplayName: 'Rosa',
         dietaryInstructions: ['Sin cebolla'],
+        dishes: [],
         dishSelections: [],
         familyName: 'Keto',
         orderPublicNumber: 'N00453',
@@ -114,6 +115,7 @@ describe('order engine', () => {
         deliveryZone: 'Centro',
         customerDisplayName: 'Juan',
         dietaryInstructions: [],
+        dishes: [],
         dishSelections: [],
         familyName: 'Keto',
         orderPublicNumber: 'N00454',
@@ -126,6 +128,7 @@ describe('order engine', () => {
         deliveryZone: 'Centro',
         customerDisplayName: 'Lola',
         dietaryInstructions: [],
+        dishes: ['A', 'A', 'B', 'C', 'D'],
         dishSelections: ['A', 'A', 'B', 'C', 'D'],
         familyName: 'Intuitivo',
         orderPublicNumber: 'N00455',
@@ -165,6 +168,7 @@ describe('order engine', () => {
         deliveryDate: '2026-08-28',
         deliveryZone: 'Centro',
         dietaryInstructions: [],
+        dishes: ['Pollo al verdeo', 'Tarta', 'Wok', 'Guiso', 'Milanesa'],
         dishSelections: ['Pollo al verdeo', 'Tarta', 'Wok', 'Guiso', 'Milanesa'],
         familyName: 'Intuitivo',
         orderPublicNumber: 'N00455',
@@ -178,6 +182,7 @@ describe('order engine', () => {
         deliveryDate: '2026-08-28',
         deliveryZone: 'Centro',
         dietaryInstructions: [],
+        dishes: ['Pollo al verdeo', 'Ensalada', 'Wok', 'Guiso', 'Tarta'],
         dishSelections: ['Pollo al verdeo', 'Ensalada', 'Wok', 'Guiso', 'Tarta'],
         familyName: 'Intuitivo',
         orderPublicNumber: 'N00456',
@@ -197,6 +202,66 @@ describe('order engine', () => {
     expect(summary.dishTally.find((entry) => entry.dishName === 'Milanesa')?.portions).toBe(2);
   });
 
+  it('con una etiqueta por plato, saca una por cada plato de cada unidad', () => {
+    const labels = buildLabels(
+      [
+        {
+          composable: false,
+          customerDisplayName: 'Rosa',
+          deliveryDate: '2026-08-28',
+          deliveryZone: 'Centro',
+          dietaryInstructions: [],
+          dishes: ['Pollo al horno', 'Tarta de verdura', 'Guiso de lentejas'],
+          dishSelections: [],
+          familyName: 'Keto',
+          orderPublicNumber: 'N00453',
+          quantityUnits: 2,
+          variantName: '250',
+        },
+      ],
+      { perDish: true },
+    );
+
+    // Dos unidades por tres platos: la cuenta que hay que poder anticipar antes de imprimir.
+    expect(labels).toHaveLength(6);
+    expect(labels.map((label) => label.dishName)).toEqual([
+      'Pollo al horno',
+      'Tarta de verdura',
+      'Guiso de lentejas',
+      'Pollo al horno',
+      'Tarta de verdura',
+      'Guiso de lentejas',
+    ]);
+    expect(labels[0]).toMatchObject({ dishIndex: 1, dishTotal: 3, unitIndex: 1 });
+    expect(labels[5]).toMatchObject({ dishIndex: 3, dishTotal: 3, unitIndex: 2 });
+  });
+
+  it('una vianda sin platos cargados sale con su etiqueta de siempre', () => {
+    const labels = buildLabels(
+      [
+        {
+          composable: false,
+          customerDisplayName: 'Rosa',
+          deliveryDate: '2026-08-28',
+          deliveryZone: 'Centro',
+          dietaryInstructions: [],
+          dishes: [],
+          dishSelections: [],
+          familyName: 'Keto',
+          orderPublicNumber: 'N00453',
+          quantityUnits: 1,
+          variantName: '250',
+        },
+      ],
+      { perDish: true },
+    );
+
+    // Dejarla sin etiqueta la haría desaparecer de la mesa de armado, que es peor que una etiqueta
+    // sin el plato escrito.
+    expect(labels).toHaveLength(1);
+    expect(labels[0]?.dishName).toBeNull();
+  });
+
   it('expande cada línea en una etiqueta por unidad física, siempre con el nombre del cliente', () => {
     const labels = buildLabels([
       {
@@ -205,6 +270,7 @@ describe('order engine', () => {
         deliveryZone: 'Centro',
         customerDisplayName: 'Rosa',
         dietaryInstructions: [],
+        dishes: [],
         dishSelections: [],
         familyName: 'Keto',
         orderPublicNumber: 'N00453',
@@ -217,6 +283,7 @@ describe('order engine', () => {
         deliveryZone: 'Centro',
         customerDisplayName: 'Lola',
         dietaryInstructions: [],
+        dishes: ['A', 'A', 'B', 'C', 'D'],
         dishSelections: ['A', 'A', 'B', 'C', 'D'],
         familyName: 'Intuitivo',
         orderPublicNumber: 'N00455',
@@ -231,6 +298,10 @@ describe('order engine', () => {
     const rosa = {
       composable: false,
       customerDisplayName: 'Rosa',
+      // Sin platos: en el modo normal la etiqueta es de la vianda entera.
+      dishIndex: 1,
+      dishName: null,
+      dishTotal: 1,
       deliveryDate: '2026-08-28',
       deliveryZone: 'Centro',
       dietaryInstructions: [],
@@ -249,6 +320,9 @@ describe('order engine', () => {
     expect(labels.find((label) => label.orderPublicNumber === 'N00455')).toEqual({
       composable: true,
       customerDisplayName: 'Lola',
+      dishIndex: 1,
+      dishName: null,
+      dishTotal: 1,
       deliveryDate: '2026-08-28',
       deliveryZone: 'Centro',
       dietaryInstructions: [],

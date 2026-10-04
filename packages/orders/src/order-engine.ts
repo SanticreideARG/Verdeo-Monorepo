@@ -219,16 +219,33 @@ export function buildKitchenSummary(lines: readonly KitchenSourceLine[]): Kitche
   };
 }
 
-// Kitchen groups by variety; a label is printed per physical unit instead, so this expands each
-// line's quantityUnits into that many identical labels rather than reusing buildKitchenSummary's
-// aggregation. Ordered by order number so a batch of labels comes off the page order-by-order.
-export function buildLabels(lines: readonly KitchenSourceLine[]): Label[] {
+/**
+ * Las etiquetas de una tanda.
+ *
+ * Cocina agrupa por variedad; una etiqueta, en cambio, va pegada a algo físico, así que cada
+ * renglón se expande en tantas etiquetas como unidades tenga. Van ordenadas por número de pedido
+ * para que la hoja salga pedido por pedido.
+ *
+ * `perDish` cambia qué es ese algo físico. En el modo normal es la vianda: una etiqueta por vianda,
+ * que es lo que se pega en la tapa. Con `perDish`, es cada plato de adentro — cinco por vianda —
+ * para que cada recipiente diga qué tiene sin abrirlo. Multiplica la cantidad de etiquetas por la
+ * cantidad de platos, y eso es visible en la pantalla antes de imprimir.
+ *
+ * Una vianda sin platos cargados no desaparece: sale su etiqueta de siempre. Es lo honesto — una
+ * variedad a la que todavía no se le cargó el menú de la semana existe igual, y dejarla sin
+ * etiqueta la haría desaparecer de la mesa de armado.
+ */
+export function buildLabels(
+  lines: readonly KitchenSourceLine[],
+  options: { perDish?: boolean } = {},
+): Label[] {
   const labels: Label[] = [];
   for (const line of [...lines].sort((left, right) =>
     left.orderPublicNumber.localeCompare(right.orderPublicNumber),
   )) {
+    const dishes = options.perDish ? line.dishes : [];
     for (let unit = 0; unit < line.quantityUnits; unit += 1) {
-      labels.push({
+      const base = {
         composable: line.composable,
         // El nombre va siempre. Antes sólo lo llevaban las líneas del Intuitivo —donde hace falta
         // para saber de quién es esa combinación de platos— y el resto salía sin nombre, que es
@@ -244,7 +261,15 @@ export function buildLabels(lines: readonly KitchenSourceLine[]): Label[] {
         unitIndex: unit + 1,
         unitTotal: line.quantityUnits,
         variantName: line.variantName,
-      });
+      };
+
+      if (dishes.length === 0) {
+        labels.push({ ...base, dishIndex: 1, dishName: null, dishTotal: 1 });
+        continue;
+      }
+      for (const [index, dishName] of dishes.entries()) {
+        labels.push({ ...base, dishIndex: index + 1, dishName, dishTotal: dishes.length });
+      }
     }
   }
   return labels;

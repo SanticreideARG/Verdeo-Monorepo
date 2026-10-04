@@ -74,6 +74,21 @@ const FIELD_RENDERERS: Record<
 > = {
   entrega: { render: (label) => shortDate(label.deliveryDate), weight: 'menor' },
   numero: { render: (label) => label.orderPublicNumber, weight: 'menor' },
+  /*
+   * El plato que acompaña esta etiqueta.
+   *
+   * Lleva su posición cuando hay más de uno —"Pollo al horno · 2 de 5"— porque cinco etiquetas de
+   * la misma vianda apiladas sobre la mesa no dicen de otro modo si están las cinco.
+   */
+  plato: {
+    render: (label) =>
+      label.dishName === null
+        ? null
+        : label.dishTotal > 1
+          ? `${label.dishName} · ${String(label.dishIndex)} de ${String(label.dishTotal)}`
+          : label.dishName,
+    weight: 'destacado',
+  },
   restricciones: {
     render: (label) =>
       label.dietaryInstructions.length > 0 ? label.dietaryInstructions.join(' · ') : null,
@@ -107,9 +122,18 @@ export function buildLabelsPrintHtml(
     | 'sheetMarginMm'
     | 'sheetWidthMm'
     | 'showBorders'
+    | 'showLogo'
     | 'uppercaseName'
   >,
   title: string,
+  /**
+   * De dónde sale el isotipo impreso.
+   *
+   * Se pasa como parámetro y no se escribe acá adentro porque este archivo no sabe en qué dominio
+   * está servida la aplicación: la hoja se abre en el navegador de quien imprime, y una ruta
+   * relativa a un HTML generado no resuelve a nada.
+   */
+  appOrigin?: string,
 ): string {
   /*
    * El lienzo real de cada etiqueta: hoja menos márgenes, dividido por la grilla. Antes la hoja era
@@ -158,7 +182,15 @@ export function buildLabelsPrintHtml(
         })
         .join('');
       const name = labelName(label, settings);
+      // El isotipo arriba de todo: es lo que hace que la etiqueta se lea como de Verdeo antes de
+      // leerla. Chico a propósito — compite por el mismo espacio que el nombre del cliente, que es
+      // lo que hay que poder leer a un metro.
+      const logo =
+        settings.showLogo && appOrigin
+          ? `<img class="logo" src="${escape(appOrigin)}/brand/verdeo-icon-128.webp" alt="" />`
+          : '';
       return `<div class="label">
+        ${logo}
         ${name ? `<p class="customer">${escape(name)}</p>` : ''}
         ${extras}
       </div>`;
@@ -179,6 +211,11 @@ export function buildLabelsPrintHtml(
     grid-auto-rows: ${canvas.heightMm.toFixed(2)}mm;
     gap: ${settings.labelGapMm}mm;
     justify-content: center;
+  }
+  .logo {
+    height: ${(6 * scale).toFixed(1)}mm;
+    width: auto;
+    margin-bottom: 0.6mm;
   }
   .label {
     border: ${settings.showBorders ? '1px dashed #999' : 'none'};

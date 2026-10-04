@@ -324,6 +324,10 @@ export interface LabelSettings {
   backgroundImageUrl: string | null;
   /** Nombre de pila e iniciales, en vez del nombre completo. */
   hideSurname: boolean;
+  /** Una etiqueta por plato en vez de una por vianda. */
+  onePerDish: boolean;
+  /** El isotipo de Verdeo impreso en la etiqueta. */
+  showLogo: boolean;
   /** La hoja, en milímetros: de acá sale el lienzo real de cada etiqueta. */
   labelGapMm: number;
   /** El nombre sólo en las Intuitivo, que son las que no se identifican por variedad y tamaño. */
@@ -332,7 +336,9 @@ export interface LabelSettings {
   sheetMarginMm: number;
   sheetWidthMm: number;
   /** Qué campos, además del nombre, se imprimen — en el orden en que salen. */
-  fields: ('entrega' | 'numero' | 'restricciones' | 'tamano' | 'unidad' | 'variedad' | 'zona')[];
+  fields: (
+    'entrega' | 'numero' | 'plato' | 'restricciones' | 'tamano' | 'unidad' | 'variedad' | 'zona'
+  )[];
   fontFamily:
     | 'clasica'
     | 'condensed'

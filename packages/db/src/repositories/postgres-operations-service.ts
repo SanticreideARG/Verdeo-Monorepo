@@ -348,11 +348,13 @@ const LABEL_SETTINGS_FALLBACK = {
   id: null,
   labelGapMm: 4,
   nameOnlyForComposable: false,
+  onePerDish: false,
   labelsPerPage: 8,
   sheetHeightMm: 297,
   sheetMarginMm: 12,
   sheetWidthMm: 210,
   showBorders: true,
+  showLogo: false,
   updatedAt: null,
   updatedByUserId: null,
   uppercaseName: false,
@@ -4320,6 +4322,8 @@ export class PostgresOperationsService {
         deliveryDate: orders.deliveryDate,
         deliveryZone: customerAddresses.operationalZone,
         familyName: orderItems.productNameSnapshot,
+        // Para buscarle los platos a una variedad estándar: son los del menú de esa oferta.
+        offeringId: orderItems.offeringId,
         orderId: orders.id,
         orderItemId: orderItems.id,
         orderPublicNumber: orders.publicNumber,
@@ -4379,15 +4383,48 @@ export class PostgresOperationsService {
               ]),
             );
 
-    return lines.map((line) => ({
-      ...line,
-      dietaryInstructions: instructions
-        .filter((instruction) => instruction.orderId === line.orderId)
-        .map((instruction) => instruction.instruction),
-      dishSelections: selections
+    /*
+     * Los platos fijos de cada variedad, por si se imprime una etiqueta por plato.
+     *
+     * Un Intuitivo lleva los que eligió el cliente; una variedad estándar, los cinco que el menú de
+     * la semana define para esa oferta, y esos viven en otra tabla. Se piden en una sola consulta
+     * para todas las ofertas de la tanda: una por renglón serían cientos.
+     */
+    const ofertas = [
+      ...new Set(lines.map((line) => line.offeringId).filter((id): id is string => id !== null)),
+    ];
+    const platosDeOferta =
+      ofertas.length === 0
+        ? []
+        : await this.database
+            .select({
+              dishName: weeklyMenuItems.dishName,
+              offeringId: weeklyMenuItems.offeringId,
+            })
+            .from(weeklyMenuItems)
+            .where(inArray(weeklyMenuItems.offeringId, ofertas))
+            .orderBy(asc(weeklyMenuItems.slot));
+
+    return lines.map((line) => {
+      const dishSelections = selections
         .filter((selection) => selection.orderItemId === line.orderItemId)
-        .map((selection) => selection.dishName),
-    }));
+        .map((selection) => selection.dishName);
+      return {
+        ...line,
+        dietaryInstructions: instructions
+          .filter((instruction) => instruction.orderId === line.orderId)
+          .map((instruction) => instruction.instruction),
+        // Lo que esta vianda lleva adentro: lo elegido si es un Intuitivo, el menú de la oferta si
+        // es una variedad estándar.
+        dishes:
+          dishSelections.length > 0
+            ? dishSelections
+            : platosDeOferta
+                .filter((plato) => plato.offeringId === line.offeringId)
+                .map((plato) => plato.dishName),
+        dishSelections,
+      };
+    });
   }
 
   // Production is bounded by the operation (ADR-028): a global scope consolidates every operation,
@@ -4413,15 +4450,22 @@ export class PostgresOperationsService {
       .where(eq(salesCycles.id, cycleId))
       .limit(1);
     if (!cycle) throw new OperationsNotFoundError('Sales cycle not found');
+    // Una por vianda o una por plato: lo decide el formato guardado, no quien llama. Así la
+    // pantalla, la impresión de la tanda y la de un pedido suelto no pueden discrepar.
+    const ajustes = await this.getLabelSettings();
     return buildLabels(
       await this.loadKitchenLines({ cycleId, operatingSiteId, ...(zone ? { zone } : {}) }),
+      { perDish: ajustes.onePerDish },
     );
   }
 
   public async orderLabels(orderId: string) {
     const order = await this.loadOrder(this.database, orderId);
     if (!order) throw new OperationsNotFoundError('Order not found');
-    return buildLabels(await this.loadKitchenLines({ orderId }));
+    const ajustes = await this.getLabelSettings();
+    return buildLabels(await this.loadKitchenLines({ orderId }), {
+      perDish: ajustes.onePerDish,
+    });
   }
 
   /* La biblioteca de fondos. Cuál está en uso lo dice `label_settings`; esto es qué hay guardado. */
@@ -4493,6 +4537,8 @@ export class PostgresOperationsService {
       hideSurname?: boolean | undefined;
       labelGapMm?: number | undefined;
       nameOnlyForComposable?: boolean | undefined;
+      onePerDish?: boolean | undefined;
+      showLogo?: boolean | undefined;
       labelsPerPage: number;
       sheetHeightMm?: number | undefined;
       sheetMarginMm?: number | undefined;
@@ -4524,6 +4570,8 @@ export class PostgresOperationsService {
           labelGapMm: input.labelGapMm ?? existing?.labelGapMm ?? 4,
           nameOnlyForComposable:
             input.nameOnlyForComposable ?? existing?.nameOnlyForComposable ?? false,
+          onePerDish: input.onePerDish ?? existing?.onePerDish ?? false,
+          showLogo: input.showLogo ?? existing?.showLogo ?? false,
           labelsPerPage: input.labelsPerPage,
           sheetHeightMm: input.sheetHeightMm ?? existing?.sheetHeightMm ?? 297,
           sheetMarginMm: input.sheetMarginMm ?? existing?.sheetMarginMm ?? 12,

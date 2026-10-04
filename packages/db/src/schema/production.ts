@@ -154,6 +154,17 @@ export const labelSettings = pgTable(
     hideSurname: boolean('hide_surname').default(false).notNull(),
     /** El nombre sólo en las Intuitivo, que son las que no se identifican por variedad y tamaño. */
     nameOnlyForComposable: boolean('name_only_for_composable').default(false).notNull(),
+    /**
+     * Una etiqueta por plato en vez de una por vianda.
+     *
+     * La etiqueta de la vianda se pega en la tapa y dice de quién es; con esto se imprime además
+     * una por cada plato de adentro, para que cada recipiente diga qué tiene sin abrirlo. Multiplica
+     * la cantidad de etiquetas por la cantidad de platos, así que es una decisión de la operación y
+     * no un comportamiento fijo.
+     */
+    onePerDish: boolean('one_per_dish').default(false).notNull(),
+    /** El isotipo de Verdeo impreso en la etiqueta: el mismo que usa la aplicación. */
+    showLogo: boolean('show_logo').default(false).notNull(),
     backgroundImageUrl: text('background_image_url'),
     // Tipografía y tamaño de la etiqueta impresa. Se guardan como texto porque van derecho a un
     // `font-family` y a un multiplicador de CSS: acotar el juego con un enum en la base obligaría a

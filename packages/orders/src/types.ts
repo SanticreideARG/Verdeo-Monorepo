@@ -7,6 +7,16 @@ export interface KitchenSourceLine {
   deliveryDate: string;
   deliveryZone: string | null;
   dietaryInstructions: readonly string[];
+  /**
+   * Qué platos lleva esta vianda.
+   *
+   * En un Intuitivo son los que eligió el cliente; en una variedad estándar, los cinco que el menú
+   * de la semana define para esa oferta. Es distinto de `dishSelections`, que son sólo los elegidos
+   * y es lo que cocina consolida para saber cuántas porciones de cada plato preparar: mezclarlos
+   * haría que los platos fijos de una variedad se cuenten como si alguien los hubiera pedido uno
+   * por uno.
+   */
+  dishes: readonly string[];
   dishSelections: readonly string[];
   familyName: string;
   orderPublicNumber: string;
@@ -73,6 +83,11 @@ export interface Label {
   deliveryDate: string;
   deliveryZone: string | null;
   dietaryInstructions: readonly string[];
+  /** Cuál de los platos de la vianda es éste, cuando se imprime una etiqueta por plato. */
+  dishIndex: number;
+  /** El plato, o null cuando la etiqueta es de la vianda entera. */
+  dishName: string | null;
+  dishTotal: number;
   familyName: string;
   orderPublicNumber: string;
   /** Qué unidad de las del renglón es ésta: se imprime como "1 de 3" cuando hay más de una. */

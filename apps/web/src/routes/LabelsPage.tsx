@@ -25,6 +25,11 @@ interface Label {
   deliveryDate: string;
   deliveryZone: string | null;
   dietaryInstructions: string[];
+  /** Cuál de los platos de la vianda es éste, cuando se imprime una etiqueta por plato. */
+  dishIndex: number;
+  /** El plato, o null cuando la etiqueta es de la vianda entera. */
+  dishName: string | null;
+  dishTotal: number;
   familyName: string;
   orderPublicNumber: string;
   unitIndex: number;
@@ -74,6 +79,9 @@ const FONT_STACKS: Record<LabelSettings['fontFamily'], string> = {
  * vianda, que es la pregunta que la etiqueta existe para contestar.
  */
 const FIELD_OPTIONS = [
+  // Sólo dice algo con 'Una etiqueta por plato' activado; sin eso la etiqueta es de la vianda
+  // entera y este campo sale vacío.
+  { key: 'plato', label: 'Plato (con etiqueta por plato)' },
   { key: 'tamano', label: 'Tamaño (250 / 400)' },
   { key: 'variedad', label: 'Variedad' },
   { key: 'unidad', label: 'Unidad (1 de 3)' },
@@ -86,7 +94,7 @@ const FIELD_OPTIONS = [
 type LabelField = (typeof FIELD_OPTIONS)[number]['key'];
 
 /** El renglón que se ve grande junto al nombre; el resto va chico, igual que al imprimir. */
-const EMPHASISED = new Set<LabelField>(['tamano', 'variedad', 'restricciones']);
+const EMPHASISED = new Set<LabelField>(['plato', 'tamano', 'variedad', 'restricciones']);
 
 /** Con qué se dibuja la vista previa cuando la tanda todavía no tiene etiquetas. */
 const SAMPLE: Label = {
@@ -95,6 +103,9 @@ const SAMPLE: Label = {
   deliveryDate: '2026-09-13',
   deliveryZone: 'Centro',
   dietaryInstructions: ['Sin cebolla'],
+  dishIndex: 2,
+  dishName: 'Pollo al horno con calabaza',
+  dishTotal: 5,
   familyName: 'Keto',
   orderPublicNumber: 'NQN-00090',
   unitIndex: 1,
@@ -108,6 +119,14 @@ function fieldValue(label: Label, field: LabelField): string | null {
       return `${label.deliveryDate.slice(8, 10)}/${label.deliveryDate.slice(5, 7)}`;
     case 'numero':
       return label.orderPublicNumber;
+    case 'plato':
+      // Con su posición cuando hay más de uno: cinco etiquetas de la misma vianda apiladas no
+      // dicen de otro modo si están las cinco.
+      return label.dishName === null
+        ? null
+        : label.dishTotal > 1
+          ? `${label.dishName} · ${String(label.dishIndex)} de ${String(label.dishTotal)}`
+          : label.dishName;
     case 'restricciones':
       return label.dietaryInstructions.length > 0 ? label.dietaryInstructions.join(' · ') : null;
     case 'tamano':
@@ -154,6 +173,7 @@ function LabelFace({
   label,
   nameOnlyForComposable,
   showBorders,
+  showLogo,
   uppercaseName,
   widthMm,
 }: {
@@ -167,6 +187,7 @@ function LabelFace({
   label: Label;
   nameOnlyForComposable: boolean;
   showBorders: boolean;
+  showLogo: boolean;
   uppercaseName: boolean;
   widthMm: number;
 }) {
@@ -195,6 +216,15 @@ function LabelFace({
         ...(backgroundImageUrl ? { backgroundImage: `url(${backgroundImageUrl})` } : {}),
       }}
     >
+      {/* El isotipo arriba de todo, chico: compite por el mismo espacio que el nombre, que es lo
+          que hay que poder leer a un metro. */}
+      {showLogo ? (
+        <img
+          alt=""
+          src="/brand/verdeo-icon-128.webp"
+          style={{ height: `${String(6 * (fontScale / 100))}mm`, marginBottom: '0.6mm' }}
+        />
+      ) : null}
       {name ? (
         <p
           style={{
@@ -242,6 +272,8 @@ export function LabelsPage() {
   const [fields, setFields] = useState<LabelField[]>(['tamano', 'numero']);
   const [alignment, setAlignment] = useState<'center' | 'left'>('center');
   const [uppercaseName, setUppercaseName] = useState(false);
+  const [onePerDish, setOnePerDish] = useState(false);
+  const [showLogo, setShowLogo] = useState(false);
   const [showBorders, setShowBorders] = useState(true);
   const [hideSurname, setHideSurname] = useState(false);
   const [nameOnlyForComposable, setNameOnlyForComposable] = useState(false);
@@ -289,6 +321,8 @@ export function LabelsPage() {
       setFields(body.fields);
       setAlignment(body.alignment);
       setUppercaseName(body.uppercaseName);
+      setOnePerDish(body.onePerDish);
+      setShowLogo(body.showLogo);
       setShowBorders(body.showBorders);
       setHideSurname(body.hideSurname);
       setNameOnlyForComposable(body.nameOnlyForComposable);
@@ -336,7 +370,7 @@ export function LabelsPage() {
     return () => {
       active = false;
     };
-  }, [canRead, cycleId]);
+  }, [canRead, cycleId, settings?.onePerDish]);
 
   // Busca a los 350 ms de dejar de tipear, y desde dos caracteres: con uno, la lista no dice nada.
   useEffect(() => {
@@ -386,6 +420,8 @@ export function LabelsPage() {
         hideSurname,
         labelGapMm,
         nameOnlyForComposable,
+        onePerDish,
+        showLogo,
         labelsPerPage,
         sheetHeightMm,
         sheetMarginMm,
@@ -565,7 +601,7 @@ export function LabelsPage() {
                 <p className="text-sm text-ink-muted" role="status">
                   {labelsLoading
                     ? 'Contando etiquetas…'
-                    : `${String(selected.length)} etiquetas · ${String(sheets)} ${sheets === 1 ? 'hoja' : 'hojas'}`}
+                    : `${String(selected.length)} etiquetas · ${String(sheets)} ${sheets === 1 ? 'hoja' : 'hojas'}${settings?.onePerDish ? ' · una por plato' : ''}`}
                 </p>
                 <ActionButton
                   className="button button-primary justify-self-start"
@@ -806,6 +842,31 @@ export function LabelsPage() {
                   />
                   Sin apellido (nombre e iniciales)
                 </label>
+                {/*
+                 * Una etiqueta por plato.
+                 *
+                 * La de la vianda se pega en la tapa y dice de quién es; ésta va en cada
+                 * recipiente de adentro, para que diga qué tiene sin abrirlo. Multiplica la
+                 * cantidad de etiquetas, así que el conteo de arriba lo refleja antes de imprimir.
+                 */}
+                <label className="label-switch">
+                  <input
+                    checked={onePerDish}
+                    disabled={!canWrite}
+                    onChange={(event) => setOnePerDish(event.target.checked)}
+                    type="checkbox"
+                  />{' '}
+                  Una etiqueta por plato
+                </label>
+                <label className="label-switch">
+                  <input
+                    checked={showLogo}
+                    disabled={!canWrite}
+                    onChange={(event) => setShowLogo(event.target.checked)}
+                    type="checkbox"
+                  />{' '}
+                  Imprimir el logo de Verdeo
+                </label>
                 <label className="label-switch">
                   <input
                     checked={nameOnlyForComposable}
@@ -979,6 +1040,7 @@ export function LabelsPage() {
                           label={contenido}
                           nameOnlyForComposable={nameOnlyForComposable}
                           showBorders={showBorders}
+                          showLogo={showLogo}
                           uppercaseName={uppercaseName}
                           widthMm={canvas.widthMm}
                         />
@@ -1006,6 +1068,7 @@ export function LabelsPage() {
                     label={sample}
                     nameOnlyForComposable={nameOnlyForComposable}
                     showBorders={showBorders}
+                    showLogo={showLogo}
                     uppercaseName={uppercaseName}
                     widthMm={canvas.widthMm}
                   />

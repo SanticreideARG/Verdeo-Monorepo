@@ -5138,6 +5138,7 @@ export function createApp(options: CreateAppOptions) {
         LabelListResponseSchema.shape.items.parse(contractValue(items)),
         LabelSettingsSchema.parse(contractValue(settings)),
         'Etiquetas de cocina',
+        options.appOrigin,
       ),
     );
   });
@@ -5164,6 +5165,7 @@ export function createApp(options: CreateAppOptions) {
         LabelListResponseSchema.shape.items.parse(contractValue(items)),
         LabelSettingsSchema.parse(contractValue(settings)),
         'Etiquetas de pedido',
+        options.appOrigin,
       ),
     );
   });
