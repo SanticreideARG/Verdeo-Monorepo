@@ -65,6 +65,70 @@ export class PostgresAITaskService {
     private readonly encryptionKey: string | undefined,
   ) {}
 
+  /**
+   * ¿Esta clave anda?
+   *
+   * Configurar un proveedor son cuatro campos —dirección, clave, modelo, tipo— y cualquiera de los
+   * cuatro mal escrito da el mismo resultado: la IA "no funciona", sin decir cuál. Peor todavía,
+   * eso se descubre en el momento menos oportuno, cuando alguien intenta usar una tarea real.
+   *
+   * Esto hace la llamada más barata que existe —un saludo, un token de respuesta— y devuelve lo que
+   * contestó el proveedor o el error tal como vino. La clave no sale de acá: se descifra, se usa y
+   * se descarta, igual que en una tarea normal.
+   *
+   * No se registra en `ai_executions`: no es una ejecución de una tarea, y mezclarla ahí ensuciaría
+   * el consumo real con pruebas de configuración.
+   */
+  public async testProvider(providerKey: string) {
+    const [row] = await this.database
+      .select({
+        adapterType: aiProviderConfigs.adapterType,
+        baseUrl: aiProviderConfigs.baseUrl,
+        defaultModel: aiProviderConfigs.defaultModel,
+        encryptedApiKey: aiProviderConfigs.encryptedApiKey,
+        key: aiProviderConfigs.key,
+      })
+      .from(aiProviderConfigs)
+      .where(eq(aiProviderConfigs.key, providerKey))
+      .limit(1);
+    if (!row) throw new AITaskNotFoundError(`No existe el proveedor "${providerKey}".`);
+    if (!row.encryptedApiKey || !this.encryptionKey) {
+      throw new AITaskNotConfiguredError(`El proveedor "${row.key}" no tiene una clave guardada.`);
+    }
+
+    const provider = this.providerFactory({
+      adapterType: row.adapterType,
+      apiKey: decryptSecret(row.encryptedApiKey, this.encryptionKey),
+      baseUrl: row.baseUrl,
+    });
+
+    const startedAt = Date.now();
+    try {
+      const result = await provider.generateText({
+        maxTokens: 16,
+        model: row.defaultModel,
+        systemPrompt: 'Respondé con una sola palabra.',
+        temperature: 0,
+        userPrompt: 'Decí: listo',
+      });
+      return {
+        latencyMs: Date.now() - startedAt,
+        model: row.defaultModel,
+        ok: true as const,
+        reply: result.text.trim().slice(0, 200),
+      };
+    } catch (error) {
+      // El error del proveedor se devuelve tal cual: "401" y "modelo inexistente" se arreglan de
+      // maneras distintas, y un "no se pudo conectar" genérico los vuelve el mismo problema.
+      return {
+        latencyMs: Date.now() - startedAt,
+        model: row.defaultModel,
+        ok: false as const,
+        reply: error instanceof Error ? error.message : 'Falló sin mensaje.',
+      };
+    }
+  }
+
   public async runTask(taskKey: string, variables: Record<string, string>, context: AITaskContext) {
     const task = findTask(taskKey);
     if (!task) throw new AITaskNotFoundError(`Unknown AI task: ${taskKey}`);

@@ -2,6 +2,18 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 let handler: { fetch(request: Request): Response | Promise<Response> };
 
+/*
+ * Treinta segundos y no los diez de por defecto.
+ *
+ * Este hook importa el bundle entero de la API —todas las rutas, todos los servicios— una sola vez.
+ * Aislado tarda cuatro segundos; con el resto de los paquetes compilando y testeando en paralelo,
+ * pasaba los diez y el gate fallaba acá sin que hubiera nada roto. Cuatro veces en una semana se
+ * verificó a mano que aislado pasaba, que es exactamente el trabajo que un test intermitente
+ * genera y la razón por la que se dejan de leer.
+ *
+ * El número no afloja una garantía: si el arranque se rompiera de verdad, falla en el primer
+ * segundo con un error, no esperando treinta.
+ */
 beforeAll(async () => {
   vi.stubEnv('NODE_ENV', 'test');
   vi.stubEnv('LOG_LEVEL', 'silent');
@@ -13,7 +25,7 @@ beforeAll(async () => {
 
   const entrypoint = await import('./index.js');
   handler = entrypoint.default;
-});
+}, 30_000);
 
 describe('Vercel function entrypoint', () => {
   it('serves the Hono application without opening a Node server', async () => {

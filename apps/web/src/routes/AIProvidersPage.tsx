@@ -29,6 +29,12 @@ interface IntegrationCredential {
 export function AIProvidersPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const [providers, setProviders] = useState<AIProviderConfig[]>([]);
+  /* El resultado de la última prueba de cada proveedor. No se guarda: una clave que andaba hace
+     una hora puede no andar ahora, y mostrar un "ok" viejo es peor que no mostrar nada. */
+  const [pruebas, setPruebas] = useState<
+    Record<string, { latencyMs: number; model: string; ok: boolean; reply: string }>
+  >({});
+  const [probando, setProbando] = useState<string | null>(null);
   const [encryptionConfigured, setEncryptionConfigured] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -161,6 +167,27 @@ export function AIProvidersPage() {
     }
   }
 
+  /** Una llamada mínima al proveedor, para saber si la clave y el modelo son los que creíamos. */
+  async function probarProveedor(key: string) {
+    setProbando(key);
+    setMessage('');
+    try {
+      const response = await apiRequest(`/api/v1/ai/providers/${key}/test`, { method: 'POST' });
+      if (!response.ok) throw new Error(await errorMessage(response));
+      const resultado = (await response.json()) as {
+        latencyMs: number;
+        model: string;
+        ok: boolean;
+        reply: string;
+      };
+      setPruebas((current) => ({ ...current, [key]: resultado }));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'No pudimos probar el proveedor.');
+    } finally {
+      setProbando(null);
+    }
+  }
+
   if (failed) return <DashboardFailed label="la configuración de IA" />;
   if (!profile) return <DashboardLoading />;
 
@@ -270,6 +297,29 @@ export function AIProvidersPage() {
                 <p className="mt-4 font-mono text-sm">
                   {provider.apiKeyMask ?? 'Sin clave configurada'}
                 </p>
+                {/* Probar antes de necesitarlo: cuatro campos mal escritos dan el mismo síntoma
+                    —"la IA no anda"— y así se descubre cuál, sin esperar a que alguien intente
+                    usar una tarea real. */}
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <button
+                    className="button button-secondary"
+                    disabled={!provider.keyConfigured || probando === provider.key}
+                    onClick={() => void probarProveedor(provider.key)}
+                    type="button"
+                  >
+                    {probando === provider.key ? 'Probando…' : 'Probar conexión'}
+                  </button>
+                  {pruebas[provider.key] ? (
+                    <p
+                      className={pruebas[provider.key]?.ok ? 'ai-test-ok' : 'ai-test-failed'}
+                      role="status"
+                    >
+                      {pruebas[provider.key]?.ok
+                        ? `Responde · ${pruebas[provider.key]?.model ?? ''} · ${String(pruebas[provider.key]?.latencyMs ?? 0)} ms`
+                        : pruebas[provider.key]?.reply}
+                    </p>
+                  ) : null}
+                </div>
                 <form
                   className="mt-4 grid gap-2"
                   onSubmit={(event) => void saveProviderKey(provider, event)}

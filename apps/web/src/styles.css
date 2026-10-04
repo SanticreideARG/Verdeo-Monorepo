@@ -7746,3 +7746,21 @@ textarea.sr-only {
   font-weight: 600;
   cursor: pointer;
 }
+
+/* El resultado de probar un proveedor de IA. El error se muestra tal como vino: "401" y "modelo
+   inexistente" se arreglan de maneras distintas, y un "no se pudo conectar" genérico los vuelve el
+   mismo problema. */
+.ai-test-ok,
+.ai-test-failed {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.ai-test-ok {
+  color: #2f7a4d;
+}
+.ai-test-failed {
+  color: #c0562f;
+  font-weight: 500;
+}

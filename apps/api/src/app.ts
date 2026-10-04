@@ -9,6 +9,7 @@ import {
   AuditEventQuerySchema,
   AuditFacetsResponseSchema,
   AIProviderConfigListResponseSchema,
+  AIProviderTestResponseSchema,
   EmailTestRequestSchema,
   EmailTestResponseSchema,
   IntegrationCredentialListResponseSchema,
@@ -771,6 +772,7 @@ interface AIPromptEngine {
 }
 
 interface AITaskEngine {
+  testProvider(providerKey: string): Promise<unknown>;
   listExecutions(taskKey?: string): Promise<unknown>;
   runTask(
     taskKey: string,
@@ -5503,6 +5505,23 @@ export function createApp(options: CreateAppOptions) {
     return context.json(
       AIProviderConfigListResponseSchema.parse(contractValue(await options.aiConfiguration.list())),
     );
+  });
+
+  /**
+   * Probar un proveedor configurado.
+   *
+   * Cuatro campos mal escritos dan el mismo síntoma —"la IA no anda"— y se descubre recién cuando
+   * alguien necesita usarla. Esto hace la llamada más barata posible y devuelve lo que contestó el
+   * proveedor. La clave nunca sale de la aplicación: se descifra adentro, se usa y se descarta.
+   *
+   * Un proveedor que contesta un error responde 200 con `ok: false`: el fallo es el resultado de la
+   * prueba, no un fallo de la prueba.
+   */
+  app.post('/api/v1/ai/providers/:key/test', async (context) => {
+    if (!context.get('session').permissions.includes('ai.providers.manage'))
+      return forbidden(context);
+    const result = await requireAiTasks().testProvider(context.req.param('key'));
+    return context.json(AIProviderTestResponseSchema.parse(contractValue(result)));
   });
 
   app.put('/api/v1/ai/providers', async (context) => {

@@ -111,3 +111,11 @@ export const AIExecutionListResponseSchema = z.object({
 export type AIPromptVersionCreateRequest = z.infer<typeof AIPromptVersionCreateRequestSchema>;
 export type AIPromptVersionActivateRequest = z.infer<typeof AIPromptVersionActivateRequestSchema>;
 export type AITaskRunRequest = z.infer<typeof AITaskRunRequestSchema>;
+
+/** El resultado de probar un proveedor: anduvo o no, qué contestó y cuánto tardó. */
+export const AIProviderTestResponseSchema = z.object({
+  latencyMs: z.number().int(),
+  model: z.string(),
+  ok: z.boolean(),
+  reply: z.string(),
+});
