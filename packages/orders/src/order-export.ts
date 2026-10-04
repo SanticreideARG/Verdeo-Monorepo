@@ -76,10 +76,24 @@ function protectSpreadsheetFormula(value: string): string {
   return /^[=+\-@]/.test(value) ? `'${value}` : value;
 }
 
+/**
+ * Una celda, entrecomillada sólo si lo necesita.
+ *
+ * Entrecomillar todas parecía lo seguro y es lo que rompía el archivo: empieza con el BOM que
+ * declara UTF-8, y con el BOM pegado a la comilla de apertura el primer campo deja de parecer
+ * entrecomillado. Un lector que tropieza ahí tampoco reconoce el BOM, lee todo en la codificación
+ * del sistema y parte cada acento en dos.
+ *
+ * Lo que sí lleva comillas: lo que tiene una coma, una comilla o un salto de línea, y lo que
+ * `protectSpreadsheetFormula` tuvo que prefijar —si queda un `'` adelante, sin comillas la planilla
+ * lo muestra como parte del texto.
+ */
 function csvCell(value: Date | number | string | null): string {
   const serialized =
     value instanceof Date ? value.toISOString() : value === null ? '' : String(value);
-  return `"${protectSpreadsheetFormula(serialized).replaceAll('"', '""')}"`;
+  const protegido = protectSpreadsheetFormula(serialized);
+  if (!/[",\r\n]/.test(protegido) && protegido === serialized) return protegido;
+  return `"${protegido.replaceAll('"', '""')}"`;
 }
 
 export function buildOrdersCsv(rows: readonly OrderExportRow[]): string {

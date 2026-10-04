@@ -65,7 +65,10 @@ const customerOperationsStubs = {
   generateProductionSnapshot: vi.fn(),
   getAddressGeocodingRequest: vi.fn(),
   getCustomer: vi.fn(),
+  addLabelBackground: vi.fn(),
+  deleteLabelBackground: vi.fn(),
   getLabelSettings: vi.fn(),
+  listLabelBackgrounds: vi.fn(() => Promise.resolve([])),
   getOrder: vi.fn(),
   getStatsOverview: vi.fn(),
   listMenuCatalogSettings: vi.fn(),
@@ -1263,7 +1266,9 @@ describe('API foundation', () => {
       expect.objectContaining({ actorUserId: '55276601-ec66-4f63-9f2f-edf73904ede0' }),
       'csv',
     );
-    expect(await exportResponse.text()).toContain('"Ana Isabella Vega"');
+    // Sin comillas: un nombre sin comas no las necesita, y entrecomillar todo era lo que dejaba el
+    // BOM pegado a la primera comilla y rompía el archivo en Google Sheets.
+    expect(await exportResponse.text()).toContain(',Ana Isabella Vega,');
 
     // La misma ruta y los mismos filtros devuelven la planilla: son dos presentaciones del mismo
     // recorte, no dos exportaciones distintas.
@@ -1286,7 +1291,7 @@ describe('API foundation', () => {
       headers: { cookie },
     });
     const masked = await maskedResponse.text();
-    expect(masked).toContain('"Ana I. V."');
+    expect(masked).toContain(',Ana I. V.,');
     expect(masked).not.toContain('Vega');
   });
 

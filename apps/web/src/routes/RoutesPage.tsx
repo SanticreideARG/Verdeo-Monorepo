@@ -301,7 +301,20 @@ export function RoutesPage() {
 
   /** La misma ruta como planilla, para quien prefiere abrirla en Excel. */
   function downloadRouteCsv(route: RouteDetail) {
-    const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    /*
+     * Se entrecomilla sólo lo que lo necesita.
+     *
+     * Entrecomillar todo parecía más seguro y resultó lo contrario: el archivo empieza con el BOM
+     * que le dice a Excel que esto es UTF-8, y con el BOM pegado a la comilla de apertura el primer
+     * campo deja de parecer entrecomillado. Google Sheets en el teléfono lo lee así y muestra
+     * `Orden"` con la comilla a la vista — y, como no reconoció el BOM, encima lee el archivo en
+     * la codificación del sistema y parte cada acento en dos: "Neuquén" sale "NeuquÃ©n".
+     *
+     * Con comillas sólo donde hacen falta, el primer campo es texto plano y el BOM queda solo al
+     * principio, que es donde un lector lo espera.
+     */
+    const escape = (value: string) =>
+      /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
     const rows = [
       [
         'Orden',

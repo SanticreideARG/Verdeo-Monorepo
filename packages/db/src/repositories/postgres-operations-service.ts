@@ -55,6 +55,7 @@ import {
   geocodingCandidates,
   geographicZones,
   geocodingRequests,
+  labelBackgrounds,
   labelSettings,
   messageTemplates,
   operatingSiteOrderCounters,
@@ -4421,6 +4422,55 @@ export class PostgresOperationsService {
     const order = await this.loadOrder(this.database, orderId);
     if (!order) throw new OperationsNotFoundError('Order not found');
     return buildLabels(await this.loadKitchenLines({ orderId }));
+  }
+
+  /* La biblioteca de fondos. Cuál está en uso lo dice `label_settings`; esto es qué hay guardado. */
+  public async listLabelBackgrounds() {
+    return this.database.select().from(labelBackgrounds).orderBy(desc(labelBackgrounds.createdAt));
+  }
+
+  public async addLabelBackground(input: {
+    createdByUserId?: string | undefined;
+    displayName: string;
+    imageUrl: string;
+  }) {
+    const [created] = await this.database
+      .insert(labelBackgrounds)
+      .values({
+        createdByUserId: input.createdByUserId ?? null,
+        displayName: input.displayName,
+        imageUrl: input.imageUrl,
+      })
+      .returning();
+    if (!created) throw new Error('Label background insert did not return a row');
+    return created;
+  }
+
+  /**
+   * Sacar un fondo de la biblioteca.
+   *
+   * Si era el que estaba en uso, las etiquetas quedan sin fondo: es lo honesto, porque la
+   * alternativa —elegir otro por su cuenta— imprimiría una semana entera con un diseño que nadie
+   * pidió.
+   */
+  public async deleteLabelBackground(id: string) {
+    const [removed] = await this.database
+      .delete(labelBackgrounds)
+      .where(eq(labelBackgrounds.id, id))
+      .returning({ imageUrl: labelBackgrounds.imageUrl });
+    if (!removed) throw new OperationsNotFoundError('Label background not found');
+
+    const [current] = await this.database
+      .select({ backgroundImageUrl: labelSettings.backgroundImageUrl, id: labelSettings.id })
+      .from(labelSettings)
+      .orderBy(desc(labelSettings.updatedAt))
+      .limit(1);
+    if (current && current.backgroundImageUrl === removed.imageUrl) {
+      await this.database
+        .update(labelSettings)
+        .set({ backgroundImageUrl: null, updatedAt: new Date() })
+        .where(eq(labelSettings.id, current.id));
+    }
   }
 
   public async getLabelSettings() {

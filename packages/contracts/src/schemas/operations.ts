@@ -1308,3 +1308,15 @@ export const MergeCandidateListResponseSchema = z.object({
 });
 
 export type CustomerMergeRequest = z.infer<typeof CustomerMergeRequestSchema>;
+
+/** Un fondo guardado en la biblioteca. Cuál está en uso lo dice `LabelSettings`. */
+export const LabelBackgroundSchema = z.object({
+  createdAt: IsoDateTimeSchema,
+  displayName: z.string(),
+  id: UuidSchema,
+  imageUrl: z.string(),
+});
+
+export const LabelBackgroundListResponseSchema = z.object({
+  items: z.array(LabelBackgroundSchema),
+});

@@ -22,7 +22,8 @@ describe('order CSV export', () => {
 
     expect(csv.startsWith('﻿')).toBe(true);
     expect(csv).toContain('"Pérez, ""María"""');
-    expect(csv).toContain('"25000"');
+    // Sin comillas: un número no las necesita, y ponérselas a todo es lo que rompía el archivo.
+    expect(csv).toContain(',25000,');
   });
 
   it('neutralizes spreadsheet formulas in textual cells', () => {
@@ -68,12 +69,12 @@ describe('order CSV export', () => {
     ]);
 
     // Antes el CSV no decía qué se había pedido: había que abrir cada pedido para saberlo.
-    expect(csv).toContain('"Keto 250 × 2"');
+    expect(csv).toContain(',Keto 250 × 2,');
     // Con el apóstrofo delante: un número que empieza con "+" es una fórmula para una planilla, y
     // el guardado contra inyección lo neutraliza igual que a cualquier otra celda de texto.
     expect(csv).toContain('"\'+542991234567"');
-    expect(csv).toContain('"sin sal"');
-    expect(csv).toContain('"No"');
+    expect(csv).toContain(',sin sal,');
+    expect(csv).toContain(',No,');
   });
 
   it('no rompe con una fila sin ítems ni contacto', () => {
@@ -94,7 +95,7 @@ describe('order CSV export', () => {
       },
     ]);
 
-    expect(csv).toContain('"Lola"');
+    expect(csv).toContain(',Lola,');
   });
 });
 

@@ -7570,23 +7570,24 @@ textarea.sr-only {
   font-weight: 700;
 }
 /* La hoja en miniatura: proporciones reales, con la grilla que sale impresa. */
-.labels-sheet {
-  display: grid;
+/* El marco mide el ancho disponible; la hoja se dibuja adentro en milímetros y se escala entera.
+   El alto del marco lo fija la propia hoja escalada, por eso lo pone el componente. */
+.labels-sheet-frame {
   width: 100%;
   margin-top: 0.35rem;
+  overflow: hidden;
+}
+.labels-sheet {
+  display: grid;
+  transform-origin: top left;
   border: 1px solid var(--db-border, rgba(23, 76, 60, 0.2));
   border-radius: 4px;
   background: #fff;
 }
-.labels-sheet-cell {
-  border: 1px dashed rgba(23, 76, 60, 0.35);
+/* Un lugar de la hoja que esta tanda no va a usar: sale en blanco. */
+.labels-sheet-empty {
+  border: 1px dashed rgba(23, 76, 60, 0.18);
   border-radius: 2px;
-  background-position: center;
-  background-size: cover;
-}
-/* Una celda que en esta tanda no se va a usar: la hoja sale con ese lugar en blanco. */
-.labels-sheet-cell:not(.is-used) {
-  opacity: 0.25;
 }
 /*
  * La etiqueta a tamaño real. Va en milímetros —los mismos que el navegador usa al imprimir— y no
@@ -8177,4 +8178,118 @@ textarea.sr-only {
   justify-content: flex-end;
   padding: 0.85rem 1.2rem;
   border-top: 1px solid var(--db-border-soft, var(--border-hairline));
+}
+
+/* La biblioteca de fondos de etiqueta. Antes había uno y subir otro lo pisaba; acá se ven todos y
+   se cambia de uno a otro sin perder nada. */
+.labels-backgrounds {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+.labels-backgrounds figure {
+  position: relative;
+  margin: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+.labels-backgrounds figure > button:first-child {
+  border: 2px solid transparent;
+  border-radius: 0.5rem;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  overflow: hidden;
+}
+.labels-backgrounds figure.is-current > button:first-child {
+  border-color: var(--db-accent);
+}
+.labels-backgrounds figure > button:first-child:disabled {
+  cursor: default;
+}
+.labels-backgrounds img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+}
+.labels-backgrounds figcaption {
+  font-size: 0.7rem;
+  color: var(--db-text-soft);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.labels-backgrounds figure.is-current figcaption {
+  color: var(--db-accent);
+  font-weight: 700;
+}
+.labels-backgrounds-remove {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.2rem;
+  width: 1.3rem;
+  height: 1.3rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  font-size: 0.7rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* El alta de usuario, en un modal. El formulario es alto —seis campos y la elección de
+   contraseña— así que el cuerpo tiene su propio scroll y el encabezado queda fijo: cerrar no puede
+   depender de haber llegado al final. */
+.users-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.modal-panel.user-create-modal {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(38rem, 100%);
+  max-height: min(88vh, 48rem);
+  padding: 0;
+  overflow: hidden;
+}
+.user-create-modal > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.2rem 0.85rem;
+  border-bottom: 1px solid var(--db-border-soft, var(--border-hairline));
+}
+.user-create-modal > header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--db-text, var(--color-forest));
+}
+.user-create-modal > header button {
+  border: 0;
+  border-radius: 0.4rem;
+  padding: 0.2rem 0.45rem;
+  background: none;
+  color: var(--db-text-soft, inherit);
+  font: inherit;
+  cursor: pointer;
+}
+/* Todo lo que no es el encabezado: el texto explicativo y el formulario. */
+.user-create-modal > *:not(header) {
+  padding-inline: 1.2rem;
+}
+.user-create-modal > p {
+  margin-top: 0.9rem;
+}
+.user-create-modal > form {
+  overflow-y: auto;
+  padding-bottom: 1.2rem;
 }

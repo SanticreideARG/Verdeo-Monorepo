@@ -120,6 +120,25 @@ export const surplusWriteoffs = pgTable(
 // (labels per printed page + optional background image), editable from Ajustes by
 // superusers/operators. Not per-site — a single operation-wide label format was the request, not a
 // per-zone one like Intuitivo.
+/**
+ * Los fondos de etiqueta guardados.
+ *
+ * Había uno solo: subir otro pisaba el anterior, así que probar un diseño nuevo para la próxima
+ * semana significaba perder el que estaba andando. Son archivos de diseño —se hacen una vez, se
+ * usan muchas— y lo normal es tener el de siempre, el de las fiestas y el que alguien está
+ * probando, y cambiar entre ellos.
+ *
+ * Cuál está en uso lo sigue diciendo `label_settings.background_image_url`: esta tabla es la
+ * biblioteca, no la elección. Así nada de lo que ya imprime necesita enterarse.
+ */
+export const labelBackgrounds = pgTable('label_backgrounds', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  displayName: text('display_name').notNull(),
+  imageUrl: text('image_url').notNull(),
+  createdByUserId: uuid('created_by_user_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const labelSettings = pgTable(
   'label_settings',
   {

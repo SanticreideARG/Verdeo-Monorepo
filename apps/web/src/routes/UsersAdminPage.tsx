@@ -148,6 +148,7 @@ export function UsersAdminPage() {
   const [choosePassword, setChoosePassword] = useState(false);
   const [search, setSearch] = useState('');
   const [provisioning, setProvisioning] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [issued, setIssued] = useState<{ email: string; password: string } | null>(null);
   const [resetLink, setResetLink] = useState<{
     displayName: string;
@@ -294,6 +295,9 @@ export function UsersAdminPage() {
       event.currentTarget.reset();
       setNewRoleKey('');
       setChoosePassword(false);
+      // Se cierra al crear: la contraseña recién generada se muestra en la pantalla de atrás, y
+      // dejar el formulario abierto encima la taparía justo cuando hay que copiarla.
+      setCreating(false);
       showToast('Usuario creado.');
       await loadUsers();
     } finally {
@@ -464,9 +468,28 @@ export function UsersAdminPage() {
       <DeskWorkNotice can="podés consultar quién es quién; repartir permisos conviene con la grilla entera a la vista." />
       <section className="dashboard-panel">
         <SettingsTabs permissions={profile.permissions} />
-        <header>
-          <p className="dashboard-kicker">Panel de control</p>
-          <h1 className="text-2xl font-semibold text-forest">Usuarios</h1>
+        <header className="users-head">
+          <div>
+            <p className="dashboard-kicker">Panel de control</p>
+            <h1 className="text-2xl font-semibold text-forest">Usuarios</h1>
+          </div>
+          {/*
+           * El alta es una acción, no una sección de la pantalla.
+           *
+           * Era un desplegable en el medio: ocupaba lugar permanentemente para algo que se hace
+           * una vez por mes, y con el desplegable cerrado —que es como está casi siempre— el
+           * formulario quedaba a dos toques de distancia sin que nada lo anunciara. Como botón
+           * está siempre visible y no cuesta nada cuando no se usa.
+           */}
+          {canCreate ? (
+            <button
+              className="button button-primary"
+              onClick={() => setCreating(true)}
+              type="button"
+            >
+              + Crear usuario
+            </button>
+          ) : null}
         </header>
 
         {message ? (
@@ -475,117 +498,131 @@ export function UsersAdminPage() {
           </p>
         ) : null}
 
-        {canCreate ? (
-          <details className="operation-card mt-6">
-            <summary className="cursor-pointer font-semibold text-forest">
-              Dar de alta un usuario
-            </summary>
-            <p className="mt-2 text-sm text-ink-muted">
-              Queda activo al instante, sin invitación ni verificación. La contraseña se muestra una
-              sola vez — se guarda cifrada y no hay forma de volver a verla.
-            </p>
-            {/* `autoComplete="off"` en el formulario entero: el navegador ve campos de alta de
+        {creating && canCreate ? (
+          <div
+            aria-label="Dar de alta un usuario"
+            aria-modal="true"
+            className="modal-backdrop"
+            role="dialog"
+          >
+            <div className="modal-panel user-create-modal">
+              <header>
+                <h2>Dar de alta un usuario</h2>
+                <button aria-label="Cerrar" onClick={() => setCreating(false)} type="button">
+                  ✕
+                </button>
+              </header>
+              <p className="mt-2 text-sm text-ink-muted">
+                Queda activo al instante, sin invitación ni verificación. La contraseña se muestra
+                una sola vez — se guarda cifrada y no hay forma de volver a verla.
+              </p>
+              {/* `autoComplete="off"` en el formulario entero: el navegador ve campos de alta de
                 cuenta y ofrece rellenarlos con los datos de quien está sentado ahí. */}
-            <form
-              autoComplete="off"
-              className="mt-4 user-create"
-              onSubmit={(event) => void provisionUser(event)}
-            >
-              <div className="form-grid">
-                <label className="field">
-                  Nombre
-                  <input autoComplete="off" name="displayName" required />
-                </label>
-                <label className="field">
-                  Correo
-                  <input autoComplete="off" name="email" required type="email" />
-                </label>
-                <label className="field">
-                  Rol
-                  <select
-                    name="roleKey"
-                    onChange={(event) => setNewRoleKey(event.target.value)}
-                    required
-                    value={newRoleKey}
-                  >
-                    <option disabled value="">
-                      Elegir
-                    </option>
-                    {roles
-                      .filter((role) => role.active)
-                      .map((role) => (
-                        <option key={role.key} value={role.key}>
-                          {role.name}
+              <form
+                autoComplete="off"
+                className="mt-4 user-create"
+                onSubmit={(event) => void provisionUser(event)}
+              >
+                <div className="form-grid">
+                  <label className="field">
+                    Nombre
+                    <input autoComplete="off" name="displayName" required />
+                  </label>
+                  <label className="field">
+                    Correo
+                    <input autoComplete="off" name="email" required type="email" />
+                  </label>
+                  <label className="field">
+                    Rol
+                    <select
+                      name="roleKey"
+                      onChange={(event) => setNewRoleKey(event.target.value)}
+                      required
+                      value={newRoleKey}
+                    >
+                      <option disabled value="">
+                        Elegir
+                      </option>
+                      {roles
+                        .filter((role) => role.active)
+                        .map((role) => (
+                          <option key={role.key} value={role.key}>
+                            {role.name}
+                          </option>
+                        ))}
+                    </select>
+                    {newRole?.description ? <small>{newRole.description}</small> : null}
+                  </label>
+                  <label className="field">
+                    Ciudad
+                    <select name="operatingSiteId" required={!siteOptional} defaultValue="">
+                      <option value="">{siteOptional ? 'Todas' : 'Elegir'}</option>
+                      {sites.map((site) => (
+                        <option key={site.id} value={site.id}>
+                          {site.displayName}
                         </option>
                       ))}
-                  </select>
-                  {newRole?.description ? <small>{newRole.description}</small> : null}
-                </label>
-                <label className="field">
-                  Ciudad
-                  <select name="operatingSiteId" required={!siteOptional} defaultValue="">
-                    <option value="">{siteOptional ? 'Todas' : 'Elegir'}</option>
-                    {sites.map((site) => (
-                      <option key={site.id} value={site.id}>
-                        {site.displayName}
-                      </option>
-                    ))}
-                  </select>
-                  {/* La ciudad no es un dato administrativo: es lo que decide si al entrar ven la
+                    </select>
+                    {/* La ciudad no es un dato administrativo: es lo que decide si al entrar ven la
                       operación o una pantalla vacía. */}
-                  <small>
-                    {siteOptional
-                      ? 'Este rol ve todas las ciudades, así que puede quedar sin asignar.'
-                      : 'Sin ciudad, esta persona entra al panel y no ve nada.'}
-                  </small>
-                </label>
-              </div>
-
-              <fieldset className="user-create-password">
-                <legend>Contraseña</legend>
-                <label>
-                  <input
-                    checked={!choosePassword}
-                    name="passwordMode"
-                    onChange={() => setChoosePassword(false)}
-                    type="radio"
-                  />
-                  <span>
-                    Generarla y mostrarla una vez
                     <small>
-                      Se muestra acá al crear la cuenta y no hay forma de volver a verla.
+                      {siteOptional
+                        ? 'Este rol ve todas las ciudades, así que puede quedar sin asignar.'
+                        : 'Sin ciudad, esta persona entra al panel y no ve nada.'}
                     </small>
-                  </span>
-                </label>
-                <label>
-                  <input
-                    checked={choosePassword}
-                    name="passwordMode"
-                    onChange={() => setChoosePassword(true)}
-                    type="radio"
-                  />
-                  <span>
-                    Escribirla yo
-                    <small>Al menos 12 caracteres. Igual hay que hacerla llegar.</small>
-                  </span>
-                </label>
-                {choosePassword ? (
-                  <input
-                    aria-label="Contraseña"
-                    autoComplete="new-password"
-                    minLength={12}
-                    name="password"
-                    required
-                    type="password"
-                  />
-                ) : null}
-              </fieldset>
+                  </label>
+                </div>
 
-              <button className="button button-primary mt-4" disabled={provisioning} type="submit">
-                {provisioning ? 'Creando…' : 'Crear usuario'}
-              </button>
-            </form>
-          </details>
+                <fieldset className="user-create-password">
+                  <legend>Contraseña</legend>
+                  <label>
+                    <input
+                      checked={!choosePassword}
+                      name="passwordMode"
+                      onChange={() => setChoosePassword(false)}
+                      type="radio"
+                    />
+                    <span>
+                      Generarla y mostrarla una vez
+                      <small>
+                        Se muestra acá al crear la cuenta y no hay forma de volver a verla.
+                      </small>
+                    </span>
+                  </label>
+                  <label>
+                    <input
+                      checked={choosePassword}
+                      name="passwordMode"
+                      onChange={() => setChoosePassword(true)}
+                      type="radio"
+                    />
+                    <span>
+                      Escribirla yo
+                      <small>Al menos 12 caracteres. Igual hay que hacerla llegar.</small>
+                    </span>
+                  </label>
+                  {choosePassword ? (
+                    <input
+                      aria-label="Contraseña"
+                      autoComplete="new-password"
+                      minLength={12}
+                      name="password"
+                      required
+                      type="password"
+                    />
+                  ) : null}
+                </fieldset>
+
+                <button
+                  className="button button-primary mt-4"
+                  disabled={provisioning}
+                  type="submit"
+                >
+                  {provisioning ? 'Creando…' : 'Crear usuario'}
+                </button>
+              </form>
+            </div>
+          </div>
         ) : null}
 
         {/*

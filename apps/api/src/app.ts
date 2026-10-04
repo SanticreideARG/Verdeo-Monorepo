@@ -110,6 +110,7 @@ import {
   HelpArticleSchema,
   HelpArticleUpsertRequestSchema,
   KitchenSummaryResponseSchema,
+  LabelBackgroundListResponseSchema,
   LabelListResponseSchema,
   LabelSettingsSchema,
   LabelSettingsUpdateRequestSchema,
@@ -518,6 +519,13 @@ interface OperationsEngine {
   }): Promise<unknown>;
   cycleLabels(cycleId: string, operatingSiteId: string | null, zone?: string): Promise<unknown>;
   getLabelSettings(): Promise<unknown>;
+  listLabelBackgrounds(): Promise<unknown>;
+  addLabelBackground(input: {
+    createdByUserId?: string | undefined;
+    displayName: string;
+    imageUrl: string;
+  }): Promise<unknown>;
+  deleteLabelBackground(id: string): Promise<unknown>;
   kitchenSummary(cycleId: string, operatingSiteId: string | null): Promise<unknown>;
   listCustomers(input: ScopedInput<CustomerListQuery>, includeSensitive: boolean): Promise<unknown>;
   listMessageTemplates(): Promise<unknown>;
@@ -5184,6 +5192,28 @@ export function createApp(options: CreateAppOptions) {
   const LABEL_BACKGROUND_ALLOWED_CONTENT_TYPES = new Set(['image/jpeg', 'image/png']);
   const LABEL_BACKGROUND_MAX_BYTES = 8 * 1024 * 1024;
 
+  /*
+   * La biblioteca de fondos.
+   *
+   * Antes había un fondo y subir otro pisaba el anterior: probar un diseño para la semana que viene
+   * costaba perder el que estaba andando. Ahora se guardan, y `label-settings` sigue diciendo cuál
+   * está en uso.
+   */
+  app.get('/api/v1/label-backgrounds', async (context) => {
+    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    const items = await requireOperations().listLabelBackgrounds();
+    return context.json(LabelBackgroundListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.delete('/api/v1/label-backgrounds/:id', async (context) => {
+    if (!context.get('session').permissions.includes('production.generate'))
+      return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    if (!params.success) return badRequest(context, 'Fondo inválido.', params.error.issues);
+    await requireOperations().deleteLabelBackground(params.data.id);
+    return context.body(null, 204);
+  });
+
   app.post('/api/v1/label-settings/background', async (context) => {
     if (!context.get('session').permissions.includes('production.generate'))
       return forbidden(context);
@@ -5195,6 +5225,12 @@ export function createApp(options: CreateAppOptions) {
     if (bytes.byteLength > LABEL_BACKGROUND_MAX_BYTES)
       return badRequest(context, 'La imagen no puede superar los 8 MB.');
     const { url } = await requireAvatarStorage().uploadMedia(bytes, contentType);
+    // Queda guardado: subir un fondo es agregarlo a la biblioteca, no reemplazar el anterior.
+    await requireOperations().addLabelBackground({
+      createdByUserId: context.get('session').userId,
+      displayName: context.req.query('nombre')?.trim() || 'Fondo sin nombre',
+      imageUrl: url,
+    });
     return context.json({ url }, 201);
   });
 
