@@ -47,12 +47,15 @@ import type { Database } from '../index.js';
 import { users } from '../schema/auth.js';
 import {
   cancellationReasons,
+  cashCollections,
+  cashSettlements,
   customerAddresses,
   customerIdentities,
   customerOperatingSites,
   customerPreferences,
   customerRestrictions,
   customers,
+  deliveryStops,
   domainEvents,
   geocodingCandidates,
   geographicZones,
@@ -78,6 +81,7 @@ import {
   salesCycles,
   surplusConfigs,
   surplusWriteoffs,
+  transferReconciliations,
   weeklyMenuItems,
   weeklyMenuOfferings,
   weeklyMenuPrices,
@@ -4581,6 +4585,111 @@ export class PostgresOperationsService {
   private async loadOrder(database: Database | DatabaseTransaction, orderId: string) {
     const [order] = await this.loadOrders(database, [orderId]);
     return order ?? null;
+  }
+
+  /**
+   * Borrar un pedido de verdad, no cancelarlo.
+   *
+   * Cancelar deja el pedido a la vista con estado `CANCELLED`, que es lo correcto para una venta que
+   * existió y no se concretó: el historial tiene que poder explicarla. Esto es otra cosa — es para
+   * lo que nunca fue una venta, como las pruebas que quedaron de antes de abrir. Por eso no hay
+   * estado nuevo: la fila deja de existir.
+   *
+   * No se puede deshacer, y por eso pide un motivo.
+   *
+   * ## Lo que queda cuando el pedido ya no está
+   *
+   * La auditoría, con una foto de lo que se borró: número público, cliente, estado, fecha de
+   * entrega, total y cuánta plata tenía registrada. Va **antes** del borrado y lleva la foto en el
+   * cuerpo, no sólo el `entityId`: después del delete no hay fila a la que apuntar, así que un
+   * evento que sólo dijera "se borró el pedido tal id" no respondería la única pregunta que alguien
+   * va a hacer, que es cuál era.
+   *
+   * ## El orden
+   *
+   * Cuatro claves foráneas `restrict` lo bloquean —`cash_settlements.collection_id`,
+   * `cash_collections.order_id`, `transfer_reconciliations.order_id`, `delivery_stops.order_id`— y
+   * con el orden equivocado Postgres tumba la transacción sin borrar nada. Es el mismo orden que
+   * usa `wipe-operations.ts`, acotado a un pedido. Lo que cuelga por `cascade` —ítems, platos
+   * elegidos, indicaciones, historial de estados, revisiones, pagos— se va solo.
+   *
+   * Se borra aunque tenga plata cobrada: quien lo pide es dueño de ese dato y lo está viendo en la
+   * pantalla antes de confirmar. Lo que no se hace es borrarlo en silencio — el monto queda escrito
+   * en la auditoría.
+   */
+  public async deleteOrder(orderId: string, reason: string, context: OperationsContext) {
+    return this.database.transaction(async (transaction) => {
+      const [existing] = await transaction
+        .select({
+          customerDisplayName: customers.displayName,
+          customerId: orders.customerId,
+          deliveryDate: orders.deliveryDate,
+          id: orders.id,
+          operatingSiteId: orders.operatingSiteId,
+          paidAt: orders.paidAt,
+          publicNumber: orders.publicNumber,
+          status: orders.status,
+          totalMinor: orders.totalMinor,
+        })
+        .from(orders)
+        .innerJoin(customers, eq(customers.id, orders.customerId))
+        .where(eq(orders.id, orderId))
+        .limit(1);
+      if (!existing) throw new OperationsNotFoundError('Order not found');
+
+      const [cobrado] = await transaction
+        .select({ total: sql<number>`coalesce(sum(${cashCollections.amountMinor}), 0)::int` })
+        .from(cashCollections)
+        .where(eq(cashCollections.orderId, orderId));
+
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: 'order.deleted',
+        actor: auditActor(context),
+        before: {
+          collectedMinor: cobrado?.total ?? 0,
+          customerDisplayName: existing.customerDisplayName,
+          customerId: existing.customerId,
+          deliveryDate: existing.deliveryDate,
+          paidAt: existing.paidAt?.toISOString() ?? null,
+          publicNumber: existing.publicNumber,
+          status: existing.status,
+          totalMinor: existing.totalMinor,
+        },
+        correlationId: context.correlationId,
+        entityId: orderId,
+        entityType: 'order',
+        metadata: { reason },
+        requestId: context.requestId,
+        source: context.source,
+      });
+
+      const cobros = await transaction
+        .select({ id: cashCollections.id })
+        .from(cashCollections)
+        .where(eq(cashCollections.orderId, orderId));
+      if (cobros.length > 0) {
+        await transaction.delete(cashSettlements).where(
+          inArray(
+            cashSettlements.collectionId,
+            cobros.map(({ id }) => id),
+          ),
+        );
+      }
+      await transaction.delete(cashCollections).where(eq(cashCollections.orderId, orderId));
+      await transaction
+        .delete(transferReconciliations)
+        .where(eq(transferReconciliations.orderId, orderId));
+      await transaction.delete(deliveryStops).where(eq(deliveryStops.orderId, orderId));
+      // Sin clave foránea, así que no cae solo: ver el comentario de `manual_notices`.
+      await transaction.delete(manualNotices).where(eq(manualNotices.orderId, orderId));
+      await transaction.delete(orders).where(eq(orders.id, orderId));
+
+      return {
+        collectedMinor: cobrado?.total ?? 0,
+        publicNumber: existing.publicNumber,
+      };
+    });
   }
 
   public async transitionOrder(

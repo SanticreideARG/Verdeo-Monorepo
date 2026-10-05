@@ -43,6 +43,14 @@ export const initialPermissionCatalog: readonly PermissionDefinition[] = [
   { key: 'orders.edit', group: 'orders', description: 'Editar pedidos' },
   { key: 'orders.confirm', group: 'orders', description: 'Confirmar pedidos' },
   { key: 'orders.cancel', group: 'orders', description: 'Cancelar pedidos' },
+  /*
+   * Borrar de verdad, no cancelar.
+   *
+   * No viene con ningún rol a propósito, ni siquiera con el de operador: cancelar es la acción
+   * de todos los días y deja el pedido explicable, mientras que esto saca la fila y no se puede
+   * deshacer. Existe para lo que nunca fue una venta, y se concede a mano a quien lo necesite.
+   */
+  { key: 'orders.delete', group: 'orders', description: 'Eliminar pedidos definitivamente' },
   { key: 'orders.revert_status', group: 'orders', description: 'Revertir estados' },
   {
     key: 'orders.override_cycle_lock',

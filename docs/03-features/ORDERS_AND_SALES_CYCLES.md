@@ -55,6 +55,32 @@ Pedidos editables por conveniencia operativa. Toda modificación queda en log.
 Permitida por operador salvo pedido entregado.
 Motivos sugeridos + `Otros` + texto opcional.
 
+## Eliminar, que no es cancelar
+
+Cancelar deja el pedido a la vista con estado `CANCELLED` y su motivo, que es lo correcto para una
+venta que existió y no se concretó: el historial tiene que poder explicarla. **Eliminar es otra
+cosa**: es para lo que nunca fue una venta —las pruebas que quedaron de antes de abrir— y saca la
+fila. No hay estado nuevo ni papelera.
+
+`DELETE /api/v1/orders/:id` pide `orders.delete`, un permiso que **no viene con ningún rol**, ni
+siquiera con el de operador: se concede a mano a quien lo necesite, y quitarlo apaga la
+funcionalidad sin tocar código. El cuerpo lleva un `reason` obligatorio.
+
+Borra en el orden que las claves foráneas `restrict` imponen —rendiciones, cobros, conciliaciones,
+parada de reparto, avisos manuales y recién ahí el pedido—, acotado a ese pedido. Lo que cuelga
+por `cascade` (ítems, platos elegidos, indicaciones, historial de estados, revisiones, pagos) se va
+solo. Es el mismo orden que `wipe-operations.ts`, por el mismo motivo: con otro, Postgres tumba la
+transacción sin borrar nada.
+
+**Se borra aunque tenga plata cobrada.** Quien lo pide es dueño de ese dato y la pantalla se lo
+dice antes de confirmar; lo que no se hace es borrarlo en silencio.
+
+Lo único que queda es el evento de auditoría `order.deleted`, y por eso lleva una **foto** en el
+cuerpo —número público, cliente, estado, fecha de entrega, total y cuánto se había cobrado— en
+lugar de sólo el `entityId`. Después del borrado no hay fila a la que apuntar: un evento que sólo
+dijera "se borró el pedido tal id" no respondería la única pregunta que alguien va a hacer, que es
+cuál era.
+
 ## Reprogramación
 
 Permitida. Método de pago puede modificarse en cualquier momento. Dirección/fecha se consideran bloqueables al publicar hoja de ruta, salvo override autorizado.

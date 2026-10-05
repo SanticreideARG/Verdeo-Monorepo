@@ -1435,3 +1435,20 @@ export const ManualNoticeMarkRequestSchema = z.object({
   status: z.enum(['sent', 'skipped']),
   templateKey: ConfigurableKeySchema,
 });
+
+/**
+ * Borrar un pedido definitivamente.
+ *
+ * El motivo es obligatorio y no es burocracia: cuando la fila ya no está, lo único que queda para
+ * explicar qué pasó es el evento de auditoría, y un evento sin motivo sólo dice que alguien borró
+ * algo.
+ */
+export const OrderDeleteRequestSchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+
+export const OrderDeleteResponseSchema = z.object({
+  /** Cuánta plata tenía registrada, para poder decirlo en el aviso de que se borró. */
+  collectedMinor: z.number().int(),
+  publicNumber: z.string(),
+});

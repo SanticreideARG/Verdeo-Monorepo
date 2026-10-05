@@ -58,6 +58,10 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [x] La fila de la cola muestra su estado en la forma, no sólo en una columna de texto.
 - [x] Importar pedidos desde una planilla, en dos pasos: vista previa que dice con qué cliente y
       con qué variedad coincide cada fila, y recién después la creación como borradores.
+- [x] Eliminar un pedido definitivamente, con motivo obligatorio y foto en la auditoría. Permiso
+      `orders.delete`, que no viene con ningún rol: se concede a mano y quitarlo lo apaga.
+      Pedido como posiblemente temporal, para limpiar lo que quedó de las pruebas; si deja de
+      hacer falta, alcanza con revocar el permiso antes de sacar el código.
 
 ## P0 - Operational capture
 

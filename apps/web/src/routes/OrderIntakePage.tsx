@@ -170,6 +170,7 @@ export function OrderIntakePage() {
    * fila pedía tocar la base. El permiso existía desde el principio; lo que faltaba era el botón.
    */
   const [reverting, setReverting] = useState<OrderSummary | null>(null);
+  const [deleting, setDeleting] = useState<OrderSummary | null>(null);
   /** El pedido que se está mirando en la ficha. Es el de la lista: no se vuelve a pedir nada. */
   const [viewing, setViewing] = useState<OrderSummary | null>(null);
   // La zona cuyo lote se está marcando: deshabilita todos los botones mientras corre, para que dos
@@ -597,6 +598,28 @@ export function OrderIntakePage() {
    * vuelta atrás cambia lo que cocina y reparto ya dieron por hecho, y sin motivo el historial no
    * explica nada tres semanas después.
    */
+  /**
+   * Borrar un pedido de verdad. No es cancelar.
+   *
+   * Cancelar lo deja a la vista con su motivo, que es lo que corresponde a una venta que existió
+   * y no se concretó. Esto saca la fila, y lo único que queda es el evento de auditoría — por eso
+   * el motivo es obligatorio y por eso el permiso no viene con ningún rol.
+   */
+  async function remove(order: OrderSummary, reason: string) {
+    setMessage('');
+    const response = await apiRequest(`/api/v1/orders/${order.id}`, {
+      body: JSON.stringify({ reason }),
+      method: 'DELETE',
+      notify: false,
+    });
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    setDeleting(null);
+    showToast(`Pedido ${order.publicNumber} eliminado.`);
+    await loadData();
+  }
   async function revert(order: OrderSummary, reason: string) {
     const previous = order.status === 'DELIVERED' ? 'READY' : 'CONFIRMED';
     try {
@@ -795,6 +818,15 @@ export function OrderIntakePage() {
               type="button"
             >
               Cancelar
+            </button>
+          ) : null}
+          {permissions.includes('orders.delete') ? (
+            <button
+              className="button button-danger"
+              onClick={() => setDeleting(order)}
+              type="button"
+            >
+              Eliminar
             </button>
           ) : null}
         </div>
@@ -1416,6 +1448,24 @@ export function OrderIntakePage() {
         />
       ) : null}
 
+      {deleting ? (
+        <ReasonDialog
+          confirmLabel="Eliminar para siempre"
+          detail={
+            `Se borra el pedido y todo lo suyo: ítems, historial, pagos y su parada de reparto. ` +
+            `No se puede deshacer y no es lo mismo que cancelar, que lo deja a la vista. ` +
+            (deleting.paidAt
+              ? `Ojo: este pedido figura como cobrado, y ese registro también se va. `
+              : '') +
+            `En la auditoría queda qué se borró y con qué motivo.`
+          }
+          label="Por qué se borra"
+          onCancel={() => setDeleting(null)}
+          onConfirm={(reason) => remove(deleting, reason)}
+          placeholder="Ej. pedido de prueba de antes de abrir"
+          title={`¿Eliminar el pedido ${deleting.publicNumber}?`}
+        />
+      ) : null}
       {cancelling ? (
         <CancelOrderDialog
           onCancel={() => setCancelling(null)}

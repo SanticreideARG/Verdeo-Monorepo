@@ -147,6 +147,8 @@ import {
   OrderListQuerySchema,
   OrderPageResponseSchema,
   OrderRevisionListResponseSchema,
+  OrderDeleteRequestSchema,
+  OrderDeleteResponseSchema,
   OrderImportConfirmRequestSchema,
   OrderImportConfirmResponseSchema,
   OrderImportPreviewResponseSchema,
@@ -460,6 +462,7 @@ interface OperationsEngine {
     input: ScopedInput<CustomerCreateRequest>,
     context: OperationsContext,
   ): Promise<unknown>;
+  deleteOrder(orderId: string, reason: string, context: OperationsContext): Promise<unknown>;
   listManualNotices(input: {
     cycleId?: string | undefined;
     operatingSiteId?: string | null | undefined;
@@ -4911,6 +4914,36 @@ export function createApp(options: CreateAppOptions) {
     return context.json(OrderSchema.parse(contractValue(order)));
   });
 
+  /**
+   * Borrar un pedido definitivamente. No es cancelar.
+   *
+   * Cancelar deja el pedido a la vista con su estado y su motivo, que es lo correcto para una
+   * venta que existió y no se concretó. Esto es para lo que nunca fue una venta —las pruebas que
+   * quedaron de antes de abrir— y saca la fila.
+   *
+   * `orders.delete` no viene con ningún rol: se concede a mano. Y pide un motivo, porque cuando
+   * la fila ya no está, el evento de auditoría es lo único que explica qué pasó.
+   */
+  app.delete('/api/v1/orders/:id', async (context) => {
+    if (!context.get('session').permissions.includes('orders.delete')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'Revisá el pedido.');
+    const input = OrderDeleteRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success) {
+      return badRequest(
+        context,
+        'Contá por qué se borra, aunque sea en pocas palabras.',
+        input.error.issues,
+      );
+    }
+
+    const deleted = await requireOperations().deleteOrder(
+      params.data.id,
+      input.data.reason,
+      operationsContext(context),
+    );
+    return context.json(OrderDeleteResponseSchema.parse(contractValue(deleted)));
+  });
   app.get('/api/v1/orders/:id/history', async (context) => {
     if (!context.get('session').permissions.includes('orders.read')) return forbidden(context);
     const params = IdParamSchema.safeParse(context.req.param());
