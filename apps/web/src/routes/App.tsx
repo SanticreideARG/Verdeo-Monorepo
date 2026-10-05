@@ -15,6 +15,8 @@ import { CmsPagesAdminPage } from './CmsPagesAdminPage.js';
 import { CustomerAccountPage } from './CustomerAccountPage.js';
 import { DashboardPage } from './DashboardPage.js';
 import { ChatLinksPage } from './ChatLinksPage.js';
+import { MessageTemplatesPage } from './MessageTemplatesPage.js';
+import { NoticesPage } from './NoticesPage.js';
 import { ChatPage } from './ChatPage.js';
 import { CustomersPage } from './CustomersPage.js';
 import { DeliverySheetPage } from './DeliverySheetPage.js';
@@ -336,6 +338,8 @@ export function App() {
       <Route path="/app/ia/workbench" element={<AIWorkbenchPage />} />
       <Route path="/app/chat" element={<ChatPage />} />
       <Route path="/app/mensajes" element={<MessagingInboxPage />} />
+      <Route path="/app/avisos" element={<NoticesPage />} />
+      <Route path="/app/ajustes/plantillas" element={<MessageTemplatesPage />} />
       <Route path="/app/ajustes/mensajes" element={<MessagingAccountsPage />} />
       <Route path="/app/reparto/rutas" element={<RoutesPage />} />
       {/* El sitio de reparto: sin sesión, la credencial es el enlace. Reemplaza a `/delivery`,

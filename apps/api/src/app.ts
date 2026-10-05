@@ -124,6 +124,8 @@ import {
   MenuListResponseSchema,
   MenuPricesUpdateRequestSchema,
   MergeCandidateListResponseSchema,
+  ManualNoticeListResponseSchema,
+  ManualNoticeMarkRequestSchema,
   MessageTemplateListResponseSchema,
   MessageTemplateSchema,
   MessageTemplateUpsertRequestSchema,
@@ -145,6 +147,9 @@ import {
   OrderListQuerySchema,
   OrderPageResponseSchema,
   OrderRevisionListResponseSchema,
+  OrderImportConfirmRequestSchema,
+  OrderImportConfirmResponseSchema,
+  OrderImportPreviewResponseSchema,
   OrderSchema,
   OrderStatusHistoryResponseSchema,
   CalendarEventListResponseSchema,
@@ -288,9 +293,10 @@ import {
 import { renderEmail, type EmailSender } from '@verdeo/email';
 
 import { ContactImportError, parseContactImport } from './integrations/contact-import.js';
+import { OrderImportError, parseOrderImport } from './integrations/order-import.js';
 import { buildLabelsPrintHtml } from './labels-export.js';
 import { buildOrdersExcel } from './orders-excel.js';
-import { buildOrdersCsv, maskSurname, type OrderExportRow } from '@verdeo/orders';
+import { buildOrdersCsv, deliveryDateFor, maskSurname, type OrderExportRow } from '@verdeo/orders';
 import {
   buildProductionExcel,
   buildProductionPrintHtml,
@@ -453,6 +459,33 @@ interface OperationsEngine {
   createCustomer(
     input: ScopedInput<CustomerCreateRequest>,
     context: OperationsContext,
+  ): Promise<unknown>;
+  listManualNotices(input: {
+    cycleId?: string | undefined;
+    operatingSiteId?: string | null | undefined;
+    templateKey: string;
+    zone?: string | undefined;
+  }): Promise<unknown>;
+  markManualNotice(
+    input: {
+      body: string;
+      note?: string | null | undefined;
+      orderId: string;
+      status: 'sent' | 'skipped';
+      templateKey: string;
+    },
+    context: OperationsContext,
+  ): Promise<unknown>;
+  previewOrderImport(
+    rows: readonly {
+      customerName: string;
+      phone: string | null;
+      quantityUnits: number;
+      rowNumber: number;
+      size: string | null;
+      variety: string | null;
+    }[],
+    operatingSiteId?: string | null,
   ): Promise<unknown>;
   importCustomers?(
     inputs: readonly ScopedInput<CustomerCreateRequest>[],
@@ -1047,8 +1080,10 @@ interface CreateAppOptions {
   cronSecret?: string | undefined;
   /** Un `select 1` contra la base, para que el cron diario sirva también de canario. */
   databasePing?: (() => Promise<void>) | undefined;
-  /** Una petición al proyecto de Supabase, para que no lo pausen por inactividad. */
+  /** Una petición al proyecto de Supabase: dice si responde, no evita que lo pausen. */
   supabasePing?: (() => Promise<{ detail: string; ok: boolean }>) | undefined;
+  /** Una escritura contra la base de Supabase, que es lo único que cuenta como actividad. */
+  supabaseTouch?: (() => Promise<{ detail: string; ok: boolean }>) | undefined;
   credentials: CredentialLogin;
   delivery?: DeliveryEngine;
   geography?: GeographyEngine;
@@ -2364,6 +2399,8 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/assistant/*', requireAuthentication);
   app.use('/api/v1/customers', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/customers/*', requireAuthentication, resolveScopeSelection);
+  app.use('/api/v1/notices/*', requireAuthentication);
+  app.use('/api/v1/notices', requireAuthentication);
   app.use('/api/v1/message-templates', requireAuthentication);
   app.use('/api/v1/menus', requireAuthentication);
   app.use('/api/v1/menus/*', requireAuthentication);
@@ -3277,6 +3314,17 @@ export function createApp(options: CreateAppOptions) {
       ? await options.supabasePing()
       : { detail: 'sin configurar', ok: false };
 
+    /*
+     * La escritura es la que mantiene vivo el proyecto; el ping de arriba sólo dice si responde.
+     *
+     * Estuvieron juntos bajo un mismo nombre y eso costó una pausa: el cron corría todos los días,
+     * el log decía que Supabase respondía, y el proyecto se pausó igual porque nunca se tocaba la
+     * base. Separados, el log dice cuál de las dos cosas pasó.
+     */
+    const supabaseWrite = options.supabaseTouch
+      ? await options.supabaseTouch()
+      : { detail: 'sin configurar', ok: false };
+
     let database = { detail: 'sin configurar', ok: false };
     if (options.databasePing) {
       try {
@@ -3294,10 +3342,11 @@ export function createApp(options: CreateAppOptions) {
       database,
       event: 'cron.keep_alive',
       supabase,
+      supabaseWrite,
     });
     // 200 aunque algo falle: un cron que devuelve error se reintenta y se apaga solo tras varios
     // fallos, justo cuando más falta hace que siga pasando. El estado va en el cuerpo.
-    return context.json({ database, supabase });
+    return context.json({ database, supabase, supabaseWrite });
   };
 
   app.get('/api/v1/cron/keep-alive', keepAlive);
@@ -3416,6 +3465,121 @@ export function createApp(options: CreateAppOptions) {
       CustomerListResponseSchema.parse({ items: [contractValue(customer)], nextCursor: null })
         .items[0],
       201,
+    );
+  });
+
+  /**
+   * Paso 1 del import de pedidos: leer la planilla y decir con qué coincide cada fila.
+   *
+   * No escribe nada. Devuelve, por fila, el cliente con el que coincide —por teléfono, por nombre
+   * exacto, o los parecidos para que alguien elija— y la oferta del menú que corresponde a esa
+   * variedad y tamaño. Lo que no coincide se dice, no se adivina.
+   */
+  app.post('/api/v1/orders/import/preview', async (context) => {
+    if (!context.get('session').permissions.includes('orders.create')) return forbidden(context);
+    const body = await context.req.parseBody().catch(() => null);
+    const file = body?.file;
+    if (!(file instanceof File)) {
+      return badRequest(context, 'Adjuntá un archivo CSV o Excel (.xlsx) en el campo file.');
+    }
+    try {
+      const rows = await parseOrderImport(file);
+      const matches = (await requireOperations().previewOrderImport(
+        rows,
+        context.get('scope')?.operatingSiteId ?? null,
+      )) as readonly { offeringId: string | null; rowNumber: number; customerMatch: unknown }[];
+      return context.json(
+        OrderImportPreviewResponseSchema.parse({
+          items: rows.map((row) => {
+            const match = matches.find((item) => item.rowNumber === row.rowNumber);
+            return {
+              ...row,
+              customerMatch: match?.customerMatch ?? {
+                candidates: [],
+                customerId: null,
+                displayName: null,
+                kind: 'nuevo',
+              },
+              offeringId: match?.offeringId ?? null,
+            };
+          }),
+        }),
+      );
+    } catch (error) {
+      if (error instanceof OrderImportError)
+        return badRequest(context, error.message, error.details);
+      throw error;
+    }
+  });
+
+  /**
+   * Paso 2: crear los pedidos con lo que una persona resolvió.
+   *
+   * Entran como borradores, igual que los que llegan por la web: una planilla es un dato de afuera
+   * y alguien tiene que confirmarlos. Una fila que falla no frena a las demás — se informa cuál y
+   * por qué, porque rechazar las cien por una es hacer repetir todo el trabajo.
+   */
+  app.post('/api/v1/orders/import', async (context) => {
+    if (!context.get('session').permissions.includes('orders.create')) return forbidden(context);
+    const input = OrderImportConfirmRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) return badRequest(context, 'Revisá las filas.', input.error.issues);
+
+    const operations = requireOperations();
+    const menu = (await operations.currentPublishedMenu(
+      context.get('scope')?.operatingSiteId ?? null,
+    )) as { cycle: { closeAt: string }; id: string } | null;
+    if (!menu) return badRequest(context, 'No hay un menú publicado para esta ciudad.');
+
+    const failed: { reason: string; rowNumber: number }[] = [];
+    let created = 0;
+    for (const row of input.data.rows) {
+      try {
+        let customerId = row.customerId;
+        if (!customerId) {
+          const customer = (await operations.createCustomer(
+            scoped(context, {
+              displayName: row.customerName,
+              ...(row.phone ? { phone: row.phone } : {}),
+            } as never),
+            operationsContext(context),
+          )) as { id: string };
+          customerId = customer.id;
+        }
+        await operations.createOrder(
+          {
+            customerId,
+            deliveryAddress: row.deliveryAddress ?? '',
+            deliveryDate: deliveryDateFor(menu.cycle.closeAt),
+            dietaryInstructions: [],
+            initialStatus: 'DRAFT',
+            items: [
+              {
+                offeringId: row.offeringId,
+                quantityUnits: row.quantityUnits,
+                ...(row.dishes.length > 0 ? { selectedDishNames: row.dishes } : {}),
+              },
+            ],
+            menuId: menu.id,
+            ...(row.notes ? { notes: row.notes } : {}),
+            operatingSiteId: context.get('scope')?.operatingSiteId ?? null,
+            paymentExpectation: row.paymentExpectation,
+            source: 'spreadsheet_import',
+          } as never,
+          operationsContext(context),
+        );
+        created += 1;
+      } catch (error) {
+        failed.push({
+          reason: error instanceof Error ? error.message : 'No se pudo crear el pedido.',
+          rowNumber: row.rowNumber,
+        });
+      }
+    }
+    return context.json(
+      OrderImportConfirmResponseSchema.parse({ created, failed }),
+      created > 0 ? 201 : 200,
     );
   });
 
@@ -3824,6 +3988,45 @@ export function createApp(options: CreateAppOptions) {
       operationsContext(context),
     );
     return context.json(CustomerRestrictionSchema.parse(contractValue(restriction)));
+  });
+
+  /**
+   * La cola de avisos de la semana, con el texto ya resuelto para cada cliente.
+   *
+   * No manda nada. Mandar por la Cloud API se cobra por conversación y la operación no lo paga, así
+   * que el aviso se manda abriendo el chat con `wa.me` desde la pantalla. Lo que el servidor aporta
+   * es la cuenta: quién falta, con qué texto y a quién ya se le escribió.
+   */
+  app.get('/api/v1/notices', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (!permissions.includes('orders.read') || !permissions.includes('messages.templates.use')) {
+      return forbidden(context);
+    }
+    const templateKey = context.req.query('templateKey');
+    if (!templateKey) return badRequest(context, 'Elegí una plantilla.');
+    const queue = await requireOperations().listManualNotices({
+      ...(context.req.query('cycleId') ? { cycleId: context.req.query('cycleId') } : {}),
+      operatingSiteId: context.get('scope')?.operatingSiteId ?? null,
+      templateKey,
+      ...(context.req.query('zone') ? { zone: context.req.query('zone') } : {}),
+    });
+    return context.json(ManualNoticeListResponseSchema.parse(contractValue(queue)));
+  });
+
+  /**
+   * Anotar que un aviso se mandó, o que se decidió saltearlo.
+   *
+   * Lo marca una persona porque es una persona la que apretó enviar: el servidor no tiene forma de
+   * saberlo y no se inventa. Mal marcado es un dato equivocado, sin marcar es avisar dos veces.
+   */
+  app.post('/api/v1/notices/mark', async (context) => {
+    if (!context.get('session').permissions.includes('messages.send')) return forbidden(context);
+    const input = ManualNoticeMarkRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) return badRequest(context, 'Revisá el aviso.', input.error.issues);
+    await requireOperations().markManualNotice(input.data, operationsContext(context));
+    return context.body(null, 204);
   });
 
   app.get('/api/v1/message-templates', async (context) => {

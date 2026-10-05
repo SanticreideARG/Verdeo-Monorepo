@@ -53,6 +53,11 @@ const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         label: 'Cuentas de WhatsApp',
         permission: 'messaging.accounts.manage',
       },
+      {
+        href: '/app/ajustes/plantillas',
+        label: 'Mensajes guardados',
+        permission: 'messages.templates.manage',
+      },
       { href: '/app/ajustes/chat', label: 'Enlaces de chat', permission: 'chat.links.manage' },
       { href: '/app/ajustes/asistente', label: 'Asistente de la web', permission: 'cms.read' },
       { href: '/app/ia', label: 'IA y plantillas', permission: 'ai.providers.manage' },

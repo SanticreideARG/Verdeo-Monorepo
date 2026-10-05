@@ -417,12 +417,62 @@ alguien vaya a mirar. El POST se conserva para dispararlos a mano.
 
 Los proyectos gratuitos de Supabase se pausan tras unos días sin actividad. Uno pausado no sólo deja
 sin ingreso por Google: **rompe el build del frontend**, que lee las variables de Supabase al
-compilar. Eso fue lo que dejó al proyecto web congelado en `3f3f5eb` mientras la API seguía
-desplegando, y costó una tarde de diagnóstico.
+compilar. Vercel lo informa como `Integration provisioning error / Resource provisioning failed`, que
+no menciona a Supabase por ningún lado.
 
-No escribe en ninguna base, y no podría: los datos de Verdeo viven en Neon, y de Supabase sólo
-tenemos la URL y la clave publicable. Lo que Supabase cuenta como actividad son peticiones a su API,
-así que el trabajo llama a `/auth/v1/settings`, que responde con la sola clave publicable.
+El costo real no es el rato que el proyecto está pausado: es que **producción se queda congelada en
+el último commit que llegó a construirse**. Todo lo que se mergeó después existe en `main` y no
+existe en el sitio, y lo que se ve son síntomas sueltos que parecen bugs — un enlace para blanquear
+la contraseña que no funciona, una pantalla nueva que no aparece —. Pasó dos veces.
+
+### Qué cuenta como actividad (y qué no)
+
+La primera versión de este trabajo llamaba a `/auth/v1/settings`, y **no alcanzó**: el cron corría
+todos los días, el log decía que Supabase respondía, y el proyecto se pausó igual. Esa ruta la
+contesta la configuración de Auth sin tocar Postgres, así que para Supabase el proyecto seguía sin
+actividad.
+
+Lo que cuenta es **llegar a la base**. Con la sola clave publicable, la forma de llegar es PostgREST,
+así que el trabajo hace un `upsert` contra una tabla `keep_alive`. Es un upsert de una fila con `id`
+fijo y no un insert: mantener vivo el proyecto no puede costar una tabla que crece para siempre. La
+fila queda con la fecha de la última corrida, que de paso responde "¿esto está funcionando?" sin
+tener que buscar en los logs.
+
+Se conserva el ping a `/auth/v1/settings` como **canario** —dice si el proyecto responde— y se
+informa aparte de la escritura. Juntos bajo un mismo nombre fue lo que escondió el problema durante
+semanas.
+
+### La tabla, una sola vez
+
+En el SQL Editor del proyecto de Supabase:
+
+```sql
+create table if not exists public.keep_alive (
+  id int primary key,
+  touched_at timestamptz not null default now()
+);
+
+alter table public.keep_alive enable row level security;
+
+-- La clave publicable viaja en el bundle del navegador, así que esta política es pública por
+-- definición. Es aceptable porque la tabla no guarda nada: lo peor que puede hacer alguien es
+-- escribir una fecha distinta en la única fila que tiene.
+create policy keep_alive_anon_upsert on public.keep_alive
+  for all to anon using (true) with check (true);
+```
+
+Sin la tabla, el trabajo responde 200 igual y el cuerpo dice `supabaseWrite.ok: false` con el error
+de PostgREST, que distingue "la tabla no existe" de "existe y `anon` no la puede escribir".
+
+### Comprobarlo
+
+```bash
+curl -s -H "Authorization: Bearer $CRON_SECRET" https://<api>/api/v1/cron/keep-alive
+```
+
+Tiene que responder `supabaseWrite: { ok: true }`. Si responde 403, falta `CRON_SECRET` en
+producción — y sin ella el cron tampoco hace nada, porque Vercel manda esa cabecera sólo cuando la
+variable existe.
 
 De paso toca Neon con un `select 1`. No hace falta para mantenerlo vivo —Neon reanuda el cómputo al
 conectarse— pero convierte el trabajo en un canario diario.
@@ -431,8 +481,25 @@ conectarse— pero convierte el trabajo en un canario diario.
 reintenta y Vercel lo desactiva tras varios fallos seguidos: justo cuando más falta hace que siga
 pasando, porque el proyecto está por pausarse.
 
-**Lo que esto no garantiza:** Supabase no documenta que una petición de este tipo reinicie el
-contador, y ha cambiado la heurística antes. Es la solución habitual y debería alcanzar, pero la
-única garantía real es un plan pago. Si el proyecto se vuelve a pausar, revisar primero que
-`CRON_SECRET` esté configurada en producción — sin ella el endpoint responde 403 y el trabajo no
-hace nada.
+**Lo que esto no garantiza:** Supabase no documenta su heurística de inactividad y la cambió antes.
+Una escritura diaria contra Postgres es lo más parecido a actividad real que se puede hacer sin
+clave de servicio, pero la única garantía dura es un plan pago. Si se vuelve a pausar con
+`supabaseWrite.ok: true` en los logs, ya no hay nada que ajustar del lado del código.
+
+### El respaldo en GitHub Actions
+
+El cron de Vercel falla de dos formas silenciosas: sin `CRON_SECRET` en producción el endpoint
+responde 403 y el trabajo no hace nada, y si el endpoint falla varias veces seguidas Vercel
+desactiva el cron. En los dos casos nadie se entera hasta que el proyecto se pausa.
+
+`.github/workflows/keep-alive.yml` llama al mismo endpoint todas las mañanas, unas horas antes, y
+**falla ruidosamente** si la escritura no salió: GitHub manda un correo cuando un workflow
+programado falla, que es la señal que faltaba.
+
+Necesita dos secretos del repositorio (Settings → Secrets → Actions):
+
+- `KEEP_ALIVE_URL`: `https://<api>/api/v1/cron/keep-alive`
+- `CRON_SECRET`: el mismo valor que tiene la API en Vercel.
+
+Sin ellos el trabajo se saltea con un mensaje en lugar de fallar todos los días, que sería ruido
+sin información.

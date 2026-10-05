@@ -211,6 +211,23 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'El asistente de la web',
   },
 
+  // --- Avisos ----------------------------------------------------------------------------------
+  {
+    body: 'Avisar a los clientes es a mano: el aviso sale de tu WhatsApp, no del sistema. "Avisos" no manda nada — lleva la cuenta de a quién ya se le avisó, que es lo que se pierde cuando son cien.\n\nArriba elegís el período, cuál de los mensajes guardados querés mandar y, si querés, una zona. Abajo aparece una tarjeta por pedido confirmado, con el texto ya armado con los datos de ese cliente.\n\n"Abrir WhatsApp y marcar" abre el chat con el texto escrito y marca la fila como avisada en el mismo gesto: apretás enviar en WhatsApp y volvés. Si alguien no tiene WhatsApp cargado, el botón no está y queda "Copiar texto"; el número se completa en la ficha del cliente.\n\n"Saltear" sirve para los que decidís no avisar, y deja constancia de que fue una decisión y no un olvido.\n\nEl tilde "Sólo los que faltan" viene puesto. Destildalo para repasar la vuelta entera y ver que no quedó nadie.\n\nLos textos se escriben una vez: ver [[avisos-plantillas]].\n\n[Ir a Avisos](/app/avisos)',
+    category: 'Avisos',
+    key: 'avisos-mandar',
+    ordinal: 0,
+    requiredPermission: 'messages.templates.use',
+    title: 'Avisar a los clientes por WhatsApp',
+  },
+  {
+    body: 'Los avisos que se mandan todas las semanas se escriben una vez, en [Panel de control → Mensajes guardados](/app/ajustes/plantillas).\n\nDonde va un dato del pedido se pone una variable, y el sistema la reemplaza por cliente: el nombre, el número de pedido, el total, la fecha de entrega, la zona, la ventana de reparto, el medio de pago, la ciudad. No hace falta escribirlas a mano — hay un botón por cada una.\n\nAbajo del formulario se ve cómo va a quedar el mensaje con valores de ejemplo. Conviene leerlo antes de guardar: es la forma de darse cuenta de que la oración no cierra.\n\nSi un dato no está cargado para un cliente, esa parte del mensaje desaparece en lugar de quedar escrita a medias.\n\nUn mensaje que ya no se usa se destilda en "En uso": deja de aparecer en Avisos, pero los que ya mandaste siguen anotados.',
+    category: 'Avisos',
+    key: 'avisos-plantillas',
+    ordinal: 1,
+    requiredPermission: 'messages.templates.use',
+    title: 'Escribir los mensajes guardados',
+  },
   // --- Administración --------------------------------------------------------------------------
   {
     body: 'En "Usuarios" se da de alta al equipo, se le asigna un rol y las ciudades en las que trabaja. El rol define los permisos. Si alguien necesita algo puntual que su rol no tiene, se agrega como excepción de permisos, en la sección plegable de su ficha.\n\n[Ir a Usuarios](/app/usuarios)',

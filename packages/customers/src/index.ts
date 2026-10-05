@@ -79,3 +79,34 @@ export function assertTemplateVariables(body: string, declaredVariables: readonl
     );
   }
 }
+
+/**
+ * Reemplaza las `{{ variables }}` de una plantilla por los valores de un pedido concreto.
+ *
+ * Una variable sin valor se reemplaza por vacío y no se deja escrita. Dejar `{{ reparto.ventana }}`
+ * en el texto es peor que no decir nada: lo que se ve es un mensaje a medio armar, y quien lo manda
+ * tiene que acordarse de borrarlo a mano justo cuando está mandando cien.
+ *
+ * No hay condicionales ni bucles a propósito. Una plantilla que necesita lógica es dos plantillas.
+ */
+export function renderTemplate(body: string, values: Readonly<Record<string, string>>): string {
+  const placeholder = /{{\s*([a-zA-Z][a-zA-Z0-9_.-]*)\s*}}/g;
+  return (
+    body
+      .split('\n')
+      .map((line) => ({
+        rendered: line.replace(placeholder, (_match, variable: string) => values[variable] ?? ''),
+        wasEmpty: line.trim().length === 0,
+      }))
+      /*
+       * Un renglón que quedó vacío *porque* le faltó el valor se va; uno que ya venía vacío se
+       * queda. Esa distinción es la que permite separar párrafos en una plantilla —el renglón en
+       * blanco es intencional— sin arrastrar el hueco que deja "{{ reparto.ventana }}" cuando esa
+       * ventana no está cargada.
+       */
+      .filter((line) => line.wasEmpty || line.rendered.trim().length > 0)
+      .map((line) => line.rendered.replace(/[ \t]+$/, ''))
+      .join('\n')
+      .trim()
+  );
+}

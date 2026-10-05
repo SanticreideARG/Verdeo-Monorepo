@@ -458,7 +458,9 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     databasePing: async () => {
       await pingDatabase(database.db);
     },
-    ...(supabaseAuth ? { supabasePing: () => supabaseAuth.ping() } : {}),
+    ...(supabaseAuth
+      ? { supabasePing: () => supabaseAuth.ping(), supabaseTouch: () => supabaseAuth.touch() }
+      : {}),
     cookieSameSite: env.SESSION_COOKIE_SAME_SITE,
     credentials,
     delivery,

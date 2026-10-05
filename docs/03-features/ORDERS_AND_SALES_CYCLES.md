@@ -93,3 +93,36 @@ Las columnas de las dos pantallas —"Ver pedidos" y "Tomar y confirmar"— sale
 el dato y no lo que se ve: "Total" compara números y no `$ 1.000` contra `$ 900` como texto, y
 "Estado" ordena por el orden en que se trabaja un pedido (borrador, confirmado, listo, entregado,
 cancelado) y no alfabéticamente.
+
+## Importar pedidos desde una planilla
+
+Un segundo origen de pedidos, al lado del formulario y del pedido web: la planilla que alguien ya
+armó por fuera del sistema. Es intencionalmente de dos pasos.
+
+**Paso 1 — `POST /api/v1/orders/import/preview`.** Recibe el archivo (CSV o `.xlsx`, hasta 5 MB y
+500 filas) y no escribe nada. El parser (`apps/api/src/integrations/order-import.ts`) acepta varias
+formas de nombrar cada columna —«Cliente» o «Nombre», «Teléfono» o «WhatsApp», «Tamaño» o
+«Tamano»— porque la planilla la arma una persona y no un sistema. Sólo `cliente` es obligatorio;
+`cantidad` sin columna vale 1. Una fila sin nombre o con una cantidad imposible se saltea y las
+demás entran: una fila mal cargada no puede voltear el archivo entero. El número de fila que se
+informa es el que se ve en Excel, encabezado incluido, para que «revisá la fila 4» mande a corregir
+la fila correcta.
+
+Después el servicio (`previewOrderImport`) resuelve, fila por fila, con qué cliente de la base
+coincide y qué oferta del menú publicado corresponde a esa variedad y tamaño. El matcheo de cliente
+va de lo más fuerte a lo más débil: teléfono normalizado, nombre exacto sin tildes ni mayúsculas, y
+si no hubo nada, los nombres parecidos como candidatos. **Un nombre parecido nunca se da por bueno
+solo.** Importar a ciegas crea clientes duplicados: la misma persona escrita «Ana Vega» en la
+planilla y «Ana Isabel Vega» en la base queda como dos registros, y el día que hay que llamarla
+nadie sabe cuál mirar; unir dos clientes es lo único de todo esto que no tiene vuelta atrás.
+
+**Paso 2 — `POST /api/v1/orders/import`.** Recibe las filas ya resueltas por una persona, con el
+`customerId` elegido o `null` para crear el cliente con el nombre y el teléfono de la planilla. Los
+pedidos entran como **borradores**, igual que los que llegan por la web: una planilla es un dato de
+afuera y alguien tiene que confirmarlos. Una fila que falla no frena a las demás — la respuesta
+trae `created` y un `failed` con el número de fila y el motivo, porque rechazar las cien por una es
+hacer repetir todo el trabajo.
+
+Las filas cuya variedad y tamaño no están en el menú publicado de la ciudad quedan afuera, a la
+vista y atenuadas: se ve cuántas son y por qué, pero no se puede decidir nada sobre ellas hasta
+corregir el menú o la planilla. Las dos rutas piden `orders.create`.

@@ -128,3 +128,37 @@ real `MetaWhatsAppProvider` (`apps/api/src/integrations/whatsapp-provider.ts`).
 **Diferido**: adaptadores de media/mensajes interactivos, IA para redactar/extraer sobre estos
 mensajes, plantillas oficiales Meta, disparadores automáticos por evento más allá de los tres de
 reparto.
+
+## Avisos a mano: la operación sin la API de Meta
+
+La Cloud API cobra por conversación iniciada por el negocio, y avisar a cien clientes cada semana
+—que es exactamente lo que hay que hacer— es justo el caso que se paga. La operación decidió no
+pagarlo. Así que **el camino por defecto para avisar es a mano**, y la API queda disponible pero
+apagada: lo que ya está construido (cuentas, webhook, inbox, `triggerMessage`) sigue sirviendo para
+_recibir_, que es gratis, y para el día que se decida pagar el envío.
+
+Avisar a mano quiere decir abrir el chat del cliente con un enlace `wa.me` que ya trae el texto
+escrito y apretar enviar. No hay forma de automatizar ese último paso sin la API, y no se intenta:
+WhatsApp Web automatizado es una cuenta suspendida esperando.
+
+El problema de hacerlo a mano no es el trabajo, son los **huecos**: con cien clientes, a la segunda
+vuelta nadie se acuerda a quién ya le escribió, y el resultado es gente avisada dos veces y gente
+sin avisar. Entonces lo que el sistema aporta no es el envío, es la cuenta:
+
+- **La cola se deriva**, no se carga: son los pedidos del período, filtrables por zona, cada uno con
+  su texto ya resuelto desde una plantilla (`message_templates`) y su enlace `wa.me` listo.
+- **`manual_notices` registra sólo lo que pasó**: mandado, o salteado con el motivo. Una fila sin
+  registro es un pendiente, así que no hay que crear nada por adelantado ni limpiar nada después.
+- Se guarda el **texto tal como salió**, no sólo la plantilla: una plantilla se edita, y el mensaje
+  que alguien recibió en marzo tiene que seguir siendo el que recibió.
+
+Las acciones de reparto (`ON_MY_WAY`, `AT_ADDRESS`, `DELIVERED_THANKS`) tienen el mismo camino
+manual desde la hoja de ruta. Siguen resolviendo el destinatario en el backend: el número del
+cliente aparece sólo dentro del enlace que se abre, en el momento de abrirlo.
+
+### Lo que esto no es
+
+No es un reemplazo de la API con otro nombre. No hay envío programado, no hay reintentos, no hay
+estados de entrega: alguien aprieta enviar o no lo aprieta. Si en algún momento se decide pagar la
+Cloud API, la cola y las plantillas son las mismas y lo único que cambia es que el botón manda en
+lugar de abrir el chat.

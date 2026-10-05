@@ -21,6 +21,7 @@ import {
   assertTemplateVariables,
   normalizeCustomerIdentity,
   normalizeCustomerText,
+  renderTemplate,
 } from '@verdeo/customers';
 import {
   GeocodingProviderError,
@@ -43,6 +44,7 @@ import {
 } from '@verdeo/orders';
 
 import type { Database } from '../index.js';
+import { users } from '../schema/auth.js';
 import {
   cancellationReasons,
   customerAddresses,
@@ -57,6 +59,7 @@ import {
   geocodingRequests,
   labelBackgrounds,
   labelSettings,
+  manualNotices,
   messageTemplates,
   operatingSiteOrderCounters,
   operatingSites,
@@ -384,6 +387,58 @@ function catalogCode(value: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
+}
+
+/**
+ * Los valores con los que se rellena una plantilla de aviso.
+ *
+ * Nombres con punto, como los que ya usa `extractTemplateVariables`: una plantilla se edita desde
+ * el panel y `{{ pedido.numero }}` se entiende sin manual. Lo que no tiene valor se omite del
+ * objeto en lugar de ir como cadena vacía, porque `renderTemplate` borra el renglón entero cuando
+ * una variable no resuelve y eso sólo funciona si falta de verdad.
+ *
+ * Catálogo cerrado a propósito. Una plantilla con una variable que no está acá la deja sin
+ * reemplazar, así que la lista es también la documentación de lo que se puede escribir.
+ */
+function templateValuesFor(order: {
+  customer: { displayName: string };
+  deliveryDate: string | null;
+  deliveryWindow?: string | null;
+  deliveryZone: string | null;
+  items: readonly { productName: string; quantityUnits: number; variantName: string | null }[];
+  operatingSiteName: string | null;
+  paymentExpectation: string | null;
+  publicNumber: string;
+  totalMinor: number;
+}): Record<string, string> {
+  const valores: Record<string, string> = {
+    'cliente.nombre': order.customer.displayName,
+    'pedido.numero': order.publicNumber,
+    // En pesos y no en centavos: el mensaje lo lee un cliente, no una planilla.
+    'pedido.total': `$ ${(order.totalMinor / 100).toLocaleString('es-AR')}`,
+  };
+  if (order.deliveryDate) {
+    valores['pedido.fecha'] = new Date(`${order.deliveryDate}T12:00:00-03:00`).toLocaleDateString(
+      'es-AR',
+      { day: 'numeric', month: 'long', weekday: 'long' },
+    );
+  }
+  if (order.items.length > 0) {
+    valores['pedido.menu'] = order.items
+      .map((item) =>
+        [
+          item.quantityUnits > 1 ? `${String(item.quantityUnits)}× ` : '',
+          item.productName,
+          item.variantName ? ` ${item.variantName}` : '',
+        ].join(''),
+      )
+      .join(', ');
+  }
+  if (order.paymentExpectation) valores['pedido.pago'] = order.paymentExpectation;
+  if (order.deliveryZone) valores['reparto.zona'] = order.deliveryZone;
+  if (order.deliveryWindow) valores['reparto.ventana'] = order.deliveryWindow;
+  if (order.operatingSiteName) valores['ciudad'] = order.operatingSiteName;
+  return valores;
 }
 
 function auditActor(context: OperationsContext) {
@@ -761,6 +816,314 @@ export class PostgresOperationsService {
    * Imports are deliberately one database transaction: either every contact is
    * persisted (with its audit trail) or the operator can correct the sheet and retry.
    */
+  /**
+   * Qué entendimos de una planilla de pedidos, antes de escribir nada.
+   *
+   * Importar pedidos a ciegas crea clientes duplicados: la misma persona escrita "Ana Vega" en una
+   * planilla y "Ana Isabel Vega" en la base son dos registros, y el día que hay que llamarla nadie
+   * sabe cuál mirar. Así que esto no importa nada — resuelve, fila por fila, con qué cliente de la
+   * base coincide y con qué variedad del menú, y devuelve eso para que una persona lo confirme.
+   *
+   * El matcheo de cliente va de lo más fuerte a lo más débil: primero el teléfono normalizado, que
+   * es único en la práctica; después el nombre exacto; y si no, los nombres parecidos como
+   * candidatos para que alguien elija. Un nombre parecido nunca se da por bueno solo.
+   */
+  /**
+   * La cola de avisos de un período: a quién hay que escribirle y si ya se le escribió.
+   *
+   * Se deriva de los pedidos y no se carga en ninguna parte. Eso es intencional: una cola que se
+   * crea por adelantado hay que mantenerla —un pedido cancelado después, un cliente que cambia de
+   * número, un período que se reabre— y la que se deriva está siempre al día por construcción. Lo
+   * único que se guarda es lo que efectivamente se hizo (`manual_notices`), así que una fila sin
+   * registro es un pendiente y no hace falta limpiar nada entre semanas.
+   *
+   * El texto se resuelve acá y no en la pantalla porque los valores son todos del servidor: el
+   * total en pesos, la fecha de entrega, la zona, la ciudad. Resolverlo en el navegador obligaba a
+   * mandar los pedidos enteros para armar una oración.
+   */
+  public async listManualNotices(input: {
+    cycleId?: string | undefined;
+    operatingSiteId?: string | null | undefined;
+    templateKey: string;
+    zone?: string | undefined;
+  }) {
+    const [template] = await this.database
+      .select()
+      .from(messageTemplates)
+      .where(eq(messageTemplates.key, input.templateKey))
+      .limit(1);
+    if (!template) throw new OperationsNotFoundError('Message template not found');
+
+    /*
+     * Sólo lo confirmado, y la lista entera.
+     *
+     * Un borrador todavía no es un pedido —puede no existir mañana— y avisarle a alguien de un
+     * pedido que después no se toma es peor que no avisarle nada.
+     *
+     * Se pagina como la exportación en vez de pedir un número grande de una: una cola truncada es
+     * justo el bug que esta pantalla existe para evitar, porque los que quedan afuera no se ven
+     * como pendientes, se ven como si no existieran.
+     */
+    const pedidos: Awaited<ReturnType<PostgresOperationsService['getOrder']>>[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await this.listOrders({
+        ...(input.cycleId ? { cycleId: input.cycleId } : {}),
+        ...(cursor ? { cursor } : {}),
+        limit: 100,
+        operatingSiteId: input.operatingSiteId ?? null,
+        statuses: ['CONFIRMED', 'READY', 'DELIVERED'],
+        ...(input.zone ? { zone: input.zone } : {}),
+      });
+      pedidos.push(...page.items);
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor);
+
+    const registros =
+      pedidos.length === 0
+        ? []
+        : await this.database
+            .select({
+              createdAt: manualNotices.createdAt,
+              displayName: users.displayName,
+              note: manualNotices.note,
+              orderId: manualNotices.orderId,
+              status: manualNotices.status,
+            })
+            .from(manualNotices)
+            .leftJoin(users, eq(users.id, manualNotices.actorUserId))
+            .where(
+              and(
+                eq(manualNotices.templateKey, input.templateKey),
+                inArray(
+                  manualNotices.orderId,
+                  pedidos.map((order) => order.id),
+                ),
+              ),
+            )
+            .orderBy(desc(manualNotices.createdAt));
+
+    return {
+      items: pedidos.map((order) => {
+        const registro = registros.find((row) => row.orderId === order.id);
+        return {
+          body: renderTemplate(template.body, templateValuesFor(order)),
+          customerDisplayName: order.customer.displayName,
+          customerId: order.customer.id,
+          deliveryZone: order.deliveryZone ?? null,
+          note: registro?.note ?? null,
+          orderId: order.id,
+          orderPublicNumber: order.publicNumber,
+          phone: order.customer.whatsapp ?? order.customer.phone ?? null,
+          sentAt: registro?.createdAt?.toISOString() ?? null,
+          sentByDisplayName: registro?.displayName ?? null,
+          status: registro?.status === 'skipped' ? 'skipped' : registro ? 'sent' : 'pending',
+        };
+      }),
+      templateDisplayName: template.displayName,
+      templateKey: template.key,
+    };
+  }
+
+  /**
+   * Anota que un aviso se mandó (o que se decidió saltearlo).
+   *
+   * Guarda el cuerpo tal como se mandó y no una referencia a la plantilla: la plantilla se edita, y
+   * el mensaje que alguien recibió en marzo tiene que seguir siendo el que recibió. Volver a marcar
+   * el mismo par pedido/plantilla reemplaza el registro anterior en lugar de acumular filas: lo que
+   * importa es el último estado, y dos filas obligarían a la pantalla a decidir cuál vale.
+   */
+  public async markManualNotice(
+    input: {
+      body: string;
+      note?: string | null | undefined;
+      orderId: string;
+      status: 'sent' | 'skipped';
+      templateKey: string;
+    },
+    context: OperationsContext,
+  ) {
+    const [order] = await this.database
+      .select({
+        customerId: orders.customerId,
+        operatingSiteId: orders.operatingSiteId,
+      })
+      .from(orders)
+      .where(eq(orders.id, input.orderId))
+      .limit(1);
+    if (!order) throw new OperationsNotFoundError('Order not found');
+
+    const phone = await this.database
+      .select({ value: customerIdentities.valueDisplay })
+      .from(customerIdentities)
+      .where(
+        and(
+          eq(customerIdentities.customerId, order.customerId),
+          eq(customerIdentities.type, 'whatsapp'),
+          eq(customerIdentities.active, true),
+        ),
+      )
+      .limit(1)
+      .then(([row]) => row?.value ?? null);
+
+    return this.database.transaction(async (transaction) => {
+      await transaction
+        .delete(manualNotices)
+        .where(
+          and(
+            eq(manualNotices.orderId, input.orderId),
+            eq(manualNotices.templateKey, input.templateKey),
+          ),
+        );
+      const [registro] = await transaction
+        .insert(manualNotices)
+        .values({
+          actorUserId: context.actorUserId,
+          body: input.body,
+          customerId: order.customerId,
+          note: input.note ?? null,
+          operatingSiteId: order.operatingSiteId,
+          orderId: input.orderId,
+          phone,
+          status: input.status,
+          templateKey: input.templateKey,
+        })
+        .returning();
+      if (!registro) throw new Error('Manual notice insert did not return a row');
+
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: 'manual_notice.recorded',
+        actor: auditActor(context),
+        after: { orderId: input.orderId, status: input.status, templateKey: input.templateKey },
+        correlationId: context.correlationId,
+        entityId: registro.id,
+        entityType: 'manual_notice',
+        requestId: context.requestId,
+        source: context.source,
+      });
+      return registro;
+    });
+  }
+
+  public async previewOrderImport(
+    rows: readonly {
+      customerName: string;
+      phone: string | null;
+      quantityUnits: number;
+      rowNumber: number;
+      size: string | null;
+      variety: string | null;
+    }[],
+    operatingSiteId?: string | null,
+  ) {
+    const menu = await this.currentPublishedMenu(operatingSiteId ?? null);
+    const ofertas = (menu?.offerings ?? []) as readonly {
+      familyName: string;
+      id: string;
+      sizeName: string;
+    }[];
+
+    const telefonos = rows
+      .map((row) => (row.phone ? normalizeCustomerIdentity('whatsapp', row.phone) : null))
+      .filter((phone): phone is string => phone !== null);
+    const porTelefono =
+      telefonos.length === 0
+        ? []
+        : await this.database
+            .select({
+              customerId: customerIdentities.customerId,
+              displayName: customers.displayName,
+              valueNormalized: customerIdentities.valueNormalized,
+            })
+            .from(customerIdentities)
+            .innerJoin(customers, eq(customers.id, customerIdentities.customerId))
+            .where(
+              and(
+                inArray(customerIdentities.valueNormalized, telefonos),
+                eq(customerIdentities.active, true),
+              ),
+            );
+
+    /*
+     * Los nombres se comparan sin tildes y en minúscula.
+     *
+     * "Agustín" y "Agustin" son la misma persona, y una planilla exportada de otro sistema pierde
+     * las tildes todo el tiempo. Compararlos como vienen haría que el import cree un duplicado por
+     * cada acento.
+     */
+    const todos = await this.database
+      .select({ displayName: customers.displayName, id: customers.id })
+      .from(customers)
+      .where(eq(customers.status, 'active'));
+    const normalizar = (value: string) =>
+      value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase('es-AR')
+        .trim();
+
+    return rows.map((row) => {
+      const telefono = row.phone ? normalizeCustomerIdentity('whatsapp', row.phone) : null;
+      const porNumero = telefono
+        ? porTelefono.find((match) => match.valueNormalized === telefono)
+        : undefined;
+
+      const nombreNormalizado = normalizar(row.customerName);
+      const exacto = todos.find(
+        (candidate) => normalizar(candidate.displayName) === nombreNormalizado,
+      );
+      // Parecidos: uno contiene al otro. Alcanza para "Ana Vega" contra "Ana Isabel Vega", que es
+      // el caso real, sin inventar una distancia de edición que nadie puede auditar.
+      const parecidos = todos
+        .filter((candidate) => {
+          const otro = normalizar(candidate.displayName);
+          return (
+            otro !== nombreNormalizado &&
+            (otro.includes(nombreNormalizado) || nombreNormalizado.includes(otro))
+          );
+        })
+        .slice(0, 5);
+
+      const oferta =
+        row.variety && row.size
+          ? ofertas.find(
+              (item) =>
+                normalizar(item.familyName) === normalizar(row.variety ?? '') &&
+                normalizar(item.sizeName) === normalizar(row.size ?? ''),
+            )
+          : undefined;
+
+      return {
+        customerMatch: porNumero
+          ? {
+              candidates: [],
+              customerId: porNumero.customerId,
+              displayName: porNumero.displayName,
+              kind: 'telefono' as const,
+            }
+          : exacto
+            ? {
+                candidates: [],
+                customerId: exacto.id,
+                displayName: exacto.displayName,
+                kind: 'nombre' as const,
+              }
+            : {
+                candidates: parecidos.map((candidate) => ({
+                  customerId: candidate.id,
+                  displayName: candidate.displayName,
+                })),
+                customerId: null,
+                displayName: null,
+                kind: parecidos.length > 0 ? ('parecidos' as const) : ('nuevo' as const),
+              },
+        offeringId: oferta?.id ?? null,
+        rowNumber: row.rowNumber,
+      };
+    });
+  }
+
   public async importCustomers(inputs: readonly CustomerInput[], context: OperationsContext) {
     return this.database
       .transaction(async (transaction) => {
@@ -4073,6 +4436,9 @@ export class PostgresOperationsService {
          */
         deliveryLatitude: customerAddresses.latitude,
         deliveryLongitude: customerAddresses.longitude,
+        /* La ventana de entrega del domicilio, para los avisos: "{{ reparto.ventana }}" es
+           justo el dato que evita el mensaje siguiente preguntando a que hora llega. */
+        deliveryWindow: customerAddresses.deliveryWindow,
         deliveryZone: customerAddresses.operationalZone,
         id: orders.id,
         menuId: orders.weeklyMenuId,

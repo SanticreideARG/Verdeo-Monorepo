@@ -65,4 +65,50 @@ describe('SupabaseAuthClient', () => {
 
     await expect(client.verifyAccessToken('an-invalid-access-token')).resolves.toBeNull();
   });
+
+  /*
+   * Escribe contra Postgres, que es lo único que Supabase cuenta como actividad.
+   *
+   * La versión anterior sólo leía `/auth/v1/settings` y el proyecto se pausó igual, con el cron
+   * corriendo todos los días. Este caso fija el contrato que faltaba: que la petición vaya a
+   * PostgREST, que sea un upsert —sin `merge-duplicates` la segunda corrida choca con la clave
+   * primaria— y que toque siempre la misma fila, para que la tabla no crezca.
+   */
+  it('escribe una fila fija en keep_alive para que el proyecto no se pause', async () => {
+    // `vi.fn<typeof fetch>`: sin la firma, `mock.calls` es `[]` y la petición no se puede mirar.
+    const fetcher = vi.fn<typeof fetch>(() => Promise.resolve(new Response(null, { status: 201 })));
+    const client = new SupabaseAuthClient(
+      'https://project-ref.supabase.co',
+      'sb_publishable_test-key-long-enough',
+      fetcher,
+    );
+
+    await expect(client.touch()).resolves.toEqual({ detail: 'HTTP 201', ok: true });
+    const [url, init] = fetcher.mock.calls[0] ?? [];
+    expect(url).toBe('https://project-ref.supabase.co/rest/v1/keep_alive');
+    expect(init?.method).toBe('POST');
+    expect((init?.headers as Record<string, string>).prefer).toContain('merge-duplicates');
+    expect(JSON.parse(init?.body as string)).toMatchObject({ id: 1 });
+  });
+
+  /*
+   * El error de PostgREST viaja en el detalle. Sin él, "la tabla no existe" y "existe pero `anon`
+   * no la puede escribir" se ven iguales desde un log, y son dos arreglos distintos.
+   */
+  it('informa el error de PostgREST en lugar de decir sólo que falló', async () => {
+    const fetcher = vi.fn(() =>
+      Promise.resolve(
+        new Response('{"message":"relation \\"keep_alive\\" does not exist"}', { status: 404 }),
+      ),
+    );
+    const client = new SupabaseAuthClient(
+      'https://project-ref.supabase.co',
+      'sb_publishable_test-key-long-enough',
+      fetcher,
+    );
+
+    const result = await client.touch();
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain('does not exist');
+  });
 });

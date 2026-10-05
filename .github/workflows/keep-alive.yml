@@ -1,0 +1,53 @@
+# Un segundo disparador del keep-alive, independiente de Vercel.
+#
+# El cron de Vercel ya llama a este mismo endpoint todos los días. Esto no lo reemplaza: lo
+# respalda, porque los dos modos en que el cron falla son silenciosos. Si `CRON_SECRET` no está
+# cargada en producción, el endpoint responde 403 y el trabajo no hace nada; si el endpoint falla
+# varias veces seguidas, Vercel desactiva el cron — justo cuando más falta hace que siga pasando.
+# En los dos casos nadie se entera hasta que el proyecto se pausa y los deploys empiezan a fallar
+# con un error que no menciona a Supabase.
+#
+# Acá, en cambio, un fallo manda un correo: GitHub avisa cuando un workflow programado falla.
+#
+# Necesita dos secretos del repositorio: `KEEP_ALIVE_URL` (la URL del endpoint en producción) y
+# `CRON_SECRET` (el mismo valor que tiene la API). Sin ellos el trabajo se saltea con un mensaje en
+# lugar de fallar todos los días, que sería ruido sin información.
+name: Keep alive
+
+on:
+  schedule:
+    # 11:00 UTC: unas horas antes que el cron de Vercel, para que los dos no sean el mismo intento.
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  touch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Tocar la base de Supabase
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          KEEP_ALIVE_URL: ${{ secrets.KEEP_ALIVE_URL }}
+        run: |
+          if [ -z "$KEEP_ALIVE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "Sin KEEP_ALIVE_URL o CRON_SECRET: nada que hacer."
+            echo "Cargalos en Settings → Secrets → Actions para que este respaldo funcione."
+            exit 0
+          fi
+
+          # El endpoint responde 200 aunque un ping falle, y el estado va en el cuerpo: un cron que
+          # devuelve error se apaga solo tras varios fallos. Así que acá se mira el cuerpo.
+          #
+          # Con jq y no con grep: el orden de las claves del JSON no es un contrato, y un patrón que
+          # depende de él se rompe sin que nadie lo note, que es exactamente lo que esto previene.
+          body=$(curl -sS --max-time 30 -H "Authorization: Bearer $CRON_SECRET" "$KEEP_ALIVE_URL")
+          echo "$body"
+
+          if [ "$(echo "$body" | jq -r '.supabaseWrite.ok')" != "true" ]; then
+            echo "::error::La escritura contra Supabase no salió bien: $(echo "$body" | jq -r '.supabaseWrite.detail // "sin detalle"')"
+            exit 1
+          fi

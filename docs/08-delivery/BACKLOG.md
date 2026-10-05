@@ -56,6 +56,8 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [x] Un solo formato de fecha en toda la aplicación (`lib/dates.ts`), con nombre de mes.
 - [x] Estados de cliente en castellano y elegidos de una lista, no escritos a mano.
 - [x] La fila de la cola muestra su estado en la forma, no sólo en una columna de texto.
+- [x] Importar pedidos desde una planilla, en dos pasos: vista previa que dice con qué cliente y
+      con qué variedad coincide cada fila, y recién después la creación como borradores.
 
 ## P0 - Operational capture
 
@@ -87,6 +89,20 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [x] Delivery statuses.
 - [x] Customer resolution.
 - [ ] Human-approved AI reply suggestions.
+
+La operación no va a pagar la Cloud API, que se cobra por conversación iniciada por el negocio y
+es exactamente el caso de avisar a cien clientes por semana. Entonces **avisar es a mano**: lo que
+construimos no es el envío sino la cuenta de a quién ya se le avisó.
+
+- [x] Pantalla de **Avisos**: la cola del período, derivada de los pedidos confirmados, con el
+      texto ya resuelto por cliente y el enlace `wa.me` que abre el chat escrito.
+- [x] `manual_notices`: registra sólo lo que se hizo (mandado o salteado). Una fila sin registro
+      es un pendiente, así que no hay cola que mantener ni limpiar entre semanas.
+- [x] **Mensajes guardados** en el Panel de control: escribir las plantillas con las variables
+      del pedido y verlas resueltas con valores de ejemplo antes de guardar.
+- [ ] Las acciones de reparto (`ON_MY_WAY`, `AT_ADDRESS`, `DELIVERED_THANKS`) por el mismo camino
+      manual desde la hoja de ruta; hoy siguen apuntando a la Cloud API.
+- [ ] Escribir las primeras plantillas reales con la operación.
 
 ## P0 - AI
 
@@ -249,6 +265,15 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
       scripts de datos de prueba usan la misma función. Las pantallas que calculaban "hoy" en UTC
       —tablero del teléfono, agenda del tablero, calendario— usan `todayInOperation()` y ya no se
       adelantan un día de noche.
+
+- [x] **El keep-alive de Supabase no mantenía vivo nada.** Pegaba a `/auth/v1/settings`, que
+      contesta la configuración de Auth sin tocar Postgres: el cron corría todos los días, el log
+      decía que Supabase respondía, y el proyecto se pausó igual —dos veces—. Un proyecto pausado
+      rompe el build del frontend, así que producción queda congelada en el último commit que
+      llegó a construirse y lo que se ve son síntomas sueltos que parecen bugs. Ahora hace un
+      `upsert` por PostgREST contra una tabla `keep_alive`, que es llegar a la base de verdad, y
+      se informa aparte del ping. Requiere crear esa tabla una vez: el SQL está en
+      `VERCEL_DEPLOYMENT.md`.
 
 ## Asistente de la landing
 

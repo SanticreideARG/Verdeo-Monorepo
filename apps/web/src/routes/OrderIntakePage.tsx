@@ -10,6 +10,7 @@ import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { DataTable } from '../components/DataTable.js';
 import { OrderDetailDialog } from '../components/OrderDetailDialog.js';
+import { OrderImportDialog } from '../components/OrderImportDialog.js';
 import { DraftNotice } from '../components/DraftNotice.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { ReasonDialog } from '../components/ReasonDialog.js';
@@ -132,6 +133,7 @@ export function OrderIntakePage() {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [message, setMessage] = useState('');
   const [formOpen, setFormOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const draft = useFormDraft(formRef, 'order-intake', formOpen);
   const [selectedMenuId, setSelectedMenuId] = useState('');
@@ -836,6 +838,15 @@ export function OrderIntakePage() {
                   {formOpen ? 'Cerrar' : '+ Nuevo pedido'}
                 </button>
               ) : null}
+              {permissions.includes('orders.create') ? (
+                <button
+                  className="button button-secondary"
+                  onClick={() => setImportOpen(true)}
+                  type="button"
+                >
+                  Importar planilla
+                </button>
+              ) : null}
             </div>
 
             {/* Con ancho se abre y el resumen se esconde: el plegado es una respuesta al teléfono, no una
@@ -1435,6 +1446,12 @@ export function OrderIntakePage() {
       ) : null}
 
       {viewing ? <OrderDetailDialog onClose={() => setViewing(null)} order={viewing} /> : null}
+      {importOpen ? (
+        <OrderImportDialog
+          onClose={() => setImportOpen(false)}
+          onImported={() => void loadData()}
+        />
+      ) : null}
     </DashboardShell>
   );
 }

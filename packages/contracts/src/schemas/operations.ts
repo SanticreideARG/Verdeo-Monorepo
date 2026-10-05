@@ -1337,3 +1337,101 @@ export const LabelBackgroundSchema = z.object({
 export const LabelBackgroundListResponseSchema = z.object({
   items: z.array(LabelBackgroundSchema),
 });
+
+/**
+ * Lo que entendimos de una planilla de pedidos, fila por fila, antes de escribir nada.
+ *
+ * Importar a ciegas crea clientes duplicados: la misma persona escrita de dos formas termina como
+ * dos registros, y el día que hay que llamarla nadie sabe cuál mirar. Por eso el import tiene dos
+ * pasos y éste es el primero: decir con qué coincide cada fila y dejar que una persona lo confirme.
+ */
+export const OrderImportPreviewRowSchema = z.object({
+  customerMatch: z.object({
+    /** Nombres parecidos, cuando no hubo una coincidencia que se pueda dar por buena sola. */
+    candidates: z.array(z.object({ customerId: UuidSchema, displayName: z.string() })),
+    customerId: UuidSchema.nullable(),
+    displayName: z.string().nullable(),
+    kind: z.enum(['telefono', 'nombre', 'parecidos', 'nuevo']),
+  }),
+  customerName: z.string(),
+  deliveryAddress: z.string().nullable(),
+  dishes: z.array(z.string()),
+  notes: z.string().nullable(),
+  /** Null cuando la variedad y el tamaño de la fila no existen en el menú publicado. */
+  offeringId: UuidSchema.nullable(),
+  paymentExpectation: z.string().nullable(),
+  phone: z.string().nullable(),
+  quantityUnits: z.number().int(),
+  rowNumber: z.number().int(),
+  size: z.string().nullable(),
+  variety: z.string().nullable(),
+});
+
+export const OrderImportPreviewResponseSchema = z.object({
+  items: z.array(OrderImportPreviewRowSchema),
+});
+
+/** Una fila ya resuelta por una persona: con qué cliente va, o que hay que crearlo. */
+export const OrderImportConfirmRequestSchema = z.object({
+  rows: z
+    .array(
+      z.object({
+        /** El cliente elegido; sin esto se crea uno nuevo con `customerName` y `phone`. */
+        customerId: UuidSchema.nullable(),
+        customerName: z.string().trim().min(1).max(160),
+        deliveryAddress: z.string().trim().max(500).nullable(),
+        dishes: z.array(z.string().trim().min(1).max(160)).max(10),
+        notes: z.string().trim().max(1_000).nullable(),
+        offeringId: UuidSchema,
+        paymentExpectation: z.string().trim().min(1).max(60),
+        phone: z.string().trim().max(60).nullable(),
+        quantityUnits: z.number().int().min(1).max(99),
+        rowNumber: z.number().int(),
+      }),
+    )
+    .min(1)
+    .max(500),
+});
+
+export const OrderImportConfirmResponseSchema = z.object({
+  created: z.number().int(),
+  /** Las filas que no se pudieron crear, con el motivo: el resto sí entró. */
+  failed: z.array(z.object({ reason: z.string(), rowNumber: z.number().int() })),
+});
+
+/**
+ * Una fila de la cola de avisos: a quién hay que escribirle, qué dice el mensaje y si ya se hizo.
+ *
+ * La cola se deriva de los pedidos del período, no se carga: por eso acá no hay `id` de aviso
+ * pendiente. Lo que identifica una fila es el pedido más la plantilla, y `status` sale de haber o
+ * no encontrado un registro en `manual_notices` para ese par.
+ */
+export const ManualNoticeRowSchema = z.object({
+  body: z.string(),
+  customerDisplayName: z.string(),
+  customerId: UuidSchema,
+  deliveryZone: z.string().nullable(),
+  note: z.string().nullable(),
+  orderId: UuidSchema,
+  orderPublicNumber: z.string(),
+  /** El número tal como se guardó; null cuando el cliente no tiene WhatsApp cargado. */
+  phone: z.string().nullable(),
+  sentAt: IsoDateTimeSchema.nullable(),
+  sentByDisplayName: z.string().nullable(),
+  status: z.enum(['pending', 'sent', 'skipped']),
+});
+
+export const ManualNoticeListResponseSchema = z.object({
+  items: z.array(ManualNoticeRowSchema),
+  /** La plantilla con la que se resolvieron los textos, para que la pantalla pueda decir cuál es. */
+  templateDisplayName: z.string(),
+  templateKey: z.string(),
+});
+
+export const ManualNoticeMarkRequestSchema = z.object({
+  body: z.string().trim().min(1).max(5_000),
+  note: z.string().trim().max(500).nullable().optional(),
+  orderId: UuidSchema,
+  status: z.enum(['sent', 'skipped']),
+  templateKey: ConfigurableKeySchema,
+});
