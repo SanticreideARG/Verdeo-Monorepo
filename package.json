@@ -16,6 +16,7 @@
     "db:migrate": "pnpm --filter @verdeo/db db:migrate",
     "db:seed": "pnpm --filter @verdeo/db db:seed",
     "db:retire-repartidor": "pnpm --filter @verdeo/db db:retire-repartidor",
+    "db:wipe-operations": "pnpm --filter @verdeo/db db:wipe-operations",
     "db:seed-permissions": "pnpm --filter @verdeo/db db:seed-permissions",
     "db:studio": "pnpm --filter @verdeo/db db:studio",
     "db:verify-scope": "pnpm --filter @verdeo/db db:verify-scope",

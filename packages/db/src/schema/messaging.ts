@@ -133,8 +133,16 @@ export const manualNotices = pgTable(
     customerId: uuid('customer_id')
       .notNull()
       .references(() => customers.id, { onDelete: 'cascade' }),
-    /* `set null` y no `cascade`: si el pedido se borra, el hecho de haberle escrito al cliente
-       sigue siendo cierto y sigue sirviendo para no escribirle de nuevo. */
+    /*
+     * Sin clave foránea a propósito, ni siquiera con `set null`.
+     *
+     * Si el pedido se borra, el hecho de haberle escrito al cliente sigue siendo cierto y sigue
+     * sirviendo para no escribirle de nuevo. Guardar el id aunque el pedido ya no esté conserva a
+     * cuál era; un `set null` lo perdería.
+     *
+     * El precio es que nada limpia estas filas solo, así que el vaciado previo a producción las
+     * borra por nombre (`wipe-operations.ts`).
+     */
     orderId: uuid('order_id'),
     operatingSiteId: uuid('operating_site_id').references(() => operatingSites.id, {
       onDelete: 'set null',

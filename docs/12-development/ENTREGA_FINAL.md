@@ -38,8 +38,23 @@ Ordenado por lo que frena a lo demás.
    producción). El deploy de Vercel no las corre, así que una versión que agrega columnas queda
    desplegada contra una base que no las tiene. Es lo primero a revisar cuando algo funciona en
    local y falla en producción.
-4. **Limpiar los datos de prueba**: ~335 clientes y ~305 pedidos que no son reales. Conviene hacerlo
-   con el respaldo descargado antes (`/app/respaldos`), que es reversible, y no a mano.
+4. **Limpiar los datos de prueba**: ~335 clientes y ~305 pedidos que no son reales. Hay un comando,
+   `pnpm db:wipe-operations`, que borra clientes, pedidos, cobros, paradas de reparto,
+   conversaciones (incluidos los eventos crudos del webhook, que traen números y textos reales),
+   avisos y respuestas de encuestas, y **deja el catálogo intacto** —ciudades,
+   zonas, menús, períodos, precios, métodos de pago, usuarios, roles, plantillas, ayuda y
+   contenidos del sitio—.
+
+   No es un `delete from customers`: cuatro claves foráneas son `restrict`
+   (`orders.customer_id`, `delivery_stops.order_id`, `cash_collections.order_id`,
+   `cash_settlements.collection_id`) y con el orden equivocado Postgres tumba la transacción
+   entera sin borrar nada. El orden está probado contra un Postgres real en
+   `wipe-operations.test.ts`, con una fila en cada barrera.
+
+   **Bajar el respaldo antes** (`/app/respaldos`): esto no se puede deshacer. `--dry-run` cuenta
+   sin borrar. Las hojas de ruta no se borran, sólo sus paradas —una ruta es del período, no del
+   cliente—, y el comando dice cuántas quedaron vacías.
+
 5. **Ciudades y zonas.** La landing anuncia más cobertura de la que el sistema tiene cargada:
    Córdoba no tiene zonas ni menús, Río Negro no tiene menús, Buenos Aires tiene una sola zona
    genérica, y ninguna ciudad tiene WhatsApp público ni punto de partida de reparto —sin eso el
