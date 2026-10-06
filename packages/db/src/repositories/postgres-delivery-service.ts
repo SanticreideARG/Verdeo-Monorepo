@@ -323,6 +323,7 @@ export class PostgresDeliveryService {
          */
         deliveryLatitude: customerAddresses.latitude,
         deliveryLongitude: customerAddresses.longitude,
+        deliveryWindow: customerAddresses.deliveryWindow,
         id: deliveryStops.id,
         orderId: deliveryStops.orderId,
         paymentExpectation: orders.paymentExpectation,

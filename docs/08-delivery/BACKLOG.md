@@ -386,3 +386,12 @@ propósito.
       panel y no ve nada, porque el alcance sale de `user_operating_sites` y el script no escribía
       ninguna fila ahí. El camino recomendado sigue siendo la invitación desde Usuarios, que ya ata
       rol y ciudad y deja que la persona elija su clave.
+
+## Ventanas horarias
+
+- [x] La ventana del cliente viaja con la parada a los cuatro lugares: pantalla de Rutas, mensaje de
+      WhatsApp, planilla y minisitio del repartidor. Antes se cargaba en la ficha y se veía sólo en
+      el minisitio — justo donde ya no sirve para decidir el orden.
+- [ ] Que el optimizador las respete. Requiere que la ventana deje de ser texto libre y pase a dos
+      horas (desde/hasta) en campos separados, más la migración de lo ya cargado. Un parser sobre el
+      texto actual falla en silencio y manda la parada a cualquier lado, que es peor que no ordenar.

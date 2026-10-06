@@ -31,6 +31,8 @@ interface RouteStop {
   detail: string;
   deliveryLocationUrl: string | null;
   deliveryLongitude: number | null;
+  /** Cuándo recibe, tal como está cargado en su ficha. Texto libre. */
+  deliveryWindow: string | null;
   id: string;
   orderId: string;
   paymentExpectation: string;
@@ -282,7 +284,10 @@ export function RoutesPage() {
     const header = `Reparto ${formatDay(route.deliveryDate)}${route.label ? ` · ${route.label}` : ''} — ${String(route.stops.length)} paradas`;
     const lines = route.stops.map((stop) =>
       [
-        `${String(stop.sequence)}. ${maskSurname(stop.customerDisplayName)}`,
+        // La ventana va pegada al nombre: es lo que decide si esta parada puede ir acá o no.
+        `${String(stop.sequence)}. ${maskSurname(stop.customerDisplayName)}${
+          stop.deliveryWindow ? ` · 🕒 ${stop.deliveryWindow}` : ''
+        }`,
         // Qué entregar, antes que dónde: es lo que se busca en la caja al bajar del auto.
         ...(stop.detail ? [stop.detail] : []),
         stop.deliveryAddress,
@@ -319,6 +324,7 @@ export function RoutesPage() {
       [
         'Orden',
         'Cliente',
+        'Recibe',
         'Qué entregar',
         'Dirección',
         'Ubicación',
@@ -329,6 +335,7 @@ export function RoutesPage() {
       ...route.stops.map((stop) => [
         String(stop.sequence),
         maskSurname(stop.customerDisplayName),
+        stop.deliveryWindow ?? '',
         stop.detail,
         stop.deliveryAddress,
         stopMapLink(stop),
@@ -739,6 +746,9 @@ export function RoutesPage() {
                           <div className="routes-stop-body">
                             <p className="routes-stop-name">{stop.customerDisplayName}</p>
                             <p className="routes-stop-number">{stop.publicNumber}</p>
+                            {stop.deliveryWindow ? (
+                              <p className="routes-stop-window">🕒 {stop.deliveryWindow}</p>
+                            ) : null}
                             {stop.detail ? (
                               <p className="routes-stop-detail">{stop.detail}</p>
                             ) : null}

@@ -469,3 +469,38 @@ describe('el enlace de la ruta', () => {
     ).rejects.toThrow(/ya está confirmada/i);
   });
 });
+
+describe('ventanas horarias', () => {
+  /*
+   * La ventana se carga en la ficha del cliente y se veía sólo en el minisitio del repartidor.
+   * Quien arma la hoja no la tenía, que es justo quien decide el orden: sin eso, el optimizador
+   * pone la parada donde le queda cerca y alguien golpea una puerta cerrada.
+   */
+  it('llega a la ruta que arma el operador, no sólo al minisitio', async () => {
+    const { client, service } = await seededService();
+    await client.exec(
+      `update customer_addresses set delivery_window = 'después de las 18' where id = '${ADDRESS_A}';`,
+    );
+
+    const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
+
+    const conVentana = route!.stops.find((stop) => stop.deliveryWindow !== null);
+    expect(conVentana?.deliveryWindow).toBe('después de las 18');
+    // La otra parada no tiene: una ventana inventada es peor que ninguna.
+    expect(route!.stops.filter((stop) => stop.deliveryWindow === null)).toHaveLength(1);
+  });
+
+  it('sigue llegando al minisitio del repartidor', async () => {
+    const { client, service } = await seededService();
+    await client.exec(
+      `update customer_addresses set delivery_window = 'de 12 a 14' where id = '${ADDRESS_A}';`,
+    );
+    const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
+    await service.publishRoute(route!.id, CONTEXT);
+    const { token } = await service.issueRouteLink(route!.id, 24, CONTEXT);
+
+    const sheet = await service.routeSheetByToken(token);
+
+    expect(sheet!.stops.some((stop) => stop.deliveryWindow === 'de 12 a 14')).toBe(true);
+  });
+});

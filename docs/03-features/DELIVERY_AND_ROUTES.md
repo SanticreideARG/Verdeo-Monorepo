@@ -23,6 +23,25 @@ Problema tipo VRPTW:
 
 Usar motor determinista (Google Route Optimization, OR-Tools u otro adapter). IA puede explicar la propuesta, no calcular la ruta principal.
 
+### Ventanas horarias: hoy las decide una persona
+
+La ventana de cada cliente (`customer_addresses.delivery_window`) se carga en su ficha y **viaja
+con la parada** a los cuatro lugares: la pantalla de Rutas, el mensaje de WhatsApp, la planilla y
+el minisitio del repartidor.
+
+**El optimizador no la usa.** Ordena por distancia desde el origen y nada más. La ventana es texto
+libre —"después de las 18", "de 12 a 14", "cuando salgo del trabajo"— y un parser sobre eso falla
+en silencio: una forma que no reconoce manda la parada a cualquier lado sin que nada lo avise, que
+es peor que no ordenar por ventana.
+
+Entonces el reparto de trabajo es explícito: el optimizador propone por distancia, y quien arma la
+hoja ve la ventana en cada parada y reacomoda las que haga falta (`reorderStops` ya existe). Es
+una persona decidiendo con el dato a la vista, en lugar de un algoritmo adivinando.
+
+Para que el motor las respete de verdad, la ventana tiene que dejar de ser texto libre y pasar a
+ser dos horas (desde/hasta) cargadas en campos separados. Eso es un cambio de modelo y una
+migración de lo ya cargado, y es el paso previo a cualquier VRPTW real.
+
 ## Delivery App
 
 Ruta `/delivery`.

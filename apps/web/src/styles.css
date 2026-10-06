@@ -8624,3 +8624,15 @@ textarea.sr-only {
     0 0 0 3px var(--db-surface-solid),
     0 0 0 5px var(--db-accent);
 }
+
+/* La ventana horaria de la parada, mientras se arma la ruta.
+   Va arriba del "qué entregar" porque es una restricción —puede invalidar el orden que propuso el
+   optimizador, que sólo mira distancia— y no un dato más.
+   Se distingue por peso y por el reloj, no por un color propio: los temas de acá no definen un
+   token de advertencia, y un color fijo que se lee bien en el tema claro se pierde en el oscuro. */
+.routes-stop-window {
+  margin: 0.2rem 0 0;
+  color: var(--db-text);
+  font-size: 0.82rem;
+  font-weight: 700;
+}

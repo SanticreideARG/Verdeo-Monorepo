@@ -46,6 +46,14 @@ export const DeliveryStopSchema = z.object({
   detail: z.string(),
   deliveryLatitude: z.number().nullable(),
   deliveryLocationUrl: z.string().nullable(),
+  /*
+   * Cuándo recibe este cliente, tal como lo cargó la operación en su ficha.
+   *
+   * Es texto libre —"después de las 18", "de 12 a 14"— y por eso no la usa el optimizador, que
+   * ordena por distancia. Sirve para quien arma la hoja: ve la restricción mientras acomoda las
+   * paradas, en vez de enterarse cuando el repartidor golpea una puerta cerrada.
+   */
+  deliveryWindow: z.string().nullable(),
   deliveryLongitude: z.number().nullable(),
   id: UuidSchema,
   orderId: UuidSchema,
