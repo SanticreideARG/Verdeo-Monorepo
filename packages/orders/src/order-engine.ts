@@ -115,6 +115,13 @@ interface ResolveCompositionInput {
   // never changes engine behaviour (ADR-030).
   composableFamilyName: string;
   familyName: string;
+  /**
+   * El techo de platos que admite una unidad. Sin esto, la cantidad estándar.
+   *
+   * Existe un máximo y no "los que quieras" porque nada distingue un pedido familiar de un
+   * error de tipeo: quince platos es un pedido grande, cincuenta es un cero de más.
+   */
+  maxDishes?: number;
   mealsPerUnit: number;
   selectedDishes?: readonly string[];
 }
@@ -126,10 +133,24 @@ export function resolveOrderComposition(input: ResolveCompositionInput): {
   if (!input.selectedDishes) {
     return { dishSelections: [], productNameSnapshot: input.familyName };
   }
-  if (input.selectedDishes.length !== input.mealsPerUnit) {
+  /*
+   * La cantidad estándar es un piso, no una igualdad.
+   *
+   * Era `!==` y eso dejaba el Intuitivo clavado en los platos del tamaño. Pedir más es un pedido
+   * legítimo —y su precio lo resuelve la regla configurada, no esto—, pero pedir menos cambia lo
+   * que se vende por el mismo precio del menú, así que el piso se mantiene.
+   */
+  const maxDishes = Math.max(input.maxDishes ?? input.mealsPerUnit, input.mealsPerUnit);
+  if (input.selectedDishes.length < input.mealsPerUnit) {
     throw new OrderRuleError(
       'INVALID_COMPOSITION',
-      `A composed unit requires exactly ${input.mealsPerUnit} dishes`,
+      `A composed unit requires at least ${String(input.mealsPerUnit)} dishes`,
+    );
+  }
+  if (input.selectedDishes.length > maxDishes) {
+    throw new OrderRuleError(
+      'INVALID_COMPOSITION',
+      `A composed unit admits at most ${String(maxDishes)} dishes`,
     );
   }
   if (input.selectedDishes.some((dish) => !input.allowedDishes.has(dish))) {

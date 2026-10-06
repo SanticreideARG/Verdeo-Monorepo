@@ -117,6 +117,13 @@ const sampleMenu = {
     status: 'OPEN',
   },
   id: '20000000-0000-4000-8000-000000000001',
+  intuitivoMaxDishes: 15,
+  intuitivoPricing: {
+    extraDishMinor: 0,
+    factorBasisPoints: 10_000,
+    mode: 'proporcional' as const,
+    roundingMinor: 50_000,
+  },
   offerings: [
     {
       composable: false,
@@ -1505,6 +1512,11 @@ describe('API foundation', () => {
           {
             dietaryInstructionsEnabled: false,
             intuitivoEnabled: true,
+            intuitivoExtraDishMinor: 0,
+            intuitivoMaxDishes: 15,
+            intuitivoPricingFactorBp: 10_000,
+            intuitivoPricingMode: 'proporcional' as const,
+            intuitivoRoundingMinor: 50_000,
             operatingSiteId: SITE,
             operatingSiteName: 'Neuquén',
           },
@@ -1519,6 +1531,11 @@ describe('API foundation', () => {
           {
             dietaryInstructionsEnabled: false,
             intuitivoEnabled: true,
+            intuitivoExtraDishMinor: 0,
+            intuitivoMaxDishes: 15,
+            intuitivoPricingFactorBp: 10_000,
+            intuitivoPricingMode: 'proporcional' as const,
+            intuitivoRoundingMinor: 50_000,
             operatingSiteId: SITE,
             operatingSiteName: 'Neuquén',
           },

@@ -538,6 +538,27 @@ export const WeeklyMenuSchema = z.object({
     status: z.string(),
   }),
   id: UuidSchema,
+  /*
+   * Hasta cuántos platos admite un Intuitivo en la ciudad de este menú.
+   *
+   * Viaja con el menú y no en un endpoint aparte porque los dos formularios que arman un
+   * Intuitivo —el del panel y el público— ya lo cargan. Un número que el selector no tuviera
+   * dejaría elegir de más para que el servidor lo rechace después.
+   */
+  intuitivoMaxDishes: z.number().int().positive(),
+  /*
+   * La regla con la que se propone el precio de un Intuitivo de más platos.
+   *
+   * Viaja al navegador para que el formulario muestre el mismo número que va a cobrar el
+   * servidor. Mostrar el precio del menú con siete platos elegidos es peor que no mostrar
+   * nada: el total dice una cosa y el pedido sale con otra.
+   */
+  intuitivoPricing: z.object({
+    extraDishMinor: z.number().int().nonnegative(),
+    factorBasisPoints: z.number().int().positive(),
+    mode: z.enum(['proporcional', 'coeficiente', 'monto_fijo']),
+    roundingMinor: z.number().int().nonnegative(),
+  }),
   offerings: z.array(MenuOfferingSchema),
   // Null means the global master revision.
   operatingSiteId: UuidSchema.nullable(),
@@ -598,7 +619,14 @@ export const CycleIdParamSchema = z.object({ cycleId: UuidSchema });
 export const OrderItemInputSchema = z.object({
   offeringId: UuidSchema,
   quantityUnits: z.number().int().min(1).max(1_000),
-  selectedDishNames: z.array(RequiredTextSchema).length(5).optional(),
+  /*
+   * Los platos elegidos de un Intuitivo.
+   *
+   * Era `.length(5)`, que clavaba la composición en cinco y además impedía repetir un plato. La
+   * cantidad que vale la decide el servidor contra el tamaño del pedido y el máximo configurado
+   * de la ciudad: acá sólo se fija un techo duro, para que un cero de más no llegue a la base.
+   */
+  selectedDishNames: z.array(RequiredTextSchema).min(1).max(50).optional(),
 });
 
 export const OrderCreateRequestSchema = z.object({
@@ -1168,6 +1196,12 @@ export const MenuCatalogSettingsSchema = z.object({
    */
   dietaryInstructionsEnabled: z.boolean(),
   intuitivoEnabled: z.boolean(),
+  intuitivoExtraDishMinor: z.number().int().nonnegative(),
+  intuitivoMaxDishes: z.number().int().min(1).max(50),
+  intuitivoPricingMode: z.enum(['proporcional', 'coeficiente', 'monto_fijo']),
+  /** En diezmilésimos: 10000 es ×1, 9500 es ×0,95. */
+  intuitivoPricingFactorBp: z.number().int().positive(),
+  intuitivoRoundingMinor: z.number().int().nonnegative(),
   operatingSiteId: UuidSchema,
   operatingSiteName: z.string(),
 });
@@ -1181,6 +1215,11 @@ export const MenuCatalogSettingsUpdateRequestSchema = z
   .object({
     dietaryInstructionsEnabled: z.boolean().optional(),
     intuitivoEnabled: z.boolean().optional(),
+    intuitivoExtraDishMinor: z.number().int().nonnegative().max(100_000_000).optional(),
+    intuitivoMaxDishes: z.number().int().min(1).max(50).optional(),
+    intuitivoPricingMode: z.enum(['proporcional', 'coeficiente', 'monto_fijo']).optional(),
+    intuitivoPricingFactorBp: z.number().int().positive().max(100_000).optional(),
+    intuitivoRoundingMinor: z.number().int().nonnegative().max(100_000_000).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: 'No hay cambios para aplicar.' });
 
@@ -1258,7 +1297,8 @@ export const CustomerOrderCreateRequestSchema = z.object({
       z.object({
         offeringId: UuidSchema,
         quantityUnits: z.number().int().positive().max(99),
-        selectedDishNames: z.array(z.string().trim().min(1).max(300)).max(5).optional(),
+        // Mismo techo duro que el pedido interno: la cantidad que vale la decide el servidor.
+        selectedDishNames: z.array(z.string().trim().min(1).max(300)).min(1).max(50).optional(),
       }),
     )
     .min(1)

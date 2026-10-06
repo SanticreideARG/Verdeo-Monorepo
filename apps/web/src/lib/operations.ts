@@ -135,6 +135,15 @@ export interface WeeklyMenu {
     status: string;
   };
   id: string;
+  /** Hasta cuántos platos admite un Intuitivo en la ciudad de este menú. */
+  intuitivoMaxDishes: number;
+  /** Cómo se propone el precio de un Intuitivo con más platos que los del tamaño. */
+  intuitivoPricing: {
+    extraDishMinor: number;
+    factorBasisPoints: number;
+    mode: 'coeficiente' | 'monto_fijo' | 'proporcional';
+    roundingMinor: number;
+  };
   offerings: MenuOffering[];
   // Null means the global master revision.
   operatingSiteId: string | null;

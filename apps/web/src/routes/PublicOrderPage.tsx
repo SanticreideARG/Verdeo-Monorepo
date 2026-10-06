@@ -450,8 +450,10 @@ export function PublicOrderPage() {
               </label>
               {offering?.composable ? (
                 <div className="field field-wide">
-                  Elegí tus cinco platos
+                  Elegí tus platos
                   <IntuitivoDishPicker
+                    maxDishes={menu.intuitivoMaxDishes}
+                    minDishes={offering.mealsPerUnit}
                     offerings={menu.offerings}
                     onChange={setSelectedDishes}
                     selected={selectedDishes}

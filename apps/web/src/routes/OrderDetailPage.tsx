@@ -77,6 +77,8 @@ export function OrderDetailPage() {
    */
   const [items, setItems] = useState<EditableItem[]>([]);
   const [offerings, setOfferings] = useState<MenuOffering[]>([]);
+  // El techo de platos de la ciudad del pedido: viaja con el menú, que esta pantalla ya carga.
+  const [maxDishes, setMaxDishes] = useState(5);
   /*
    * A qué semana pertenece el pedido.
    *
@@ -120,6 +122,7 @@ export function OrderDetailPage() {
         const menus = ((await response.json()) as { items: WeeklyMenu[] }).items;
         const menu = menus.find((candidate) => candidate.id === loaded.menuId);
         setOfferings(menu?.offerings ?? []);
+        if (menu) setMaxDishes(menu.intuitivoMaxDishes);
         setCycle(menu ? { alias: menu.cycle.alias, id: menu.cycle.id } : null);
       })
       .catch(() => undefined);
@@ -385,7 +388,12 @@ export function OrderDetailPage() {
                     no se pueden editar acá.
                   </p>
                 ) : (
-                  <OrderItemsEditor items={items} offerings={offerings} onChange={setItems} />
+                  <OrderItemsEditor
+                    items={items}
+                    maxDishes={maxDishes}
+                    offerings={offerings}
+                    onChange={setItems}
+                  />
                 )}
               </section>
             ) : null}

@@ -366,12 +366,41 @@ export const menuCatalogSettings = pgTable(
      * apagarlo saca el campo de los formularios, no el dato de lo que ya pasó.
      */
     dietaryInstructionsEnabled: boolean('dietary_instructions_enabled').default(false).notNull(),
+    /*
+     * Hasta cuántos platos admite un Intuitivo, y cómo se propone su precio cuando pasa del
+     * estándar del tamaño (`product_sizes.meals_per_unit`).
+     *
+     * Vive acá, por ciudad, y no en el código: cobrar la parte proporcional, premiar el volumen o
+     * cobrar un plato extra a precio fijo son tres decisiones comerciales distintas, y cuál se usa
+     * es de quien vende. Cambiar de una a otra no puede depender de un deploy.
+     */
+    intuitivoMaxDishes: integer('intuitivo_max_dishes').default(15).notNull(),
+    intuitivoPricingMode: text('intuitivo_pricing_mode').default('proporcional').notNull(),
+    /* En diezmilésimos: 10000 es ×1, 9500 es ×0,95. Entero porque el resultado es plata, y un
+       factor en coma flotante arrastra su error de representación hasta el precio. */
+    intuitivoPricingFactorBp: integer('intuitivo_pricing_factor_bp').default(10_000).notNull(),
+    intuitivoExtraDishMinor: integer('intuitivo_extra_dish_minor').default(0).notNull(),
+    /** El escalón de redondeo, en centavos. 50000 redondea al quinientos. 0 no redondea. */
+    intuitivoRoundingMinor: integer('intuitivo_rounding_minor').default(50_000).notNull(),
     updatedByUserId: uuid('updated_by_user_id').references(() => users.id, {
       onDelete: 'set null',
     }),
     ...timestamps,
   },
-  (table) => [index('menu_catalog_settings_site_idx').on(table.operatingSiteId, table.updatedAt)],
+  (table) => [
+    index('menu_catalog_settings_site_idx').on(table.operatingSiteId, table.updatedAt),
+    // Un máximo menor que el estándar de cualquier tamaño dejaría el Intuitivo sin poder pedirse.
+    check('menu_catalog_settings_max_dishes_check', sql`${table.intuitivoMaxDishes} >= 1`),
+    check(
+      'menu_catalog_settings_pricing_mode_check',
+      sql`${table.intuitivoPricingMode} in ('proporcional', 'coeficiente', 'monto_fijo')`,
+    ),
+    check('menu_catalog_settings_factor_check', sql`${table.intuitivoPricingFactorBp} > 0`),
+    check(
+      'menu_catalog_settings_rounding_check',
+      sql`${table.intuitivoRoundingMinor} >= 0 and ${table.intuitivoExtraDishMinor} >= 0`,
+    ),
+  ],
 );
 
 // Commercial size. '250' and '400' are commercial names and never express a unit of measure.

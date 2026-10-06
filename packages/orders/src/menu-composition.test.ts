@@ -34,7 +34,7 @@ describe('Composable variety identification', () => {
     expect(result.dishSelections).toEqual([]);
   });
 
-  it('derives the required dish count from the size instead of assuming five', () => {
+  it('derives the dish count from the size instead of assuming five', () => {
     expect(() =>
       resolveOrderComposition({
         allowedDishes: universe,
@@ -44,7 +44,54 @@ describe('Composable variety identification', () => {
         mealsPerUnit: 3,
         selectedDishes: ['A', 'B', 'C', 'D', 'E'],
       }),
-    ).toThrowError(/exactly 3 dishes/);
+    ).toThrowError(/at most 3 dishes/);
+  });
+
+  /*
+   * Más platos que el estándar es un pedido legítimo: su precio lo resuelve la regla configurada,
+   * no esto. Lo que no se admite es menos, que cambiaría lo que se vende por el mismo precio.
+   */
+  it('admite más platos que el estándar hasta el máximo configurado', () => {
+    const result = resolveOrderComposition({
+      allowedDishes: universe,
+      baseDishes: ['A', 'B', 'C'],
+      composableFamilyName: 'Intuitivo',
+      familyName: 'Keto',
+      maxDishes: 6,
+      mealsPerUnit: 3,
+      selectedDishes: ['A', 'B', 'C', 'D', 'E'],
+    });
+
+    expect(result.dishSelections).toEqual(['A', 'B', 'C', 'D', 'E']);
+    expect(result.productNameSnapshot).toBe('Intuitivo');
+  });
+
+  it('no admite menos platos que el estándar', () => {
+    expect(() =>
+      resolveOrderComposition({
+        allowedDishes: universe,
+        baseDishes: ['A', 'B', 'C'],
+        composableFamilyName: 'Intuitivo',
+        familyName: 'Keto',
+        maxDishes: 6,
+        mealsPerUnit: 3,
+        selectedDishes: ['A', 'B'],
+      }),
+    ).toThrowError(/at least 3 dishes/);
+  });
+
+  // Dos porciones del mismo plato son dos porciones, no un duplicado a deduplicar.
+  it('deja repetir el mismo plato', () => {
+    const result = resolveOrderComposition({
+      allowedDishes: universe,
+      baseDishes: ['A', 'B', 'C'],
+      composableFamilyName: 'Intuitivo',
+      familyName: 'Keto',
+      mealsPerUnit: 3,
+      selectedDishes: ['A', 'A', 'B'],
+    });
+
+    expect(result.dishSelections).toEqual(['A', 'A', 'B']);
   });
 
   it('sends a composable line to the custom list even without its own selections', () => {

@@ -1,5 +1,6 @@
 export * from './delivery-date.js';
 export * from './delivery-detail.js';
+export * from './intuitivo-pricing.js';
 export * from './label-sheet.js';
 export * from './menu-names.js';
 export * from './order-engine.js';

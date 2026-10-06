@@ -12,6 +12,8 @@ export interface CartOffering {
   currency: string;
   familyName: string;
   id: string;
+  /** Cuántos platos trae una unidad de este tamaño. */
+  mealsPerUnit: number;
   sizeName: string;
   unitPriceMinor: number;
 }
@@ -42,17 +44,31 @@ export type PendingLine = { line: CartLine } | { reason: string } | null;
  * incompleto: un Intuitivo sin sus platos no se puede descartar en silencio, porque quien lo eligió
  * cree que lo cargó, y el pedido saldría sin esa vianda.
  */
+/** Lo que la ciudad permite y cómo cobra los platos de más. */
+export interface IntuitivoLimits {
+  maxDishes: number;
+  pricing: {
+    extraDishMinor: number;
+    factorBasisPoints: number;
+    mode: 'coeficiente' | 'monto_fijo' | 'proporcional';
+    roundingMinor: number;
+  };
+}
+
 export function pendingCartLine(
   offering: CartOffering | null,
   quantityUnits: number,
   dishes: readonly string[],
-  dishesPerIntuitivo: number,
+  limits: IntuitivoLimits,
 ): PendingLine {
   if (!offering) return null;
-  if (offering.composable && dishes.length !== dishesPerIntuitivo) {
+  if (offering.composable && dishes.length < offering.mealsPerUnit) {
     return {
-      reason: `Elegí los ${String(dishesPerIntuitivo)} platos del Intuitivo antes de agregarlo.`,
+      reason: `Elegí al menos ${String(offering.mealsPerUnit)} platos del Intuitivo antes de agregarlo.`,
     };
+  }
+  if (offering.composable && dishes.length > limits.maxDishes) {
+    return { reason: `Un Intuitivo admite hasta ${String(limits.maxDishes)} platos.` };
   }
   return {
     line: {
@@ -62,7 +78,15 @@ export function pendingCartLine(
       quantityUnits,
       // Una vianda estándar no lleva platos elegidos aunque queden seleccionados de antes.
       selectedDishNames: offering.composable ? [...dishes] : [],
-      unitPriceMinor: offering.unitPriceMinor,
+      // El mismo número que va a cobrar el servidor, no el del menú: con platos de más, difieren.
+      unitPriceMinor: offering.composable
+        ? intuitivoUnitPriceMinor({
+            baseDishes: offering.mealsPerUnit,
+            basePriceMinor: offering.unitPriceMinor,
+            dishes: dishes.length,
+            rule: limits.pricing,
+          })
+        : offering.unitPriceMinor,
     },
   };
 }
@@ -100,4 +124,41 @@ export function cartItemsPayload(
     quantityUnits: line.quantityUnits,
     ...(line.selectedDishNames.length > 0 ? { selectedDishNames: line.selectedDishNames } : {}),
   }));
+}
+
+/**
+ * El precio de un Intuitivo con una cantidad de platos distinta de la estándar.
+ *
+ * Es un espejo de `intuitivoUnitPriceMinor` de `@verdeo/orders`, que es la fuente de verdad: esta
+ * aplicación no depende de los paquetes internos, así que la cuenta se repite acá para que el total
+ * del formulario sea el mismo número que va a cobrar el servidor. Si una cambia, la otra también.
+ *
+ * Con la cantidad estándar devuelve el precio del menú intacto, sin regla ni redondeo.
+ */
+export function intuitivoUnitPriceMinor(input: {
+  baseDishes: number;
+  basePriceMinor: number;
+  dishes: number;
+  rule: {
+    extraDishMinor: number;
+    factorBasisPoints: number;
+    mode: 'coeficiente' | 'monto_fijo' | 'proporcional';
+    roundingMinor: number;
+  };
+}): number {
+  const { baseDishes, basePriceMinor, dishes, rule } = input;
+  if (baseDishes <= 0 || dishes === baseDishes) return basePriceMinor;
+
+  const crudo =
+    rule.mode === 'monto_fijo'
+      ? basePriceMinor + (dishes - baseDishes) * rule.extraDishMinor
+      : rule.mode === 'coeficiente'
+        ? (basePriceMinor / baseDishes) * dishes * (rule.factorBasisPoints / 10_000)
+        : (basePriceMinor / baseDishes) * dishes;
+
+  const redondeado =
+    rule.roundingMinor > 0
+      ? Math.round(crudo / rule.roundingMinor) * rule.roundingMinor
+      : Math.round(crudo);
+  return Math.max(redondeado, rule.roundingMinor > 0 ? rule.roundingMinor : 1);
 }

@@ -19,7 +19,7 @@ Cada una:
 
 ### Intuitivo
 
-- cinco platos elegidos por cliente;
+- los platos del tamaño elegidos por cliente, o más (ver «Más platos que el estándar»);
 - sólo platos publicados esa semana;
 - repeticiones permitidas;
 - 250 usa universo 250;
@@ -41,6 +41,48 @@ a semana: tabla `menu_catalog_settings` (una fila, "gana la última"), servicio
 y el backend rechaza igual cualquier intento que llegue con una oferta `composable: true`
 (`OperationsConflictError`, no un 500). Apagarlo no toca ningún menú ya creado — composición y
 precios quedan congelados como snapshot en el pedido, como siempre.
+
+### Más platos que el estándar
+
+Cuántos platos lleva una unidad sale del tamaño (`product_sizes.meals_per_unit`, cinco por
+defecto) y nunca estuvo escrito en el código. Lo que sí estaba clavado era la igualdad: el motor
+exigía **exactamente** esa cantidad. Ahora es un **piso**.
+
+- **Más** es un pedido válido y su precio lo propone la regla de la ciudad.
+- **Menos** se rechaza: cambiaría lo que se vende por el mismo precio del menú.
+- El techo lo fija cada ciudad (`intuitivo_max_dishes`, quince por defecto). Existe un techo
+  porque nada distingue un pedido familiar de un cero de más.
+
+**Las repeticiones ya estaban en la especificación** y la base siempre las aguantó —los platos se
+guardan por slot—. Lo que las impedía era el selector, que usaba «¿ya está elegido?» como
+interruptor. Ahora cada plato lleva una cuenta.
+
+### Cómo se propone el precio
+
+Tres formas, configurables por ciudad en `menu_catalog_settings`, porque son tres decisiones
+comerciales distintas y cuál se usa es de quien vende, no del código:
+
+| Modo           | Cuenta                                                                    |
+| -------------- | ------------------------------------------------------------------------- |
+| `proporcional` | precio ÷ platos del tamaño × platos elegidos                              |
+| `coeficiente`  | lo mismo, por un factor (`intuitivo_pricing_factor_bp`, en diezmilésimos) |
+| `monto_fijo`   | precio del tamaño + un monto por cada plato de más                        |
+
+Después se redondea al escalón configurado (`intuitivo_rounding_minor`, al quinientos por
+defecto). **Al más cercano y no para arriba**: la regla ya decide cuánto se cobra de más, y
+redondear siempre hacia arriba le sumaría un sesgo que nadie pidió.
+
+**Con la cantidad estándar el precio del menú no se toca**: ni regla ni redondeo. Ese precio lo
+publicó alguien, y pasarlo por el cálculo lo cambiaría como efecto secundario de otra cosa.
+
+La cuenta vive en `packages/orders/src/intuitivo-pricing.ts` y está **duplicada** en
+`apps/web/src/lib/orderCart.ts`: la aplicación web no depende de los paquetes internos, y el
+formulario tiene que mostrar el mismo número que va a cobrar el servidor. Mostrar el precio del
+menú con siete platos elegidos sería peor que no mostrar nada. Las dos puntas tienen un comentario
+diciendo cuál es la fuente.
+
+El factor se guarda en diezmilésimos y no como decimal: el resultado es plata, y un número en coma
+flotante arrastra su error de representación hasta el precio.
 
 ## Precios
 

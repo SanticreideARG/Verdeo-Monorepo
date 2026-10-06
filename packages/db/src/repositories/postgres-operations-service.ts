@@ -33,11 +33,14 @@ import {
   buildKitchenSummary,
   buildLabels,
   calculateLineTotal,
+  intuitivoUnitPriceMinor,
   calculateOrderTotal,
   deliveryDateFor,
   mergeByLooseName,
   normalizeMenuName,
   resolveOrderComposition,
+  type IntuitivoPricingMode,
+  type IntuitivoPricingRule,
   type KitchenSourceLine,
   type OrderExportRow,
   type OrderStatus,
@@ -2314,6 +2317,31 @@ export class PostgresOperationsService {
             )
             .orderBy(asc(weeklyMenuItems.slot));
 
+    /*
+     * El máximo de platos del Intuitivo de cada ciudad, en una consulta y no una por menú.
+     *
+     * Viaja con el menú porque los dos formularios que arman un Intuitivo ya lo cargan: sin esto
+     * el selector dejaría elegir de más para que el servidor lo rechace al guardar.
+     */
+    const ajustes = await this.database
+      .select({
+        extraDishMinor: menuCatalogSettings.intuitivoExtraDishMinor,
+        factorBasisPoints: menuCatalogSettings.intuitivoPricingFactorBp,
+        maxDishes: menuCatalogSettings.intuitivoMaxDishes,
+        mode: menuCatalogSettings.intuitivoPricingMode,
+        operatingSiteId: menuCatalogSettings.operatingSiteId,
+        roundingMinor: menuCatalogSettings.intuitivoRoundingMinor,
+        updatedAt: menuCatalogSettings.updatedAt,
+      })
+      .from(menuCatalogSettings)
+      .orderBy(desc(menuCatalogSettings.updatedAt));
+    const reglaBySite = new Map<string, (typeof ajustes)[number]>();
+    for (const ajuste of ajustes) {
+      if (ajuste.operatingSiteId && !reglaBySite.has(ajuste.operatingSiteId)) {
+        reglaBySite.set(ajuste.operatingSiteId, ajuste);
+      }
+    }
+
     return menuRows.map((menu) => ({
       cycle: {
         alias: menu.cycleAlias,
@@ -2324,6 +2352,25 @@ export class PostgresOperationsService {
         status: menu.cycleStatus,
       },
       id: menu.id,
+      // Sin fila de ajustes vale el mismo valor que la tabla, para que una ciudad sin configurar
+      // se comporte igual que una configurada con los valores de fábrica.
+      intuitivoMaxDishes:
+        (menu.operatingSiteId ? reglaBySite.get(menu.operatingSiteId)?.maxDishes : null) ?? 15,
+      intuitivoPricing: {
+        extraDishMinor:
+          (menu.operatingSiteId ? reglaBySite.get(menu.operatingSiteId)?.extraDishMinor : null) ??
+          0,
+        factorBasisPoints:
+          (menu.operatingSiteId
+            ? reglaBySite.get(menu.operatingSiteId)?.factorBasisPoints
+            : null) ?? 10_000,
+        mode:
+          (menu.operatingSiteId ? reglaBySite.get(menu.operatingSiteId)?.mode : null) ??
+          'proporcional',
+        roundingMinor:
+          (menu.operatingSiteId ? reglaBySite.get(menu.operatingSiteId)?.roundingMinor : null) ??
+          50_000,
+      },
       offerings: offeringRows
         .filter((offering) => offering.menuId === menu.id)
         .map(
@@ -3366,6 +3413,8 @@ export class PostgresOperationsService {
           deliveryDate: orders.deliveryDate,
           deliveryLocationUrl: orders.deliveryLocationUrlSnapshot,
           menuId: orders.weeklyMenuId,
+          // La regla del Intuitivo es por ciudad: editar un pedido tiene que usar la de su ciudad.
+          operatingSiteId: orders.operatingSiteId,
           notes: orders.notes,
           paymentExpectation: orders.paymentExpectation,
           status: orders.status,
@@ -3412,7 +3461,12 @@ export class PostgresOperationsService {
       });
 
       const resolvedItems = input.items
-        ? await this.resolveOrderItems(transaction, current.menuId, input.items)
+        ? await this.resolveOrderItems(
+            transaction,
+            current.menuId,
+            input.items,
+            current.operatingSiteId,
+          )
         : null;
       const firstResolvedItem = resolvedItems?.[0];
       const resolvedTotal = resolvedItems
@@ -3709,7 +3763,12 @@ export class PostgresOperationsService {
         'Un pedido necesita una operación: elegí una ciudad o un domicilio con zona asignada',
       );
 
-    const resolvedItems = await this.resolveOrderItems(transaction, input.menuId, input.items);
+    const resolvedItems = await this.resolveOrderItems(
+      transaction,
+      input.menuId,
+      input.items,
+      operatingSiteId,
+    );
     const currency = resolvedItems[0]?.currency;
     if (!currency) throw new OperationsConflictError('An order requires at least one item');
     if (input.source === 'opportunity_sale') {
@@ -3787,12 +3846,16 @@ export class PostgresOperationsService {
       quantityUnits: number;
       selectedDishNames?: readonly string[] | undefined;
     }[],
+    /** De dónde sale la regla del Intuitivo: cuántos platos admite y cómo se cobra el exceso. */
+    operatingSiteId: string | null,
   ): Promise<ResolvedOrderItem[]> {
     if (items.length === 0)
       throw new OperationsConflictError('An order requires at least one item');
     const resolvedItems: ResolvedOrderItem[] = [];
     // The composable variety is the same for every line, so it is resolved once instead of per item.
     const composableFamilyName = await this.composableFamilyName(transaction);
+    // Una sola lectura para todo el pedido: la regla es de la ciudad, no del renglón.
+    const { maxDishes, rule } = await this.intuitivoRuleForSite(transaction, operatingSiteId);
 
     for (const item of items) {
       const [offering] = await transaction
@@ -3860,8 +3923,24 @@ export class PostgresOperationsService {
         baseDishes: baseDishes.map(({ dishName }) => dishName),
         composableFamilyName,
         familyName: offering.familyName,
+        maxDishes,
         mealsPerUnit: offering.mealsPerUnit,
         ...(item.selectedDishNames ? { selectedDishes: item.selectedDishNames } : {}),
+      });
+
+      /*
+       * El precio del menú, salvo que se hayan elegido más platos que los del tamaño.
+       *
+       * Se calcula sobre la composición resuelta y no sobre lo que vino en el pedido: una
+       * composición igual a la base se guarda vacía, y contarla como cero platos habría
+       * cobrado de menos justamente al pedido más común.
+       */
+      const platosElegidos = item.selectedDishNames?.length ?? offering.mealsPerUnit;
+      const unitPriceConPlatos = intuitivoUnitPriceMinor({
+        baseDishes: offering.mealsPerUnit,
+        basePriceMinor: unitPriceMinor,
+        dishes: platosElegidos,
+        rule,
       });
 
       resolvedItems.push({
@@ -3871,8 +3950,8 @@ export class PostgresOperationsService {
         productNameSnapshot: composition.productNameSnapshot,
         productVariantId: offering.productVariantId,
         quantityUnits: item.quantityUnits,
-        totalMinor: calculateLineTotal(item.quantityUnits, unitPriceMinor),
-        unitPriceMinor,
+        totalMinor: calculateLineTotal(item.quantityUnits, unitPriceConPlatos),
+        unitPriceMinor: unitPriceConPlatos,
         variantSnapshot: offering.variantName,
       });
     }
@@ -5356,6 +5435,11 @@ export class PostgresOperationsService {
       .select({
         dietaryInstructionsEnabled: menuCatalogSettings.dietaryInstructionsEnabled,
         intuitivoEnabled: menuCatalogSettings.intuitivoEnabled,
+        intuitivoExtraDishMinor: menuCatalogSettings.intuitivoExtraDishMinor,
+        intuitivoMaxDishes: menuCatalogSettings.intuitivoMaxDishes,
+        intuitivoPricingFactorBp: menuCatalogSettings.intuitivoPricingFactorBp,
+        intuitivoPricingMode: menuCatalogSettings.intuitivoPricingMode,
+        intuitivoRoundingMinor: menuCatalogSettings.intuitivoRoundingMinor,
         operatingSiteId: menuCatalogSettings.operatingSiteId,
         updatedAt: menuCatalogSettings.updatedAt,
       })
@@ -5372,9 +5456,65 @@ export class PostgresOperationsService {
       // alimentarias apagadas, porque se pidió sacarlas.
       dietaryInstructionsEnabled: latestBySite.get(site.id)?.dietaryInstructionsEnabled ?? false,
       intuitivoEnabled: latestBySite.get(site.id)?.intuitivoEnabled ?? true,
+      // Los mismos valores que la tabla, para que una ciudad sin fila se vea como una
+      // configurada de fábrica y no como una sin regla.
+      intuitivoExtraDishMinor: latestBySite.get(site.id)?.intuitivoExtraDishMinor ?? 0,
+      intuitivoMaxDishes: latestBySite.get(site.id)?.intuitivoMaxDishes ?? 15,
+      intuitivoPricingFactorBp: latestBySite.get(site.id)?.intuitivoPricingFactorBp ?? 10_000,
+      intuitivoPricingMode: (latestBySite.get(site.id)?.intuitivoPricingMode ??
+        'proporcional') as IntuitivoPricingMode,
+      intuitivoRoundingMinor: latestBySite.get(site.id)?.intuitivoRoundingMinor ?? 50_000,
       operatingSiteId: site.id,
       operatingSiteName: site.displayName,
     }));
+  }
+
+  /**
+   * Cuántos platos admite un Intuitivo acá y cómo se propone su precio de más.
+   *
+   * Sin fila de ajustes valen los mismos valores que la tabla: hasta quince platos, proporcional
+   * y al quinientos. Repetirlos acá es a propósito — una ciudad sin configurar tiene que
+   * comportarse igual que una configurada con los valores de fábrica, y no quedarse sin regla.
+   */
+  private async intuitivoRuleForSite(
+    database: Database | DatabaseTransaction,
+    operatingSiteId: string | null,
+  ): Promise<{ maxDishes: number; rule: IntuitivoPricingRule }> {
+    const porDefecto = {
+      maxDishes: 15,
+      rule: {
+        extraDishMinor: 0,
+        factorBasisPoints: 10_000,
+        mode: 'proporcional' as const,
+        roundingMinor: 50_000,
+      },
+    };
+    if (!operatingSiteId) return porDefecto;
+
+    const [row] = await database
+      .select({
+        extraDishMinor: menuCatalogSettings.intuitivoExtraDishMinor,
+        factorBasisPoints: menuCatalogSettings.intuitivoPricingFactorBp,
+        maxDishes: menuCatalogSettings.intuitivoMaxDishes,
+        mode: menuCatalogSettings.intuitivoPricingMode,
+        roundingMinor: menuCatalogSettings.intuitivoRoundingMinor,
+      })
+      .from(menuCatalogSettings)
+      .where(eq(menuCatalogSettings.operatingSiteId, operatingSiteId))
+      .orderBy(desc(menuCatalogSettings.updatedAt))
+      .limit(1);
+    if (!row) return porDefecto;
+
+    return {
+      maxDishes: row.maxDishes,
+      rule: {
+        extraDishMinor: row.extraDishMinor,
+        factorBasisPoints: row.factorBasisPoints,
+        // El check de la tabla ya limita los valores; esto es sólo el estrechamiento de tipo.
+        mode: row.mode as IntuitivoPricingMode,
+        roundingMinor: row.roundingMinor,
+      },
+    };
   }
 
   private async isIntuitivoEnabledForSite(
@@ -5401,6 +5541,11 @@ export class PostgresOperationsService {
     changes: {
       dietaryInstructionsEnabled?: boolean | undefined;
       intuitivoEnabled?: boolean | undefined;
+      intuitivoExtraDishMinor?: number | undefined;
+      intuitivoMaxDishes?: number | undefined;
+      intuitivoPricingFactorBp?: number | undefined;
+      intuitivoPricingMode?: string | undefined;
+      intuitivoRoundingMinor?: number | undefined;
     },
     context: OperationsContext,
   ) {

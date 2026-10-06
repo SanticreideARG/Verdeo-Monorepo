@@ -472,7 +472,7 @@ a {
 }
 .intuitivo-picker-dish {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.5rem;
   border-radius: 0.65rem;
   padding: 0.45rem 0.6rem;
@@ -484,11 +484,40 @@ a {
   background: rgb(23 76 60 / 12%);
   font-weight: 650;
 }
-.intuitivo-picker-dish input {
-  margin-top: 0.2rem;
+/* El plato con su cuenta, no con un tilde: la operación pide poder llevarse dos porciones del
+   mismo guiso, y eso con un interruptor no se puede expresar. El nombre se estira y los controles
+   quedan pegados a la derecha, donde está el pulgar en el teléfono. */
+.intuitivo-picker-dish > span {
+  flex: 1;
+  min-width: 0;
 }
-.intuitivo-picker-dish input:disabled {
+.intuitivo-picker-dish > button {
+  flex: none;
+  width: 1.9rem;
+  height: 1.9rem;
+  border: 1px solid var(--db-border, rgb(23 76 60 / 18%));
+  border-radius: 50%;
+  background: var(--db-surface-solid, #fff);
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.intuitivo-picker-dish > button:disabled {
+  opacity: 0.35;
   cursor: not-allowed;
+}
+/* Ancho fijo para que agregar o quitar no corra el nombre del plato de lugar. */
+.intuitivo-picker-dish > b {
+  flex: none;
+  min-width: 1.1rem;
+  text-align: center;
+}
+.intuitivo-picker-limit {
+  margin: 0.5rem 0 0;
+  color: var(--db-text-soft);
+  font-size: 0.78rem;
 }
 
 .empty-state {
@@ -8700,4 +8729,36 @@ textarea.sr-only {
   color: var(--db-text-soft);
   font: inherit;
   cursor: pointer;
+}
+
+/* La tarjeta de una ciudad en "Menú personalizado".
+   Dejó de ser una fila horizontal cuando se le colgó debajo la regla de precio del Intuitivo: con
+   `items-center` el bloque de campos empujaba los botones al medio de la tarjeta. */
+.catalog-site-card {
+  display: grid;
+  gap: 1rem;
+}
+.catalog-site-card > div:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+.catalog-pricing {
+  display: grid;
+  gap: 0.7rem;
+  border-top: 1px solid var(--db-border-soft, var(--border-hairline));
+  padding-top: 0.9rem;
+}
+.catalog-pricing > p {
+  margin: 0;
+  color: var(--db-text-soft);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+.catalog-pricing-fields {
+  display: grid;
+  gap: 0.75rem 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
 }

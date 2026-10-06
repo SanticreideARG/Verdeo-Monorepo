@@ -10,6 +10,12 @@ import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 interface SiteSetting {
   dietaryInstructionsEnabled: boolean;
   intuitivoEnabled: boolean;
+  intuitivoExtraDishMinor: number;
+  intuitivoMaxDishes: number;
+  /** En diezmilésimos: 10000 es ×1, 9500 es ×0,95. */
+  intuitivoPricingFactorBp: number;
+  intuitivoPricingMode: 'coeficiente' | 'monto_fijo' | 'proporcional';
+  intuitivoRoundingMinor: number;
   operatingSiteId: string;
   operatingSiteName: string;
 }
@@ -46,6 +52,22 @@ export function MenuCatalogSettingsPage() {
     if (canRead) void load().finally(() => setLoading(false));
     else setLoading(false);
   }, [canRead, load]);
+
+  /** Guarda un campo de la ciudad. Mismo criterio que el tilde: sólo viaja lo que cambió. */
+  async function save(site: SiteSetting, patch: Partial<SiteSetting>) {
+    setSavingSiteId(site.operatingSiteId);
+    setMessage('');
+    const response = await apiRequest(`/api/v1/menu-catalog/settings/${site.operatingSiteId}`, {
+      body: JSON.stringify(patch),
+      method: 'PATCH',
+    });
+    setSavingSiteId(null);
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    setSites(((await response.json()) as { items: SiteSetting[] }).items);
+  }
 
   // Se manda sólo el tilde que se tocó: mandar los dos obligaría a esta pantalla a conocer el
   // valor del otro para no pisarlo.
@@ -106,7 +128,7 @@ export function MenuCatalogSettingsPage() {
             {sites.map((site) => (
               <li
                 key={site.operatingSiteId}
-                className="flex items-center justify-between rounded-2xl border border-forest/10 bg-[var(--db-surface)] p-6"
+                className="catalog-site-card rounded-2xl border border-forest/10 bg-[var(--db-surface)] p-6"
               >
                 <div>
                   <p className="font-semibold text-forest">{site.operatingSiteName}</p>
@@ -136,6 +158,107 @@ export function MenuCatalogSettingsPage() {
                         ? 'No pedir indicaciones'
                         : 'Pedir indicaciones'}
                     </button>
+                  </div>
+                ) : null}
+
+                {/*
+                  La regla del Intuitivo de más platos.
+
+                  Sólo cuando el Intuitivo está habilitado: configurar cómo se cobra algo que la
+                  ciudad no ofrece es un formulario que no significa nada.
+                */}
+                {canManage && site.intuitivoEnabled ? (
+                  <div className="catalog-pricing">
+                    <p>
+                      Intuitivo de más platos: hasta <b>{site.intuitivoMaxDishes}</b> por vianda. El
+                      precio del tamaño no se toca; lo que pasa de ahí se propone así.
+                    </p>
+                    <div className="catalog-pricing-fields">
+                      <label className="field">
+                        Máximo de platos
+                        {/* Se guarda al salir del campo y no en cada tecla: escribir "15" pasa por
+                            "1", y guardar eso dejaría la ciudad en un máximo de un plato. */}
+                        <input
+                          defaultValue={site.intuitivoMaxDishes}
+                          max={50}
+                          min={1}
+                          onBlur={(event) =>
+                            void save(site, { intuitivoMaxDishes: Number(event.target.value) })
+                          }
+                          type="number"
+                        />
+                      </label>
+                      <label className="field">
+                        Cómo se cobra
+                        <select
+                          onChange={(event) =>
+                            void save(site, {
+                              intuitivoPricingMode: event.target
+                                .value as SiteSetting['intuitivoPricingMode'],
+                            })
+                          }
+                          value={site.intuitivoPricingMode}
+                        >
+                          <option value="proporcional">Proporcional por plato</option>
+                          <option value="coeficiente">Proporcional por un coeficiente</option>
+                          <option value="monto_fijo">Un monto fijo por plato extra</option>
+                        </select>
+                      </label>
+                      {site.intuitivoPricingMode === 'coeficiente' ? (
+                        <label className="field">
+                          Coeficiente
+                          <input
+                            defaultValue={site.intuitivoPricingFactorBp / 10_000}
+                            max={10}
+                            min={0.01}
+                            onBlur={(event) =>
+                              void save(site, {
+                                intuitivoPricingFactorBp: Math.round(
+                                  Number(event.target.value) * 10_000,
+                                ),
+                              })
+                            }
+                            step={0.01}
+                            type="number"
+                          />
+                          <small className="field-hint">0,95 cobra un 5% menos por plato.</small>
+                        </label>
+                      ) : null}
+                      {site.intuitivoPricingMode === 'monto_fijo' ? (
+                        <label className="field">
+                          Por cada plato extra
+                          <input
+                            defaultValue={site.intuitivoExtraDishMinor / 100}
+                            min={0}
+                            onBlur={(event) =>
+                              void save(site, {
+                                intuitivoExtraDishMinor: Math.round(
+                                  Number(event.target.value) * 100,
+                                ),
+                              })
+                            }
+                            type="number"
+                          />
+                          <small className="field-hint">En pesos.</small>
+                        </label>
+                      ) : null}
+                      <label className="field">
+                        Redondeo
+                        <select
+                          onChange={(event) =>
+                            void save(site, {
+                              intuitivoRoundingMinor: Number(event.target.value),
+                            })
+                          }
+                          value={site.intuitivoRoundingMinor}
+                        >
+                          <option value={0}>Sin redondeo</option>
+                          <option value={10_000}>Al cien más cercano</option>
+                          <option value={50_000}>Al quinientos más cercano</option>
+                          <option value={100_000}>Al mil más cercano</option>
+                        </select>
+                      </label>
+                    </div>
                   </div>
                 ) : null}
               </li>

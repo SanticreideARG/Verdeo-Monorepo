@@ -377,6 +377,22 @@ export function OrderIntakePage() {
 
   const publishedMenus = menus.filter((menu) => menu.status === 'PUBLISHED');
   const selectedMenu = menus.find((menu) => menu.id === selectedMenuId) ?? null;
+  /*
+   * Lo que la ciudad permite y cómo cobra los platos de más.
+   *
+   * Viaja con el menú: sin esto el formulario mostraría el precio del menú con siete platos
+   * elegidos, y el total diría una cosa mientras el pedido sale con otra.
+   */
+  const intuitivoLimits = {
+    maxDishes: selectedMenu?.intuitivoMaxDishes ?? DISHES_PER_INTUITIVO,
+    pricing: selectedMenu?.intuitivoPricing ?? {
+      extraDishMinor: 0,
+      factorBasisPoints: 10_000,
+      mode: 'proporcional' as const,
+      roundingMinor: 50_000,
+    },
+  };
+
   const selectedOffering =
     selectedMenu?.offerings.find((offering) => offering.id === selectedOfferingId) ?? null;
 
@@ -393,7 +409,7 @@ export function OrderIntakePage() {
 
   /** Agrega lo elegido y limpia la selección, para que lo de arriba no quede contado dos veces. */
   function addToCart() {
-    const pending = pendingCartLine(selectedOffering, units, selectedDishes, DISHES_PER_INTUITIVO);
+    const pending = pendingCartLine(selectedOffering, units, selectedDishes, intuitivoLimits);
     if (pending === null) {
       setMessage('Elegí una variedad antes de agregarla.');
       return;
@@ -409,7 +425,7 @@ export function OrderIntakePage() {
     setUnits(1);
   }
 
-  const pending = pendingCartLine(selectedOffering, units, selectedDishes, DISHES_PER_INTUITIVO);
+  const pending = pendingCartLine(selectedOffering, units, selectedDishes, intuitivoLimits);
   const pendingLineValue = pending !== null && 'line' in pending ? pending.line : null;
   const totalMinor = cartTotalMinor(cart, pending);
   const cartCurrency = cart[0]?.currency ?? pendingLineValue?.currency ?? 'ARS';
@@ -568,7 +584,7 @@ export function OrderIntakePage() {
      */
     const armado = linesToSubmit(
       cart,
-      pendingCartLine(selectedOffering, units, selectedDishes, DISHES_PER_INTUITIVO),
+      pendingCartLine(selectedOffering, units, selectedDishes, intuitivoLimits),
     );
     if ('reason' in armado) {
       setMessage(armado.reason);
@@ -1275,6 +1291,8 @@ export function OrderIntakePage() {
               <div className="field field-wide mt-4">
                 Platos de Intuitivo
                 <IntuitivoDishPicker
+                  maxDishes={selectedMenu?.intuitivoMaxDishes ?? DISHES_PER_INTUITIVO}
+                  minDishes={selectedOffering.mealsPerUnit}
                   offerings={selectedMenu?.offerings ?? []}
                   onChange={setSelectedDishes}
                   selected={selectedDishes}
@@ -1291,10 +1309,16 @@ export function OrderIntakePage() {
              * pantalla. Contar antes de apretar evita llegar a ese punto.
              */}
             {selectedOffering?.composable ? (
-              <p className={`intake-rule mt-3 ${selectedDishes.length === 5 ? 'is-ready' : ''}`}>
-                {selectedDishes.length === 5
-                  ? 'Cinco platos elegidos. Ya podés registrar el borrador.'
-                  : `Elegiste ${selectedDishes.length} de 5 platos.`}
+              <p
+                className={`intake-rule mt-3 ${
+                  selectedDishes.length >= selectedOffering.mealsPerUnit ? 'is-ready' : ''
+                }`}
+              >
+                {selectedDishes.length >= selectedOffering.mealsPerUnit
+                  ? `${String(selectedDishes.length)} platos elegidos. Ya podés registrar el borrador.`
+                  : `Elegiste ${String(selectedDishes.length)} de ${String(
+                      selectedOffering.mealsPerUnit,
+                    )} platos.`}
               </p>
             ) : null}
 

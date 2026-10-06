@@ -21,6 +21,13 @@ function menu(overrides: {
       status: overrides.status ?? 'OPEN',
     },
     id: `menu-${overrides.id}-${overrides.operatingSiteId ?? 'master'}`,
+    intuitivoMaxDishes: 15,
+    intuitivoPricing: {
+      extraDishMinor: 0,
+      factorBasisPoints: 10_000,
+      mode: 'proporcional' as const,
+      roundingMinor: 50_000,
+    },
     offerings: [],
     operatingSiteId: overrides.operatingSiteId ?? null,
     operatingSiteName: null,

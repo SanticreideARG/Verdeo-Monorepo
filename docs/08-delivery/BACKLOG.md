@@ -403,3 +403,16 @@ propósito.
       una variedad no paga el costo de la función.
 - [x] La misma variedad repetida en dos renglones, que es un pedido válido y no un duplicado.
 - [ ] El pedido web (`/pedido`) sigue siendo de una variedad: usa su propio formulario.
+
+## Intuitivo de más platos
+
+- [x] La cantidad del tamaño pasa de ser una igualdad a ser un piso: más platos es un pedido válido,
+      menos se rechaza. El techo lo fija cada ciudad; quince por defecto.
+- [x] Repetir un plato. Ya estaba en la especificación y la base siempre lo aguantó: lo impedía el
+      selector, que usaba un tilde donde hacía falta una cuenta.
+- [x] Precio propuesto por regla configurable por ciudad: proporcional, por coeficiente o monto fijo
+      por plato extra, con redondeo al escalón elegido. El precio del tamaño nunca se toca.
+- [x] La regla se configura en Panel de control → Menú personalizado, sin deploy.
+- [ ] El menú sigue admitiendo hasta cinco platos base por variedad
+      (`weekly_menu_items_slot_check`). Es la definición del menú y no el tope del pedido, pero si
+      alguna vez se quiere un tamaño de ocho platos estándar, hay que subirlo.
