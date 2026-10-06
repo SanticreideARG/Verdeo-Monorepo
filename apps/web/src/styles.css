@@ -8636,3 +8636,68 @@ textarea.sr-only {
   font-size: 0.82rem;
   font-weight: 700;
 }
+
+/* --- El pedido de varias variedades ------------------------------------------------------------
+   Un carrito que aparece sólo cuando se usa: el pedido de una variedad sola, que son casi todos,
+   no lo ve nunca. Por eso el botón de agregar es secundario y la lista no existe hasta que haya
+   algo en ella. */
+.intake-cart-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.8rem;
+}
+.intake-cart-add small {
+  color: var(--db-text-soft);
+  font-size: 0.75rem;
+}
+.intake-cart {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.intake-cart > li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border: 1px solid var(--db-border-soft, var(--border-hairline));
+  border-radius: 0.6rem;
+  padding: 0.5rem 0.65rem;
+  background: var(--db-bg-2, transparent);
+}
+.intake-cart > li > div {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 0.1rem;
+}
+.intake-cart strong {
+  color: var(--db-text, var(--color-forest));
+  font-size: 0.9rem;
+}
+/* Los platos del Intuitivo, cortados: dos renglones alcanzan para reconocer el pedido, y la lista
+   completa empujaría el precio fuera de la pantalla del teléfono. */
+.intake-cart small {
+  color: var(--db-text-soft);
+  font-size: 0.74rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.intake-cart > li > span {
+  flex: none;
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.intake-cart > li > button {
+  flex: none;
+  border: 0;
+  border-radius: 0.4rem;
+  padding: 0.15rem 0.4rem;
+  background: none;
+  color: var(--db-text-soft);
+  font: inherit;
+  cursor: pointer;
+}

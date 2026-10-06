@@ -46,6 +46,14 @@ import {
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { useOrderFormSettings } from '../lib/useOrderFormSettings.js';
 import { useFormDraft } from '../lib/useFormDraft.js';
+import {
+  cartItemsPayload,
+  cartTotalMinor,
+  linesToSubmit,
+  pendingCartLine,
+  type CartLine,
+} from '../lib/orderCart.js';
+import { usePersistedState } from '../lib/usePersistedState.js';
 
 /**
  * Qué se ve de cada pedido en la cola de trabajo.
@@ -92,6 +100,15 @@ const FIELD_LABELS: Record<string, string> = {
   source: 'el origen del pedido',
 };
 
+/*
+ * Cuántos platos lleva un Intuitivo.
+ *
+ * Está acá y no escrito en cada comparación porque deja de ser fijo: el contrato todavía pide
+ * exactamente cinco, y el pedido de permitir hasta quince se resuelve cambiando esto y el
+ * esquema, no buscando cincos por el archivo.
+ */
+const DISHES_PER_INTUITIVO = 5;
+
 function formText(form: FormData, key: string): string {
   const value = form.get(key);
   return typeof value === 'string' ? value : '';
@@ -136,6 +153,13 @@ export function OrderIntakePage() {
   const [importOpen, setImportOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const draft = useFormDraft(formRef, 'order-intake', formOpen);
+  /*
+   * Los renglones del pedido viven acá y no en el formulario.
+   *
+   * `useFormDraft` guarda los campos del DOM, que no puede representar una lista que crece y
+   * se achica. Es la misma razón por la que el armador de menús usa esto para sus variedades.
+   */
+  const [cart, setCart, clearStoredCart] = usePersistedState<CartLine[]>('order-intake-cart', []);
   const [selectedMenuId, setSelectedMenuId] = useState('');
   const [selectedOfferingId, setSelectedOfferingId] = useState('');
   const [selectedDishes, setSelectedDishes] = useState<string[]>([]);
@@ -356,6 +380,40 @@ export function OrderIntakePage() {
   const selectedOffering =
     selectedMenu?.offerings.find((offering) => offering.id === selectedOfferingId) ?? null;
 
+  /**
+   * Vaciar el carrito de verdad.
+   *
+   * El `clear` del hook borra lo guardado pero no el valor en memoria, así que por sí solo deja
+   * el pedido siguiente arrancando con los renglones del anterior.
+   */
+  function resetCart() {
+    setCart([]);
+    clearStoredCart();
+  }
+
+  /** Agrega lo elegido y limpia la selección, para que lo de arriba no quede contado dos veces. */
+  function addToCart() {
+    const pending = pendingCartLine(selectedOffering, units, selectedDishes, DISHES_PER_INTUITIVO);
+    if (pending === null) {
+      setMessage('Elegí una variedad antes de agregarla.');
+      return;
+    }
+    if ('reason' in pending) {
+      setMessage(pending.reason);
+      return;
+    }
+    setMessage('');
+    setCart((current) => [...current, pending.line]);
+    setSelectedOfferingId('');
+    setSelectedDishes([]);
+    setUnits(1);
+  }
+
+  const pending = pendingCartLine(selectedOffering, units, selectedDishes, DISHES_PER_INTUITIVO);
+  const pendingLineValue = pending !== null && 'line' in pending ? pending.line : null;
+  const totalMinor = cartTotalMinor(cart, pending);
+  const cartCurrency = cart[0]?.currency ?? pendingLineValue?.currency ?? 'ARS';
+
   /*
    * Variedad y tamaño, en dos desplegables.
    *
@@ -502,8 +560,18 @@ export function OrderIntakePage() {
       return;
     }
 
-    if (selectedOffering?.composable && selectedDishes.length !== 5) {
-      setMessage('Elegí exactamente cinco platos para el Intuitivo.');
+    /*
+     * Lo elegido arriba y no agregado entra como un renglón más.
+     *
+     * Así el pedido de una sola variedad —que son casi todos— sigue siendo elegir y guardar, sin
+     * un paso nuevo en el medio, y el carrito aparece sólo cuando de verdad se usa.
+     */
+    const armado = linesToSubmit(
+      cart,
+      pendingCartLine(selectedOffering, units, selectedDishes, DISHES_PER_INTUITIVO),
+    );
+    if ('reason' in armado) {
+      setMessage(armado.reason);
       return;
     }
 
@@ -533,13 +601,7 @@ export function OrderIntakePage() {
           .split('\n')
           .map((value) => value.trim())
           .filter(Boolean),
-        items: [
-          {
-            offeringId: formText(form, 'offeringId'),
-            quantityUnits: Number(form.get('quantityUnits')),
-            ...(selectedDishes.length === 5 ? { selectedDishNames: selectedDishes } : {}),
-          },
-        ],
+        items: cartItemsPayload(armado.lines),
         menuId: formText(form, 'menuId'),
         paymentExpectation: formText(form, 'paymentExpectation'),
         source: formText(form, 'source'),
@@ -547,6 +609,7 @@ export function OrderIntakePage() {
       // The draft is dropped on a successful save, not on unmount: that is what makes "I switched
       // screens and came back" restore, while "I already saved this" does not come back as a ghost.
       draft.discard();
+      resetCart();
       setMessage('');
       showToast('Pedido registrado como borrador.');
       /*
@@ -1235,6 +1298,54 @@ export function OrderIntakePage() {
               </p>
             ) : null}
 
+            {/*
+              Agregar otra variedad al mismo pedido.
+              
+              Secundario y no primario: el pedido de una variedad sola es el caso normal y se
+              guarda sin pasar por acá. Un botón primario de más al lado del de guardar es una
+              invitación a apretar el equivocado.
+            */}
+            <div className="intake-cart-add mt-3">
+              <button className="button button-secondary" onClick={addToCart} type="button">
+                + Agregar otra variedad
+              </button>
+              {cart.length > 0 ? (
+                <small>Lo que ya agregaste queda abajo; lo de arriba se suma al guardar.</small>
+              ) : null}
+            </div>
+
+            {cart.length > 0 ? (
+              <ul className="intake-cart mt-3">
+                {cart.map((line, index) => (
+                  // El índice como clave: la misma variedad puede ir dos veces en un pedido, así
+                  // que el id de la oferta no identifica el renglón.
+                  <li key={`${line.offeringId}-${String(index)}`}>
+                    <div>
+                      <strong>
+                        {line.label}
+                        {line.quantityUnits > 1 ? ` ×${String(line.quantityUnits)}` : ''}
+                      </strong>
+                      {line.selectedDishNames.length > 0 ? (
+                        <small>{line.selectedDishNames.join(' · ')}</small>
+                      ) : null}
+                    </div>
+                    <span>
+                      {formatMoney(line.unitPriceMinor * line.quantityUnits, line.currency)}
+                    </span>
+                    <button
+                      aria-label={`Quitar ${line.label}`}
+                      onClick={() =>
+                        setCart((current) => current.filter((_, position) => position !== index))
+                      }
+                      type="button"
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
             {/* El mismo mensaje que arriba, acá abajo, donde está el dedo cuando algo falla. */}
             {message ? (
               <p className="intake-rule intake-rule-alert mt-3" role="alert">
@@ -1246,15 +1357,10 @@ export function OrderIntakePage() {
                 cinco platos de un Intuitivo, guardar quedaba a varias pantallas de distancia. El
                 total va acá por lo mismo — era el otro dato que había que ir a buscar. */}
             <div className="form-actions form-actions-sticky mt-4">
-              {selectedOffering ? (
+              {/* El total del pedido entero: lo agregado más lo que está elegido arriba. */}
+              {totalMinor > 0 ? (
                 <p className="form-actions-total">
-                  Total{' '}
-                  <strong>
-                    {formatMoney(
-                      selectedOffering.unitPriceMinor * units,
-                      selectedOffering.currency,
-                    )}
-                  </strong>
+                  Total <strong>{formatMoney(totalMinor, cartCurrency)}</strong>
                 </p>
               ) : null}
               <button className="button button-primary" type="submit">
@@ -1264,6 +1370,7 @@ export function OrderIntakePage() {
                 className="button button-secondary"
                 onClick={() => {
                   draft.clear();
+                  resetCart();
                   setSelectedCustomer(null);
                   setDeliveryAddress('');
                   setAddressHint('');

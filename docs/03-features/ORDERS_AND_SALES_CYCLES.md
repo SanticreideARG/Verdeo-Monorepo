@@ -34,6 +34,30 @@ Pasos:
 Conversaciones incompletas generan `DRAFT`.
 Debe existir cola/listado de drafts para seguimiento.
 
+## Varias variedades en un pedido
+
+El contrato acepta `items` como lista desde siempre: un pedido con dos viandas distintas nunca
+estuvo limitado del lado del servidor. Lo que mandaba una sola era el formulario.
+
+El carrito es deliberadamente discreto. El pedido de una variedad —que son casi todos— sigue
+siendo elegir y guardar, sin un paso nuevo: **lo que quedó elegido arriba entra solo como un
+renglón más al guardar**. "Agregar otra variedad" suma lo elegido a la lista y limpia los
+selectores, para que no quede contado dos veces. Quien nunca pide dos variedades no ve el carrito.
+
+Un Intuitivo a medio elegir **no se descarta en silencio**: se corta con un mensaje. Quien eligió
+tres platos de cinco cree que los cargó, y el pedido saldría sin esa vianda.
+
+La misma variedad puede ir en dos renglones. No es un duplicado a fusionar: dos Intuitivos del
+mismo tamaño con composiciones distintas son dos renglones legítimos del mismo pedido.
+
+Las reglas viven en `apps/web/src/lib/orderCart.ts`, no dentro de la pantalla, por la misma razón
+que `menuPayload`: son cosas que se rompen sin hacer ruido y adentro de un componente no hay forma
+de probarlas.
+
+El carrito se guarda con `usePersistedState` (sessionStorage), que es lo que usa el armador de
+menús para sus arreglos de variedades. `useFormDraft` no sirve acá: fotografía el DOM del
+formulario, y una lista que crece y se achica no tiene un input detrás.
+
 ## Confirmación
 
 No se requiere una segunda confirmación después de enviar el resumen. El mensaje post-confirmación debe poder incluir automáticamente:

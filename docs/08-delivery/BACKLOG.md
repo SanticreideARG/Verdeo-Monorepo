@@ -395,3 +395,11 @@ propósito.
 - [ ] Que el optimizador las respete. Requiere que la ventana deje de ser texto libre y pase a dos
       horas (desde/hasta) en campos separados, más la migración de lo ya cargado. Un parser sobre el
       texto actual falla en silencio y manda la parada a cualquier lado, que es peor que no ordenar.
+
+## Carrito
+
+- [x] Varias variedades en un pedido desde el formulario. El backend ya las aceptaba; lo que mandaba
+      una sola era la pantalla. Lo elegido y no agregado entra solo al guardar, así que el pedido de
+      una variedad no paga el costo de la función.
+- [x] La misma variedad repetida en dos renglones, que es un pedido válido y no un duplicado.
+- [ ] El pedido web (`/pedido`) sigue siendo de una variedad: usa su propio formulario.
