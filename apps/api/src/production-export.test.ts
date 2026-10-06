@@ -114,4 +114,55 @@ describe('buildProductionExcel', () => {
 
     expect(book.SheetNames).toEqual(['Conciliado', 'Producción base']);
   });
+
+  it('suma las columnas numéricas al pie de cada hoja', () => {
+    const book = read(buildProductionExcel(report));
+    const rows = rowsOf(book, 'Conciliado');
+
+    // Un renglón en blanco separa la tabla del total, así que el total es la última fila.
+    const total = rows.at(-1);
+    expect(total?.[0]).toBe('Total');
+    // Keto 12 + los dos Intuitivos (2 y 1) = 15 unidades, en 8 + 2 pedidos.
+    expect(total?.[2]).toBe(15);
+    expect(total?.[3]).toBe(10);
+  });
+
+  /*
+   * `SUBTOTAL(109, …)` y no `SUM`: 109 suma ignorando lo que el filtro esconde, así que filtrar por
+   * una familia deja el total de esa familia. Con `SUM`, el número de abajo contradiría lo que se
+   * está mirando arriba.
+   */
+  it('escribe el total como fórmula que respeta el autofiltro', () => {
+    const book = read(buildProductionExcel(report));
+    const sheet = book.Sheets.Conciliado as XLSX.WorkSheet;
+
+    const celda = Object.entries(sheet).find(
+      ([reference, cell]) =>
+        !reference.startsWith('!') && (cell as XLSX.CellObject).f !== undefined,
+    );
+    expect((celda?.[1] as XLSX.CellObject | undefined)?.f).toMatch(/^SUBTOTAL\(109,/);
+  });
+
+  /*
+   * Con la fórmula va el valor ya calculado. Excel y Sheets recalculan al abrir, pero un lector que
+   * sólo parsea el archivo no evalúa nada: sin el valor cacheado vería la celda vacía, y esta
+   * planilla se reenvía y se abre con cualquier cosa.
+   */
+  it('deja el total también como número, para quien no recalcula', () => {
+    const book = read(buildProductionExcel(report));
+    const rows = rowsOf(book, 'Platos a preparar');
+
+    expect(rows.at(-1)).toEqual(['Total', 3]);
+  });
+
+  it('no suma columnas que no son cantidades', () => {
+    const book = read(buildProductionExcel(report));
+    const rows = rowsOf(book, 'Intuitivos');
+
+    const total = rows.at(-1);
+    // El "#" es el número de renglón: sumarlo daría 3, un número sin significado.
+    expect(total?.[0]).toBe('Total');
+    expect(total?.[3]).toBe(3);
+    expect(total?.[1]).toBeUndefined();
+  });
 });

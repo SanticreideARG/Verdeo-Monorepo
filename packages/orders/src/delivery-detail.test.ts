@@ -46,4 +46,60 @@ describe('deliveryDetail', () => {
   it('un pedido sin ítems no inventa nada', () => {
     expect(deliveryDetail([], 'Ana')).toBe('');
   });
+
+  /*
+   * Los platos del Intuitivo, que es lo que el cliente pregunta al recibir la caja y lo que permite
+   * revisar la parada contra la etiqueta antes de salir.
+   */
+  it('escribe los platos elegidos del Intuitivo', () => {
+    expect(
+      deliveryDetail(
+        [
+          {
+            composable: true,
+            dishes: ['Guiso', 'Tarta', 'Wok'],
+            familyName: 'Intuitivo',
+            quantityUnits: 1,
+            variantName: '250',
+          },
+        ],
+        'Ana',
+      ),
+    ).toBe('Intuitivo 250 · Ana (Guiso, Tarta, Wok)');
+  });
+
+  // Una vianda estándar no los lleva: su variedad ya dice qué trae.
+  it('no agrega paréntesis cuando no hay platos elegidos', () => {
+    expect(
+      deliveryDetail(
+        [
+          {
+            composable: false,
+            dishes: [],
+            familyName: 'Menú Keto',
+            quantityUnits: 1,
+            variantName: '400',
+          },
+        ],
+        'Ana',
+      ),
+    ).toBe('Menú Keto 400');
+  });
+
+  it('las unidades van antes de los platos, no mezcladas con ellos', () => {
+    expect(
+      deliveryDetail(
+        [
+          {
+            composable: true,
+            dishes: ['Guiso', 'Tarta'],
+            familyName: 'Intuitivo',
+            quantityUnits: 2,
+            variantName: '400',
+          },
+        ],
+        'Ana',
+      ),
+    ).toBe('Intuitivo 400 · Ana ×2 (Guiso, Tarta)');
+  });
 });

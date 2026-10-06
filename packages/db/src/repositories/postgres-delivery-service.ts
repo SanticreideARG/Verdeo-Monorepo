@@ -16,6 +16,7 @@ import {
   deliveryStops,
   messageTemplates,
   operatingSites,
+  orderItemSelections,
   orderItems,
   orderStatusHistory,
   orders,
@@ -494,6 +495,7 @@ export class PostgresDeliveryService {
         // reconociéndose como Intuitivo.
         composable: sql<boolean>`coalesce(${productFamilies.kind} = 'COMPOSABLE', false)`,
         familyName: orderItems.productNameSnapshot,
+        id: orderItems.id,
         orderId: orderItems.orderId,
         quantityUnits: orderItems.quantityUnits,
         variantName: orderItems.variantSnapshot,
@@ -511,12 +513,42 @@ export class PostgresDeliveryService {
       // el operador que compara la hoja de ruta con el mensaje de WhatsApp ve dos textos distintos.
       .orderBy(orderItems.createdAt, orderItems.productNameSnapshot);
 
+    /*
+     * Los platos elegidos de cada Intuitivo, en una consulta y no una por parada.
+     *
+     * Ordenados por `slot`, que es el orden en que la persona los eligió: ese mismo orden es el
+     * que sale impreso en la etiqueta, y leer la lista contra la caja sólo sirve si coinciden.
+     */
+    const platos =
+      lineas.length === 0
+        ? []
+        : await database
+            .select({
+              dishName: orderItemSelections.dishNameSnapshot,
+              orderItemId: orderItemSelections.orderItemId,
+            })
+            .from(orderItemSelections)
+            .where(
+              inArray(
+                orderItemSelections.orderItemId,
+                lineas.map((linea) => linea.id),
+              ),
+            )
+            .orderBy(orderItemSelections.slot);
+
     for (const parada of paradas) {
       const nombre = parada.customerDisplayName.split(' ')[0] ?? parada.customerDisplayName;
       detalles.set(
         parada.orderId,
         deliveryDetail(
-          lineas.filter((linea) => linea.orderId === parada.orderId),
+          lineas
+            .filter((linea) => linea.orderId === parada.orderId)
+            .map((linea) => ({
+              ...linea,
+              dishes: platos
+                .filter((plato) => plato.orderItemId === linea.id)
+                .map((plato) => plato.dishName),
+            })),
           nombre,
         ),
       );

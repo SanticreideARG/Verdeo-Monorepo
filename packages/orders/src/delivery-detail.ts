@@ -1,6 +1,8 @@
 export interface DeliveryDetailItem {
   /** Un Intuitivo: su contenido lo eligió el cliente, así que no se identifica por la variedad. */
   composable: boolean;
+  /** Los platos elegidos, cuando los hay. Vacío en una vianda estándar, que no se elige. */
+  dishes?: readonly string[];
   familyName: string;
   quantityUnits: number;
   variantName: string;
@@ -20,6 +22,11 @@ export interface DeliveryDetailItem {
  *
  * Las unidades se escriben sólo cuando son más de una. "Menú Keto 400" es una vianda; "Menú Keto
  * 400 ×3" son tres, y esa diferencia es la que hace que falte una al llegar.
+ *
+ * Los platos del Intuitivo van entre paréntesis. Decir "Intuitivo 400 · Ana" alcanza para encontrar
+ * la caja, pero no para contestar lo que el cliente pregunta al recibirla —qué le tocó— ni para
+ * revisar contra la etiqueta antes de salir. Una vianda estándar no los lleva: su variedad ya dice
+ * qué trae, y repetirlo alargaría la línea sin agregar nada.
  */
 export function deliveryDetail(
   items: readonly DeliveryDetailItem[],
@@ -30,7 +37,10 @@ export function deliveryDetail(
       const nombre = item.composable
         ? `${item.familyName} ${item.variantName} · ${customerFirstName}`.trim()
         : `${item.familyName} ${item.variantName}`.trim();
-      return item.quantityUnits > 1 ? `${nombre} ×${String(item.quantityUnits)}` : nombre;
+      const conUnidades =
+        item.quantityUnits > 1 ? `${nombre} ×${String(item.quantityUnits)}` : nombre;
+      const platos = item.dishes?.filter((dish) => dish.trim().length > 0) ?? [];
+      return platos.length > 0 ? `${conUnidades} (${platos.join(', ')})` : conUnidades;
     })
     .join(' + ');
 }

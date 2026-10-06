@@ -658,6 +658,23 @@ export function DashboardShell({
     theme,
   };
 
+  const shiftEntries = shiftNavigation.filter(
+    (item) => !item.permission || profile.permissions.includes(item.permission),
+  );
+  // Partido al medio para que el búho quede centrado con cualquier cantidad de accesos: con tres
+  // visibles van uno y dos, no dos y uno, porque "Más" cuenta del lado derecho.
+  const middle = Math.ceil(shiftEntries.length / 2);
+  const renderShiftLink = (item: NavigationItem) => (
+    <Link
+      aria-current={location.pathname === item.href ? 'page' : undefined}
+      key={item.href}
+      to={item.href}
+    >
+      <NavIcon name={item.icon} />
+      <span>{item.label}</span>
+      {navBadge(item.href, pendingOrders)}
+    </Link>
+  );
   return (
     <AppearanceContext.Provider value={appearance}>
       <div
@@ -842,19 +859,23 @@ export function DashboardShell({
           />
           {narrow ? (
             <nav aria-label="Accesos del turno" className="dashboard-bottom-nav">
-              {shiftNavigation
-                .filter((item) => !item.permission || profile.permissions.includes(item.permission))
-                .map((item) => (
-                  <Link
-                    aria-current={location.pathname === item.href ? 'page' : undefined}
-                    key={item.href}
-                    to={item.href}
-                  >
-                    <NavIcon name={item.icon} />
-                    <span>{item.label}</span>
-                    {navBadge(item.href, pendingOrders)}
-                  </Link>
-                ))}
+              {shiftEntries.slice(0, middle).map(renderShiftLink)}
+              {/*
+                El búho en el medio, y además el acceso al tablero.
+                
+                Una marca que sólo decora ocupa el lugar más cómodo de la barra sin dar nada a
+                cambio. El tablero no estaba en ningún lado del teléfono —se llegaba por "Más"—,
+                así que el lugar donde la vista cae sola es justo el que le corresponde.
+              */}
+              <Link
+                aria-current={location.pathname === '/app' ? 'page' : undefined}
+                aria-label="Tablero"
+                className="bottom-nav-brand"
+                to="/app"
+              >
+                <img alt="" height="30" src="/brand/verdeo-icon-128.webp" width="30" />
+              </Link>
+              {shiftEntries.slice(middle).map(renderShiftLink)}
               <button aria-label="Más secciones" onClick={() => setMenuOpen(true)} type="button">
                 <NavIcon name="settings" />
                 <span>Más</span>

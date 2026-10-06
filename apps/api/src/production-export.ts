@@ -67,12 +67,48 @@ function sheetWithTitle(
   title: string,
   rows: Record<string, number | string>[],
   widths: number[],
+  /** Encabezados cuya columna se suma al pie. Los que no son números se ignoran. */
+  totalColumns: readonly string[] = [],
 ): XLSX.WorkSheet {
   const sheet = XLSX.utils.aoa_to_sheet([[title], []]);
   XLSX.utils.sheet_add_json(sheet, rows, { origin: 'A2' });
   sheet['!cols'] = widths.map((wch) => ({ wch }));
   const lastColumn = XLSX.utils.encode_col(Math.max(0, widths.length - 1));
+  // El autofiltro cubre encabezados y datos, y termina antes del total: adentro, filtrar u ordenar
+  // se lo llevaría al medio de la tabla como si fuera un renglón más.
   sheet['!autofilter'] = { ref: `A2:${lastColumn}${String(rows.length + 2)}` };
+
+  const headers = Object.keys(rows[0] ?? {});
+  if (totalColumns.length === 0 || rows.length === 0) return sheet;
+
+  /*
+   * Los totales van al pie, separados por un renglón en blanco.
+   *
+   * Cada uno es un `SUBTOTAL(109, …)` y no un `SUM`: 109 es "sumar ignorando lo que el filtro
+   * esconde", así que filtrar por una familia deja el total de esa familia en vez del de la
+   * planilla entera. Con `SUM` el número de abajo contradiría lo que se está mirando.
+   *
+   * Se escribe la fórmula y además el valor ya calculado. Excel y Sheets recalculan al abrir, pero
+   * un lector que sólo parsea el archivo no evalúa nada: sin el valor cacheado vería la celda
+   * vacía, y esta planilla se reenvía y se abre con cualquier cosa.
+   */
+  const totalRow = rows.length + 4;
+  sheet[`A${String(totalRow)}`] = { t: 's', v: 'Total' };
+  for (const header of totalColumns) {
+    const index = headers.indexOf(header);
+    if (index < 0) continue;
+    const column = XLSX.utils.encode_col(index);
+    const sum = rows.reduce((accumulated, row) => {
+      const value = row[header];
+      return accumulated + (typeof value === 'number' ? value : 0);
+    }, 0);
+    sheet[`${column}${String(totalRow)}`] = {
+      f: `SUBTOTAL(109,${column}3:${column}${String(rows.length + 2)})`,
+      t: 'n',
+      v: sum,
+    };
+  }
+  sheet['!ref'] = `A1:${lastColumn}${String(totalRow)}`;
   return sheet;
 }
 
@@ -140,6 +176,7 @@ export function buildProductionExcel(report: ProductionReport): ArrayBuffer {
             baseOrderCounts.get(lineLabel(row.familyName, row.variantName)) ?? row.orders.size,
         })),
       [24, 10, 12, 10],
+      ['Unidades', 'Pedidos'],
     ),
     'Conciliado',
   );
@@ -168,6 +205,7 @@ export function buildProductionExcel(report: ProductionReport): ArrayBuffer {
         };
       }),
       [24, 10, 12, 10, 16, 8, 60],
+      ['Unidades', 'Pedidos', 'Producción real', 'Delta'],
     ),
     'Producción base',
   );
@@ -180,6 +218,7 @@ export function buildProductionExcel(report: ProductionReport): ArrayBuffer {
         title,
         report.dishTally.map((entry) => ({ Plato: entry.dishName, Porciones: entry.portions })),
         [40, 12],
+        ['Porciones'],
       ),
       'Platos a preparar',
     );
@@ -201,6 +240,8 @@ export function buildProductionExcel(report: ProductionReport): ArrayBuffer {
           Indicaciones: item.dietaryInstructions.join(' · '),
         })),
         [6, 16, 10, 10, 28, 14, 60, 30],
+        // El `#` no se suma: es el número de renglón, y sumarlo da un número sin significado.
+        ['Unidades'],
       ),
       'Intuitivos',
     );

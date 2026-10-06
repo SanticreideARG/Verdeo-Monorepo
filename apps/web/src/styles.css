@@ -8601,3 +8601,26 @@ textarea.sr-only {
   flex-wrap: wrap;
   gap: 0.6rem;
 }
+
+/* El búho en el medio de la barra del teléfono.
+   Más angosto que un acceso normal porque no lleva texto, y el círculo va levantado sobre el borde
+   superior: es lo que lo hace leerse como la marca y no como un quinto ícono más. */
+.dashboard-bottom-nav > .bottom-nav-brand {
+  flex: 0 0 auto;
+  align-content: center;
+  padding-inline: 0.55rem;
+}
+.dashboard-bottom-nav > .bottom-nav-brand img {
+  display: block;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  /* El fondo propio tapa el borde de la barra por detrás del círculo. */
+  background: var(--db-surface-solid);
+  box-shadow: 0 0 0 3px var(--db-surface-solid);
+}
+.dashboard-bottom-nav > .bottom-nav-brand[aria-current='page'] img {
+  box-shadow:
+    0 0 0 3px var(--db-surface-solid),
+    0 0 0 5px var(--db-accent);
+}
