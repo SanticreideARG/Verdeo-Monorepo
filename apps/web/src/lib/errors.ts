@@ -122,7 +122,17 @@ export async function describeResponse(response: Response): Promise<AppError> {
   });
 }
 
-/** El error como una sola línea, para las pantallas que todavía muestran un texto suelto. */
+/**
+ * El error como una sola línea, para las pantallas que todavía muestran un texto suelto.
+ *
+ * En un fallo nuestro lleva el número de la solicitud. El aviso dice "avisanos con el número de la
+ * solicitud" y esta línea no lo incluía —sólo `ErrorNotice` lo mostraba—, así que cuarenta pantallas
+ * pedían algo que no daban: alguien con el calendario roto no tenía qué mandar, y quien tenía que
+ * buscar el error en los registros no tenía por dónde empezar.
+ */
 export function errorText(error: AppError): string {
-  return error.hint ? `${error.message} ${error.hint}` : error.message;
+  const base = error.hint ? `${error.message} ${error.hint}` : error.message;
+  return error.requestId && error.kind === 'servidor'
+    ? `${base} (Solicitud ${error.requestId})`
+    : base;
 }

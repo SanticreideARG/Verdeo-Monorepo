@@ -81,6 +81,32 @@ describe('describeThrown', () => {
 });
 
 describe('errorText', () => {
+  /*
+   * El aviso dice "avisanos con el número de la solicitud": si la línea no lo trae, pide algo
+   * imposible de cumplir.
+   */
+  it('incluye el número de la solicitud en un fallo del servidor', () => {
+    const text = errorText({
+      hint: 'Si vuelve a pasar, avisanos con el número de la solicitud.',
+      kind: 'servidor',
+      message: 'Algo falló de nuestro lado.',
+      requestId: 'req-123',
+    });
+
+    expect(text).toContain('Solicitud req-123');
+  });
+
+  // En un error de regla el mensaje ya dice qué pasó: un número ahí sería ruido.
+  it('no agrega el número cuando el error es una regla', () => {
+    const text = errorText({
+      kind: 'regla',
+      message: 'La semana ya está cerrada.',
+      requestId: 'req-1',
+    });
+
+    expect(text).toBe('La semana ya está cerrada.');
+  });
+
   it('junta qué pasó y qué hacer, para las pantallas que muestran una línea', () => {
     expect(errorText({ hint: 'Volvé a intentar.', kind: 'conexion', message: 'Se cortó.' })).toBe(
       'Se cortó. Volvé a intentar.',

@@ -28,7 +28,7 @@
  * Postgres de verdad. El orden depende de esas cuatro `restrict`, y eso no se verifica leyendo: se
  * verifica corriéndolo. Un script que sólo se ejecuta en producción es un script sin probar.
  */
-import { sql } from 'drizzle-orm';
+import { desc, ne, sql } from 'drizzle-orm';
 
 import type { Database } from './index.js';
 import {
@@ -40,8 +40,10 @@ import {
   messagingConversations,
   messagingWebhookEvents,
   orders,
+  salesCycles,
   surveyResponses,
   transferReconciliations,
+  weeklyMenus,
 } from './schema/index.js';
 
 /** Las tablas que el vaciado toca, con el nombre que se muestra en el resumen. */
@@ -54,6 +56,7 @@ const CONTADAS = {
   eventos: messagingWebhookEvents,
   paradas: deliveryStops,
   pedidos: orders,
+  periodos: salesCycles,
   rendiciones: cashSettlements,
   respuestas: surveyResponses,
 } as const;
@@ -82,7 +85,36 @@ export async function countOperations(database: Database): Promise<OperationCoun
  *
  * Es idempotente: correrlo dos veces no cambia nada la segunda.
  */
-export async function wipeOperations(database: Database): Promise<void> {
+/**
+ * El período más reciente: el que se conserva cuando se pide quedarse sólo con uno.
+ *
+ * "El último cargado" se resuelve por fecha de cierre y no por orden de alta. Son lo mismo cuando
+ * las semanas se cargan en orden, y no cuando alguien carga una vieja a posteriori: ahí el último
+ * *cargado* es una semana vieja, que es justo lo que nadie quiere conservar. El CLI imprime cuál
+ * eligió antes de borrar, para que no haya que confiar en esta regla a ciegas.
+ */
+export async function findLatestCycle(
+  database: Database,
+): Promise<{ alias: string; closeAt: Date; id: string } | null> {
+  const [latest] = await database
+    .select({ alias: salesCycles.alias, closeAt: salesCycles.closeAt, id: salesCycles.id })
+    .from(salesCycles)
+    .orderBy(desc(salesCycles.closeAt))
+    .limit(1);
+  return latest ?? null;
+}
+
+export interface WipeOptions {
+  /**
+   * Conservar sólo este período y borrar los demás, con sus menús, precios y platos.
+   *
+   * Sin esto se conservan **todos**: los períodos son parte del catálogo y rehacerlos —menús,
+   * precios, platos— es trabajo que el vaciado no tiene por qué destruir.
+   */
+  keepOnlyCycleId?: string;
+}
+
+export async function wipeOperations(database: Database, options: WipeOptions = {}): Promise<void> {
   await database.transaction(async (transaction) => {
     await transaction.delete(cashSettlements);
     await transaction.delete(cashCollections);
@@ -108,5 +140,21 @@ export async function wipeOperations(database: Database): Promise<void> {
     await transaction.delete(messagingWebhookEvents);
     await transaction.delete(orders);
     await transaction.delete(customers);
+
+    if (options.keepOnlyCycleId) {
+      /*
+       * Los menús antes que los períodos: `weekly_menus.sales_cycle_id` es `restrict`, y con el
+       * orden al revés Postgres tumba la transacción entera. Después de los pedidos, que
+       * referencian a las dos cosas con `restrict`. Ofertas, precios y platos cuelgan del menú
+       * por `cascade`, y lo de producción —cierres, reales, excedentes— del período.
+       *
+       * `source_menu_id` es `set null`, así que no importa si se borra primero la revisión
+       * regional o la maestra.
+       */
+      await transaction
+        .delete(weeklyMenus)
+        .where(ne(weeklyMenus.salesCycleId, options.keepOnlyCycleId));
+      await transaction.delete(salesCycles).where(ne(salesCycles.id, options.keepOnlyCycleId));
+    }
   });
 }

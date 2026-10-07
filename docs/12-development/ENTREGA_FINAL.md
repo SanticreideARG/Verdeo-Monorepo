@@ -63,6 +63,20 @@ Ordenado por lo que frena a lo demás.
    entera sin borrar nada. El orden está probado contra un Postgres real en
    `wipe-operations.test.ts`, con una fila en cada barrera.
 
+   **Qué pasa con los períodos.** Por defecto se conservan todos —con sus menús, precios y platos—,
+   porque rehacerlos es trabajo que un vaciado de clientes no tiene por qué destruir. Para quedarse
+   sólo con el más reciente:
+
+   ```bash
+   pnpm db:wipe-operations --produccion --solo-ultimo-periodo --dry-run
+   ```
+
+   `--dry-run` cuenta y lista sin borrar: dice qué período conserva y cuáles borra. **Conviene
+   leerlo antes de correrlo de verdad**, porque "el último" se decide por fecha de cierre y no por
+   orden de alta —una semana vieja cargada a posteriori sería "la última cargada" y es justo la que
+   nadie quiere conservar—. Los períodos borrados se llevan sus menús, ofertas, precios y lo de
+   cocina (cierres, reales, excedentes); el catálogo de variedades y tamaños no se toca.
+
    **Bajar el respaldo antes** (`/app/respaldos`): esto no se puede deshacer. `--dry-run` cuenta
    sin borrar. Las hojas de ruta no se borran, sólo sus paradas —una ruta es del período, no del
    cliente—, y el comando dice cuántas quedaron vacías.
