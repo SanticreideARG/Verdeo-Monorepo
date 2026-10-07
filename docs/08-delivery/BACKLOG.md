@@ -416,3 +416,31 @@ propósito.
 - [ ] El menú sigue admitiendo hasta cinco platos base por variedad
       (`weekly_menu_items_slot_check`). Es la definición del menú y no el tope del pedido, pero si
       alguna vez se quiere un tamaño de ocho platos estándar, hay que subirlo.
+
+## Auditoría: que diga qué se hizo
+
+Pedido del product owner, anotado para después.
+
+**Lo que ya existe.** El registro guarda quién (`actor_type`, `actor_user_id`), qué (`action`), sobre qué
+(`entity_type`, `entity_id`), el antes y el después (`before`, `after`) y datos sueltos (`metadata`),
+más `request_id` y `correlation_id`. Hay más de setenta acciones distintas, y ya incluyen
+`order.created`, `order.updated`, `order.status_changed` y `order.deleted`. El conteo es de piso: las
+que se pasan por funciones auxiliares (`auditCustomerMutation`) no aparecen en una búsqueda simple.
+
+**Lo que probablemente falta es la lectura, no la escritura.** Hay que confirmarlo mirando la pantalla
+con datos reales antes de prometer nada.
+
+- [ ] **El hueco enorme de la pantalla.** Entre el título y los filtros queda un espacio en blanco de
+      casi una pantalla, y el primer evento aparece recién abajo. Es un bug de maquetación.
+- [ ] **Una frase por evento.** Hoy se ve `auth.login_succeeded`. Tendría que decir "Santiago entró al
+      panel" o "Isabella confirmó el pedido NQN-00123": el código de la acción es para quien programa.
+- [ ] **El antes y el después, legibles.** Mostrar qué cambió campo por campo ("total: $25.000 →
+      $30.000") en lugar del JSON crudo.
+- [ ] **Seguimiento de un pedido.** Desde un pedido, ver todo lo que le pasó —creado, editado,
+      confirmado, cobrado, avisado, eliminado— en una línea de tiempo. El filtro por ID de entidad ya
+      lo permite; falta llegar a él desde la ficha.
+- [ ] **Una pasada de huecos.** Recorrer cada mutación del sistema contra las acciones auditadas.
+      Candidatas conocidas: alta y baja de fondos de etiqueta, el vaciado de datos de prueba (un
+      resumen de lo borrado) y la importación de pedidos (un evento por importación con cuántos
+      entraron y cuántos fallaron, además de los de cada pedido).
+- [ ] Decidir si el registro tiene retención o crece para siempre.

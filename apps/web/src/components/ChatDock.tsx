@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 
 import { apiRequest } from '../lib/api.js';
@@ -73,6 +82,30 @@ export function ChatDock({
   viewerUserId,
 }: ChatDockProps) {
   const [panelOpen, setPanelOpen] = useState(false);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  /*
+   * Dónde se dibujan las ventanas: el shell, y no la barra de arriba donde vive el botón.
+   *
+   * `position: fixed` mide contra la ventana salvo que un ancestro tenga `backdrop-filter`,
+   * `transform` o `filter`: entonces mide contra ese ancestro. La barra tiene un desenfoque, así
+   * que "abajo a la derecha" quedó siendo el borde de abajo de la barra, y las ventanas crecían
+   * hacia arriba, fuera de pantalla, con la caja de texto cortada contra ese borde. El fondo que
+   * cierra el panel al hacer clic afuera sufría lo mismo: sólo cubría la barra.
+   *
+   * Se sacan de ahí con un portal en lugar de quitarle el desenfoque a la barra: cualquier cosa
+   * fija que alguien monte en la barra mañana tendría el mismo problema, y el desenfoque es lo
+   * que la hace verse como se ve.
+   *
+   * Al shell y no a `document.body`: los colores del tema (`--db-surface-solid`, `--db-border`)
+   * están definidos en `.dashboard-shell[data-theme=…]`, y fuera de él las ventanas quedarían
+   * sin fondo ni borde.
+   */
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    setPortalTarget(triggerRef.current?.closest<HTMLElement>('.dashboard-shell') ?? null);
+  }, []);
+  // Sin shell a la vista —un test, otra pantalla— se dibuja en el lugar, como antes.
+  const mount = (node: ReactNode) => (portalTarget ? createPortal(node, portalTarget) : node);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [contacts, setContacts] = useState<ChatContact[]>([]);
   const [presence, setPresence] = useState<Map<string, ChatPresence>>(new Map());
@@ -183,7 +216,7 @@ export function ChatDock({
 
   return (
     <>
-      <div className="chat-dock-trigger">
+      <div className="chat-dock-trigger" ref={triggerRef}>
         <button
           aria-expanded={panelOpen}
           aria-label={unread > 0 ? `Mensajes, ${String(unread)} sin leer` : 'Mensajes'}
@@ -210,12 +243,14 @@ export function ChatDock({
 
         {panelOpen ? (
           <>
-            <button
-              aria-label="Cerrar mensajes"
-              className="chat-dock-backdrop"
-              onClick={() => setPanelOpen(false)}
-              type="button"
-            />
+            {mount(
+              <button
+                aria-label="Cerrar mensajes"
+                className="chat-dock-backdrop"
+                onClick={() => setPanelOpen(false)}
+                type="button"
+              />,
+            )}
             <section aria-label="Mensajes" className="chat-dock-panel">
               <header>
                 <h2>Mensajes</h2>
@@ -285,34 +320,36 @@ export function ChatDock({
         ) : null}
       </div>
 
-      <div className={`chat-dock ${narrow ? 'is-narrow' : ''}`}>
-        {windows.map((entry) => {
-          const conversation = conversations.find((item) => item.id === entry.conversationId);
-          if (!conversation) return null;
-          return (
-            <ChatWindow
-              canShareReference={canShareReference}
-              conversation={conversation}
-              draft={drafts[entry.conversationId] ?? ''}
-              key={entry.conversationId}
-              messages={transcripts.get(entry.conversationId) ?? []}
-              minimized={entry.minimized}
-              onClose={() => closeWindow(entry.conversationId)}
-              onDraft={(value) =>
-                setDrafts((current) => ({ ...current, [entry.conversationId]: value }))
-              }
-              onSent={() => {
-                void loadTranscript(entry.conversationId);
-                void loadConversations();
-              }}
-              onToggle={() => toggleMinimized(entry.conversationId)}
-              presence={presence}
-              showPresence={canSeePresence}
-              viewerUserId={viewerUserId}
-            />
-          );
-        })}
-      </div>
+      {mount(
+        <div className={`chat-dock ${narrow ? 'is-narrow' : ''}`}>
+          {windows.map((entry) => {
+            const conversation = conversations.find((item) => item.id === entry.conversationId);
+            if (!conversation) return null;
+            return (
+              <ChatWindow
+                canShareReference={canShareReference}
+                conversation={conversation}
+                draft={drafts[entry.conversationId] ?? ''}
+                key={entry.conversationId}
+                messages={transcripts.get(entry.conversationId) ?? []}
+                minimized={entry.minimized}
+                onClose={() => closeWindow(entry.conversationId)}
+                onDraft={(value) =>
+                  setDrafts((current) => ({ ...current, [entry.conversationId]: value }))
+                }
+                onSent={() => {
+                  void loadTranscript(entry.conversationId);
+                  void loadConversations();
+                }}
+                onToggle={() => toggleMinimized(entry.conversationId)}
+                presence={presence}
+                showPresence={canSeePresence}
+                viewerUserId={viewerUserId}
+              />
+            );
+          })}
+        </div>,
+      )}
     </>
   );
 }

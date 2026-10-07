@@ -1327,11 +1327,21 @@ a {
     align-items: start;
   }
   /* La navegación ocupa la primera columna entera y acompaña el scroll: en una pantalla larga,
-     cambiar de sección no puede obligar a volver arriba. */
+     cambiar de sección no puede obligar a volver arriba.
+
+     `grid-row: 1 / span 999` y no `1 / -1`, y la diferencia es un hueco de media pantalla en cada
+     sección del panel de control. `-1` es la última línea del grid *explícito*, y este grid no
+     declara filas: la última línea es la primera, así que la navegación ocupaba una sola fila, la
+     misma del título. Medía unos 600px, la fila crecía hasta igualarla y todo lo demás quedaba
+     empujado hacia abajo —476px de blanco entre el título y el contenido—.
+
+     Con un span largo, cuando la navegación es más alta que el contenido, la altura que sobra se
+     reparte entre todas las filas que abarca, y casi toda cae en las vacías, que no se ven. Las
+     filas reales apenas crecen y el panel mide lo justo para contener la navegación. */
   .dashboard-panel:has(> .settings-nav) > .settings-nav {
     position: sticky;
     top: 1rem;
-    grid-row: 1 / -1;
+    grid-row: 1 / span 999;
     margin-bottom: 0;
   }
   .dashboard-panel:has(> .settings-nav) > *:not(.settings-nav) {
@@ -3205,10 +3215,15 @@ a {
   line-height: 1.05rem;
   text-align: center;
 }
+/* El fondo que cierra el panel al tocar afuera.
+   Vive fuera de la barra (ver el portal en ChatDock), así que su z-index se compara con el de la
+   barra, que es 40. Con 58 tapaba la barra entera, panel incluido, y no se podía tocar ningún
+   contacto. Por debajo de la barra y por encima del contenido: el panel y el botón quedan
+   clickeables y todo lo demás cierra. */
 .chat-dock-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 58;
+  z-index: 39;
   border: 0;
   background: transparent;
   cursor: default;

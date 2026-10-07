@@ -115,6 +115,18 @@ export function MenusPage() {
     ]);
     if (menuResponse?.ok) {
       setMenus(((await menuResponse.json()) as { items: WeeklyMenu[] }).items);
+    } else if (menuResponse) {
+      /*
+       * Un pedido que falló no es una lista vacía.
+       *
+       * Antes se ignoraba, y la pantalla decía "Todavía no hay semanas cargadas" delante de
+       * alguien que tenía semanas: parecía que se habían borrado, que es lo peor que puede
+       * parecer un error de carga. Sin esto, el diagnóstico de esa tarde fue "¿es normal que
+       * desaparezcan los períodos?" en vez de "falló la carga".
+       */
+      setMessage(
+        `No pudimos cargar las semanas, pero no se perdió nada. ${await errorMessage(menuResponse)}`,
+      );
     }
     if (siteResponse?.ok) {
       const loadedSites = (
@@ -309,7 +321,8 @@ export function MenusPage() {
             <DataTable
               caption="Semanas"
               columns={columns}
-              empty="Todavía no hay semanas cargadas."
+              // Con un error de carga arriba, "no hay semanas" sería una afirmación falsa: no se sabe.
+              empty={message ? 'No se pudo cargar la lista.' : 'Todavía no hay semanas cargadas.'}
               rowKey={(week) => week.cycleId}
               rows={weeks}
             />

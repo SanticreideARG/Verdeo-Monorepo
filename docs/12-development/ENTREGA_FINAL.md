@@ -34,10 +34,22 @@ Ordenado por lo que frena a lo demás.
 2. ~~Correr `pnpm db:seed-permissions` contra producción.~~ **Hecho el 1 de octubre de 2026**: 18
    concesiones nuevas al rol `operador`, que había salido sin ningún permiso de `orders.*` ni de
    `customers.*`. El script es idempotente, así que volver a correrlo no cambia nada.
-3. **Aplicar las migraciones pendientes a producción** (`pnpm db:migrate` con el `DATABASE_URL` de
-   producción). El deploy de Vercel no las corre, así que una versión que agrega columnas queda
-   desplegada contra una base que no las tiene. Es lo primero a revisar cuando algo funciona en
-   local y falla en producción.
+3. **Aplicar las migraciones pendientes a producción**: `pnpm db:migrate --produccion`. El deploy de
+   Vercel no las corre, así que una versión que agrega columnas queda desplegada contra una base que
+   no las tiene. Es lo primero a revisar cuando algo funciona en local y falla en producción.
+
+   **Cómo se ve cuando falta una**: las pantallas que listan menús —Períodos, Pedidos, Cocina—
+   dejan de cargar, y Períodos decía "Todavía no hay semanas cargadas", que parece una pérdida de
+   datos y no lo es. Ahora muestra el error de carga en vez de una lista vacía, pero la causa sigue
+   siendo la misma: migrar.
+
+   `--produccion` lee `DATABASE_URL_PROD` del `.env` e imprime a qué servidor apunta antes de hacer
+   nada (sólo el host, nunca la clave). Sirve para todos los scripts de `packages/db`:
+   `db:seed-permissions`, `db:wipe-operations`, `db:retire-repartidor`. No es el comportamiento por
+   defecto —sin la bandera ni `DATABASE_URL`, el script se niega a correr—, y si se pasan las dos
+   también se niega, porque son dos bases distintas. Reemplaza a una línea larga que la terminal
+   partía en dos al copiarla, y el comando corría sin la variable.
+
 4. **Limpiar los datos de prueba**: ~335 clientes y ~305 pedidos que no son reales. Hay un comando,
    `pnpm db:wipe-operations`, que borra clientes, pedidos, cobros, paradas de reparto,
    conversaciones (incluidos los eventos crudos del webhook, que traen números y textos reales),
