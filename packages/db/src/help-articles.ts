@@ -49,6 +49,14 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Pedidos que llegan por la web',
   },
   {
+    body: 'Los pedidos que llegan por el formulario de la página llegan al correo, uno por email. En lugar de cargarlos a mano se pegan en "Pedidos" → "Importar pedidos" → "Pegar emails".\n\nSe pegan tal cual llegan, reenviados y con el encabezado, de a uno o de a muchos juntos. Se lee el celular, la dirección, el barrio, las cantidades y el mensaje del cliente.\n\nAntes de crear nada se ve cada pedido con lo que se entendió. Para cada uno:\n\n- **El cliente**: se reconoce por celular o por email, aunque el número esté escrito distinto (con +54, con 0, con 9). Si no está, se crea. Si hay nombres parecidos, elegís vos: nunca se unen solos.\n\n- **La variedad**: si no se reconoce en el menú de la semana, aparece un selector y hay que elegirla. No se adivina.\n\n- **El tilde de la izquierda**: un pedido destildado no se importa.\n\nDos cosas que arrancan destildadas a propósito: un pedido que el cliente **ya tiene igual** en esta semana (por si pegaste los mismos emails dos veces), y uno con una línea que no se pudo leer. Podés tildarlos si corresponde.\n\nLos formularios con todo en cero **no son pedidos**: son consultas. Aparecen abajo, con el mensaje y un botón para abrir el WhatsApp del cliente, y no se importan.\n\nLos pedidos entran como borradores, igual que los que se cargan a mano: después se confirman desde la cola. El mensaje del cliente queda como nota del pedido.\n\n[Ir a Pedidos](/app/pedidos)',
+    category: 'Pedidos / Tomar pedidos',
+    key: 'pedidos-importar-emails',
+    ordinal: 2,
+    requiredPermission: 'orders.create',
+    title: 'Importar pedidos desde los emails de la página',
+  },
+  {
     body: 'En "Pedidos" podés filtrar por estado y buscar por número o cliente. Arriba de la tabla se ve cuántos pedidos coinciden, y al pie los totales.\n\nPara ordenar, tocá el encabezado de una columna: Estado agrupa por estado, Pedido por tipo de pedido, y así con cada una.\n\nEl botón "Columnas" elige qué se ve en la tabla. "Exportar a Excel" baja exactamente lo filtrado.\n\n[Ir a Pedidos](/app/pedidos)',
     category: 'Pedidos / Ver y exportar',
     key: 'pedidos-ver-pedidos',

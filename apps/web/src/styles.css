@@ -8788,3 +8788,128 @@ textarea.sr-only {
   gap: 0.75rem 1rem;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
 }
+
+/* --- Importar pedidos: emails, varias variedades y consultas ----------------------------------
+   Lo que se agrega a la revisión cuando el origen es un email: un pedido trae varias variedades,
+   cada una puede necesitar que alguien la elija, y los mensajes sin cantidad son consultas. */
+.order-import-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--db-border-soft, var(--border-hairline));
+}
+.order-import-tabs button {
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0.5rem 0.8rem;
+  background: none;
+  color: var(--db-text-soft);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.order-import-tabs button.is-active {
+  border-bottom-color: var(--db-accent);
+  color: var(--db-text);
+}
+.order-import-intro textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 0.85rem;
+  resize: vertical;
+}
+.order-import-hint {
+  margin: 0;
+  color: var(--db-text-soft);
+  font-size: 0.78rem;
+}
+.order-import-include {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.order-import-include strong {
+  overflow-wrap: anywhere;
+}
+/* Las variedades del pedido. Una por renglón, con el selector al lado sólo cuando hace falta: el
+   caso normal es que el menú las reconozca solo y el renglón sea una línea de texto. */
+.order-import-items {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.order-import-items > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.order-import-items small {
+  color: var(--db-text-soft);
+  font-weight: 500;
+}
+.order-import-items select {
+  max-width: 100%;
+}
+/* El mensaje del cliente, tal como lo escribió: es lo que va a la nota del pedido. */
+.order-import-note {
+  margin: 0;
+  border-left: 3px solid var(--db-border, currentcolor);
+  padding-left: 0.6rem;
+  color: var(--db-text-soft);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.order-import-inquiries {
+  display: grid;
+  gap: 0.6rem;
+  border-top: 1px solid var(--db-border-soft, var(--border-hairline));
+  padding-top: 0.9rem;
+}
+.order-import-inquiries h3 {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.order-import-inquiries > p {
+  margin: 0;
+  color: var(--db-text-soft);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.order-import-inquiries ul {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.order-import-inquiries li {
+  display: grid;
+  gap: 0.4rem;
+  border: 1px solid var(--db-border-soft, var(--border-hairline));
+  border-radius: 0.7rem;
+  padding: 0.7rem 0.8rem;
+}
+.order-import-inquiry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+.order-import-foot-note {
+  margin-right: auto;
+  color: var(--db-danger, #b3261e);
+  font-size: 0.78rem;
+}

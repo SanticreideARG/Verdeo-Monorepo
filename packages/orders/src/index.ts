@@ -3,6 +3,7 @@ export * from './delivery-detail.js';
 export * from './intuitivo-pricing.js';
 export * from './label-sheet.js';
 export * from './menu-names.js';
+export * from './offering-match.js';
 export * from './order-engine.js';
 export * from './order-export.js';
 export * from './stats-merge.js';

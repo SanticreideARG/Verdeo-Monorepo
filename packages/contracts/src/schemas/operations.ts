@@ -25,6 +25,15 @@ export const OrderSourceSchema = z.enum([
    * sacarlo del enum no "limpiaría" nada — haría que el historial entero dejara de poder leerse.
    */
   'manual',
+  /*
+   * Pedidos creados al importar una planilla.
+   *
+   * Faltaba en esta lista, y faltar acá no rompe al escribir sino al LEER: `source` se valida al
+   * leer el pedido, y la lista de pedidos parsea cada uno con ese esquema. Un solo pedido con un
+   * origen que no está acá hacía fallar con un 500 la pantalla de Pedidos entera. Pasó inadvertido
+   * porque el importador pasaba el valor con un `as never` que apagaba la comprobación de tipos.
+   */
+  'spreadsheet_import',
   'opportunity_sale',
   // Referral ("recomendación") — a distinct origin from opportunity_sale, which stays load-bearing
   // for surplus stock validation and the "vendido por oportunidad" report metric.
@@ -1385,30 +1394,76 @@ export const LabelBackgroundListResponseSchema = z.object({
  * dos registros, y el día que hay que llamarla nadie sabe cuál mirar. Por eso el import tiene dos
  * pasos y éste es el primero: decir con qué coincide cada fila y dejar que una persona lo confirme.
  */
+/** Una variedad de un pedido importado, ya emparejada —o no— con el menú publicado. */
+export const OrderImportPreviewItemSchema = z.object({
+  dishes: z.array(z.string()),
+  /**
+   * Null cuando la variedad y el tamaño no se reconocen en el menú publicado.
+   *
+   * No es un error: es la señal para que una persona elija a mano. Adivinar es la forma de cargar
+   * el pedido de otra variedad sin que nadie lo note.
+   */
+  offeringId: UuidSchema.nullable(),
+  quantityUnits: z.number().int(),
+  size: z.string().nullable(),
+  variety: z.string().nullable(),
+});
+
 export const OrderImportPreviewRowSchema = z.object({
   customerMatch: z.object({
     /** Nombres parecidos, cuando no hubo una coincidencia que se pueda dar por buena sola. */
     candidates: z.array(z.object({ customerId: UuidSchema, displayName: z.string() })),
     customerId: UuidSchema.nullable(),
     displayName: z.string().nullable(),
-    kind: z.enum(['telefono', 'nombre', 'parecidos', 'nuevo']),
+    kind: z.enum(['telefono', 'email', 'nombre', 'parecidos', 'nuevo']),
   }),
   customerName: z.string(),
   deliveryAddress: z.string().nullable(),
-  dishes: z.array(z.string()),
+  /**
+   * El número del pedido que ya existe y parece ser el mismo, si lo hay.
+   *
+   * Pegar dos veces los mismos emails es lo más probable que va a pasar, y sin esto cada pegado
+   * duplica los pedidos. Se avisa y no se bloquea: dos pedidos idénticos del mismo cliente son
+   * legítimos si de verdad pidió dos veces.
+   */
+  duplicateOf: z.string().nullable(),
+  email: z.string().nullable(),
+  items: z.array(OrderImportPreviewItemSchema).min(1),
+  kind: z.enum(['email', 'spreadsheet_import']),
+  /** La ciudad que dice el origen, tal como la escribió: se muestra, no se interpreta. */
+  locality: z.string().nullable(),
   notes: z.string().nullable(),
-  /** Null cuando la variedad y el tamaño de la fila no existen en el menú publicado. */
-  offeringId: UuidSchema.nullable(),
   paymentExpectation: z.string().nullable(),
   phone: z.string().nullable(),
-  quantityUnits: z.number().int(),
+  receivedOn: z.string().nullable(),
   rowNumber: z.number().int(),
-  size: z.string().nullable(),
-  variety: z.string().nullable(),
+  /** Lo que el lector no pudo entender de este pedido: se dice en lugar de perderse. */
+  warnings: z.array(z.string()),
+});
+
+/** Un mensaje del formulario sin ninguna cantidad: una pregunta, no un pedido. */
+export const OrderImportInquirySchema = z.object({
+  customerName: z.string(),
+  email: z.string().nullable(),
+  message: z.string(),
+  phone: z.string().nullable(),
+  receivedOn: z.string().nullable(),
+  rowNumber: z.number().int(),
 });
 
 export const OrderImportPreviewResponseSchema = z.object({
+  /** Los mensajes que no traían ninguna cantidad, para contestarlos y no perderlos. */
+  inquiries: z.array(OrderImportInquirySchema),
   items: z.array(OrderImportPreviewRowSchema),
+  /** Lo que se puede elegir a mano cuando una variedad no se reconoce. */
+  offerings: z.array(z.object({ id: UuidSchema, label: z.string() })),
+  /** Cuántos bloques de lo pegado no se pudieron leer como un pedido. */
+  unreadable: z.number().int(),
+});
+
+/** Los emails de pedido tal como llegan, pegados de a uno o de a muchos. */
+export const OrderImportEmailPreviewRequestSchema = z.object({
+  text: z.string().trim().min(1).max(200_000),
 });
 
 /** Una fila ya resuelta por una persona: con qué cliente va, o que hay que crearlo. */
@@ -1416,16 +1471,25 @@ export const OrderImportConfirmRequestSchema = z.object({
   rows: z
     .array(
       z.object({
-        /** El cliente elegido; sin esto se crea uno nuevo con `customerName` y `phone`. */
+        /** El cliente elegido; sin esto se crea uno nuevo con `customerName`, `phone` y `email`. */
         customerId: UuidSchema.nullable(),
         customerName: z.string().trim().min(1).max(160),
         deliveryAddress: z.string().trim().max(500).nullable(),
-        dishes: z.array(z.string().trim().min(1).max(160)).max(10),
+        email: z.string().trim().max(320).nullable(),
+        items: z
+          .array(
+            z.object({
+              dishes: z.array(z.string().trim().min(1).max(160)).max(50),
+              offeringId: UuidSchema,
+              quantityUnits: z.number().int().min(1).max(99),
+            }),
+          )
+          .min(1)
+          .max(20),
+        kind: z.enum(['email', 'spreadsheet_import']),
         notes: z.string().trim().max(1_000).nullable(),
-        offeringId: UuidSchema,
         paymentExpectation: z.string().trim().min(1).max(60),
         phone: z.string().trim().max(60).nullable(),
-        quantityUnits: z.number().int().min(1).max(99),
         rowNumber: z.number().int(),
       }),
     )
@@ -1438,7 +1502,6 @@ export const OrderImportConfirmResponseSchema = z.object({
   /** Las filas que no se pudieron crear, con el motivo: el resto sí entró. */
   failed: z.array(z.object({ reason: z.string(), rowNumber: z.number().int() })),
 });
-
 /**
  * Una fila de la cola de avisos: a quién hay que escribirle, qué dice el mensaje y si ya se hizo.
  *

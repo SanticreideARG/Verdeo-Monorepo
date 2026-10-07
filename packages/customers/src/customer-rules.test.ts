@@ -7,6 +7,8 @@ import {
   normalizeCustomerIdentity,
   normalizeCustomerText,
   renderTemplate,
+  argentinePhoneKey,
+  canonicalArgentinePhone,
 } from './index.js';
 
 describe('customer rules', () => {
@@ -51,5 +53,45 @@ describe('customer rules', () => {
     );
 
     expect(rendered).toBe(['Hola Ana', 'Gracias.'].join('\n'));
+  });
+
+  /*
+   * Un mismo celular llega escrito de cinco maneras, y comparar por igualdad crea un cliente duplicado
+   * por cada una. Los números son inventados, con la forma de los que llegan en los pedidos reales.
+   */
+  it('reconoce un mismo celular argentino escrito de cualquier manera', () => {
+    const formas = [
+      '+541155550101',
+      '+5491155550101',
+      '1155550101',
+      '01155550101',
+      '91155550101',
+      '+54 9 11 5555-0101',
+    ];
+
+    expect(new Set(formas.map((forma) => argentinePhoneKey(forma)))).toEqual(
+      new Set(['1155550101']),
+    );
+  });
+
+  it('no reconoce un número sin código de área: sus últimos dígitos unirían ciudades distintas', () => {
+    expect(argentinePhoneKey('5555 0101')).toBeNull();
+    expect(argentinePhoneKey('155550101')).toBeNull();
+  });
+
+  it('guarda todos los celulares con la misma forma, la que entiende wa.me', () => {
+    expect(canonicalArgentinePhone('1155550101')).toBe('+5491155550101');
+    expect(canonicalArgentinePhone('+541155550101')).toBe('+5491155550101');
+    expect(canonicalArgentinePhone('91155550101')).toBe('+5491155550101');
+  });
+
+  // Quedarse con los últimos diez dígitos de un número de otro país lo corrompería.
+  it('deja como vino un número con un código de país que no es el 54', () => {
+    expect(canonicalArgentinePhone('+598 99 123 456')).toBe('+59899123456');
+  });
+
+  // Inventarle un código de área a un número incompleto es peor que guardarlo incompleto.
+  it('no toca un número con menos de diez dígitos', () => {
+    expect(canonicalArgentinePhone('5555 0101')).toBe('5555 0101');
   });
 });

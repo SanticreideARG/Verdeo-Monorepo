@@ -444,3 +444,20 @@ con datos reales antes de prometer nada.
       resumen de lo borrado) y la importación de pedidos (un evento por importación con cuántos
       entraron y cuántos fallaron, además de los de cada pedido).
 - [ ] Decidir si el registro tiene retención o crece para siempre.
+
+## Pedidos que llegan por email
+
+- [x] Pegar los emails del formulario del sitio en el diálogo de importación: se lee celular,
+      dirección, barrio, cantidades y mensaje; se reconoce al cliente por celular argentino o email;
+      se empareja cada variedad con el menú; y se avisa si el cliente ya tiene un pedido igual.
+- [x] Los formularios todo en cero se separan como consultas, con enlace a WhatsApp, y no se importan.
+- [x] Corregido: los pedidos importados de una planilla tenían un origen que la API no sabía leer, y
+      hacían fallar con un 500 la pantalla de Pedidos entera.
+- [x] Corregido: los nombres parecidos no encontraban a la misma persona con y sin segundo nombre.
+- [ ] **Recibir los emails sin pegarlos.** Hoy los pega una persona. Para que entren solos hace falta
+      una casilla que los reciba y los entregue a la API (Resend, un reenvío a un webhook, o la API
+      de Gmail): otra decisión de proveedor y de qué hacer con lo que no se entiende.
+- [ ] Crear el domicilio del cliente a partir de la dirección y el barrio del email, con su zona.
+      Hoy el pedido lleva la dirección como texto y la zona se asigna desde el CRM.
+- [ ] Mapear la ciudad del asunto ("Capital Federal") a una ciudad del sistema, para avisar cuando
+      un pedido llega con una ciudad distinta de la que está elegida arriba. Hoy sólo se muestra.

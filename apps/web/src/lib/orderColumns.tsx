@@ -29,6 +29,7 @@ const SOURCE_LABELS: Record<string, string> = {
   opportunity_sale: 'Venta de oportunidad',
   phone: 'Teléfono',
   referral: 'Recomendación',
+  spreadsheet_import: 'Planilla',
   web: 'Sitio web',
   whatsapp: 'WhatsApp',
 };

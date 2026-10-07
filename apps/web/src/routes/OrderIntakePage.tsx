@@ -955,7 +955,7 @@ export function OrderIntakePage() {
                   onClick={() => setImportOpen(true)}
                   type="button"
                 >
-                  Importar planilla
+                  Importar pedidos
                 </button>
               ) : null}
             </div>

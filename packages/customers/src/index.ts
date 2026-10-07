@@ -110,3 +110,43 @@ export function renderTemplate(body: string, values: Readonly<Record<string, str
       .trim()
   );
 }
+
+/**
+ * La clave con la que se reconoce un teléfono argentino, sea cual sea la forma en que se escribió.
+ *
+ * `normalizeCustomerIdentity` sólo quita los símbolos y conserva el `+`, así que un mismo celular
+ * llega como `+541156380959`, `+5491156380959`, `1156380959`, `01156380959` o `91156380959` —cinco
+ * cadenas distintas que son la misma línea— y comparar por igualdad crea un cliente duplicado por
+ * cada forma. Un número argentino son diez dígitos significativos (área y abonado); lo que sobra
+ * antes es el prefijo del país (54), el 9 de los celulares o el 0 de marcación nacional. Quedarse con
+ * los últimos diez los iguala a todos.
+ *
+ * Es una clave para **comparar**, no un valor para guardar: `canonicalArgentinePhone` es el que da
+ * la forma almacenable.
+ *
+ * Devuelve `null` si hay menos de diez dígitos: un número sin código de área no se puede reconocer,
+ * y comparar sus últimos ocho dígitos uniría clientes de ciudades distintas.
+ */
+export function argentinePhoneKey(raw: string): string | null {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length < 10) return null;
+  return digits.slice(-10);
+}
+
+/**
+ * La forma en que se guarda un celular argentino: `+549` y los diez dígitos significativos.
+ *
+ * Es la que entiende `wa.me`, y la que hace que dos pedidos del mismo cliente escritos de maneras
+ * distintas queden con el mismo valor en la base.
+ *
+ * Un número que empieza con `+` y un país que no es el 54 se deja como vino: quedarse con sus
+ * últimos diez dígitos lo corrompería. Y uno con menos de diez dígitos tampoco se toca, porque
+ * inventarle un código de área sería peor que guardarlo incompleto.
+ */
+export function canonicalArgentinePhone(raw: string): string {
+  const trimmed = raw.trim();
+  const digits = trimmed.replace(/\D/g, '');
+  if (trimmed.startsWith('+') && !digits.startsWith('54')) return `+${digits}`;
+  const key = argentinePhoneKey(trimmed);
+  return key ? `+549${key}` : trimmed;
+}

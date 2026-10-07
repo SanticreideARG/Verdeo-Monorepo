@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  OrderSourceSchema,
   HealthResponseSchema,
   MenuListResponseSchema,
   LoginResponseSchema,
@@ -1308,6 +1309,275 @@ describe('API foundation', () => {
     expect(masked).not.toContain('Vega');
   });
 
+  describe('importar pedidos', () => {
+    const MENU = '20000000-0000-4000-8000-0000000000aa';
+    const KETO_400 = '30000000-0000-4000-8000-0000000000a1';
+    const VEGAN_250 = '30000000-0000-4000-8000-0000000000a2';
+    const CLIENTE = '40000000-0000-4000-8000-0000000000b1';
+    const cookie = 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars';
+
+    function buildApp(operations: Record<string, unknown>, permissions = ['orders.create']) {
+      return createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        geography: singleSiteGeography,
+        operations: {
+          ...customerOperationsStubs,
+          createMenu: vi.fn(),
+          distributeMenu: vi.fn(),
+          setCycleClosed: vi.fn(),
+          setOrderPaid: vi.fn(),
+          createPublicOrder: vi.fn(),
+          kitchenSummary: vi.fn(),
+          listCustomers: vi.fn(),
+          listMenus: vi.fn(),
+          listMergeCandidates: vi.fn(),
+          listOrders: vi.fn(),
+          mergeCustomers: vi.fn(),
+          publishMenu: vi.fn(),
+          transitionOrder: vi.fn(),
+          createCustomer: vi.fn(() => Promise.resolve({ id: CLIENTE })),
+          createOrder: vi.fn(() => Promise.resolve({})),
+          currentPublishedMenu: vi.fn(() =>
+            Promise.resolve({ cycle: { closeAt: '2026-10-08T22:00:00.000Z' }, id: MENU }),
+          ),
+          ...operations,
+        },
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            Promise.resolve({
+              expiresAt: new Date('2026-08-20T12:00:00.000Z'),
+              permissions,
+              sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+            }),
+        },
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+    }
+
+    const post = (app: ReturnType<typeof buildApp>, path: string, body: unknown) =>
+      app.request(path, {
+        body: JSON.stringify(body),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+
+    const fila = (overrides: Record<string, unknown> = {}) => ({
+      customerId: null,
+      customerName: 'Ana Pérez',
+      deliveryAddress: 'Calle Falsa 123, Palermo',
+      email: 'ana@example.com',
+      items: [{ dishes: [], offeringId: KETO_400, quantityUnits: 2 }],
+      kind: 'email',
+      notes: null,
+      paymentExpectation: 'A confirmar',
+      phone: '+5491155550101',
+      rowNumber: 1,
+      ...overrides,
+    });
+
+    const EMAIL_DE_PEDIDO = [
+      'From: Ana Pérez ana@example.com',
+      'Celular: 1155550101',
+      'Dirección de entrega: Calle Falsa 123',
+      'Barrio : Palermo',
+      '',
+      'Pedido',
+      'Menú Paleo & Keto  400 2',
+      '',
+      'Message Body:',
+      'Soy alérgica a las nueces',
+    ].join('\n');
+    const EMAIL_DE_CONSULTA = [
+      'From: Laura laura@example.com',
+      'Celular: 1155550102',
+      'Dirección de entrega: Calle Falsa 999',
+      '',
+      'Pedido',
+      'Menú Paleo & Keto  400 0',
+      '',
+      'Message Body:',
+      '¿Tienen vianda dulce?',
+    ].join('\n');
+    const REENVIO = '---------- Forwarded message ---------';
+
+    it('lee los emails pegados y devuelve el pedido y la consulta por separado', async () => {
+      const previewOrderImport = vi.fn(() =>
+        Promise.resolve({
+          matches: [
+            {
+              customerMatch: { candidates: [], customerId: null, displayName: null, kind: 'nuevo' },
+              duplicateOf: null,
+              itemMatches: [KETO_400],
+              rowNumber: 1,
+            },
+          ],
+          offerings: [{ id: KETO_400, label: 'Menú Paleo & Keto 400' }],
+        }),
+      );
+      const app = buildApp({ previewOrderImport });
+
+      const response = await post(app, '/api/v1/orders/import/preview-email', {
+        text: [REENVIO, EMAIL_DE_PEDIDO, REENVIO, EMAIL_DE_CONSULTA].join('\n'),
+      });
+      const body = (await response.json()) as {
+        inquiries: { customerName: string; message: string }[];
+        items: {
+          items: { offeringId: string | null }[];
+          notes: string | null;
+          phone: string | null;
+        }[];
+      };
+
+      expect(response.status).toBe(200);
+      expect(body.items).toHaveLength(1);
+      expect(body.items[0]?.items[0]?.offeringId).toBe(KETO_400);
+      // El celular llega a la vista previa con la misma forma que se guarda.
+      expect(body.items[0]?.phone).toBe('+5491155550101');
+      expect(body.items[0]?.notes).toBe('Soy alérgica a las nueces');
+      expect(body.inquiries).toEqual([
+        expect.objectContaining({ customerName: 'Laura', message: '¿Tienen vianda dulce?' }),
+      ]);
+    });
+
+    it('responde con un mensaje claro cuando el texto no tiene ningún pedido', async () => {
+      const app = buildApp({ previewOrderImport: vi.fn() });
+
+      const response = await post(app, '/api/v1/orders/import/preview-email', {
+        text: 'Hola, esto no es un pedido.',
+      });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('pide el permiso de crear pedidos para leer los emails y para importar', async () => {
+      const app = buildApp({ previewOrderImport: vi.fn() }, []);
+
+      const preview = await post(app, '/api/v1/orders/import/preview-email', {
+        text: EMAIL_DE_PEDIDO,
+      });
+      const confirm = await post(app, '/api/v1/orders/import', { rows: [fila()] });
+
+      expect(preview.status).toBe(403);
+      expect(confirm.status).toBe(403);
+    });
+
+    /*
+     * El origen con el que se crea el pedido tiene que ser uno que la API sabe leer de vuelta.
+     *
+     * `source` se valida al LEER el pedido, y la lista de pedidos parsea cada uno con ese esquema:
+     * un origen que no esté en el enum hace fallar con un 500 la pantalla de Pedidos entera. Pasó
+     * con `spreadsheet_import`, que el importador escribía y el enum no tenía, y pasó inadvertido
+     * porque el importador lo pasaba con un `as never`. Esta prueba lee cada valor contra el enum.
+     */
+    it('crea los pedidos con un origen que la API sabe leer de vuelta', async () => {
+      const createOrder = vi.fn<(input: unknown) => Promise<unknown>>(() => Promise.resolve({}));
+      const app = buildApp({ createOrder });
+
+      const response = await post(app, '/api/v1/orders/import', {
+        rows: [
+          fila({ customerId: CLIENTE, kind: 'email', rowNumber: 1 }),
+          fila({ customerId: CLIENTE, kind: 'spreadsheet_import', rowNumber: 2 }),
+        ],
+      });
+
+      expect(response.status).toBe(201);
+      const origenes = createOrder.mock.calls.map(
+        ([input]) => (input as { source: string }).source,
+      );
+      expect(origenes).toEqual(['email', 'spreadsheet_import']);
+      for (const origen of origenes) {
+        expect(OrderSourceSchema.safeParse(origen).success).toBe(true);
+      }
+    });
+
+    it('crea un solo pedido con todas las variedades del email', async () => {
+      const createOrder = vi.fn<(input: unknown) => Promise<unknown>>(() => Promise.resolve({}));
+      const app = buildApp({ createOrder });
+
+      await post(app, '/api/v1/orders/import', {
+        rows: [
+          fila({
+            customerId: CLIENTE,
+            items: [
+              { dishes: [], offeringId: KETO_400, quantityUnits: 2 },
+              { dishes: [], offeringId: VEGAN_250, quantityUnits: 1 },
+            ],
+          }),
+        ],
+      });
+
+      expect(createOrder).toHaveBeenCalledTimes(1);
+      const input = createOrder.mock.calls[0]?.[0] as {
+        items: { offeringId: string; quantityUnits: number }[];
+      };
+      expect(input.items).toEqual([
+        { offeringId: KETO_400, quantityUnits: 2 },
+        { offeringId: VEGAN_250, quantityUnits: 1 },
+      ]);
+    });
+
+    /*
+     * Dos emails de la misma persona nueva llegan los dos como "cliente nuevo": cuando se armó la
+     * vista previa todavía no existía. Sin reconocerla dentro de la tanda se crearían dos clientes
+     * con el mismo celular, escrito de dos maneras.
+     */
+    it('crea un solo cliente cuando dos emails de la misma persona nueva vienen juntos', async () => {
+      const createCustomer = vi.fn<(input: unknown) => Promise<unknown>>(() =>
+        Promise.resolve({ id: CLIENTE }),
+      );
+      const createOrder = vi.fn<(input: unknown) => Promise<unknown>>(() => Promise.resolve({}));
+      const app = buildApp({ createCustomer, createOrder });
+
+      await post(app, '/api/v1/orders/import', {
+        rows: [
+          fila({ phone: '+5491155550101', rowNumber: 1 }),
+          fila({ email: null, phone: '1155550101', rowNumber: 2 }),
+        ],
+      });
+
+      expect(createCustomer).toHaveBeenCalledTimes(1);
+      expect(createOrder).toHaveBeenCalledTimes(2);
+    });
+
+    it('no frena a las demás filas cuando una falla, y dice cuál fue', async () => {
+      const createOrder = vi
+        .fn<(input: unknown) => Promise<unknown>>(() => Promise.resolve({}))
+        .mockRejectedValueOnce(new Error('El menú ya cerró'));
+      const app = buildApp({ createOrder });
+
+      const response = await post(app, '/api/v1/orders/import', {
+        rows: [
+          fila({ customerId: CLIENTE, rowNumber: 1 }),
+          fila({ customerId: CLIENTE, rowNumber: 2 }),
+        ],
+      });
+
+      expect(await response.json()).toEqual({
+        created: 1,
+        failed: [{ reason: 'El menú ya cerró', rowNumber: 1 }],
+      });
+    });
+
+    it('crea el cliente sin email cuando el email no es válido, en lugar de rechazar el pedido', async () => {
+      const createCustomer = vi.fn<(input: unknown) => Promise<unknown>>(() =>
+        Promise.resolve({ id: CLIENTE }),
+      );
+      const app = buildApp({ createCustomer });
+
+      await post(app, '/api/v1/orders/import', { rows: [fila({ email: 'esto-no-es-un-email' })] });
+
+      const input = createCustomer.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(input).not.toHaveProperty('email');
+      expect(input).toMatchObject({ displayName: 'Ana Pérez', phone: '+5491155550101' });
+    });
+  });
   describe('production and surplus', () => {
     const CYCLE = '10000000-0000-4000-8000-000000000099';
 

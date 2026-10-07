@@ -1,3 +1,4 @@
+import { canonicalArgentinePhone } from '@verdeo/customers';
 import * as XLSX from 'xlsx';
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -15,6 +16,7 @@ type SheetRow = Record<string, unknown>;
 const columnAliases = {
   customerName: ['cliente', 'nombre', 'nombre_completo', 'nombre completo'],
   deliveryAddress: ['direccion', 'dirección', 'domicilio'],
+  email: ['email', 'e-mail', 'correo', 'mail'],
   dishes: ['platos', 'platos elegidos', 'seleccion', 'selección'],
   notes: ['notas', 'observaciones', 'comentarios'],
   paymentExpectation: ['medio_de_pago', 'medio de pago', 'pago', 'forma de pago'],
@@ -24,20 +26,39 @@ const columnAliases = {
   variety: ['variedad', 'menu', 'menú', 'producto'],
 } as const;
 
-export interface OrderImportRow {
-  customerName: string;
-  deliveryAddress: string | null;
+/**
+ * Una variedad de un pedido.
+ *
+ * Una fila de planilla trae una; un email trae las que el cliente marcó. Por eso un pedido es una
+ * lista de estas y no una variedad suelta con su cantidad: con una sola por fila, un email con dos
+ * variedades se habría importado como dos pedidos.
+ */
+export interface OrderImportItem {
   dishes: string[];
-  notes: string | null;
-  paymentExpectation: string | null;
-  phone: string | null;
   quantityUnits: number;
-  /** El número de fila de la planilla, para que un error se pueda ir a corregir al archivo. */
-  rowNumber: number;
   size: string | null;
   variety: string | null;
 }
 
+export interface OrderImportRow {
+  customerName: string;
+  deliveryAddress: string | null;
+  email: string | null;
+  items: OrderImportItem[];
+  /** De dónde viene el pedido: sirve para decir de dónde se importó y cómo se etiqueta. */
+  kind: 'email' | 'spreadsheet_import';
+  /** La ciudad que dice el origen, tal como la escribió: se muestra, no se interpreta. */
+  locality: string | null;
+  notes: string | null;
+  paymentExpectation: string | null;
+  phone: string | null;
+  /** El día en que llegó el pedido, cuando el origen lo dice. */
+  receivedOn: string | null;
+  /** El número de fila de la planilla, o de pedido dentro de lo pegado, para poder ubicarlo. */
+  rowNumber: number;
+  /** Lo que el lector no pudo entender de este pedido, para que no se pierda en silencio. */
+  warnings: string[];
+}
 export class OrderImportError extends Error {
   public constructor(
     message: string,
@@ -155,26 +176,36 @@ export async function parseOrderImport(file: File): Promise<OrderImportRow[]> {
     }
 
     const platos = valueFor(row, columnAliases.dishes);
+    const telefono = valueFor(row, columnAliases.phone);
     parsed.push({
       customerName,
       deliveryAddress: valueFor(row, columnAliases.deliveryAddress) ?? null,
-      // Separados por coma o por punto y coma: las dos formas aparecen en las planillas reales.
-      dishes: platos
-        ? platos
-            .split(/[;,]/)
-            .map((dish) => dish.trim())
-            .filter(Boolean)
-        : [],
+      email: valueFor(row, columnAliases.email)?.toLocaleLowerCase('es-AR') ?? null,
+      items: [
+        {
+          // Separados por coma o por punto y coma: las dos formas aparecen en las planillas reales.
+          dishes: platos
+            ? platos
+                .split(/[;,]/)
+                .map((dish) => dish.trim())
+                .filter(Boolean)
+            : [],
+          quantityUnits,
+          size: valueFor(row, columnAliases.size) ?? null,
+          variety: valueFor(row, columnAliases.variety) ?? null,
+        },
+      ],
+      kind: 'spreadsheet_import',
+      locality: null,
       notes: valueFor(row, columnAliases.notes) ?? null,
       paymentExpectation: valueFor(row, columnAliases.paymentExpectation) ?? null,
-      phone: valueFor(row, columnAliases.phone) ?? null,
-      quantityUnits,
+      // Todos los celulares con la misma forma: es lo que permite reconocer a un cliente que ya está.
+      phone: telefono ? canonicalArgentinePhone(telefono) : null,
+      receivedOn: null,
       rowNumber,
-      size: valueFor(row, columnAliases.size) ?? null,
-      variety: valueFor(row, columnAliases.variety) ?? null,
+      warnings: [],
     });
   }
-
   if (parsed.length === 0) {
     throw new OrderImportError(
       'Ninguna fila de la planilla tiene los datos mínimos (cliente y cantidad).',

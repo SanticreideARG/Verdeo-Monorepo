@@ -18,6 +18,7 @@ import {
 import { AuditService, type JsonValue } from '@verdeo/audit';
 import {
   assertCoordinatePair,
+  argentinePhoneKey,
   assertTemplateVariables,
   normalizeCustomerIdentity,
   normalizeCustomerText,
@@ -36,6 +37,7 @@ import {
   intuitivoUnitPriceMinor,
   calculateOrderTotal,
   deliveryDateFor,
+  matchOffering,
   mergeByLooseName,
   normalizeMenuName,
   resolveOrderComposition,
@@ -820,22 +822,6 @@ export class PostgresOperationsService {
   }
 
   /**
-   * Imports are deliberately one database transaction: either every contact is
-   * persisted (with its audit trail) or the operator can correct the sheet and retry.
-   */
-  /**
-   * Qué entendimos de una planilla de pedidos, antes de escribir nada.
-   *
-   * Importar pedidos a ciegas crea clientes duplicados: la misma persona escrita "Ana Vega" en una
-   * planilla y "Ana Isabel Vega" en la base son dos registros, y el día que hay que llamarla nadie
-   * sabe cuál mirar. Así que esto no importa nada — resuelve, fila por fila, con qué cliente de la
-   * base coincide y con qué variedad del menú, y devuelve eso para que una persona lo confirme.
-   *
-   * El matcheo de cliente va de lo más fuerte a lo más débil: primero el teléfono normalizado, que
-   * es único en la práctica; después el nombre exacto; y si no, los nombres parecidos como
-   * candidatos para que alguien elija. Un nombre parecido nunca se da por bueno solo.
-   */
-  /**
    * La cola de avisos de un período: a quién hay que escribirle y si ya se le escribió.
    *
    * Se deriva de los pedidos y no se carga en ninguna parte. Eso es intencional: una cola que se
@@ -1013,42 +999,98 @@ export class PostgresOperationsService {
     });
   }
 
+  /**
+   * Qué entendimos de los pedidos importados —de una planilla o de un email—, antes de escribir
+   * nada.
+   *
+   * Importar a ciegas crea clientes duplicados: la misma persona escrita "Ana Vega" en un email y
+   * "Ana Isabel Vega" en la base son dos registros, y el día que hay que llamarla nadie sabe cuál
+   * mirar. Así que esto no importa nada: resuelve, pedido por pedido, con qué cliente de la base
+   * coincide y con qué variedad del menú, y devuelve eso para que una persona lo confirme.
+   *
+   * El matcheo de cliente va de lo más fuerte a lo más débil: el celular, el email, el nombre
+   * exacto, y si no, los nombres parecidos como candidatos para que alguien elija. Un nombre
+   * parecido nunca se da por bueno solo.
+   *
+   * El celular se compara por su clave argentina (los diez dígitos significativos) y no por
+   * igualdad: el mismo número llega como `+54 9 11…`, `011…` o `11…`, y comparar el texto crea un
+   * cliente por cada forma.
+   */
   public async previewOrderImport(
     rows: readonly {
       customerName: string;
+      email: string | null;
+      items: readonly {
+        quantityUnits: number;
+        size: string | null;
+        variety: string | null;
+      }[];
       phone: string | null;
-      quantityUnits: number;
       rowNumber: number;
-      size: string | null;
-      variety: string | null;
     }[],
     operatingSiteId?: string | null,
   ) {
     const menu = await this.currentPublishedMenu(operatingSiteId ?? null);
     const ofertas = (menu?.offerings ?? []) as readonly {
+      composable?: boolean;
       familyName: string;
       id: string;
       sizeName: string;
     }[];
 
-    const telefonos = rows
-      .map((row) => (row.phone ? normalizeCustomerIdentity('whatsapp', row.phone) : null))
-      .filter((phone): phone is string => phone !== null);
-    const porTelefono =
-      telefonos.length === 0
+    // Sólo clientes activos: un cliente archivado ya no recibe pedidos nuevos.
+    const claves = new Set(
+      rows
+        .map((row) => (row.phone ? argentinePhoneKey(row.phone) : null))
+        .filter((clave): clave is string => clave !== null),
+    );
+    const identidadesDeTelefono =
+      claves.size === 0
+        ? []
+        : (
+            await this.database
+              .select({
+                customerId: customerIdentities.customerId,
+                displayName: customers.displayName,
+                value: customerIdentities.valueNormalized,
+              })
+              .from(customerIdentities)
+              .innerJoin(customers, eq(customers.id, customerIdentities.customerId))
+              .where(
+                and(
+                  inArray(customerIdentities.type, ['whatsapp', 'phone']),
+                  eq(customerIdentities.active, true),
+                  eq(customers.status, 'active'),
+                ),
+              )
+          )
+            .map((identidad) => ({ ...identidad, clave: argentinePhoneKey(identidad.value) }))
+            .filter((identidad) => identidad.clave !== null && claves.has(identidad.clave));
+
+    const correos = [
+      ...new Set(
+        rows
+          .map((row) => row.email?.trim().toLocaleLowerCase('es-AR') ?? null)
+          .filter((correo): correo is string => correo !== null && correo.length > 0),
+      ),
+    ];
+    const identidadesDeCorreo =
+      correos.length === 0
         ? []
         : await this.database
             .select({
               customerId: customerIdentities.customerId,
               displayName: customers.displayName,
-              valueNormalized: customerIdentities.valueNormalized,
+              value: customerIdentities.valueNormalized,
             })
             .from(customerIdentities)
             .innerJoin(customers, eq(customers.id, customerIdentities.customerId))
             .where(
               and(
-                inArray(customerIdentities.valueNormalized, telefonos),
+                eq(customerIdentities.type, 'email'),
+                inArray(customerIdentities.valueNormalized, correos),
                 eq(customerIdentities.active, true),
+                eq(customers.status, 'active'),
               ),
             );
 
@@ -1070,44 +1112,68 @@ export class PostgresOperationsService {
         .toLocaleLowerCase('es-AR')
         .trim();
 
-    return rows.map((row) => {
-      const telefono = row.phone ? normalizeCustomerIdentity('whatsapp', row.phone) : null;
-      const porNumero = telefono
-        ? porTelefono.find((match) => match.valueNormalized === telefono)
+    const coincidencias = rows.map((row) => {
+      const clave = row.phone ? argentinePhoneKey(row.phone) : null;
+      const porNumero = clave
+        ? identidadesDeTelefono.find((identidad) => identidad.clave === clave)
+        : undefined;
+      const correo = row.email?.trim().toLocaleLowerCase('es-AR') ?? null;
+      const porCorreo = correo
+        ? identidadesDeCorreo.find((identidad) => identidad.value === correo)
         : undefined;
 
       const nombreNormalizado = normalizar(row.customerName);
       const exacto = todos.find(
-        (candidate) => normalizar(candidate.displayName) === nombreNormalizado,
+        (candidato) => normalizar(candidato.displayName) === nombreNormalizado,
       );
-      // Parecidos: uno contiene al otro. Alcanza para "Ana Vega" contra "Ana Isabel Vega", que es
-      // el caso real, sin inventar una distancia de edición que nadie puede auditar.
+      /*
+       * Parecidos: las palabras de uno están todas en el otro, y el más corto tiene al menos dos.
+       *
+       * Por palabras y no por texto seguido. Antes era "un nombre contiene al otro", y "ana isabel
+       * vega" no contiene "ana vega" porque hay un nombre en el medio: justo el caso que esto
+       * existe para resolver —la misma persona con y sin su segundo nombre— no se resolvía. Y por
+       * texto seguido "ana" estaba dentro de "mariana".
+       *
+       * El mínimo de dos palabras evita que "Ana" a secas ofrezca como candidata a cada Ana de la
+       * base. No hace falta una distancia de edición que nadie puede auditar.
+       */
+      const palabrasDe = (nombre: string) => nombre.split(/\s+/).filter(Boolean);
+      const estaContenido = (chico: string[], grande: string[]) =>
+        chico.length >= 2 && chico.every((palabra) => grande.includes(palabra));
+      const palabrasDelPedido = palabrasDe(nombreNormalizado);
       const parecidos = todos
-        .filter((candidate) => {
-          const otro = normalizar(candidate.displayName);
+        .filter((candidato) => {
+          const otro = normalizar(candidato.displayName);
+          if (otro === nombreNormalizado) return false;
+          const palabrasOtro = palabrasDe(otro);
           return (
-            otro !== nombreNormalizado &&
-            (otro.includes(nombreNormalizado) || nombreNormalizado.includes(otro))
+            estaContenido(palabrasDelPedido, palabrasOtro) ||
+            estaContenido(palabrasOtro, palabrasDelPedido)
           );
         })
         .slice(0, 5);
 
-      const oferta =
-        row.variety && row.size
-          ? ofertas.find(
-              (item) =>
-                normalizar(item.familyName) === normalizar(row.variety ?? '') &&
-                normalizar(item.sizeName) === normalizar(row.size ?? ''),
-            )
-          : undefined;
-
-      return {
-        customerMatch: porNumero
+      const customerMatch = porNumero
+        ? {
+            /*
+             * Si el correo apunta a OTRO cliente, queda como candidato: dos señales fuertes que
+             * discrepan son justo el caso en que una persona tiene que mirar, y callarlo sería
+             * elegir una de las dos sin decirlo.
+             */
+            candidates:
+              porCorreo && porCorreo.customerId !== porNumero.customerId
+                ? [{ customerId: porCorreo.customerId, displayName: porCorreo.displayName }]
+                : [],
+            customerId: porNumero.customerId,
+            displayName: porNumero.displayName,
+            kind: 'telefono' as const,
+          }
+        : porCorreo
           ? {
               candidates: [],
-              customerId: porNumero.customerId,
-              displayName: porNumero.displayName,
-              kind: 'telefono' as const,
+              customerId: porCorreo.customerId,
+              displayName: porCorreo.displayName,
+              kind: 'email' as const,
             }
           : exacto
             ? {
@@ -1117,20 +1183,134 @@ export class PostgresOperationsService {
                 kind: 'nombre' as const,
               }
             : {
-                candidates: parecidos.map((candidate) => ({
-                  customerId: candidate.id,
-                  displayName: candidate.displayName,
+                candidates: parecidos.map((candidato) => ({
+                  customerId: candidato.id,
+                  displayName: candidato.displayName,
                 })),
                 customerId: null,
                 displayName: null,
                 kind: parecidos.length > 0 ? ('parecidos' as const) : ('nuevo' as const),
-              },
-        offeringId: oferta?.id ?? null,
-        rowNumber: row.rowNumber,
-      };
+              };
+
+      const itemMatches = row.items.map((item) => matchOffering(item.variety, item.size, ofertas));
+
+      return { customerMatch, itemMatches, rowNumber: row.rowNumber };
     });
+
+    /*
+     * ¿Este cliente ya tiene un pedido igual en este período?
+     *
+     * Pegar dos veces los mismos emails es lo más probable que va a pasar, y sin esto cada pegado
+     * duplica los pedidos. Sólo se compara cuando el cliente ya existe y todas las variedades se
+     * reconocieron: con una variedad sin emparejar no hay forma de saber si es el mismo pedido.
+     * Se avisa y no se bloquea, porque dos pedidos iguales son legítimos si pidió dos veces.
+     */
+    const clientesConocidos = [
+      ...new Set(
+        coincidencias
+          .map((coincidencia) => coincidencia.customerMatch.customerId)
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+    const firmaDe = (items: readonly { offeringId: string; quantityUnits: number }[]) => {
+      const porOferta = new Map<string, number>();
+      for (const item of items) {
+        porOferta.set(item.offeringId, (porOferta.get(item.offeringId) ?? 0) + item.quantityUnits);
+      }
+      return [...porOferta.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([oferta, cantidad]) => `${oferta}×${String(cantidad)}`)
+        .join('|');
+    };
+    const pedidosPorCliente = new Map<string, { firma: string; publicNumber: string }[]>();
+    if (menu && clientesConocidos.length > 0) {
+      const lineas = await this.database
+        .select({
+          customerId: orders.customerId,
+          offeringId: orderItems.offeringId,
+          orderId: orders.id,
+          publicNumber: orders.publicNumber,
+          quantityUnits: orderItems.quantityUnits,
+        })
+        .from(orders)
+        .innerJoin(orderItems, eq(orderItems.orderId, orders.id))
+        .where(
+          and(
+            eq(orders.weeklyMenuId, menu.id),
+            inArray(orders.customerId, clientesConocidos),
+            ne(orders.status, 'CANCELLED'),
+          ),
+        );
+      const porPedido = new Map<
+        string,
+        {
+          customerId: string;
+          items: { offeringId: string; quantityUnits: number }[];
+          publicNumber: string;
+        }
+      >();
+      for (const linea of lineas) {
+        if (!linea.offeringId) continue;
+        const actual = porPedido.get(linea.orderId) ?? {
+          customerId: linea.customerId,
+          items: [],
+          publicNumber: linea.publicNumber,
+        };
+        actual.items.push({ offeringId: linea.offeringId, quantityUnits: linea.quantityUnits });
+        porPedido.set(linea.orderId, actual);
+      }
+      for (const pedido of porPedido.values()) {
+        const lista = pedidosPorCliente.get(pedido.customerId) ?? [];
+        lista.push({ firma: firmaDe(pedido.items), publicNumber: pedido.publicNumber });
+        pedidosPorCliente.set(pedido.customerId, lista);
+      }
+    }
+
+    return {
+      matches: coincidencias.map((coincidencia) => {
+        const todasReconocidas = coincidencia.itemMatches.every((id) => id !== null);
+        const cliente = coincidencia.customerMatch.customerId;
+        const row = rows.find((candidata) => candidata.rowNumber === coincidencia.rowNumber);
+        const firma =
+          todasReconocidas && row
+            ? firmaDe(
+                row.items.map((item, index) => ({
+                  offeringId: coincidencia.itemMatches[index] as string,
+                  quantityUnits: item.quantityUnits,
+                })),
+              )
+            : null;
+        const igual =
+          cliente && firma
+            ? (pedidosPorCliente.get(cliente) ?? []).find((pedido) => pedido.firma === firma)
+            : undefined;
+        return {
+          customerMatch: coincidencia.customerMatch,
+          duplicateOf: igual?.publicNumber ?? null,
+          itemMatches: coincidencia.itemMatches,
+          rowNumber: coincidencia.rowNumber,
+        };
+      }),
+      /*
+       * Lo que se puede elegir a mano cuando una variedad no se reconoce.
+       *
+       * Sin los Intuitivos: necesitan que alguien elija los platos, y un pedido por email o por
+       * planilla no los trae.
+       */
+      offerings: ofertas
+        .filter((oferta) => !oferta.composable)
+        .map((oferta) => ({
+          id: oferta.id,
+          label: `${oferta.familyName} ${oferta.sizeName}`.trim(),
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label, 'es-AR')),
+    };
   }
 
+  /**
+   * Imports are deliberately one database transaction: either every contact is
+   * persisted (with its audit trail) or the operator can correct the sheet and retry.
+   */
   public async importCustomers(inputs: readonly CustomerInput[], context: OperationsContext) {
     return this.database
       .transaction(async (transaction) => {

@@ -173,6 +173,70 @@ afuera y alguien tiene que confirmarlos. Una fila que falla no frena a las demá
 trae `created` y un `failed` con el número de fila y el motivo, porque rechazar las cien por una es
 hacer repetir todo el trabajo.
 
-Las filas cuya variedad y tamaño no están en el menú publicado de la ciudad quedan afuera, a la
-vista y atenuadas: se ve cuántas son y por qué, pero no se puede decidir nada sobre ellas hasta
-corregir el menú o la planilla. Las dos rutas piden `orders.create`.
+Una variedad que el menú no reconoce **se elige a mano** desde una lista de las ofertas publicadas
+(sin los Intuitivos, que necesitan que alguien elija los platos). No se adivina: elegir la
+equivocada es cargar el pedido de otra variedad sin que nadie lo note. Las dos rutas piden
+`orders.create`.
+
+### Desde los emails del formulario del sitio
+
+El sitio actual manda un email por pedido, con el celular, la dirección, el barrio, una línea por
+variedad y tamaño con su cantidad, y un mensaje libre. Se pega tal cual llega —reenviado, con el
+encabezado de Gmail— en la pestaña **Pegar emails** del mismo diálogo, de a uno o de a muchos
+(`POST /api/v1/orders/import/preview-email`). Comparte con la planilla la revisión y la creación:
+son dos formas de entrada y una sola decisión.
+
+**Es un formato fijo que genera una máquina**, así que se lee con reglas y no con inteligencia
+(`apps/api/src/integrations/order-email.ts`). Lo que las reglas no entienden se dice en lugar de
+adivinarse: una línea del pedido ilegible queda como aviso del pedido, y el pedido arranca
+destildado. Descartarla en silencio dejaría salir el pedido sin esa vianda, y quien lo revisa cree
+que está completo.
+
+- **Un email es un pedido**, con tantas variedades como haya marcado el cliente. Las que tienen
+  cantidad cero —el formulario las lista todas— se ignoran. La cantidad puede venir con cero
+  adelante (`01`): el campo es de texto.
+- **Un formulario todo en cero es una consulta, no un pedido.** Quien lo manda casi siempre quiere
+  preguntar algo y lo dice en el mensaje. Convertirlo en un pedido vacío lo perdería, y descartarlo
+  también: queda aparte, con el mensaje y un enlace a WhatsApp, para contestarlo. No se importa.
+- **El mensaje del cliente va a la nota del pedido** ("soy alérgica a las nueces").
+- **La ciudad** que dice el asunto ("Pedido online Capital Federal") se muestra pero no se
+  interpreta: la ciudad del pedido es la que está elegida arriba, como en cualquier pedido.
+- El origen del pedido queda como **Email**.
+
+**El celular se reconoce por su clave argentina, no por igualdad.** `normalizeCustomerIdentity`
+sólo quita los símbolos y conserva el `+`, así que un mismo celular llega como `+541156380959`,
+`1156380959`, `01156380959` o `91156380959` —cuatro cadenas distintas de una misma línea— y
+comparar el texto crea un cliente por cada forma. `argentinePhoneKey` se queda con los diez dígitos
+significativos (área y abonado) y `canonicalArgentinePhone` guarda todos con la misma forma,
+`+549…`, que es la que entiende `wa.me`. Un número sin código de área no se reconoce, porque
+comparar sus últimos ocho dígitos uniría clientes de ciudades distintas; uno con otro código de
+país se deja como vino.
+
+El cliente se busca en este orden: celular, email, nombre exacto, y como último recurso los
+**nombres parecidos como candidatos** para que alguien elija. Si el celular y el email apuntan a
+clientes distintos se elige el celular y el otro queda como candidato: dos señales fuertes que
+discrepan son el caso en que una persona tiene que mirar. Los clientes archivados no se
+reconocen.
+
+Los **nombres parecidos** se comparan por palabras: las del más corto, que debe tener al menos
+dos, están todas en el otro. "Ana Vega" encuentra a "Ana Isabel Vega". Antes era "un nombre
+contiene al otro como texto seguido", que no encontraba justo ese caso —la misma persona con y sin
+su segundo nombre— y en cambio ofrecía "ana" dentro de "mariana".
+
+**Pegar dos veces los mismos emails no duplica los pedidos.** Si el cliente ya tiene en el
+período un pedido no cancelado con las mismas variedades y cantidades, la fila lo dice
+(`duplicateOf`, con el número del pedido) y arranca destildada. Se puede volver a tildar: dos
+pedidos iguales son legítimos si de verdad pidió dos veces. Dos emails de una misma persona nueva
+dentro de un mismo pegado crean **un** cliente, no dos.
+
+**El origen con el que se crea el pedido tiene que ser uno que la API sabe leer de vuelta.**
+`source` se valida al leer, y la lista de pedidos parsea cada uno con ese esquema: un origen que
+no esté en `OrderSourceSchema` hace fallar con un 500 la pantalla de Pedidos entera. Le pasaba a
+`spreadsheet_import`, que el importador escribía y el enum no tenía, y pasó inadvertido porque el
+importador lo pasaba con un `as never` que apagaba la comprobación de tipos.
+
+**Lo que no hace.** No lee el correo solo: alguien pega los emails. Para que los pedidos entren
+sin intervención haría falta una casilla que reciba los mensajes y los entregue a la API, que es
+otro trabajo con otras decisiones (qué casilla, qué proveedor, qué pasa con lo que no se entiende).
+Tampoco crea el domicilio del cliente: el pedido lleva la dirección como texto, y asignarle una
+zona sigue siendo una tarea del CRM.

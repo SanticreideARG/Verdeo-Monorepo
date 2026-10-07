@@ -21,14 +21,24 @@ describe('parseOrderImport', () => {
       {
         customerName: 'María Pérez',
         deliveryAddress: 'Av. Siempre Viva 123',
-        dishes: ['Pollo al horno', 'Tarta de verdura'],
+        email: null,
+        items: [
+          {
+            dishes: ['Pollo al horno', 'Tarta de verdura'],
+            quantityUnits: 2,
+            size: 'Grande',
+            variety: 'Intuitivo',
+          },
+        ],
+        kind: 'spreadsheet_import',
+        locality: null,
         notes: 'Sin sal',
         paymentExpectation: 'Transferencia',
-        phone: '+54 299 555 0101',
-        quantityUnits: 2,
+        // Todos los celulares con la misma forma, la que permite reconocer a un cliente que ya está.
+        phone: '+5492995550101',
+        receivedOn: null,
         rowNumber: 2,
-        size: 'Grande',
-        variety: 'Intuitivo',
+        warnings: [],
       },
     ]);
   });
@@ -45,9 +55,8 @@ describe('parseOrderImport', () => {
       ),
     );
 
-    expect(rows[0]).toMatchObject({
-      customerName: 'Ana Vega',
-      phone: '2995550102',
+    expect(rows[0]).toMatchObject({ customerName: 'Ana Vega', phone: '+5492995550102' });
+    expect(rows[0]?.items[0]).toMatchObject({
       quantityUnits: 1,
       size: 'Chico',
       variety: 'Clásico',
@@ -56,7 +65,7 @@ describe('parseOrderImport', () => {
 
   it('defaults the quantity to one unit when the column is absent', async () => {
     const rows = await parseOrderImport(csvFile(['cliente', 'Ana Vega'].join('\n')));
-    expect(rows[0]?.quantityUnits).toBe(1);
+    expect(rows[0]?.items[0]?.quantityUnits).toBe(1);
   });
 
   /*
@@ -98,7 +107,7 @@ describe('parseOrderImport', () => {
     const rows = await parseOrderImport(
       csvFile(['cliente,platos', 'Ana Vega,"Pollo, Tarta , Guiso"'].join('\n')),
     );
-    expect(rows[0]?.dishes).toEqual(['Pollo', 'Tarta', 'Guiso']);
+    expect(rows[0]?.items[0]?.dishes).toEqual(['Pollo', 'Tarta', 'Guiso']);
   });
 
   it('explains what is missing when no row has the minimum data', async () => {

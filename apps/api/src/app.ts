@@ -1,8 +1,10 @@
 import { cors } from 'hono/cors';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { Hono, type Context } from 'hono';
+import { z } from 'zod';
 
 import type { AuthenticatedSession, SessionSummary, UserDirectoryPage } from '@verdeo/auth';
+import { argentinePhoneKey } from '@verdeo/customers';
 import {
   AIExecutionListResponseSchema,
   AuditEventListResponseSchema,
@@ -150,6 +152,7 @@ import {
   OrderDeleteRequestSchema,
   OrderDeleteResponseSchema,
   OrderImportConfirmRequestSchema,
+  OrderImportEmailPreviewRequestSchema,
   OrderImportConfirmResponseSchema,
   OrderImportPreviewResponseSchema,
   OrderSchema,
@@ -295,7 +298,12 @@ import {
 import { renderEmail, type EmailSender } from '@verdeo/email';
 
 import { ContactImportError, parseContactImport } from './integrations/contact-import.js';
-import { OrderImportError, parseOrderImport } from './integrations/order-import.js';
+import { parseOrderEmails, type OrderInquiry } from './integrations/order-email.js';
+import {
+  OrderImportError,
+  parseOrderImport,
+  type OrderImportRow,
+} from './integrations/order-import.js';
 import { buildLabelsPrintHtml } from './labels-export.js';
 import { buildOrdersExcel } from './orders-excel.js';
 import { buildOrdersCsv, deliveryDateFor, maskSurname, type OrderExportRow } from '@verdeo/orders';
@@ -482,11 +490,14 @@ interface OperationsEngine {
   previewOrderImport(
     rows: readonly {
       customerName: string;
+      email: string | null;
+      items: readonly {
+        quantityUnits: number;
+        size: string | null;
+        variety: string | null;
+      }[];
       phone: string | null;
-      quantityUnits: number;
       rowNumber: number;
-      size: string | null;
-      variety: string | null;
     }[],
     operatingSiteId?: string | null,
   ): Promise<unknown>;
@@ -3472,12 +3483,57 @@ export function createApp(options: CreateAppOptions) {
   });
 
   /**
-   * Paso 1 del import de pedidos: leer la planilla y decir con qué coincide cada fila.
+   * Arma la vista previa de unos pedidos importados: lo mismo para una planilla y para unos emails.
    *
-   * No escribe nada. Devuelve, por fila, el cliente con el que coincide —por teléfono, por nombre
-   * exacto, o los parecidos para que alguien elija— y la oferta del menú que corresponde a esa
-   * variedad y tamaño. Lo que no coincide se dice, no se adivina.
+   * No escribe nada. Devuelve, por pedido, el cliente con el que coincide —por celular, por email,
+   * por nombre exacto, o los parecidos para que alguien elija— y la oferta del menú que corresponde
+   * a cada variedad. Lo que no coincide se dice, no se adivina.
    */
+  const buildOrderImportPreview = async (
+    context: Context<{ Variables: AppVariables }>,
+    parsed: {
+      inquiries?: readonly OrderInquiry[];
+      rows: readonly OrderImportRow[];
+      unreadable?: number;
+    },
+  ) => {
+    const preview = (await requireOperations().previewOrderImport(
+      parsed.rows,
+      context.get('scope')?.operatingSiteId ?? null,
+    )) as {
+      matches: readonly {
+        customerMatch: unknown;
+        duplicateOf: string | null;
+        itemMatches: readonly (string | null)[];
+        rowNumber: number;
+      }[];
+      offerings: readonly { id: string; label: string }[];
+    };
+    return OrderImportPreviewResponseSchema.parse({
+      inquiries: parsed.inquiries ?? [],
+      items: parsed.rows.map((row) => {
+        const match = preview.matches.find((item) => item.rowNumber === row.rowNumber);
+        return {
+          ...row,
+          customerMatch: match?.customerMatch ?? {
+            candidates: [],
+            customerId: null,
+            displayName: null,
+            kind: 'nuevo',
+          },
+          duplicateOf: match?.duplicateOf ?? null,
+          items: row.items.map((item, index) => ({
+            ...item,
+            offeringId: match?.itemMatches[index] ?? null,
+          })),
+        };
+      }),
+      offerings: preview.offerings,
+      unreadable: parsed.unreadable ?? 0,
+    });
+  };
+
+  /** Paso 1 con una planilla: leerla y decir con qué coincide cada fila. */
   app.post('/api/v1/orders/import/preview', async (context) => {
     if (!context.get('session').permissions.includes('orders.create')) return forbidden(context);
     const body = await context.req.parseBody().catch(() => null);
@@ -3486,27 +3542,8 @@ export function createApp(options: CreateAppOptions) {
       return badRequest(context, 'Adjuntá un archivo CSV o Excel (.xlsx) en el campo file.');
     }
     try {
-      const rows = await parseOrderImport(file);
-      const matches = (await requireOperations().previewOrderImport(
-        rows,
-        context.get('scope')?.operatingSiteId ?? null,
-      )) as readonly { offeringId: string | null; rowNumber: number; customerMatch: unknown }[];
       return context.json(
-        OrderImportPreviewResponseSchema.parse({
-          items: rows.map((row) => {
-            const match = matches.find((item) => item.rowNumber === row.rowNumber);
-            return {
-              ...row,
-              customerMatch: match?.customerMatch ?? {
-                candidates: [],
-                customerId: null,
-                displayName: null,
-                kind: 'nuevo',
-              },
-              offeringId: match?.offeringId ?? null,
-            };
-          }),
-        }),
+        await buildOrderImportPreview(context, { rows: await parseOrderImport(file) }),
       );
     } catch (error) {
       if (error instanceof OrderImportError)
@@ -3516,11 +3553,36 @@ export function createApp(options: CreateAppOptions) {
   });
 
   /**
+   * Paso 1 con los emails del formulario del sitio, pegados tal como llegan.
+   *
+   * Lo que no trae ninguna cantidad vuelve aparte como consulta, con su mensaje: una persona que
+   * manda el formulario todo en cero casi siempre quiere preguntar algo, y convertirlo en un pedido
+   * vacío —o descartarlo— lo perdería.
+   */
+  app.post('/api/v1/orders/import/preview-email', async (context) => {
+    if (!context.get('session').permissions.includes('orders.create')) return forbidden(context);
+    const input = OrderImportEmailPreviewRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'Pegá el texto de los emails.', input.error.issues);
+
+    const parsed = parseOrderEmails(input.data.text);
+    if (parsed.rows.length === 0 && parsed.inquiries.length === 0) {
+      return badRequest(
+        context,
+        'No encontré ningún pedido en el texto. Pegá los emails tal como llegan, con el celular, la dirección y las cantidades.',
+      );
+    }
+    return context.json(await buildOrderImportPreview(context, parsed));
+  });
+
+  /**
    * Paso 2: crear los pedidos con lo que una persona resolvió.
    *
-   * Entran como borradores, igual que los que llegan por la web: una planilla es un dato de afuera
-   * y alguien tiene que confirmarlos. Una fila que falla no frena a las demás — se informa cuál y
-   * por qué, porque rechazar las cien por una es hacer repetir todo el trabajo.
+   * Entran como borradores, igual que los que llegan por la web: un dato de afuera necesita que
+   * alguien lo confirme. Una fila que falla no frena a las demás —se informa cuál y por qué—,
+   * porque rechazar las cien por una es hacer repetir todo el trabajo.
    */
   app.post('/api/v1/orders/import', async (context) => {
     if (!context.get('session').permissions.includes('orders.create')) return forbidden(context);
@@ -3535,20 +3597,43 @@ export function createApp(options: CreateAppOptions) {
     )) as { cycle: { closeAt: string }; id: string } | null;
     if (!menu) return badRequest(context, 'No hay un menú publicado para esta ciudad.');
 
+    /*
+     * Los clientes que se crean en esta misma tanda.
+     *
+     * Dos emails de una misma persona nueva llegan los dos como "cliente nuevo", porque cuando se
+     * armó la vista previa todavía no existía. Sin esto se crearían dos clientes con el mismo
+     * celular. Se reconocen por el celular argentino y por el email, igual que contra la base.
+     */
+    const creadosEnLaTanda = new Map<string, string>();
+    const clavesDe = (row: { email: string | null; phone: string | null }) => [
+      ...(row.phone && argentinePhoneKey(row.phone) ? [`tel:${argentinePhoneKey(row.phone)}`] : []),
+      ...(row.email ? [`mail:${row.email.trim().toLocaleLowerCase('es-AR')}`] : []),
+    ];
+
     const failed: { reason: string; rowNumber: number }[] = [];
     let created = 0;
     for (const row of input.data.rows) {
       try {
         let customerId = row.customerId;
         if (!customerId) {
+          customerId =
+            clavesDe(row)
+              .map((clave) => creadosEnLaTanda.get(clave))
+              .find((id) => id !== undefined) ?? null;
+        }
+        if (!customerId) {
+          // Un email mal escrito no tiene que impedir el pedido: se crea el cliente sin él.
+          const email = row.email && z.email().safeParse(row.email).success ? row.email : null;
           const customer = (await operations.createCustomer(
             scoped(context, {
               displayName: row.customerName,
+              ...(email ? { email } : {}),
               ...(row.phone ? { phone: row.phone } : {}),
             } as never),
             operationsContext(context),
           )) as { id: string };
           customerId = customer.id;
+          for (const clave of clavesDe(row)) creadosEnLaTanda.set(clave, customerId);
         }
         await operations.createOrder(
           {
@@ -3557,18 +3642,23 @@ export function createApp(options: CreateAppOptions) {
             deliveryDate: deliveryDateFor(menu.cycle.closeAt),
             dietaryInstructions: [],
             initialStatus: 'DRAFT',
-            items: [
-              {
-                offeringId: row.offeringId,
-                quantityUnits: row.quantityUnits,
-                ...(row.dishes.length > 0 ? { selectedDishNames: row.dishes } : {}),
-              },
-            ],
+            items: row.items.map((item) => ({
+              offeringId: item.offeringId,
+              quantityUnits: item.quantityUnits,
+              ...(item.dishes.length > 0 ? { selectedDishNames: item.dishes } : {}),
+            })),
             menuId: menu.id,
             ...(row.notes ? { notes: row.notes } : {}),
             operatingSiteId: context.get('scope')?.operatingSiteId ?? null,
             paymentExpectation: row.paymentExpectation,
-            source: 'spreadsheet_import',
+            /*
+             * El origen sale de la fila y es un valor que la API sabe leer de vuelta.
+             *
+             * Antes era un literal que no estaba en el enum de orígenes, pasado con un `as never`
+             * que apagaba la comprobación de tipos: el pedido se creaba y la lista de pedidos
+             * dejaba de poder leerlo. La prueba de este endpoint lee el valor contra el enum.
+             */
+            source: row.kind === 'email' ? 'email' : 'spreadsheet_import',
           } as never,
           operationsContext(context),
         );
@@ -3585,7 +3675,6 @@ export function createApp(options: CreateAppOptions) {
       created > 0 ? 201 : 200,
     );
   });
-
   app.post('/api/v1/customers/import', async (context) => {
     if (!context.get('session').permissions.includes('customers.create')) return forbidden(context);
     const body = await context.req.parseBody().catch(() => null);
