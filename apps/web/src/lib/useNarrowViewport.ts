@@ -25,3 +25,25 @@ export function useNarrowViewport(): boolean {
 
   return narrow;
 }
+
+/**
+ * Si una media query se cumple ahora, y se vuelve a calcular cuando cambia.
+ *
+ * Existe para las decisiones que tienen su propio punto de corte. `useNarrowViewport` fija 680px,
+ * el del shell, y el submenú del Panel de control se pliega a otro ancho porque lo que importa ahí
+ * es cuánto le queda al contenido, no cuán angosta es la pantalla.
+ */
+export function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
+
+  useEffect(() => {
+    const list = window.matchMedia(query);
+    const update = (event: MediaQueryListEvent) => setMatches(event.matches);
+    // Por si cambió entre el primer render y el efecto.
+    setMatches(list.matches);
+    list.addEventListener('change', update);
+    return () => list.removeEventListener('change', update);
+  }, [query]);
+
+  return matches;
+}

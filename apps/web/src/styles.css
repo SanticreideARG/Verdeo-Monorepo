@@ -1272,10 +1272,14 @@ a {
    entera para encontrar una. En columna se barre con la vista, y los títulos de grupo hacen de
    índice en vez de ser decoración.
 
-   El `:has()` es lo que permite que la columna exista sin tocar las trece páginas: cada una sigue
-   montando su panel igual que siempre, y el panel que contiene esta navegación se convierte en dos
-   columnas. Sin `:has()` habría que envolver cada pantalla a mano, que es la clase de cambio que se
-   hace mal en una de ellas y nadie lo nota. */
+   El `:has()` es lo que permite que la columna exista sin envolver cada pantalla a mano: el panel
+   que contiene esta navegación se convierte en dos columnas.
+
+   **Con una condición que el CSS no puede hacer cumplir: la navegación tiene que ser hija DIRECTA
+   del panel.** Montada como hermana —antes de la sección, que parecía equivalente— el selector no
+   coincide, la navegación queda arriba a todo el ancho y el contenido cae debajo en lugar de seguir
+   a su derecha. Ocho de las trece pantallas la montaban así y el CSS no avisó: simplemente no se
+   aplicaba. `settingsLayout.test.ts` lee las pantallas y lo verifica. */
 .settings-nav {
   margin-bottom: 1.25rem;
 }
@@ -1319,7 +1323,14 @@ a {
   color: var(--db-accent-contrast, #fff);
 }
 
-@media (min-width: 60rem) {
+/* 75rem y no 60rem, y la diferencia se mide en el contenido que queda.
+
+   El corte se compara contra el ancho de la VENTANA, pero el contenido no dispone de la ventana
+   entera: la barra lateral fija le quita 260px, y el panel su padding. Con 60rem (960px) la
+   columna de contenido quedaba en unos 420px, demasiado angosta para las tablas y los
+   formularios de estas pantallas, y 1000px es un ancho muy común (un portátil con zoom). Con
+   75rem la columna no baja de unos 620px. */
+@media (min-width: 75rem) {
   .dashboard-panel:has(> .settings-nav) {
     display: grid;
     grid-template-columns: 13rem minmax(0, 1fr);
@@ -1352,7 +1363,7 @@ a {
 /* En el teléfono se pliega: trece renglones antes de la configuración que se vino a cambiar son
    media pantalla de índice. El resumen dice en cuál sección estás, que es lo que una tira de
    pestañas mostraba y un desplegable cerrado perdería. */
-@media (max-width: 59.99rem) {
+@media (max-width: 74.99rem) {
   .settings-nav > summary {
     display: flex;
     align-items: baseline;

@@ -121,8 +121,8 @@ export function PaymentMethodsSettingsPage() {
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
-      <SettingsTabs permissions={profile.permissions} />
       <section className="dashboard-panel">
+        <SettingsTabs permissions={profile.permissions} />
         <header>
           <p className="dashboard-kicker">Panel de control</p>
           <h1 className="text-2xl font-semibold text-forest">Métodos de pago</h1>

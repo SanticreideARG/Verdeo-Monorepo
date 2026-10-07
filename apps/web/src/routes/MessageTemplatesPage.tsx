@@ -182,8 +182,8 @@ export function MessageTemplatesPage() {
   if (!canManage) {
     return (
       <DashboardShell onLogout={() => void logout()} profile={profile}>
-        <SettingsTabs permissions={profile.permissions} />
         <section className="dashboard-panel">
+          <SettingsTabs permissions={profile.permissions} />
           <h1 className="text-2xl font-semibold text-forest">Mensajes guardados</h1>
           <p className="mt-3 text-ink-muted">
             Tu usuario puede usar los mensajes guardados, pero no escribirlos ni cambiarlos.
@@ -195,8 +195,8 @@ export function MessageTemplatesPage() {
 
   return (
     <DashboardShell onLogout={() => void logout()} profile={profile}>
-      <SettingsTabs permissions={profile.permissions} />
       <section className="dashboard-panel">
+        <SettingsTabs permissions={profile.permissions} />
         <header>
           <p className="dashboard-kicker">Panel de control</p>
           <h1 className="text-2xl font-semibold text-forest">Mensajes guardados</h1>

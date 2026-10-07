@@ -209,8 +209,8 @@ export function AssistantSettingsPage() {
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
-      <SettingsTabs permissions={profile.permissions} />
       <section className="dashboard-panel">
+        <SettingsTabs permissions={profile.permissions} />
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="dashboard-kicker">Panel de control</p>

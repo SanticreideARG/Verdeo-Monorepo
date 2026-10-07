@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 
-import { useNarrowViewport } from '../lib/useNarrowViewport.js';
+import { useMediaQuery } from '../lib/useNarrowViewport.js';
 
 interface SettingsTab {
   href: string;
@@ -89,7 +89,14 @@ export const SETTINGS_TAB_PERMISSIONS: readonly string[] = SETTINGS_TABS.map(
 
 export function SettingsTabs({ permissions }: { permissions: string[] }) {
   const location = useLocation();
-  const narrow = useNarrowViewport();
+  /*
+   * Plegado con el MISMO corte que su CSS (74.99rem), y no con el de "angosto" del shell (680px).
+   *
+   * Eran dos números distintos: entre 681px y el corte del CSS el submenú estaba plegado en el
+   * diseño y abierto en el componente, y un índice de trece renglones se desplegaba entero
+   * sobre el contenido. Un solo número, escrito en los dos lugares.
+   */
+  const stacked = useMediaQuery('(max-width: 74.99rem)');
   // Una pestaña sin permiso la ve cualquiera que haya llegado hasta acá.
   const groups = SETTINGS_GROUPS.map((group) => ({
     ...group,
@@ -112,7 +119,7 @@ export function SettingsTabs({ permissions }: { permissions: string[] }) {
    * vino a cambiar, así que ahí se pliega y el resumen dice en cuál estás.
    */
   return (
-    <details className="settings-nav" open={!narrow}>
+    <details className="settings-nav" open={!stacked}>
       <summary>
         <span>Panel de control</span>
         <small>{actual?.label ?? 'Elegí una sección'}</small>

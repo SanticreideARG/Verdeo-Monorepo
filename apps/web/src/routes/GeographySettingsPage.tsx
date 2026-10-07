@@ -321,8 +321,8 @@ export function GeographySettingsPage() {
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
       <DeskWorkNotice can="podés consultar zonas y ajustes; cambiarlos conviene con la grilla entera a la vista." />
-      <SettingsTabs permissions={profile.permissions} />
       <section className="dashboard-panel">
+        <SettingsTabs permissions={profile.permissions} />
         <header>
           <p className="dashboard-kicker">Panel de control</p>
           <h1 className="text-2xl font-semibold text-forest">Zonas geográficas</h1>

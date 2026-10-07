@@ -103,8 +103,8 @@ export function MessagingAccountsPage() {
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
-      <SettingsTabs permissions={profile.permissions} />
       <section className="dashboard-panel">
+        <SettingsTabs permissions={profile.permissions} />
         <header className="flex items-center justify-between">
           <div>
             <p className="dashboard-kicker">Panel de control</p>
