@@ -194,17 +194,29 @@ export function OrderDetailPage() {
         setMessage('El pedido tiene que llevar al menos un ítem.');
         return;
       }
-      const incomplete = items.find(
-        (item) =>
-          !item.offeringId ||
-          (offerings.find((offering) => offering.id === item.offeringId)?.composable === true &&
-            item.selectedDishNames.length !== 5),
-      );
+      /*
+       * Un Intuitivo lleva entre los platos de su tamaño y el máximo de la ciudad.
+       *
+       * Antes exigía exactamente cinco: un pedido con siete platos se podía crear y no se podía
+       * volver a guardar al editarlo, porque esta pantalla lo rechazaba.
+       */
+      const platosFuera = (item: (typeof items)[number]) => {
+        const offering = offerings.find((candidate) => candidate.id === item.offeringId);
+        if (!offering?.composable) return null;
+        const cantidad = item.selectedDishNames.length;
+        return cantidad < offering.mealsPerUnit || cantidad > maxDishes
+          ? { desde: offering.mealsPerUnit, hasta: maxDishes }
+          : null;
+      };
+      const incomplete = items.find((item) => !item.offeringId || platosFuera(item) !== null);
       if (incomplete) {
+        const rango = platosFuera(incomplete);
         setMessage(
           !incomplete.offeringId
             ? 'Hay un ítem sin variedad elegida.'
-            : 'Un Intuitivo tiene que llevar exactamente cinco platos.',
+            : rango
+              ? `Un Intuitivo tiene que llevar entre ${String(rango.desde)} y ${String(rango.hasta)} platos.`
+              : 'Revisá los ítems.',
         );
         return;
       }

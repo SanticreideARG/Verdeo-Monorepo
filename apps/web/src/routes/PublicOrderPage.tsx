@@ -7,6 +7,7 @@ import { BrandLoading } from '../components/BrandLoading.js';
 import { deliveryDateFor, deliveryDateLabel } from '../lib/dates.js';
 import { apiRequest } from '../lib/api.js';
 import { brandingKey, useMenuBranding } from '../lib/menuBranding.js';
+import { intuitivoUnitPriceMinor } from '../lib/orderCart.js';
 import { useFormDraft } from '../lib/useFormDraft.js';
 import { useOrderFormSettings } from '../lib/useOrderFormSettings.js';
 import {
@@ -168,8 +169,18 @@ export function PublicOrderPage() {
     event.preventDefault();
     setMessage('');
     const form = new FormData(event.currentTarget);
-    if (offering?.composable && selectedDishes.length !== 5) {
-      setMessage('Elegí exactamente cinco platos para tu Intuitivo.');
+    /*
+     * Al menos los platos del tamaño, y hasta el máximo de la ciudad.
+     *
+     * Antes exigía exactamente cinco, y el selector ya dejaba elegir hasta quince: se podían
+     * elegir siete platos y recibir un error que decía que tenían que ser cinco.
+     */
+    if (offering?.composable && selectedDishes.length < offering.mealsPerUnit) {
+      setMessage(`Elegí al menos ${String(offering.mealsPerUnit)} platos para tu Intuitivo.`);
+      return;
+    }
+    if (offering?.composable && menu && selectedDishes.length > menu.intuitivoMaxDishes) {
+      setMessage(`Un Intuitivo lleva hasta ${String(menu.intuitivoMaxDishes)} platos.`);
       return;
     }
 
@@ -194,7 +205,9 @@ export function PublicOrderPage() {
         {
           offeringId,
           quantityUnits: Number(form.get('quantityUnits')),
-          ...(selectedDishes.length === 5 ? { selectedDishNames: selectedDishes } : {}),
+          // Los platos sólo viajan con un Intuitivo: sobre una vianda estándar la convertirían en
+          // una composición propia.
+          ...(offering?.composable ? { selectedDishNames: selectedDishes } : {}),
         },
       ],
       menuId: menu?.id,
@@ -482,7 +495,24 @@ export function PublicOrderPage() {
               {offering ? (
                 <p className="form-actions-total">
                   Total{' '}
-                  <strong>{formatMoney(offering.unitPriceMinor * units, offering.currency)}</strong>
+                  <strong>
+                    {formatMoney(
+                      /*
+                       * El precio de lo elegido, no el del menú: con más platos que los del tamaño
+                       * son distintos, y mostrar uno mientras se cobra el otro es peor que no
+                       * mostrar nada. Mientras todavía se está eligiendo vale el del tamaño.
+                       */
+                      (offering.composable && menu
+                        ? intuitivoUnitPriceMinor({
+                            baseDishes: offering.mealsPerUnit,
+                            basePriceMinor: offering.unitPriceMinor,
+                            dishes: Math.max(selectedDishes.length, offering.mealsPerUnit),
+                            rule: menu.intuitivoPricing,
+                          })
+                        : offering.unitPriceMinor) * units,
+                      offering.currency,
+                    )}
+                  </strong>
                 </p>
               ) : null}
               <button className="button button-primary button-large" type="submit">
