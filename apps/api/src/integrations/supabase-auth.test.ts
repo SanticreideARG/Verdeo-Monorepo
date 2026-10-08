@@ -147,7 +147,7 @@ describe('SupabaseAuthClient', () => {
       const result = await cliente(fetcher).lastMirroredAt();
       expect(result).toMatchObject({ ok: true });
       expect(result.at?.toISOString()).toBe('2026-10-06T10:00:00.000Z');
-      expect(String(fetcher.mock.calls[0]?.[0])).toContain(
+      expect(fetcher.mock.calls[0]?.[0] as string).toContain(
         '/rest/v1/audit_mirror?select=occurred_at',
       );
     });
@@ -192,9 +192,9 @@ describe('SupabaseAuthClient', () => {
       ]);
       expect(result).toEqual({ detail: 'HTTP 201', ok: true });
       const [url, init] = fetcher.mock.calls[0] ?? [];
-      expect(String(url)).toContain('on_conflict=id');
+      expect(url as string).toContain('on_conflict=id');
       expect((init?.headers as Record<string, string>).prefer).toContain('merge-duplicates');
-      const [fila] = JSON.parse(String(init?.body)) as Record<string, unknown>[];
+      const [fila] = JSON.parse(init?.body as string) as Record<string, unknown>[];
       expect(Object.keys(fila ?? {}).sort()).toEqual([
         'action',
         'actor_type',

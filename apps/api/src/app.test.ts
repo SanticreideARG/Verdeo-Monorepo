@@ -1551,6 +1551,27 @@ describe('API foundation', () => {
       expect(createOrder).toHaveBeenCalledTimes(2);
     });
 
+    // Es lo que permite ubicar las direcciones de lo recién importado.
+    it('devuelve los ids de los pedidos creados', async () => {
+      const createOrder = vi
+        .fn<(input: unknown) => Promise<unknown>>()
+        .mockResolvedValueOnce({ id: '0a000000-0000-4000-8000-000000000001' })
+        .mockResolvedValueOnce({ id: '0a000000-0000-4000-8000-000000000002' });
+      const app = buildApp({ createOrder });
+
+      const response = await post(app, '/api/v1/orders/import', {
+        rows: [
+          fila({ customerId: CLIENTE, rowNumber: 1 }),
+          fila({ customerId: CLIENTE, rowNumber: 2 }),
+        ],
+      });
+
+      expect(await response.json()).toMatchObject({
+        created: 2,
+        orderIds: ['0a000000-0000-4000-8000-000000000001', '0a000000-0000-4000-8000-000000000002'],
+      });
+    });
+
     it('no frena a las demás filas cuando una falla, y dice cuál fue', async () => {
       const createOrder = vi
         .fn<(input: unknown) => Promise<unknown>>(() => Promise.resolve({}))
@@ -1567,6 +1588,8 @@ describe('API foundation', () => {
       expect(await response.json()).toEqual({
         created: 1,
         failed: [{ reason: 'El menú ya cerró', rowNumber: 1 }],
+        // El mock de createOrder no devuelve id, así que no hay pedidos para ubicar.
+        orderIds: [],
       });
     });
 
@@ -1798,7 +1821,7 @@ describe('API foundation', () => {
           });
         expect((await pedir([ORDEN])).status).toBe(200);
         expect(locateOrderAddress).toHaveBeenCalledTimes(1);
-        expect((await pedir(Array(6).fill(ORDEN))).status).toBe(400);
+        expect((await pedir(Array.from({ length: 6 }, () => ORDEN))).status).toBe(400);
       });
       it('ubica el pedido con orders.edit y lo niega sin el permiso', async () => {
         const locateOrderAddress = vi.fn(() => Promise.resolve(ubicado));

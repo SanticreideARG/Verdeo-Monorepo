@@ -58,7 +58,7 @@ describe('UnlocatedOrdersPanel', () => {
       if (path.startsWith('/api/v1/delivery/unlocated')) {
         return json({ items: ubicados ? [] : [pedido(1), pedido(2)] });
       }
-      const pedidoBody = JSON.parse(String(init?.body)) as { skipOrderIds: string[] };
+      const pedidoBody = JSON.parse(init?.body as string) as { skipOrderIds: string[] };
       if (pedidoBody.skipOrderIds.length === 0) {
         return json({
           remaining: 1,
@@ -82,6 +82,6 @@ describe('UnlocatedOrdersPanel', () => {
       .mocked(apiRequest)
       .mock.calls.filter(([path]) => path === '/api/v1/delivery/locate-missing');
     expect(llamadas).toHaveLength(2);
-    expect(JSON.parse(String(llamadas[1]?.[1]?.body))).toMatchObject({ skipOrderIds: ['id-1'] });
+    expect(JSON.parse(llamadas[1]?.[1]?.body as string)).toMatchObject({ skipOrderIds: ['id-1'] });
   });
 });

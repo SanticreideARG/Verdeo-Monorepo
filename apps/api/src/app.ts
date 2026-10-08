@@ -6364,10 +6364,12 @@ export function createApp(options: CreateAppOptions) {
     ]);
 
     // La sonda de la copia mide la lectura de la base de Supabase, que es la que importa.
-    const supabaseDatabase = await timed('supabase_db', 'Supabase · base de datos', async () => ({
-      detail: mirrorState.detail,
-      ok: mirrorState.ok,
-    }));
+    const supabaseDatabase = await timed('supabase_db', 'Supabase · base de datos', () =>
+      Promise.resolve({
+        detail: mirrorState.detail,
+        ok: mirrorState.ok,
+      }),
+    );
 
     const [recent, last24h] = options.system
       ? await Promise.all([

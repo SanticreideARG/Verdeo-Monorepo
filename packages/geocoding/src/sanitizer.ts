@@ -132,7 +132,7 @@ export class SanitizingGeocodingProvider implements GeocodingProvider {
       return this.base.geocode(input);
     }
 
-    let normalized: NormalizedAddress | null = null;
+    let normalized: NormalizedAddress | null;
     try {
       normalized = await this.normalizer.normalize({
         city: input.cityHint,

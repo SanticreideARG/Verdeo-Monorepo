@@ -21,11 +21,12 @@ describe('findTask', () => {
     expect(findTask('does_not_exist')).toBeUndefined();
   });
 
-  it('lists exactly the three V1 tasks', () => {
+  it('lists the V1 tasks plus address normalization', () => {
     expect(AI_TASKS.map((task) => task.key)).toEqual([
       'rewrite_message',
       'extract_order',
       'kitchen_summary',
+      'normalize_address',
     ]);
   });
 });

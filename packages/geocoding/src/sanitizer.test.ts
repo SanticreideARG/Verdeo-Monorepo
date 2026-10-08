@@ -97,15 +97,23 @@ describe('decideAutoAccept', () => {
 });
 
 describe('SanitizingGeocodingProvider', () => {
-  const base = (resultados: Record<string, GeocodingCandidate[]>): GeocodingProvider => ({
-    geocode: vi.fn((input: GeocodingInput) =>
-      Promise.resolve(resultados[input.writtenAddress] ?? []),
-    ),
-    key: 'base',
-  });
+  /** El proveedor de base y la lista de textos que recibió, para contar cuántas veces se lo llamó. */
+  const base = (resultados: Record<string, GeocodingCandidate[]>) => {
+    const calls: string[] = [];
+    const provider: GeocodingProvider = {
+      geocode: (input: GeocodingInput) => {
+        calls.push(input.writtenAddress);
+        return Promise.resolve(resultados[input.writtenAddress] ?? []);
+      },
+      key: 'base',
+    };
+    return { calls, provider };
+  };
 
   it('geocodifica la consulta limpia en lugar del texto crudo', async () => {
-    const proveedor = base({ 'Julián Álvarez 1010, Villa Crespo': [candidato(-34.6, -58.44, 1)] });
+    const { calls, provider: proveedor } = base({
+      'Julián Álvarez 1010, Villa Crespo': [candidato(-34.6, -58.44, 1)],
+    });
     const normalizer: AddressNormalizer = {
       normalize: () => Promise.resolve(normalizado('Julián Álvarez 1010, Villa Crespo')),
     };
@@ -115,11 +123,11 @@ describe('SanitizingGeocodingProvider', () => {
     );
 
     expect(resultado).toHaveLength(1);
-    expect(proveedor.geocode).toHaveBeenCalledTimes(1);
+    expect(calls).toHaveLength(1);
   });
 
   it('reintenta con el texto original si la consulta limpia no encuentra nada', async () => {
-    const proveedor = base({
+    const { calls, provider: proveedor } = base({
       'Julián Álvarez 1010. 6 ° A, Villa Crespo': [candidato(-34.6, -58.44, 0.8)],
     });
     const normalizer: AddressNormalizer = {
@@ -131,12 +139,12 @@ describe('SanitizingGeocodingProvider', () => {
     );
 
     expect(resultado).toHaveLength(1);
-    expect(proveedor.geocode).toHaveBeenCalledTimes(2);
+    expect(calls).toHaveLength(2);
   });
 
   // La ubicación no puede depender de que haya una clave de IA.
   it('si el normalizador falla, geocodifica el texto tal cual', async () => {
-    const proveedor = base({
+    const { provider: proveedor } = base({
       'Julián Álvarez 1010. 6 ° A, Villa Crespo': [candidato(-34.6, -58.44, 0.8)],
     });
     const normalizer: AddressNormalizer = {
@@ -151,7 +159,7 @@ describe('SanitizingGeocodingProvider', () => {
   });
 
   it('sin normalizador se comporta como el proveedor de base', async () => {
-    const proveedor = base({
+    const { provider: proveedor } = base({
       'Julián Álvarez 1010. 6 ° A, Villa Crespo': [candidato(-34.6, -58.44, 0.8)],
     });
     expect(await new SanitizingGeocodingProvider(proveedor, null).geocode(entrada())).toHaveLength(
@@ -161,7 +169,7 @@ describe('SanitizingGeocodingProvider', () => {
 
   // Un enlace de ubicación son coordenadas elegidas a mano: nada que mejorar ni que pagar.
   it('con un enlace de ubicación no llama al normalizador', async () => {
-    const proveedor = base({
+    const { provider: proveedor } = base({
       'Julián Álvarez 1010. 6 ° A, Villa Crespo': [candidato(-34.6, -58.44, 1)],
     });
     const normalize = vi.fn();

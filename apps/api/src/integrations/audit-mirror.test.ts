@@ -24,7 +24,7 @@ describe('syncAuditMirror', () => {
     const result = await syncAuditMirror({
       batchSize: 500,
       fetchEvents,
-      lastMirroredAt: async () => ({ at: since, detail: 'ok', ok: true }),
+      lastMirroredAt: () => Promise.resolve({ at: since, detail: 'ok', ok: true }),
       push,
     });
 
@@ -37,8 +37,8 @@ describe('syncAuditMirror', () => {
     const push = vi.fn();
     const result = await syncAuditMirror({
       batchSize: 500,
-      fetchEvents: async () => [],
-      lastMirroredAt: async () => ({ at: null, detail: 'ok', ok: true }),
+      fetchEvents: () => Promise.resolve([]),
+      lastMirroredAt: () => Promise.resolve({ at: null, detail: 'ok', ok: true }),
       push,
     });
     expect(push).not.toHaveBeenCalled();
@@ -51,7 +51,7 @@ describe('syncAuditMirror', () => {
     const result = await syncAuditMirror({
       batchSize: 500,
       fetchEvents,
-      lastMirroredAt: async () => ({ at: null, detail: 'HTTP 404 tabla', ok: false }),
+      lastMirroredAt: () => Promise.resolve({ at: null, detail: 'HTTP 404 tabla', ok: false }),
       push: vi.fn(),
     });
     expect(fetchEvents).not.toHaveBeenCalled();
@@ -61,9 +61,9 @@ describe('syncAuditMirror', () => {
   it('informa el fallo de la escritura sin dar los eventos por copiados', async () => {
     const result = await syncAuditMirror({
       batchSize: 500,
-      fetchEvents: async () => [evento('a')],
-      lastMirroredAt: async () => ({ at: null, detail: 'ok', ok: true }),
-      push: async () => ({ detail: 'HTTP 401', ok: false }),
+      fetchEvents: () => Promise.resolve([evento('a')]),
+      lastMirroredAt: () => Promise.resolve({ at: null, detail: 'ok', ok: true }),
+      push: () => Promise.resolve({ detail: 'HTTP 401', ok: false }),
     });
     expect(result).toEqual({ copied: 0, detail: 'HTTP 401', ok: false });
   });
