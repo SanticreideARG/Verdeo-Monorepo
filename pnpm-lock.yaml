@@ -168,6 +168,9 @@ importers:
 
   packages/ai:
     dependencies:
+      '@verdeo/geocoding':
+        specifier: workspace:*
+        version: link:../geocoding
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -239,7 +242,11 @@ importers:
 
   packages/events: {}
 
-  packages/geocoding: {}
+  packages/geocoding:
+    dependencies:
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
 
   packages/observability:
     dependencies:

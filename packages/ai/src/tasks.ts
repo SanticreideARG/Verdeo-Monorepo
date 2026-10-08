@@ -1,5 +1,11 @@
 import { z, type ZodType } from 'zod';
 
+import {
+  NORMALIZE_ADDRESS_SYSTEM_PROMPT,
+  NormalizedAddressSchema,
+  type NormalizedAddress,
+} from '@verdeo/geocoding';
+
 import type { ModelCapability } from './adapters.js';
 
 /**
@@ -16,6 +22,14 @@ import type { ModelCapability } from './adapters.js';
  */
 export interface AITaskDefinition<Output = unknown> {
   defaultMaxTokens: number;
+  /**
+   * La instrucción con la que corre la tarea cuando nadie escribió una propia.
+   *
+   * Sin esto una tarea nueva no funciona hasta que alguien crea su plantilla a mano, y una
+   * función que depende de un paso manual que nadie sabe que existe queda apagada. Una
+   * plantilla activa, si la hay, la reemplaza.
+   */
+  defaultSystemPrompt?: string;
   defaultTemperature: number;
   description: string;
   displayName: string;
@@ -71,10 +85,25 @@ export const KITCHEN_SUMMARY_TASK: AITaskDefinition<string> = {
   requiredCapabilities: ['TEXT'],
 };
 
+export type { NormalizedAddress };
+
+export const NORMALIZE_ADDRESS_TASK: AITaskDefinition<NormalizedAddress> = {
+  defaultMaxTokens: 300,
+  defaultSystemPrompt: NORMALIZE_ADDRESS_SYSTEM_PROMPT,
+  defaultTemperature: 0,
+  description:
+    'Ordena una dirección escrita a mano (calle, número, piso, depto, barrio, ciudad) y arma la consulta limpia para el mapa. Nunca devuelve coordenadas.',
+  displayName: 'Normalizar dirección',
+  key: 'normalize_address',
+  outputSchema: NormalizedAddressSchema,
+  requiredCapabilities: ['TEXT', 'STRUCTURED_OUTPUT'],
+};
+
 export const AI_TASKS: readonly AITaskDefinition[] = [
   REWRITE_MESSAGE_TASK,
   EXTRACT_ORDER_TASK,
   KITCHEN_SUMMARY_TASK,
+  NORMALIZE_ADDRESS_TASK,
 ];
 
 export function findTask(key: string): AITaskDefinition | undefined {

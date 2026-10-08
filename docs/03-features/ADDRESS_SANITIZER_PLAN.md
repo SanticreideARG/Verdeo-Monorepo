@@ -1,6 +1,6 @@
 # Sanitizador de direcciones (plan)
 
-Estado: **plan, nada construido**. Pedido: convertir las direcciones escritas a mano en ubicaciones
+Estado: **fases 1 y 2 construidas** (ver "Como quedó" al final); la 3 (lote configurable por ciudad) y la 4 (al importar, métricas) siguen pendientes. Pedido: convertir las direcciones escritas a mano en ubicaciones
 usables, con la API de Gemini y otros procedimientos configurables, desde el detalle del pedido o
 del cliente, **antes de armar la hoja de ruta**.
 
@@ -127,3 +127,32 @@ La fase 1 no depende de la IA ni de la clave de Gemini y se puede hacer primero.
    `access_notes` ahora, campos propios si el reparto los pide).
 5. **Permisos**: reutilizar el de edición de pedidos para "Ubicar" y el de ajustes de reparto para la
    configuración (sin permiso nuevo, para no sumar otro paso de siembra en producción).
+
+## Como quedó (fases 1 y 2)
+
+- **Control previo en rutas.** En Rutas, bajo el formulario de la ruta, aparece un cuadro con los
+  pedidos del día elegido que no tienen ubicación y por eso **no entrarían en la hoja**, con el botón
+  "Ubicar los pedidos". Va por tandas de 5 por petición (cada pedido son dos llamadas externas y una
+  función sin estado tiene tiempo máximo) y repite hasta que no quedan, sin volver sobre los ya
+  intentados. `GET /api/v1/delivery/unlocated` y `POST /api/v1/delivery/locate-missing`.
+- **Detalle del pedido.** Si el pedido no tiene coordenadas y se puede editar, aparece "Ubicar
+  dirección" junto al domicilio (`POST /api/v1/orders/:id/locate`). Si el resultado no es seguro se
+  muestran los candidatos y "Usar esta" (la misma confirmación de la ficha del cliente).
+- **Domicilio del pedido.** Los pedidos que entraron por email o planilla no tienen domicilio
+  propio, y `createRoute` los une a la ruta por ese domicilio. Al ubicar se **crea el domicilio**
+  del cliente a partir del texto del pedido, en la zona del pedido o en la única zona activa de la
+  ciudad, y se vincula al pedido. Con más de una zona y ninguna en el pedido responde "asigná la
+  zona" en lugar de adivinar.
+- **Normalizador (Gemini u otro).** Tarea de IA `normalize_address` (`packages/ai`), con
+  instrucción por defecto en el código —no hace falta crear una plantilla—, reemplazable desde las
+  plantillas de IA. Usa el proveedor de IA que esté configurado y queda en el registro de
+  ejecuciones. Devuelve calle, número, piso, depto, barrio, ciudad y la consulta limpia; nunca
+  coordenadas. `SanitizingGeocodingProvider` geocodifica la consulta limpia y, si no encuentra
+  nada o la IA falla, el texto tal cual: **la ubicación no depende de que haya IA**. Un enlace de
+  ubicación manda y no llama a la IA. Sólo viaja el texto de la dirección.
+- **Aceptar sola** sólo con confianza ≥ 0,9 **y** dentro de 60 km del origen de la ciudad (la
+  ciudad debe tener origen cargado; sin origen no se acepta sola). Fijos por ahora, en
+  `LOCATE_RULES` de `app.ts`; la configuración por ciudad es la fase 3. Nunca pisa un domicilio
+  que ya tiene coordenadas.
+- Los botones de la ficha del cliente también se benefician: el proveedor envuelto ordena el
+  texto antes de buscar, y la ciudad del domicilio orienta al normalizador.

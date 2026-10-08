@@ -12,7 +12,7 @@ import {
 import { createLogger } from '@verdeo/observability';
 import type { EmailSender } from '@verdeo/email';
 
-import { createApp } from './app.js';
+import { createApp, SITE_SCOPE_HEADER } from './app.js';
 
 const emptySessions = {
   authenticate: () => Promise.resolve(null),
@@ -107,6 +107,8 @@ const customerOperationsStubs = {
   listCancellationReasons: vi.fn(),
   replaceCancellationReasons: vi.fn(),
   writeOffSurplus: vi.fn(),
+  locateOrderAddress: vi.fn(),
+  unlocatedOrders: vi.fn(),
 };
 const sampleMenu = {
   cycle: {
@@ -1691,6 +1693,108 @@ describe('API foundation', () => {
         method: 'POST',
       });
       expect(deniedResponse.status).toBe(403);
+    });
+
+    describe('ubicar direcciones', () => {
+      const ORDEN = '0a000000-0000-4000-8000-000000000001';
+      const SEDE = '90000000-0000-4000-8000-000000000001';
+      const pedido = {
+        address: 'X 1',
+        customerName: 'Ana',
+        hasAddress: false,
+        id: ORDEN,
+        publicNumber: 'CABA-1',
+        status: 'CONFIRMED',
+      };
+      const ubicado = {
+        addressId: 'a',
+        candidates: [],
+        customerId: 'c',
+        requestId: 'r',
+        status: 'located',
+      };
+
+      it('ubica el pedido con orders.edit y lo niega sin el permiso', async () => {
+        const locateOrderAddress = vi.fn(() => Promise.resolve(ubicado));
+        const ok = await buildApp({ locateOrderAddress }, ['orders.edit']).request(
+          `/api/v1/orders/${ORDEN}/locate`,
+          { headers: { cookie }, method: 'POST' },
+        );
+        expect(ok.status).toBe(200);
+        expect(await ok.json()).toMatchObject({ status: 'located' });
+        // La regla de aceptación viaja con el pedido: confianza alta y radio de la ciudad.
+        expect(locateOrderAddress).toHaveBeenCalledWith(
+          ORDEN,
+          { radiusKm: 60, threshold: 0.9 },
+          expect.anything(),
+        );
+
+        const denied = await buildApp({ locateOrderAddress: vi.fn() }, ['orders.read']).request(
+          `/api/v1/orders/${ORDEN}/locate`,
+          { headers: { cookie }, method: 'POST' },
+        );
+        expect(denied.status).toBe(403);
+      });
+
+      it('lista los pedidos del día sin ubicación', async () => {
+        const unlocatedOrders = vi.fn(() => Promise.resolve([pedido]));
+        const response = await buildApp({ unlocatedOrders }, ['routes.read']).request(
+          '/api/v1/delivery/unlocated?deliveryDate=2026-10-10',
+          { headers: { cookie, [SITE_SCOPE_HEADER]: SEDE } },
+        );
+        expect(response.status).toBe(200);
+        expect(((await response.json()) as { items: unknown[] }).items).toHaveLength(1);
+      });
+
+      // Una tanda corta por petición, y los ya intentados no se vuelven a intentar.
+      it('ubica en tandas y deja afuera lo ya intentado', async () => {
+        const pedidos = ['1', '2', '3'].map((n) => ({
+          ...pedido,
+          id: `0a000000-0000-4000-8000-00000000000${n}`,
+          publicNumber: `CABA-${n}`,
+        }));
+        const app = buildApp(
+          {
+            locateOrderAddress: vi.fn(() => Promise.resolve(ubicado)),
+            unlocatedOrders: vi.fn(() => Promise.resolve(pedidos)),
+          },
+          ['orders.edit'],
+        );
+        const response = await app.request('/api/v1/delivery/locate-missing', {
+          body: JSON.stringify({
+            deliveryDate: '2026-10-10',
+            limit: 1,
+            skipOrderIds: [pedidos[0]?.id],
+          }),
+          headers: { cookie, 'content-type': 'application/json', [SITE_SCOPE_HEADER]: SEDE },
+          method: 'POST',
+        });
+        const body = (await response.json()) as {
+          remaining: number;
+          results: { orderId: string }[];
+        };
+        expect(response.status).toBe(200);
+        expect(body.results.map((r) => r.orderId)).toEqual([pedidos[1]?.id]);
+        expect(body.remaining).toBe(1);
+      });
+
+      it('un pedido que falla no frena la tanda', async () => {
+        const app = buildApp(
+          {
+            locateOrderAddress: vi.fn(() => Promise.reject(new Error('mapa caído'))),
+            unlocatedOrders: vi.fn(() => Promise.resolve([pedido])),
+          },
+          ['orders.edit'],
+        );
+        const response = await app.request('/api/v1/delivery/locate-missing', {
+          body: JSON.stringify({ deliveryDate: '2026-10-10' }),
+          headers: { cookie, 'content-type': 'application/json', [SITE_SCOPE_HEADER]: SEDE },
+          method: 'POST',
+        });
+        expect(await response.json()).toMatchObject({
+          results: [{ reason: 'mapa caído', status: 'failed' }],
+        });
+      });
     });
 
     it('reads the surplus report with production.read', async () => {

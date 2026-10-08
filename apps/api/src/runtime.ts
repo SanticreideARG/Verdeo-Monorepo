@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { AuditService } from '@verdeo/audit';
 import {
   AccessTokenService,
@@ -42,7 +43,12 @@ import {
   PostgresUserAdminRepository,
   PostgresUserDirectoryRepository,
 } from '@verdeo/db';
-import { ConfigurableGeocodingProvider } from '@verdeo/geocoding';
+import {
+  ConfigurableGeocodingProvider,
+  NormalizedAddressSchema,
+  SanitizingGeocodingProvider,
+  type AddressNormalizer,
+} from '@verdeo/geocoding';
 import { createLogger } from '@verdeo/observability';
 import { NearestNeighborRouteOptimizer } from '@verdeo/routing';
 
@@ -123,12 +129,6 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     database.db,
     env.AI_CONFIG_ENCRYPTION_KEY,
   );
-  const operations = new PostgresOperationsService(
-    database.db,
-    // Resolves the maps key per call, so adding it in Ajustes takes effect without a redeploy and
-    // falls back to link-parsing when none is configured.
-    new ConfigurableGeocodingProvider(() => integrationCredentials.secretFor('maps')),
-  );
   // Same lazy resolution as the maps key: configuring email in Ajustes takes effect immediately.
   const emailSender = new ConfigurableEmailSender(() => integrationCredentials.configFor('email'));
   const calendar = new PostgresCalendarService(database.db);
@@ -155,6 +155,33 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     ({ apiKey, baseUrl, adapterType }) =>
       new OpenAICompatibleProvider(adapterType, apiKey, baseUrl),
     env.AI_CONFIG_ENCRYPTION_KEY,
+  );
+  /*
+   * Ordena el texto de una dirección con la IA antes de buscarla en el mapa.
+   *
+   * Va por el motor de tareas de IA, así que usa el proveedor que esté configurado (Gemini u otro),
+   * queda en el registro de ejecuciones con su costo, y su instrucción se puede reemplazar desde
+   * las plantillas. Si no hay proveedor o falla, `SanitizingGeocodingProvider` busca el texto tal
+   * cual: la ubicación no depende de que haya IA. Sólo viaja el texto de la dirección.
+   */
+  const addressNormalizer: AddressNormalizer = {
+    normalize: async ({ city, text }) => {
+      const result = await aiTasks.runTask(
+        'normalize_address',
+        { dirección: text, ...(city ? { ciudad: city } : {}) },
+        { correlationId: randomUUID(), requestId: randomUUID(), source: 'address-normalizer' },
+      );
+      return NormalizedAddressSchema.parse(result.output);
+    },
+  };
+  const operations = new PostgresOperationsService(
+    database.db,
+    // Resolves the maps key per call, so adding it in Ajustes takes effect without a redeploy and
+    // falls back to link-parsing when none is configured.
+    new SanitizingGeocodingProvider(
+      new ConfigurableGeocodingProvider(() => integrationCredentials.secretFor('maps')),
+      addressNormalizer,
+    ),
   );
   const avatarStorage = env.VERDEO_READ_WRITE_TOKEN
     ? new VercelBlobAvatarStorage(env.VERDEO_READ_WRITE_TOKEN, env.VERDEO_STORE_ID)

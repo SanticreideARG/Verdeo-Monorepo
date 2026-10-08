@@ -304,6 +304,38 @@ describe('PostgresAITaskService', () => {
     expect(executions[0]).toMatchObject({ status: 'error' });
   });
 
+  // Una tarea con instrucción por defecto funciona sin que nadie cree su plantilla a mano.
+  it('usa la instrucción por defecto de la tarea cuando no hay plantilla activa', async () => {
+    const { db, prompts } = await seededWithProvider();
+    const provider = fakeProvider(
+      JSON.stringify({
+        city: null,
+        floor: '6',
+        neighborhood: 'Villa Crespo',
+        notes: null,
+        number: '1010',
+        query: 'Julián Álvarez 1010, Villa Crespo',
+        street: 'Julián Álvarez',
+        unit: 'A',
+      }),
+    );
+    const service = new PostgresAITaskService(db, prompts, () => provider, ENCRYPTION_KEY);
+
+    const result = await service.runTask(
+      'normalize_address',
+      { dirección: 'Julián Álvarez 1010. 6 ° A, Villa Crespo' },
+      CONTEXT,
+    );
+
+    expect(result.output).toMatchObject({ query: 'Julián Álvarez 1010, Villa Crespo' });
+    const [call] = vi.mocked(provider.generateText).mock.calls;
+    expect(call?.[0].systemPrompt).toContain('direcciones postales');
+    expect(call?.[0].temperature).toBe(0);
+    expect((await service.listExecutions('normalize_address'))[0]).toMatchObject({
+      status: 'completed',
+    });
+  });
+
   it('throws AITaskNotConfiguredError when no prompt is active for the task', async () => {
     const { db, prompts } = await seededWithProvider();
     const provider = fakeProvider('irrelevant');

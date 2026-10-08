@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { DashboardShell } from '../components/DashboardShell.js';
+import { UnlocatedOrdersPanel } from '../components/LocateAddress.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { RouteMap } from '../components/RouteMap.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
@@ -91,6 +92,12 @@ export function RoutesPage() {
    * paradas" sin decir por qué. Se recargan al cambiar de zona, porque la respuesta depende de ella.
    */
   const [routableDates, setRoutableDates] = useState<RoutableDate[]>([]);
+  const [selectedDate, setSelectedDate] = useState('');
+  /** Se vuelve a pedir la lista de días después de ubicar pedidos. */
+  const [datesVersion, setDatesVersion] = useState(0);
+  const activeDate = routableDates.some((date) => date.deliveryDate === selectedDate)
+    ? selectedDate
+    : (routableDates[0]?.deliveryDate ?? '');
   const [zoneId, setZoneId] = useState('');
   const [routes, setRoutes] = useState<RouteSummary[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteDetail | null>(null);
@@ -201,7 +208,7 @@ export function RoutesPage() {
         setRoutableDates(((await response.json()) as { items: RoutableDate[] }).items);
       })
       .catch(() => setRoutableDates([]));
-  }, [canRead, zoneId]);
+  }, [canRead, datesVersion, zoneId]);
 
   async function createRoute(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -496,7 +503,12 @@ export function RoutesPage() {
                * fecha libre dejaba proponer rutas para días vacíos, que es lo que venía pasando.
                */}
               {routableDates.length > 0 ? (
-                <select name="deliveryDate" required>
+                <select
+                  name="deliveryDate"
+                  onChange={(event) => setSelectedDate(event.target.value)}
+                  required
+                  value={activeDate}
+                >
                   {routableDates.map((date) => (
                     <option key={date.deliveryDate} value={date.deliveryDate}>
                       {formatDayLong(date.deliveryDate)} · {String(date.geocoded)} para rutear
@@ -531,14 +543,26 @@ export function RoutesPage() {
                 confirmado o listo, y su domicilio está geocodificado.
               </p>
             ) : (
-              <p className="text-sm text-ink-muted sm:col-span-3">
-                {routableDates.reduce(
-                  (total, date) => total + date.total - date.geocoded - date.routed,
-                  0,
-                ) > 0
-                  ? `Hay ${String(routableDates.reduce((total, date) => total + date.total - date.geocoded - date.routed, 0))} pedidos por repartir que no entran en ninguna hoja porque su domicilio no está geocodificado.`
-                  : 'Todos los pedidos por repartir tienen domicilio geocodificado.'}
-              </p>
+              <>
+                {/*
+                 * Los pedidos sin ubicación del día elegido, que antes se omitían de la hoja sin
+                 * avisar: se listan y se pueden ubicar acá, antes de proponer la ruta.
+                 */}
+                {activeDate ? (
+                  <UnlocatedOrdersPanel
+                    deliveryDate={activeDate}
+                    onChanged={() => setDatesVersion((version) => version + 1)}
+                  />
+                ) : null}
+                <p className="text-sm text-ink-muted sm:col-span-3">
+                  {routableDates.reduce(
+                    (total, date) => total + date.total - date.geocoded - date.routed,
+                    0,
+                  ) > 0
+                    ? `Hay ${String(routableDates.reduce((total, date) => total + date.total - date.geocoded - date.routed, 0))} pedidos por repartir que no entran en ninguna hoja porque su domicilio no está geocodificado.`
+                    : 'Todos los pedidos por repartir tienen domicilio geocodificado.'}
+                </p>
+              </>
             )}
           </form>
         ) : null}

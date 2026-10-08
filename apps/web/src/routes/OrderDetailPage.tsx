@@ -27,6 +27,7 @@ import {
 } from '../lib/operations.js';
 import { sourceLabel } from '../lib/orderColumns.js';
 import { showToast } from '../lib/toast.js';
+import { LocateOrderControl } from '../components/LocateAddress.js';
 import { historyActor } from '../lib/orderHistory.js';
 import {
   paymentMethodLabel,
@@ -518,6 +519,9 @@ export function OrderDetailPage() {
                       Ver ubicación
                     </a>
                   </>
+                ) : null}
+                {canEdit && order.deliveryLatitude === null ? (
+                  <LocateOrderControl onLocated={() => void load()} orderId={order.id} />
                 ) : null}
               </dd>
             </div>

@@ -194,3 +194,11 @@ que eso tiraba un TypeError y se llevaba puesto todo lo que venía atrás —cer
 recargar la lista, mostrar la ruta—. La ruta se creaba y la pantalla no decía nada; había siete en la
 base cuando se encontró. El formulario ahora se captura antes del `await`, y al crear una ruta se
 avisa cuántas paradas quedaron (o por qué quedó vacía).
+
+## Ubicar direcciones antes de la ruta
+
+`createRoute` sólo arma paradas con pedidos cuyo domicilio tiene coordenadas. Un pedido que entró
+por email o planilla trae la dirección como texto y no tiene domicilio, así que antes quedaba afuera
+sin aviso. Ahora Rutas lista los pedidos del día sin ubicación y permite ubicarlos (la IA ordena el
+texto, el mapa lo busca, y se acepta sola sólo con confianza alta dentro de la ciudad). Detalle y
+decisiones en `ADDRESS_SANITIZER_PLAN.md`.

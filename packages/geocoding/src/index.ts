@@ -10,6 +10,8 @@ export interface GeocodingCandidate {
 }
 
 export interface GeocodingInput {
+  /** La ciudad que ya se conoce del domicilio, para orientar al normalizador. */
+  cityHint?: string | undefined;
   idempotencyKey: string;
   locationUrl?: string | undefined;
   requestId: string;
@@ -290,3 +292,5 @@ export class LocationLinkGeocodingProvider implements GeocodingProvider {
     ]);
   }
 }
+
+export * from './sanitizer.js';

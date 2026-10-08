@@ -18,6 +18,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@verdeo/geocoding": "workspace:*",
     "zod": "4.4.3"
   }
 }

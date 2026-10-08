@@ -9167,3 +9167,56 @@ textarea.sr-only {
   gap: 0.4rem;
   font-size: 0.85rem;
 }
+
+/* --- Ubicar direcciones ------------------------------------------------------------------------ */
+.unlocated-panel {
+  display: grid;
+  gap: 0.6rem;
+  border: 1px solid #d9a21b;
+  border-radius: 0.9rem;
+  padding: 0.8rem 1rem;
+}
+.unlocated-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.unlocated-list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+}
+.unlocated-list li {
+  display: grid;
+  gap: 0.1rem;
+  overflow-wrap: anywhere;
+}
+.unlocated-list small {
+  color: var(--db-muted);
+}
+.locate-control {
+  display: grid;
+  gap: 0.4rem;
+  justify-items: start;
+}
+.locate-candidates {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+}
+.locate-candidates li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}

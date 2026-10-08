@@ -466,9 +466,9 @@ con datos reales antes de prometer nada.
 
 Plan completo en `docs/03-features/ADDRESS_SANITIZER_PLAN.md`.
 
-- [ ] Fase 1: control previo en rutas (cuántos pedidos del día no tienen ubicación, con la lista) y
-      aviso al crear la ruta. Hoy los pedidos sin ubicación quedan afuera de la ruta sin avisar.
-- [ ] Fase 2: normalizador con Gemini (texto estructurado, nunca coordenadas) + geocodificador, con
-      botón "Ubicar" en el detalle del pedido y en la ficha del cliente.
+- [x] Fase 1: control previo en rutas con la lista de pedidos del día sin ubicación y botón para
+      ubicarlos. Antes quedaban afuera de la ruta sin avisar.
+- [x] Fase 2: normalizador con IA (texto estructurado, nunca coordenadas) + geocodificador, con
+      botón "Ubicar" en el detalle del pedido y creación del domicilio a partir del pedido.
 - [ ] Fase 3: ubicar en lote y configurar por ciudad el orden de procedimientos y el umbral.
 - [ ] Fase 4: ubicar al importar pedidos; métricas de acierto y costo.

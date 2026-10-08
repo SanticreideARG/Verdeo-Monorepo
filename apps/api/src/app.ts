@@ -534,6 +534,33 @@ interface OperationsEngine {
   setCycleClosed(cycleId: string, closed: boolean, context: OperationsContext): Promise<unknown>;
   createPublicOrder(input: PublicOrderCreateRequest, context: OperationsContext): Promise<unknown>;
   trackPublicOrder(publicNumber: string, contact: string): Promise<unknown>;
+  /** Ubica la dirección de un pedido: la ordena, la busca y, si es seguro, la confirma. */
+  locateOrderAddress(
+    orderId: string,
+    rules: { radiusKm: number; threshold: number },
+    context: OperationsContext,
+  ): Promise<{
+    addressId: string | null;
+    candidates: { confidence: number; formattedAddress: string; id: string }[];
+    customerId: string;
+    reason?: string;
+    requestId: string | null;
+    status: string;
+  }>;
+  /** Los pedidos de un día que no entran en una hoja de ruta por no tener ubicación. */
+  unlocatedOrders(
+    operatingSiteId: string,
+    deliveryDate: string,
+  ): Promise<
+    {
+      address: string;
+      customerName: string;
+      hasAddress: boolean;
+      id: string;
+      publicNumber: string;
+      status: string;
+    }[]
+  >;
   confirmAddressGeocoding(
     customerId: string,
     addressId: string,
@@ -2428,6 +2455,8 @@ export function createApp(options: CreateAppOptions) {
    * ámbito, y pedirlo para todas ataría el módulo entero al servicio de geografía.
    */
   app.use('/api/v1/delivery/routable-dates', requireAuthentication, resolveScopeSelection);
+  app.use('/api/v1/delivery/unlocated', requireAuthentication, resolveScopeSelection);
+  app.use('/api/v1/delivery/locate-missing', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/delivery/*', requireAuthentication);
   app.use('/api/v1/payments/*', requireAuthentication);
   app.use('/api/v1/stats', requireAuthentication);
@@ -4356,6 +4385,81 @@ export function createApp(options: CreateAppOptions) {
     return context.json({ items });
   });
 
+  /*
+   * Qué se considera una ubicación segura para aceptarla sin que la mire una persona.
+   *
+   * 0,9 de confianza y hasta 60 km del origen de la ciudad (cubre el conurbano sin dejar pasar
+   * otra provincia). Fijos por ahora; la configuración por ciudad es la fase 3 del plan.
+   */
+  const LOCATE_RULES = { radiusKm: 60, threshold: 0.9 } as const;
+
+  /*
+   * Los pedidos del día que quedarían afuera de la hoja de ruta por no tener ubicación.
+   *
+   * `createRoute` sólo arma paradas con domicilios que tienen coordenadas, y un pedido que entró
+   * por email o planilla no tiene domicilio propio: se omitía sin avisar. Esto es el aviso.
+   */
+  app.get('/api/v1/delivery/unlocated', async (context) => {
+    if (!context.get('session').permissions.includes('routes.read')) return forbidden(context);
+    const operatingSiteId = context.get('scope')?.operatingSiteId;
+    const deliveryDate = z.iso.date().safeParse(context.req.query('deliveryDate'));
+    if (!operatingSiteId || !deliveryDate.success) return context.json({ items: [] });
+    const items = await requireOperations().unlocatedOrders(operatingSiteId, deliveryDate.data);
+    return context.json({ items });
+  });
+
+  /*
+   * Ubica en tandas los pedidos de un día.
+   *
+   * Cada pedido son dos llamadas externas (la IA y el mapa), y una función sin estado tiene un
+   * tiempo máximo: se hacen pocos por petición y quien llama repite hasta que no queden,
+   * pasando los que ya se intentaron para no volver sobre los que no se pudieron resolver.
+   */
+  app.post('/api/v1/delivery/locate-missing', async (context) => {
+    if (!context.get('session').permissions.includes('orders.edit')) return forbidden(context);
+    const operatingSiteId = context.get('scope')?.operatingSiteId;
+    const input = z
+      .object({
+        deliveryDate: z.iso.date(),
+        limit: z.number().int().min(1).max(10).default(5),
+        skipOrderIds: z.array(z.uuid()).max(500).default([]),
+      })
+      .safeParse(await context.req.json().catch(() => null));
+    if (!operatingSiteId || !input.success)
+      return badRequest(context, 'Revisá la fecha y la ciudad.');
+    const operations = requireOperations();
+    const skip = new Set(input.data.skipOrderIds);
+    const pending = (
+      await operations.unlocatedOrders(operatingSiteId, input.data.deliveryDate)
+    ).filter((order) => !skip.has(order.id));
+    const batch = pending.slice(0, input.data.limit);
+    const results: { orderId: string; publicNumber: string; reason?: string; status: string }[] =
+      [];
+    for (const order of batch) {
+      try {
+        const result = await operations.locateOrderAddress(
+          order.id,
+          LOCATE_RULES,
+          operationsContext(context),
+        );
+        results.push({
+          orderId: order.id,
+          publicNumber: order.publicNumber,
+          ...(result.reason ? { reason: result.reason } : {}),
+          status: result.status,
+        });
+      } catch (error) {
+        results.push({
+          orderId: order.id,
+          publicNumber: order.publicNumber,
+          reason: error instanceof Error ? error.message : 'Falló al ubicar.',
+          status: 'failed',
+        });
+      }
+    }
+    return context.json({ remaining: pending.length - batch.length, results });
+  });
+
   app.post('/api/v1/delivery/routes', async (context) => {
     if (!context.get('session').permissions.includes('routes.manage')) return forbidden(context);
     const input = DeliveryRouteCreateRequestSchema.safeParse(
@@ -5066,6 +5170,23 @@ export function createApp(options: CreateAppOptions) {
    * `orders.delete` no viene con ningún rol: se concede a mano. Y pide un motivo, porque cuando
    * la fila ya no está, el evento de auditoría es lo único que explica qué pasó.
    */
+  /*
+   * Ubicar la dirección de un pedido desde su detalle. Devuelve lo necesario para resolverlo a
+   * mano si no se pudo sola: los candidatos y los ids del domicilio y la solicitud, que son los
+   * de la confirmación que ya usa la ficha del cliente.
+   */
+  app.post('/api/v1/orders/:id/locate', async (context) => {
+    if (!context.get('session').permissions.includes('orders.edit')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El pedido no es válido.');
+    const result = await requireOperations().locateOrderAddress(
+      params.data.id,
+      LOCATE_RULES,
+      operationsContext(context),
+    );
+    return context.json(result);
+  });
+
   app.delete('/api/v1/orders/:id', async (context) => {
     if (!context.get('session').permissions.includes('orders.delete')) return forbidden(context);
     const params = IdParamSchema.safeParse(context.req.param());

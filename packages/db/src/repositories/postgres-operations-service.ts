@@ -7,6 +7,7 @@ import {
   gte,
   ilike,
   inArray,
+  isNull,
   lt,
   lte,
   ne,
@@ -25,8 +26,10 @@ import {
   renderTemplate,
 } from '@verdeo/customers';
 import {
+  decideAutoAccept,
   GeocodingProviderError,
   validateGeocodingCandidates,
+  type AutoAcceptRules,
   type GeocodingProvider,
 } from '@verdeo/geocoding';
 import {
@@ -60,6 +63,7 @@ import {
   customerPreferences,
   customerRestrictions,
   customers,
+  deliveryRoutes,
   deliveryStops,
   domainEvents,
   geocodingCandidates,
@@ -1868,6 +1872,7 @@ export class PostgresOperationsService {
       candidates = validateGeocodingCandidates(
         await this.geocodingProvider.geocode({
           idempotencyKey: input.idempotencyKey,
+          ...(initialized.address.city ? { cityHint: initialized.address.city } : {}),
           ...(initialized.address.locationUrl
             ? { locationUrl: initialized.address.locationUrl }
             : {}),
@@ -2318,6 +2323,240 @@ export class PostgresOperationsService {
     });
   }
 
+  /**
+   * Ubica la dirección de un pedido: la ordena, la busca en el mapa y, si el resultado es seguro y
+   * cae dentro de la ciudad, la deja confirmada sin que nadie la mire.
+   *
+   * Existe porque `createRoute` sólo arma paradas con pedidos cuyo domicilio tiene coordenadas, y
+   * un pedido que entró por email o planilla trae la dirección como texto y ningún domicilio
+   * propio: quedaba afuera de la ruta sin que nada lo dijera. Acá se le crea el domicilio a partir
+   * del texto del pedido —en la zona del pedido, o la única de la ciudad— y se lo ubica.
+   *
+   * Nunca pisa una ubicación que ya está: si el domicilio tiene coordenadas, no hace nada. Lo
+   * dudoso (poca confianza, fuera de la ciudad) queda como candidatos para que lo resuelva una
+   * persona, que es el mismo flujo de la ficha del cliente.
+   */
+  public async locateOrderAddress(
+    orderId: string,
+    rules: Pick<AutoAcceptRules, 'radiusKm' | 'threshold'>,
+    context: OperationsContext,
+  ): Promise<{
+    addressId: string | null;
+    candidates: { confidence: number; formattedAddress: string; id: string }[];
+    customerId: string;
+    reason?: string;
+    requestId: string | null;
+    status: 'already_located' | 'failed' | 'located' | 'needs_zone' | 'no_match' | 'review';
+  }> {
+    const [order] = await this.database
+      .select({
+        customerId: orders.customerId,
+        deliveryAddressId: orders.deliveryAddressId,
+        geographicZoneId: orders.geographicZoneId,
+        id: orders.id,
+        locationUrl: orders.deliveryLocationUrlSnapshot,
+        originLatitude: operatingSites.originLatitude,
+        originLongitude: operatingSites.originLongitude,
+        operatingSiteId: orders.operatingSiteId,
+        snapshot: orders.deliveryAddressSnapshot,
+      })
+      .from(orders)
+      .innerJoin(operatingSites, eq(operatingSites.id, orders.operatingSiteId))
+      .where(eq(orders.id, orderId))
+      .limit(1);
+    if (!order) throw new OperationsNotFoundError('Order not found');
+
+    let addressId = order.deliveryAddressId;
+    if (addressId) {
+      const [existing] = await this.database
+        .select({ latitude: customerAddresses.latitude, longitude: customerAddresses.longitude })
+        .from(customerAddresses)
+        .where(eq(customerAddresses.id, addressId))
+        .limit(1);
+      if (existing?.latitude !== null && existing?.longitude !== null && existing) {
+        return {
+          addressId,
+          candidates: [],
+          customerId: order.customerId,
+          requestId: null,
+          status: 'already_located',
+        };
+      }
+    } else {
+      const zoneId = order.geographicZoneId ?? (await this.soleActiveZone(order.operatingSiteId));
+      if (!zoneId) {
+        return {
+          addressId: null,
+          candidates: [],
+          customerId: order.customerId,
+          reason:
+            'La ciudad tiene más de una zona y el pedido no tiene ninguna: asignala desde el cliente.',
+          requestId: null,
+          status: 'needs_zone',
+        };
+      }
+      addressId = await this.database.transaction(async (transaction) => {
+        const [created] = await transaction
+          .insert(customerAddresses)
+          .values({
+            customerId: order.customerId,
+            geographicZoneId: zoneId,
+            geocodingStatus: 'NEEDS_LOCATION',
+            label: 'Pedido',
+            locationUrl: order.locationUrl,
+            source: 'order_locate',
+            writtenAddress: order.snapshot,
+          })
+          .returning({ id: customerAddresses.id });
+        if (!created) throw new Error('Address creation did not return a row');
+        await transaction
+          .update(orders)
+          .set({
+            deliveryAddressId: created.id,
+            geographicZoneId: order.geographicZoneId ?? zoneId,
+            updatedAt: new Date(),
+          })
+          .where(eq(orders.id, orderId));
+        await this.auditCustomerMutation(
+          transaction,
+          order.customerId,
+          'customer.address_created_from_order',
+          context,
+          { metadata: { addressId: created.id, orderId } },
+        );
+        return created.id;
+      });
+    }
+
+    const request = await this.requestAddressGeocoding(
+      order.customerId,
+      addressId,
+      { idempotencyKey: `locate:${orderId}:${String(Date.now())}` },
+      context,
+    );
+    const summary = request.candidates.map((candidate) => ({
+      confidence: candidate.confidence,
+      formattedAddress: candidate.formattedAddress,
+      id: candidate.id,
+    }));
+    if (request.status === 'FAILED') {
+      return {
+        addressId,
+        candidates: [],
+        customerId: order.customerId,
+        reason: 'El buscador de direcciones no respondió.',
+        requestId: request.id,
+        status: 'failed',
+      };
+    }
+    if (request.candidates.length === 0) {
+      return {
+        addressId,
+        candidates: [],
+        customerId: order.customerId,
+        requestId: request.id,
+        status: 'no_match',
+      };
+    }
+
+    const decision = decideAutoAccept(
+      request.candidates.map((candidate) => ({
+        confidence: candidate.confidence,
+        formattedAddress: candidate.formattedAddress,
+        latitude: candidate.latitude,
+        longitude: candidate.longitude,
+        providerCandidateId: candidate.id,
+      })),
+      {
+        origin:
+          order.originLatitude !== null && order.originLongitude !== null
+            ? { latitude: Number(order.originLatitude), longitude: Number(order.originLongitude) }
+            : null,
+        radiusKm: rules.radiusKm,
+        threshold: rules.threshold,
+      },
+    );
+    if (!decision.accept) {
+      const reasons: Record<string, string> = {
+        baja_confianza: 'El mapa no está seguro de esta dirección.',
+        fuera_de_la_ciudad: 'El punto que encontró queda lejos de la ciudad.',
+        sin_candidatos: 'No encontró la dirección.',
+        sin_origen: 'La ciudad no tiene punto de origen cargado para verificar la distancia.',
+      };
+      return {
+        addressId,
+        candidates: summary,
+        customerId: order.customerId,
+        reason: reasons[decision.reason] ?? decision.reason,
+        requestId: request.id,
+        status: 'review',
+      };
+    }
+
+    // El candidato se identificó con su id de base al armar la decisión.
+    const candidateId = decision.candidate.providerCandidateId;
+    await this.confirmAddressGeocoding(
+      order.customerId,
+      addressId,
+      request.id,
+      { candidateId },
+      context,
+    );
+    return {
+      addressId,
+      candidates: summary,
+      customerId: order.customerId,
+      requestId: request.id,
+      status: 'located',
+    };
+  }
+
+  /** La única zona activa de una ciudad, o null si hay más de una (o ninguna). */
+  private async soleActiveZone(operatingSiteId: string): Promise<string | null> {
+    const zones = await this.database
+      .select({ id: geographicZones.id })
+      .from(geographicZones)
+      .where(
+        and(eq(geographicZones.operatingSiteId, operatingSiteId), eq(geographicZones.active, true)),
+      )
+      .limit(2);
+    return zones.length === 1 ? (zones[0]?.id ?? null) : null;
+  }
+
+  /**
+   * Los pedidos de un día que no entran en una hoja de ruta por no tener ubicación, con lo
+   * necesario para reconocerlos y ubicarlos. Los que ya están en una ruta no cuentan.
+   */
+  public async unlocatedOrders(operatingSiteId: string, deliveryDate: string) {
+    const alreadyRouted = this.database
+      .select({ orderId: deliveryStops.orderId })
+      .from(deliveryStops)
+      .innerJoin(deliveryRoutes, eq(deliveryRoutes.id, deliveryStops.routeId))
+      .where(inArray(deliveryRoutes.status, ['draft', 'published']));
+    const rows = await this.database
+      .select({
+        address: orders.deliveryAddressSnapshot,
+        customerName: customers.displayName,
+        hasAddress: sql<boolean>`${orders.deliveryAddressId} is not null`,
+        id: orders.id,
+        publicNumber: orders.publicNumber,
+        status: orders.status,
+      })
+      .from(orders)
+      .innerJoin(customers, eq(customers.id, orders.customerId))
+      .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+      .where(
+        and(
+          eq(orders.operatingSiteId, operatingSiteId),
+          eq(orders.deliveryDate, deliveryDate),
+          inArray(orders.status, ['CONFIRMED', 'READY']),
+          notInArray(orders.id, alreadyRouted),
+          or(isNull(customerAddresses.latitude), isNull(customerAddresses.longitude)),
+        ),
+      )
+      .orderBy(asc(orders.publicNumber));
+    return rows;
+  }
   private async loadAddressGeocodingRequest(
     customerId: string,
     addressId: string,

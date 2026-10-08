@@ -133,7 +133,19 @@ export class PostgresAITaskService {
     const task = findTask(taskKey);
     if (!task) throw new AITaskNotFoundError(`Unknown AI task: ${taskKey}`);
 
-    const promptVersion = await this.promptService.getActiveVersion(taskKey);
+    const activeVersion = await this.promptService.getActiveVersion(taskKey);
+    const promptVersion =
+      activeVersion ??
+      (task.defaultSystemPrompt
+        ? {
+            id: null,
+            maxTokens: task.defaultMaxTokens,
+            preferredProviderKey: null,
+            systemPrompt: task.defaultSystemPrompt,
+            temperature: task.defaultTemperature,
+            version: 0,
+          }
+        : null);
     if (!promptVersion)
       throw new AITaskNotConfiguredError(
         'Esta tarea todavía no tiene un prompt activo configurado.',
