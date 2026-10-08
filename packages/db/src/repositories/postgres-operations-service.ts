@@ -4590,18 +4590,24 @@ export class PostgresOperationsService {
       .where(eq(orders.id, orderId))
       .limit(1);
     if (!order) throw new OperationsNotFoundError('Order not found');
-    return this.database
-      .select({
-        actorUserId: orderStatusHistory.actorUserId,
-        createdAt: orderStatusHistory.createdAt,
-        fromStatus: orderStatusHistory.fromStatus,
-        id: orderStatusHistory.id,
-        reason: orderStatusHistory.reason,
-        toStatus: orderStatusHistory.toStatus,
-      })
-      .from(orderStatusHistory)
-      .where(eq(orderStatusHistory.orderId, orderId))
-      .orderBy(asc(orderStatusHistory.createdAt));
+    return (
+      this.database
+        .select({
+          actorDisplayName: users.displayName,
+          actorUserId: orderStatusHistory.actorUserId,
+          createdAt: orderStatusHistory.createdAt,
+          fromStatus: orderStatusHistory.fromStatus,
+          id: orderStatusHistory.id,
+          reason: orderStatusHistory.reason,
+          toStatus: orderStatusHistory.toStatus,
+        })
+        .from(orderStatusHistory)
+        // `left`: el id del actor se guarda suelto, y un usuario borrado no puede hacer
+        // desaparecer el cambio del historial.
+        .leftJoin(users, eq(users.id, orderStatusHistory.actorUserId))
+        .where(eq(orderStatusHistory.orderId, orderId))
+        .orderBy(asc(orderStatusHistory.createdAt))
+    );
   }
 
   public async orderRevisionHistory(orderId: string) {
@@ -4613,6 +4619,7 @@ export class PostgresOperationsService {
     if (!order) throw new OperationsNotFoundError('Order not found');
     return this.database
       .select({
+        actorDisplayName: users.displayName,
         actorUserId: orderRevisions.actorUserId,
         createdAt: orderRevisions.createdAt,
         id: orderRevisions.id,
@@ -4621,6 +4628,7 @@ export class PostgresOperationsService {
         snapshot: orderRevisions.snapshot,
       })
       .from(orderRevisions)
+      .leftJoin(users, eq(users.id, orderRevisions.actorUserId))
       .where(eq(orderRevisions.orderId, orderId))
       .orderBy(desc(orderRevisions.revision));
   }

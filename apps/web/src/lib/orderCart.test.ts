@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cartItemsPayload,
   cartTotalMinor,
+  estimatedItemsTotalMinor,
   linesToSubmit,
   pendingCartLine,
   type CartLine,
@@ -185,5 +186,42 @@ describe('cartItemsPayload', () => {
       { offeringId: 'offering-keto', quantityUnits: 1 },
       { offeringId: 'offering-intuitivo', quantityUnits: 1, selectedDishNames: CINCO },
     ]);
+  });
+});
+
+describe('estimatedItemsTotalMinor', () => {
+  const regla = {
+    extraDishMinor: 0,
+    factorBasisPoints: 10_000,
+    mode: 'proporcional' as const,
+    roundingMinor: 50_000,
+  };
+  const ofertas = [
+    { composable: true, id: 'i', mealsPerUnit: 5, unitPriceMinor: 8_500_000 },
+    { composable: false, id: 'k', mealsPerUnit: 5, unitPriceMinor: 1_000_000 },
+  ];
+  const platos = (n: number) => Array.from({ length: n }, (_, i) => `Plato ${String(i)}`);
+
+  it('cobra el precio del tamaño mientras se eligen los platos', () => {
+    expect(
+      estimatedItemsTotalMinor(
+        [{ offeringId: 'i', quantityUnits: 2, selectedDishNames: platos(3) }],
+        ofertas,
+        regla,
+      ),
+    ).toBe(17_000_000);
+  });
+
+  it('cobra más con platos de más, según la regla, y no toca lo que no es componible', () => {
+    expect(
+      estimatedItemsTotalMinor(
+        [
+          { offeringId: 'i', quantityUnits: 1, selectedDishNames: platos(10) },
+          { offeringId: 'k', quantityUnits: 1, selectedDishNames: [] },
+        ],
+        ofertas,
+        regla,
+      ),
+    ).toBe(17_000_000 + 1_000_000);
   });
 });

@@ -227,6 +227,7 @@ export interface OrderSummary {
 }
 
 export interface OrderStatusHistoryEntry {
+  actorDisplayName: string | null;
   actorUserId: string | null;
   createdAt: string;
   fromStatus: OrderSummary['status'] | null;
@@ -236,6 +237,7 @@ export interface OrderStatusHistoryEntry {
 }
 
 export interface OrderRevision {
+  actorDisplayName: string | null;
   actorUserId: string | null;
   createdAt: string;
   id: string;

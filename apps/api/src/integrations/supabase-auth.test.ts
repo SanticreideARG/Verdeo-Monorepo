@@ -95,6 +95,27 @@ describe('SupabaseAuthClient', () => {
    * El error de PostgREST viaja en el detalle. Sin él, "la tabla no existe" y "existe pero `anon`
    * no la puede escribir" se ven iguales desde un log, y son dos arreglos distintos.
    */
+  /*
+   * Las claves nuevas de Supabase no son JWT y no van como `Authorization: Bearer`; las anteriores
+   * sí. No se sabe cuál tiene el proyecto, así que la escritura tiene que servir con las dos.
+   */
+  it('manda una clave nueva sólo como apikey y una clave JWT en las dos cabeceras', async () => {
+    const llamar = async (clave: string) => {
+      const fetcher = vi.fn<typeof fetch>(() =>
+        Promise.resolve(new Response(null, { status: 201 })),
+      );
+      await new SupabaseAuthClient('https://project-ref.supabase.co', clave, fetcher).touch();
+      return fetcher.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    };
+
+    const nueva = await llamar('sb_publishable_test-key-long-enough');
+    expect(nueva.apikey).toBe('sb_publishable_test-key-long-enough');
+    expect(nueva).not.toHaveProperty('authorization');
+
+    const jwt = await llamar('eyJhbGciOiJIUzI1NiJ9.payload.signature');
+    expect(jwt.authorization).toBe('Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature');
+  });
+
   it('informa el error de PostgREST en lugar de decir sólo que falló', async () => {
     const fetcher = vi.fn(() =>
       Promise.resolve(

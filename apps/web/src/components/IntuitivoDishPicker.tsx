@@ -65,12 +65,23 @@ export function IntuitivoDishPicker({
   }
 
   const faltan = minDishes - total;
+  /*
+   * Al llegar al mínimo se dice que se puede seguir.
+   *
+   * Decía "listo" y nada más, y "listo" suena a "no se puede agregar nada": quien quería llevar
+   * más platos no sabía que el selector se lo permitía.
+   */
+  const margen = maxDishes - total;
   const estado =
     faltan > 0
       ? `elegí ${String(faltan)} más`
       : total === minDishes
-        ? 'listo'
-        : `${String(total - minDishes)} de más · el precio se recalcula`;
+        ? margen > 0
+          ? `listo · podés sumar hasta ${String(margen)} más`
+          : 'listo'
+        : margen > 0
+          ? `${String(total - minDishes)} de más · podés sumar ${String(margen)} más · el precio se recalcula`
+          : `${String(total - minDishes)} de más · el precio se recalcula`;
 
   return (
     <div className="intuitivo-picker">

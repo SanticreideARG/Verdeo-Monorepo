@@ -890,6 +890,8 @@ export const OrderPageResponseSchema = z.object({
 });
 
 export const OrderRevisionSchema = z.object({
+  /** El nombre de quien editó; null si ya no existe el usuario. */
+  actorDisplayName: z.string().nullable(),
   actorUserId: UuidSchema.nullable(),
   createdAt: IsoDateTimeSchema,
   id: UuidSchema,
@@ -901,6 +903,14 @@ export const OrderRevisionSchema = z.object({
 export const OrderRevisionListResponseSchema = z.object({ items: z.array(OrderRevisionSchema) });
 
 export const OrderStatusHistoryEntrySchema = z.object({
+  /**
+   * El nombre de quien hizo el cambio.
+   *
+   * Null cuando no hubo un usuario —un pedido de la web, una entrega confirmada con el enlace
+   * del repartidor— y también cuando el usuario ya no existe: lo que los distingue es
+   * `actorUserId`, que en el segundo caso sigue estando.
+   */
+  actorDisplayName: z.string().nullable(),
   actorUserId: UuidSchema.nullable(),
   createdAt: IsoDateTimeSchema,
   fromStatus: OrderStatusSchema.nullable(),

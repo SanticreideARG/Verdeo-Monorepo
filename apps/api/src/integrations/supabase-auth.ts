@@ -97,7 +97,17 @@ export class SupabaseAuthClient {
         cache: 'no-store',
         headers: {
           apikey: this.publishableKey,
-          authorization: `Bearer ${this.publishableKey}`,
+          /*
+           * `Authorization` sólo con una clave que sea un JWT.
+           *
+           * Las claves nuevas de Supabase (`sb_publishable_…`) no son JWT, y mandarlas como
+           * `Bearer` es lo que el gateway no espera de ellas: con `apikey` alcanza para actuar como
+           * `anon`. Las claves anteriores sí son JWT y se mandan en las dos cabeceras, como siempre.
+           * Sin saber cuál tiene el proyecto, esto funciona con las dos.
+           */
+          ...(this.publishableKey.startsWith('eyJ')
+            ? { authorization: `Bearer ${this.publishableKey}` }
+            : {}),
           'content-type': 'application/json',
           // Un upsert: sin esto, la segunda corrida choca con la clave primaria y devuelve 409.
           prefer: 'resolution=merge-duplicates,return=minimal',

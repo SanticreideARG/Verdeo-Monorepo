@@ -26,6 +26,7 @@ import {
 } from '../lib/operations.js';
 import { sourceLabel } from '../lib/orderColumns.js';
 import { showToast } from '../lib/toast.js';
+import { historyActor } from '../lib/orderHistory.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { useOrderFormSettings } from '../lib/useOrderFormSettings.js';
 
@@ -79,6 +80,14 @@ export function OrderDetailPage() {
   const [offerings, setOfferings] = useState<MenuOffering[]>([]);
   // El techo de platos de la ciudad del pedido: viaja con el menú, que esta pantalla ya carga.
   const [maxDishes, setMaxDishes] = useState(5);
+  // Cómo cobra la ciudad los platos de más, para que el total estimado sea el que va a cobrar el
+  // servidor y no el del menú.
+  const [pricing, setPricing] = useState<WeeklyMenu['intuitivoPricing']>({
+    extraDishMinor: 0,
+    factorBasisPoints: 10_000,
+    mode: 'proporcional',
+    roundingMinor: 50_000,
+  });
   /*
    * A qué semana pertenece el pedido.
    *
@@ -122,7 +131,10 @@ export function OrderDetailPage() {
         const menus = ((await response.json()) as { items: WeeklyMenu[] }).items;
         const menu = menus.find((candidate) => candidate.id === loaded.menuId);
         setOfferings(menu?.offerings ?? []);
-        if (menu) setMaxDishes(menu.intuitivoMaxDishes);
+        if (menu) {
+          setMaxDishes(menu.intuitivoMaxDishes);
+          setPricing(menu.intuitivoPricing);
+        }
         setCycle(menu ? { alias: menu.cycle.alias, id: menu.cycle.id } : null);
       })
       .catch(() => undefined);
@@ -405,6 +417,7 @@ export function OrderDetailPage() {
                     maxDishes={maxDishes}
                     offerings={offerings}
                     onChange={setItems}
+                    pricing={pricing}
                   />
                 )}
               </section>
@@ -567,13 +580,18 @@ export function OrderDetailPage() {
 
         <div className="mt-8 grid gap-2">
           <h2 className="text-sm font-bold text-forest">Historial de estado</h2>
-          {history.map((entry) => (
-            <p className="text-sm text-ink-muted" key={entry.id}>
-              {formatMoment(entry.createdAt)} · {statusLabel(entry.fromStatus)} →{' '}
-              {orderStatusLabel(entry.toStatus)}
-              {entry.reason ? ` · ${entry.reason}` : ''}
-            </p>
-          ))}
+          {history.map((entry) => {
+            const actor = historyActor(entry);
+            return (
+              <p className="text-sm text-ink-muted" key={entry.id}>
+                {formatMoment(entry.createdAt)} · {statusLabel(entry.fromStatus)} →{' '}
+                {orderStatusLabel(entry.toStatus)}
+                {/* Quién y cuándo: lo que hace que un cambio se pueda atribuir sin ir a la auditoría. */}
+                {actor ? ` · por ${actor}` : ''}
+                {entry.reason ? ` · ${entry.reason}` : ''}
+              </p>
+            );
+          })}
           {history.length === 0 ? <p className="text-sm text-ink-muted">Sin registros.</p> : null}
         </div>
 
@@ -583,6 +601,7 @@ export function OrderDetailPage() {
             {revisions.map((revision) => (
               <p className="text-sm text-ink-muted" key={revision.id}>
                 {formatMoment(revision.createdAt)} · revisión #{revision.revision} ·{' '}
+                {historyActor(revision) ? `por ${historyActor(revision) ?? ''} · ` : ''}
                 {revision.reason}
               </p>
             ))}

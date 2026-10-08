@@ -162,3 +162,40 @@ export function intuitivoUnitPriceMinor(input: {
       : Math.round(crudo);
   return Math.max(redondeado, rule.roundingMinor > 0 ? rule.roundingMinor : 1);
 }
+
+/**
+ * El total estimado de los ítems de un pedido que se está editando.
+ *
+ * Con el precio de la regla y no con el del menú: un Intuitivo con más platos que los del tamaño
+ * cuesta distinto, y mostrar un total mientras el servidor cobra otro es peor que no mostrar
+ * nada. Mientras todavía se están eligiendo los platos vale el precio del tamaño, para que el
+ * total no salte con cada plato que falta.
+ */
+export function estimatedItemsTotalMinor(
+  items: readonly {
+    offeringId: string;
+    quantityUnits: number;
+    selectedDishNames: readonly string[];
+  }[],
+  offerings: readonly {
+    composable: boolean;
+    id: string;
+    mealsPerUnit: number;
+    unitPriceMinor: number;
+  }[],
+  pricing: IntuitivoLimits['pricing'],
+): number {
+  return items.reduce((sum, item) => {
+    const offering = offerings.find((candidate) => candidate.id === item.offeringId);
+    if (!offering) return sum;
+    const unitPriceMinor = offering.composable
+      ? intuitivoUnitPriceMinor({
+          baseDishes: offering.mealsPerUnit,
+          basePriceMinor: offering.unitPriceMinor,
+          dishes: Math.max(item.selectedDishNames.length, offering.mealsPerUnit),
+          rule: pricing,
+        })
+      : offering.unitPriceMinor;
+    return sum + unitPriceMinor * item.quantityUnits;
+  }, 0);
+}

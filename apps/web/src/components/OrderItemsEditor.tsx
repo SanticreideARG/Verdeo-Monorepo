@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { formatMoney, type MenuOffering, type OrderSummary } from '../lib/operations.js';
+import { estimatedItemsTotalMinor, type IntuitivoLimits } from '../lib/orderCart.js';
 import { IntuitivoDishPicker } from './IntuitivoDishPicker.js';
 
 export interface EditableItem {
@@ -53,12 +54,15 @@ export function OrderItemsEditor({
   maxDishes,
   offerings,
   onChange,
+  pricing,
 }: {
   items: readonly EditableItem[];
   /** El techo de platos del Intuitivo en la ciudad del pedido. */
   maxDishes: number;
   offerings: readonly MenuOffering[];
   onChange: (next: EditableItem[]) => void;
+  /** Cómo cobra la ciudad los platos de más, para que el total estimado coincida con el real. */
+  pricing: IntuitivoLimits['pricing'];
 }) {
   const [adding, setAdding] = useState('');
 
@@ -80,10 +84,7 @@ export function OrderItemsEditor({
     setAdding('');
   }
 
-  const total = items.reduce((sum, item) => {
-    const offering = offerings.find((candidate) => candidate.id === item.offeringId);
-    return sum + (offering?.unitPriceMinor ?? 0) * item.quantityUnits;
-  }, 0);
+  const total = estimatedItemsTotalMinor(items, offerings, pricing);
   const currency = offerings[0]?.currency ?? 'ARS';
 
   return (
