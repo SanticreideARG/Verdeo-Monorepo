@@ -461,3 +461,14 @@ con datos reales antes de prometer nada.
       Hoy el pedido lleva la dirección como texto y la zona se asigna desde el CRM.
 - [ ] Mapear la ciudad del asunto ("Capital Federal") a una ciudad del sistema, para avisar cuando
       un pedido llega con una ciudad distinta de la que está elegida arriba. Hoy sólo se muestra.
+
+## Sanitizador de direcciones
+
+Plan completo en `docs/03-features/ADDRESS_SANITIZER_PLAN.md`.
+
+- [ ] Fase 1: control previo en rutas (cuántos pedidos del día no tienen ubicación, con la lista) y
+      aviso al crear la ruta. Hoy los pedidos sin ubicación quedan afuera de la ruta sin avisar.
+- [ ] Fase 2: normalizador con Gemini (texto estructurado, nunca coordenadas) + geocodificador, con
+      botón "Ubicar" en el detalle del pedido y en la ficha del cliente.
+- [ ] Fase 3: ubicar en lote y configurar por ciudad el orden de procedimientos y el umbral.
+- [ ] Fase 4: ubicar al importar pedidos; métricas de acierto y costo.
