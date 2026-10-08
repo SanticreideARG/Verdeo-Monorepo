@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { formatDayLong, formatMoment } from '../lib/dates.js';
 import { formatArgentinePhone, whatsappHref } from '../lib/phone.js';
+import { paymentMethodLabel, type PaymentChoice } from '../lib/paymentMethods.js';
 import { formatMoney, orderStatusLabel, type OrderSummary } from '../lib/operations.js';
 
 function mapHref(order: OrderSummary): string | null {
@@ -34,9 +35,11 @@ function mapHref(order: OrderSummary): string | null {
 export function OrderDetailDialog({
   onClose,
   order,
+  paymentMethods = [],
 }: {
   onClose: () => void;
   order: OrderSummary;
+  paymentMethods?: readonly PaymentChoice[];
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
 
@@ -166,7 +169,7 @@ export function OrderDetailDialog({
             <dl>
               <div>
                 <dt>Medio</dt>
-                <dd>{order.paymentExpectation}</dd>
+                <dd>{paymentMethodLabel(order.paymentExpectation, paymentMethods)}</dd>
               </div>
               <div>
                 <dt>Estado</dt>

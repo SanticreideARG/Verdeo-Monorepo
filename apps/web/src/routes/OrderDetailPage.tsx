@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+
 import { Link, useParams } from 'react-router-dom';
 
 import { ActionButton } from '../components/ActionButton.js';
@@ -27,6 +28,12 @@ import {
 import { sourceLabel } from '../lib/orderColumns.js';
 import { showToast } from '../lib/toast.js';
 import { historyActor } from '../lib/orderHistory.js';
+import {
+  paymentMethodLabel,
+  paymentOptions,
+  paymentSelectValue,
+  usePaymentMethods,
+} from '../lib/paymentMethods.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { useOrderFormSettings } from '../lib/useOrderFormSettings.js';
 
@@ -60,6 +67,7 @@ async function printLabels(orderId: string): Promise<string | null> {
 export function OrderDetailPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const { id } = useParams<{ id: string }>();
+  const paymentMethods = usePaymentMethods();
   const [order, setOrder] = useState<OrderSummary | null>(null);
   const [history, setHistory] = useState<OrderStatusHistoryEntry[]>([]);
   const [revisions, setRevisions] = useState<OrderRevision[]>([]);
@@ -371,7 +379,28 @@ export function OrderDetailPage() {
               </label>
               <label className="field">
                 Medio de pago
-                <input defaultValue={order.paymentExpectation} name="paymentExpectation" required />
+                {paymentMethods.length > 0 ? (
+                  <select
+                    defaultValue={paymentSelectValue(order.paymentExpectation, paymentMethods)}
+                    name="paymentExpectation"
+                    required
+                  >
+                    {paymentOptions(
+                      paymentSelectValue(order.paymentExpectation, paymentMethods),
+                      paymentMethods,
+                    ).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    defaultValue={order.paymentExpectation}
+                    name="paymentExpectation"
+                    required
+                  />
+                )}
               </label>
               <label className="field field-wide">
                 Enlace de ubicación
@@ -516,7 +545,7 @@ export function OrderDetailPage() {
             ) : null}
             <div>
               <dt>Medio de pago</dt>
-              <dd>{order.paymentExpectation}</dd>
+              <dd>{paymentMethodLabel(order.paymentExpectation, paymentMethods)}</dd>
             </div>
             <div>
               <dt>Origen</dt>

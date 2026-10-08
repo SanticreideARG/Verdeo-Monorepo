@@ -11,6 +11,12 @@ import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus
 import { DataTable } from '../components/DataTable.js';
 import { OrderDetailDialog } from '../components/OrderDetailDialog.js';
 import { OrderImportDialog } from '../components/OrderImportDialog.js';
+import {
+  paymentMethodLabel,
+  paymentOptions,
+  paymentSelectValue,
+  usePaymentMethods,
+} from '../lib/paymentMethods.js';
 import { DraftNotice } from '../components/DraftNotice.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { ReasonDialog } from '../components/ReasonDialog.js';
@@ -40,7 +46,6 @@ import {
   orderStatusLabel,
   type CustomerSummary,
   type OrderSummary,
-  type PaymentMethod,
   type WeeklyMenu,
 } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
@@ -147,7 +152,7 @@ export function OrderIntakePage() {
   const [permissions, setPermissions] = useState<string[]>([]);
   const [menus, setMenus] = useState<WeeklyMenu[]>([]);
   const [orders, setOrders] = useState<OrderSummary[]>([]);
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const paymentMethods = usePaymentMethods();
   const [message, setMessage] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -295,14 +300,9 @@ export function OrderIntakePage() {
     if (statusFilter === PENDING_FILTER) params.set('statuses', PENDING_STATUSES);
     else if (statusFilter) params.set('status', statusFilter);
 
-    const [orderResponse, methodsResponse] = await Promise.all([
-      profile.permissions.includes('orders.read')
-        ? apiRequest(`/api/v1/orders?${params.toString()}`)
-        : null,
-      // Optional: staff without payments.read (e.g. cocina) still create orders fine — "Pago
-      // esperado" just falls back to free text for them instead of the method picker.
-      profile.permissions.includes('payments.read') ? apiRequest('/api/v1/payments/methods') : null,
-    ]);
+    const orderResponse = profile.permissions.includes('orders.read')
+      ? await apiRequest(`/api/v1/orders?${params.toString()}`)
+      : null;
     if (orderResponse?.ok) {
       const body = (await orderResponse.json()) as {
         items: OrderSummary[];
@@ -314,12 +314,7 @@ export function OrderIntakePage() {
     } else if (orderResponse) {
       setError(await describeResponse(orderResponse));
     }
-    if (methodsResponse?.ok) {
-      const active = ((await methodsResponse.json()) as { items: PaymentMethod[] }).items.filter(
-        (method) => method.active,
-      );
-      setPaymentMethods(active);
-    }
+
     loadedOnce.current = true;
     setLoading(false);
   }, [periodId, profile, search, searchParams, statusFilter]);
@@ -360,6 +355,24 @@ export function OrderIntakePage() {
 
   /** El tilde de cobrado, en la misma lista. Actualiza la fila en el lugar: recargar la lista
    * paginada devolvería al principio y perdería de vista justo la fila recién tildada. */
+  /** Cambiar el medio de pago desde la lista, sin abrir el pedido. */
+  async function changePayment(order: OrderSummary, value: string) {
+    const response = await apiRequest(`/api/v1/orders/${order.id}`, {
+      body: JSON.stringify({ paymentExpectation: value }),
+      method: 'PATCH',
+    });
+    if (!response.ok) {
+      setError(await describeResponse(response));
+      return;
+    }
+    const updated = (await response.json()) as OrderSummary;
+    setOrders((current) =>
+      current.map((row) =>
+        row.id === updated.id ? { ...row, paymentExpectation: updated.paymentExpectation } : row,
+      ),
+    );
+  }
+
   async function togglePaid(order: OrderSummary) {
     const response = await apiRequest(`/api/v1/orders/${order.id}/paid`, {
       body: JSON.stringify({ paid: !order.paidAt }),
@@ -1271,7 +1284,7 @@ export function OrderIntakePage() {
                       Seleccionar
                     </option>
                     {paymentMethods.map((method) => (
-                      <option key={method.code} value={method.code}>
+                      <option key={method.code} value={method.displayName}>
                         {method.displayName}
                       </option>
                     ))}
@@ -1482,22 +1495,46 @@ export function OrderIntakePage() {
               .map(
                 // "Cobrado" es un tilde que se puede tocar cuando hay permiso para editar.
                 (column) =>
-                  column.key === 'cobrado' && permissions.includes('orders.edit')
+                  column.key === 'pago'
                     ? {
                         ...column,
-                        render: (order: OrderSummary) => (
-                          <label className="paid-check">
-                            <input
-                              aria-label={`Marcar ${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName} como cobrado`}
-                              checked={Boolean(order.paidAt)}
-                              onChange={() => void togglePaid(order)}
-                              type="checkbox"
-                            />
-                            <span>{order.paidAt ? 'Cobrado' : 'Pendiente'}</span>
-                          </label>
-                        ),
+                        render: (order: OrderSummary) =>
+                          permissions.includes('orders.edit') && paymentMethods.length > 0 ? (
+                            <select
+                              aria-label={`Medio de pago de ${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName}`}
+                              className="inline-select"
+                              onChange={(event) => void changePayment(order, event.target.value)}
+                              value={paymentSelectValue(order.paymentExpectation, paymentMethods)}
+                            >
+                              {paymentOptions(
+                                paymentSelectValue(order.paymentExpectation, paymentMethods),
+                                paymentMethods,
+                              ).map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            paymentMethodLabel(order.paymentExpectation, paymentMethods)
+                          ),
                       }
-                    : column,
+                    : column.key === 'cobrado' && permissions.includes('orders.edit')
+                      ? {
+                          ...column,
+                          render: (order: OrderSummary) => (
+                            <label className="paid-check">
+                              <input
+                                aria-label={`Marcar ${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName} como cobrado`}
+                                checked={Boolean(order.paidAt)}
+                                onChange={() => void togglePaid(order)}
+                                type="checkbox"
+                              />
+                              <span>{order.paidAt ? 'Cobrado' : 'Pendiente'}</span>
+                            </label>
+                          ),
+                        }
+                      : column,
               )}
             empty={
               <EmptyState
@@ -1626,7 +1663,13 @@ export function OrderIntakePage() {
         />
       ) : null}
 
-      {viewing ? <OrderDetailDialog onClose={() => setViewing(null)} order={viewing} /> : null}
+      {viewing ? (
+        <OrderDetailDialog
+          onClose={() => setViewing(null)}
+          order={viewing}
+          paymentMethods={paymentMethods}
+        />
+      ) : null}
       {importOpen ? (
         <OrderImportDialog
           onClose={() => setImportOpen(false)}

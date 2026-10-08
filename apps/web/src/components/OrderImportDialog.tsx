@@ -4,6 +4,7 @@ import { apiRequest } from '../lib/api.js';
 import { formatDay } from '../lib/dates.js';
 import { errorMessage } from '../lib/operations.js';
 import { whatsappHref } from '../lib/phone.js';
+import { isParametrized, paymentSelectValue, usePaymentMethods } from '../lib/paymentMethods.js';
 import { showToast } from '../lib/toast.js';
 
 interface Candidate {
@@ -99,6 +100,15 @@ export function OrderImportDialog({
   // Las variedades que se eligieron a mano, por pedido y posición.
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [included, setIncluded] = useState<Record<number, boolean>>({});
+  const paymentMethods = usePaymentMethods();
+  /*
+   * El medio de pago de los pedidos que no lo traen.
+   *
+   * Un email del sitio no dice cómo va a pagar el cliente, y esto se guardaba como "A confirmar",
+   * que no es un medio de pago y rompía los filtros y las hojas de ruta. Se elige acá, de los
+   * parametrizados, y se puede cambiar pedido por pedido en la lista después.
+   */
+  const [payment, setPayment] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -173,9 +183,15 @@ export function OrderImportDialog({
   const selected = rows.filter((row) => included[row.rowNumber]);
   const ready = selected.filter(resolved);
   const blocking = selected.length - ready.length;
+  /** Lo que trae la planilla si es un medio parametrizado; si no, el que se eligió arriba. */
+  const paymentFor = (row: PreviewRow): string =>
+    row.paymentExpectation && isParametrized(row.paymentExpectation, paymentMethods)
+      ? paymentSelectValue(row.paymentExpectation, paymentMethods)
+      : payment;
+  const missingPayment = ready.some((row) => paymentFor(row) === '');
 
   async function confirm() {
-    if (ready.length === 0 || blocking > 0) return;
+    if (ready.length === 0 || blocking > 0 || missingPayment) return;
     setBusy(true);
     setMessage('');
     const response = await apiRequest('/api/v1/orders/import', {
@@ -194,7 +210,7 @@ export function OrderImportDialog({
             })),
             kind: row.kind,
             notes: row.notes,
-            paymentExpectation: row.paymentExpectation ?? 'A confirmar',
+            paymentExpectation: paymentFor(row),
             phone: row.phone,
             rowNumber: row.rowNumber,
           };
@@ -510,6 +526,19 @@ export function OrderImportDialog({
             )
           ) : (
             <>
+              <label className="order-import-payment">
+                <span>Medio de pago</span>
+                <select onChange={(event) => setPayment(event.target.value)} value={payment}>
+                  <option disabled value="">
+                    Elegir…
+                  </option>
+                  {paymentMethods.map((method) => (
+                    <option key={method.code} value={method.displayName}>
+                      {method.displayName}
+                    </option>
+                  ))}
+                </select>
+              </label>
               {blocking > 0 ? (
                 <span className="order-import-foot-note">
                   Elegí la variedad de{' '}
@@ -518,7 +547,7 @@ export function OrderImportDialog({
               ) : null}
               <button
                 className="button button-primary"
-                disabled={busy || ready.length === 0 || blocking > 0}
+                disabled={busy || ready.length === 0 || blocking > 0 || missingPayment}
                 onClick={() => void confirm()}
                 type="button"
               >

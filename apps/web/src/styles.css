@@ -9147,3 +9147,23 @@ textarea.sr-only {
   color: var(--db-muted);
   overflow-wrap: anywhere;
 }
+
+/* --- Medio de pago en la lista y fila que se abre con doble clic ------------------------------ */
+.inline-select {
+  max-width: 100%;
+  border: 1px solid var(--db-border);
+  border-radius: 0.5rem;
+  padding: 0.2rem 0.4rem;
+  background: var(--db-surface-solid, transparent);
+  color: inherit;
+  font: inherit;
+}
+.data-table tbody tr.is-linked {
+  cursor: pointer;
+}
+.order-import-payment {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}

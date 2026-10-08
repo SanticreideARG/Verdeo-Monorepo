@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DataTable, type DataColumn } from './DataTable.js';
@@ -114,5 +114,47 @@ describe('DataTable', () => {
     setViewport(true);
     renderTable([]);
     expect(screen.getByText('Sin datos todavía.')).toBeTruthy();
+  });
+
+  describe('doble clic en escritorio', () => {
+    const tabla = (onRowSelect: (row: Row) => void) =>
+      render(
+        <DataTable
+          caption="Pedidos"
+          columns={[
+            ...COLUMNS,
+            {
+              key: 'control',
+              label: 'Control',
+              render: () => (
+                <select aria-label="medio">
+                  <option>a</option>
+                </select>
+              ),
+            },
+          ]}
+          empty="nada"
+          onRowSelect={onRowSelect}
+          rowKey={(row) => row.variedad}
+          rows={ROWS}
+        />,
+      );
+
+    it('abre la fila con doble clic', () => {
+      setViewport(false);
+      const abrir = vi.fn();
+      tabla(abrir);
+      fireEvent.doubleClick(screen.getByText('Keto 250'));
+      expect(abrir).toHaveBeenCalledWith(ROWS[0]);
+    });
+
+    // Doble clic sobre un selector es del selector, no una orden de abrir el pedido.
+    it('no abre la fila cuando el doble clic cae sobre un control', () => {
+      setViewport(false);
+      const abrir = vi.fn();
+      tabla(abrir);
+      fireEvent.doubleClick(screen.getAllByLabelText('medio')[0] as HTMLElement);
+      expect(abrir).not.toHaveBeenCalled();
+    });
   });
 });

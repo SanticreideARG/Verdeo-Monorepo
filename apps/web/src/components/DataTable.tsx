@@ -78,8 +78,10 @@ export function DataTable<T>({
   /**
    * Qué pasa al tocar la tarjeta, en el teléfono.
    *
-   * En escritorio la fila no reacciona a propósito: con quince columnas posibles, una fila que
-   * navega convierte cualquier intento de seleccionar un texto en un accidente. En un teléfono no
+   * En escritorio la fila no reacciona a un clic a propósito: con quince columnas posibles, una
+   * fila que navega convierte cualquier intento de seleccionar un texto en un accidente. Se abre
+   * con **doble clic**, que no se hace sin querer, y no cuando cae sobre un control (selector,
+   * tilde, botón, enlace). En un teléfono no
    * se selecciona texto de una tabla, se toca — y tocar una tarjeta y que no pase nada es el
    * reflejo roto. El disparador se dibuja por encima de la tarjeta pero por debajo de los botones,
    * así que las acciones siguen siendo acciones.
@@ -257,7 +259,26 @@ export function DataTable<T>({
         </thead>
         <tbody>
           {sorted.map((row) => (
-            <tr data-tone={rowTone?.(row)} key={rowKey(row)}>
+            <tr
+              className={onRowSelect ? 'is-linked' : undefined}
+              data-tone={rowTone?.(row)}
+              key={rowKey(row)}
+              onDoubleClick={
+                onRowSelect
+                  ? (event) => {
+                      // Doble clic sobre un control (un selector, un tilde, un botón) es del
+                      // control, no una orden de abrir la fila.
+                      if (
+                        (event.target as HTMLElement).closest(
+                          'a, button, input, label, select, textarea',
+                        )
+                      )
+                        return;
+                      onRowSelect(row);
+                    }
+                  : undefined
+              }
+            >
               {columns.map((column) => (
                 <td className={column.emphasis ? 'is-emphasis' : undefined} key={column.key}>
                   {column.render(row)}

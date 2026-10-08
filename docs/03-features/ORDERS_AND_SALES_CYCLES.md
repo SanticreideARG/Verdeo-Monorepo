@@ -70,6 +70,21 @@ No se requiere una segunda confirmación después de enviar el resumen. El mensa
 - día de entrega;
 - consulta/confirmación de disponibilidad.
 
+## Medio de pago
+
+El medio de pago es siempre uno de los **parametrizados** (Panel de control → Medios de pago).
+
+- Se elige de una lista en el alta, en la edición del pedido y **directamente en la columna
+  "Medio de pago" de la lista de pedidos** (con `orders.edit`), sin abrir el pedido.
+- Se guarda el **nombre** parametrizado, igual que la web pública. El alta del equipo guardaba el
+  código y la importación de emails "A confirmar"; al leer se reconcilian código y nombre, y un
+  valor que no es parametrizado se muestra tal cual y se marca "(sin parametrizar)" en el
+  selector, para corregirlo sin que guardar por otro motivo lo cambie solo.
+- **Importar emails/planilla**: el medio se elige en el pie del diálogo (una vez para todos). Si
+  la planilla trae un medio que coincide con uno parametrizado, se respeta ese.
+- **Doble clic** sobre una fila (escritorio) abre la ficha del pedido en un modal; en el teléfono,
+  tocar la tarjeta. El doble clic sobre un selector, tilde o botón de la fila no abre nada.
+
 ## Edición
 
 Pedidos editables por conveniencia operativa. Toda modificación queda en log.
