@@ -183,9 +183,9 @@ export function AddressSettingsPage() {
                 value={settings.radiusKm}
               />
               <small className="text-ink-muted">
-                Un punto más lejos que esto nunca se acepta solo, por más seguro que parezca. Se mide
-                desde el origen de la ciudad; si no tiene, desde el centro de las direcciones ya
-                confirmadas (la primera hay que confirmarla a mano).
+                Un punto más lejos que esto nunca se acepta solo, por más seguro que parezca. Se
+                mide desde el origen de la ciudad; si no tiene, desde el centro de las direcciones
+                ya confirmadas (la primera hay que confirmarla a mano).
               </small>
             </label>
 

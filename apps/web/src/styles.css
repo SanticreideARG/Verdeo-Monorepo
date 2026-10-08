@@ -8151,6 +8151,15 @@ textarea.sr-only {
   font-weight: 700;
   white-space: nowrap;
 }
+/*
+ * `.order-detail-body` también es la clase del cuerpo de la PÁGINA del pedido, que a partir de
+ * 900 px reparte datos y mapa en dos columnas. El modal usa la misma clase, así que heredaba ese
+ * reparto dentro de 34 rem: la columna de datos quedaba aplastada, las letras se apilaban una
+ * debajo de otra y el cuerpo se volvía larguísimo. Dentro del modal siempre es una sola columna.
+ */
+.modal-panel.order-detail .order-detail-body {
+  grid-template-columns: minmax(0, 1fr);
+}
 .order-detail-body {
   display: grid;
   gap: 1.1rem;
@@ -9157,9 +9166,6 @@ textarea.sr-only {
   background: var(--db-surface-solid, transparent);
   color: inherit;
   font: inherit;
-}
-.data-table tbody tr.is-linked {
-  cursor: pointer;
 }
 .order-import-payment {
   display: inline-flex;

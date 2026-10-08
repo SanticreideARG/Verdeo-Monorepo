@@ -260,7 +260,6 @@ export function DataTable<T>({
         <tbody>
           {sorted.map((row) => (
             <tr
-              className={onRowSelect ? 'is-linked' : undefined}
               data-tone={rowTone?.(row)}
               key={rowKey(row)}
               onDoubleClick={
