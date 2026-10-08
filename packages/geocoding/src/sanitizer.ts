@@ -128,7 +128,9 @@ export class SanitizingGeocodingProvider implements GeocodingProvider {
   }
 
   public async geocode(input: GeocodingInput): Promise<readonly GeocodingCandidate[]> {
-    if (input.locationUrl || !this.normalizer) return this.base.geocode(input);
+    if (input.locationUrl || !this.normalizer || input.normalize === false) {
+      return this.base.geocode(input);
+    }
 
     let normalized: NormalizedAddress | null = null;
     try {

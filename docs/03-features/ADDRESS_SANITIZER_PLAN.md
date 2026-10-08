@@ -1,6 +1,6 @@
 # Sanitizador de direcciones (plan)
 
-Estado: **fases 1 y 2 construidas** (ver "Como quedó" al final); la 3 (lote configurable por ciudad) y la 4 (al importar, métricas) siguen pendientes. Pedido: convertir las direcciones escritas a mano en ubicaciones
+Estado: **las cuatro fases construidas** (ver "Como quedó" y "Fases 3 y 4" al final).
 usables, con la API de Gemini y otros procedimientos configurables, desde el detalle del pedido o
 del cliente, **antes de armar la hoja de ruta**.
 
@@ -14,16 +14,16 @@ entrega. Las direcciones que entran por email o planilla llegan como texto crudo
 
 ## Lo que ya existe (y se reutiliza)
 
-| Pieza                                                                          | Dónde                                                          |
-| ------------------------------------------------------------------------------ | -------------------------------------------------------------- |
-| Interfaz `GeocodingProvider` + Google Maps + lectura de enlaces de Maps       | `packages/geocoding`                                           |
+| Pieza                                                                         | Dónde                                                                                               |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Interfaz `GeocodingProvider` + Google Maps + lectura de enlaces de Maps       | `packages/geocoding`                                                                                |
 | Solicitudes y **candidatos** con confianza 0–1, confirmar / rechazar          | tablas `geocoding_requests` / `geocoding_candidates`, API `/customers/:id/addresses/:id/geocoding…` |
-| Botón "Buscar ubicación" y confirmación en la ficha del cliente               | `CustomersPage.tsx`                                            |
-| Clave de mapas cifrada y activable                                             | Panel de control → IA y plantillas                             |
-| Proveedores de IA (Gemini por su endpoint compatible con OpenAI), tareas, log | `packages/ai`, `ai_provider_configs`, `ai_task_executions`     |
+| Botón "Buscar ubicación" y confirmación en la ficha del cliente               | `CustomersPage.tsx`                                                                                 |
+| Clave de mapas cifrada y activable                                            | Panel de control → IA y plantillas                                                                  |
+| Proveedores de IA (Gemini por su endpoint compatible con OpenAI), tareas, log | `packages/ai`, `ai_provider_configs`, `ai_task_executions`                                          |
 
-**No se construye un geocodificador nuevo.** Se agrega una capa de *limpieza* antes y un orden de
-*procedimientos* después, sobre el flujo de candidatos que ya existe.
+**No se construye un geocodificador nuevo.** Se agrega una capa de _limpieza_ antes y un orden de
+_procedimientos_ después, sobre el flujo de candidatos que ya existe.
 
 ## Idea central: dos etapas
 
@@ -53,13 +53,13 @@ Un orden de intentos por ciudad, que se corta en el primero que resuelve con con
 Configurable desde Panel de control (nueva pestaña **Direcciones**, permiso `geography.manage` o el
 de ajustes de reparto): qué pasos están activos y en qué orden, el **umbral de confianza** para
 aceptar sola, el **país y la ciudad por defecto** que se le dan de contexto, y el proveedor/modelo de
-IA. El mecanismo es una lista ordenada de *estrategias* con la misma forma que `GeocodingProvider`,
+IA. El mecanismo es una lista ordenada de _estrategias_ con la misma forma que `GeocodingProvider`,
 así que sumar un procedimiento (otro geocodificador, un servicio municipal) es una clase y una línea.
 
 ## Reglas de seguridad de la ubicación
 
 - **Auto-aceptar sólo con confianza alta** (por defecto ≥ 0,9 y resultado tipo `ROOFTOP`/interpolado)
-  **y dentro del radio de la ciudad** del pedido. Lo demás queda como *candidato para revisar*.
+  **y dentro del radio de la ciudad** del pedido. Lo demás queda como _candidato para revisar_.
 - **Nunca se pisa una ubicación confirmada a mano.** El sanitizador sólo actúa sobre
   `NEEDS_LOCATION` o cuando se lo pide explícitamente.
 - **Chequeo de plausibilidad**: si las coordenadas caen fuera del área de la ciudad (con un margen),
@@ -75,7 +75,7 @@ así que sumar un procedimiento (otro geocodificador, un servicio municipal) es 
    mano**. Es el flujo de la ficha del cliente, llevado al pedido.
 2. **Ficha del cliente** — el botón de ahora gana el paso de limpieza, y suma "Normalizar" sin
    geocodificar.
-3. **Antes de la hoja de ruta** *(lo más valioso)* — en la pantalla de rutas, un **control previo**:
+3. **Antes de la hoja de ruta** _(lo más valioso)_ — en la pantalla de rutas, un **control previo**:
    "De 38 pedidos del día, 31 con ubicación, **7 sin**" con la lista y un botón **"Ubicar los 7"**
    que corre el procedimiento en lote y deja el resto para revisar. Crear la ruta con pedidos sin
    ubicación pasa a **avisar y listar** cuáles quedan afuera, en vez de omitirlos callado.
@@ -105,12 +105,12 @@ commit que cada parte.
 
 ## Fases
 
-| Fase | Contenido                                                                                       | Valor                                      |
-| ---- | ----------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| 1    | Control previo en rutas (conteo + lista de pedidos sin ubicación) y aviso al crear la ruta     | Corta el problema de las paradas perdidas  |
-| 2    | `GeocodingPipeline` + normalizador Gemini + botón "Ubicar" en el pedido y el cliente           | El sanitizador en sí                       |
-| 3    | Lote "Ubicar los N" + configuración por ciudad (orden, umbral, contexto)                        | Escala y control del equipo                |
-| 4    | Ubicar al importar; métricas (tasa de acierto, costo de IA, rechazados)                         | Pulido                                     |
+| Fase | Contenido                                                                                  | Valor                                     |
+| ---- | ------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| 1    | Control previo en rutas (conteo + lista de pedidos sin ubicación) y aviso al crear la ruta | Corta el problema de las paradas perdidas |
+| 2    | `GeocodingPipeline` + normalizador Gemini + botón "Ubicar" en el pedido y el cliente       | El sanitizador en sí                      |
+| 3    | Lote "Ubicar los N" + configuración por ciudad (orden, umbral, contexto)                   | Escala y control del equipo               |
+| 4    | Ubicar al importar; métricas (tasa de acierto, costo de IA, rechazados)                    | Pulido                                    |
 
 La fase 1 no depende de la IA ni de la clave de Gemini y se puede hacer primero.
 
@@ -156,3 +156,24 @@ La fase 1 no depende de la IA ni de la clave de Gemini y se puede hacer primero.
   que ya tiene coordenadas.
 - Los botones de la ficha del cliente también se benefician: el proveedor envuelto ordena el
   texto antes de buscar, y la ciudad del domicilio orienta al normalizador.
+
+## Fases 3 y 4
+
+- **Ajustes por ciudad** (Panel de control → Direcciones, `site_geocoding_settings`, migración
+  0054): ordenar el texto con IA sí/no, aceptar sola sí/no, seguridad mínima (50–100 %, por
+  defecto 90), radio máximo desde el origen (por defecto 60 km) y una referencia de la ciudad
+  ("Cipolletti, Río Negro, Argentina") que orienta la búsqueda. Ver exige `sites.read`; cambiar,
+  `sites.manage`. Cada cambio queda en la auditoría con el antes y el después. Sin fila guardada
+  valen los valores por defecto.
+- **Sobre el "orden de procedimientos" del plan.** Se implementó como interruptores (IA sí/no,
+  aceptar sola sí/no) y no como una lista que se reordena: hoy hay un solo geocodificador, y
+  reordenar pasos que no existen sería configuración sin efecto. El orden fijo es enlace de
+  ubicación → coordenadas ya conocidas → IA + mapa → mapa solo. Si se suma otro geocodificador,
+  la lista ordenable pasa a tener sentido.
+- **Ubicar al importar.** El diálogo de importar pedidos trae la casilla "Ubicar las direcciones"
+  (encendida por defecto): al terminar, ubica los pedidos recién creados de a 5 y avisa cuántos
+  quedaron con ubicación y cuántos para revisar. La importación devuelve los ids creados.
+- **Métricas** en la misma pantalla, por período (7/30/90 días): solicitudes de ubicación de la
+  ciudad (confirmadas con su porcentaje, esperando revisión, no encontradas, con error) y lo que
+  usó la IA (llamadas, fallidas, tokens, demora media; esto último es de todo el sistema). Sirve
+  para calibrar el umbral con datos.

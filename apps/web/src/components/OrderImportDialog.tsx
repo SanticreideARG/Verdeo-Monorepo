@@ -109,6 +109,13 @@ export function OrderImportDialog({
    * parametrizados, y se puede cambiar pedido por pedido en la lista después.
    */
   const [payment, setPayment] = useState('');
+  /*
+   * Ubicar las direcciones apenas se importa, para que los pedidos lleguen listos para la hoja de
+   * ruta: un pedido de email trae la dirección como texto, sin ubicación, y quedaba afuera de la
+   * ruta sin aviso. Encendido por defecto; si no hay claves configuradas simplemente no encuentra
+   * nada y los pedidos quedan como estaban.
+   */
+  const [locateAfter, setLocateAfter] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -227,8 +234,35 @@ export function OrderImportDialog({
     const payload = (await response.json()) as {
       created: number;
       failed: { reason: string; rowNumber: number }[];
+      orderIds?: string[];
     };
     onImported();
+    let locateNote = '';
+    if (locateAfter && (payload.orderIds?.length ?? 0) > 0) {
+      setBusy(true);
+      setMessage('Ubicando las direcciones…');
+      let located = 0;
+      let toReview = 0;
+      const ids = payload.orderIds ?? [];
+      for (let start = 0; start < ids.length; start += 5) {
+        const located5 = await apiRequest('/api/v1/orders/locate', {
+          body: JSON.stringify({ orderIds: ids.slice(start, start + 5) }),
+          method: 'POST',
+          notify: false,
+        });
+        if (!located5.ok) break;
+        for (const result of ((await located5.json()) as { results: { status: string }[] })
+          .results) {
+          if (result.status === 'located' || result.status === 'already_located') located += 1;
+          else toReview += 1;
+        }
+      }
+      setBusy(false);
+      locateNote =
+        toReview > 0
+          ? ` ${String(located)} con ubicación; ${String(toReview)} para revisar desde Rutas o el pedido.`
+          : ` ${String(located)} con ubicación.`;
+    }
     if (payload.failed.length > 0) {
       /*
        * Las que entraron ya están. El modal se queda abierto con el detalle de las que no, porque
@@ -244,7 +278,7 @@ export function OrderImportDialog({
     showToast(
       `${String(payload.created)} pedido${payload.created === 1 ? '' : 's'} importado${
         payload.created === 1 ? '' : 's'
-      } como borrador.`,
+      } como borrador.${locateNote}`,
     );
     onClose();
   }
@@ -526,6 +560,14 @@ export function OrderImportDialog({
             )
           ) : (
             <>
+              <label className="order-import-payment">
+                <input
+                  checked={locateAfter}
+                  onChange={(event) => setLocateAfter(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>Ubicar las direcciones</span>
+              </label>
               <label className="order-import-payment">
                 <span>Medio de pago</span>
                 <select onChange={(event) => setPayment(event.target.value)} value={payment}>

@@ -791,3 +791,27 @@ export const calendarReminders = pgTable(
     check('calendar_reminders_scope_check', sql`${table.scope} in ('personal', 'general')`),
   ],
 );
+
+/**
+ * Cómo se ubican las direcciones en cada ciudad.
+ *
+ * Una fila por ciudad; sin fila valen los valores por defecto (los de las columnas). Es
+ * configuración de la ciudad y no del sistema porque lo que es "dentro de la ciudad" y cuánta
+ * confianza se le pide a un resultado cambia con el lugar: CABA es compacta y el Alto Valle no.
+ */
+export const siteGeocodingSettings = pgTable('site_geocoding_settings', {
+  operatingSiteId: uuid('operating_site_id')
+    .primaryKey()
+    .references(() => operatingSites.id, { onDelete: 'cascade' }),
+  // Aceptar sola una ubicación segura, o dejar todo para revisar a mano.
+  autoAccept: boolean('auto_accept').default(true).notNull(),
+  // Confianza mínima (en %) para aceptar sola.
+  confidenceThresholdPercent: integer('confidence_threshold_percent').default(90).notNull(),
+  // Orienta al normalizador y al buscador: "Cipolletti, Río Negro, Argentina".
+  cityContext: text('city_context'),
+  // Radio máximo desde el origen de la ciudad para aceptar sola.
+  radiusKm: integer('radius_km').default(60).notNull(),
+  // Ordenar el texto con IA antes de buscarlo. Apagado: se busca el texto tal cual.
+  useAi: boolean('use_ai').default(true).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});

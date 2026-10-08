@@ -153,6 +153,8 @@ import {
   OrderDeleteResponseSchema,
   OrderImportConfirmRequestSchema,
   OrderImportEmailPreviewRequestSchema,
+  GeocodingMetricsSchema,
+  GeocodingSettingsSchema,
   OrderImportConfirmResponseSchema,
   OrderImportPreviewResponseSchema,
   OrderSchema,
@@ -288,6 +290,7 @@ import {
   type UserPermissionOverridesUpdateRequest,
   SystemStatusResponseSchema,
   SystemTableMapResponseSchema,
+  type GeocodingSettings,
 } from '@verdeo/contracts';
 import { createRequestId, type Logger } from '@verdeo/observability';
 
@@ -547,6 +550,13 @@ interface OperationsEngine {
     requestId: string | null;
     status: string;
   }>;
+  getGeocodingSettings(operatingSiteId: string): Promise<GeocodingSettings>;
+  updateGeocodingSettings(
+    operatingSiteId: string,
+    input: GeocodingSettings,
+    context: OperationsContext,
+  ): Promise<GeocodingSettings>;
+  geocodingMetrics(operatingSiteId: string, days: number): Promise<unknown>;
   /** Los pedidos de un día que no entran en una hoja de ruta por no tener ubicación. */
   unlocatedOrders(
     operatingSiteId: string,
@@ -2455,6 +2465,7 @@ export function createApp(options: CreateAppOptions) {
    * ámbito, y pedirlo para todas ataría el módulo entero al servicio de geografía.
    */
   app.use('/api/v1/delivery/routable-dates', requireAuthentication, resolveScopeSelection);
+  app.use('/api/v1/geocoding/*', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/delivery/unlocated', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/delivery/locate-missing', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/delivery/*', requireAuthentication);
@@ -3694,6 +3705,7 @@ export function createApp(options: CreateAppOptions) {
 
     const failed: { reason: string; rowNumber: number }[] = [];
     let created = 0;
+    const orderIds: string[] = [];
     for (const row of input.data.rows) {
       try {
         let customerId = row.customerId;
@@ -3717,7 +3729,7 @@ export function createApp(options: CreateAppOptions) {
           customerId = customer.id;
           for (const clave of clavesDe(row)) creadosEnLaTanda.set(clave, customerId);
         }
-        await operations.createOrder(
+        const createdOrder = await operations.createOrder(
           {
             customerId,
             deliveryAddress: row.deliveryAddress ?? '',
@@ -3744,6 +3756,8 @@ export function createApp(options: CreateAppOptions) {
           } as never,
           operationsContext(context),
         );
+        const createdId = (createdOrder as { id?: unknown } | null)?.id;
+        if (typeof createdId === 'string') orderIds.push(createdId);
         created += 1;
       } catch (error) {
         failed.push({
@@ -3753,7 +3767,7 @@ export function createApp(options: CreateAppOptions) {
       }
     }
     return context.json(
-      OrderImportConfirmResponseSchema.parse({ created, failed }),
+      OrderImportConfirmResponseSchema.parse({ created, failed, orderIds }),
       created > 0 ? 201 : 200,
     );
   });
@@ -4458,6 +4472,82 @@ export function createApp(options: CreateAppOptions) {
       }
     }
     return context.json({ remaining: pending.length - batch.length, results });
+  });
+
+  /*
+   * Ajustes de ubicación de direcciones de la ciudad elegida arriba (umbral, radio, IA, aceptar
+   * sola). Hace falta una ciudad: son de cada ciudad, no globales.
+   */
+  app.get('/api/v1/geocoding/settings', async (context) => {
+    if (!context.get('session').permissions.includes('sites.read')) return forbidden(context);
+    const operatingSiteId = context.get('scope')?.operatingSiteId;
+    if (!operatingSiteId) return badRequest(context, 'Elegí una ciudad para ver sus ajustes.');
+    return context.json(
+      GeocodingSettingsSchema.parse(
+        await requireOperations().getGeocodingSettings(operatingSiteId),
+      ),
+    );
+  });
+
+  app.put('/api/v1/geocoding/settings', async (context) => {
+    if (!context.get('session').permissions.includes('sites.manage')) return forbidden(context);
+    const operatingSiteId = context.get('scope')?.operatingSiteId;
+    if (!operatingSiteId) return badRequest(context, 'Elegí una ciudad para guardar sus ajustes.');
+    const input = GeocodingSettingsSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success) return badRequest(context, 'Revisá los ajustes.', input.error.issues);
+    const saved = await requireOperations().updateGeocodingSettings(
+      operatingSiteId,
+      input.data,
+      operationsContext(context),
+    );
+    return context.json(GeocodingSettingsSchema.parse(saved));
+  });
+
+  app.get('/api/v1/geocoding/metrics', async (context) => {
+    if (!context.get('session').permissions.includes('sites.read')) return forbidden(context);
+    const operatingSiteId = context.get('scope')?.operatingSiteId;
+    if (!operatingSiteId) return badRequest(context, 'Elegí una ciudad para ver sus métricas.');
+    const days = z.coerce.number().int().min(1).max(365).catch(30).parse(context.req.query('days'));
+    return context.json(
+      GeocodingMetricsSchema.parse(
+        await requireOperations().geocodingMetrics(operatingSiteId, days),
+      ),
+    );
+  });
+
+  /*
+   * Ubica una lista corta de pedidos puntuales: los que acaban de importarse. El diálogo de
+   * importación lo llama de a 5, como `locate-missing` por fecha.
+   */
+  app.post('/api/v1/orders/locate', async (context) => {
+    if (!context.get('session').permissions.includes('orders.edit')) return forbidden(context);
+    const input = z
+      .object({ orderIds: z.array(z.uuid()).min(1).max(5) })
+      .safeParse(await context.req.json().catch(() => null));
+    if (!input.success) return badRequest(context, 'Revisá los pedidos a ubicar.');
+    const operations = requireOperations();
+    const results: { orderId: string; reason?: string; status: string }[] = [];
+    for (const orderId of input.data.orderIds) {
+      try {
+        const result = await operations.locateOrderAddress(
+          orderId,
+          LOCATE_RULES,
+          operationsContext(context),
+        );
+        results.push({
+          orderId,
+          ...(result.reason ? { reason: result.reason } : {}),
+          status: result.status,
+        });
+      } catch (error) {
+        results.push({
+          orderId,
+          reason: error instanceof Error ? error.message : 'Falló al ubicar.',
+          status: 'failed',
+        });
+      }
+    }
+    return context.json({ results });
   });
 
   app.post('/api/v1/delivery/routes', async (context) => {

@@ -470,5 +470,9 @@ Plan completo en `docs/03-features/ADDRESS_SANITIZER_PLAN.md`.
       ubicarlos. Antes quedaban afuera de la ruta sin avisar.
 - [x] Fase 2: normalizador con IA (texto estructurado, nunca coordenadas) + geocodificador, con
       botón "Ubicar" en el detalle del pedido y creación del domicilio a partir del pedido.
-- [ ] Fase 3: ubicar en lote y configurar por ciudad el orden de procedimientos y el umbral.
-- [ ] Fase 4: ubicar al importar pedidos; métricas de acierto y costo.
+- [x] Fase 3: ubicar en lote (ya desde la fase 1) y ajustes por ciudad: IA sí/no, aceptar sola,
+      umbral, radio y referencia de la ciudad. El orden de procedimientos no es reordenable (hay un
+      solo geocodificador).
+- [x] Fase 4: ubicar al importar pedidos; métricas de acierto y de uso de la IA.
+- [ ] Un segundo geocodificador (OpenStreetMap u otro) para que el orden de procedimientos sea
+      configurable de verdad; medirlo antes con direcciones reales.

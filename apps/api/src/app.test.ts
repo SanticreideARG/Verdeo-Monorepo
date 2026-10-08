@@ -109,6 +109,9 @@ const customerOperationsStubs = {
   writeOffSurplus: vi.fn(),
   locateOrderAddress: vi.fn(),
   unlocatedOrders: vi.fn(),
+  getGeocodingSettings: vi.fn(),
+  updateGeocodingSettings: vi.fn(),
+  geocodingMetrics: vi.fn(),
 };
 const sampleMenu = {
   cycle: {
@@ -1714,6 +1717,89 @@ describe('API foundation', () => {
         status: 'located',
       };
 
+      describe('ajustes de la ciudad', () => {
+        const ajustes = {
+          autoAccept: true,
+          cityContext: 'Villa Crespo, CABA, Argentina',
+          confidenceThresholdPercent: 90,
+          radiusKm: 60,
+          useAi: true,
+        };
+        const headers = { cookie, [SITE_SCOPE_HEADER]: SEDE };
+
+        it('lee los ajustes con sites.read y guarda con sites.manage', async () => {
+          const updateGeocodingSettings = vi.fn(() => Promise.resolve(ajustes));
+          const getGeocodingSettings = vi.fn(() => Promise.resolve(ajustes));
+          const lectura = await buildApp({ getGeocodingSettings }, ['sites.read']).request(
+            '/api/v1/geocoding/settings',
+            { headers },
+          );
+          expect(lectura.status).toBe(200);
+          expect(getGeocodingSettings).toHaveBeenCalledWith(SEDE);
+
+          const guardado = await buildApp({ updateGeocodingSettings }, ['sites.manage']).request(
+            '/api/v1/geocoding/settings',
+            {
+              body: JSON.stringify(ajustes),
+              headers: { ...headers, 'content-type': 'application/json' },
+              method: 'PUT',
+            },
+          );
+          expect(guardado.status).toBe(200);
+          expect(updateGeocodingSettings).toHaveBeenCalledWith(SEDE, ajustes, expect.anything());
+        });
+
+        it('no deja guardar sin permiso de administrar ni con valores fuera de rango', async () => {
+          const sinPermiso = await buildApp({ updateGeocodingSettings: vi.fn() }, [
+            'sites.read',
+          ]).request('/api/v1/geocoding/settings', {
+            body: JSON.stringify(ajustes),
+            headers: { ...headers, 'content-type': 'application/json' },
+            method: 'PUT',
+          });
+          expect(sinPermiso.status).toBe(403);
+
+          // Un umbral de 10 % aceptaría solas direcciones que el mapa casi no reconoce.
+          const fueraDeRango = await buildApp({ updateGeocodingSettings: vi.fn() }, [
+            'sites.manage',
+          ]).request('/api/v1/geocoding/settings', {
+            body: JSON.stringify({ ...ajustes, confidenceThresholdPercent: 10 }),
+            headers: { ...headers, 'content-type': 'application/json' },
+            method: 'PUT',
+          });
+          expect(fueraDeRango.status).toBe(400);
+        });
+
+        it('devuelve las métricas de los últimos días pedidos', async () => {
+          const geocodingMetrics = vi.fn(() =>
+            Promise.resolve({
+              ai: { averageLatencyMs: 800, calls: 3, failed: 0, inputTokens: 90, outputTokens: 60 },
+              days: 7,
+              requests: { confirmed: 2, failed: 0, noMatch: 1, pending: 0, total: 3 },
+            }),
+          );
+          const response = await buildApp({ geocodingMetrics }, ['sites.read']).request(
+            '/api/v1/geocoding/metrics?days=7',
+            { headers },
+          );
+          expect(response.status).toBe(200);
+          expect(geocodingMetrics).toHaveBeenCalledWith(SEDE, 7);
+        });
+      });
+
+      it('ubica una lista corta de pedidos y rechaza más de cinco', async () => {
+        const locateOrderAddress = vi.fn(() => Promise.resolve(ubicado));
+        const app = buildApp({ locateOrderAddress }, ['orders.edit']);
+        const pedir = (orderIds: string[]) =>
+          app.request('/api/v1/orders/locate', {
+            body: JSON.stringify({ orderIds }),
+            headers: { cookie, 'content-type': 'application/json', [SITE_SCOPE_HEADER]: SEDE },
+            method: 'POST',
+          });
+        expect((await pedir([ORDEN])).status).toBe(200);
+        expect(locateOrderAddress).toHaveBeenCalledTimes(1);
+        expect((await pedir(Array(6).fill(ORDEN))).status).toBe(400);
+      });
       it('ubica el pedido con orders.edit y lo niega sin el permiso', async () => {
         const locateOrderAddress = vi.fn(() => Promise.resolve(ubicado));
         const ok = await buildApp({ locateOrderAddress }, ['orders.edit']).request(

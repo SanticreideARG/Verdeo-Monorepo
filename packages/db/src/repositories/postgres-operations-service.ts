@@ -67,6 +67,7 @@ import {
   deliveryStops,
   domainEvents,
   geocodingCandidates,
+  aiExecutions,
   geographicZones,
   geocodingRequests,
   labelBackgrounds,
@@ -75,6 +76,7 @@ import {
   messageTemplates,
   operatingSiteOrderCounters,
   operatingSites,
+  siteGeocodingSettings,
   orderDietaryInstructions,
   orderItemSelections,
   orderItems,
@@ -1867,12 +1869,18 @@ export class PostgresOperationsService {
       return this.loadAddressGeocodingRequest(customerId, addressId, initialized.requestId);
     }
 
+    const geocodingSettings = await this.geocodingSettingsForZone(
+      initialized.address.geographicZoneId,
+    );
     let candidates: ReturnType<typeof validateGeocodingCandidates>;
     try {
       candidates = validateGeocodingCandidates(
         await this.geocodingProvider.geocode({
           idempotencyKey: input.idempotencyKey,
-          ...(initialized.address.city ? { cityHint: initialized.address.city } : {}),
+          normalize: geocodingSettings.useAi,
+          ...((geocodingSettings.cityContext ?? initialized.address.city)
+            ? { cityHint: geocodingSettings.cityContext ?? initialized.address.city ?? undefined }
+            : {}),
           ...(initialized.address.locationUrl
             ? { locationUrl: initialized.address.locationUrl }
             : {}),
@@ -2459,6 +2467,17 @@ export class PostgresOperationsService {
       };
     }
 
+    const stored = await this.storedGeocodingSettings(order.operatingSiteId);
+    if (stored && !stored.autoAccept) {
+      return {
+        addressId,
+        candidates: summary,
+        customerId: order.customerId,
+        reason: 'La ciudad está configurada para revisar todas las ubicaciones a mano.',
+        requestId: request.id,
+        status: 'review',
+      };
+    }
     const decision = decideAutoAccept(
       request.candidates.map((candidate) => ({
         confidence: candidate.confidence,
@@ -2472,8 +2491,8 @@ export class PostgresOperationsService {
           order.originLatitude !== null && order.originLongitude !== null
             ? { latitude: Number(order.originLatitude), longitude: Number(order.originLongitude) }
             : null,
-        radiusKm: rules.radiusKm,
-        threshold: rules.threshold,
+        radiusKm: stored?.radiusKm ?? rules.radiusKm,
+        threshold: stored ? stored.confidenceThresholdPercent / 100 : rules.threshold,
       },
     );
     if (!decision.accept) {
@@ -2511,6 +2530,128 @@ export class PostgresOperationsService {
     };
   }
 
+  /** Los ajustes guardados de la ciudad, o null si nunca se tocaron (valen los de por defecto). */
+  private async storedGeocodingSettings(operatingSiteId: string) {
+    const [row] = await this.database
+      .select()
+      .from(siteGeocodingSettings)
+      .where(eq(siteGeocodingSettings.operatingSiteId, operatingSiteId))
+      .limit(1);
+    return row ?? null;
+  }
+
+  private async geocodingSettingsForZone(zoneId: string) {
+    const [zone] = await this.database
+      .select({ operatingSiteId: geographicZones.operatingSiteId })
+      .from(geographicZones)
+      .where(eq(geographicZones.id, zoneId))
+      .limit(1);
+    const stored = zone ? await this.storedGeocodingSettings(zone.operatingSiteId) : null;
+    return { cityContext: stored?.cityContext ?? null, useAi: stored?.useAi ?? true };
+  }
+
+  public async getGeocodingSettings(operatingSiteId: string) {
+    const stored = await this.storedGeocodingSettings(operatingSiteId);
+    return {
+      autoAccept: stored?.autoAccept ?? true,
+      cityContext: stored?.cityContext ?? null,
+      confidenceThresholdPercent: stored?.confidenceThresholdPercent ?? 90,
+      radiusKm: stored?.radiusKm ?? 60,
+      useAi: stored?.useAi ?? true,
+    };
+  }
+
+  public async updateGeocodingSettings(
+    operatingSiteId: string,
+    input: {
+      autoAccept: boolean;
+      cityContext: string | null;
+      confidenceThresholdPercent: number;
+      radiusKm: number;
+      useAi: boolean;
+    },
+    context: OperationsContext,
+  ) {
+    const before = await this.getGeocodingSettings(operatingSiteId);
+    const cityContext = input.cityContext?.trim() ? input.cityContext.trim() : null;
+    await this.database
+      .insert(siteGeocodingSettings)
+      .values({ ...input, cityContext, operatingSiteId })
+      .onConflictDoUpdate({
+        set: { ...input, cityContext, updatedAt: new Date() },
+        target: siteGeocodingSettings.operatingSiteId,
+      });
+    const audit = new AuditService(new PostgresAuditSink(this.database));
+    await audit.record({
+      action: 'geocoding.settings_updated',
+      actor: auditActor(context),
+      after: { ...input, cityContext },
+      before,
+      correlationId: context.correlationId,
+      entityId: operatingSiteId,
+      entityType: 'operating_site',
+      requestId: context.requestId,
+      source: context.source,
+    });
+    return this.getGeocodingSettings(operatingSiteId);
+  }
+
+  /**
+   * Cómo le fue a la ubicación de direcciones en los últimos días, para ajustar el umbral con datos
+   * y no a ojo: cuántas solicitudes terminaron confirmadas, cuántas no encontraron nada, y lo que
+   * gastó la IA (llamadas, tokens y demora). La IA se cuenta de todo el sistema, no por ciudad.
+   */
+  public async geocodingMetrics(operatingSiteId: string, days: number) {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const byStatus = await this.database
+      .select({ count: sql<number>`count(*)::int`, status: geocodingRequests.status })
+      .from(geocodingRequests)
+      .innerJoin(customerAddresses, eq(customerAddresses.id, geocodingRequests.addressId))
+      .innerJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
+      .where(
+        and(
+          eq(geographicZones.operatingSiteId, operatingSiteId),
+          gte(geocodingRequests.createdAt, since),
+        ),
+      )
+      .groupBy(geocodingRequests.status);
+    const count = (...statuses: string[]) =>
+      byStatus
+        .filter((row) => statuses.includes(row.status))
+        .reduce((total, row) => total + row.count, 0);
+    const [ai] = await this.database
+      .select({
+        averageLatencyMs: sql<number | null>`avg(${aiExecutions.latencyMs})::float`,
+        calls: sql<number>`count(*)::int`,
+        failed: sql<number>`count(*) filter (where ${aiExecutions.status} = 'error')::int`,
+        inputTokens: sql<number>`coalesce(sum(${aiExecutions.inputTokens}), 0)::int`,
+        outputTokens: sql<number>`coalesce(sum(${aiExecutions.outputTokens}), 0)::int`,
+      })
+      .from(aiExecutions)
+      .where(
+        and(eq(aiExecutions.taskKey, 'normalize_address'), gte(aiExecutions.createdAt, since)),
+      );
+    return {
+      ai: {
+        averageLatencyMs:
+          ai?.averageLatencyMs === null || ai === undefined
+            ? null
+            : Math.round(ai.averageLatencyMs ?? 0),
+        calls: ai?.calls ?? 0,
+        failed: ai?.failed ?? 0,
+        inputTokens: ai?.inputTokens ?? 0,
+        outputTokens: ai?.outputTokens ?? 0,
+      },
+      days,
+      requests: {
+        confirmed: count('CONFIRMED'),
+        failed: count('FAILED'),
+        noMatch: count('NO_MATCH'),
+        pending: count('CANDIDATES', 'PENDING'),
+        total: byStatus.reduce((total, row) => total + row.count, 0),
+      },
+    };
+  }
   /** La única zona activa de una ciudad, o null si hay más de una (o ninguna). */
   private async soleActiveZone(operatingSiteId: string): Promise<string | null> {
     const zones = await this.database

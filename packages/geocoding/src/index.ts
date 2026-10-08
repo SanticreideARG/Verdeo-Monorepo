@@ -10,6 +10,8 @@ export interface GeocodingCandidate {
 }
 
 export interface GeocodingInput {
+  /** Ordenar el texto con IA antes de buscarlo. Por defecto sí; una ciudad puede apagarlo. */
+  normalize?: boolean | undefined;
   /** La ciudad que ya se conoce del domicilio, para orientar al normalizador. */
   cityHint?: string | undefined;
   idempotencyKey: string;

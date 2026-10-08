@@ -1509,6 +1509,8 @@ export const OrderImportConfirmRequestSchema = z.object({
 
 export const OrderImportConfirmResponseSchema = z.object({
   created: z.number().int(),
+  /** Los pedidos creados, para poder ubicarlos al terminar de importar. */
+  orderIds: z.array(z.string()).default([]),
   /** Las filas que no se pudieron crear, con el motivo: el resto sí entró. */
   failed: z.array(z.object({ reason: z.string(), rowNumber: z.number().int() })),
 });
@@ -1564,4 +1566,32 @@ export const OrderDeleteResponseSchema = z.object({
   /** Cuánta plata tenía registrada, para poder decirlo en el aviso de que se borró. */
   collectedMinor: z.number().int(),
   publicNumber: z.string(),
+});
+
+/** Cómo se ubican las direcciones en una ciudad. */
+export const GeocodingSettingsSchema = z.object({
+  autoAccept: z.boolean(),
+  cityContext: z.string().trim().max(120).nullable(),
+  confidenceThresholdPercent: z.number().int().min(50).max(100),
+  radiusKm: z.number().int().min(1).max(500),
+  useAi: z.boolean(),
+});
+export type GeocodingSettings = z.infer<typeof GeocodingSettingsSchema>;
+
+export const GeocodingMetricsSchema = z.object({
+  ai: z.object({
+    calls: z.number().int(),
+    failed: z.number().int(),
+    inputTokens: z.number().int(),
+    outputTokens: z.number().int(),
+    averageLatencyMs: z.number().nullable(),
+  }),
+  days: z.number().int(),
+  requests: z.object({
+    confirmed: z.number().int(),
+    failed: z.number().int(),
+    noMatch: z.number().int(),
+    pending: z.number().int(),
+    total: z.number().int(),
+  }),
 });

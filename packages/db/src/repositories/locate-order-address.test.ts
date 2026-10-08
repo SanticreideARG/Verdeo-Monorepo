@@ -176,3 +176,71 @@ describe('unlocatedOrders', () => {
     expect(await service.unlocatedOrders(SITE, '2026-10-10')).toHaveLength(0);
   });
 });
+
+describe('ajustes de ubicación por ciudad', () => {
+  const ajustes = {
+    autoAccept: true,
+    cityContext: 'Villa Crespo, CABA, Argentina',
+    confidenceThresholdPercent: 90,
+    radiusKm: 60,
+    useAi: true,
+  };
+
+  it('sin ajustes guardados valen los de por defecto', async () => {
+    const { service } = await base(proveedor([]));
+    expect(await service.getGeocodingSettings(SITE)).toEqual({
+      autoAccept: true,
+      cityContext: null,
+      confidenceThresholdPercent: 90,
+      radiusKm: 60,
+      useAi: true,
+    });
+  });
+
+  it('guarda los ajustes de la ciudad y deja registro de quién los cambió', async () => {
+    const { client, service } = await base(proveedor([]));
+
+    const guardados = await service.updateGeocodingSettings(
+      SITE,
+      { ...ajustes, cityContext: '  Villa Crespo, CABA, Argentina ', radiusKm: 25 },
+      contexto,
+    );
+
+    expect(guardados).toMatchObject({ cityContext: 'Villa Crespo, CABA, Argentina', radiusKm: 25 });
+    const audit = await client.query(
+      `select 1 from audit_events where action = 'geocoding.settings_updated'`,
+    );
+    expect(audit.rows).toHaveLength(1);
+  });
+
+  it('con la aceptación automática apagada deja todo para revisar aunque sea seguro', async () => {
+    const { service } = await base(proveedor([candidato(-34.5998, -58.44, 1)]));
+    await service.updateGeocodingSettings(SITE, { ...ajustes, autoAccept: false }, contexto);
+
+    const result = await service.locateOrderAddress(ORDER, reglas, contexto);
+
+    expect(result.status).toBe('review');
+    expect(result.candidates).toHaveLength(1);
+  });
+
+  it('respeta el umbral y el radio de la ciudad en lugar de los de por defecto', async () => {
+    const { service } = await base(proveedor([candidato(-34.5998, -58.44, 0.95)]));
+    await service.updateGeocodingSettings(
+      SITE,
+      { ...ajustes, confidenceThresholdPercent: 99 },
+      contexto,
+    );
+
+    expect((await service.locateOrderAddress(ORDER, reglas, contexto)).status).toBe('review');
+  });
+
+  it('cuenta las solicitudes de los últimos días por resultado', async () => {
+    const { service } = await base(proveedor([candidato(-34.5998, -58.44, 1)]));
+    await service.locateOrderAddress(ORDER, reglas, contexto);
+
+    const metricas = await service.geocodingMetrics(SITE, 30);
+
+    expect(metricas.requests).toMatchObject({ confirmed: 1, total: 1 });
+    expect(metricas.ai.calls).toBe(0);
+  });
+});
