@@ -244,3 +244,48 @@ describe('ajustes de ubicación por ciudad', () => {
     expect(metricas.ai.calls).toBe(0);
   });
 });
+
+describe('ciudad sin punto de origen', () => {
+  const sinOrigen = async (provider: GeocodingProvider) => {
+    const ctx = await base(provider);
+    await ctx.client.exec(
+      `update operating_sites set origin_latitude = null, origin_longitude = null`,
+    );
+    return ctx;
+  };
+
+  // Sin origen ni direcciones confirmadas no hay contra qué comparar: la primera la confirma una persona.
+  it('deja la primera dirección para revisar a mano', async () => {
+    const { service } = await sinOrigen(proveedor([candidato(-34.5998, -58.44, 1)]));
+
+    const result = await service.locateOrderAddress(ORDER, reglas, contexto);
+
+    expect(result.status).toBe('review');
+    expect(result.reason).toContain('primeras direcciones');
+  });
+
+  it('usa de referencia las direcciones ya confirmadas y acepta la que cae cerca', async () => {
+    const { client, service } = await sinOrigen(proveedor([candidato(-34.5998, -58.44, 1)]));
+    await client.exec(
+      `insert into customer_addresses (customer_id, label, written_address, geographic_zone_id, latitude, longitude, geocoding_status)
+       values ('${CUSTOMER}', 'Casa', 'Otra 1', '${ZONE}', -34.61, -58.43, 'CONFIRMED')`,
+    );
+
+    const result = await service.locateOrderAddress(ORDER, reglas, contexto);
+
+    expect(result.status).toBe('located');
+  });
+
+  it('descarta lo que cae lejos de las direcciones confirmadas', async () => {
+    const { client, service } = await sinOrigen(proveedor([candidato(-31.42, -64.18, 1)]));
+    await client.exec(
+      `insert into customer_addresses (customer_id, label, written_address, geographic_zone_id, latitude, longitude, geocoding_status)
+       values ('${CUSTOMER}', 'Casa', 'Otra 1', '${ZONE}', -34.61, -58.43, 'CONFIRMED')`,
+    );
+
+    const result = await service.locateOrderAddress(ORDER, reglas, contexto);
+
+    expect(result.status).toBe('review');
+    expect(result.reason).toContain('lejos');
+  });
+});

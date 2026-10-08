@@ -150,8 +150,9 @@ La fase 1 no depende de la IA ni de la clave de Gemini y se puede hacer primero.
   coordenadas. `SanitizingGeocodingProvider` geocodifica la consulta limpia y, si no encuentra
   nada o la IA falla, el texto tal cual: **la ubicación no depende de que haya IA**. Un enlace de
   ubicación manda y no llama a la IA. Sólo viaja el texto de la dirección.
-- **Aceptar sola** sólo con confianza ≥ 0,9 **y** dentro de 60 km del origen de la ciudad (la
-  ciudad debe tener origen cargado; sin origen no se acepta sola). Fijos por ahora, en
+- **Aceptar sola** sólo con confianza ≥ 0,9 **y** dentro de 60 km del origen de la ciudad. **El
+  origen es opcional**: sin él la referencia es el centro (mediana) de las direcciones ya
+  confirmadas de la ciudad, y la primera dirección queda para que la confirme una persona. Fijos por ahora, en
   `LOCATE_RULES` de `app.ts`; la configuración por ciudad es la fase 3. Nunca pisa un domicilio
   que ya tiene coordenadas.
 - Los botones de la ficha del cliente también se benefician: el proveedor envuelto ordena el

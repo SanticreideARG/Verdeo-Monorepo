@@ -2478,6 +2478,18 @@ export class PostgresOperationsService {
         status: 'review',
       };
     }
+    /*
+     * Contra qué se mide la distancia.
+     *
+     * El origen de la ciudad si lo tiene. Si no, el centro de las direcciones que ya están
+     * confirmadas: así no hace falta cargar un origen para empezar. La primera dirección de una
+     * ciudad sin origen no tiene contra qué compararse y queda para que la confirme una persona;
+     * desde ahí, las siguientes se comparan con ella y con las que se vayan confirmando.
+     */
+    const origin =
+      order.originLatitude !== null && order.originLongitude !== null
+        ? { latitude: Number(order.originLatitude), longitude: Number(order.originLongitude) }
+        : await this.confirmedAddressesCenter(order.operatingSiteId);
     const decision = decideAutoAccept(
       request.candidates.map((candidate) => ({
         confidence: candidate.confidence,
@@ -2487,10 +2499,7 @@ export class PostgresOperationsService {
         providerCandidateId: candidate.id,
       })),
       {
-        origin:
-          order.originLatitude !== null && order.originLongitude !== null
-            ? { latitude: Number(order.originLatitude), longitude: Number(order.originLongitude) }
-            : null,
+        origin,
         radiusKm: stored?.radiusKm ?? rules.radiusKm,
         threshold: stored ? stored.confidenceThresholdPercent / 100 : rules.threshold,
       },
@@ -2500,7 +2509,8 @@ export class PostgresOperationsService {
         baja_confianza: 'El mapa no está seguro de esta dirección.',
         fuera_de_la_ciudad: 'El punto que encontró queda lejos de la ciudad.',
         sin_candidatos: 'No encontró la dirección.',
-        sin_origen: 'La ciudad no tiene punto de origen cargado para verificar la distancia.',
+        sin_origen:
+          'Es de las primeras direcciones de la ciudad: confirmala a mano y las siguientes se comparan con ella.',
       };
       return {
         addressId,
@@ -2527,6 +2537,44 @@ export class PostgresOperationsService {
       customerId: order.customerId,
       requestId: request.id,
       status: 'located',
+    };
+  }
+
+  /**
+   * El centro de las direcciones ya confirmadas de una ciudad, o null si todavía no hay ninguna.
+   *
+   * La mediana de cada coordenada y no el promedio: una dirección mal confirmada, lejos de las
+   * demás, mueve un promedio pero no una mediana.
+   */
+  private async confirmedAddressesCenter(operatingSiteId: string) {
+    const rows = await this.database
+      .select({ latitude: customerAddresses.latitude, longitude: customerAddresses.longitude })
+      .from(customerAddresses)
+      .innerJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
+      .where(
+        and(
+          eq(geographicZones.operatingSiteId, operatingSiteId),
+          eq(customerAddresses.geocodingStatus, 'CONFIRMED'),
+          eq(customerAddresses.active, true),
+        ),
+      )
+      .limit(200);
+    const points = rows.flatMap((row) =>
+      row.latitude !== null && row.longitude !== null
+        ? [{ latitude: Number(row.latitude), longitude: Number(row.longitude) }]
+        : [],
+    );
+    if (points.length === 0) return null;
+    const median = (values: number[]) => {
+      const sorted = [...values].sort((a, b) => a - b);
+      const middle = Math.floor(sorted.length / 2);
+      return sorted.length % 2 === 1
+        ? (sorted[middle] ?? 0)
+        : ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
+    };
+    return {
+      latitude: median(points.map((point) => point.latitude)),
+      longitude: median(points.map((point) => point.longitude)),
     };
   }
 
