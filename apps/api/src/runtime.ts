@@ -12,6 +12,7 @@ import {
   createDatabase,
   PostgresAccessTokenRepository,
   PostgresAuditSink,
+  PostgresSystemService,
   PostgresChatService,
   PostgresAIConfigurationService,
   PostgresAIPromptService,
@@ -50,6 +51,7 @@ import { OpenAICompatibleProvider } from './integrations/ai-providers.js';
 import { VercelBlobAvatarStorage } from './integrations/avatar-storage.js';
 import { ConfigurableEmailSender } from './integrations/email-sender.js';
 import { SupabaseAuthClient } from './integrations/supabase-auth.js';
+import { syncAuditMirror } from './integrations/audit-mirror.js';
 import { MetaWhatsAppProvider } from './integrations/whatsapp-provider.js';
 
 interface CreateApiRuntimeOptions {
@@ -142,6 +144,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
   );
   const aiPrompts = new PostgresAIPromptService(database.db);
   const auditQuery = new PostgresAuditQueryService(database.db);
+  const system = new PostgresSystemService(database.db);
   const surveys = new PostgresSurveyService(database.db);
   const assistant = new PostgresAssistantService(database.db);
   const help = new PostgresHelpService(database.db);
@@ -458,8 +461,22 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     databasePing: async () => {
       await pingDatabase(database.db);
     },
+    system,
     ...(supabaseAuth
-      ? { supabasePing: () => supabaseAuth.ping(), supabaseTouch: () => supabaseAuth.touch() }
+      ? {
+          auditMirror: {
+            lastMirroredAt: () => supabaseAuth.lastMirroredAt(),
+            sync: () =>
+              syncAuditMirror({
+                batchSize: 500,
+                fetchEvents: (since, limit) => system.auditEventsAfter(since, limit),
+                lastMirroredAt: () => supabaseAuth.lastMirroredAt(),
+                push: (events) => supabaseAuth.mirrorAuditEvents(events),
+              }),
+          },
+          supabasePing: () => supabaseAuth.ping(),
+          supabaseTouch: () => supabaseAuth.touch(),
+        }
       : {}),
     cookieSameSite: env.SESSION_COOKIE_SAME_SITE,
     credentials,

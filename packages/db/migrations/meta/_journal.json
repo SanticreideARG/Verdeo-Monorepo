@@ -372,6 +372,13 @@
       "when": 1791299640615,
       "tag": "0052_old_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1791421664888,
+      "tag": "0053_spotty_thundra",
+      "breakpoints": true
     }
   ]
 }

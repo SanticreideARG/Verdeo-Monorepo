@@ -8913,3 +8913,237 @@ textarea.sr-only {
   color: var(--db-danger, #b3261e);
   font-size: 0.78rem;
 }
+
+/* --- Estado del sistema -----------------------------------------------------------------------
+   El modal de la barra y la página del panel comparten los medidores. Tres tonos —bien, lento,
+   mal— y uno neutro para "todavía no hay dato"; el color nunca va solo: cada medidor dice también
+   los milisegundos y el detalle en texto. */
+.system-dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: var(--db-muted);
+}
+.system-dot-bien {
+  background: #3fae5a;
+}
+.system-dot-lento {
+  background: #d9a21b;
+}
+.system-dot-mal {
+  background: #d2493f;
+}
+.system-trigger {
+  position: relative;
+}
+.system-trigger-dot {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  box-shadow: 0 0 0 2px var(--db-topbar);
+}
+.system-modal {
+  max-width: 34rem;
+}
+.system-modal-head,
+.system-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.system-header-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.system-pill {
+  border: 1px solid var(--db-border);
+  border-radius: 999px;
+  padding: 0.15rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--db-text);
+}
+.system-pill-bien {
+  border-color: #3fae5a;
+}
+.system-pill-lento {
+  border-color: #d9a21b;
+}
+.system-pill-mal {
+  border-color: #d2493f;
+}
+.system-probes {
+  display: grid;
+  gap: 0.9rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.system-probes-wide {
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+.system-probe {
+  display: grid;
+  gap: 0.35rem;
+}
+.system-probe-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.system-probe-ms {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--db-text-soft);
+}
+.system-probe-detail {
+  color: var(--db-muted);
+  overflow-wrap: anywhere;
+}
+.system-gauge {
+  height: 0.5rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--db-border-soft);
+}
+.system-gauge-fill {
+  display: block;
+  height: 100%;
+  min-width: 0.25rem;
+  border-radius: 999px;
+  background: var(--db-muted);
+}
+.system-gauge-bien {
+  background: #3fae5a;
+}
+.system-gauge-lento {
+  background: #d9a21b;
+}
+.system-gauge-mal {
+  background: #d2493f;
+}
+.system-modal-meta {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--db-text-soft);
+}
+.system-section {
+  margin: 1.75rem 0 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--db-text);
+}
+.system-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+  margin: 0.75rem 0 0;
+}
+.system-stats div {
+  border: 1px solid var(--db-border-soft);
+  border-radius: 0.75rem;
+  padding: 0.6rem 0.8rem;
+}
+.system-stats dt {
+  font-size: 0.75rem;
+  color: var(--db-muted);
+}
+.system-stats dd {
+  margin: 0.15rem 0 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.system-relations {
+  display: grid;
+  gap: 0.2rem;
+  margin-top: 0.75rem;
+  border: 1px solid var(--db-border);
+  border-radius: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.system-map {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.9rem;
+  margin-top: 0.9rem;
+}
+.system-group {
+  border: 1px solid var(--db-border-soft);
+  border-radius: 0.9rem;
+  padding: 0.75rem;
+}
+.system-group h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--db-muted);
+}
+.system-group ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.system-table {
+  display: grid;
+  width: 100%;
+  gap: 0.1rem;
+  border: 1px solid var(--db-border-soft);
+  border-radius: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  font-size: 0.85rem;
+  color: var(--db-text);
+  overflow-wrap: anywhere;
+}
+.system-table small {
+  color: var(--db-muted);
+}
+.system-table:hover {
+  border-color: var(--db-accent);
+}
+.system-table.is-related {
+  border-color: var(--db-accent);
+  background: var(--db-border-soft);
+}
+.system-table.is-dim {
+  opacity: 0.45;
+}
+.system-errors {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.system-errors li {
+  border: 1px solid var(--db-border-soft);
+  border-radius: 0.75rem;
+  padding: 0.7rem 0.9rem;
+}
+.system-error-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.system-errors p {
+  margin: 0.25rem 0;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.system-errors small {
+  color: var(--db-muted);
+  overflow-wrap: anywhere;
+}

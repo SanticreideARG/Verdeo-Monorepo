@@ -127,4 +127,99 @@ export class SupabaseAuthClient {
       return { detail: error instanceof Error ? error.message : 'fallo desconocido', ok: false };
     }
   }
+
+  private restHeaders(extra: Record<string, string> = {}): Record<string, string> {
+    return {
+      apikey: this.publishableKey,
+      ...(this.publishableKey.startsWith('eyJ')
+        ? { authorization: `Bearer ${this.publishableKey}` }
+        : {}),
+      'content-type': 'application/json',
+      ...extra,
+    };
+  }
+
+  /**
+   * La fecha del último evento de auditoría copiado a `audit_mirror`, o null si está vacía.
+   *
+   * Sirve de cursor: lo que tiene fecha posterior es lo que falta copiar. Si la tabla no
+   * existe o `anon` no puede leerla devuelve `ok: false` con el motivo, para que quien llama
+   * no confunda "no puedo saberlo" con "no hay nada copiado" y vuelva a copiar todo.
+   */
+  public async lastMirroredAt(): Promise<{ at: Date | null; detail: string; ok: boolean }> {
+    try {
+      const response = await this.fetcher(
+        `${this.baseUrl}/rest/v1/audit_mirror?select=occurred_at&order=occurred_at.desc&limit=1`,
+        {
+          cache: 'no-store',
+          headers: this.restHeaders(),
+          signal: AbortSignal.timeout(8_000),
+        },
+      );
+      if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        return {
+          at: null,
+          detail: `HTTP ${response.status} ${body.slice(0, 200)}`.trim(),
+          ok: false,
+        };
+      }
+      const rows = (await response.json()) as { occurred_at: string }[];
+      const first = rows[0]?.occurred_at;
+      return { at: first ? new Date(first) : null, detail: 'responde', ok: true };
+    } catch (error) {
+      return {
+        at: null,
+        detail: error instanceof Error ? error.message : 'fallo desconocido',
+        ok: false,
+      };
+    }
+  }
+
+  /**
+   * Copia eventos de auditoría a `audit_mirror`. Upsert por id: repetir una copia no duplica.
+   * Sólo viajan los campos que identifican el evento; ver `syncAuditMirror`.
+   */
+  public async mirrorAuditEvents(
+    events: readonly {
+      action: string;
+      actorType: string;
+      actorUserId: string | null;
+      correlationId: string;
+      entityId: string;
+      entityType: string;
+      id: string;
+      occurredAt: Date;
+      requestId: string;
+      source: string;
+    }[],
+  ): Promise<{ detail: string; ok: boolean }> {
+    try {
+      const response = await this.fetcher(`${this.baseUrl}/rest/v1/audit_mirror?on_conflict=id`, {
+        body: JSON.stringify(
+          events.map((event) => ({
+            action: event.action,
+            actor_type: event.actorType,
+            actor_user_id: event.actorUserId,
+            correlation_id: event.correlationId,
+            entity_id: event.entityId,
+            entity_type: event.entityType,
+            id: event.id,
+            occurred_at: event.occurredAt.toISOString(),
+            request_id: event.requestId,
+            source: event.source,
+          })),
+        ),
+        cache: 'no-store',
+        headers: this.restHeaders({ prefer: 'resolution=merge-duplicates,return=minimal' }),
+        method: 'POST',
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (response.ok) return { detail: `HTTP ${response.status}`, ok: true };
+      const body = await response.text().catch(() => '');
+      return { detail: `HTTP ${response.status} ${body.slice(0, 200)}`.trim(), ok: false };
+    } catch (error) {
+      return { detail: error instanceof Error ? error.message : 'fallo desconocido', ok: false };
+    }
+  }
 }

@@ -132,4 +132,81 @@ describe('SupabaseAuthClient', () => {
     expect(result.ok).toBe(false);
     expect(result.detail).toContain('does not exist');
   });
+
+  describe('copia de auditoría', () => {
+    const clave = 'sb_publishable_test-key-long-enough';
+    const cliente = (fetcher: typeof fetch) =>
+      new SupabaseAuthClient('https://project-ref.supabase.co', clave, fetcher);
+
+    it('lee la fecha de la última copia como cursor', async () => {
+      const fetcher = vi.fn<typeof fetch>(() =>
+        Promise.resolve(
+          new Response('[{"occurred_at":"2026-10-06T10:00:00+00:00"}]', { status: 200 }),
+        ),
+      );
+      const result = await cliente(fetcher).lastMirroredAt();
+      expect(result).toMatchObject({ ok: true });
+      expect(result.at?.toISOString()).toBe('2026-10-06T10:00:00.000Z');
+      expect(String(fetcher.mock.calls[0]?.[0])).toContain(
+        '/rest/v1/audit_mirror?select=occurred_at',
+      );
+    });
+
+    it('con la tabla vacía devuelve ok y sin fecha', async () => {
+      const fetcher = vi.fn<typeof fetch>(() =>
+        Promise.resolve(new Response('[]', { status: 200 })),
+      );
+      await expect(cliente(fetcher).lastMirroredAt()).resolves.toMatchObject({
+        at: null,
+        ok: true,
+      });
+    });
+
+    // No poder leer no es lo mismo que estar vacía: confundirlas copiaría todo otra vez.
+    it('con la tabla inexistente devuelve ok false y el motivo', async () => {
+      const fetcher = vi.fn<typeof fetch>(() =>
+        Promise.resolve(new Response('relation "audit_mirror" does not exist', { status: 404 })),
+      );
+      const result = await cliente(fetcher).lastMirroredAt();
+      expect(result.ok).toBe(false);
+      expect(result.detail).toContain('does not exist');
+    });
+
+    it('copia sólo los campos que identifican el evento, con upsert por id', async () => {
+      const fetcher = vi.fn<typeof fetch>(() =>
+        Promise.resolve(new Response(null, { status: 201 })),
+      );
+      const result = await cliente(fetcher).mirrorAuditEvents([
+        {
+          action: 'order.created',
+          actorType: 'user',
+          actorUserId: null,
+          correlationId: 'c',
+          entityId: 'e',
+          entityType: 'order',
+          id: 'i',
+          occurredAt: new Date('2026-10-06T10:00:00Z'),
+          requestId: 'r',
+          source: 'api',
+        },
+      ]);
+      expect(result).toEqual({ detail: 'HTTP 201', ok: true });
+      const [url, init] = fetcher.mock.calls[0] ?? [];
+      expect(String(url)).toContain('on_conflict=id');
+      expect((init?.headers as Record<string, string>).prefer).toContain('merge-duplicates');
+      const [fila] = JSON.parse(String(init?.body)) as Record<string, unknown>[];
+      expect(Object.keys(fila ?? {}).sort()).toEqual([
+        'action',
+        'actor_type',
+        'actor_user_id',
+        'correlation_id',
+        'entity_id',
+        'entity_type',
+        'id',
+        'occurred_at',
+        'request_id',
+        'source',
+      ]);
+    });
+  });
 });

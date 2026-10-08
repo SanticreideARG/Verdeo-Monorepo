@@ -486,6 +486,63 @@ Una escritura diaria contra Postgres es lo más parecido a actividad real que se
 clave de servicio, pero la única garantía dura es un plan pago. Si se vuelve a pausar con
 `supabaseWrite.ok: true` en los logs, ya no hay nada que ajustar del lado del código.
 
+### Historial paralelo en Supabase (`audit_mirror`)
+
+El mismo trabajo, después de escribir `keep_alive`, copia a Supabase los eventos de auditoría que
+todavía no están. Sirve de respaldo del historial y de actividad real y diaria en el proyecto.
+
+- **Se copia después, no al escribir cada evento.** Se lee de `audit_events` ya confirmada, así que
+  un pedido que se deshace no deja una copia de algo que no pasó, y una caída de Supabase no puede
+  romper un pedido. Lo que no se copió hoy se copia en la próxima corrida (hasta 500 por vez).
+- **Repetir es seguro.** Se copia por `id` con upsert; el cursor es la fecha del último evento copiado.
+- **Sólo identifica el evento**: acción, entidad, id de entidad, tipo de actor, id de usuario,
+  solicitud y fecha. **No viajan** el antes/después ni los metadatos, que es donde aparecen
+  nombres, direcciones y teléfonos de clientes.
+- Si la copia falla, el cron igual responde 200 y el cuerpo trae `auditMirror: { ok: false, detail }`.
+
+La tabla, una sola vez, en el SQL Editor de Supabase:
+
+```sql
+create table if not exists public.audit_mirror (
+  id uuid primary key,
+  occurred_at timestamptz not null,
+  action text not null,
+  entity_type text not null,
+  entity_id text not null,
+  actor_type text not null,
+  actor_user_id uuid,
+  request_id text not null,
+  correlation_id text not null,
+  source text not null
+);
+
+create index if not exists audit_mirror_occurred_at_idx on public.audit_mirror (occurred_at desc);
+
+alter table public.audit_mirror enable row level security;
+
+-- Misma salvedad que keep_alive: la clave publicable es pública. Acá se escribe y se lee el
+-- historial, pero sin datos de clientes. Si más adelante se guarda algo más sensible, hay que
+-- pasar a una clave de servicio en lugar de abrir esta política.
+create policy audit_mirror_anon on public.audit_mirror
+  for all to anon using (true) with check (true);
+```
+
+### Estado del sistema (Panel de control → Estado del sistema)
+
+Permiso `audit.read` (no hay un permiso nuevo para no sumar un paso de siembra en producción).
+
+- **Modal de la barra** (ícono de servidores, en todo el tablero y el panel): un medidor por
+  servidor —Neon, Supabase (acceso) y Supabase (base de datos)— con latencia y detalle. El punto de
+  color es el peor de los tres.
+- **Página `/app/sistema`**: lo anterior, más latencia de la aplicación (mediana, p95 y peor),
+  estado de la copia paralela, el **mapa de tablas** agrupado por tema (filas estimadas, tamaño y
+  relaciones por clave foránea) y el **log de errores** del servidor.
+- **Latencia de la aplicación**: es de la instancia que contestó, no de toda la plataforma (un
+  servicio sin estado levanta varias, cada una con su memoria). Sirve para ver "anda lento ahora".
+- **Errores**: los 500 se guardan en `server_errors` (migración 0053), 30 días, con el número de
+  solicitud para buscar el detalle en los logs de Vercel. Sin cuerpos de pedido ni datos de clientes.
+- Cada sonda falla por separado: si Supabase no contesta, la base principal se sigue midiendo.
+
 ### El respaldo en GitHub Actions
 
 El cron de Vercel falla de dos formas silenciosas: sin `CRON_SECRET` en producción el endpoint

@@ -3402,8 +3402,13 @@ describe('API foundation', () => {
   });
 
   describe('audit', () => {
-    function buildAuditApp(auditQuery: Record<string, unknown>, permissions: string[]) {
+    function buildAuditApp(
+      auditQuery: Record<string, unknown>,
+      permissions: string[],
+      extra: Record<string, unknown> = {},
+    ) {
       return createApp({
+        ...(extra as object),
         appOrigin: 'http://localhost:5173',
         auditQuery: auditQuery as never,
         cookieSameSite: 'Lax',
@@ -3437,6 +3442,97 @@ describe('API foundation', () => {
       const denied = buildAuditApp({ listEvents: vi.fn() }, []);
       const deniedResponse = await denied.request('/api/v1/audit', { headers: { cookie } });
       expect(deniedResponse.status).toBe(403);
+    });
+
+    describe('GET /api/v1/system/status', () => {
+      const system = {
+        countErrorsSince: vi.fn(() => Promise.resolve(3)),
+        listErrors: vi.fn(() => Promise.resolve([])),
+        recordError: vi.fn(() => Promise.resolve()),
+        tableMap: vi.fn(() =>
+          Promise.resolve([
+            { references: ['customers'], rows: 12, sizeBytes: 8192, table: 'orders' },
+          ]),
+        ),
+      };
+
+      it('mide cada servidor por separado y devuelve el log de errores', async () => {
+        const app = buildAuditApp({}, ['audit.read'], {
+          auditMirror: {
+            lastMirroredAt: () =>
+              Promise.resolve({
+                at: new Date('2026-10-06T10:00:00Z'),
+                detail: 'responde',
+                ok: true,
+              }),
+            sync: vi.fn(),
+          },
+          databasePing: () => Promise.resolve(),
+          supabasePing: () => Promise.resolve({ detail: 'HTTP 200', ok: true }),
+          system,
+        });
+
+        const response = await app.request('/api/v1/system/status', { headers: { cookie } });
+        const body = (await response.json()) as {
+          errors: { last24h: number };
+          mirror: { lastMirroredAt: string };
+          probes: { key: string; latencyMs: number | null; ok: boolean }[];
+        };
+
+        expect(response.status).toBe(200);
+        expect(body.probes.map((probe) => probe.key)).toEqual(['neon', 'supabase', 'supabase_db']);
+        expect(body.probes.every((probe) => probe.ok && probe.latencyMs !== null)).toBe(true);
+        expect(body.errors.last24h).toBe(3);
+        expect(body.mirror.lastMirroredAt).toBe('2026-10-06T10:00:00.000Z');
+      });
+
+      // Cuando Supabase no contesta es cuando más sirve ver cómo anda la base principal.
+      it('sigue informando la base principal aunque Supabase falle', async () => {
+        const app = buildAuditApp({}, ['audit.read'], {
+          auditMirror: {
+            lastMirroredAt: () => Promise.reject(new Error('timeout')),
+            sync: vi.fn(),
+          },
+          databasePing: () => Promise.resolve(),
+          supabasePing: () => Promise.reject(new Error('sin red')),
+          system,
+        });
+
+        const response = await app.request('/api/v1/system/status', { headers: { cookie } });
+        const body = (await response.json()) as {
+          probes: { detail: string; key: string; ok: boolean }[];
+        };
+
+        expect(response.status).toBe(200);
+        expect(body.probes.find((probe) => probe.key === 'neon')?.ok).toBe(true);
+        expect(body.probes.find((probe) => probe.key === 'supabase')).toMatchObject({
+          detail: 'sin red',
+          ok: false,
+        });
+        expect(body.probes.find((probe) => probe.key === 'supabase_db')).toMatchObject({
+          detail: 'timeout',
+          ok: false,
+        });
+      });
+
+      it('exige audit.read', async () => {
+        const app = buildAuditApp({}, [], { system });
+        expect((await app.request('/api/v1/system/status', { headers: { cookie } })).status).toBe(
+          403,
+        );
+        expect((await app.request('/api/v1/system/tables', { headers: { cookie } })).status).toBe(
+          403,
+        );
+      });
+
+      it('devuelve el mapa de tablas', async () => {
+        const app = buildAuditApp({}, ['audit.read'], { system });
+        const response = await app.request('/api/v1/system/tables', { headers: { cookie } });
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+          items: [{ references: ['customers'], rows: 12, sizeBytes: 8192, table: 'orders' }],
+        });
+      });
     });
 
     it('passes query filters through to the service', async () => {
@@ -4446,6 +4542,21 @@ describe('API foundation', () => {
       expect(await response.json()).toMatchObject({
         database: { detail: 'conexión rechazada', ok: false },
         supabase: { detail: 'HTTP 503', ok: false },
+      });
+    });
+
+    it('copia la auditoría pendiente y no cambia la respuesta si la copia falla', async () => {
+      const sync = vi.fn(() => Promise.reject(new Error('tabla inexistente')));
+      const response = await buildApp({
+        auditMirror: { lastMirroredAt: vi.fn(), sync },
+        databasePing: vi.fn(() => Promise.resolve()),
+      }).request('/api/v1/cron/keep-alive', ok);
+
+      expect(response.status).toBe(200);
+      expect(sync).toHaveBeenCalledTimes(1);
+      expect(await response.json()).toMatchObject({
+        auditMirror: { copied: 0, detail: 'tabla inexistente', ok: false },
+        database: { ok: true },
       });
     });
 

@@ -28,3 +28,4 @@ export * from './postgres-appearance-service.js';
 export * from './postgres-password-reset-service.js';
 export * from './postgres-dashboard-layout-service.js';
 export * from './customer-merge.js';
+export * from './postgres-system-service.js';

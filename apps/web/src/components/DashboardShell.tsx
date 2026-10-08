@@ -9,6 +9,7 @@ import { AppearanceMenu, FONT_OPTIONS, SCALE_OPTIONS, type ThemeOption } from '.
 import { ChatDock } from './ChatDock.js';
 import { OperatorAssistant } from './OperatorAssistant.js';
 import { PresenceControl } from './PresenceControl.js';
+import { SystemStatusButton } from './SystemStatusButton.js';
 import { SETTINGS_TAB_PERMISSIONS } from './SettingsTabs.js';
 import { RequestProgressBar } from './RequestProgressBar.js';
 import { ToastHost } from './ToastHost.js';
@@ -592,6 +593,7 @@ export function DashboardShell({
   const secondaryTools = (
     <>
       <PresenceControl enabled={profile.permissions.includes('chat.use')} />
+      {profile.permissions.includes('audit.read') ? <SystemStatusButton /> : null}
       {profile.permissions.includes('calendar.use') ? (
         <Link
           aria-label="Calendario"

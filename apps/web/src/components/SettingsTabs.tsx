@@ -67,6 +67,7 @@ const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     label: 'Sistema',
     tabs: [
       { href: '/app/auditoria', label: 'Auditoría', permission: 'audit.read' },
+      { href: '/app/sistema', label: 'Estado del sistema', permission: 'audit.read' },
       // El permiso no viene con ningún rol: la descarga se lleva los datos de todos los clientes.
       { href: '/app/respaldos', label: 'Respaldos', permission: 'backups.manage' },
     ],

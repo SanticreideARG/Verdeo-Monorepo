@@ -286,6 +286,8 @@ import {
   type SurveySubmitRequest,
   type SurveyUpdateRequest,
   type UserPermissionOverridesUpdateRequest,
+  SystemStatusResponseSchema,
+  SystemTableMapResponseSchema,
 } from '@verdeo/contracts';
 import { createRequestId, type Logger } from '@verdeo/observability';
 
@@ -305,6 +307,7 @@ import {
   type OrderImportRow,
 } from './integrations/order-import.js';
 import { buildLabelsPrintHtml } from './labels-export.js';
+import { RequestStats } from './request-stats.js';
 import { buildOrdersExcel } from './orders-excel.js';
 import { buildOrdersCsv, deliveryDateFor, maskSurname, type OrderExportRow } from '@verdeo/orders';
 import {
@@ -1096,6 +1099,29 @@ interface CreateAppOptions {
   databasePing?: (() => Promise<void>) | undefined;
   /** Una petición al proyecto de Supabase: dice si responde, no evita que lo pausen. */
   supabasePing?: (() => Promise<{ detail: string; ok: boolean }>) | undefined;
+  /** Copia a la base paralela los eventos de auditoría pendientes y dice cuántos copió. */
+  auditMirror?:
+    | {
+        lastMirroredAt: () => Promise<{ at: Date | null; detail: string; ok: boolean }>;
+        sync: () => Promise<{ copied: number; detail: string; ok: boolean }>;
+      }
+    | undefined;
+  /** Errores del servidor y mapa de tablas, para el panel de estado. */
+  system?:
+    | {
+        countErrorsSince: (since: Date) => Promise<number>;
+        listErrors: (limit: number) => Promise<unknown[]>;
+        recordError: (input: {
+          errorName: string;
+          message: string;
+          method: string;
+          path: string;
+          requestId: string;
+          status: number;
+        }) => Promise<void>;
+        tableMap: () => Promise<unknown[]>;
+      }
+    | undefined;
   /** Una escritura contra la base de Supabase, que es lo único que cuenta como actividad. */
   supabaseTouch?: (() => Promise<{ detail: string; ok: boolean }>) | undefined;
   credentials: CredentialLogin;
@@ -1213,6 +1239,8 @@ function statusForCode(code: ApiErrorCode): 400 | 401 | 403 | 404 | 409 | 429 | 
 }
 
 export function createApp(options: CreateAppOptions) {
+  const requestStats = new RequestStats();
+  const processStartedAt = new Date().toISOString();
   const app = new Hono<{ Variables: AppVariables }>();
   const operations = options.operations;
 
@@ -1553,8 +1581,10 @@ export function createApp(options: CreateAppOptions) {
 
     await next();
 
+    const duration = Math.round(performance.now() - startedAt);
+    requestStats.record(duration);
     logger.info({
-      duration: Math.round(performance.now() - startedAt),
+      duration,
       event: 'http.request.completed',
       method: context.req.method,
       path: context.req.path,
@@ -2427,6 +2457,7 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/integrations/credentials', requireAuthentication);
   app.use('/api/v1/ai/prompts', requireAuthentication);
   app.use('/api/v1/ai/prompts/*', requireAuthentication);
+  app.use('/api/v1/system/*', requireAuthentication);
   app.use('/api/v1/audit', requireAuthentication);
   app.use('/api/v1/audit/*', requireAuthentication);
   /*
@@ -3352,7 +3383,29 @@ export function createApp(options: CreateAppOptions) {
       }
     }
 
+    /*
+     * Después de la escritura de arriba y sin que su resultado cambie la respuesta: si la
+     * copia falla, el proyecto igual quedó con actividad y el detalle queda en el log.
+     */
+    let auditMirror: { copied: number; detail: string; ok: boolean } = {
+      copied: 0,
+      detail: 'sin configurar',
+      ok: false,
+    };
+    if (options.auditMirror) {
+      try {
+        auditMirror = await options.auditMirror.sync();
+      } catch (error) {
+        auditMirror = {
+          copied: 0,
+          detail: error instanceof Error ? error.message : 'fallo desconocido',
+          ok: false,
+        };
+      }
+    }
+
     (context.get('logger') ?? options.logger).info({
+      auditMirror,
       database,
       event: 'cron.keep_alive',
       supabase,
@@ -3360,7 +3413,7 @@ export function createApp(options: CreateAppOptions) {
     });
     // 200 aunque algo falle: un cron que devuelve error se reintenta y se apaga solo tras varios
     // fallos, justo cuando más falta hace que siga pasando. El estado va en el cuerpo.
-    return context.json({ database, supabase, supabaseWrite });
+    return context.json({ auditMirror, database, supabase, supabaseWrite });
   };
 
   app.get('/api/v1/cron/keep-alive', keepAlive);
@@ -6046,6 +6099,97 @@ export function createApp(options: CreateAppOptions) {
     return context.json(AIExecutionListResponseSchema.parse({ items: contractValue(items) }));
   });
 
+  /*
+   * Estado de los servidores, para el modal del tablero y el panel de control.
+   *
+   * Cada sonda se mide con su propio reloj y falla por separado: que Supabase no conteste no
+   * impide ver cómo anda la base principal, que es justamente cuando más sirve esta pantalla.
+   * Se pide con `audit.read` para no sumar un permiso que habría que sembrar en producción.
+   */
+  app.get('/api/v1/system/status', async (context) => {
+    if (!context.get('session').permissions.includes('audit.read')) return forbidden(context);
+
+    const timed = async (
+      key: string,
+      label: string,
+      run: (() => Promise<{ detail: string; ok: boolean }>) | undefined,
+    ) => {
+      if (!run) return { detail: 'sin configurar', key, label, latencyMs: null, ok: false };
+      const started = performance.now();
+      try {
+        const result = await run();
+        return { ...result, key, label, latencyMs: Math.round(performance.now() - started) };
+      } catch (error) {
+        return {
+          detail: error instanceof Error ? error.message : 'fallo desconocido',
+          key,
+          label,
+          latencyMs: Math.round(performance.now() - started),
+          ok: false,
+        };
+      }
+    };
+
+    const databasePing = options.databasePing;
+    const [neon, supabaseApi, mirrorState] = await Promise.all([
+      timed(
+        'neon',
+        'Base principal (Neon)',
+        databasePing
+          ? async () => {
+              await databasePing();
+              return { detail: 'responde', ok: true };
+            }
+          : undefined,
+      ),
+      timed('supabase', 'Supabase · acceso', options.supabasePing),
+      options.auditMirror
+        ? options.auditMirror.lastMirroredAt().catch((error: unknown) => ({
+            at: null,
+            detail: error instanceof Error ? error.message : 'fallo desconocido',
+            ok: false,
+          }))
+        : Promise.resolve({ at: null, detail: 'sin configurar', ok: false }),
+    ]);
+
+    // La sonda de la copia mide la lectura de la base de Supabase, que es la que importa.
+    const supabaseDatabase = await timed('supabase_db', 'Supabase · base de datos', async () => ({
+      detail: mirrorState.detail,
+      ok: mirrorState.ok,
+    }));
+
+    const [recent, last24h] = options.system
+      ? await Promise.all([
+          options.system.listErrors(25),
+          options.system.countErrorsSince(new Date(Date.now() - 24 * 60 * 60 * 1000)),
+        ])
+      : [[], 0];
+
+    return context.json(
+      SystemStatusResponseSchema.parse({
+        api: {
+          latency: requestStats.summary(),
+          startedAt: processStartedAt,
+          version: options.version,
+        },
+        errors: { last24h, recent },
+        generatedAt: new Date().toISOString(),
+        mirror: {
+          detail: mirrorState.detail,
+          lastMirroredAt: mirrorState.at ? mirrorState.at.toISOString() : null,
+          ok: mirrorState.ok,
+        },
+        probes: [neon, supabaseApi, supabaseDatabase],
+      }),
+    );
+  });
+
+  app.get('/api/v1/system/tables', async (context) => {
+    if (!context.get('session').permissions.includes('audit.read')) return forbidden(context);
+    const items = options.system ? await options.system.tableMap() : [];
+    return context.json(SystemTableMapResponseSchema.parse({ items }));
+  });
+
   app.get('/api/v1/audit', async (context) => {
     if (!context.get('session').permissions.includes('audit.read')) return forbidden(context);
     const query = AuditEventQuerySchema.safeParse(context.req.query());
@@ -6136,6 +6280,20 @@ export function createApp(options: CreateAppOptions) {
       );
     }
     (context.get('logger') ?? options.logger).error({ error, event: 'http.request.failed' });
+    /*
+     * Se guarda para el panel de estado. Sin esperar la respuesta ni dejar que su fallo la
+     * cambie: un registro que no se pudo guardar no puede convertir un error en otro.
+     */
+    void options.system
+      ?.recordError({
+        errorName: error instanceof Error ? error.name : 'Error',
+        message: error instanceof Error ? error.message : String(error),
+        method: context.req.method,
+        path: context.req.path,
+        requestId: context.get('requestId'),
+        status: 500,
+      })
+      .catch(() => undefined);
     const code: ApiErrorCode = 'INTERNAL_ERROR';
     return context.json(
       {

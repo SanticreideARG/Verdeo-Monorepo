@@ -19,3 +19,4 @@ export * from './schemas/sessions.js';
 export * from './schemas/stats.js';
 export * from './schemas/surveys.js';
 export * from './schemas/users.js';
+export * from './schemas/system.js';
