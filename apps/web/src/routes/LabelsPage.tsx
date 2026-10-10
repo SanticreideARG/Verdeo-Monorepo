@@ -508,26 +508,15 @@ export function LabelsPage() {
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
   }
 
-  if (failed) return <DashboardFailed label="las etiquetas" />;
-  if (!profile) return <DashboardLoading />;
-
-  if (!canRead) {
-    return (
-      <DashboardShell profile={profile} onLogout={() => void logout()}>
-        <section className="dashboard-panel">
-          <h1 className="text-2xl font-semibold text-forest">Etiquetas</h1>
-          <p className="mt-3 text-ink-muted">Tu usuario no tiene permiso para ver esto.</p>
-        </section>
-      </DashboardShell>
-    );
-  }
-
   /*
    * Cuánto hay que achicar la hoja para que entre en la columna.
    *
    * Se mide el ancho real del marco y se lo compara con el ancho del papel en píxeles de CSS
    * (96 por pulgada). Con un `ResizeObserver` y no una sola vez: la columna cambia de ancho al
    * plegar el menú, al rotar el teléfono y al cambiar el tamaño de hoja.
+   *
+   * Va antes de los `return` de carga y de permiso: estuvo después, y en la primera vuelta (sin
+   * perfil) React veía menos hooks que en la segunda y tiraba la pantalla entera en blanco.
    */
   const sheetFrameRef = useRef<HTMLDivElement>(null);
   const [sheetScale, setSheetScale] = useState(0.3);
@@ -544,7 +533,21 @@ export function LabelsPage() {
     const observer = new ResizeObserver(update);
     observer.observe(frame);
     return () => observer.disconnect();
-  }, [sheetWidthMm]);
+  }, [canRead, sheetWidthMm]);
+
+  if (failed) return <DashboardFailed label="las etiquetas" />;
+  if (!profile) return <DashboardLoading />;
+
+  if (!canRead) {
+    return (
+      <DashboardShell profile={profile} onLogout={() => void logout()}>
+        <section className="dashboard-panel">
+          <h1 className="text-2xl font-semibold text-forest">Etiquetas</h1>
+          <p className="mt-3 text-ink-muted">Tu usuario no tiene permiso para ver esto.</p>
+        </section>
+      </DashboardShell>
+    );
+  }
 
   const canvas = labelCanvas(
     { gapMm: labelGapMm, heightMm: sheetHeightMm, marginMm: sheetMarginMm, widthMm: sheetWidthMm },

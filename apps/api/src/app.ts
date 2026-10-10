@@ -2513,6 +2513,23 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/help', requireAuthentication);
   app.use('/api/v1/help/*', requireAuthentication);
   app.use('/api/v1/ai/tasks/*', requireAuthentication);
+  /*
+   * Rutas que leían la sesión sin que nadie la hubiera resuelto.
+   *
+   * Sin su `use`, `context.get('session')` es undefined y la primera lectura de `permissions` o
+   * `userId` tira un TypeError: 500 en cada llamada. Fallaba cerrado —no filtraba nada— pero
+   * dejaba sin funcionar el calendario, los fondos de etiquetas, el tablero personalizado, los
+   * respaldos y las pruebas de IA y correo. `app.auth-coverage.test.ts` falla si vuelve a pasar.
+   */
+  app.use('/api/v1/dashboard/*', requireAuthentication);
+  app.use('/api/v1/calendar', requireAuthentication);
+  app.use('/api/v1/calendar/*', requireAuthentication);
+  app.use('/api/v1/label-backgrounds', requireAuthentication);
+  app.use('/api/v1/label-backgrounds/*', requireAuthentication);
+  app.use('/api/v1/backups/*', requireAuthentication);
+  app.use('/api/v1/ai/providers/*', requireAuthentication);
+  app.use('/api/v1/ai/executions', requireAuthentication);
+  app.use('/api/v1/integrations/email/*', requireAuthentication);
 
   app.get('/api/v1/me', async (context) => {
     const session = context.get('session');
@@ -6342,7 +6359,19 @@ export function createApp(options: CreateAppOptions) {
     };
 
     const databasePing = options.databasePing;
-    const [neon, supabaseApi, mirrorState] = await Promise.all([
+    const auditMirror = options.auditMirror;
+    /*
+     * La lectura de la copia es la sonda de la base de Supabase, y se mide ella misma.
+     *
+     * Se medía un `Promise.resolve` con el resultado ya obtenido, y la base de Supabase salía
+     * siempre con 0 ms: un número que parecía buena noticia y no medía nada.
+     */
+    let mirrorState: { at: Date | null; detail: string; ok: boolean } = {
+      at: null,
+      detail: 'sin configurar',
+      ok: false,
+    };
+    const [neon, supabaseApi, supabaseDatabase] = await Promise.all([
       timed(
         'neon',
         'Base principal (Neon)',
@@ -6354,22 +6383,25 @@ export function createApp(options: CreateAppOptions) {
           : undefined,
       ),
       timed('supabase', 'Supabase · acceso', options.supabasePing),
-      options.auditMirror
-        ? options.auditMirror.lastMirroredAt().catch((error: unknown) => ({
-            at: null,
-            detail: error instanceof Error ? error.message : 'fallo desconocido',
-            ok: false,
-          }))
-        : Promise.resolve({ at: null, detail: 'sin configurar', ok: false }),
+      timed(
+        'supabase_db',
+        'Supabase · base de datos',
+        auditMirror
+          ? async () => {
+              try {
+                mirrorState = await auditMirror.lastMirroredAt();
+              } catch (error) {
+                mirrorState = {
+                  at: null,
+                  detail: error instanceof Error ? error.message : 'fallo desconocido',
+                  ok: false,
+                };
+              }
+              return { detail: mirrorState.detail, ok: mirrorState.ok };
+            }
+          : undefined,
+      ),
     ]);
-
-    // La sonda de la copia mide la lectura de la base de Supabase, que es la que importa.
-    const supabaseDatabase = await timed('supabase_db', 'Supabase · base de datos', () =>
-      Promise.resolve({
-        detail: mirrorState.detail,
-        ok: mirrorState.ok,
-      }),
-    );
 
     const [recent, last24h] = options.system
       ? await Promise.all([

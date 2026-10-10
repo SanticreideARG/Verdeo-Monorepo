@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
+import { formatDay } from '../lib/dates.js';
 import { BrandLoading } from '../components/BrandLoading.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { apiRequest } from '../lib/api.js';
@@ -472,8 +473,7 @@ export function CustomerAccountPage() {
                   <span className="status-chip">{orderStatusLabel(order.status)}</span>
                 </div>
                 <p className="mt-1 text-sm text-ink-muted">
-                  {new Intl.DateTimeFormat('es-AR').format(new Date(order.deliveryDate))} ·{' '}
-                  {formatMoney(order.totalMinor, order.currency)}
+                  {formatDay(order.deliveryDate)} · {formatMoney(order.totalMinor, order.currency)}
                 </p>
               </div>
             ))}

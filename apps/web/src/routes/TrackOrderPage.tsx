@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
+import { formatDayLong } from '../lib/dates.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage, formatMoney } from '../lib/operations.js';
 
@@ -120,7 +121,7 @@ export function TrackOrderPage() {
             <p className="eyebrow">{order.publicNumber}</p>
             <h2 className="mt-2 text-2xl font-semibold text-forest">{statusLabel(order.status)}</h2>
             <p className="mt-2 text-sm text-ink-muted">
-              Entrega: {order.deliveryDate} · {order.deliveryAddress}
+              Entrega: {formatDayLong(order.deliveryDate)} · {order.deliveryAddress}
             </p>
             <ul className="mt-4 grid gap-1 text-sm text-ink-muted">
               {order.items.map((item, index) => (

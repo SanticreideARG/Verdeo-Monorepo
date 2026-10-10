@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate, Route, Routes } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { useOperatingSiteId } from '../lib/useOperatingSite.js';
 
 import { CmsSection, type PageSection } from '../components/CmsSections.js';
 import { LandingAssistant } from '../components/LandingAssistant.js';
+import { RouteErrorBoundary } from '../components/RouteErrorBoundary.js';
 import { apiRequest } from '../lib/api.js';
 import { AccessTokenLoginPage } from './AccessTokenLoginPage.js';
 import { AppearanceSettingsPage } from './AppearanceSettingsPage.js';
@@ -300,83 +301,87 @@ export function App() {
    * un cliente de Neuquén no se puede guardar como pedido de Mendoza.
    */
   const operatingSiteId = useOperatingSiteId();
+  const location = useLocation();
 
   return (
-    <Routes key={operatingSiteId ?? 'global'}>
-      <Route path="/" element={<HomePage />} />
-      <Route path="/pedido" element={<PublicOrderPage />} />
-      <Route path="/seguimiento" element={<TrackOrderPage />} />
-      {/*
-       * Los dos documentos legales, como rutas propias y públicas.
-       *
-       * Google verifica la pantalla de consentimiento de OAuth abriendo estas URLs sin sesión, desde
-       * afuera: tienen que responder siempre, en este dominio, sin login de por medio.
-       */}
-      <Route path="/privacidad" element={<PrivacyPolicyPage />} />
-      <Route path="/terminos" element={<TermsPage />} />
-      <Route path="/public/survey/:token" element={<PublicSurveyPage />} />
-      {/* El enlace compartido: corto, para que entre en un mensaje sin ocupar tres renglones. */}
-      <Route path="/encuesta/:token" element={<PublicSurveyPage variant="enlace" />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/acceso" element={<AccessTokenLoginPage />} />
-      <Route path="/recuperar" element={<PasswordResetPage />} />
-      <Route path="/mi-cuenta" element={<CustomerAccountPage />} />
-      <Route path="/auth/callback" element={<OAuthCallbackPage />} />
-      <Route path="/app" element={<DashboardPage />} />
-      <Route path="/app/clientes" element={<CustomersPage />} />
-      <Route path="/app/encuestas" element={<SurveysPage />} />
-      <Route path="/app/encuestas/:id/resultados" element={<SurveyResultsPage />} />
-      {/* La pantalla de tomar pedidos se fusionó con la de verlos: la ruta vieja redirige para
+    // La pantalla de error se reinicia al cambiar de ruta: una pantalla rota no rompe la siguiente.
+    <RouteErrorBoundary key={location.pathname}>
+      <Routes key={operatingSiteId ?? 'global'}>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/pedido" element={<PublicOrderPage />} />
+        <Route path="/seguimiento" element={<TrackOrderPage />} />
+        {/*
+         * Los dos documentos legales, como rutas propias y públicas.
+         *
+         * Google verifica la pantalla de consentimiento de OAuth abriendo estas URLs sin sesión, desde
+         * afuera: tienen que responder siempre, en este dominio, sin login de por medio.
+         */}
+        <Route path="/privacidad" element={<PrivacyPolicyPage />} />
+        <Route path="/terminos" element={<TermsPage />} />
+        <Route path="/public/survey/:token" element={<PublicSurveyPage />} />
+        {/* El enlace compartido: corto, para que entre en un mensaje sin ocupar tres renglones. */}
+        <Route path="/encuesta/:token" element={<PublicSurveyPage variant="enlace" />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/acceso" element={<AccessTokenLoginPage />} />
+        <Route path="/recuperar" element={<PasswordResetPage />} />
+        <Route path="/mi-cuenta" element={<CustomerAccountPage />} />
+        <Route path="/auth/callback" element={<OAuthCallbackPage />} />
+        <Route path="/app" element={<DashboardPage />} />
+        <Route path="/app/clientes" element={<CustomersPage />} />
+        <Route path="/app/encuestas" element={<SurveysPage />} />
+        <Route path="/app/encuestas/:id/resultados" element={<SurveyResultsPage />} />
+        {/* La pantalla de tomar pedidos se fusionó con la de verlos: la ruta vieja redirige para
           que los enlaces guardados y las tarjetas de chat sigan llevando a algún lado. */}
-      <Route path="/app/pedidos/nuevo" element={<Navigate replace to="/app/pedidos" />} />
-      <Route path="/app/pedidos/:id" element={<OrderDetailPage />} />
-      <Route path="/app/pedidos" element={<OrderIntakePage />} />
-      <Route path="/app/menus/nuevo" element={<MenuBuilderPage />} />
-      <Route path="/app/menus/:id/editar" element={<MenuBuilderPage />} />
-      <Route path="/app/menus" element={<MenusPage />} />
-      <Route path="/app/menus/precios" element={<PriceByLocationPage />} />
-      <Route path="/app/cocina" element={<KitchenPage />} />
-      <Route path="/app/ia" element={<AIProvidersPage />} />
-      <Route path="/app/ia/workbench" element={<AIWorkbenchPage />} />
-      <Route path="/app/chat" element={<ChatPage />} />
-      <Route path="/app/mensajes" element={<MessagingInboxPage />} />
-      <Route path="/app/avisos" element={<NoticesPage />} />
-      <Route path="/app/ajustes/plantillas" element={<MessageTemplatesPage />} />
-      <Route path="/app/ajustes/mensajes" element={<MessagingAccountsPage />} />
-      <Route path="/app/reparto/rutas" element={<RoutesPage />} />
-      {/* El sitio de reparto: sin sesión, la credencial es el enlace. Reemplaza a `/delivery`,
+        <Route path="/app/pedidos/nuevo" element={<Navigate replace to="/app/pedidos" />} />
+        <Route path="/app/pedidos/:id" element={<OrderDetailPage />} />
+        <Route path="/app/pedidos" element={<OrderIntakePage />} />
+        <Route path="/app/menus/nuevo" element={<MenuBuilderPage />} />
+        <Route path="/app/menus/:id/editar" element={<MenuBuilderPage />} />
+        <Route path="/app/menus" element={<MenusPage />} />
+        <Route path="/app/menus/precios" element={<PriceByLocationPage />} />
+        <Route path="/app/cocina" element={<KitchenPage />} />
+        <Route path="/app/ia" element={<AIProvidersPage />} />
+        <Route path="/app/ia/workbench" element={<AIWorkbenchPage />} />
+        <Route path="/app/chat" element={<ChatPage />} />
+        <Route path="/app/mensajes" element={<MessagingInboxPage />} />
+        <Route path="/app/avisos" element={<NoticesPage />} />
+        <Route path="/app/ajustes/plantillas" element={<MessageTemplatesPage />} />
+        <Route path="/app/ajustes/mensajes" element={<MessagingAccountsPage />} />
+        <Route path="/app/reparto/rutas" element={<RoutesPage />} />
+        {/* El sitio de reparto: sin sesión, la credencial es el enlace. Reemplaza a `/delivery`,
           que necesitaba una cuenta de repartidor. */}
-      <Route path="/reparto/:token" element={<DeliverySheetPage />} />
-      <Route path="/app/perfil" element={<ProfilePage />} />
-      <Route path="/app/usuarios" element={<UsersAdminPage />} />
-      <Route path="/app/estadisticas" element={<StatsPage />} />
-      <Route path="/app/contenidos" element={<CmsPagesAdminPage />} />
-      <Route path="/app/ajustes/zonas" element={<GeographySettingsPage />} />
-      <Route path="/app/ajustes/menu" element={<MenuCatalogSettingsPage />} />
-      {/* Etiquetas dejó de ser una pestaña de Ajustes: el formato y la generación viven juntos en su
+        <Route path="/reparto/:token" element={<DeliverySheetPage />} />
+        <Route path="/app/perfil" element={<ProfilePage />} />
+        <Route path="/app/usuarios" element={<UsersAdminPage />} />
+        <Route path="/app/estadisticas" element={<StatsPage />} />
+        <Route path="/app/contenidos" element={<CmsPagesAdminPage />} />
+        <Route path="/app/ajustes/zonas" element={<GeographySettingsPage />} />
+        <Route path="/app/ajustes/menu" element={<MenuCatalogSettingsPage />} />
+        {/* Etiquetas dejó de ser una pestaña de Ajustes: el formato y la generación viven juntos en su
           propia sección. La ruta vieja redirige. */}
-      <Route path="/app/ajustes/etiquetas" element={<Navigate replace to="/app/etiquetas" />} />
-      <Route path="/app/etiquetas" element={<LabelsPage />} />
-      <Route path="/app/calendario" element={<CalendarPage />} />
-      <Route path="/app/ajustes/correo" element={<EmailSettingsPage />} />
-      <Route path="/app/ajustes/apariencia" element={<AppearanceSettingsPage />} />
-      <Route path="/app/ajustes/asistente" element={<AssistantSettingsPage />} />
-      <Route path="/app/ajustes/pagos" element={<PaymentMethodsSettingsPage />} />
-      <Route path="/app/auditoria" element={<AuditLogPage />} />
-      <Route path="/app/sistema" element={<SystemPage />} />
-      <Route path="/app/ajustes/direcciones" element={<AddressSettingsPage />} />
-      <Route path="/app/respaldos" element={<BackupsPage />} />
-      <Route path="/app/ajustes/chat" element={<ChatLinksPage />} />
-      <Route path="/app/ayuda" element={<HelpPage />} />
-      <Route
-        path="*"
-        element={
-          <PlaceholderPage
-            title="No encontramos esa página"
-            copy="Revisá el enlace o volvé al inicio."
-          />
-        }
-      />
-    </Routes>
+        <Route path="/app/ajustes/etiquetas" element={<Navigate replace to="/app/etiquetas" />} />
+        <Route path="/app/etiquetas" element={<LabelsPage />} />
+        <Route path="/app/calendario" element={<CalendarPage />} />
+        <Route path="/app/ajustes/correo" element={<EmailSettingsPage />} />
+        <Route path="/app/ajustes/apariencia" element={<AppearanceSettingsPage />} />
+        <Route path="/app/ajustes/asistente" element={<AssistantSettingsPage />} />
+        <Route path="/app/ajustes/pagos" element={<PaymentMethodsSettingsPage />} />
+        <Route path="/app/auditoria" element={<AuditLogPage />} />
+        <Route path="/app/sistema" element={<SystemPage />} />
+        <Route path="/app/ajustes/direcciones" element={<AddressSettingsPage />} />
+        <Route path="/app/respaldos" element={<BackupsPage />} />
+        <Route path="/app/ajustes/chat" element={<ChatLinksPage />} />
+        <Route path="/app/ayuda" element={<HelpPage />} />
+        <Route
+          path="*"
+          element={
+            <PlaceholderPage
+              title="No encontramos esa página"
+              copy="Revisá el enlace o volvé al inicio."
+            />
+          }
+        />
+      </Routes>
+    </RouteErrorBoundary>
   );
 }

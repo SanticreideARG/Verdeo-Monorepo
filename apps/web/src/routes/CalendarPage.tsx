@@ -53,6 +53,7 @@ export function CalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
   const [weeks, setWeeks] = useState(4);
 
   const canUse = profile?.permissions.includes('calendar.use') ?? false;
@@ -68,6 +69,7 @@ export function CalendarPage() {
     const response = await apiRequest(`/api/v1/calendar?${params.toString()}`);
     if (!response.ok) throw new Error(await errorMessage(response));
     setEvents(((await response.json()) as { items: CalendarEvent[] }).items);
+    setLoadFailed(false);
     setLoading(false);
   }, [weeks]);
 
@@ -79,6 +81,7 @@ export function CalendarPage() {
     }
     void load().catch((error: unknown) => {
       setLoading(false);
+      setLoadFailed(true);
       setMessage(error instanceof Error ? error.message : 'No pudimos cargar el calendario.');
     });
   }, [load, profile]);
@@ -220,7 +223,7 @@ export function CalendarPage() {
 
         {loading ? (
           <p className="mt-6 text-ink-muted">Cargando…</p>
-        ) : byDay.size === 0 ? (
+        ) : loadFailed ? null : byDay.size === 0 ? (
           <p className="mt-6 empty-state">No hay nada agendado en este período.</p>
         ) : (
           <div className="calendar-agenda mt-6">

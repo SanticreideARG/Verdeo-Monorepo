@@ -110,7 +110,7 @@ export function SystemPage() {
               ))}
             </ul>
             <p className="system-modal-meta">
-              Medido {moment(status.generatedAt)}. Se actualiza solo cada 30 segundos.
+              Medido el {moment(status.generatedAt)} · se actualiza solo cada 30 segundos.
             </p>
 
             <h2 className="system-section">Servidor de la aplicación</h2>
