@@ -9262,3 +9262,49 @@ textarea.sr-only {
   background: var(--db-surface-solid, #fff);
   color: var(--db-text, #18351f);
 }
+
+/* --- Acciones de fila: el paso que sigue y el menú "⋯" ---------------------------------------- */
+.row-actions.is-compact {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.action-menu-trigger {
+  min-width: 2.4rem;
+  padding-inline: 0.6rem;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.data-cards .row-actions.is-compact .action-menu-trigger {
+  flex: none;
+}
+.action-menu {
+  position: fixed;
+  z-index: 70;
+  display: grid;
+  min-width: 11rem;
+  padding: 0.35rem;
+  border: 1px solid var(--db-border);
+  border-radius: 0.75rem;
+  background: var(--db-surface-solid, #fff);
+  box-shadow: 0 12px 32px rgb(9 20 16 / 28%);
+}
+.action-menu-item {
+  min-height: 2.5rem;
+  padding: 0.45rem 0.75rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: none;
+  color: var(--db-text);
+  font: inherit;
+  font-size: 0.88rem;
+  text-align: left;
+  cursor: pointer;
+}
+.action-menu-item:hover,
+.action-menu-item:focus-visible {
+  background: var(--db-border-soft);
+  outline: none;
+}
+.action-menu-item.is-danger {
+  color: #d2493f;
+}

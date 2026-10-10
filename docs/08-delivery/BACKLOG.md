@@ -476,3 +476,13 @@ Plan completo en `docs/03-features/ADDRESS_SANITIZER_PLAN.md`.
 - [x] Fase 4: ubicar al importar pedidos; métricas de acierto y de uso de la IA.
 - [ ] Un segundo geocodificador (OpenStreetMap u otro) para que el orden de procedimientos sea
       configurable de verdad; medirlo antes con direcciones reales.
+
+## Carga de datos
+
+Plan completo en `docs/08-delivery/PLAN_CARGA_DE_DATOS.md`.
+
+- [ ] Fase 1: repetir el pedido anterior del cliente, pegar el mensaje de WhatsApp (conectar la
+      tarea `extract_order`, que ya existe), elegir cliente con teclado, guardar y confirmar en un paso.
+- [ ] Fase 2: aviso de cliente duplicado al crearlo, ubicar la dirección al guardar, validación en
+      el campo, precios precargados y autocompletar platos en el menú semanal.
+- [ ] Fase 3: importación sin pegar, corrección en la vista previa, domicilio con zona desde el email.

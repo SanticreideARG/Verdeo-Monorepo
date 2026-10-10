@@ -82,6 +82,9 @@ El medio de pago es siempre uno de los **parametrizados** (Panel de control → 
   selector, para corregirlo sin que guardar por otro motivo lo cambie solo.
 - **Importar emails/planilla**: el medio se elige en el pie del diálogo (una vez para todos). Si
   la planilla trae un medio que coincide con uno parametrizado, se respeta ese.
+- **Acciones de la fila:** a la vista queda sólo el paso que sigue (Confirmar un borrador, Marcar
+  listo uno confirmado); Ver detalle, Revertir, Cancelar y Eliminar van al menú "⋯". Así cada fila
+  ocupa una línea en lugar de apilar tres botones.
 - **Doble clic** sobre una fila (escritorio) abre la ficha del pedido en un modal; en el teléfono,
   tocar la tarjeta. El doble clic sobre un selector, tilde o botón de la fila no abre nada.
 

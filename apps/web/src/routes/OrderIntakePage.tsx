@@ -10,6 +10,7 @@ import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { DataTable } from '../components/DataTable.js';
 import { OrderDetailDialog } from '../components/OrderDetailDialog.js';
+import { ActionMenu } from '../components/ActionMenu.js';
 import { OrderImportDialog } from '../components/OrderImportDialog.js';
 import {
   paymentMethodLabel,
@@ -17,6 +18,7 @@ import {
   paymentSelectValue,
   usePaymentMethods,
 } from '../lib/paymentMethods.js';
+import { orderRowActions, type OrderRowActionKey } from '../lib/orderRowActions.js';
 import { DraftNotice } from '../components/DraftNotice.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { ReasonDialog } from '../components/ReasonDialog.js';
@@ -872,57 +874,42 @@ export function OrderIntakePage() {
       key: 'acciones',
       label: 'Acciones',
       locked: true,
-      render: (order) => (
-        <div className="row-actions">
-          {order.status === 'DRAFT' && permissions.includes('orders.confirm') ? (
-            <button
-              className="button button-primary"
-              onClick={() => void transition(order, 'CONFIRMED')}
-              type="button"
-            >
-              Confirmar
-            </button>
-          ) : null}
-          {order.status === 'CONFIRMED' && permissions.includes('orders.edit') ? (
-            <button
-              className="button button-secondary"
-              onClick={() => void transition(order, 'READY')}
-              type="button"
-            >
-              Marcar listo
-            </button>
-          ) : null}
-          {['READY', 'DELIVERED'].includes(order.status) &&
-          permissions.includes('orders.revert_status') ? (
-            <button
-              className="button button-secondary"
-              onClick={() => setReverting(order)}
-              type="button"
-            >
-              Revertir
-            </button>
-          ) : null}
-          {['DRAFT', 'CONFIRMED'].includes(order.status) &&
-          permissions.includes('orders.cancel') ? (
-            <button
-              className="button button-secondary"
-              onClick={() => void transition(order, 'CANCELLED')}
-              type="button"
-            >
-              Cancelar
-            </button>
-          ) : null}
-          {permissions.includes('orders.delete') ? (
-            <button
-              className="button button-danger"
-              onClick={() => setDeleting(order)}
-              type="button"
-            >
-              Eliminar
-            </button>
-          ) : null}
-        </div>
-      ),
+      render: (order) => {
+        const { menu, primary } = orderRowActions(order, permissions);
+        const run = (key: OrderRowActionKey) => {
+          if (key === 'confirm') void transition(order, 'CONFIRMED');
+          else if (key === 'ready') void transition(order, 'READY');
+          else if (key === 'cancel') void transition(order, 'CANCELLED');
+          else if (key === 'revert') setReverting(order);
+          else if (key === 'delete') setDeleting(order);
+          else setViewing(order);
+        };
+        const name = maskSurnames
+          ? maskSurname(order.customer.displayName)
+          : order.customer.displayName;
+        return (
+          <div className="row-actions is-compact">
+            {primary ? (
+              <button
+                className={`button ${primary.key === 'confirm' ? 'button-primary' : 'button-secondary'}`}
+                onClick={() => run(primary.key)}
+                type="button"
+              >
+                {primary.label}
+              </button>
+            ) : null}
+            <ActionMenu
+              items={menu.map((action) => ({
+                key: action.key,
+                label: action.label,
+                onSelect: () => run(action.key),
+                tone: action.tone,
+              }))}
+              label={`Más acciones para ${name}`}
+            />
+          </div>
+        );
+      },
     },
   ];
 
