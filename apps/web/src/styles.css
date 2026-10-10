@@ -9308,3 +9308,24 @@ textarea.sr-only {
 .action-menu-item.is-danger {
   color: #d2493f;
 }
+
+/*
+ * En la tabla, los botones de la fila son compactos y de una línea.
+ *
+ * Heredaban el relleno de los botones grandes (14 px × 18 px) y "Marcar listo" se partía en dos
+ * renglones: la fila medía 100 px aun con una sola acción a la vista. En la tarjeta del teléfono
+ * siguen grandes, porque ahí se tocan con el dedo.
+ */
+.data-table .row-actions.is-compact .button {
+  min-height: 2.25rem;
+  padding: 0.4rem 0.8rem;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+.data-table .row-actions.is-compact .action-menu-trigger {
+  min-width: 2.25rem;
+  padding-inline: 0.5rem;
+}
+.data-table .order-card-phone {
+  white-space: nowrap;
+}

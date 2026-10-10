@@ -37,7 +37,9 @@ export function ActionMenu({ items, label }: { items: readonly ActionMenuItem[];
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
     const height = items.length * ITEM_HEIGHT + 12;
-    const right = Math.max(8, window.innerWidth - rect.right);
+    // Contra el ancho sin la barra de scroll: con `innerWidth` el menú quedaba corrido el ancho
+    // de la barra (10 px) a la izquierda de su botón.
+    const right = Math.max(8, document.documentElement.clientWidth - rect.right);
     setStyle(
       rect.bottom + height + 8 > window.innerHeight && rect.top > height
         ? { bottom: window.innerHeight - rect.top + 4, right }
