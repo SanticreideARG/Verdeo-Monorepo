@@ -70,6 +70,17 @@ No se requiere una segunda confirmación después de enviar el resumen. El mensa
 - día de entrega;
 - consulta/confirmación de disponibilidad.
 
+## Carga de un pedido
+
+- **Repetir lo de la última vez**: al elegir un cliente se ofrece repetir su último pedido no
+  cancelado (lo pedido, dirección, medio de pago y origen; no el comentario para la cocina ni los
+  platos de un Intuitivo). Detalle en `docs/08-delivery/PLAN_CARGA_DE_DATOS.md`.
+- **Pegar el mensaje del cliente**: la IA propone el pedido y el formulario se completa para
+  revisarlo. Nunca guarda sola.
+- **Guardar y confirmar** es el botón principal para quien puede confirmar; "Guardar como
+  borrador" queda al lado.
+- **Comentario para la cocina**: uno por pedido. No hay indicaciones por plato.
+
 ## Medio de pago
 
 El medio de pago es siempre uno de los **parametrizados** (Panel de control → Medios de pago).

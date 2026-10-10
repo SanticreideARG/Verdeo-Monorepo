@@ -289,3 +289,27 @@ describe('ciudad sin punto de origen', () => {
     expect(result.reason).toContain('lejos');
   });
 });
+
+describe('buscar clientes por teléfono', () => {
+  // Se escribe como lo dicta el cliente; se guarda en forma canónica. Tienen que encontrarse.
+  it('encuentra al cliente con el teléfono escrito en formato local con el 15', async () => {
+    const { client, service } = await base(proveedor([]));
+    await client.exec(
+      `insert into customer_identities (customer_id, type, value_normalized, value_display)
+       values ('${CUSTOMER}', 'whatsapp', '+5491155550101', '+54 9 11 5555 0101')`,
+    );
+
+    const encontrados = await service.listCustomers(
+      { limit: 10, search: '(011) 15 5555-0101' },
+      true,
+    );
+
+    expect(encontrados.items.map((item) => item.id)).toContain(CUSTOMER);
+  });
+
+  it('un texto que no es teléfono no busca por clave de teléfono', async () => {
+    const { service } = await base(proveedor([]));
+    const encontrados = await service.listCustomers({ limit: 10, search: 'Marta' }, true);
+    expect(encontrados.items.map((item) => item.id)).toEqual([CUSTOMER]);
+  });
+});

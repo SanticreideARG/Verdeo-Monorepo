@@ -609,12 +609,25 @@ export class PostgresOperationsService {
       .limit(input.limit + 1);
 
     if (input.search && includeSensitive) {
+      const phoneSearchKey = /^[\d\s+().-]+$/.test(input.search)
+        ? argentinePhoneKey(input.search)
+        : null;
       const matchingIdentities = await this.database
         .select({ customerId: customerIdentities.customerId })
         .from(customerIdentities)
         .where(
           and(
-            ilike(customerIdentities.valueNormalized, `%${input.search.toLowerCase()}%`),
+            or(
+              ilike(customerIdentities.valueNormalized, `%${input.search.toLowerCase()}%`),
+              /*
+               * Un teléfono escrito como lo escribe una persona —"(011) 15 5555-0101"— no aparece
+               * tal cual en el valor guardado ("+5491155550101"). Si lo buscado parece un
+               * teléfono, se busca también por su clave de diez dígitos.
+               */
+              ...(phoneSearchKey
+                ? [ilike(customerIdentities.valueNormalized, `%${phoneSearchKey}%`)]
+                : []),
+            ),
             eq(customerIdentities.active, true),
           ),
         )

@@ -9329,3 +9329,46 @@ textarea.sr-only {
 .data-table .order-card-phone {
   white-space: nowrap;
 }
+
+/* --- Carga de pedidos: repetir, pegar el mensaje, cliente marcado ------------------------------ */
+.repeat-order {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px dashed var(--db-border);
+  border-radius: 0.75rem;
+  font-size: 0.88rem;
+}
+.repeat-order p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.paste-message {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--db-border-soft);
+  border-radius: 0.75rem;
+}
+.paste-message[open] {
+  padding-bottom: 0.8rem;
+}
+.paste-message > summary {
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.paste-message textarea {
+  width: 100%;
+}
+.paste-message .button {
+  justify-self: start;
+}
+.customer-result.is-active {
+  border-color: var(--db-accent);
+  background: var(--db-border-soft);
+}

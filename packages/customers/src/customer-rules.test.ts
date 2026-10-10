@@ -95,3 +95,30 @@ describe('customer rules', () => {
     expect(canonicalArgentinePhone('5555 0101')).toBe('5555 0101');
   });
 });
+
+describe('argentinePhoneKey con el 15 del formato local', () => {
+  // Es como se escribe un celular en Argentina y como lo muestra la propia aplicación.
+  it('reconoce la misma línea escrita con el 15', () => {
+    expect(argentinePhoneKey('(011) 15 5555-0101')).toBe('1155550101');
+    expect(argentinePhoneKey('011 15 5555 0101')).toBe('1155550101');
+    expect(argentinePhoneKey('11 15 5555 0101')).toBe('1155550101');
+    expect(argentinePhoneKey('+54 9 11 5555-0101')).toBe('1155550101');
+  });
+
+  it('funciona con códigos de área de tres y cuatro dígitos', () => {
+    expect(argentinePhoneKey('(0299) 15 549 3102')).toBe('2995493102');
+    expect(argentinePhoneKey('(0351) 15 300 7925')).toBe('3513007925');
+    expect(argentinePhoneKey('(02944) 15 12 3456')).toBe('2944123456');
+  });
+
+  it('no cambia los números que ya venían bien', () => {
+    expect(argentinePhoneKey('+5491156380959')).toBe('1156380959');
+    expect(argentinePhoneKey('01156380959')).toBe('1156380959');
+    expect(argentinePhoneKey('1156380959')).toBe('1156380959');
+  });
+
+  // Con más de un 15 posible no hay forma de saber cuál es el del formato: no se adivina.
+  it('no adivina cuando el 15 puede estar en más de un lugar', () => {
+    expect(argentinePhoneKey('11 15 15 00 0000')).toBe('1515000000');
+  });
+});

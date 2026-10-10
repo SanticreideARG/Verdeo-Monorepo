@@ -155,6 +155,8 @@ import {
   OrderImportEmailPreviewRequestSchema,
   GeocodingMetricsSchema,
   GeocodingSettingsSchema,
+  OrderExtractRequestSchema,
+  OrderExtractResponseSchema,
   OrderImportConfirmResponseSchema,
   OrderImportPreviewResponseSchema,
   OrderSchema,
@@ -528,7 +530,12 @@ interface OperationsEngine {
     input: MenuDistributeRequest,
     context: OperationsContext,
   ): Promise<unknown>;
-  createOrder(input: ScopedInput<OrderCreateRequest>, context: OperationsContext): Promise<unknown>;
+  createOrder(
+    input: ScopedInput<Omit<OrderCreateRequest, 'confirm'>> & {
+      initialStatus?: 'CONFIRMED' | 'DRAFT';
+    },
+    context: OperationsContext,
+  ): Promise<unknown>;
   setOrderPaid(
     orderId: string,
     paid: boolean,
@@ -5210,11 +5217,59 @@ export function createApp(options: CreateAppOptions) {
         statusForCode(code),
       );
     }
+    // Crear ya confirmado pide el mismo permiso que confirmar después.
+    const { confirm, ...data } = input.data;
+    if (confirm && !context.get('session').permissions.includes('orders.confirm'))
+      return forbidden(context);
     const order = await requireOperations().createOrder(
-      scoped(context, input.data),
+      scoped(context, { ...data, ...(confirm ? { initialStatus: 'CONFIRMED' as const } : {}) }),
       operationsContext(context),
     );
     return context.json(OrderSchema.parse(contractValue(order)), 201);
+  });
+
+  /*
+   * Pegar el mensaje del cliente y que la IA proponga el pedido.
+   *
+   * Sólo propone: la pantalla completa el formulario y la persona lo revisa antes de guardar.
+   * Pide `orders.create` y no `ai.use`, porque es parte de cargar un pedido y está encendido para
+   * todo el que carga. El teléfono se saca del texto con reglas, no con la IA: es un dato que se
+   * puede leer sin adivinar.
+   */
+  app.post('/api/v1/orders/extract', async (context) => {
+    if (!context.get('session').permissions.includes('orders.create')) return forbidden(context);
+    const input = OrderExtractRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success)
+      return badRequest(context, 'Pegá el mensaje del cliente.', input.error.issues);
+    const menu = input.data.menu
+      .map((family) => `${family.familyName} (${family.sizes.join(', ')})`)
+      .join('; ');
+    const result = await requireAiTasks().runTask(
+      'extract_order',
+      { mensaje: input.data.text, menu },
+      aiEngineContext(context),
+    );
+    const candidate = result.output as {
+      confidence: number;
+      dishes: string[];
+      familyName: string | null;
+      quantityUnits: number | null;
+      sizeName: string | null;
+    };
+    const phoneMatch = input.data.text.match(/\+?\d[\d\s().-]{8,}\d/);
+    const phoneKey = phoneMatch ? argentinePhoneKey(phoneMatch[0]) : null;
+    return context.json(
+      OrderExtractResponseSchema.parse({
+        candidate: {
+          confidence: candidate.confidence,
+          dishes: candidate.dishes,
+          familyName: candidate.familyName,
+          quantityUnits: candidate.quantityUnits,
+          sizeName: candidate.sizeName,
+        },
+        phone: phoneKey ? `+549${phoneKey}` : null,
+      }),
+    );
   });
 
   app.get('/api/v1/orders/:id', async (context) => {

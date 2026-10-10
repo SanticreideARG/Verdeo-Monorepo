@@ -19,6 +19,12 @@ import {
   usePaymentMethods,
 } from '../lib/paymentMethods.js';
 import { orderRowActions, type OrderRowActionKey } from '../lib/orderRowActions.js';
+import {
+  matchMenuOffering,
+  menuNameKey,
+  orderItemsSummary,
+  planRepeat,
+} from '../lib/orderRepeat.js';
 import { DraftNotice } from '../components/DraftNotice.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { ReasonDialog } from '../components/ReasonDialog.js';
@@ -155,6 +161,7 @@ export function OrderIntakePage() {
   const [menus, setMenus] = useState<WeeklyMenu[]>([]);
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const paymentMethods = usePaymentMethods();
+  const canConfirm = permissions.includes('orders.confirm');
   const [message, setMessage] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -174,6 +181,14 @@ export function OrderIntakePage() {
   const [units, setUnits] = useState(1);
   // Número del pedido recién guardado: mientras haya uno, el diálogo pregunta qué sigue.
   const [savedNumber, setSavedNumber] = useState<string | null>(null);
+  // Si el último guardado salió confirmado, para decirlo en el diálogo.
+  const [savedConfirmed, setSavedConfirmed] = useState(false);
+  // Qué resultado de la búsqueda de clientes está marcado, para elegirlo con Enter.
+  const [customerActive, setCustomerActive] = useState(0);
+  // El último pedido del cliente elegido, para ofrecer repetirlo.
+  const [lastOrder, setLastOrder] = useState<OrderSummary | null>(null);
+  const [pasteText, setPasteText] = useState('');
+  const [pasteBusy, setPasteBusy] = useState(false);
 
   // "Nuevo cliente" (quick alta) vs "Buscar cliente" (by name/number) — a client is picked before
   // the rest of the order form matters, so this drives what `customerId` ends up as on submit.
@@ -516,6 +531,164 @@ export function OrderIntakePage() {
     setAddressHint('Domicilio del cliente. Podés cambiarlo para esta entrega.');
   }
 
+  /** Elegir un cliente: su domicilio, su último pedido, y el foco a la variedad para seguir. */
+  function chooseCustomer(customer: CustomerSummary) {
+    setSelectedCustomer(customer);
+    setCustomerResults([]);
+    setCustomerActive(0);
+    void fillAddressFor(customer.id);
+    void loadLastOrder(customer.id);
+    window.setTimeout(() => {
+      formRef.current?.querySelector<HTMLSelectElement>('select[name="offeringFamily"]')?.focus();
+    }, 0);
+  }
+
+  /** El pedido más reciente del cliente que no se canceló: es el que tiene sentido repetir. */
+  async function loadLastOrder(customerId: string) {
+    setLastOrder(null);
+    const response = await apiRequest(
+      `/api/v1/orders?customerId=${encodeURIComponent(customerId)}&limit=5`,
+      { notify: false },
+    );
+    if (!response.ok) return;
+    const items = ((await response.json()) as { items: OrderSummary[] }).items;
+    setLastOrder(items.find((order) => order.status !== 'CANCELLED') ?? null);
+  }
+
+  /*
+   * Origen, medio de pago y comentario son campos sin estado propio (los recupera el borrador del
+   * formulario), así que se completan escribiendo en el campo y no en un estado de React.
+   */
+  function setFormField(name: string, value: string) {
+    const field = formRef.current?.elements.namedItem(name);
+    if (
+      field instanceof HTMLInputElement ||
+      field instanceof HTMLSelectElement ||
+      field instanceof HTMLTextAreaElement
+    ) {
+      field.value = value;
+    }
+  }
+
+  /**
+   * Repetir lo de la última vez.
+   *
+   * La vianda es semanal y casi todos los pedidos son de clientes que ya pidieron: se recargaba
+   * todo a mano cada semana. Se copia lo pedido (emparejado con el menú de esta semana, porque las
+   * ofertas cambian de id), la dirección, el medio de pago y el origen. No se copia el comentario
+   * para la cocina —es de aquel pedido— ni los platos de un Intuitivo, que son de aquella semana.
+   * No es un valor por defecto adivinado: es lo que **este** cliente eligió, y se puede cambiar.
+   */
+  function repeatLastOrder() {
+    if (!lastOrder || !selectedMenu) return;
+    const plan = planRepeat(lastOrder.items, selectedMenu.offerings);
+    const lines = plan.lines.flatMap(({ offering, quantityUnits }) => {
+      const line = pendingCartLine(offering, quantityUnits, [], intuitivoLimits);
+      return line && 'line' in line ? [line.line] : [];
+    });
+    setCart(lines);
+    if (plan.composable) {
+      setSelectedOfferingId(plan.composable.offering.id);
+      setUnits(plan.composable.quantityUnits);
+    } else {
+      setSelectedOfferingId('');
+      setUnits(1);
+    }
+    setSelectedDishes([]);
+    setDeliveryAddress(lastOrder.deliveryAddress);
+    setAddressHint('La dirección del pedido anterior. Podés cambiarla para esta entrega.');
+    setFormField(
+      'paymentExpectation',
+      paymentSelectValue(lastOrder.paymentExpectation, paymentMethods),
+    );
+    setFormField('source', lastOrder.source);
+    const notes = [
+      plan.composable ? 'Elegí los platos del Intuitivo de esta semana.' : '',
+      plan.missing.length > 0
+        ? `No está en el menú de esta semana: ${plan.missing.join(', ')}.`
+        : '',
+    ].filter(Boolean);
+    setMessage(notes.join(' '));
+    showToast('Pedido anterior cargado. Revisalo antes de guardar.');
+  }
+
+  /**
+   * Pegar el mensaje del cliente y completar el formulario con lo que propone la IA.
+   *
+   * Propone y no guarda: completa variedad, tamaño, unidades y —en un Intuitivo— los platos que
+   * existan en el menú de esta semana. Si el mensaje trae un teléfono y todavía no hay cliente
+   * elegido, lo busca; con un solo resultado lo elige.
+   */
+  async function fillFromMessage() {
+    if (!selectedMenu || !pasteText.trim()) return;
+    setPasteBusy(true);
+    setMessage('');
+    const families = [
+      ...new Set(selectedMenu.offerings.map((offering) => offering.familyName)),
+    ].map((familyName) => ({
+      familyName,
+      sizes: selectedMenu.offerings
+        .filter((offering) => offering.familyName === familyName)
+        .map((offering) => offering.variantName),
+    }));
+    const response = await apiRequest('/api/v1/orders/extract', {
+      body: JSON.stringify({ menu: families, text: pasteText }),
+      method: 'POST',
+      notify: false,
+    });
+    setPasteBusy(false);
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    const body = (await response.json()) as {
+      candidate: {
+        dishes: string[];
+        familyName: string | null;
+        quantityUnits: number | null;
+        sizeName: string | null;
+      };
+      phone: string | null;
+    };
+    const offering = matchMenuOffering(
+      body.candidate.familyName,
+      body.candidate.sizeName,
+      selectedMenu.offerings,
+    );
+    if (offering) {
+      setSelectedOfferingId(offering.id);
+      if (body.candidate.quantityUnits) setUnits(Math.max(1, body.candidate.quantityUnits));
+      if (offering.composable) {
+        const available = new Map(
+          selectedMenu.offerings
+            .flatMap((item) => item.dishes)
+            .map((dish) => [menuNameKey(dish), dish] as const),
+        );
+        setSelectedDishes(
+          body.candidate.dishes
+            .map((dish) => available.get(menuNameKey(dish)))
+            .filter((dish): dish is string => Boolean(dish)),
+        );
+      }
+    }
+    if (body.phone && !selectedCustomer) {
+      setCustomerMode('search');
+      const found = await apiRequest(
+        `/api/v1/customers?search=${encodeURIComponent(body.phone)}&limit=2`,
+        { notify: false },
+      );
+      const matches = found.ok ? ((await found.json()) as { items: CustomerSummary[] }).items : [];
+      const [only] = matches;
+      if (matches.length === 1 && only) chooseCustomer(only);
+      else setCustomerQuery(body.phone);
+    }
+    setMessage(
+      offering
+        ? 'Completé el pedido con el mensaje: revisá variedad, tamaño y unidades antes de guardar.'
+        : 'No reconocí la variedad en el mensaje: elegila a mano.',
+    );
+  }
+
   async function mutate(path: string, payload?: unknown) {
     setMessage('');
     const response = await apiRequest(path, {
@@ -544,6 +717,7 @@ export function OrderIntakePage() {
         .then(async (response) => {
           if (!active || !response.ok) return;
           setCustomerResults(((await response.json()) as { items: CustomerSummary[] }).items);
+          setCustomerActive(0);
         })
         .finally(() => {
           if (active) setCustomerSearching(false);
@@ -558,6 +732,12 @@ export function OrderIntakePage() {
   async function createOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formEl = event.currentTarget;
+    /*
+     * Qué botón se apretó. Enter (o Ctrl+Enter) envía con el primer botón, que es "Guardar y
+     * confirmar" para quien puede confirmar: lo que se hace casi siempre.
+     */
+    const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    const confirmNow = canConfirm && submitter?.value !== 'draft';
     const form = new FormData(formEl);
 
     /*
@@ -628,21 +808,26 @@ export function OrderIntakePage() {
         customerId,
         deliveryAddress: formText(form, 'deliveryAddress'),
         deliveryDate: selectedMenu ? deliveryDateFor(selectedMenu.cycle.closeAt) : '',
-        dietaryInstructions: formText(form, 'dietaryInstructions')
-          .split('\n')
-          .map((value) => value.trim())
-          .filter(Boolean),
+        // Un solo comentario para la cocina por pedido: no hay indicaciones por plato.
+        dietaryInstructions: formText(form, 'dietaryInstructions').trim()
+          ? [formText(form, 'dietaryInstructions').trim().replace(/\s+/g, ' ')]
+          : [],
         items: cartItemsPayload(armado.lines),
         menuId: formText(form, 'menuId'),
         paymentExpectation: formText(form, 'paymentExpectation'),
         source: formText(form, 'source'),
+        ...(confirmNow ? { confirm: true } : {}),
       });
       // The draft is dropped on a successful save, not on unmount: that is what makes "I switched
       // screens and came back" restore, while "I already saved this" does not come back as a ghost.
       draft.discard();
       resetCart();
       setMessage('');
-      showToast('Pedido registrado como borrador.');
+      showToast(
+        confirmNow ? 'Pedido registrado y confirmado.' : 'Pedido registrado como borrador.',
+      );
+      setSavedConfirmed(confirmNow);
+      setLastOrder(null);
       /*
        * El formulario NO se limpia ni se cierra acá: eso lo decide el diálogo.
        *
@@ -1047,6 +1232,26 @@ export function OrderIntakePage() {
             ref={formRef}
           >
             {draft.restored ? <DraftNotice onDiscard={draft.dismissNotice} /> : null}
+            {selectedMenu ? (
+              <details className="paste-message mb-4">
+                <summary>Pegar el mensaje del cliente</summary>
+                <textarea
+                  aria-label="Mensaje del cliente"
+                  onChange={(event) => setPasteText(event.target.value)}
+                  placeholder="Pegá acá el mensaje de WhatsApp: la IA propone el pedido y lo revisás antes de guardar."
+                  rows={3}
+                  value={pasteText}
+                />
+                <button
+                  className="button button-secondary"
+                  disabled={pasteBusy || pasteText.trim().length < 3}
+                  onClick={() => void fillFromMessage()}
+                  type="button"
+                >
+                  {pasteBusy ? 'Leyendo el mensaje…' : 'Completar con el mensaje'}
+                </button>
+              </details>
+            ) : null}
             <fieldset className="mb-5 rounded-2xl border border-forest/10 p-4">
               <legend className="px-2 text-sm font-bold text-forest">Cliente</legend>
               <div className="flex gap-2">
@@ -1072,22 +1277,60 @@ export function OrderIntakePage() {
               {customerMode === 'search' ? (
                 <div className="mt-3">
                   {selectedCustomer ? (
-                    <p className="flex items-center gap-2 text-sm">
-                      <span className="status-chip">{selectedCustomer.displayName}</span>
-                      <button
-                        className="button button-secondary"
-                        onClick={() => setSelectedCustomer(null)}
-                        type="button"
-                      >
-                        Cambiar
-                      </button>
-                    </p>
+                    <>
+                      <p className="flex items-center gap-2 text-sm">
+                        <span className="status-chip">{selectedCustomer.displayName}</span>
+                        <button
+                          className="button button-secondary"
+                          onClick={() => {
+                            setSelectedCustomer(null);
+                            setLastOrder(null);
+                          }}
+                          type="button"
+                        >
+                          Cambiar
+                        </button>
+                      </p>
+                      {lastOrder ? (
+                        <div className="repeat-order">
+                          <p>
+                            <strong>Última vez</strong> ({lastOrder.publicNumber}):{' '}
+                            {orderItemsSummary(lastOrder.items)} ·{' '}
+                            {paymentMethodLabel(lastOrder.paymentExpectation, paymentMethods)}
+                          </p>
+                          <button
+                            className="button button-secondary"
+                            onClick={repeatLastOrder}
+                            type="button"
+                          >
+                            Repetir lo de la última vez
+                          </button>
+                        </div>
+                      ) : null}
+                    </>
                   ) : (
                     <>
                       <div className="relative">
                         <input
                           autoComplete="off"
                           onChange={(event) => setCustomerQuery(event.target.value)}
+                          // Flechas para recorrer, Enter para elegir. Enter acá nunca envía el
+                          // formulario: guardaría un pedido sin cliente a medio elegir.
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              const customer = customerResults[customerActive];
+                              if (customer) chooseCustomer(customer);
+                            } else if (event.key === 'ArrowDown' && customerResults.length > 0) {
+                              event.preventDefault();
+                              setCustomerActive((current) =>
+                                Math.min(current + 1, customerResults.length - 1),
+                              );
+                            } else if (event.key === 'ArrowUp' && customerResults.length > 0) {
+                              event.preventDefault();
+                              setCustomerActive((current) => Math.max(current - 1, 0));
+                            }
+                          }}
                           placeholder="Empezá a escribir un nombre o teléfono…"
                           value={customerQuery}
                         />
@@ -1106,15 +1349,12 @@ export function OrderIntakePage() {
                       ) : null}
                       {customerResults.length > 0 ? (
                         <ul className="mt-2 grid gap-1">
-                          {customerResults.map((customer) => (
+                          {customerResults.map((customer, index) => (
                             <li key={customer.id}>
                               <button
-                                className="w-full rounded-lg border border-forest/10 px-3 py-2 text-left text-sm hover:bg-forest/5"
-                                onClick={() => {
-                                  setSelectedCustomer(customer);
-                                  setCustomerResults([]);
-                                  void fillAddressFor(customer.id);
-                                }}
+                                aria-selected={index === customerActive}
+                                className={`customer-result w-full rounded-lg border border-forest/10 px-3 py-2 text-left text-sm hover:bg-forest/5${index === customerActive ? ' is-active' : ''}`}
+                                onClick={() => chooseCustomer(customer)}
                                 type="button"
                               >
                                 {customer.displayName}
@@ -1282,8 +1522,13 @@ export function OrderIntakePage() {
               </label>
               {dietaryInstructionsEnabled ? (
                 <label className="field field-wide">
-                  Indicaciones para cocina
-                  <textarea name="dietaryInstructions" placeholder="Una por línea" rows={2} />
+                  Comentario para la cocina
+                  <textarea
+                    maxLength={200}
+                    name="dietaryInstructions"
+                    placeholder="Una sola nota para este pedido"
+                    rows={2}
+                  />
                 </label>
               ) : null}
             </div>
@@ -1387,9 +1632,20 @@ export function OrderIntakePage() {
                   Total <strong>{formatMoney(totalMinor, cartCurrency)}</strong>
                 </p>
               ) : null}
-              <button className="button button-primary" type="submit">
-                Registrar borrador
-              </button>
+              {canConfirm ? (
+                <>
+                  <button className="button button-primary" type="submit" value="confirm">
+                    Guardar y confirmar
+                  </button>
+                  <button className="button button-secondary" type="submit" value="draft">
+                    Guardar como borrador
+                  </button>
+                </>
+              ) : (
+                <button className="button button-primary" type="submit" value="draft">
+                  Registrar borrador
+                </button>
+              )}
               <button
                 className="button button-secondary"
                 onClick={() => {
@@ -1631,7 +1887,7 @@ export function OrderIntakePage() {
 
       {savedNumber ? (
         <AfterSaveDialog
-          detail={`Quedó como borrador con el número ${savedNumber}.`}
+          detail={`Quedó ${savedConfirmed ? 'confirmado' : 'como borrador'} con el número ${savedNumber}.`}
           keepLabel="Conservar los datos"
           newLabel="Cargar otro pedido"
           onKeep={() => setSavedNumber(null)}
@@ -1644,6 +1900,8 @@ export function OrderIntakePage() {
             setCustomerQuery('');
             setSelectedOfferingId('');
             setSelectedDishes([]);
+            setLastOrder(null);
+            setPasteText('');
             setSavedNumber(null);
           }}
           title="Pedido registrado"

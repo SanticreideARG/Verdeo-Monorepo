@@ -481,8 +481,10 @@ Plan completo en `docs/03-features/ADDRESS_SANITIZER_PLAN.md`.
 
 Plan completo en `docs/08-delivery/PLAN_CARGA_DE_DATOS.md`.
 
-- [ ] Fase 1: repetir el pedido anterior del cliente, pegar el mensaje de WhatsApp (conectar la
-      tarea `extract_order`, que ya existe), elegir cliente con teclado, guardar y confirmar en un paso.
+- [x] Fase 1: repetir el pedido anterior del cliente, pegar el mensaje de WhatsApp, elegir cliente
+      con teclado y buscarlo por teléfono escrito como sea, guardar y confirmar en un paso.
+- [ ] Revisar teléfonos ya guardados con la clave vieja: los que se cargaron en formato local con
+      el 15 pueden haber quedado con un número equivocado.
 - [ ] Fase 2: aviso de cliente duplicado al crearlo, ubicar la dirección al guardar, validación en
       el campo, precios precargados y autocompletar platos en el menú semanal.
 - [ ] Fase 3: importación sin pegar, corrección en la vista previa, domicilio con zona desde el email.

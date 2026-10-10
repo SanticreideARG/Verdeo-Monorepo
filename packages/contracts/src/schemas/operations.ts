@@ -639,6 +639,13 @@ export const OrderItemInputSchema = z.object({
 });
 
 export const OrderCreateRequestSchema = z.object({
+  /**
+   * Crear el pedido ya confirmado, en un paso.
+   *
+   * Todo pedido manual nacía como borrador y se confirmaba aparte: dos pasos para el caso común.
+   * Pide `orders.confirm`, igual que confirmar después.
+   */
+  confirm: z.boolean().optional(),
   customerId: UuidSchema,
   deliveryAddressId: UuidSchema.optional(),
   deliveryAddress: z.string().trim().min(4).max(500),
@@ -1594,4 +1601,23 @@ export const GeocodingMetricsSchema = z.object({
     pending: z.number().int(),
     total: z.number().int(),
   }),
+});
+
+/** El mensaje de un cliente, para que la IA proponga el pedido. */
+export const OrderExtractRequestSchema = z.object({
+  /** Variedades y tamaños del menú de la semana, para que la IA use esos nombres. */
+  menu: z.array(z.object({ familyName: z.string(), sizes: z.array(z.string()) })).max(60),
+  text: z.string().trim().min(3).max(4_000),
+});
+
+export const OrderExtractResponseSchema = z.object({
+  candidate: z.object({
+    confidence: z.number(),
+    dishes: z.array(z.string()),
+    familyName: z.string().nullable(),
+    quantityUnits: z.number().int().nullable(),
+    sizeName: z.string().nullable(),
+  }),
+  /** El teléfono que aparece en el mensaje, en forma canónica, para buscar al cliente. */
+  phone: z.string().nullable(),
 });

@@ -1,6 +1,6 @@
 # Plan: carga de datos
 
-Estado: **plan, nada construido**. Pedido: analizar el flujo de carga y _data entry_ y planificar
+Estado: **fase 1 construida** (ver "Cómo quedó la fase 1" al final); fases 2 y 3 pendientes. Pedido: analizar el flujo de carga y _data entry_ y planificar
 implementaciones u optimizaciones.
 
 El criterio para ordenar es **cuánto se repite**: lo que se hace decenas de veces por semana (cargar
@@ -134,3 +134,32 @@ alcanzan.
    ¿Lo queremos para todos los que pueden confirmar, o como preferencia de cada usuario?
 3. **Pegar mensaje**: usa el proveedor de IA configurado (Gemini) y tiene costo por uso, chico por
    mensaje. ¿Lo dejamos encendido para todos o sólo para algunos usuarios?
+
+## Decisiones tomadas
+
+1. **No hay indicaciones por plato.** Un solo **comentario para la cocina** por pedido. Al repetir
+   un pedido no se copia: es de esa vez.
+2. **"Guardar y confirmar" es el botón principal** para quien tiene `orders.confirm`.
+3. **Pegar el mensaje queda encendido para todos** los que cargan pedidos (`orders.create`).
+
+## Cómo quedó la fase 1
+
+- **Repetir lo de la última vez.** Al elegir un cliente aparece su último pedido no cancelado
+  ("Última vez (CABA-00116): Menú Nuevo Keto 400 × 2 · Transferencia") con el botón para repetirlo.
+  Copia lo pedido —emparejado con el menú de esta semana por variedad y tamaño, porque las ofertas
+  cambian de id—, la dirección, el medio de pago y el origen. Un Intuitivo queda elegido para marcar
+  sus platos de esta semana; lo que ya no está en el menú se avisa. No copia el comentario para la
+  cocina.
+- **Pegar el mensaje del cliente.** Un desplegable arriba del formulario; la IA (tarea
+  `extract_order`, con instrucción por defecto) propone variedad, tamaño, unidades y platos, y el
+  formulario se completa para revisar. El teléfono del mensaje se lee con reglas y, si coincide con
+  un solo cliente, lo elige. `POST /api/v1/orders/extract`, con `orders.create`.
+- **Cliente con teclado.** Flechas para recorrer los resultados, Enter para elegir (Enter en la
+  búsqueda nunca envía el formulario), y el foco pasa a "Variedad".
+- **Buscar por teléfono escrito como sea.** La búsqueda compara por la clave de diez dígitos. De
+  paso se corrigió la clave: no entendía el 15 del formato local ("(011) 15 5555-0101" daba otra
+  línea), y eso también afectaba la detección de duplicados al importar.
+- **Guardar y confirmar** como botón principal (y "Guardar como borrador" al lado). Enter envía con
+  el principal. La API exige `orders.confirm` para crear confirmado.
+- **Comentario para la cocina**: un solo campo de hasta 200 caracteres, donde antes había
+  "indicaciones, una por línea".

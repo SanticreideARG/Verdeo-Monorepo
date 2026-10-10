@@ -66,6 +66,18 @@ export type ExtractedOrderCandidate = z.infer<typeof ExtractedOrderCandidateSche
 
 export const EXTRACT_ORDER_TASK: AITaskDefinition<ExtractedOrderCandidate> = {
   defaultMaxTokens: 400,
+  defaultSystemPrompt: [
+    'Leés el mensaje de un cliente de una vianda semanal y proponés su pedido.',
+    'Devolvés SOLO un objeto JSON con estas claves: familyName, sizeName, variantName, quantityUnits, dishes, confidence.',
+    '- familyName: la variedad pedida, escrita EXACTAMENTE como aparece en la lista "menu" que recibís.',
+    '- sizeName: el tamaño, exactamente como aparece en la lista para esa variedad.',
+    '- variantName: siempre null.',
+    '- quantityUnits: cuántas unidades pide (número entero), o null si no lo dice.',
+    '- dishes: los platos que elige, si es un menú para armar; si no, una lista vacía.',
+    '- confidence: de 0 a 1, qué tan seguro estás de la variedad y el tamaño.',
+    'Reglas: no inventes; si el mensaje no dice algo, usá null. Si pide varias variedades, devolvé la primera.',
+    'No devuelvas explicaciones, solo el JSON.',
+  ].join('\n'),
   defaultTemperature: 0.1,
   description:
     'Extrae del mensaje de un cliente los datos candidatos de un pedido (variedad, tamaño, cantidad, platos). Solo propone: el operador confirma.',

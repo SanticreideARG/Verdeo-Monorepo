@@ -128,7 +128,29 @@ export function renderTemplate(body: string, values: Readonly<Record<string, str
  * y comparar sus últimos ocho dígitos uniría clientes de ciudades distintas.
  */
 export function argentinePhoneKey(raw: string): string | null {
-  const digits = raw.replace(/\D/g, '');
+  let digits = raw.replace(/\D/g, '');
+  // Prefijo de país y el 9 de los celulares; el 0 de marcación nacional.
+  if (digits.startsWith('54')) {
+    digits = digits.slice(2);
+    if (digits.startsWith('9')) digits = digits.slice(1);
+  }
+  if (digits.startsWith('0')) digits = digits.slice(1);
+  /*
+   * El 15 del formato local: "(011) 15 5555-0101", "(0299) 15 549 3102".
+   *
+   * Es como se escribe un celular en Argentina y como lo muestra esta misma aplicación, y quedarse
+   * con los últimos diez dígitos lo rompía: daba `1555550101` en lugar de `1155550101`, así que la
+   * misma línea escrita así no se reconocía. Con el 15, el número tiene doce dígitos y el 15 va
+   * después de un código de área de dos a cuatro. Si hay una sola posición donde puede estar, se
+   * saca; si hay más de una no se adivina y queda como antes.
+   */
+  if (digits.length === 12) {
+    const positions = [2, 3, 4].filter((position) => digits.slice(position, position + 2) === '15');
+    const [position] = positions;
+    if (positions.length === 1 && position !== undefined) {
+      digits = digits.slice(0, position) + digits.slice(position + 2);
+    }
+  }
   if (digits.length < 10) return null;
   return digits.slice(-10);
 }
