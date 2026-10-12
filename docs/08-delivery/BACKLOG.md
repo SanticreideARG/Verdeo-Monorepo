@@ -454,9 +454,9 @@ con datos reales antes de prometer nada.
 - [x] Corregido: los pedidos importados de una planilla tenían un origen que la API no sabía leer, y
       hacían fallar con un 500 la pantalla de Pedidos entera.
 - [x] Corregido: los nombres parecidos no encontraban a la misma persona con y sin segundo nombre.
-- [ ] **Recibir los emails sin pegarlos.** Hoy los pega una persona. Para que entren solos hace falta
-      una casilla que los reciba y los entregue a la API (Resend, un reenvío a un webhook, o la API
-      de Gmail): otra decisión de proveedor y de qué hacer con lo que no se entiende.
+- [ ] **Recibir los emails sin pegarlos.** Análisis en `docs/12-development/INBOUND_LISTENERS_PLAN.md`:
+      sin servidor, con un Google Apps Script en la cuenta que manda los mails a un endpoint firmado,
+      y una bandeja de "Pedidos entrantes" para revisarlos.
 - [ ] Crear el domicilio del cliente a partir de la dirección y el barrio del email, con su zona.
       Hoy el pedido lleva la dirección como texto y la zona se asigna desde el CRM.
 - [ ] Mapear la ciudad del asunto ("Capital Federal") a una ciudad del sistema, para avisar cuando
