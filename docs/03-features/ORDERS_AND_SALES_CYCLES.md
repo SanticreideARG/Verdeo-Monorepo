@@ -80,6 +80,10 @@ No se requiere una segunda confirmación después de enviar el resumen. El mensa
 - **Guardar y confirmar** es el botón principal para quien puede confirmar; "Guardar como
   borrador" queda al lado.
 - **Comentario para la cocina**: uno por pedido. No hay indicaciones por plato.
+- **Mensaje de confirmación**: en el detalle del pedido, "Copiar confirmación" copia al portapapeles
+  el mensaje para WhatsApp (nombre de pila, lo pedido con el total, dirección y día de entrega). La
+  franja horaria se escribe ahí mismo y se recuerda en el navegador. Más adelante puede pasar a las
+  plantillas de "Mensajes guardados".
 
 ## Medio de pago
 

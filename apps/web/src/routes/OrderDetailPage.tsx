@@ -27,6 +27,7 @@ import {
 } from '../lib/operations.js';
 import { sourceLabel } from '../lib/orderColumns.js';
 import { showToast } from '../lib/toast.js';
+import { ConfirmationMessageCard } from '../components/ConfirmationMessageCard.js';
 import { LocateOrderControl } from '../components/LocateAddress.js';
 import { historyActor } from '../lib/orderHistory.js';
 import {
@@ -576,6 +577,9 @@ export function OrderDetailPage() {
             longitude={order.deliveryLongitude}
           />
         </div>
+
+        {/* El mensaje con que se confirma el pedido por WhatsApp, listo para copiar. */}
+        <ConfirmationMessageCard order={order} />
 
         <div className="mt-8 grid gap-3">
           <h2 className="text-sm font-bold text-forest">Ítems</h2>
