@@ -26,6 +26,7 @@ export interface SystemStatus {
     }[];
   };
   generatedAt: string;
+  inbound: { lastReceivedAt: string | null; pending: number } | null;
   mirror: { detail: string; lastMirroredAt: string | null; ok: boolean };
   probes: SystemProbe[];
 }

@@ -14,6 +14,7 @@ import {
   PostgresAccessTokenRepository,
   PostgresAuditSink,
   PostgresSystemService,
+  PostgresInboundEmailService,
   PostgresChatService,
   PostgresAIConfigurationService,
   PostgresAIPromptService,
@@ -145,6 +146,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
   const aiPrompts = new PostgresAIPromptService(database.db);
   const auditQuery = new PostgresAuditQueryService(database.db);
   const system = new PostgresSystemService(database.db);
+  const inboundEmails = new PostgresInboundEmailService(database.db);
   const surveys = new PostgresSurveyService(database.db);
   const assistant = new PostgresAssistantService(database.db);
   const help = new PostgresHelpService(database.db);
@@ -485,6 +487,8 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     chat,
     chatRetentionDays: env.CHAT_RETENTION_DAYS,
     ...(env.CRON_SECRET ? { cronSecret: env.CRON_SECRET } : {}),
+    ...(env.INBOUND_EMAIL_SECRET ? { inboundEmailSecret: env.INBOUND_EMAIL_SECRET } : {}),
+    inboundEmails,
     databasePing: async () => {
       await pingDatabase(database.db);
     },

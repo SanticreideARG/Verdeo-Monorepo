@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react';
+import { useEffect, useState, type ChangeEvent } from 'react';
 
 import { apiRequest } from '../lib/api.js';
 import { formatDay } from '../lib/dates.js';
@@ -86,16 +86,41 @@ function matchLabel(kind: PreviewRow['customerMatch']['kind']): string {
  * note. Y los nombres parecidos no se dan por buenos solos, porque unir dos clientes es lo único de
  * todo esto que no tiene vuelta atrás.
  */
+/** Un pedido que llegó solo por correo y espera revisión. */
+export interface InboundEmailDetail {
+  body: string;
+  fromAddress: string;
+  id: string;
+  preview: Preview | null;
+  receivedAt: string;
+  status: string;
+  subject: string;
+}
+
 export function OrderImportDialog({
+  canConfirm = false,
+  inbound,
   onClose,
   onImported,
 }: {
+  /** Quien puede confirmar ve "Aprobar y confirmar" como acción principal. */
+  canConfirm?: boolean;
+  /**
+   * Revisar un pedido que llegó por correo en lugar de importar.
+   *
+   * Es la misma revisión —cliente, variedad, duplicados—, pero hecha al abrir el pedido y no al
+   * cargar el mail, y con el correo original al lado para comparar lo que entendió el lector con
+   * lo que escribió el cliente.
+   */
+  inbound?: InboundEmailDetail | undefined;
   onClose: () => void;
   onImported: () => void;
 }) {
   const [mode, setMode] = useState<'email' | 'planilla'>('email');
   const [text, setText] = useState('');
-  const [preview, setPreview] = useState<Preview | null>(null);
+  // Con un correo, la revisión arranca con su vista previa: sin esto el primer instante decía
+  // "no se reconoció un pedido" hasta que corría el efecto de abajo.
+  const [preview, setPreview] = useState<Preview | null>(() => inbound?.preview ?? null);
   const [decisions, setDecisions] = useState<Record<number, string>>({});
   // Las variedades que se eligieron a mano, por pedido y posición.
   const [choices, setChoices] = useState<Record<string, string>>({});
@@ -118,6 +143,11 @@ export function OrderImportDialog({
   const [locateAfter, setLocateAfter] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    if (inbound?.preview) load(inbound.preview);
+    // Sólo al abrir: la vista previa del correo llega armada y no cambia mientras se revisa.
+  }, []);
 
   function load(next: Preview) {
     setPreview(next);
@@ -197,12 +227,14 @@ export function OrderImportDialog({
       : payment;
   const missingPayment = ready.some((row) => paymentFor(row) === '');
 
-  async function confirm() {
+  async function confirm(confirmNow = false) {
     if (ready.length === 0 || blocking > 0 || missingPayment) return;
     setBusy(true);
     setMessage('');
-    const response = await apiRequest('/api/v1/orders/import', {
+    const path = inbound ? `/api/v1/inbound-emails/${inbound.id}/approve` : '/api/v1/orders/import';
+    const response = await apiRequest(path, {
       body: JSON.stringify({
+        ...(confirmNow ? { confirm: true } : {}),
         rows: ready.map((row) => {
           const decision = decisions[row.rowNumber] ?? 'nuevo';
           return {
@@ -275,11 +307,36 @@ export function OrderImportDialog({
       );
       return;
     }
+    if (inbound) {
+      showToast(
+        `${confirmNow ? 'Pedido aprobado y confirmado.' : 'Pedido aprobado como borrador.'}${locateNote}`,
+      );
+      onClose();
+      return;
+    }
     showToast(
       `${String(payload.created)} pedido${payload.created === 1 ? '' : 's'} importado${
         payload.created === 1 ? '' : 's'
       } como borrador.${locateNote}`,
     );
+    onClose();
+  }
+
+  /** Descartar el correo: no es un pedido (spam, prueba, uno que ya se cargó a mano). */
+  async function discard() {
+    if (!inbound) return;
+    setBusy(true);
+    const response = await apiRequest(`/api/v1/inbound-emails/${inbound.id}/discard`, {
+      method: 'POST',
+      notify: false,
+    });
+    setBusy(false);
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    onImported();
+    showToast('Correo descartado.');
     onClose();
   }
 
@@ -299,8 +356,12 @@ export function OrderImportDialog({
       <div className="modal-panel order-import">
         <header className="order-import-head">
           <div>
-            <h2>Importar pedidos</h2>
-            <p>{summary}</p>
+            <h2>{inbound ? 'Pedido por correo' : 'Importar pedidos'}</h2>
+            <p>
+              {inbound
+                ? `${inbound.fromAddress} · ${new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(inbound.receivedAt))}`
+                : summary}
+            </p>
           </div>
           <button aria-label="Cerrar" onClick={onClose} type="button">
             ✕
@@ -314,7 +375,12 @@ export function OrderImportDialog({
             </p>
           ) : null}
 
-          {preview === null ? (
+          {inbound && preview === null ? (
+            <p className="text-sm text-ink-muted">
+              El lector no reconoció un pedido en este correo. Revisá el texto original abajo: si es
+              un pedido, cargalo a mano; si no, descartalo.
+            </p>
+          ) : preview === null ? (
             <>
               <div className="order-import-tabs" role="tablist">
                 <button
@@ -534,10 +600,19 @@ export function OrderImportDialog({
               ) : null}
             </>
           )}
+          {inbound ? (
+            <details className="inbound-original" open>
+              <summary>Correo original</summary>
+              <p className="text-sm text-ink-muted">
+                {inbound.subject} · lo que escribió el cliente, para comparar con lo de arriba.
+              </p>
+              <pre>{inbound.body}</pre>
+            </details>
+          ) : null}
         </div>
 
         <footer className="order-import-foot">
-          {preview === null ? (
+          {inbound && preview === null ? null : preview === null ? (
             mode === 'email' ? (
               <button
                 className="button button-primary"
@@ -587,18 +662,51 @@ export function OrderImportDialog({
                   {blocking === 1 ? 'un pedido' : `${String(blocking)} pedidos`} o destildalos.
                 </span>
               ) : null}
-              <button
-                className="button button-primary"
-                disabled={busy || ready.length === 0 || blocking > 0 || missingPayment}
-                onClick={() => void confirm()}
-                type="button"
-              >
-                {busy
-                  ? 'Importando…'
-                  : `Importar ${String(ready.length)} pedido${ready.length === 1 ? '' : 's'}`}
-              </button>
+              {inbound ? (
+                <>
+                  {canConfirm ? (
+                    <button
+                      className="button button-primary"
+                      disabled={busy || ready.length === 0 || blocking > 0 || missingPayment}
+                      onClick={() => void confirm(true)}
+                      type="button"
+                    >
+                      {busy ? 'Aprobando…' : 'Aprobar y confirmar'}
+                    </button>
+                  ) : null}
+                  <button
+                    className={`button ${canConfirm ? 'button-secondary' : 'button-primary'}`}
+                    disabled={busy || ready.length === 0 || blocking > 0 || missingPayment}
+                    onClick={() => void confirm(false)}
+                    type="button"
+                  >
+                    Aprobar como borrador
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="button button-primary"
+                  disabled={busy || ready.length === 0 || blocking > 0 || missingPayment}
+                  onClick={() => void confirm()}
+                  type="button"
+                >
+                  {busy
+                    ? 'Importando…'
+                    : `Importar ${String(ready.length)} pedido${ready.length === 1 ? '' : 's'}`}
+                </button>
+              )}
             </>
           )}
+          {inbound ? (
+            <button
+              className="button button-secondary"
+              disabled={busy}
+              onClick={() => void discard()}
+              type="button"
+            >
+              Descartar correo
+            </button>
+          ) : null}
           <button className="button button-secondary" onClick={onClose} type="button">
             Cerrar
           </button>

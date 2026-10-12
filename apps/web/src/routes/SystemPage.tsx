@@ -158,6 +158,15 @@ export function SystemPage() {
                   : 'La tabla está vacía: todavía no se copió nada. Se llena en la próxima corrida diaria.'
                 : `No se pudo leer la copia: ${status.mirror.detail}. Falta crear la tabla audit_mirror en Supabase.`}
             </p>
+
+            <h2 className="system-section">Correo entrante (Gmail)</h2>
+            <p className="system-modal-meta">
+              {status.inbound
+                ? status.inbound.lastReceivedAt
+                  ? `Último mail recibido: ${moment(status.inbound.lastReceivedAt)}. Esperando revisión: ${String(status.inbound.pending)}.`
+                  : 'Todavía no llegó ningún mail. Si el script de Gmail ya está instalado, revisá su secreto y su dirección.'
+                : 'Sin configurar.'}
+            </p>
           </>
         ) : failed ? null : (
           <p className="mt-4 text-ink-muted">Midiendo…</p>

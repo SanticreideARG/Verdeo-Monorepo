@@ -19,6 +19,9 @@ const ServerEnvSchema = z
     // Shared secret for scheduled jobs. Without it the retention endpoint refuses every caller,
     // which is the safe direction: a purge nobody can trigger beats one anybody can.
     CRON_SECRET: optionalString(z.string().min(16)),
+    // Firma de los mails que manda el Google Apps Script de la cuenta de pedidos. Sin ella, el
+    // endpoint de entrada rechaza todo: un correo que cualquiera pudiera inyectar sería un pedido falso.
+    INBOUND_EMAIL_SECRET: optionalString(z.string().min(24)),
     CHAT_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
     DATABASE_URL: z.string().min(1),
     SESSION_SECRET: z.string().min(32),

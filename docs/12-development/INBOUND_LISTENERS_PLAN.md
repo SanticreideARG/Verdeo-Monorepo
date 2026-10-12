@@ -1,6 +1,6 @@
 # Escuchar Gmail (y WhatsApp) sin servidor propio — análisis
 
-Estado: **análisis, nada construido**. Pedido: importar solos los emails de pedidos que llegan a una
+Estado: **Gmail construido con la opción A** (ver "Cómo quedó" al final). WhatsApp sigue por su webhook oficial. Pedido: importar solos los emails de pedidos que llegan a una
 cuenta de Gmail, con prioridad para una solución _serverless_; si no la hay, montar un servidor
 "listener" para Gmail y WhatsApp.
 
@@ -94,3 +94,28 @@ gratis y desde adentro de Google.
 | 3    | Script de Apps Script versionado en el repositorio, con instrucciones de instalación |
 | 4    | Estado del sistema: última recepción y rechazados                                    |
 | 5    | (Más adelante) crear borradores solos para lo que entra limpio                       |
+
+## Cómo quedó
+
+Decisiones: cuenta de Gmail común → **opción A** (Apps Script). Los pedidos **no se crean solos**:
+quedan pendientes y se revisan al abrirlos, con el correo original a la vista.
+
+- **Script**: `tools/gmail-apps-script/Code.gs`, con su instalación en el `README.md` de la misma
+  carpeta. Corre cada 5 minutos, manda los mails "Pedido online" no etiquetados y les pone
+  `verdeo-importado` sólo si la API los recibió.
+- **Entrada**: `POST /api/v1/inbound/email`, sin sesión y firmado (HMAC-SHA256 del cuerpo con
+  `INBOUND_EMAIL_SECRET`, cabecera `x-verdeo-signature`). Sin el secreto configurado rechaza todo.
+  Lee el mail con el mismo lector de "Pegar emails" y lo guarda **una vez por id de Gmail**: un
+  reintento responde `duplicate`. Un formulario todo en cero queda como consulta; uno que no se
+  reconoce, como "no reconocido" (no se pierde).
+- **Tabla** `inbound_emails` (migración 0055): el cuerpo entero, lo leído, el estado
+  (`pending`, `processing`, `approved`, `discarded`, `inquiry`, `unreadable`) y los pedidos creados.
+- **Revisión**: en Pedidos aparece "Pedidos por correo para revisar". Al abrir uno se arma la vista
+  previa **en ese momento** (contra el menú y los clientes de hoy) con el mismo diálogo de importar
+  —cliente, variedad, duplicados, medio de pago— y debajo el **correo original** para comparar.
+  "Aprobar y confirmar" (con `orders.confirm`) o "Aprobar como borrador"; "Descartar correo".
+- **Aprobar** reclama el mail antes de crear el pedido: si dos personas lo aprueban a la vez, la
+  segunda recibe "ya lo revisó otra persona". Si el pedido no se pudo crear, vuelve a pendiente.
+- **Estado del sistema** muestra el último mail recibido y cuántos esperan.
+- La importación de "Pegar emails" y "Subir planilla" y la aprobación usan la misma función
+  (`importOrderRows`), y las dos aceptan crear los pedidos ya confirmados.

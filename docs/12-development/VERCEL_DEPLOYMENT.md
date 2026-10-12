@@ -560,3 +560,10 @@ Necesita dos secretos del repositorio (Settings → Secrets → Actions):
 
 Sin ellos el trabajo se saltea con un mensaje en lugar de fallar todos los días, que sería ruido
 sin información.
+
+## Correo entrante (`INBOUND_EMAIL_SECRET`)
+
+Variable del proyecto de la **API**: el secreto con el que firma el script de Gmail los mails que
+manda a `POST /api/v1/inbound/email`. Sin ella, el endpoint rechaza todo (403). Tiene que ser la
+misma que `VERDEO_SECRET` en las propiedades del script. Instalación completa en
+`tools/gmail-apps-script/README.md`.

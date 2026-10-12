@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { cors } from 'hono/cors';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { Hono, type Context } from 'hono';
@@ -157,6 +158,9 @@ import {
   GeocodingSettingsSchema,
   OrderExtractRequestSchema,
   OrderExtractResponseSchema,
+  InboundEmailDetailSchema,
+  InboundEmailIngestSchema,
+  InboundEmailListResponseSchema,
   OrderImportConfirmResponseSchema,
   OrderImportPreviewResponseSchema,
   OrderSchema,
@@ -1139,6 +1143,58 @@ interface CreateAppOptions {
   chatRetentionDays?: number | undefined;
   cms?: CmsEngine;
   cronSecret?: string | undefined;
+  /** Secreto con el que firma el Google Apps Script los mails que manda. */
+  inboundEmailSecret?: string | undefined;
+  /** Los mails de pedidos que llegan solos, pendientes de revisión. */
+  inboundEmails?:
+    | {
+        claim: (id: string) => Promise<void>;
+        get: (id: string) => Promise<{
+          body: string;
+          fromAddress: string;
+          id: string;
+          orderIds: unknown;
+          parsed: unknown;
+          receivedAt: string;
+          status: string;
+          subject: string;
+        } | null>;
+        list: (
+          statuses: readonly (
+            'approved' | 'discarded' | 'inquiry' | 'pending' | 'processing' | 'unreadable'
+          )[],
+          limit: number,
+        ) => Promise<
+          {
+            fromAddress: string;
+            id: string;
+            parsed: unknown;
+            receivedAt: string;
+            status: string;
+            subject: string;
+          }[]
+        >;
+        overview: () => Promise<{ lastReceivedAt: string | null; pending: number }>;
+        release: (id: string) => Promise<void>;
+        resolve: (
+          id: string,
+          status: 'approved' | 'discarded',
+          orderIds: readonly string[],
+          actorUserId: string,
+        ) => Promise<void>;
+        store: (
+          input: {
+            body: string;
+            fromAddress: string;
+            gmailMessageId: string;
+            receivedAt: Date;
+            subject: string;
+          },
+          parsed: unknown,
+          status: 'inquiry' | 'pending' | 'unreadable',
+        ) => Promise<{ id: string | null; stored: boolean }>;
+      }
+    | undefined;
   /** Un `select 1` contra la base, para que el cron diario sirva también de canario. */
   databasePing?: (() => Promise<void>) | undefined;
   /** Una petición al proyecto de Supabase: dice si responde, no evita que lo pausen. */
@@ -2473,6 +2529,8 @@ export function createApp(options: CreateAppOptions) {
    */
   app.use('/api/v1/delivery/routable-dates', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/geocoding/*', requireAuthentication, resolveScopeSelection);
+  app.use('/api/v1/inbound-emails', requireAuthentication, resolveScopeSelection);
+  app.use('/api/v1/inbound-emails/*', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/delivery/unlocated', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/delivery/locate-missing', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/delivery/*', requireAuthentication);
@@ -3701,18 +3759,22 @@ export function createApp(options: CreateAppOptions) {
    * alguien lo confirme. Una fila que falla no frena a las demás —se informa cuál y por qué—,
    * porque rechazar las cien por una es hacer repetir todo el trabajo.
    */
-  app.post('/api/v1/orders/import', async (context) => {
-    if (!context.get('session').permissions.includes('orders.create')) return forbidden(context);
-    const input = OrderImportConfirmRequestSchema.safeParse(
-      await context.req.json().catch(() => null),
-    );
-    if (!input.success) return badRequest(context, 'Revisá las filas.', input.error.issues);
-
+  /**
+   * Crear los pedidos de unas filas ya revisadas: el paso 2 de importar.
+   *
+   * Es la misma lógica para lo que se importa pegando emails o una planilla y para lo que se
+   * aprueba desde la bandeja de pedidos que llegaron por correo, así que vive en un solo lugar.
+   */
+  const importOrderRows = async (
+    context: Context<{ Variables: AppVariables }>,
+    rows: z.infer<typeof OrderImportConfirmRequestSchema>['rows'],
+    initialStatus: 'CONFIRMED' | 'DRAFT' = 'DRAFT',
+  ) => {
     const operations = requireOperations();
     const menu = (await operations.currentPublishedMenu(
       context.get('scope')?.operatingSiteId ?? null,
     )) as { cycle: { closeAt: string }; id: string } | null;
-    if (!menu) return badRequest(context, 'No hay un menú publicado para esta ciudad.');
+    if (!menu) return { error: 'No hay un menú publicado para esta ciudad.' } as const;
 
     /*
      * Los clientes que se crean en esta misma tanda.
@@ -3730,7 +3792,7 @@ export function createApp(options: CreateAppOptions) {
     const failed: { reason: string; rowNumber: number }[] = [];
     let created = 0;
     const orderIds: string[] = [];
-    for (const row of input.data.rows) {
+    for (const row of rows) {
       try {
         let customerId = row.customerId;
         if (!customerId) {
@@ -3759,7 +3821,7 @@ export function createApp(options: CreateAppOptions) {
             deliveryAddress: row.deliveryAddress ?? '',
             deliveryDate: deliveryDateFor(menu.cycle.closeAt),
             dietaryInstructions: [],
-            initialStatus: 'DRAFT',
+            initialStatus,
             items: row.items.map((item) => ({
               offeringId: item.offeringId,
               quantityUnits: item.quantityUnits,
@@ -3790,10 +3852,235 @@ export function createApp(options: CreateAppOptions) {
         });
       }
     }
+    return { created, failed, orderIds } as const;
+  };
+  app.post('/api/v1/orders/import', async (context) => {
+    if (!context.get('session').permissions.includes('orders.create')) return forbidden(context);
+    const input = OrderImportConfirmRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) return badRequest(context, 'Revisá las filas.', input.error.issues);
+
+    if (input.data.confirm && !context.get('session').permissions.includes('orders.confirm'))
+      return forbidden(context);
+    const result = await importOrderRows(
+      context,
+      input.data.rows,
+      input.data.confirm ? 'CONFIRMED' : 'DRAFT',
+    );
+    if ('error' in result) return badRequest(context, result.error);
+    const { created, failed, orderIds } = result;
     return context.json(
       OrderImportConfirmResponseSchema.parse({ created, failed, orderIds }),
       created > 0 ? 201 : 200,
     );
+  });
+  /*
+   * Correo entrante: los mails de pedidos que manda solo el Google Apps Script de la cuenta.
+   *
+   * Sin sesión —lo llama un script, no una persona— y por eso firmado: el script calcula un
+   * HMAC-SHA256 del cuerpo con `INBOUND_EMAIL_SECRET` y lo manda en `x-verdeo-signature`. Sin el
+   * secreto configurado rechaza todo: un endpoint abierto dejaría inyectar pedidos falsos.
+   *
+   * No crea el pedido: lo lee con el mismo lector de "Pegar emails" y lo deja pendiente para que una
+   * persona lo revise. Es idempotente por id de Gmail, así que el script puede reintentar.
+   */
+  app.post('/api/v1/inbound/email', async (context) => {
+    const secret = options.inboundEmailSecret;
+    const inbound = options.inboundEmails;
+    if (!secret || !inbound) return forbidden(context);
+    const raw = await context.req.text();
+    const provided = (context.req.header('x-verdeo-signature') ?? '').replace(/^sha256=/, '');
+    const expected = createHmac('sha256', secret).update(raw).digest('hex');
+    const valid =
+      provided.length === expected.length &&
+      timingSafeEqual(Buffer.from(provided, 'utf8'), Buffer.from(expected, 'utf8'));
+    if (!valid) return forbidden(context);
+
+    let json: unknown;
+    try {
+      json = JSON.parse(raw);
+    } catch {
+      json = null;
+    }
+    const input = InboundEmailIngestSchema.safeParse(json);
+    if (!input.success)
+      return badRequest(context, 'El mail no tiene el formato esperado.', input.error.issues);
+
+    // El lector espera el mail con su encabezado, como cuando se pega uno reenviado.
+    const text = [
+      `From: ${input.data.from}`,
+      `Date: ${input.data.date}`,
+      `Subject: ${input.data.subject}`,
+      '',
+      input.data.body,
+    ].join('\n');
+    const parsed = parseOrderEmails(text);
+    const status =
+      parsed.rows.length > 0 ? 'pending' : parsed.inquiries.length > 0 ? 'inquiry' : 'unreadable';
+    const receivedAt = new Date(input.data.date);
+    const result = await inbound.store(
+      {
+        body: input.data.body,
+        fromAddress: input.data.from,
+        gmailMessageId: input.data.messageId,
+        receivedAt: Number.isNaN(receivedAt.getTime()) ? new Date() : receivedAt,
+        subject: input.data.subject,
+      },
+      parsed,
+      status,
+    );
+    (context.get('logger') ?? options.logger).info({
+      event: 'inbound.email',
+      status: result.stored ? status : 'duplicate',
+    });
+    return context.json({ id: result.id, status: result.stored ? status : 'duplicate' });
+  });
+
+  const requireInbound = () => {
+    if (!options.inboundEmails) throw new Error('Inbound email engine is not configured');
+    return options.inboundEmails;
+  };
+
+  /** "Menú Keto 400 × 2 · …" y el nombre del cliente, sacados de lo que leyó el lector. */
+  const inboundSummary = (parsed: unknown) => {
+    const value = parsed as Partial<ReturnType<typeof parseOrderEmails>> | null;
+    const row = value?.rows?.[0];
+    const inquiry = value?.inquiries?.[0];
+    return {
+      customerName: row?.customerName ?? inquiry?.customerName ?? null,
+      itemsSummary: row
+        ? row.items
+            .map((item) =>
+              `${item.variety ?? '?'} ${item.size ?? ''} × ${String(item.quantityUnits)}`.replace(
+                /\s+/g,
+                ' ',
+              ),
+            )
+            .join(' · ')
+        : inquiry
+          ? 'Consulta'
+          : 'Sin pedido reconocible',
+    };
+  };
+
+  app.get('/api/v1/inbound-emails', async (context) => {
+    if (!context.get('session').permissions.includes('orders.create')) return forbidden(context);
+    const wanted = context.req.query('status');
+    const statuses =
+      wanted === 'all'
+        ? (['pending', 'inquiry', 'unreadable', 'approved', 'discarded'] as const)
+        : (['pending', 'inquiry', 'unreadable'] as const);
+    const rows = await requireInbound().list(statuses, 50);
+    return context.json(
+      InboundEmailListResponseSchema.parse({
+        items: rows.map((row) => ({
+          fromAddress: row.fromAddress,
+          id: row.id,
+          receivedAt: row.receivedAt,
+          status: row.status,
+          subject: row.subject,
+          ...inboundSummary(row.parsed),
+        })),
+      }),
+    );
+  });
+
+  /*
+   * Abrir un pedido que llegó por correo: el mail original y la vista previa armada ahora, contra
+   * el menú y los clientes de hoy (no los del momento en que llegó).
+   */
+  app.get('/api/v1/inbound-emails/:id', async (context) => {
+    if (!context.get('session').permissions.includes('orders.create')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El pedido no es válido.');
+    const row = await requireInbound().get(params.data.id);
+    if (!row) {
+      const code: ApiErrorCode = 'NOT_FOUND';
+      return context.json(
+        {
+          error: {
+            code,
+            message: 'No encontramos ese pedido.',
+            requestId: context.get('requestId'),
+          },
+        },
+        statusForCode(code),
+      );
+    }
+    const parsed = row.parsed as Parameters<typeof buildOrderImportPreview>[1];
+    const preview =
+      parsed.rows.length > 0 || (parsed.inquiries?.length ?? 0) > 0
+        ? await buildOrderImportPreview(context, parsed)
+        : null;
+    return context.json(
+      InboundEmailDetailSchema.parse({
+        body: row.body,
+        fromAddress: row.fromAddress,
+        id: row.id,
+        orderIds: Array.isArray(row.orderIds) ? row.orderIds : [],
+        preview,
+        receivedAt: row.receivedAt,
+        status: row.status,
+        subject: row.subject,
+      }),
+    );
+  });
+
+  /*
+   * Aprobar: crear el pedido con lo que la persona resolvió al abrirlo.
+   *
+   * Primero se reclama el mail (pendiente → en proceso, en una sola sentencia): si dos personas lo
+   * aprueban a la vez, la segunda recibe un aviso en lugar de crear el pedido otra vez. Si el pedido
+   * no se pudo crear, el mail vuelve a pendiente.
+   */
+  app.post('/api/v1/inbound-emails/:id/approve', async (context) => {
+    if (!context.get('session').permissions.includes('orders.create')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    const input = OrderImportConfirmRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá el pedido.',
+        input.success ? undefined : input.error.issues,
+      );
+    if (input.data.confirm && !context.get('session').permissions.includes('orders.confirm'))
+      return forbidden(context);
+    const inbound = requireInbound();
+    await inbound.claim(params.data.id);
+    let result: Awaited<ReturnType<typeof importOrderRows>>;
+    try {
+      result = await importOrderRows(
+        context,
+        input.data.rows,
+        input.data.confirm ? 'CONFIRMED' : 'DRAFT',
+      );
+    } catch (error) {
+      await inbound.release(params.data.id);
+      throw error;
+    }
+    if ('error' in result || result.created === 0) {
+      await inbound.release(params.data.id);
+      if ('error' in result) return badRequest(context, result.error);
+      return context.json(OrderImportConfirmResponseSchema.parse(result), 200);
+    }
+    await inbound.resolve(
+      params.data.id,
+      'approved',
+      result.orderIds,
+      context.get('session').userId,
+    );
+    return context.json(OrderImportConfirmResponseSchema.parse(result), 201);
+  });
+
+  app.post('/api/v1/inbound-emails/:id/discard', async (context) => {
+    if (!context.get('session').permissions.includes('orders.create')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El pedido no es válido.');
+    await requireInbound().resolve(params.data.id, 'discarded', [], context.get('session').userId);
+    return context.body(null, 204);
   });
   app.post('/api/v1/customers/import', async (context) => {
     if (!context.get('session').permissions.includes('customers.create')) return forbidden(context);
@@ -6474,6 +6761,9 @@ export function createApp(options: CreateAppOptions) {
         },
         errors: { last24h, recent },
         generatedAt: new Date().toISOString(),
+        inbound: options.inboundEmails
+          ? await options.inboundEmails.overview().catch(() => null)
+          : null,
         mirror: {
           detail: mirrorState.detail,
           lastMirroredAt: mirrorState.at ? mirrorState.at.toISOString() : null,
@@ -6566,6 +6856,7 @@ export function createApp(options: CreateAppOptions) {
       error.name === 'CustomerMergeError' ||
       error.name === 'PasswordResetError' ||
       error.name === 'AIConfigurationUnavailableError' ||
+      error.name === 'InboundEmailConflictError' ||
       error.name === 'DeliveryConflictError' ||
       error.name === 'PaymentsConflictError' ||
       error.name === 'AITaskNotConfiguredError' ||

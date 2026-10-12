@@ -454,7 +454,7 @@ con datos reales antes de prometer nada.
 - [x] Corregido: los pedidos importados de una planilla tenían un origen que la API no sabía leer, y
       hacían fallar con un 500 la pantalla de Pedidos entera.
 - [x] Corregido: los nombres parecidos no encontraban a la misma persona con y sin segundo nombre.
-- [ ] **Recibir los emails sin pegarlos.** Análisis en `docs/12-development/INBOUND_LISTENERS_PLAN.md`:
+- [x] **Recibir los emails sin pegarlos.** Análisis en `docs/12-development/INBOUND_LISTENERS_PLAN.md`:
       sin servidor, con un Google Apps Script en la cuenta que manda los mails a un endpoint firmado,
       y una bandeja de "Pedidos entrantes" para revisarlos.
 - [ ] Crear el domicilio del cliente a partir de la dirección y el barrio del email, con su zona.

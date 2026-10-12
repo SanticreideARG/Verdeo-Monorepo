@@ -11,6 +11,7 @@ import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus
 import { DataTable } from '../components/DataTable.js';
 import { OrderDetailDialog } from '../components/OrderDetailDialog.js';
 import { ActionMenu } from '../components/ActionMenu.js';
+import { InboundEmailsPanel } from '../components/InboundEmailsPanel.js';
 import { OrderImportDialog } from '../components/OrderImportDialog.js';
 import {
   paymentMethodLabel,
@@ -1222,6 +1223,10 @@ export function OrderIntakePage() {
           </div>
         ) : null}
 
+        {/* Los pedidos que llegaron solos por correo, esperando revisión. */}
+        {permissions.includes('orders.create') ? (
+          <InboundEmailsPanel canConfirm={canConfirm} onChanged={() => void loadData()} />
+        ) : null}
         {formOpen && permissions.includes('orders.create') ? (
           <form
             className="operation-card mt-6 max-w-3xl"

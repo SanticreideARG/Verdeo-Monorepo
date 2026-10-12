@@ -9372,3 +9372,73 @@ textarea.sr-only {
   border-color: var(--db-accent);
   background: var(--db-border-soft);
 }
+
+/* --- Pedidos por correo para revisar ------------------------------------------------------------ */
+.inbound-panel {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--db-accent);
+  border-radius: 0.9rem;
+}
+.inbound-panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--db-text);
+}
+.inbound-panel ul {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.inbound-panel li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--db-border-soft);
+}
+.inbound-panel li > div {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.inbound-panel small {
+  color: var(--db-muted);
+}
+.inbound-kind {
+  justify-self: start;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--db-text-soft);
+}
+.inbound-original {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 1rem;
+}
+.inbound-original > summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+.inbound-original pre {
+  max-height: 22rem;
+  overflow: auto;
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--db-border-soft);
+  border-radius: 0.6rem;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

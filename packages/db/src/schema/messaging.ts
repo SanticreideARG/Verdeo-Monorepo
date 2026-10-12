@@ -163,3 +163,41 @@ export const manualNotices = pgTable(
     index('manual_notices_customer_idx').on(table.customerId, table.createdAt),
   ],
 );
+
+/**
+ * Los mails de pedidos que llegan solos desde la cuenta de Gmail (un Google Apps Script los manda).
+ *
+ * No se crea el pedido al llegar: queda **pendiente** para que una persona lo revise y apruebe, con
+ * el texto original a la vista para compararlo con lo que entendió el lector. Se guarda el `body`
+ * entero porque es lo único que permite corroborar la interpretación, y lo leído (`parsed`) para no
+ * releerlo en cada apertura. La vista previa contra el menú y los clientes se arma al abrirlo, no
+ * al recibirlo: entre que llega y que alguien lo mira pueden cambiar el menú o los clientes.
+ *
+ * `gmailMessageId` es único: el script reintenta si la API no respondió, y un reintento no puede
+ * duplicar el pedido.
+ */
+export const inboundEmails = pgTable(
+  'inbound_emails',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    gmailMessageId: text('gmail_message_id').notNull().unique(),
+    fromAddress: text('from_address').notNull(),
+    subject: text('subject').notNull(),
+    receivedAt: timestamp('received_at', { withTimezone: true }).notNull(),
+    body: text('body').notNull(),
+    /*
+     * `pending` espera revisión; `processing` mientras alguien lo aprueba (para que dos personas no
+     * lo aprueben a la vez); `approved` y `discarded` ya se resolvieron; `inquiry` es una consulta
+     * (todo en cero); `unreadable`, un mail que el lector no reconoció como pedido.
+     */
+    status: text('status').default('pending').notNull(),
+    parsed: jsonb('parsed').notNull(),
+    orderIds: jsonb('order_ids').default([]).notNull(),
+    resolvedByUserId: uuid('resolved_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index('inbound_emails_status_received_idx').on(table.status, table.receivedAt)],
+);

@@ -29,3 +29,4 @@ export * from './postgres-password-reset-service.js';
 export * from './postgres-dashboard-layout-service.js';
 export * from './customer-merge.js';
 export * from './postgres-system-service.js';
+export * from './postgres-inbound-email-service.js';

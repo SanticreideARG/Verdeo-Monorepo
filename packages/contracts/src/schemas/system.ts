@@ -35,6 +35,10 @@ export const SystemStatusResponseSchema = z.object({
     ),
   }),
   generatedAt: z.string(),
+  /** Correo entrante: cuántos esperan revisión y cuándo llegó el último. */
+  inbound: z
+    .object({ lastReceivedAt: z.string().nullable(), pending: z.number().int() })
+    .nullable(),
   mirror: z.object({
     detail: z.string(),
     lastMirroredAt: z.string().nullable(),

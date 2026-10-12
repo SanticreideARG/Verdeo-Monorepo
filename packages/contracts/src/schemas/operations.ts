@@ -1485,6 +1485,8 @@ export const OrderImportEmailPreviewRequestSchema = z.object({
 
 /** Una fila ya resuelta por una persona: con qué cliente va, o que hay que crearlo. */
 export const OrderImportConfirmRequestSchema = z.object({
+  /** Crear los pedidos ya confirmados (pide `orders.confirm`). Sin esto entran como borrador. */
+  confirm: z.boolean().optional(),
   rows: z
     .array(
       z.object({
@@ -1620,4 +1622,48 @@ export const OrderExtractResponseSchema = z.object({
   }),
   /** El teléfono que aparece en el mensaje, en forma canónica, para buscar al cliente. */
   phone: z.string().nullable(),
+});
+
+/** Lo que manda el Google Apps Script por cada mail de pedido. */
+export const InboundEmailIngestSchema = z.object({
+  body: z.string().max(200_000),
+  date: z.string().max(100),
+  from: z.string().max(500),
+  messageId: z.string().trim().min(1).max(200),
+  subject: z.string().max(500),
+});
+
+export const InboundEmailStatusSchema = z.enum([
+  'approved',
+  'discarded',
+  'inquiry',
+  'pending',
+  'processing',
+  'unreadable',
+]);
+
+export const InboundEmailSummarySchema = z.object({
+  customerName: z.string().nullable(),
+  fromAddress: z.string(),
+  id: UuidSchema,
+  itemsSummary: z.string(),
+  receivedAt: IsoDateTimeSchema,
+  status: InboundEmailStatusSchema,
+  subject: z.string(),
+});
+
+export const InboundEmailListResponseSchema = z.object({
+  items: z.array(InboundEmailSummarySchema),
+});
+
+export const InboundEmailDetailSchema = z.object({
+  body: z.string(),
+  fromAddress: z.string(),
+  id: UuidSchema,
+  orderIds: z.array(z.string()),
+  /** La vista previa contra el menú y los clientes de hoy; null si no trae ningún pedido. */
+  preview: OrderImportPreviewResponseSchema.nullable(),
+  receivedAt: IsoDateTimeSchema,
+  status: InboundEmailStatusSchema,
+  subject: z.string(),
 });
