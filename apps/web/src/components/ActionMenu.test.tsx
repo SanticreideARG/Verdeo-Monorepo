@@ -66,4 +66,52 @@ describe('ActionMenu', () => {
     fireEvent.mouseDown(document.body);
     expect(screen.queryByRole('menu')).toBeNull();
   });
+
+  // En la tarjeta del teléfono el botón está a la izquierda: el menú no puede salirse de la pantalla.
+  it('se abre hacia la derecha cuando hacia la izquierda no entra', () => {
+    Object.defineProperty(document.documentElement, 'clientWidth', {
+      configurable: true,
+      value: 390,
+    });
+    const { trigger } = armar();
+    trigger.getBoundingClientRect = () =>
+      ({
+        bottom: 120,
+        height: 40,
+        left: 20,
+        right: 70,
+        top: 80,
+        width: 50,
+        x: 20,
+        y: 80,
+      }) as DOMRect;
+    fireEvent.click(trigger);
+    const menu = screen.getByRole('menu');
+    expect(menu.style.left).toBe('20px');
+    expect(menu.style.right).toBe('');
+  });
+
+  it('en la tabla, con el botón a la derecha, se abre hacia la izquierda', () => {
+    Object.defineProperty(document.documentElement, 'clientWidth', {
+      configurable: true,
+      value: 390,
+    });
+    const { trigger } = armar();
+    const right = 390;
+    trigger.getBoundingClientRect = () =>
+      ({
+        bottom: 120,
+        height: 40,
+        left: right - 60,
+        right: right - 10,
+        top: 80,
+        width: 50,
+        x: 0,
+        y: 80,
+      }) as DOMRect;
+    fireEvent.click(trigger);
+    const menu = screen.getByRole('menu');
+    expect(menu.style.left).toBe('');
+    expect(menu.style.right).not.toBe('');
+  });
 });

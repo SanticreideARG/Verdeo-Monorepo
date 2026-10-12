@@ -9488,3 +9488,14 @@ textarea.sr-only {
   overflow-wrap: anywhere;
   user-select: all;
 }
+
+/* --- Sin zoom al pellizcar (ver src/lib/noPinchZoom.ts) ------------------------------------------
+   Sólo desplazarse: ni pellizco ni doble toque agrandan la app. El mapa de rutas vuelve a tomar
+   todos los gestos para poder acercarse. */
+html,
+body {
+  touch-action: pan-x pan-y;
+}
+.leaflet-container {
+  touch-action: none;
+}

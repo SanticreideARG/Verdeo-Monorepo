@@ -8,6 +8,9 @@ export interface ActionMenuItem {
   tone?: 'danger' | undefined;
 }
 
+/** El ancho mínimo del menú (11rem), por si todavía no se pudo medir. */
+const MENU_MIN_WIDTH = 176;
+
 /** Alto aproximado de una opción, para decidir si el menú abre hacia arriba. */
 const ITEM_HEIGHT = 40;
 
@@ -39,11 +42,21 @@ export function ActionMenu({ items, label }: { items: readonly ActionMenuItem[];
     const height = items.length * ITEM_HEIGHT + 12;
     // Contra el ancho sin la barra de scroll: con `innerWidth` el menú quedaba corrido el ancho
     // de la barra (10 px) a la izquierda de su botón.
-    const right = Math.max(8, document.documentElement.clientWidth - rect.right);
+    const viewportWidth = document.documentElement.clientWidth;
+    const width = menuRef.current?.offsetWidth || MENU_MIN_WIDTH;
+    /*
+     * Hacia la izquierda desde el borde derecho del botón, que es lo natural en la tabla (el botón
+     * está a la derecha). En la tarjeta del teléfono el botón está a la izquierda y el menú se
+     * salía de la pantalla: si no entra así, se abre hacia la derecha desde el borde izquierdo.
+     */
+    const horizontal =
+      rect.right - width >= 8
+        ? { right: Math.max(8, viewportWidth - rect.right) }
+        : { left: Math.max(8, Math.min(rect.left, viewportWidth - width - 8)) };
     setStyle(
       rect.bottom + height + 8 > window.innerHeight && rect.top > height
-        ? { bottom: window.innerHeight - rect.top + 4, right }
-        : { right, top: rect.bottom + 4 },
+        ? { ...horizontal, bottom: window.innerHeight - rect.top + 4 }
+        : { ...horizontal, top: rect.bottom + 4 },
     );
   }, [items.length, open]);
 
