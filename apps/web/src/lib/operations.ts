@@ -115,6 +115,7 @@ export interface MenuOffering {
   currency: string;
   description: string | null;
   dishes: string[];
+  familyAbbreviation?: string | null;
   familyName: string;
   id: string;
   mealsPerUnit: number;
@@ -331,6 +332,9 @@ export interface Label {
 }
 
 export interface LabelSettings {
+  intuitivoCustomerName: boolean;
+  kitchenMode: boolean;
+  showSize: boolean;
   alignment: 'center' | 'left';
   backgroundImageUrl: string | null;
   /** Nombre de pila e iniciales, en vez del nombre completo. */

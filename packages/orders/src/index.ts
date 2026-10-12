@@ -8,3 +8,4 @@ export * from './order-engine.js';
 export * from './order-export.js';
 export * from './stats-merge.js';
 export * from './types.js';
+export * from './kitchen-labels.js';

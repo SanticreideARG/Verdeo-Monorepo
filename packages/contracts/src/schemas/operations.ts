@@ -447,6 +447,8 @@ export const MenuOfferingInputSchema = z.object({
   // carries over between weeks, same as prices.
   description: z.string().trim().max(500).nullable().optional(),
   dishes: z.array(RequiredTextSchema).max(5),
+  /** "KETO": la abreviatura de la variedad para la etiqueta de cocina. Vacía conserva la cargada. */
+  familyAbbreviation: z.string().trim().max(16).nullable().optional(),
   familyName: RequiredTextSchema,
   // Deliberate per-variety exception; omitted means the size price applies.
   overridePriceMinor: z.number().int().nonnegative().optional(),
@@ -528,6 +530,7 @@ export const MenuOfferingSchema = z.object({
   currency: z.string(),
   description: z.string().nullable(),
   dishes: z.array(z.string()),
+  familyAbbreviation: z.string().nullable(),
   familyName: z.string(),
   id: UuidSchema,
   mealsPerUnit: z.number().int(),
@@ -1099,11 +1102,14 @@ export const LabelSettingsSchema = z.object({
   id: UuidSchema.nullable(),
   labelGapMm: z.number().int().min(0).max(20),
   nameOnlyForComposable: z.boolean(),
-  labelsPerPage: z.number().int().min(1).max(12),
+  labelsPerPage: z.number().int().min(1).max(24),
   sheetHeightMm: z.number().int().min(80).max(600),
   sheetMarginMm: z.number().int().min(0).max(40),
   sheetWidthMm: z.number().int().min(80).max(420),
   showBorders: z.boolean(),
+  kitchenMode: z.boolean(),
+  showSize: z.boolean(),
+  intuitivoCustomerName: z.boolean(),
   updatedAt: IsoDateTimeSchema.nullable(),
   updatedByUserId: UuidSchema.nullable(),
   uppercaseName: z.boolean(),
@@ -1114,13 +1120,16 @@ export const LabelSettingsUpdateRequestSchema = z.object({
   backgroundImageUrl: z.string().url().nullable().optional(),
   fields: z.array(LabelFieldSchema).max(7).optional(),
   onePerDish: z.boolean().optional(),
+  kitchenMode: z.boolean().optional(),
+  showSize: z.boolean().optional(),
+  intuitivoCustomerName: z.boolean().optional(),
   showLogo: z.boolean().optional(),
   fontFamily: LabelFontSchema.optional(),
   fontScale: z.number().int().min(60).max(200).optional(),
   hideSurname: z.boolean().optional(),
   labelGapMm: z.number().int().min(0).max(20).optional(),
   nameOnlyForComposable: z.boolean().optional(),
-  labelsPerPage: z.number().int().min(1).max(12),
+  labelsPerPage: z.number().int().min(1).max(24),
   sheetHeightMm: z.number().int().min(80).max(600).optional(),
   sheetMarginMm: z.number().int().min(0).max(40).optional(),
   sheetWidthMm: z.number().int().min(80).max(420).optional(),
@@ -1667,3 +1676,16 @@ export const InboundEmailDetailSchema = z.object({
   status: InboundEmailStatusSchema,
   subject: z.string(),
 });
+
+/** Una etiqueta de cocina: un plato, para pegar en su recipiente. */
+export const KitchenLabelSchema = z.object({
+  abbreviation: z.string(),
+  composable: z.boolean(),
+  customerName: z.string().nullable(),
+  dish: z.string(),
+  side: z.string().nullable(),
+  sizeName: z.string().nullable(),
+});
+
+export const KitchenLabelListResponseSchema = z.object({ items: z.array(KitchenLabelSchema) });
+export type KitchenLabel = z.infer<typeof KitchenLabelSchema>;

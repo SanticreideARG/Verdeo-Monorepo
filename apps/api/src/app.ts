@@ -161,6 +161,7 @@ import {
   InboundEmailDetailSchema,
   InboundEmailIngestSchema,
   InboundEmailListResponseSchema,
+  KitchenLabelListResponseSchema,
   OrderImportConfirmResponseSchema,
   OrderImportPreviewResponseSchema,
   OrderSchema,
@@ -315,6 +316,7 @@ import {
   parseOrderImport,
   type OrderImportRow,
 } from './integrations/order-import.js';
+import { buildKitchenLabelsPrintHtml } from './kitchen-labels-export.js';
 import { buildLabelsPrintHtml } from './labels-export.js';
 import { RequestStats } from './request-stats.js';
 import { buildOrdersExcel } from './orders-excel.js';
@@ -561,6 +563,11 @@ interface OperationsEngine {
     requestId: string | null;
     status: string;
   }>;
+  cycleKitchenLabels(
+    cycleId: string,
+    operatingSiteId?: string | null,
+    zone?: string,
+  ): Promise<unknown[]>;
   getGeocodingSettings(operatingSiteId: string): Promise<GeocodingSettings>;
   updateGeocodingSettings(
     operatingSiteId: string,
@@ -6053,6 +6060,48 @@ export function createApp(options: CreateAppOptions) {
   });
 
   // --- Kitchen labels: on-demand only, never generated automatically on order confirm --------
+
+  /*
+   * Etiquetas de cocina: una por plato, sin cliente (salvo los Intuitivo, si así se configuró).
+   * `elab` es la fecha de elaboración que va en el pie; sin ella, la de hoy en la operación.
+   */
+  app.get('/api/v1/production/:cycleId/kitchen-labels', async (context) => {
+    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El ciclo indicado no es válido.');
+    const items = await requireOperations().cycleKitchenLabels(
+      params.data.cycleId,
+      context.get('scope')?.operatingSiteId ?? null,
+      context.req.query('zone')?.trim() || undefined,
+    );
+    return context.json(KitchenLabelListResponseSchema.parse({ items }));
+  });
+
+  app.get('/api/v1/production/:cycleId/kitchen-labels/export', async (context) => {
+    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El ciclo indicado no es válido.');
+    const elab = z.iso.date().safeParse(context.req.query('elab'));
+    // Hoy en la operación (Argentina, UTC-3), no en UTC: de noche el día UTC ya es mañana.
+    const today = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const [items, settings] = await Promise.all([
+      requireOperations().cycleKitchenLabels(
+        params.data.cycleId,
+        context.get('scope')?.operatingSiteId ?? null,
+        context.req.query('zone')?.trim() || undefined,
+      ),
+      requireOperations().getLabelSettings(),
+    ]);
+    context.header('content-type', 'text/html; charset=utf-8');
+    return context.html(
+      buildKitchenLabelsPrintHtml(
+        KitchenLabelListResponseSchema.shape.items.parse(items),
+        LabelSettingsSchema.parse(contractValue(settings)),
+        elab.success ? elab.data : today,
+        options.appOrigin,
+      ),
+    );
+  });
 
   app.get('/api/v1/production/:cycleId/labels', async (context) => {
     if (!context.get('session').permissions.includes('production.read')) return forbidden(context);

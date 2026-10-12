@@ -165,6 +165,15 @@ export const labelSettings = pgTable(
     onePerDish: boolean('one_per_dish').default(false).notNull(),
     /** El isotipo de Verdeo impreso en la etiqueta: el mismo que usa la aplicación. */
     showLogo: boolean('show_logo').default(false).notNull(),
+    /*
+     * Etiquetas de cocina: una por plato para pegar en cada recipiente, sin el nombre del cliente,
+     * con el diseño fijo de la hoja de producción (plato, acompañamiento y "KETO ELAB # 24-09").
+     */
+    kitchenMode: boolean('kitchen_mode').default(false).notNull(),
+    /** En la etiqueta de cocina: mostrar el tamaño (sin él, 250 y 400 llevan la misma). */
+    showSize: boolean('show_size').default(false).notNull(),
+    /** En la etiqueta de cocina, los Intuitivo llevan el nombre del cliente: cambian de uno a otro. */
+    intuitivoCustomerName: boolean('intuitivo_customer_name').default(true).notNull(),
     backgroundImageUrl: text('background_image_url'),
     // Tipografía y tamaño de la etiqueta impresa. Se guardan como texto porque van derecho a un
     // `font-family` y a un multiplicador de CSS: acotar el juego con un enum en la base obligaría a

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
 
 import { ActionButton } from '../components/ActionButton.js';
+import { KitchenLabelsPanel } from '../components/KitchenLabelsPanel.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { PeriodPicker } from '../components/PeriodPicker.js';
@@ -37,7 +38,8 @@ interface Label {
   variantName: string;
 }
 
-const LABELS_PER_PAGE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+// 24 es la hoja de stickers troquelados de 3 × 8 que usa cocina.
+const LABELS_PER_PAGE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 24];
 
 /** Familias de sistema: la etiqueta se imprime sin depender de descargar una fuente. */
 const FONT_OPTIONS = [
@@ -273,6 +275,9 @@ export function LabelsPage() {
   const [alignment, setAlignment] = useState<'center' | 'left'>('center');
   const [uppercaseName, setUppercaseName] = useState(false);
   const [onePerDish, setOnePerDish] = useState(false);
+  const [kitchenMode, setKitchenMode] = useState(false);
+  const [showSize, setShowSize] = useState(false);
+  const [intuitivoCustomerName, setIntuitivoCustomerName] = useState(true);
   const [showLogo, setShowLogo] = useState(false);
   const [showBorders, setShowBorders] = useState(true);
   const [hideSurname, setHideSurname] = useState(false);
@@ -322,6 +327,9 @@ export function LabelsPage() {
       setAlignment(body.alignment);
       setUppercaseName(body.uppercaseName);
       setOnePerDish(body.onePerDish);
+      setKitchenMode(body.kitchenMode);
+      setShowSize(body.showSize);
+      setIntuitivoCustomerName(body.intuitivoCustomerName);
       setShowLogo(body.showLogo);
       setShowBorders(body.showBorders);
       setHideSurname(body.hideSurname);
@@ -421,6 +429,9 @@ export function LabelsPage() {
         labelGapMm,
         nameOnlyForComposable,
         onePerDish,
+        kitchenMode,
+        showSize,
+        intuitivoCustomerName,
         showLogo,
         labelsPerPage,
         sheetHeightMm,
@@ -601,23 +612,33 @@ export function LabelsPage() {
                     ))}
                   </select>
                 </label>
-                <p className="text-sm text-ink-muted" role="status">
-                  {labelsLoading
-                    ? 'Contando etiquetas…'
-                    : `${String(selected.length)} etiquetas · ${String(sheets)} ${sheets === 1 ? 'hoja' : 'hojas'}${settings?.onePerDish ? ' · una por plato' : ''}`}
-                </p>
-                <ActionButton
-                  className="button button-primary justify-self-start"
-                  disabled={selected.length === 0}
-                  onClick={print}
-                  pendingLabel="Preparando…"
-                >
-                  Imprimir o guardar como PDF
-                </ActionButton>
-                <p className="field-hint">
-                  Se abre la hoja lista para imprimir. Para guardarla, elegí «Guardar como PDF» en
-                  el destino del diálogo de impresión.
-                </p>
+                {settings?.kitchenMode ? (
+                  <KitchenLabelsPanel
+                    cycleId={cycleId}
+                    labelsPerPage={settings.labelsPerPage}
+                    zone={zone}
+                  />
+                ) : (
+                  <>
+                    <p className="text-sm text-ink-muted" role="status">
+                      {labelsLoading
+                        ? 'Contando etiquetas…'
+                        : `${String(selected.length)} etiquetas · ${String(sheets)} ${sheets === 1 ? 'hoja' : 'hojas'}${settings?.onePerDish ? ' · una por plato' : ''}`}
+                    </p>
+                    <ActionButton
+                      className="button button-primary justify-self-start"
+                      disabled={selected.length === 0}
+                      onClick={print}
+                      pendingLabel="Preparando…"
+                    >
+                      Imprimir o guardar como PDF
+                    </ActionButton>
+                    <p className="field-hint">
+                      Se abre la hoja lista para imprimir. Para guardarla, elegí «Guardar como PDF»
+                      en el destino del diálogo de impresión.
+                    </p>
+                  </>
+                )}
 
                 <label className="field">
                   O un pedido suelto
@@ -852,6 +873,41 @@ export function LabelsPage() {
                  * recipiente de adentro, para que diga qué tiene sin abrirlo. Multiplica la
                  * cantidad de etiquetas, así que el conteo de arriba lo refleja antes de imprimir.
                  */}
+                {/*
+                 * Etiquetas de cocina: la hoja de producción. Una por plato, sin cliente, con el
+                 * plato, su acompañamiento y "KETO ELAB # 24-09". Cambia qué se imprime abajo.
+                 */}
+                <label className="label-switch">
+                  <input
+                    checked={kitchenMode}
+                    disabled={!canWrite}
+                    onChange={(event) => setKitchenMode(event.target.checked)}
+                    type="checkbox"
+                  />{' '}
+                  Etiquetas de cocina (una por plato, sin cliente)
+                </label>
+                {kitchenMode ? (
+                  <>
+                    <label className="label-switch">
+                      <input
+                        checked={showSize}
+                        disabled={!canWrite}
+                        onChange={(event) => setShowSize(event.target.checked)}
+                        type="checkbox"
+                      />{' '}
+                      Mostrar el tamaño
+                    </label>
+                    <label className="label-switch">
+                      <input
+                        checked={intuitivoCustomerName}
+                        disabled={!canWrite}
+                        onChange={(event) => setIntuitivoCustomerName(event.target.checked)}
+                        type="checkbox"
+                      />{' '}
+                      Nombre del cliente en los Intuitivo
+                    </label>
+                  </>
+                ) : null}
                 <label className="label-switch">
                   <input
                     checked={onePerDish}

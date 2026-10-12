@@ -35,6 +35,7 @@ import {
 import {
   assertOrderTransitionPolicy,
   buildKitchenSummary,
+  buildKitchenLabels,
   buildLabels,
   calculateLineTotal,
   intuitivoUnitPriceMinor,
@@ -225,6 +226,7 @@ export interface MenuInput {
     composable?: boolean | undefined;
     description?: string | null | undefined;
     dishes: readonly string[];
+    familyAbbreviation?: string | null | undefined;
     familyName: string;
     // Deliberate per-variety exception; omitted means the size price applies.
     overridePriceMinor?: number | undefined;
@@ -373,6 +375,9 @@ const LABEL_SETTINGS_FALLBACK = {
   sheetWidthMm: 210,
   showBorders: true,
   showLogo: false,
+  kitchenMode: false,
+  showSize: false,
+  intuitivoCustomerName: true,
   updatedAt: null,
   updatedByUserId: null,
   uppercaseName: false,
@@ -2888,6 +2893,7 @@ export class PostgresOperationsService {
       .select({
         composable: sql<boolean>`${productFamilies.kind} = 'COMPOSABLE'`,
         description: weeklyMenuOfferings.description,
+        familyAbbreviation: productFamilies.abbreviation,
         familyName: productFamilies.displayName,
         id: weeklyMenuOfferings.id,
         mealsPerUnit: productVariants.mealsPerUnit,
@@ -3124,15 +3130,19 @@ export class PostgresOperationsService {
        * ítem vendido — que es lo que partió "Demanda por variedad" en dos porciones.
        */
       const familyName = normalizeMenuName(offering.familyName);
+      const abbreviation = offering.familyAbbreviation?.trim().toLocaleUpperCase('es-AR') || null;
       const [family] = await transaction
         .insert(productFamilies)
         .values({
+          ...(abbreviation ? { abbreviation } : {}),
           code: familyCode,
           displayName: familyName,
           kind: offering.composable ? 'COMPOSABLE' : 'FIXED',
         })
         .onConflictDoUpdate({
           set: {
+            // Vacía en el formulario no borra la que ya estaba: la de la semana pasada sirve.
+            ...(abbreviation ? { abbreviation } : {}),
             displayName: familyName,
             kind: offering.composable ? 'COMPOSABLE' : 'FIXED',
             updatedAt: new Date(),
@@ -5504,6 +5514,7 @@ export class PostgresOperationsService {
         // se imprimen. Un dato que no llega hasta acá no se puede activar sin volver al backend.
         deliveryDate: orders.deliveryDate,
         deliveryZone: customerAddresses.operationalZone,
+        familyAbbreviation: productFamilies.abbreviation,
         familyName: orderItems.productNameSnapshot,
         // Para buscarle los platos a una variedad estándar: son los del menú de esa oferta.
         offeringId: orderItems.offeringId,
@@ -5626,6 +5637,18 @@ export class PostgresOperationsService {
 
   // --- Kitchen labels: one entry per physical unit, one per order/cycle print run ----------------
 
+  /**
+   * Las etiquetas de cocina de un período: una por plato, sin cliente, con los platos
+   * intercalados (ver `buildKitchenLabels`). Usa los mismos pedidos que las de vianda.
+   */
+  public async cycleKitchenLabels(cycleId: string, operatingSiteId?: string | null, zone?: string) {
+    const ajustes = await this.getLabelSettings();
+    return buildKitchenLabels(
+      await this.loadKitchenLines({ cycleId, operatingSiteId, ...(zone ? { zone } : {}) }),
+      { intuitivoCustomerName: ajustes.intuitivoCustomerName, showSize: ajustes.showSize },
+    );
+  }
+
   public async cycleLabels(cycleId: string, operatingSiteId?: string | null, zone?: string) {
     const [cycle] = await this.database
       .select({ id: salesCycles.id })
@@ -5722,6 +5745,9 @@ export class PostgresOperationsService {
       nameOnlyForComposable?: boolean | undefined;
       onePerDish?: boolean | undefined;
       showLogo?: boolean | undefined;
+      kitchenMode?: boolean | undefined;
+      showSize?: boolean | undefined;
+      intuitivoCustomerName?: boolean | undefined;
       labelsPerPage: number;
       sheetHeightMm?: number | undefined;
       sheetMarginMm?: number | undefined;
@@ -5755,6 +5781,10 @@ export class PostgresOperationsService {
             input.nameOnlyForComposable ?? existing?.nameOnlyForComposable ?? false,
           onePerDish: input.onePerDish ?? existing?.onePerDish ?? false,
           showLogo: input.showLogo ?? existing?.showLogo ?? false,
+          kitchenMode: input.kitchenMode ?? existing?.kitchenMode ?? false,
+          showSize: input.showSize ?? existing?.showSize ?? false,
+          intuitivoCustomerName:
+            input.intuitivoCustomerName ?? existing?.intuitivoCustomerName ?? true,
           labelsPerPage: input.labelsPerPage,
           sheetHeightMm: input.sheetHeightMm ?? existing?.sheetHeightMm ?? 297,
           sheetMarginMm: input.sheetMarginMm ?? existing?.sheetMarginMm ?? 12,

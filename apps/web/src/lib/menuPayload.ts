@@ -13,6 +13,8 @@ export interface OfferingDraft {
   description: string;
   /** One dish per line, as typed. */
   dishes: string;
+  /** "KETO": la abreviatura de la etiqueta de cocina. Opcional: un borrador viejo no la trae. */
+  familyAbbreviation?: string;
   familyName: string;
 }
 
@@ -26,6 +28,8 @@ export interface MenuPayloadInput {
   alias: string;
   closeAt: string;
   includeIntuitivo: boolean;
+  /** La abreviatura del Intuitivo en la etiqueta de cocina. */
+  intuitivoAbbreviation?: string;
   offerings: readonly OfferingDraft[];
   openAt: string;
   partialKitchenCutoffAt: string;
@@ -36,6 +40,7 @@ export interface MenuOfferingPayload {
   composable: boolean;
   description: string | null;
   dishes: string[];
+  familyAbbreviation: string | null;
   familyName: string;
   sizeName: string;
 }
@@ -92,6 +97,9 @@ export function buildMenuPayload(input: MenuPayloadInput): MenuPayloadResult {
       .split('\n')
       .map((dish) => dish.trim())
       .filter(Boolean),
+    familyAbbreviation: offering.familyAbbreviation?.trim()
+      ? offering.familyAbbreviation.trim().toUpperCase()
+      : null,
     familyName: offering.familyName,
   }));
   if (varieties.some((variety) => variety.dishes.length !== DISHES_PER_VARIETY)) {
@@ -118,6 +126,9 @@ export function buildMenuPayload(input: MenuPayloadInput): MenuPayloadResult {
         composable: true,
         description: null,
         dishes: [],
+        familyAbbreviation: input.intuitivoAbbreviation?.trim()
+          ? input.intuitivoAbbreviation.trim().toUpperCase()
+          : null,
         familyName: 'Intuitivo',
         sizeName: price.sizeName,
       })),

@@ -110,6 +110,7 @@ const customerOperationsStubs = {
   locateOrderAddress: vi.fn(),
   unlocatedOrders: vi.fn(),
   getGeocodingSettings: vi.fn(),
+  cycleKitchenLabels: vi.fn(),
   updateGeocodingSettings: vi.fn(),
   geocodingMetrics: vi.fn(),
 };
@@ -136,6 +137,7 @@ const sampleMenu = {
       currency: 'ARS',
       description: null,
       dishes: ['A', 'B', 'C', 'D', 'E'],
+      familyAbbreviation: null,
       familyName: 'Real',
       id: '30000000-0000-4000-8000-000000000001',
       mealsPerUnit: 5,
@@ -2187,6 +2189,9 @@ describe('API foundation', () => {
       updatedAt: null,
       updatedByUserId: null,
       uppercaseName: false,
+      kitchenMode: false,
+      showSize: false,
+      intuitivoCustomerName: true,
     };
 
     it('lists and exports kitchen labels for a cycle', async () => {
@@ -2205,6 +2210,39 @@ describe('API foundation', () => {
       expect(html.status).toBe(200);
       expect(html.headers.get('content-type')).toContain('text/html');
       expect(await html.text()).toContain('Lola');
+    });
+
+    // La hoja de producción: una por plato, sin cliente, con la fecha de elaboración en el pie.
+    it('lista e imprime las etiquetas de cocina con la fecha de elaboración elegida', async () => {
+      const cycleKitchenLabels = vi.fn(() =>
+        Promise.resolve([
+          {
+            abbreviation: 'KETO',
+            composable: false,
+            customerName: null,
+            dish: 'Meatloaf con jamón y nueces',
+            side: 'Zapallitos revueltos',
+            sizeName: null,
+          },
+        ]),
+      );
+      const getLabelSettings = vi.fn(() =>
+        Promise.resolve({ ...sampleLabelSettings, kitchenMode: true, labelsPerPage: 24 }),
+      );
+      const app = buildApp({ cycleKitchenLabels, getLabelSettings }, ['production.read']);
+
+      const json = await app.request(`/api/v1/production/${CYCLE}/kitchen-labels`, {
+        headers: { cookie },
+      });
+      expect(((await json.json()) as { items: unknown[] }).items).toHaveLength(1);
+
+      const html = await app.request(
+        `/api/v1/production/${CYCLE}/kitchen-labels/export?elab=2026-09-24`,
+        { headers: { cookie } },
+      );
+      const page = await html.text();
+      expect(page).toContain('KETO ELAB # 24-09');
+      expect(page).toContain('Zapallitos revueltos');
     });
 
     it('denies kitchen labels without production.read', async () => {

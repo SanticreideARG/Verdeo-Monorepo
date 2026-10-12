@@ -9442,3 +9442,22 @@ textarea.sr-only {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* --- Etiquetas de cocina: vista previa de la hoja que se imprime ------------------------------- */
+.kitchen-labels-preview {
+  width: 100%;
+  max-width: 30rem;
+  aspect-ratio: 210 / 297;
+  overflow: hidden;
+  border: 1px solid var(--db-border-soft);
+  border-radius: 0.5rem;
+  background: #fff;
+}
+/* La hoja mide 210 mm (~794 px): se dibuja a tamaño real y se achica al ancho de la caja. */
+.kitchen-labels-preview iframe {
+  width: 794px;
+  height: 1123px;
+  border: 0;
+  transform: scale(var(--kitchen-preview-scale, 0.6));
+  transform-origin: top left;
+}

@@ -96,3 +96,29 @@ encendido, y hay un test que lo fija.
 La exportación es HTML listo para imprimir y no un PDF generado: el diálogo de impresión del
 navegador es el adaptador a PDF, así que ninguna librería de PDF entra al bundle de la Vercel
 Function. Tamaño de etiqueta e impresora térmica siguen OPEN.
+
+## Etiquetas de cocina (hoja de producción)
+
+Formato definitivo de cocina: la hoja de stickers troquelados de **3 × 8 en A4** (24 por hoja).
+Se activa en Etiquetas → "Etiquetas de cocina (una por plato, sin cliente)".
+
+- **Una por plato**, sin el nombre del cliente. En una variedad fija se suman las unidades de
+  todos los pedidos y se imprimen los platos **intercalados** (1-2-3-4-5, 1-2-3-4-5…), como se
+  arman las viandas. La última hoja queda con los lugares que sobran en blanco.
+- **Diseño fijo**: logo arriba; el plato en mayúsculas con letra con serif; el acompañamiento
+  debajo, en cursiva; el pie "KETO ELAB # 24-09" en letra sin serif.
+- **Plato y acompañamiento** se escriben en una línea del menú separados por una barra:
+  "Wraps de pechuga con crema de cúrcuma / Tortilla de brócoli". Sin barra, sin acompañamiento.
+- **Abreviatura** ("KETO"): se carga junto al nombre de cada variedad al armar el menú (y la del
+  Intuitivo, en su recuadro). Se guarda en la variedad, así que pasa de semana en semana; vacía en
+  el formulario conserva la que había. Sin ninguna cargada se usa una sugerida (la última palabra
+  del nombre sin "Menú": "Menú Paleo & Keto" → "KETO").
+- **Fecha de elaboración**: se elige al imprimir y arranca en hoy.
+- **Mostrar el tamaño** (interruptor): sin él, el 250 y el 400 de una variedad llevan la misma
+  etiqueta; con él van aparte y el pie dice "KETO 400 ELAB # …".
+- **Intuitivo**: va pedido por pedido con los platos que eligió cada cliente y, por defecto, con su
+  nombre (interruptor "Nombre del cliente en los Intuitivo").
+- La vista previa es la misma hoja que se imprime, achicada.
+- Pendiente: calibrar márgenes y separación con la matriz de Illustrator de la hoja que se usa hoy.
+- API: `GET /api/v1/production/:cycleId/kitchen-labels` y `/kitchen-labels/export?elab=AAAA-MM-DD`.
+  Migración 0056 (abreviatura en `product_families` y los tres ajustes en `label_settings`).

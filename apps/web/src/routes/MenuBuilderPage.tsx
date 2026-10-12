@@ -17,6 +17,7 @@ import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 const emptyOffering = (): OfferingDraft => ({
   description: '',
   dishes: '',
+  familyAbbreviation: '',
   familyName: '',
 });
 
@@ -42,6 +43,7 @@ function isoToLocalInput(iso: string): string {
 // one-row-per-(variety,size) offering list — the inverse of the flatMap createMenu/updateMenu send.
 function decomposeMenu(menu: WeeklyMenu): {
   includeIntuitivo: boolean;
+  intuitivoAbbreviation: string;
   offerings: OfferingDraft[];
   sizePrices: SizePriceDraft[];
 } {
@@ -57,6 +59,7 @@ function decomposeMenu(menu: WeeklyMenu): {
   const offerings = [...byFamily.entries()].map(([familyName, rows]) => ({
     description: rows[0]?.description ?? '',
     dishes: rows[0]?.dishes.join('\n') ?? '',
+    familyAbbreviation: rows[0]?.familyAbbreviation ?? '',
     familyName,
   }));
 
@@ -76,6 +79,8 @@ function decomposeMenu(menu: WeeklyMenu): {
 
   return {
     includeIntuitivo,
+    intuitivoAbbreviation:
+      menu.offerings.find((offering) => offering.composable)?.familyAbbreviation ?? '',
     offerings: offerings.length > 0 ? offerings : [emptyOffering()],
     sizePrices: sizePrices.length > 0 ? sizePrices : defaultSizePrices(),
   };
@@ -102,6 +107,7 @@ export function MenuBuilderPage() {
     draftsEnabled,
   );
   const [message, setMessage] = useState('');
+  const [intuitivoAbbreviation, setIntuitivoAbbreviation] = useState('');
   const [includeIntuitivo, setIncludeIntuitivo, clearIntuitivoDraft] = usePersistedState(
     'menu-builder-intuitivo',
     true,
@@ -148,6 +154,7 @@ export function MenuBuilderPage() {
         setOfferings(decomposed.offerings);
         setSizePrices(decomposed.sizePrices);
         setIncludeIntuitivo(decomposed.includeIntuitivo);
+        setIntuitivoAbbreviation(decomposed.intuitivoAbbreviation);
         setLoading(false);
       })
       .catch(() => {
@@ -186,6 +193,7 @@ export function MenuBuilderPage() {
         const decomposed = decomposeMenu(mostRecentMaster);
         setOfferings(decomposed.offerings.map((offering) => ({ ...offering, dishes: '' })));
         setIncludeIntuitivo(decomposed.includeIntuitivo);
+        setIntuitivoAbbreviation(decomposed.intuitivoAbbreviation);
       })
       .catch(() => undefined);
     return () => {
@@ -214,6 +222,7 @@ export function MenuBuilderPage() {
       alias: formText(form, 'alias'),
       closeAt: formText(form, 'closeAt'),
       includeIntuitivo,
+      intuitivoAbbreviation,
       offerings,
       openAt: formText(form, 'openAt'),
       partialKitchenCutoffAt: formText(form, 'partialKitchenCutoffAt'),
@@ -553,6 +562,24 @@ export function MenuBuilderPage() {
                   Se carga una vez: sale disponible en todos los tamaños definidos arriba.
                 </p>
                 <div className="form-grid">
+                  <label className="field">
+                    Abreviatura
+                    <input
+                      maxLength={16}
+                      onChange={(event) =>
+                        setOfferings((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? { ...item, familyAbbreviation: event.target.value.toUpperCase() }
+                              : item,
+                          ),
+                        )
+                      }
+                      placeholder="KETO"
+                      value={offering.familyAbbreviation ?? ''}
+                    />
+                    <small className="field-hint">Va en el pie de la etiqueta de cocina.</small>
+                  </label>
                   <label className="field field-wide">
                     Variedad
                     <input
@@ -583,6 +610,10 @@ export function MenuBuilderPage() {
                       rows={5}
                       value={offering.dishes}
                     />
+                    <small className="field-hint">
+                      El acompañamiento va después de una barra: «Wraps de pechuga / Tortilla de
+                      brócoli». En la etiqueta de cocina sale debajo, en cursiva.
+                    </small>
                   </label>
                   <label className="field field-wide">
                     Descripción (opcional, se muestra al cliente)
@@ -621,6 +652,17 @@ export function MenuBuilderPage() {
               </Link>
               .
             </label>
+            {includeIntuitivo ? (
+              <label className="field mt-3 max-w-xs">
+                Abreviatura del Intuitivo
+                <input
+                  maxLength={16}
+                  onChange={(event) => setIntuitivoAbbreviation(event.target.value.toUpperCase())}
+                  placeholder="INTUITIVO"
+                  value={intuitivoAbbreviation}
+                />
+              </label>
+            ) : null}
           </fieldset>
 
           <div className="mt-5 flex flex-wrap gap-3">

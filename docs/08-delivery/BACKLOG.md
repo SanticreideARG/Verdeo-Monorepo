@@ -488,3 +488,13 @@ Plan completo en `docs/08-delivery/PLAN_CARGA_DE_DATOS.md`.
 - [ ] Fase 2: aviso de cliente duplicado al crearlo, ubicar la dirección al guardar, validación en
       el campo, precios precargados y autocompletar platos en el menú semanal.
 - [ ] Fase 3: importación sin pegar, corrección en la vista previa, domicilio con zona desde el email.
+
+## Etiquetas de cocina
+
+Detalle en `docs/03-features/LABELS_AND_QR.md`.
+
+- [x] Una por plato sin cliente, platos intercalados, 24 por hoja (3 × 8), diseño de la hoja de
+      producción, abreviatura por variedad, fecha de elaboración, tamaño opcional, Intuitivo con
+      nombre opcional.
+- [ ] Calibrar márgenes y separación con la matriz de Illustrator de la hoja actual.
+- [ ] Cargar las abreviaturas del período actual (editar el menú publicado).

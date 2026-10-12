@@ -333,6 +333,9 @@ export const productFamilies = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     code: text('code').notNull().unique(),
     displayName: text('display_name').notNull(),
+    // "KETO": lo que va en el pie de la etiqueta de cocina. Se carga junto al nombre al armar el
+    // menú; vacía, la etiqueta usa una sugerida a partir del nombre.
+    abbreviation: text('abbreviation'),
     kind: text('kind').default('FIXED').notNull(),
     active: boolean('active').default(true).notNull(),
     ...timestamps,

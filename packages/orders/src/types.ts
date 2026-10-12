@@ -18,6 +18,8 @@ export interface KitchenSourceLine {
    */
   dishes: readonly string[];
   dishSelections: readonly string[];
+  /** La abreviatura cargada de la variedad, para el pie de la etiqueta de cocina. */
+  familyAbbreviation?: string | null | undefined;
   familyName: string;
   orderPublicNumber: string;
   quantityUnits: number;
