@@ -46,6 +46,7 @@ import {
 } from '@verdeo/db';
 import {
   ConfigurableGeocodingProvider,
+  NominatimGeocodingProvider,
   NormalizedAddressSchema,
   SanitizingGeocodingProvider,
   type AddressNormalizer,
@@ -181,7 +182,13 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     // Resolves the maps key per call, so adding it in Ajustes takes effect without a redeploy and
     // falls back to link-parsing when none is configured.
     new SanitizingGeocodingProvider(
-      new ConfigurableGeocodingProvider(() => integrationCredentials.secretFor('maps')),
+      new ConfigurableGeocodingProvider(
+        () => integrationCredentials.secretFor('maps'),
+        undefined,
+        // Sin clave de Google (o con Google caído), OpenStreetMap: gratis, sin clave y suficiente
+        // para la mayoría de las paradas mientras se gestiona la de Google.
+        new NominatimGeocodingProvider(),
+      ),
       addressNormalizer,
     ),
   );

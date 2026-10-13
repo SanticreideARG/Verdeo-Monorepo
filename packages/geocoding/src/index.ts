@@ -250,12 +250,16 @@ export class GoogleMapsGeocodingProvider implements GeocodingProvider {
  */
 export class ConfigurableGeocodingProvider implements GeocodingProvider {
   public readonly key = 'configurable';
-  private readonly fallback = new LocationLinkGeocodingProvider();
 
   public constructor(
     private readonly resolveApiKey: () => Promise<string | null>,
     private readonly buildGoogleProvider: (apiKey: string) => GeocodingProvider = (apiKey) =>
       new GoogleMapsGeocodingProvider(apiKey),
+    /**
+     * Sin clave de Google, o con Google caído. Por defecto sólo lee enlaces de ubicación; el
+     * servidor pasa OpenStreetMap, que además busca la dirección escrita.
+     */
+    private readonly fallback: GeocodingProvider = new LocationLinkGeocodingProvider(),
   ) {}
 
   public async geocode(input: GeocodingInput): Promise<readonly GeocodingCandidate[]> {
@@ -296,3 +300,4 @@ export class LocationLinkGeocodingProvider implements GeocodingProvider {
 }
 
 export * from './sanitizer.js';
+export * from './nominatim.js';

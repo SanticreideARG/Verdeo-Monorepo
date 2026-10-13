@@ -176,14 +176,14 @@ export class PostgresAIPromptService {
         .from(aiPrompts)
         .where(eq(aiPrompts.taskKey, taskKey))
         .limit(1);
-      if (!prompt) throw new AIPromptNotFoundError('Prompt not found');
+      if (!prompt) throw new AIPromptNotFoundError('No se encontró el prompt');
 
       const [version] = await transaction
         .select({ id: aiPromptVersions.id })
         .from(aiPromptVersions)
         .where(and(eq(aiPromptVersions.id, versionId), eq(aiPromptVersions.promptId, prompt.id)))
         .limit(1);
-      if (!version) throw new AIPromptNotFoundError('Version not found for this prompt');
+      if (!version) throw new AIPromptNotFoundError('No se encontró esa versión del prompt');
 
       await transaction
         .update(aiPrompts)

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { Link, useParams } from 'react-router-dom';
 
-import { ActionButton } from '../components/ActionButton.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { CancelOrderDialog } from '../components/CancelOrderDialog.js';
 import { DeliveryMap } from '../components/DeliveryMap.js';
@@ -46,18 +45,6 @@ function formText(form: FormData, key: string): string {
 
 function statusLabel(status: OrderSummary['status'] | null): string {
   return status ? orderStatusLabel(status) : '—';
-}
-
-async function printLabels(orderId: string): Promise<string | null> {
-  const response = await apiRequest(`/api/v1/orders/${orderId}/labels/export`);
-  if (!response.ok) return errorMessage(response);
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  window.open(url, '_blank', 'noopener,noreferrer');
-  // Revocar en el mismo turno corre carrera con la pestaña que recién se abre: a veces se queda
-  // sin nada que cargar. Se libera un segundo después, ya con la página leída.
-  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
-  return null;
 }
 
 /** "Ver pedidos" drills into here for a single order: full detail, status history, revision
@@ -202,10 +189,17 @@ export function OrderDetailPage() {
     event.preventDefault();
     if (!order) return;
     const form = new FormData(event.currentTarget);
-    const dietaryInstructions = formText(form, 'dietaryInstructions')
-      .split('\n')
-      .map((value) => value.trim())
-      .filter(Boolean);
+    // Un solo comentario para la cocina, como en la carga. Se manda sólo si cambió: el servidor
+    // traba lo que se cocina cuando el pedido pasa a producción, y la dirección tiene que poder
+    // seguir cambiando hasta el reparto.
+    const comment = formText(form, 'dietaryInstructions').trim().replace(/\s+/g, ' ');
+    const dietaryInstructions = comment ? [comment] : [];
+    const commentChanged =
+      form.has('dietaryInstructions') &&
+      JSON.stringify(dietaryInstructions) !==
+        JSON.stringify(
+          order.dietaryInstructions.length > 0 ? [order.dietaryInstructions.join(' · ')] : [],
+        );
     const notes = formText(form, 'notes').trim();
     const locationUrl = formText(form, 'deliveryLocationUrl').trim();
     // Los ítems se mandan sólo si alguno cambió: un PATCH que los reenvía iguales igual dispara la
@@ -250,7 +244,7 @@ export function OrderDetailPage() {
         deliveryAddress: formText(form, 'deliveryAddress').trim(),
         deliveryDate: formText(form, 'deliveryDate'),
         deliveryLocationUrl: locationUrl ? locationUrl : null,
-        dietaryInstructions,
+        ...(commentChanged ? { dietaryInstructions } : {}),
         ...(itemsChanged ? { items: toItemPayload(items, offerings) } : {}),
         notes: notes ? notes : null,
         paymentExpectation: formText(form, 'paymentExpectation').trim(),
@@ -299,6 +293,8 @@ export function OrderDetailPage() {
   }
 
   const canEdit = profile.permissions.includes('orders.edit');
+  // De READY en adelante el servidor rechaza cambios en lo que se cocina.
+  const compositionEditable = order.status === 'DRAFT' || order.status === 'CONFIRMED';
   const canConfirm = profile.permissions.includes('orders.confirm');
   const canCancel = profile.permissions.includes('orders.cancel');
 
@@ -354,13 +350,8 @@ export function OrderDetailPage() {
               {editing ? 'Cerrar edición' : 'Editar pedido'}
             </button>
           ) : null}
-          <ActionButton
-            className="button button-secondary"
-            onClick={() => printLabels(order.id).then((error) => error && setMessage(error))}
-            pendingLabel="Generando…"
-          >
-            Generar etiquetas
-          </ActionButton>
+          {/* Las etiquetas salen en lote desde Etiquetas (por zona); acá, ubicar la dirección. */}
+          {canEdit ? <LocateOrderControl onLocated={() => void load()} orderId={order.id} /> : null}
         </div>
 
         {editing && canEdit ? (
@@ -408,13 +399,15 @@ export function OrderDetailPage() {
                 Enlace de ubicación
                 <input defaultValue={order.deliveryLocationUrl ?? ''} name="deliveryLocationUrl" />
               </label>
-              {dietaryInstructionsEnabled || order.dietaryInstructions.length > 0 ? (
+              {compositionEditable &&
+              (dietaryInstructionsEnabled || order.dietaryInstructions.length > 0) ? (
                 <label className="field field-wide">
-                  Indicaciones para cocina
+                  Comentario para la cocina
                   <textarea
-                    defaultValue={order.dietaryInstructions.join('\n')}
+                    defaultValue={order.dietaryInstructions.join(' · ')}
+                    maxLength={200}
                     name="dietaryInstructions"
-                    placeholder="Una por línea"
+                    placeholder="Una sola nota para este pedido"
                     rows={2}
                   />
                 </label>
@@ -434,7 +427,7 @@ export function OrderDetailPage() {
              * el día antes—. Se editan en borradores y confirmados; de READY en adelante el backend
              * lo rechaza, así que acá no se ofrece.
              */}
-            {order.status === 'DRAFT' || order.status === 'CONFIRMED' ? (
+            {compositionEditable ? (
               <section className="mt-6">
                 <h3 className="text-sm font-bold text-forest">Ítems</h3>
                 {offerings.length === 0 ? (
@@ -452,7 +445,13 @@ export function OrderDetailPage() {
                   />
                 )}
               </section>
-            ) : null}
+            ) : (
+              <p className="mt-4 text-sm text-ink-muted">
+                El pedido ya pasó a producción: los platos y el comentario para la cocina quedan
+                fijos. La dirección, la entrega, el pago y las notas se pueden cambiar hasta el
+                reparto.
+              </p>
+            )}
 
             <button className="button button-primary mt-4" type="submit">
               Guardar cambios
@@ -521,9 +520,6 @@ export function OrderDetailPage() {
                     </a>
                   </>
                 ) : null}
-                {canEdit && order.deliveryLatitude === null ? (
-                  <LocateOrderControl onLocated={() => void load()} orderId={order.id} />
-                ) : null}
               </dd>
             </div>
             {order.deliveryZone ? (
@@ -558,7 +554,7 @@ export function OrderDetailPage() {
             </div>
             {order.dietaryInstructions.length > 0 ? (
               <div className="order-facts-wide">
-                <dt>Indicaciones alimentarias</dt>
+                <dt>Comentario para la cocina</dt>
                 <dd>{order.dietaryInstructions.join(' · ')}</dd>
               </div>
             ) : null}

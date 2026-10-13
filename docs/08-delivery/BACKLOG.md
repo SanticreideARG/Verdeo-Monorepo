@@ -162,8 +162,8 @@ construimos no es el envío sino la cuenta de a quién ya se le avisó.
       que están en la calle. Sacarlo del contrato cuando hayan vencido todos.
 - [x] **Qué entregar en cada parada** (`deliveryDetail` en `@verdeo/orders`): una vianda estándar se
       nombra por variedad y tamaño —"Menú Keto 400"—, que es lo que dice su etiqueta; un Intuitivo,
-      por el nombre de quien lo pidió —"Intuitivo 250 · Ana"—, porque dos Intuitivo del mismo tamaño
-      son combinaciones distintas y eso es lo único que los separa. Las unidades se escriben sólo
+      sólo por su tamaño —"Intuitivo 250"—: el detalle de los platos no le sirve al repartidor, la
+      vianda ya va rotulada con el cliente. Las unidades se escriben sólo
       cuando son más de una. Lo arma el servidor una vez por ruta, así que la vista, el mensaje de
       WhatsApp, el CSV (columna "Qué entregar") y la app del repartidor dicen exactamente lo mismo.
 

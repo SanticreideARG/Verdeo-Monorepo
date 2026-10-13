@@ -74,7 +74,7 @@ export class PostgresPaymentsService {
       .from(orders)
       .where(eq(orders.id, orderId))
       .limit(1);
-    if (!order) throw new PaymentsNotFoundError('Order not found');
+    if (!order) throw new PaymentsNotFoundError('No se encontró el pedido');
 
     const [created] = await database
       .insert(payments)
@@ -420,7 +420,7 @@ export class PostgresPaymentsService {
         .from(cashCollections)
         .where(eq(cashCollections.id, collectionId))
         .limit(1);
-      if (!collection) throw new PaymentsNotFoundError('Collection not found');
+      if (!collection) throw new PaymentsNotFoundError('No se encontró el cobro');
 
       const [existingSettlement] = await transaction
         .select({ id: cashSettlements.id })

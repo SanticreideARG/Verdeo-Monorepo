@@ -145,7 +145,7 @@ export class PostgresAssistantService {
       .from(assistantFlows)
       .where(eq(assistantFlows.key, LANDING_FLOW_KEY))
       .limit(1);
-    if (!raced) throw new AssistantNotFoundError('Assistant flow could not be created');
+    if (!raced) throw new AssistantNotFoundError('No se pudo crear el flujo del asistente');
     return raced;
   }
 
@@ -236,7 +236,7 @@ export class PostgresAssistantService {
   public async publish(context: AssistantContext) {
     const flow = await this.ensureFlow();
     const latest = await this.latestRevision(flow.id);
-    if (!latest) throw new AssistantNotFoundError('There is no revision to publish');
+    if (!latest) throw new AssistantNotFoundError('No hay una revisión para publicar');
 
     return this.database.transaction(async (transaction) => {
       await transaction

@@ -158,6 +158,22 @@ La fase 1 no depende de la IA ni de la clave de Gemini y se puede hacer primero.
 - Los botones de la ficha del cliente también se benefician: el proveedor envuelto ordena el
   texto antes de buscar, y la ciudad del domicilio orienta al normalizador.
 
+## Respaldo con OpenStreetMap y limpieza de la semilla
+
+- **Sin clave de Google, busca en OpenStreetMap** (`NominatimGeocodingProvider` en
+  `@verdeo/geocoding`): gratis y sin clave, una consulta por segundo como pide su regla de uso,
+  limitado a Argentina. La seguridad sale del tipo de resultado: con número de puerta 0,95, un
+  edificio 0,9, una calle sin número 0,6 y un barrio o ciudad 0,4; así el umbral de 0,9 acepta solo
+  lo que tiene número y manda el resto a revisar. Un enlace de ubicación pegado sigue teniendo
+  prioridad. Cuando se configure la clave de Google, pasa a usarse Google sin tocar nada más.
+- **Coordenadas falsas de la semilla de carga.** `seed-load-test.ts` ponía puntos al azar
+  alrededor del Obelisco, marcados como confirmados (algunos caían en el río). Toda ubicación que
+  pone la aplicación deja su búsqueda en `geocoding_requests`, así que un domicilio con
+  coordenadas y sin búsquedas no pasó nunca por el ubicador.
+  `pnpm db:reset-unverified-locations --produccion [--dry-run]` les borra las coordenadas (y el
+  enlace cuando apunta al mismo punto, para que no se vuelva a tomar como elegido a mano) y los
+  deja "sin ubicación"; después, "Ubicar los pedidos" en Rutas los busca de verdad.
+
 ## Fases 3 y 4
 
 - **Ajustes por ciudad** (Panel de control → Direcciones, `site_geocoding_settings`, migración

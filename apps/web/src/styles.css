@@ -8677,8 +8677,10 @@ textarea.sr-only {
 }
 .dashboard-bottom-nav > .bottom-nav-brand img {
   display: block;
-  width: 30px;
-  height: 30px;
+  /* Más grande y levantado sobre el borde de la barra: se lee como la marca y queda a la vista. */
+  width: 44px;
+  height: 44px;
+  transform: translateY(-26px);
   border-radius: 50%;
   /* El fondo propio tapa el borde de la barra por detrás del círculo. */
   background: var(--db-surface-solid);

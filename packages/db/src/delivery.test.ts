@@ -136,12 +136,9 @@ describe('createRoute', () => {
     expect(route?.stops).toHaveLength(2);
     // Origin is (0,0); B is closer (longitude 1) than A (longitude 3).
     expect(route?.stops.map((stop) => stop.orderId)).toEqual([ORDER_B, ORDER_A]);
-    // Un Intuitivo se identifica por el nombre impreso en la etiqueta; una vianda estándar, por su
-    // variedad y tamaño. La hoja de ruta dice exactamente lo que el repartidor busca en la caja.
-    expect(route?.stops.map((stop) => stop.detail)).toEqual([
-      'Menú Keto 400 ×2',
-      'Intuitivo 250 · Ana',
-    ]);
+    // Variedad y tamaño, que es lo que el repartidor busca en la caja: el Intuitivo no lleva sus
+    // platos (ni el nombre, que ya encabeza la parada).
+    expect(route?.stops.map((stop) => stop.detail)).toEqual(['Menú Keto 400 ×2', 'Intuitivo 250']);
   });
 
   it('arma la hoja de una zona sola y deja afuera las paradas de las otras', async () => {

@@ -249,6 +249,6 @@ describe('sending', () => {
 
     await expect(
       service.sendMessage('00000000-0000-4000-8000-000000000000', 'Hola!', CONTEXT),
-    ).rejects.toThrow(/not found/i);
+    ).rejects.toThrow(/no se encontr/i);
   });
 });

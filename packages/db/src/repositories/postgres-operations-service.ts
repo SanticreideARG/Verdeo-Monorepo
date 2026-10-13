@@ -722,7 +722,7 @@ export class PostgresOperationsService {
       .from(customers)
       .where(eq(customers.id, customerId))
       .limit(1);
-    if (!customer) throw new OperationsNotFoundError('Customer not found');
+    if (!customer) throw new OperationsNotFoundError('No se encontró el cliente');
 
     const customerOrders = await this.database
       .select({
@@ -869,7 +869,7 @@ export class PostgresOperationsService {
       .from(messageTemplates)
       .where(eq(messageTemplates.key, input.templateKey))
       .limit(1);
-    if (!template) throw new OperationsNotFoundError('Message template not found');
+    if (!template) throw new OperationsNotFoundError('No se encontró la plantilla de mensaje');
 
     /*
      * Sólo lo confirmado, y la lista entera.
@@ -968,7 +968,7 @@ export class PostgresOperationsService {
       .from(orders)
       .where(eq(orders.id, input.orderId))
       .limit(1);
-    if (!order) throw new OperationsNotFoundError('Order not found');
+    if (!order) throw new OperationsNotFoundError('No se encontró el pedido');
 
     const phone = await this.database
       .select({ value: customerIdentities.valueDisplay })
@@ -1424,7 +1424,7 @@ export class PostgresOperationsService {
     ];
     const primaryTypes = identityValues.filter(({ primary }) => primary).map(({ type }) => type);
     if (new Set(primaryTypes).size !== primaryTypes.length) {
-      throw new OperationsConflictError('Only one primary identity is allowed for each type');
+      throw new OperationsConflictError('Sólo puede haber un contacto principal de cada tipo');
     }
 
     if (identityValues.length > 0)
@@ -1440,7 +1440,7 @@ export class PostgresOperationsService {
       };
     });
     if (addressValues.filter(({ primary }) => primary).length > 1) {
-      throw new OperationsConflictError('Only one primary address is allowed');
+      throw new OperationsConflictError('Sólo puede haber un domicilio principal');
     }
     if (addressValues.length > 0) await transaction.insert(customerAddresses).values(addressValues);
 
@@ -1502,7 +1502,7 @@ export class PostgresOperationsService {
         .from(customers)
         .where(eq(customers.id, customerId))
         .limit(1);
-      if (!before) throw new OperationsNotFoundError('Customer not found');
+      if (!before) throw new OperationsNotFoundError('No se encontró el cliente');
 
       const changes = {
         ...(input.displayName !== undefined
@@ -1615,7 +1615,7 @@ export class PostgresOperationsService {
         .from(customers)
         .where(eq(customers.id, customerId))
         .limit(1);
-      if (!existing) throw new OperationsNotFoundError('Customer not found');
+      if (!existing) throw new OperationsNotFoundError('No se encontró el cliente');
 
       const [counted] = await transaction
         .select({ orderCount: sql<number>`count(*)` })
@@ -1666,7 +1666,8 @@ export class PostgresOperationsService {
             ),
           )
           .limit(1);
-        if (!current) throw new OperationsNotFoundError('Customer identity not found');
+        if (!current)
+          throw new OperationsNotFoundError('No se encontró el dato de contacto del cliente');
         const nextActive = input.active ?? current.active;
         const nextPrimary = nextActive && (input.primary ?? current.primary);
         if (nextPrimary) {
@@ -1765,7 +1766,7 @@ export class PostgresOperationsService {
             and(eq(customerAddresses.id, addressId), eq(customerAddresses.customerId, customerId)),
           )
           .limit(1);
-        if (!current) throw new OperationsNotFoundError('Customer address not found');
+        if (!current) throw new OperationsNotFoundError('No se encontró el domicilio del cliente');
         const { latitude: inputLatitude, longitude: inputLongitude, ...addressChanges } = input;
         const latitude =
           inputLatitude === null
@@ -1833,7 +1834,7 @@ export class PostgresOperationsService {
           ),
         )
         .limit(1);
-      if (!address) throw new OperationsNotFoundError('Customer address not found');
+      if (!address) throw new OperationsNotFoundError('No se encontró el domicilio del cliente');
 
       const [created] = await transaction
         .insert(geocodingRequests)
@@ -2017,7 +2018,7 @@ export class PostgresOperationsService {
           ),
         )
         .limit(1);
-      if (!request) throw new OperationsNotFoundError('Geocoding request not found');
+      if (!request) throw new OperationsNotFoundError('No se encontró la búsqueda de ubicación');
       if (!['CANDIDATES', 'NO_MATCH', 'FAILED'].includes(request.status)) {
         throw new OperationsConflictError('La solicitud de geocodificación no puede confirmarse.');
       }
@@ -2027,7 +2028,7 @@ export class PostgresOperationsService {
         .from(customerAddresses)
         .where(and(eq(customerAddresses.id, addressId), eq(customerAddresses.active, true)))
         .limit(1);
-      if (!address) throw new OperationsNotFoundError('Customer address not found');
+      if (!address) throw new OperationsNotFoundError('No se encontró el domicilio del cliente');
 
       const [candidate] = input.candidateId
         ? await transaction
@@ -2042,7 +2043,7 @@ export class PostgresOperationsService {
             .limit(1)
         : [undefined];
       if (input.candidateId && !candidate) {
-        throw new OperationsNotFoundError('Geocoding candidate not found');
+        throw new OperationsNotFoundError('No se encontró la ubicación sugerida');
       }
 
       const latitude = input.latitude ?? (candidate ? Number(candidate.latitude) : undefined);
@@ -2145,7 +2146,7 @@ export class PostgresOperationsService {
           ),
         )
         .limit(1);
-      if (!request) throw new OperationsNotFoundError('Geocoding request not found');
+      if (!request) throw new OperationsNotFoundError('No se encontró la búsqueda de ubicación');
       if (['CONFIRMED', 'REJECTED', 'SUPERSEDED'].includes(request.status)) {
         throw new OperationsConflictError('La solicitud de geocodificación ya fue resuelta.');
       }
@@ -2217,7 +2218,8 @@ export class PostgresOperationsService {
             ),
           )
           .returning();
-        if (!updated) throw new OperationsNotFoundError('Customer preference not found');
+        if (!updated)
+          throw new OperationsNotFoundError('No se encontró la preferencia del cliente');
         await this.auditCustomerMutation(
           transaction,
           customerId,
@@ -2283,7 +2285,7 @@ export class PostgresOperationsService {
           ),
         )
         .returning();
-      if (!updated) throw new OperationsNotFoundError('Customer restriction not found');
+      if (!updated) throw new OperationsNotFoundError('No se encontró la restricción del cliente');
       await this.auditCustomerMutation(
         transaction,
         customerId,
@@ -2390,7 +2392,7 @@ export class PostgresOperationsService {
       .innerJoin(operatingSites, eq(operatingSites.id, orders.operatingSiteId))
       .where(eq(orders.id, orderId))
       .limit(1);
-    if (!order) throw new OperationsNotFoundError('Order not found');
+    if (!order) throw new OperationsNotFoundError('No se encontró el pedido');
 
     let addressId = order.deliveryAddressId;
     if (addressId) {
@@ -2789,7 +2791,7 @@ export class PostgresOperationsService {
         ),
       )
       .limit(1);
-    if (!request) throw new OperationsNotFoundError('Geocoding request not found');
+    if (!request) throw new OperationsNotFoundError('No se encontró la búsqueda de ubicación');
     const candidates = await this.database
       .select({
         city: geocodingCandidates.city,
@@ -2821,7 +2823,7 @@ export class PostgresOperationsService {
       .from(customers)
       .where(eq(customers.id, customerId))
       .limit(1);
-    if (!customer) throw new OperationsNotFoundError('Customer not found');
+    if (!customer) throw new OperationsNotFoundError('No se encontró el cliente');
     return customer;
   }
 
@@ -3316,7 +3318,7 @@ export class PostgresOperationsService {
           .innerJoin(salesCycles, eq(salesCycles.id, weeklyMenus.salesCycleId))
           .where(eq(weeklyMenus.id, menuId))
           .limit(1);
-        if (!existing) throw new OperationsNotFoundError('Weekly menu not found');
+        if (!existing) throw new OperationsNotFoundError('No se encontró el menú semanal');
 
         /*
          * El ciclo de venta —nombre y fechas de la semana— es uno solo y lo comparten todas las
@@ -3425,7 +3427,7 @@ export class PostgresOperationsService {
           .innerJoin(salesCycles, eq(salesCycles.id, weeklyMenus.salesCycleId))
           .where(eq(weeklyMenus.id, menuId))
           .limit(1);
-        if (!menu) throw new OperationsNotFoundError('Weekly menu not found');
+        if (!menu) throw new OperationsNotFoundError('No se encontró el menú semanal');
         if (menu.cycleStatus === 'CLOSED') {
           throw new OperationsConflictError(
             `"${menu.cycleAlias}" ya está cerrado: ese precio es lo que se cobró y no se edita.`,
@@ -3506,7 +3508,7 @@ export class PostgresOperationsService {
           .from(weeklyMenus)
           .where(eq(weeklyMenus.id, menuId))
           .limit(1);
-        if (!menu) throw new OperationsNotFoundError('Weekly menu not found');
+        if (!menu) throw new OperationsNotFoundError('No se encontró el menú semanal');
 
         const [orderCountRow] = await transaction
           .select({ count: sql<number>`count(*)` })
@@ -3553,7 +3555,7 @@ export class PostgresOperationsService {
           .from(salesCycles)
           .where(eq(salesCycles.id, cycleId))
           .limit(1);
-        if (!current) throw new OperationsNotFoundError('Sales cycle not found');
+        if (!current) throw new OperationsNotFoundError('No se encontró el período de venta');
 
         const status = closed ? 'CLOSED' : 'OPEN';
         await transaction
@@ -3617,9 +3619,9 @@ export class PostgresOperationsService {
         .from(weeklyMenus)
         .where(eq(weeklyMenus.id, menuId))
         .limit(1);
-      if (!current) throw new OperationsNotFoundError('Weekly menu not found');
+      if (!current) throw new OperationsNotFoundError('No se encontró el menú semanal');
       if (current.status !== 'DRAFT')
-        throw new OperationsConflictError('Only draft menus can be published');
+        throw new OperationsConflictError('Sólo se pueden publicar menús en borrador');
 
       const publishedAt = new Date();
       await transaction
@@ -3646,7 +3648,7 @@ export class PostgresOperationsService {
     });
 
     const menu = (await this.listMenus()).find(({ id }) => id === menuId);
-    if (!menu) throw new OperationsNotFoundError('Weekly menu not found');
+    if (!menu) throw new OperationsNotFoundError('No se encontró el menú semanal');
     return menu;
   }
 
@@ -3676,7 +3678,7 @@ export class PostgresOperationsService {
           .from(weeklyMenus)
           .where(eq(weeklyMenus.id, menuId))
           .limit(1);
-        if (!master) throw new OperationsNotFoundError('Weekly menu not found');
+        if (!master) throw new OperationsNotFoundError('No se encontró el menú semanal');
         if (master.operatingSiteId !== null)
           throw new OperationsConflictError(
             'Sólo un menú global puede distribuirse; este ya pertenece a una operación',
@@ -3739,7 +3741,7 @@ export class PostgresOperationsService {
             .from(operatingSites)
             .where(and(eq(operatingSites.id, operatingSiteId), eq(operatingSites.active, true)))
             .limit(1);
-          if (!site) throw new OperationsNotFoundError('Operating site not found');
+          if (!site) throw new OperationsNotFoundError('No se encontró la sede');
 
           const [existing] = await transaction
             .select({ id: weeklyMenus.id, status: weeklyMenus.status })
@@ -3991,7 +3993,7 @@ export class PostgresOperationsService {
           .from(orders)
           .where(eq(orders.id, orderId))
           .limit(1);
-        if (!current) throw new OperationsNotFoundError('Order not found');
+        if (!current) throw new OperationsNotFoundError('No se encontró el pedido');
 
         const paidAt = paid ? new Date() : null;
         await transaction
@@ -4056,20 +4058,21 @@ export class PostgresOperationsService {
         .where(eq(orders.id, orderId))
         .for('update')
         .limit(1);
-      if (!current) throw new OperationsNotFoundError('Order not found');
+      if (!current) throw new OperationsNotFoundError('No se encontró el pedido');
+      // Lo que se cocina (platos y comentario a la cocina) queda fijo cuando cierra el período o
+      // el pedido pasa a producción. La dirección, la entrega, el pago y las notas pueden cambiar
+      // hasta el reparto, así que no se traban.
+      const changesComposition =
+        input.items !== undefined || input.dietaryInstructions !== undefined;
       const cycleLocked = current.cycleStatus === 'CLOSED' || new Date() >= current.closeAt;
-      if (cycleLocked && !allowCycleOverride) {
+      if (changesComposition && cycleLocked && !allowCycleOverride) {
         throw new OperationsConflictError(
-          'The sales cycle is closed; editing this order requires an authorized override',
+          'El período ya cerró: cambiar lo que se cocina en este pedido requiere autorización',
         );
       }
-      if (
-        (input.items !== undefined || input.dietaryInstructions !== undefined) &&
-        current.status !== 'DRAFT' &&
-        current.status !== 'CONFIRMED'
-      ) {
+      if (changesComposition && current.status !== 'DRAFT' && current.status !== 'CONFIRMED') {
         throw new OperationsConflictError(
-          'Order composition can only be edited while the order is draft or confirmed',
+          'Los platos y el comentario a la cocina sólo se pueden cambiar con el pedido en borrador o confirmado. La dirección, la entrega, el pago y las notas sí se pueden editar.',
         );
       }
 
@@ -4104,7 +4107,7 @@ export class PostgresOperationsService {
         ? calculateOrderTotal(resolvedItems.map(({ totalMinor }) => totalMinor))
         : undefined;
       if (resolvedItems && !firstResolvedItem) {
-        throw new OperationsConflictError('An order requires at least one item');
+        throw new OperationsConflictError('El pedido necesita al menos un plato');
       }
 
       let deliveryAddress = input.deliveryAddress ?? current.deliveryAddress;
@@ -4127,7 +4130,8 @@ export class PostgresOperationsService {
             ),
           )
           .limit(1);
-        if (!address) throw new OperationsNotFoundError('Active customer address not found');
+        if (!address)
+          throw new OperationsNotFoundError('No se encontró el domicilio activo del cliente');
         deliveryAddress = address.writtenAddress;
         if (input.deliveryLocationUrl === undefined) deliveryLocationUrl = address.locationUrl;
       }
@@ -4186,7 +4190,7 @@ export class PostgresOperationsService {
         entityId: orderId,
         entityType: 'order',
         metadata: {
-          cycleOverride: cycleLocked && allowCycleOverride,
+          cycleOverride: changesComposition && cycleLocked && allowCycleOverride,
           reason: input.reason ?? null,
         },
         requestId: context.requestId,
@@ -4252,7 +4256,7 @@ export class PostgresOperationsService {
         }
         if (resolvedIds.size > 1) {
           throw new OperationsConflictError(
-            'The supplied identities belong to different customers',
+            'Los datos de contacto indicados pertenecen a clientes distintos',
           );
         }
 
@@ -4303,9 +4307,9 @@ export class PostgresOperationsService {
       .innerJoin(salesCycles, eq(salesCycles.id, weeklyMenus.salesCycleId))
       .where(eq(weeklyMenus.id, input.menuId))
       .limit(1);
-    if (!menu) throw new OperationsNotFoundError('Weekly menu not found');
+    if (!menu) throw new OperationsNotFoundError('No se encontró el menú semanal');
     if (menu.status !== 'PUBLISHED')
-      throw new OperationsConflictError('Orders require a published menu');
+      throw new OperationsConflictError('Para cargar pedidos hace falta un menú publicado');
 
     /*
      * El día de entrega lo decide el ciclo, no quien llama.
@@ -4321,7 +4325,7 @@ export class PostgresOperationsService {
       .from(customers)
       .where(and(eq(customers.id, input.customerId), eq(customers.status, 'active')))
       .limit(1);
-    if (!customer) throw new OperationsNotFoundError('Active customer not found');
+    if (!customer) throw new OperationsNotFoundError('No se encontró el cliente activo');
 
     let deliveryAddress = input.deliveryAddress;
     let deliveryLocationUrl = input.deliveryLocationUrl;
@@ -4373,7 +4377,8 @@ export class PostgresOperationsService {
           ),
         )
         .limit(1);
-      if (!address) throw new OperationsNotFoundError('Active customer address not found');
+      if (!address)
+        throw new OperationsNotFoundError('No se encontró el domicilio activo del cliente');
       // Only an explicitly chosen address rewrites what the order says it is delivering to. When
       // the id was inferred above, the operator may have typed a one-off address on purpose —
       // linking it for routing must not silently replace their text with the stored one.
@@ -4401,7 +4406,7 @@ export class PostgresOperationsService {
       operatingSiteId,
     );
     const currency = resolvedItems[0]?.currency;
-    if (!currency) throw new OperationsConflictError('An order requires at least one item');
+    if (!currency) throw new OperationsConflictError('El pedido necesita al menos un plato');
     if (input.source === 'opportunity_sale') {
       await this.assertOpportunitySaleAvailability(transaction, menu.salesCycleId, resolvedItems);
     }
@@ -4481,7 +4486,7 @@ export class PostgresOperationsService {
     operatingSiteId: string | null,
   ): Promise<ResolvedOrderItem[]> {
     if (items.length === 0)
-      throw new OperationsConflictError('An order requires at least one item');
+      throw new OperationsConflictError('El pedido necesita al menos un plato');
     const resolvedItems: ResolvedOrderItem[] = [];
     // The composable variety is the same for every line, so it is resolved once instead of per item.
     const composableFamilyName = await this.composableFamilyName(transaction);
@@ -4521,12 +4526,13 @@ export class PostgresOperationsService {
           ),
         )
         .limit(1);
-      if (!offering) throw new OperationsNotFoundError('Published menu offering not found');
+      if (!offering)
+        throw new OperationsNotFoundError('No se encontró esa opción en el menú publicado');
 
       const unitPriceMinor = offering.overridePriceMinor ?? offering.sizePriceMinor;
       if (unitPriceMinor === null)
         throw new OperationsConflictError(
-          'The menu has no price for this size and the offering defines no override',
+          'El menú no tiene precio para ese tamaño y la opción no define uno propio',
         );
       const currency =
         offering.overridePriceMinor === null ? offering.sizeCurrency : offering.overrideCurrency;
@@ -4589,7 +4595,7 @@ export class PostgresOperationsService {
 
     const currency = resolvedItems[0]?.currency;
     if (!currency || resolvedItems.some((item) => item.currency !== currency)) {
-      throw new OperationsConflictError('All order items must use the same currency');
+      throw new OperationsConflictError('Todos los ítems del pedido deben usar la misma moneda');
     }
     return resolvedItems;
   }
@@ -4635,7 +4641,8 @@ export class PostgresOperationsService {
           .limit(1)
           .then(([row]) => row)
       : null;
-    if (input.cursor && !cursor) throw new OperationsNotFoundError('Order cursor not found');
+    if (input.cursor && !cursor)
+      throw new OperationsNotFoundError('No se encontró la posición en la lista de pedidos');
 
     const conditions = [
       // A concrete operation restricts the page; the global view leaves it unfiltered.
@@ -4707,7 +4714,7 @@ export class PostgresOperationsService {
       exported.push(...page.items);
       if (exported.length >= 5_000 && page.nextCursor) {
         throw new OperationsConflictError(
-          'The export exceeds 5000 orders; narrow the filters before retrying',
+          'La exportación supera los 5000 pedidos; acotá los filtros y volvé a intentar',
         );
       }
       cursor = page.nextCursor ?? undefined;
@@ -4978,7 +4985,7 @@ export class PostgresOperationsService {
 
   public async getOrder(orderId: string) {
     const order = await this.loadOrder(this.database, orderId);
-    if (!order) throw new OperationsNotFoundError('Order not found');
+    if (!order) throw new OperationsNotFoundError('No se encontró el pedido');
     return order;
   }
 
@@ -5040,7 +5047,7 @@ export class PostgresOperationsService {
       .from(orders)
       .where(eq(orders.id, orderId))
       .limit(1);
-    if (!order) throw new OperationsNotFoundError('Order not found');
+    if (!order) throw new OperationsNotFoundError('No se encontró el pedido');
     return (
       this.database
         .select({
@@ -5067,7 +5074,7 @@ export class PostgresOperationsService {
       .from(orders)
       .where(eq(orders.id, orderId))
       .limit(1);
-    if (!order) throw new OperationsNotFoundError('Order not found');
+    if (!order) throw new OperationsNotFoundError('No se encontró el pedido');
     return this.database
       .select({
         actorDisplayName: users.displayName,
@@ -5096,7 +5103,7 @@ export class PostgresOperationsService {
       .from(operatingSites)
       .where(eq(operatingSites.id, operatingSiteId))
       .limit(1);
-    if (!site) throw new OperationsNotFoundError('Operating site not found');
+    if (!site) throw new OperationsNotFoundError('No se encontró la sede');
 
     const [counter] = await transaction
       .insert(operatingSiteOrderCounters)
@@ -5353,7 +5360,7 @@ export class PostgresOperationsService {
         .innerJoin(customers, eq(customers.id, orders.customerId))
         .where(eq(orders.id, orderId))
         .limit(1);
-      if (!existing) throw new OperationsNotFoundError('Order not found');
+      if (!existing) throw new OperationsNotFoundError('No se encontró el pedido');
 
       const [cobrado] = await transaction
         .select({ total: sql<number>`coalesce(sum(${cashCollections.amountMinor}), 0)::int` })
@@ -5431,7 +5438,7 @@ export class PostgresOperationsService {
         .innerJoin(salesCycles, eq(salesCycles.id, orders.salesCycleId))
         .where(eq(orders.id, orderId))
         .limit(1);
-      if (!current) throw new OperationsNotFoundError('Order not found');
+      if (!current) throw new OperationsNotFoundError('No se encontró el pedido');
 
       const fromStatus = current.status as OrderStatus;
       const cycleLocked = current.cycleStatus === 'CLOSED' || new Date() >= current.closeAt;
@@ -5491,7 +5498,7 @@ export class PostgresOperationsService {
     });
 
     const order = await this.loadOrder(this.database, orderId);
-    if (!order) throw new OperationsNotFoundError('Order not found');
+    if (!order) throw new OperationsNotFoundError('No se encontró el pedido');
     return order;
   }
 
@@ -5629,7 +5636,7 @@ export class PostgresOperationsService {
       .from(salesCycles)
       .where(eq(salesCycles.id, cycleId))
       .limit(1);
-    if (!cycle) throw new OperationsNotFoundError('Sales cycle not found');
+    if (!cycle) throw new OperationsNotFoundError('No se encontró el período de venta');
 
     const lines = await this.loadKitchenLines({ cycleId, operatingSiteId });
     return { ...buildKitchenSummary(lines), cycle, generatedAt: new Date() };
@@ -5655,7 +5662,7 @@ export class PostgresOperationsService {
       .from(salesCycles)
       .where(eq(salesCycles.id, cycleId))
       .limit(1);
-    if (!cycle) throw new OperationsNotFoundError('Sales cycle not found');
+    if (!cycle) throw new OperationsNotFoundError('No se encontró el período de venta');
     // Una por vianda o una por plato: lo decide el formato guardado, no quien llama. Así la
     // pantalla, la impresión de la tanda y la de un pedido suelto no pueden discrepar.
     const ajustes = await this.getLabelSettings();
@@ -5667,7 +5674,7 @@ export class PostgresOperationsService {
 
   public async orderLabels(orderId: string) {
     const order = await this.loadOrder(this.database, orderId);
-    if (!order) throw new OperationsNotFoundError('Order not found');
+    if (!order) throw new OperationsNotFoundError('No se encontró el pedido');
     const ajustes = await this.getLabelSettings();
     return buildLabels(await this.loadKitchenLines({ orderId }), {
       perDish: ajustes.onePerDish,
@@ -5708,7 +5715,7 @@ export class PostgresOperationsService {
       .delete(labelBackgrounds)
       .where(eq(labelBackgrounds.id, id))
       .returning({ imageUrl: labelBackgrounds.imageUrl });
-    if (!removed) throw new OperationsNotFoundError('Label background not found');
+    if (!removed) throw new OperationsNotFoundError('No se encontró el fondo de etiqueta');
 
     const [current] = await this.database
       .select({ backgroundImageUrl: labelSettings.backgroundImageUrl, id: labelSettings.id })
@@ -5876,7 +5883,7 @@ export class PostgresOperationsService {
           .from(salesCycles)
           .where(eq(salesCycles.id, cycleId))
           .limit(1);
-        if (!cycle) throw new OperationsNotFoundError('Sales cycle not found');
+        if (!cycle) throw new OperationsNotFoundError('No se encontró el período de venta');
 
         const reportedAt = new Date();
         for (const entry of entries) {
@@ -6214,7 +6221,7 @@ export class PostgresOperationsService {
         .from(operatingSites)
         .where(eq(operatingSites.id, operatingSiteId))
         .limit(1);
-      if (!site) throw new OperationsNotFoundError('Operating site not found');
+      if (!site) throw new OperationsNotFoundError('No se encontró la sede');
 
       const [existing] = await transaction
         .select()
@@ -6359,7 +6366,7 @@ export class PostgresOperationsService {
       .from(salesCycles)
       .where(eq(salesCycles.id, cycleId))
       .limit(1);
-    if (!cycle) throw new OperationsNotFoundError('Sales cycle not found');
+    if (!cycle) throw new OperationsNotFoundError('No se encontró el período de venta');
     const coefficientPercent = await this.surplusCoefficientPercent(this.database);
     const rows = await this.surplusRows(this.database, cycleId);
     return {
@@ -6418,7 +6425,7 @@ export class PostgresOperationsService {
           .from(salesCycles)
           .where(eq(salesCycles.id, cycleId))
           .limit(1);
-        if (!cycle) throw new OperationsNotFoundError('Sales cycle not found');
+        if (!cycle) throw new OperationsNotFoundError('No se encontró el período de venta');
 
         const rows = await this.surplusRows(transaction, cycleId);
         for (const entry of entries) {

@@ -131,7 +131,7 @@ export class PostgresAITaskService {
 
   public async runTask(taskKey: string, variables: Record<string, string>, context: AITaskContext) {
     const task = findTask(taskKey);
-    if (!task) throw new AITaskNotFoundError(`Unknown AI task: ${taskKey}`);
+    if (!task) throw new AITaskNotFoundError(`Tarea de IA desconocida: ${taskKey}`);
 
     const activeVersion = await this.promptService.getActiveVersion(taskKey);
     const promptVersion =

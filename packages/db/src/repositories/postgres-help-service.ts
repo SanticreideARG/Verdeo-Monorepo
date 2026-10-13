@@ -107,7 +107,7 @@ export class PostgresHelpService {
         .from(helpArticles)
         .where(eq(helpArticles.id, id))
         .limit(1);
-      if (!existing) throw new HelpArticleNotFoundError('Help article not found');
+      if (!existing) throw new HelpArticleNotFoundError('No se encontró el artículo de ayuda');
 
       const [article] = await transaction
         .update(helpArticles)
@@ -150,7 +150,7 @@ export class PostgresHelpService {
         .from(helpArticles)
         .where(eq(helpArticles.id, id))
         .limit(1);
-      if (!existing) throw new HelpArticleNotFoundError('Help article not found');
+      if (!existing) throw new HelpArticleNotFoundError('No se encontró el artículo de ayuda');
 
       await transaction.delete(helpArticles).where(eq(helpArticles.id, id));
 

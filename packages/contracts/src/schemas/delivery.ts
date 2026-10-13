@@ -37,7 +37,7 @@ export const DeliveryStopSchema = z.object({
   // Coordenadas del domicilio: con esto la lista que se le pasa al repartidor lleva un enlace de
   // mapa aunque nadie haya compartido una ubicación por chat.
   /*
-   * Qué hay que entregar acá, ya escrito: "Menú Keto 400", "Intuitivo 250 · Ana".
+   * Qué hay que entregar acá, ya escrito: "Menú Keto 400", "Intuitivo 250".
    *
    * Lo arma el servidor y no cada pantalla, porque la misma línea va a la vista, al mensaje de
    * WhatsApp, a la planilla y a la app del repartidor: cuatro formas distintas de decir lo mismo

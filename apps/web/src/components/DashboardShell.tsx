@@ -8,6 +8,7 @@ import { useNarrowViewport } from '../lib/useNarrowViewport.js';
 import { AppearanceMenu, FONT_OPTIONS, SCALE_OPTIONS, type ThemeOption } from './AppearanceMenu.js';
 import { ChatDock } from './ChatDock.js';
 import { OperatorAssistant } from './OperatorAssistant.js';
+import { bottomNavLayout } from '../lib/bottomNav.js';
 import { PresenceControl } from './PresenceControl.js';
 import { SystemStatusButton } from './SystemStatusButton.js';
 import { SETTINGS_TAB_PERMISSIONS } from './SettingsTabs.js';
@@ -663,9 +664,9 @@ export function DashboardShell({
   const shiftEntries = shiftNavigation.filter(
     (item) => !item.permission || profile.permissions.includes(item.permission),
   );
-  // Partido al medio para que el búho quede centrado con cualquier cantidad de accesos: con tres
-  // visibles van uno y dos, no dos y uno, porque "Más" cuenta del lado derecho.
-  const middle = Math.ceil(shiftEntries.length / 2);
+  // Mismos botones a cada lado del logo, para que quede en el centro exacto (arriba del botón de
+  // inicio de Android). "Más" sólo aparece cuando hace falta para emparejar: ver `bottomNavLayout`.
+  const { left: middle, showMore } = bottomNavLayout(shiftEntries.length);
   const renderShiftLink = (item: NavigationItem) => (
     <Link
       aria-current={location.pathname === item.href ? 'page' : undefined}
@@ -875,13 +876,15 @@ export function DashboardShell({
                 className="bottom-nav-brand"
                 to="/app"
               >
-                <img alt="" height="30" src="/brand/verdeo-icon-128.webp" width="30" />
+                <img alt="" height="44" src="/brand/verdeo-icon-128.webp" width="44" />
               </Link>
               {shiftEntries.slice(middle).map(renderShiftLink)}
-              <button aria-label="Más secciones" onClick={() => setMenuOpen(true)} type="button">
-                <NavIcon name="settings" />
-                <span>Más</span>
-              </button>
+              {showMore ? (
+                <button aria-label="Más secciones" onClick={() => setMenuOpen(true)} type="button">
+                  <NavIcon name="settings" />
+                  <span>Más</span>
+                </button>
+              ) : null}
             </nav>
           ) : null}
         </div>

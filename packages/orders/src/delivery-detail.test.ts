@@ -3,103 +3,35 @@ import { describe, expect, it } from 'vitest';
 import { deliveryDetail } from './delivery-detail.js';
 
 describe('deliveryDetail', () => {
-  it('nombra una vianda estándar por variedad y tamaño', () => {
+  it('nombra una vianda por variedad y tamaño', () => {
     expect(
-      deliveryDetail(
-        [{ composable: false, familyName: 'Menú Keto', quantityUnits: 1, variantName: '400' }],
-        'Ana',
-      ),
+      deliveryDetail([{ familyName: 'Menú Keto', quantityUnits: 1, variantName: '400' }]),
     ).toBe('Menú Keto 400');
   });
 
-  it('agrega el nombre en un Intuitivo, que es lo que dice su etiqueta', () => {
-    // Dos Intuitivo del mismo tamaño son combinaciones distintas: sin el nombre no se sabe cuál es.
+  // Al repartidor le alcanza con saber qué caja entregar: los platos del Intuitivo no le sirven.
+  it('un Intuitivo dice sólo variedad y tamaño, sin platos ni nombre', () => {
     expect(
-      deliveryDetail(
-        [{ composable: true, familyName: 'Intuitivo', quantityUnits: 1, variantName: '250' }],
-        'Ana',
-      ),
-    ).toBe('Intuitivo 250 · Ana');
+      deliveryDetail([{ familyName: 'Intuitivo', quantityUnits: 1, variantName: '250' }]),
+    ).toBe('Intuitivo 250');
   });
 
   it('escribe las unidades sólo cuando son más de una', () => {
     expect(
-      deliveryDetail(
-        [{ composable: false, familyName: 'Menú Real', quantityUnits: 3, variantName: '250' }],
-        'Ana',
-      ),
+      deliveryDetail([{ familyName: 'Menú Real', quantityUnits: 3, variantName: '250' }]),
     ).toBe('Menú Real 250 ×3');
   });
 
   it('junta los renglones de un pedido con varias viandas', () => {
     expect(
-      deliveryDetail(
-        [
-          { composable: false, familyName: 'Menú Keto', quantityUnits: 2, variantName: '400' },
-          { composable: true, familyName: 'Intuitivo', quantityUnits: 1, variantName: '250' },
-        ],
-        'Ana',
-      ),
-    ).toBe('Menú Keto 400 ×2 + Intuitivo 250 · Ana');
+      deliveryDetail([
+        { familyName: 'Menú Keto', quantityUnits: 2, variantName: '400' },
+        { familyName: 'Intuitivo', quantityUnits: 1, variantName: '250' },
+      ]),
+    ).toBe('Menú Keto 400 ×2 + Intuitivo 250');
   });
 
   it('un pedido sin ítems no inventa nada', () => {
-    expect(deliveryDetail([], 'Ana')).toBe('');
-  });
-
-  /*
-   * Los platos del Intuitivo, que es lo que el cliente pregunta al recibir la caja y lo que permite
-   * revisar la parada contra la etiqueta antes de salir.
-   */
-  it('escribe los platos elegidos del Intuitivo', () => {
-    expect(
-      deliveryDetail(
-        [
-          {
-            composable: true,
-            dishes: ['Guiso', 'Tarta', 'Wok'],
-            familyName: 'Intuitivo',
-            quantityUnits: 1,
-            variantName: '250',
-          },
-        ],
-        'Ana',
-      ),
-    ).toBe('Intuitivo 250 · Ana (Guiso, Tarta, Wok)');
-  });
-
-  // Una vianda estándar no los lleva: su variedad ya dice qué trae.
-  it('no agrega paréntesis cuando no hay platos elegidos', () => {
-    expect(
-      deliveryDetail(
-        [
-          {
-            composable: false,
-            dishes: [],
-            familyName: 'Menú Keto',
-            quantityUnits: 1,
-            variantName: '400',
-          },
-        ],
-        'Ana',
-      ),
-    ).toBe('Menú Keto 400');
-  });
-
-  it('las unidades van antes de los platos, no mezcladas con ellos', () => {
-    expect(
-      deliveryDetail(
-        [
-          {
-            composable: true,
-            dishes: ['Guiso', 'Tarta'],
-            familyName: 'Intuitivo',
-            quantityUnits: 2,
-            variantName: '400',
-          },
-        ],
-        'Ana',
-      ),
-    ).toBe('Intuitivo 400 · Ana ×2 (Guiso, Tarta)');
+    expect(deliveryDetail([])).toBe('');
   });
 });

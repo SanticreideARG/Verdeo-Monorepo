@@ -359,6 +359,44 @@ describe('kitchen labels', () => {
   });
 });
 
+// El pedido sembrado es de un período ya cerrado: sirve para probar que la dirección se puede
+// cambiar hasta el reparto aunque el pedido esté listo y el período cerrado.
+describe('editar un pedido listo', () => {
+  const ORDER = '0a000000-0000-4000-8000-000000000001';
+
+  async function listo() {
+    const { client, close: closeDatabase, db } = await migratedDatabase();
+    close = closeDatabase;
+    await client.exec(seed);
+    await client.exec(`update orders set status = 'READY' where id = '${ORDER}'`);
+    return new PostgresOperationsService(db, {
+      key: 'test',
+      resolve: () => Promise.resolve({ candidates: [], status: 'NO_MATCH' }),
+    } as never);
+  }
+
+  it('deja cambiar la dirección, las notas y el pago sin autorización', async () => {
+    const service = await listo();
+    const order = await service.updateOrder(
+      ORDER,
+      { deliveryAddress: 'Calle 2', notes: 'Timbre B', paymentExpectation: 'efectivo' },
+      false,
+      context,
+    );
+    expect(order).toMatchObject({ deliveryAddress: 'Calle 2', notes: 'Timbre B' });
+  });
+
+  it('rechaza en español cambiar lo que se cocina', async () => {
+    const service = await listo();
+    await expect(
+      service.updateOrder(ORDER, { dietaryInstructions: ['Sin sal'] }, true, context),
+    ).rejects.toThrow(/borrador o confirmado/);
+    await expect(
+      service.updateOrder(ORDER, { dietaryInstructions: ['Sin sal'] }, false, context),
+    ).rejects.toThrow(/período ya cerró/);
+  });
+});
+
 describe('opportunity sale stock', () => {
   it('rejects an opportunity-sale order requesting more than disponible', async () => {
     const service = await seededService();

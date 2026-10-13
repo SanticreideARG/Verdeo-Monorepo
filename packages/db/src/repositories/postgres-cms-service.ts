@@ -192,7 +192,7 @@ export class PostgresCmsService {
         .from(pages)
         .where(eq(pages.slug, slug))
         .limit(1);
-      if (!page) throw new CmsNotFoundError(`Page not found: ${slug}`);
+      if (!page) throw new CmsNotFoundError(`No se encontró la página: ${slug}`);
 
       const [aggregate] = await transaction
         .select({ nextRevision: max(pageRevisions.revision) })
@@ -245,7 +245,7 @@ export class PostgresCmsService {
           .from(pages)
           .where(eq(pages.slug, slug))
           .limit(1);
-        if (!page) throw new CmsNotFoundError(`Page not found: ${slug}`);
+        if (!page) throw new CmsNotFoundError(`No se encontró la página: ${slug}`);
 
         const [revision] = await transaction
           .select({ id: pageRevisions.id })
@@ -288,7 +288,7 @@ export class PostgresCmsService {
       .from(pages)
       .where(eq(pages.slug, slug))
       .limit(1);
-    if (!page) throw new CmsNotFoundError(`Page not found: ${slug}`);
+    if (!page) throw new CmsNotFoundError(`No se encontró la página: ${slug}`);
 
     return this.database
       .select({

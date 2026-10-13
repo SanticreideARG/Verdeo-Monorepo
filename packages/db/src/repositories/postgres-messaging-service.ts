@@ -168,7 +168,7 @@ export class PostgresMessagingService {
         .from(messagingAccounts)
         .where(eq(messagingAccounts.id, id))
         .limit(1);
-      if (!current) throw new MessagingNotFoundError('Messaging account not found');
+      if (!current) throw new MessagingNotFoundError('No se encontró la cuenta de mensajería');
 
       const patch: Record<string, unknown> = { updatedAt: new Date() };
       if (input.label !== undefined) patch.label = input.label;
@@ -230,7 +230,7 @@ export class PostgresMessagingService {
       .from(messagingConversations)
       .where(eq(messagingConversations.id, conversationId))
       .limit(1);
-    if (!conversation) throw new MessagingNotFoundError('Conversation not found');
+    if (!conversation) throw new MessagingNotFoundError('No se encontró la conversación');
 
     return this.database
       .select({
@@ -265,7 +265,7 @@ export class PostgresMessagingService {
         )
         .where(eq(messagingConversations.id, conversationId))
         .limit(1);
-      if (!conversation) throw new MessagingNotFoundError('Conversation not found');
+      if (!conversation) throw new MessagingNotFoundError('No se encontró la conversación');
       if (!conversation.accessToken)
         throw new MessagingProviderError(
           'La cuenta de WhatsApp de esta conversación todavía no tiene un token configurado.',

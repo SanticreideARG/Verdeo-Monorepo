@@ -131,7 +131,7 @@ export class PostgresSurveyService {
         .from(surveys)
         .where(eq(surveys.id, surveyId))
         .limit(1);
-      if (!existing) throw new SurveyNotFoundError('Survey not found');
+      if (!existing) throw new SurveyNotFoundError('No se encontró la encuesta');
 
       const [survey] = await transaction
         .update(surveys)
@@ -177,7 +177,7 @@ export class PostgresSurveyService {
       .from(surveys)
       .where(eq(surveys.id, surveyId))
       .limit(1);
-    if (!survey) throw new SurveyNotFoundError('Survey not found');
+    if (!survey) throw new SurveyNotFoundError('No se encontró la encuesta');
     return { ...survey, questions: await this.loadQuestions(this.database, surveyId) };
   }
 
@@ -209,14 +209,14 @@ export class PostgresSurveyService {
       .from(surveys)
       .where(eq(surveys.id, surveyId))
       .limit(1);
-    if (!survey) throw new SurveyNotFoundError('Survey not found');
+    if (!survey) throw new SurveyNotFoundError('No se encontró la encuesta');
     if (!survey.active) throw new SurveyConflictError('La encuesta está desactivada.');
     const [customer] = await this.database
       .select({ id: customers.id })
       .from(customers)
       .where(eq(customers.id, customerId))
       .limit(1);
-    if (!customer) throw new SurveyNotFoundError('Customer not found');
+    if (!customer) throw new SurveyNotFoundError('No se encontró el cliente');
 
     const token = randomBytes(24).toString('base64url');
     return this.database.transaction(async (transaction) => {
@@ -263,7 +263,7 @@ export class PostgresSurveyService {
       .from(surveys)
       .where(eq(surveys.id, surveyId))
       .limit(1);
-    if (!survey) throw new SurveyNotFoundError('Survey not found');
+    if (!survey) throw new SurveyNotFoundError('No se encontró la encuesta');
 
     // Veinticuatro bytes: no se adivina, y sigue entrando en un mensaje de chat sin partirse.
     const publicToken = enabled ? randomBytes(24).toString('base64url') : null;
@@ -309,7 +309,7 @@ export class PostgresSurveyService {
         .from(surveys)
         .where(eq(surveys.id, surveyId))
         .limit(1);
-      if (!survey) throw new SurveyNotFoundError('Survey not found');
+      if (!survey) throw new SurveyNotFoundError('No se encontró la encuesta');
 
       const [counted] = await transaction
         .select({ total: sql<number>`count(*)` })
@@ -353,7 +353,7 @@ export class PostgresSurveyService {
       .from(surveys)
       .where(eq(surveys.publicToken, publicToken))
       .limit(1);
-    if (!row) throw new SurveyNotFoundError('Survey link not found');
+    if (!row) throw new SurveyNotFoundError('No se encontró el enlace de la encuesta');
     if (!row.active) throw new SurveyConflictError('Esta encuesta ya no está disponible.');
 
     const questions = await this.loadQuestions(this.database, row.id);
@@ -389,7 +389,7 @@ export class PostgresSurveyService {
         .from(surveys)
         .where(eq(surveys.publicToken, publicToken))
         .limit(1);
-      if (!survey) throw new SurveyNotFoundError('Survey link not found');
+      if (!survey) throw new SurveyNotFoundError('No se encontró el enlace de la encuesta');
       if (!survey.active) throw new SurveyConflictError('Esta encuesta ya no está disponible.');
 
       await this.assertAnswersMatchSurvey(transaction, survey.id, answers);
@@ -418,7 +418,7 @@ export class PostgresSurveyService {
       .innerJoin(surveys, eq(surveys.id, surveyTokens.surveyId))
       .where(eq(surveyTokens.token, token))
       .limit(1);
-    if (!row) throw new SurveyNotFoundError('Survey link not found');
+    if (!row) throw new SurveyNotFoundError('No se encontró el enlace de la encuesta');
     if (row.usedAt) throw new SurveyConflictError('Esta encuesta ya fue respondida.');
     if (!row.active) throw new SurveyConflictError('Esta encuesta ya no está disponible.');
 
@@ -446,7 +446,7 @@ export class PostgresSurveyService {
         .from(surveyTokens)
         .where(eq(surveyTokens.token, token))
         .limit(1);
-      if (!tokenRow) throw new SurveyNotFoundError('Survey link not found');
+      if (!tokenRow) throw new SurveyNotFoundError('No se encontró el enlace de la encuesta');
       if (tokenRow.usedAt) throw new SurveyConflictError('Esta encuesta ya fue respondida.');
 
       await this.assertAnswersMatchSurvey(transaction, tokenRow.surveyId, answers);
@@ -521,7 +521,7 @@ export class PostgresSurveyService {
       .from(surveys)
       .where(eq(surveys.id, surveyId))
       .limit(1);
-    if (!survey) throw new SurveyNotFoundError('Survey not found');
+    if (!survey) throw new SurveyNotFoundError('No se encontró la encuesta');
 
     const questions = await this.loadQuestions(this.database, surveyId);
     const [sentRow] = await this.database

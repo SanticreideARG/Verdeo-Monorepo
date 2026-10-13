@@ -3120,7 +3120,7 @@ describe('API foundation', () => {
         }
       }
       const getRouteDetail = vi.fn(() =>
-        Promise.reject(new DeliveryNotFoundError('Route not found')),
+        Promise.reject(new DeliveryNotFoundError('No se encontró la ruta')),
       );
       const app = buildDeliveryApp({ getRouteDetail }, ['routes.read']);
 

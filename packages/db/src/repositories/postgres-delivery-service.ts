@@ -16,7 +16,6 @@ import {
   deliveryStops,
   messageTemplates,
   operatingSites,
-  orderItemSelections,
   orderItems,
   orderStatusHistory,
   orders,
@@ -124,7 +123,7 @@ export class PostgresDeliveryService {
         .from(operatingSites)
         .where(eq(operatingSites.id, operatingSiteId))
         .limit(1);
-      if (!site) throw new DeliveryNotFoundError('Operating site not found');
+      if (!site) throw new DeliveryNotFoundError('No se encontró la sede');
 
       const alreadyRoutedOrderIds = await transaction
         .select({ orderId: deliveryStops.orderId })
@@ -292,7 +291,7 @@ export class PostgresDeliveryService {
 
   public async getRouteDetail(routeId: string) {
     const detail = await this.loadRouteDetail(this.database, routeId);
-    if (!detail) throw new DeliveryNotFoundError('Route not found');
+    if (!detail) throw new DeliveryNotFoundError('No se encontró la ruta');
     return detail;
   }
 
@@ -378,7 +377,7 @@ export class PostgresDeliveryService {
         .from(deliveryRoutes)
         .where(eq(deliveryRoutes.id, routeId))
         .limit(1);
-      if (!current) throw new DeliveryNotFoundError('Route not found');
+      if (!current) throw new DeliveryNotFoundError('No se encontró la ruta');
       if (current.status !== 'draft')
         throw new DeliveryConflictError(
           'Sólo se puede borrar una ruta en borrador. Una ruta publicada ya salió a la calle.',
@@ -417,7 +416,7 @@ export class PostgresDeliveryService {
         .from(deliveryRoutes)
         .where(eq(deliveryRoutes.id, routeId))
         .limit(1);
-      if (!current) throw new DeliveryNotFoundError('Route not found');
+      if (!current) throw new DeliveryNotFoundError('No se encontró la ruta');
       if (current.status !== 'draft')
         throw new DeliveryConflictError('Solo una ruta en borrador puede publicarse.');
 
@@ -514,44 +513,10 @@ export class PostgresDeliveryService {
       // el operador que compara la hoja de ruta con el mensaje de WhatsApp ve dos textos distintos.
       .orderBy(orderItems.createdAt, orderItems.productNameSnapshot);
 
-    /*
-     * Los platos elegidos de cada Intuitivo, en una consulta y no una por parada.
-     *
-     * Ordenados por `slot`, que es el orden en que la persona los eligió: ese mismo orden es el
-     * que sale impreso en la etiqueta, y leer la lista contra la caja sólo sirve si coinciden.
-     */
-    const platos =
-      lineas.length === 0
-        ? []
-        : await database
-            .select({
-              dishName: orderItemSelections.dishNameSnapshot,
-              orderItemId: orderItemSelections.orderItemId,
-            })
-            .from(orderItemSelections)
-            .where(
-              inArray(
-                orderItemSelections.orderItemId,
-                lineas.map((linea) => linea.id),
-              ),
-            )
-            .orderBy(orderItemSelections.slot);
-
     for (const parada of paradas) {
-      const nombre = parada.customerDisplayName.split(' ')[0] ?? parada.customerDisplayName;
       detalles.set(
         parada.orderId,
-        deliveryDetail(
-          lineas
-            .filter((linea) => linea.orderId === parada.orderId)
-            .map((linea) => ({
-              ...linea,
-              dishes: platos
-                .filter((plato) => plato.orderItemId === linea.id)
-                .map((plato) => plato.dishName),
-            })),
-          nombre,
-        ),
+        deliveryDetail(lineas.filter((linea) => linea.orderId === parada.orderId)),
       );
     }
     return detalles;
@@ -581,7 +546,7 @@ export class PostgresDeliveryService {
         .from(deliveryRoutes)
         .where(eq(deliveryRoutes.id, routeId))
         .limit(1);
-      if (!route) throw new DeliveryNotFoundError('Route not found');
+      if (!route) throw new DeliveryNotFoundError('No se encontró la ruta');
       if (route.status !== 'published') {
         throw new DeliveryConflictError(
           'La ruta todavía es un borrador. Publicala antes de pasarle el enlace a alguien.',
@@ -722,13 +687,14 @@ export class PostgresDeliveryService {
    * cualquier parada del sistema pasando otro id. */
   private async stopInTokenRoute(rawToken: string, stopId: string): Promise<string> {
     const routeId = await this.routeIdForToken(rawToken);
-    if (!routeId) throw new DeliveryNotFoundError('Route link is not valid');
+    if (!routeId) throw new DeliveryNotFoundError('El enlace de la ruta no es válido');
     const [stop] = await this.database
       .select({ routeId: deliveryStops.routeId })
       .from(deliveryStops)
       .where(eq(deliveryStops.id, stopId))
       .limit(1);
-    if (!stop || stop.routeId !== routeId) throw new DeliveryNotFoundError('Stop not found');
+    if (!stop || stop.routeId !== routeId)
+      throw new DeliveryNotFoundError('No se encontró la parada');
     return routeId;
   }
 
@@ -854,7 +820,7 @@ export class PostgresDeliveryService {
     context: DeliveryContext,
   ) {
     const routeId = await this.routeIdForToken(rawToken);
-    if (!routeId) throw new DeliveryNotFoundError('Route link is not valid');
+    if (!routeId) throw new DeliveryNotFoundError('El enlace de la ruta no es válido');
 
     return this.database.transaction(async (transaction) => {
       const [stop] = await transaction
@@ -871,7 +837,8 @@ export class PostgresDeliveryService {
         .leftJoin(payments, eq(payments.orderId, orders.id))
         .where(eq(deliveryStops.id, stopId))
         .limit(1);
-      if (!stop || stop.routeId !== routeId) throw new DeliveryNotFoundError('Stop not found');
+      if (!stop || stop.routeId !== routeId)
+        throw new DeliveryNotFoundError('No se encontró la parada');
       if (stop.status === 'delivered') {
         throw new DeliveryConflictError('Esa parada ya está confirmada.');
       }
@@ -964,7 +931,7 @@ export class PostgresDeliveryService {
         .from(deliveryStops)
         .where(eq(deliveryStops.id, stopId))
         .limit(1);
-      if (!stop) throw new DeliveryNotFoundError('Stop not found');
+      if (!stop) throw new DeliveryNotFoundError('No se encontró la parada');
 
       await transaction
         .update(deliveryStops)
@@ -1036,14 +1003,14 @@ export class PostgresDeliveryService {
         .from(deliveryStops)
         .where(eq(deliveryStops.id, stopId))
         .limit(1);
-      if (!stop) throw new DeliveryNotFoundError('Stop not found');
+      if (!stop) throw new DeliveryNotFoundError('No se encontró la parada');
 
       const [reason] = await transaction
         .select({ displayName: cancellationReasons.displayName, id: cancellationReasons.id })
         .from(cancellationReasons)
         .where(eq(cancellationReasons.id, cancellationReasonId))
         .limit(1);
-      if (!reason) throw new DeliveryNotFoundError('Cancellation reason not found');
+      if (!reason) throw new DeliveryNotFoundError('No se encontró el motivo de cancelación');
 
       await transaction
         .update(deliveryStops)
@@ -1112,7 +1079,7 @@ export class PostgresDeliveryService {
       .innerJoin(orders, eq(orders.id, deliveryStops.orderId))
       .where(eq(deliveryStops.id, stopId))
       .limit(1);
-    if (!stop) throw new DeliveryNotFoundError('Stop not found');
+    if (!stop) throw new DeliveryNotFoundError('No se encontró la parada');
 
     const [template] = await this.database
       .select({ body: messageTemplates.body })

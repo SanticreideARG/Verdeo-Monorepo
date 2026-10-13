@@ -107,6 +107,18 @@ El medio de pago es siempre uno de los **parametrizados** (Panel de control → 
 
 Pedidos editables por conveniencia operativa. Toda modificación queda en log.
 
+- **Lo que se cocina** (platos y el comentario para la cocina) se cambia sólo con el pedido en
+  borrador o confirmado y con el período abierto; con el período cerrado hace falta la
+  autorización de cambio fuera de período.
+- **Lo demás** —dirección, enlace de ubicación, fecha de entrega, pago y notas— se puede cambiar en
+  cualquier estado y con el período cerrado, porque hasta el reparto puede cambiar. Antes el
+  período cerrado trababa todo.
+- La pantalla del pedido manda el comentario sólo si cambió, y con el pedido listo no muestra los
+  platos ni el comentario: avisa que quedan fijos y deja editar el resto.
+- El botón "Generar etiquetas" del pedido se reemplazó por "Ubicar dirección": las etiquetas se
+  imprimen en lote desde Etiquetas, por zona.
+- Los mensajes de error del servidor están en español, para que la pantalla los muestre tal cual.
+
 ## Cancelación
 
 Permitida por operador salvo pedido entregado.

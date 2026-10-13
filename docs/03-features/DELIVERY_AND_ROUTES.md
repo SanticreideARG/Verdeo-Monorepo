@@ -121,9 +121,9 @@ OR-Tools u otro adapter)" que pide este documento; los llamadores solo conocen l
 - **Qué entregar en cada parada**: la hoja decía a quién y dónde, pero no qué, así que el repartidor
   llegaba con la caja y adivinaba cuál de las viandas era de esa parada. `deliveryDetail`
   (`@verdeo/orders`) escribe la línea: una vianda estándar por variedad y tamaño —"Menú Keto
-  400"—, que es lo que dice su etiqueta; un Intuitivo por el nombre de quien lo pidió —"Intuitivo
-  250 · Ana"—, porque dos Intuitivo del mismo tamaño son combinaciones distintas y el nombre
-  impreso es lo único que los separa. Las unidades sólo cuando son más de una ("×3"), que es la
+  400"—, que es lo que dice su etiqueta; un Intuitivo sólo por su tamaño —"Intuitivo 250"—. El
+  detalle de los platos no le sirve al repartidor: la vianda ya va rotulada con el cliente y la
+  parada dice a quién se entrega (antes decía "Intuitivo 250 · Ana", y se sacó a pedido). Las unidades sólo cuando son más de una ("×3"), que es la
   diferencia que hace que falte una al llegar. Lo arma el servidor —una consulta por hoja, no una
   por parada— y viaja en el contrato, así que la vista, el mensaje de WhatsApp, el CSV (columna "Qué
   entregar") y la app del repartidor dicen exactamente lo mismo. Se toma de los snapshots del

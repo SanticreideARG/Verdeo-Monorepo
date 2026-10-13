@@ -28,7 +28,7 @@ interface RouteStop {
   customerDisplayName: string;
   deliveryAddress: string;
   deliveryLatitude: number | null;
-  /** Qué entregar acá, ya escrito por el servidor: "Menú Keto 400", "Intuitivo 250 · Ana". */
+  /** Qué entregar acá, ya escrito por el servidor: "Menú Keto 400", "Intuitivo 250". */
   detail: string;
   deliveryLocationUrl: string | null;
   deliveryLongitude: number | null;
