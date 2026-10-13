@@ -1300,34 +1300,55 @@ export function CustomersPage() {
                   <strong>Uso</strong>
                 </div>
                 <div>
-                  <code>nombre_completo</code>
-                  <span>Obligatoria. Nombre visible del cliente.</span>
+                  <code>Nombre</code>
+                  <span>
+                    Obligatoria. También «Nombre y apellido», «Cliente» o «Nombre» + «Apellido».
+                  </span>
                 </div>
                 <div>
-                  <code>whatsapp</code>
-                  <span>Opcional. Se registra como contacto WhatsApp sin verificar.</span>
+                  <code>Celular</code>
+                  <span>Se guarda como teléfono y como WhatsApp. También «Móvil».</span>
                 </div>
                 <div>
-                  <code>telefono</code>
-                  <span>Opcional. Teléfono alternativo.</span>
+                  <code>WhatsApp</code>
+                  <span>Contacto WhatsApp sin verificar, si viene aparte del celular.</span>
                 </div>
                 <div>
-                  <code>email</code>
-                  <span>Opcional. Correo electrónico.</span>
+                  <code>Teléfono</code>
+                  <span>Teléfono fijo o alternativo.</span>
                 </div>
                 <div>
-                  <code>direccion</code>
-                  <span>Opcional. Crea un domicilio pendiente de validar.</span>
+                  <code>Email</code>
+                  <span>También «Mail» o «Correo».</span>
                 </div>
                 <div>
-                  <code>enlace_ubicacion</code>
-                  <span>Opcional. URL de mapa del domicilio.</span>
+                  <code>Dirección</code>
+                  <span>
+                    Crea un domicilio para ubicar. También «Domicilio» o «Dirección de entrega».
+                  </span>
+                </div>
+                <div>
+                  <code>Barrio</code>
+                  <span>Se suma a la dirección para ubicarla mejor. También «Localidad».</span>
+                </div>
+                <div>
+                  <code>Forma de pago</code>
+                  <span>Queda como forma de pago preferida en las notas del cliente.</span>
+                </div>
+                <div>
+                  <code>Enlace</code>
+                  <span>Enlace de Maps del domicilio. También «Link» o «Ubicación».</span>
+                </div>
+                <div>
+                  <code>Observaciones</code>
+                  <span>Notas internas del cliente.</span>
                 </div>
               </div>
               <p className="crm-import-note">
-                Podés usar también <code>nombre_visible</code>, <code>correo</code>,{' '}
-                <code>phone</code> o <code>domicilio</code>. Un contacto repetido o una fila con
-                formato inválido detiene la importación sin crear registros parciales.
+                Los encabezados se reconocen con o sin tildes y en cualquier orden, aunque haya
+                filas vacías arriba. Si la dirección trae la forma de pago pegada («Mitre 400
+                transferencia»), se separa sola. Un contacto repetido o una fila con formato
+                inválido detiene la importación sin crear registros parciales.
               </p>
               <form className="crm-import-form" onSubmit={(event) => void importContacts(event)}>
                 <label className="field field-wide">

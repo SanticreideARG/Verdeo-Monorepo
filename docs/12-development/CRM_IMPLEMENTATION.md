@@ -205,8 +205,18 @@ customer update event. Do not include more PII in event payloads than consumers 
 ### Spreadsheet contact import
 
 Staff members with `customers.create` may import up to 500 contacts from the first sheet of a CSV UTF-8
-or Excel `.xlsx` file. Required column: `nombre_completo`. Optional columns are `whatsapp`, `telefono`,
-`email`, `direccion`, and `enlace_ubicacion`; the latter two create an address in `NEEDS_LOCATION` state.
+or Excel `.xlsx` file. Headers are recognized loosely (`contact-import.ts`, `FIELD_RULES`): case,
+accents and punctuation are ignored, exact names are tried first and then partial ones, and the header
+row is the first of the top 10 rows that has a name column (real sheets carry blank or title rows above).
+Required: a name column ("Nombre", "Nombre y apellido", "Cliente", `nombre_completo`, or "Nombre" +
+"Apellido", which are joined). Optional: "Celular"/"Móvil" (stored as phone **and** as an unverified
+WhatsApp identity — in Argentina a mobile is the WhatsApp), "WhatsApp", "Teléfono", "Email"/"Mail",
+"Dirección"/"Domicilio", "Barrio" (stored as `sector` and appended to the written address to help the
+locator), "Localidad" (`city`), "Enlace"/"Link", "Forma de pago" and "Observaciones" (`internalNotes`).
+A payment method written inside the address or the notes ("Mitre 400 transferencia", "… POR
+TRANSFERENCIA") is stripped out and stored as "Forma de pago preferida: …" in the customer's internal
+notes (`extractPayment`); there is no dedicated field for it yet. Blank rows are skipped. Addresses are
+created in `NEEDS_LOCATION` state.
 The API parses and validates the file server-side, then creates all customer records, identities, addresses,
 audits, and events in one database transaction. A malformed row or a duplicate active identity rolls the
 whole import back; no partial upload is retained.
