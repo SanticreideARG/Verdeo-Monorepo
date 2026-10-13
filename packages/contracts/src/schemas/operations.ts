@@ -1490,6 +1490,11 @@ export const OrderImportPreviewRowSchema = z.object({
    */
   duplicateOf: z.string().nullable(),
   email: z.string().nullable(),
+  /**
+   * Los pedidos que este cliente ya tiene en el período, iguales o no: para ver antes de importar
+   * qué ya está cargado ("CABA-00012: Keto 250 × 1").
+   */
+  existingOrders: z.array(z.object({ publicNumber: z.string(), summary: z.string() })).default([]),
   items: z.array(OrderImportPreviewItemSchema).min(1),
   kind: z.enum(['email', 'spreadsheet_import']),
   /** La ciudad que dice el origen, tal como la escribió: se muestra, no se interpreta. */
@@ -1501,6 +1506,8 @@ export const OrderImportPreviewRowSchema = z.object({
   rowNumber: z.number().int(),
   /** Lo que el lector no pudo entender de este pedido: se dice en lugar de perderse. */
   warnings: z.array(z.string()),
+  /** Lo que el lector interpretó y conviene revisar, sin que sea un problema. */
+  notices: z.array(z.string()).default([]),
 });
 
 /** Un mensaje del formulario sin ninguna cantidad: una pregunta, no un pedido. */
@@ -1567,6 +1574,10 @@ export const OrderImportConfirmResponseSchema = z.object({
   orderIds: z.array(z.string()).default([]),
   /** Las filas que no se pudieron crear, con el motivo: el resto sí entró. */
   failed: z.array(z.object({ reason: z.string(), rowNumber: z.number().int() })),
+  /** Qué pedido quedó de cada fila: la conciliación después de importar. */
+  results: z
+    .array(z.object({ orderId: z.string(), publicNumber: z.string(), rowNumber: z.number().int() }))
+    .default([]),
 });
 /**
  * Una fila de la cola de avisos: a quién hay que escribirle, qué dice el mensaje y si ya se hizo.

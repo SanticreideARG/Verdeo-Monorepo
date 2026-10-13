@@ -285,3 +285,33 @@ sin intervención haría falta una casilla que reciba los mensajes y los entregu
 otro trabajo con otras decisiones (qué casilla, qué proveedor, qué pasa con lo que no se entiende).
 Tampoco crea el domicilio del cliente: el pedido lleva la dirección como texto, y asignarle una
 zona sigue siendo una tarea del CRM.
+
+### Planilla armada por viandas (2026-10-13)
+
+`parseOrderImport` entiende también la planilla como se carga a mano:
+
+- **Encabezados donde estén**: la fila de encabezados es la primera, entre las 10 de arriba, que
+  tiene la columna del cliente. Acepta `.csv`, `.tsv` (lo que se copia de Google Sheets), `.txt` y
+  `.xlsx`.
+- **Una fila por vianda**: el tamaño en «Pedido» (si trae 250/400; si trae nombres es la variedad)
+  y, a su derecha, una columna por plato sin nombre propio («Columna1», vacías, «Plato 2»,
+  «Lunes»…) con la variedad de cada plato.
+- **Filas seguidas del mismo cliente** son el mismo pedido. Una vianda de una sola variedad es ese
+  menú y las iguales se suman (dos filas de Keto 250 → Keto 250 × 2). Una vianda que mezcla
+  variedades es un **Intuitivo** (`slotVarieties`): en la vista previa el servidor toma, para cada
+  posición, el plato de esa variedad en esa posición del menú publicado; si alguno no está, avisa y
+  los platos se eligen en el pedido.
+- Una fila con platos de menos que entran en los huecos de la vianda anterior, del mismo tamaño, la
+  completa (se avisa en `notices`, que no destilda el pedido). Una vianda incompleta sola va a
+  `warnings`.
+- «Venta» queda en las notas ("Venta en planilla: $85.000"); la forma de pago pegada a la dirección
+  se separa (`extractPayment`); el «Barrio» se suma a la dirección; un producto suelto al costado
+  ("ANTIAGE 250" y la cantidad en la celda siguiente) es otro ítem.
+- Las variedades toleran errores de tipeo de hasta dos letras en nombres largos (`matchOffering`):
+  "vegerariano" es Vegetariano.
+
+**Conciliación.** La vista previa muestra, además del pedido idéntico (`duplicateOf`, que arranca
+destildado), **todos los pedidos que el cliente ya tiene en el período** (`existingOrders`). Cada
+pedido se puede corregir antes de importar: nombre del cliente nuevo, dirección, medio de pago,
+cantidad y variedad de cada ítem. Al importar el diálogo no se cierra: muestra fila por fila qué
+pedido quedó (`results` con el número), cuáles no entraron y por qué, y cuáles quedaron afuera.

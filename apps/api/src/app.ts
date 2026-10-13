@@ -3699,7 +3699,10 @@ export function createApp(options: CreateAppOptions) {
       matches: readonly {
         customerMatch: unknown;
         duplicateOf: string | null;
+        existingOrders?: readonly { publicNumber: string; summary: string }[];
+        itemDishes?: readonly (readonly string[] | null)[];
         itemMatches: readonly (string | null)[];
+        notices?: readonly string[];
         rowNumber: number;
       }[];
       offerings: readonly { id: string; label: string }[];
@@ -3717,10 +3720,14 @@ export function createApp(options: CreateAppOptions) {
             kind: 'nuevo',
           },
           duplicateOf: match?.duplicateOf ?? null,
+          existingOrders: match?.existingOrders ?? [],
           items: row.items.map((item, index) => ({
             ...item,
+            // Los platos de un Intuitivo armado por variedades salen del menú publicado.
+            dishes: match?.itemDishes?.[index] ?? item.dishes,
             offeringId: match?.itemMatches[index] ?? null,
           })),
+          notices: [...((row as { notices?: string[] }).notices ?? []), ...(match?.notices ?? [])],
         };
       }),
       offerings: preview.offerings,
@@ -3812,6 +3819,8 @@ export function createApp(options: CreateAppOptions) {
     const failed: { reason: string; rowNumber: number }[] = [];
     let created = 0;
     const orderIds: string[] = [];
+    // Qué pedido quedó de cada fila: es lo que muestra la conciliación al terminar.
+    const results: { orderId: string; publicNumber: string; rowNumber: number }[] = [];
     for (const row of rows) {
       try {
         let customerId = row.customerId;
@@ -3862,8 +3871,16 @@ export function createApp(options: CreateAppOptions) {
           } as never,
           operationsContext(context),
         );
-        const createdId = (createdOrder as { id?: unknown } | null)?.id;
-        if (typeof createdId === 'string') orderIds.push(createdId);
+        const createdRow = createdOrder as { id?: unknown; publicNumber?: unknown } | null;
+        if (typeof createdRow?.id === 'string') {
+          orderIds.push(createdRow.id);
+          results.push({
+            orderId: createdRow.id,
+            publicNumber:
+              typeof createdRow.publicNumber === 'string' ? createdRow.publicNumber : '',
+            rowNumber: row.rowNumber,
+          });
+        }
         created += 1;
       } catch (error) {
         failed.push({
@@ -3872,7 +3889,7 @@ export function createApp(options: CreateAppOptions) {
         });
       }
     }
-    return { created, failed, orderIds } as const;
+    return { created, failed, orderIds, results } as const;
   };
   app.post('/api/v1/orders/import', async (context) => {
     if (!context.get('session').permissions.includes('orders.create')) return forbidden(context);
@@ -3889,9 +3906,9 @@ export function createApp(options: CreateAppOptions) {
       input.data.confirm ? 'CONFIRMED' : 'DRAFT',
     );
     if ('error' in result) return badRequest(context, result.error);
-    const { created, failed, orderIds } = result;
+    const { created, failed, orderIds, results } = result;
     return context.json(
-      OrderImportConfirmResponseSchema.parse({ created, failed, orderIds }),
+      OrderImportConfirmResponseSchema.parse({ created, failed, orderIds, results }),
       created > 0 ? 201 : 200,
     );
   });

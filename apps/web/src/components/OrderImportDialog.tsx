@@ -31,6 +31,8 @@ interface PreviewRow {
   deliveryAddress: string | null;
   duplicateOf: string | null;
   email: string | null;
+  /** Lo que el cliente ya tiene en el período, igual o no. */
+  existingOrders?: { publicNumber: string; summary: string }[];
   items: PreviewItem[];
   kind: 'email' | 'spreadsheet_import';
   locality: string | null;
@@ -40,6 +42,17 @@ interface PreviewRow {
   receivedOn: string | null;
   rowNumber: number;
   warnings: string[];
+  /** Lo que el lector interpretó y conviene mirar, sin que sea un problema. */
+  notices?: string[];
+}
+
+/** Cómo quedó cada fila después de importar. */
+interface ImportOutcome {
+  customerName: string;
+  publicNumber: string | null;
+  reason: string | null;
+  rowNumber: number;
+  status: 'created' | 'failed' | 'skipped';
 }
 
 interface Inquiry {
@@ -125,6 +138,17 @@ export function OrderImportDialog({
   // Las variedades que se eligieron a mano, por pedido y posición.
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [included, setIncluded] = useState<Record<number, boolean>>({});
+  /*
+   * Las correcciones a mano, por pedido: lo que se cambia acá es lo que se importa. Una planilla
+   * cargada a mano trae errores (una dirección incompleta, una cantidad de más) y corregirlos acá
+   * es más rápido que volver al Excel y subirla de nuevo.
+   */
+  const [edits, setEdits] = useState<
+    Record<number, { customerName?: string; deliveryAddress?: string; paymentExpectation?: string }>
+  >({});
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  // La conciliación después de importar: qué pedido quedó de cada fila.
+  const [outcome, setOutcome] = useState<ImportOutcome[] | null>(null);
   const paymentMethods = usePaymentMethods();
   /*
    * El medio de pago de los pedidos que no lo traen.
@@ -157,6 +181,9 @@ export function OrderImportDialog({
       ),
     );
     setChoices({});
+    setEdits({});
+    setQuantities({});
+    setOutcome(null);
     /*
      * Un pedido que ya existe igual, o con una línea que no se leyó, arranca destildado.
      *
@@ -212,8 +239,23 @@ export function OrderImportDialog({
     load((await response.json()) as Preview);
   }
 
+  const itemKey = (row: PreviewRow, index: number) => `${String(row.rowNumber)}:${String(index)}`;
   const offeringFor = (row: PreviewRow, index: number): string | null =>
-    choices[`${String(row.rowNumber)}:${String(index)}`] ?? row.items[index]?.offeringId ?? null;
+    choices[itemKey(row, index)] ?? row.items[index]?.offeringId ?? null;
+  const quantityFor = (row: PreviewRow, index: number): number =>
+    quantities[itemKey(row, index)] ?? row.items[index]?.quantityUnits ?? 1;
+  const edited = (row: PreviewRow) => ({
+    customerName: edits[row.rowNumber]?.customerName ?? row.customerName,
+    deliveryAddress: edits[row.rowNumber]?.deliveryAddress ?? row.deliveryAddress,
+  });
+  const editRow = (
+    row: PreviewRow,
+    change: { customerName?: string; deliveryAddress?: string; paymentExpectation?: string },
+  ) =>
+    setEdits((current) => ({
+      ...current,
+      [row.rowNumber]: { ...current[row.rowNumber], ...change },
+    }));
   const resolved = (row: PreviewRow) => row.items.every((_, index) => offeringFor(row, index));
 
   const rows = preview?.items ?? [];
@@ -222,9 +264,10 @@ export function OrderImportDialog({
   const blocking = selected.length - ready.length;
   /** Lo que trae la planilla si es un medio parametrizado; si no, el que se eligió arriba. */
   const paymentFor = (row: PreviewRow): string =>
-    row.paymentExpectation && isParametrized(row.paymentExpectation, paymentMethods)
+    edits[row.rowNumber]?.paymentExpectation ||
+    (row.paymentExpectation && isParametrized(row.paymentExpectation, paymentMethods)
       ? paymentSelectValue(row.paymentExpectation, paymentMethods)
-      : payment;
+      : payment);
   const missingPayment = ready.some((row) => paymentFor(row) === '');
 
   async function confirm(confirmNow = false) {
@@ -239,13 +282,14 @@ export function OrderImportDialog({
           const decision = decisions[row.rowNumber] ?? 'nuevo';
           return {
             customerId: decision === 'nuevo' ? null : decision,
-            customerName: row.customerName,
-            deliveryAddress: row.deliveryAddress,
+            customerName: edited(row).customerName.trim() || row.customerName,
+            deliveryAddress: edited(row).deliveryAddress?.trim() || null,
             email: row.email,
             items: row.items.map((item, index) => ({
-              dishes: item.dishes,
+              // Los platos van con la variedad que los trajo: si se eligió otra, no aplican.
+              dishes: offeringFor(row, index) === item.offeringId ? item.dishes : [],
               offeringId: offeringFor(row, index),
-              quantityUnits: item.quantityUnits,
+              quantityUnits: quantityFor(row, index),
             })),
             kind: row.kind,
             notes: row.notes,
@@ -267,6 +311,7 @@ export function OrderImportDialog({
       created: number;
       failed: { reason: string; rowNumber: number }[];
       orderIds?: string[];
+      results?: { orderId: string; publicNumber: string; rowNumber: number }[];
     };
     onImported();
     let locateNote = '';
@@ -295,16 +340,8 @@ export function OrderImportDialog({
           ? ` ${String(located)} con ubicación; ${String(toReview)} para revisar desde Rutas o el pedido.`
           : ` ${String(located)} con ubicación.`;
     }
-    if (payload.failed.length > 0) {
-      /*
-       * Las que entraron ya están. El modal se queda abierto con el detalle de las que no, porque
-       * cerrarlo con un cartel de tres segundos obliga a adivinar qué pedidos hay que volver a cargar.
-       */
-      setMessage(
-        `Entraron ${String(payload.created)}. No entraron ${String(payload.failed.length)}: ${payload.failed
-          .map((fail) => `pedido ${String(fail.rowNumber)} (${fail.reason})`)
-          .join('; ')}`,
-      );
+    if (inbound && payload.failed.length > 0) {
+      setMessage(payload.failed.map((fail) => fail.reason).join('; '));
       return;
     }
     if (inbound) {
@@ -314,12 +351,30 @@ export function OrderImportDialog({
       onClose();
       return;
     }
+    /*
+     * La conciliación: el diálogo se queda abierto con qué pedido quedó de cada fila, cuáles no
+     * entraron y por qué, y cuáles se dejaron afuera. Cerrarlo con un cartel de tres segundos
+     * obligaba a adivinar qué había que volver a cargar.
+     */
+    setOutcome(
+      rows.map((row) => {
+        const result = payload.results?.find((item) => item.rowNumber === row.rowNumber);
+        const fail = payload.failed.find((item) => item.rowNumber === row.rowNumber);
+        return {
+          customerName: edited(row).customerName,
+          publicNumber: result?.publicNumber ?? null,
+          reason: fail?.reason ?? null,
+          rowNumber: row.rowNumber,
+          status: result ? 'created' : fail ? 'failed' : 'skipped',
+        };
+      }),
+    );
+    setMessage('');
     showToast(
       `${String(payload.created)} pedido${payload.created === 1 ? '' : 's'} importado${
         payload.created === 1 ? '' : 's'
-      } como borrador.${locateNote}`,
+      } como ${confirmNow ? 'confirmado' : 'borrador'}.${locateNote}`,
     );
-    onClose();
   }
 
   /** Descartar el correo: no es un pedido (spam, prueba, uno que ya se cargó a mano). */
@@ -431,6 +486,12 @@ export function OrderImportDialog({
                     «Teléfono» o «WhatsApp», «Tamaño» o «Tamano»—, así que no hace falta rearmar el
                     archivo.
                   </p>
+                  <p>
+                    También entiende la planilla armada por viandas: el tamaño en «Pedido» (250 o
+                    400) y una columna por plato con la variedad. Las filas seguidas del mismo
+                    cliente van al mismo pedido, una vianda con variedades mezcladas se carga como
+                    Intuitivo, y la forma de pago pegada a la dirección y la venta se toman solas.
+                  </p>
                 </div>
               )}
               <p className="order-import-hint">
@@ -438,6 +499,33 @@ export function OrderImportDialog({
                 los que se cargan a mano.
               </p>
             </>
+          ) : outcome ? (
+            <section className="order-import-outcome" aria-live="polite">
+              <p>
+                <strong>
+                  Se importaron {outcome.filter((item) => item.status === 'created').length} de{' '}
+                  {outcome.length}.
+                </strong>{' '}
+                Revisá que cada fila haya quedado en su pedido.
+              </p>
+              <ul className="order-import-rows">
+                {outcome.map((item) => (
+                  <li className={`order-import-outcome-row is-${item.status}`} key={item.rowNumber}>
+                    <div className="order-import-row-head">
+                      <strong>{item.customerName}</strong>
+                      <span>fila {item.rowNumber}</span>
+                    </div>
+                    <p>
+                      {item.status === 'created'
+                        ? `Creado: ${item.publicNumber ?? 'pedido nuevo'}`
+                        : item.status === 'failed'
+                          ? `No entró: ${item.reason ?? 'error desconocido'}`
+                          : 'No se importó (quedó destildado).'}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </section>
           ) : (
             <>
               {preview.unreadable > 0 ? (
@@ -464,7 +552,7 @@ export function OrderImportDialog({
                           }
                           type="checkbox"
                         />
-                        <strong>{row.customerName}</strong>
+                        <strong>{edited(row).customerName}</strong>
                       </label>
                       <span>
                         {row.kind === 'email'
@@ -475,9 +563,45 @@ export function OrderImportDialog({
                     </div>
 
                     <p className="order-import-row-order">
-                      {[row.phone, row.email, row.deliveryAddress].filter(Boolean).join(' · ')}
+                      {[row.phone, row.email].filter(Boolean).join(' · ')}
                       {row.locality ? ` · ${row.locality}` : ''}
                     </p>
+                    <div className="order-import-edit">
+                      {(decisions[row.rowNumber] ?? 'nuevo') === 'nuevo' ? (
+                        <label className="field">
+                          Nombre del cliente nuevo
+                          <input
+                            onChange={(event) => editRow(row, { customerName: event.target.value })}
+                            value={edited(row).customerName}
+                          />
+                        </label>
+                      ) : null}
+                      <label className="field">
+                        Dirección
+                        <input
+                          onChange={(event) =>
+                            editRow(row, { deliveryAddress: event.target.value })
+                          }
+                          value={edited(row).deliveryAddress ?? ''}
+                        />
+                      </label>
+                      <label className="field">
+                        Medio de pago
+                        <select
+                          onChange={(event) =>
+                            editRow(row, { paymentExpectation: event.target.value })
+                          }
+                          value={paymentFor(row)}
+                        >
+                          <option value="">El de abajo para todos</option>
+                          {paymentMethods.map((method) => (
+                            <option key={method.code} value={method.displayName}>
+                              {method.displayName}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
 
                     <ul className="order-import-items">
                       {row.items.map((item, index) => {
@@ -486,10 +610,29 @@ export function OrderImportDialog({
                           <li key={`${String(row.rowNumber)}-${String(index)}`}>
                             <span>
                               {[item.variety, item.size].filter(Boolean).join(' ') ||
-                                'Sin variedad'}{' '}
-                              × {item.quantityUnits}
+                                'Sin variedad'}
+                              {item.dishes.length > 0 ? ` (${item.dishes.join(', ')})` : ''}
                             </span>
-                            {item.offeringId === null ? (
+                            <label className="order-import-qty">
+                              ×
+                              <input
+                                aria-label="Cantidad"
+                                max={99}
+                                min={1}
+                                onChange={(event) =>
+                                  setQuantities((current) => ({
+                                    ...current,
+                                    [itemKey(row, index)]: Math.max(
+                                      1,
+                                      Math.min(99, Number(event.target.value) || 1),
+                                    ),
+                                  }))
+                                }
+                                type="number"
+                                value={quantityFor(row, index)}
+                              />
+                            </label>
+                            {item.offeringId === null || choices[itemKey(row, index)] ? (
                               /*
                                * Una variedad que no se reconoce se elige a mano, y es obligatorio.
                                * No se adivina: elegir la equivocada es cargar el pedido de otra
@@ -514,7 +657,18 @@ export function OrderImportDialog({
                                 ))}
                               </select>
                             ) : (
-                              <small>en el menú</small>
+                              <button
+                                className="order-import-change"
+                                onClick={() =>
+                                  setChoices((current) => ({
+                                    ...current,
+                                    [itemKey(row, index)]: item.offeringId ?? '',
+                                  }))
+                                }
+                                type="button"
+                              >
+                                en el menú · cambiar
+                              </button>
                             )}
                           </li>
                         );
@@ -532,6 +686,20 @@ export function OrderImportDialog({
                     {row.warnings.map((warning) => (
                       <p className="order-import-row-blocked" key={warning}>
                         {warning}
+                      </p>
+                    ))}
+                    {(row.existingOrders ?? []).length > 0 && !row.duplicateOf ? (
+                      <p className="order-import-row-existing">
+                        Ya tiene en este período:{' '}
+                        {(row.existingOrders ?? [])
+                          .map((order) => `${order.publicNumber} (${order.summary})`)
+                          .join('; ')}
+                        .
+                      </p>
+                    ) : null}
+                    {(row.notices ?? []).map((notice) => (
+                      <p className="order-import-row-notice" key={notice}>
+                        {notice}
                       </p>
                     ))}
 
@@ -612,7 +780,7 @@ export function OrderImportDialog({
         </div>
 
         <footer className="order-import-foot">
-          {inbound && preview === null ? null : preview === null ? (
+          {outcome ? null : inbound && preview === null ? null : preview === null ? (
             mode === 'email' ? (
               <button
                 className="button button-primary"
@@ -625,7 +793,7 @@ export function OrderImportDialog({
             ) : (
               <label className="button button-primary order-import-file">
                 <input
-                  accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  accept=".csv,.tsv,.txt,.xlsx,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                   disabled={busy}
                   onChange={(event) => void readSheet(event)}
                   type="file"

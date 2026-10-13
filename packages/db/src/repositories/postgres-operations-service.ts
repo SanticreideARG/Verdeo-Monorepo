@@ -1049,6 +1049,8 @@ export class PostgresOperationsService {
       items: readonly {
         quantityUnits: number;
         size: string | null;
+        /** La variedad de cada plato de un Intuitivo armado por variedades, en orden. */
+        slotVarieties?: readonly string[] | undefined;
         variety: string | null;
       }[];
       phone: string | null;
@@ -1059,10 +1061,16 @@ export class PostgresOperationsService {
     const menu = await this.currentPublishedMenu(operatingSiteId ?? null);
     const ofertas = (menu?.offerings ?? []) as readonly {
       composable?: boolean;
+      dishes?: readonly string[];
       familyName: string;
       id: string;
       sizeName: string;
     }[];
+    const fijas = ofertas.filter((oferta) => !oferta.composable);
+    const etiquetaDe = (offeringId: string) => {
+      const oferta = ofertas.find((candidata) => candidata.id === offeringId);
+      return oferta ? `${oferta.familyName} ${oferta.sizeName}`.trim() : 'Variedad';
+    };
 
     // Sólo clientes activos: un cliente archivado ya no recibe pedidos nuevos.
     const claves = new Set(
@@ -1220,7 +1228,35 @@ export class PostgresOperationsService {
 
       const itemMatches = row.items.map((item) => matchOffering(item.variety, item.size, ofertas));
 
-      return { customerMatch, itemMatches, rowNumber: row.rowNumber };
+      /*
+       * Un Intuitivo armado por variedades ("keto, keto, vegetariano, keto, keto"): cada plato es
+       * el de esa variedad, en esa posición, del menú publicado. Si alguno no se encuentra se avisa
+       * y los platos quedan para elegir a mano en el pedido.
+       */
+      const notices: string[] = [];
+      const itemDishes = row.items.map((item) => {
+        if (!item.slotVarieties) return null;
+        const platos = item.slotVarieties.map((variedad, posicion) => {
+          if (!variedad) return null;
+          const id = matchOffering(variedad, item.size, fijas);
+          return fijas.find((oferta) => oferta.id === id)?.dishes?.[posicion] ?? null;
+        });
+        const faltan = item.slotVarieties.filter(
+          (variedad, posicion) => variedad && !platos[posicion],
+        );
+        if (faltan.length > 0) {
+          notices.push(
+            `No encontramos en el menú el plato de ${[...new Set(faltan)].join(', ')} ${item.size ?? ''}: elegí los platos del Intuitivo en el pedido.`.replace(
+              /\s+:/,
+              ':',
+            ),
+          );
+          return null;
+        }
+        return platos.filter((plato): plato is string => plato !== null);
+      });
+
+      return { customerMatch, itemDishes, itemMatches, notices, rowNumber: row.rowNumber };
     });
 
     /*
@@ -1248,7 +1284,10 @@ export class PostgresOperationsService {
         .map(([oferta, cantidad]) => `${oferta}×${String(cantidad)}`)
         .join('|');
     };
-    const pedidosPorCliente = new Map<string, { firma: string; publicNumber: string }[]>();
+    const pedidosPorCliente = new Map<
+      string,
+      { firma: string; publicNumber: string; summary: string }[]
+    >();
     if (menu && clientesConocidos.length > 0) {
       const lineas = await this.database
         .select({
@@ -1287,7 +1326,13 @@ export class PostgresOperationsService {
       }
       for (const pedido of porPedido.values()) {
         const lista = pedidosPorCliente.get(pedido.customerId) ?? [];
-        lista.push({ firma: firmaDe(pedido.items), publicNumber: pedido.publicNumber });
+        lista.push({
+          firma: firmaDe(pedido.items),
+          publicNumber: pedido.publicNumber,
+          summary: pedido.items
+            .map((item) => `${etiquetaDe(item.offeringId)} × ${String(item.quantityUnits)}`)
+            .join(' + '),
+        });
         pedidosPorCliente.set(pedido.customerId, lista);
       }
     }
@@ -1313,7 +1358,16 @@ export class PostgresOperationsService {
         return {
           customerMatch: coincidencia.customerMatch,
           duplicateOf: igual?.publicNumber ?? null,
+          // Todo lo que el cliente ya tiene en el período, igual o no: para ver qué ya está cargado.
+          existingOrders: cliente
+            ? (pedidosPorCliente.get(cliente) ?? []).map(({ publicNumber, summary }) => ({
+                publicNumber,
+                summary,
+              }))
+            : [],
+          itemDishes: coincidencia.itemDishes,
           itemMatches: coincidencia.itemMatches,
+          notices: coincidencia.notices,
           rowNumber: coincidencia.rowNumber,
         };
       }),

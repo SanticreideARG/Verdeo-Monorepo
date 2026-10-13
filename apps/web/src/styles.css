@@ -9595,3 +9595,50 @@ body {
 .crm-import-row-why {
   color: #8a5a12;
 }
+
+/* Importar pedidos: correcciones por pedido, lo que ya está en el período y el resultado. */
+.order-import-edit {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.5rem;
+  margin: 0.4rem 0;
+}
+.order-import-qty {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.order-import-qty input {
+  width: 3.5rem;
+}
+.order-import-change {
+  border: 0;
+  background: none;
+  color: var(--color-forest);
+  font-size: 0.78rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.order-import-row-existing,
+.order-import-row-notice {
+  margin: 0.3rem 0 0;
+  font-size: 0.82rem;
+}
+.order-import-row-existing {
+  color: #8a5a12;
+}
+.order-import-row-notice {
+  color: var(--db-muted, #6b7280);
+}
+.order-import-outcome-row {
+  border-left: 4px solid var(--db-border);
+}
+.order-import-outcome-row.is-created {
+  border-left-color: #2f7d4a;
+}
+.order-import-outcome-row.is-failed {
+  border-left-color: #b42318;
+}
+.order-import-outcome-row.is-skipped {
+  border-left-color: #b7791f;
+}

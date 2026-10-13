@@ -60,5 +60,33 @@ export function matchOffering(
     const family = normalizeName(offering.familyName);
     return family.length > 0 && (family.includes(wantedVariety) || wantedVariety.includes(family));
   });
-  return contained.length === 1 ? (contained[0]?.id ?? null) : null;
+  if (contained.length === 1) return contained[0]?.id ?? null;
+  if (contained.length > 1) return null;
+
+  // Un error de tipeo ("vegerariano"): a lo sumo dos letras de diferencia con una sola variedad, y
+  // sólo en nombres largos, donde dos letras no alcanzan para confundir una variedad con otra.
+  const close = sameSize.filter((offering) => {
+    const family = normalizeName(offering.familyName);
+    return (
+      wantedVariety.length >= 6 && family.length >= 6 && editDistance(family, wantedVariety) <= 2
+    );
+  });
+  return close.length === 1 ? (close[0]?.id ?? null) : null;
+}
+
+/** Cuántas letras hay que cambiar, agregar o sacar para pasar de un texto al otro. */
+function editDistance(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j += 1) {
+      current[j] = Math.min(
+        (previous[j] ?? 0) + 1,
+        (current[j - 1] ?? 0) + 1,
+        (previous[j - 1] ?? 0) + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    previous = current;
+  }
+  return previous[b.length] ?? 0;
 }

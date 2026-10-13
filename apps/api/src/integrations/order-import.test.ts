@@ -120,3 +120,70 @@ describe('parseOrderImport', () => {
     await expect(parseOrderImport(csvFile(''))).rejects.toThrow('El archivo está vacío.');
   });
 });
+
+/*
+ * La planilla armada por viandas, como se carga a mano: filas vacías arriba, el tamaño en
+ * "Pedido", una columna por plato con la variedad, la venta, la forma de pago pegada a la dirección
+ * y un producto suelto al costado. Datos inventados con la forma de una planilla real.
+ */
+describe('parseOrderImport con una fila por vianda', () => {
+  const planilla = [
+    '\t\t\t\t\t\t\t\t\t\t\t\t',
+    '\tBarrio\tDirección\tNombre\tPedido\tColumna1\t\t\t\t\tVenta\tCelular\t\t',
+    '\t\t\t\t\t\t\t\t\t\t\t\t',
+    '\tAlmagro\tLavalle 100\tAna Prueba\t250\tketo\tketo\tketo\tketo\tketo\t70000\t\t\t',
+    '\tAlmagro\tGallo 200 piso 6 transferencia\tBeto Ensayo\t400\tketo\tketo\t\tketo\tketo\t85000\t1155550102\tANTIAGE 250\t1',
+    '\tAlmagro\tGallo 200 piso 6 transferencia\tBeto Ensayo\t400\t\t\t\t\tvegerariano\t\t\t\t',
+    '\tPalermo\tGorriti 300 transferencia\tCarla Muestra\t250\tketo\tketo\tketo\tketo\tketo\t140000\t1155550103\t\t',
+    '\tPalermo\tGorriti 300\tCarla Muestra\t250\tketo\tketo\tketo\tketo\tketo\t\t\t\t',
+    '\tRetiro\tTalcahuano 400\tDora Inventada\t250\tvegetariano\tvegetariano\tvegetariano\tvegetariano\tvegetariano\t140000\t\t\t',
+    '\tRetiro\tTalcahuano 400\tDora Inventada\t250\tREAL\tREAL\tREAL\tREAL\tREAL\t\t\t\t',
+  ].join('\n');
+  const tsv = () => new File([planilla], 'pedidos.tsv', { type: 'text/tab-separated-values' });
+
+  it('arma un pedido por cliente con las filas seguidas', async () => {
+    const rows = await parseOrderImport(tsv());
+    expect(rows.map((row) => [row.customerName, row.rowNumber])).toEqual([
+      ['Ana Prueba', 4],
+      ['Beto Ensayo', 5],
+      ['Carla Muestra', 7],
+      ['Dora Inventada', 9],
+    ]);
+  });
+
+  it('una vianda de una sola variedad es ese menú, y dos iguales se suman', async () => {
+    const [ana, , carla, dora] = await parseOrderImport(tsv());
+    expect(ana?.items).toEqual([{ dishes: [], quantityUnits: 1, size: '250', variety: 'keto' }]);
+    expect(carla?.items).toEqual([{ dishes: [], quantityUnits: 2, size: '250', variety: 'keto' }]);
+    expect(dora?.items.map((item) => item.variety)).toEqual(['vegetariano', 'REAL']);
+  });
+
+  it('una vianda con variedades mezcladas es un Intuitivo, completada con la fila de abajo', async () => {
+    const beto = (await parseOrderImport(tsv()))[1];
+    expect(beto?.items[0]).toEqual({
+      dishes: [],
+      quantityUnits: 1,
+      size: '400',
+      slotVarieties: ['keto', 'keto', 'vegerariano', 'keto', 'keto'],
+      variety: 'Intuitivo',
+    });
+    expect(beto?.notices).toEqual(['La fila 6 completa la vianda de la fila 5.']);
+    // El producto suelto al costado.
+    expect(beto?.items[1]).toEqual({
+      dishes: [],
+      quantityUnits: 1,
+      size: '250',
+      variety: 'ANTIAGE',
+    });
+  });
+
+  it('toma la forma de pago de la dirección, el barrio, la venta y el celular', async () => {
+    const beto = (await parseOrderImport(tsv()))[1];
+    expect(beto).toMatchObject({
+      deliveryAddress: 'Gallo 200 piso 6, Almagro',
+      notes: 'Venta en planilla: $85.000',
+      paymentExpectation: 'Transferencia',
+      phone: '+5491155550102',
+    });
+  });
+});

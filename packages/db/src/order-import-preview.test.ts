@@ -324,3 +324,65 @@ describe('previewOrderImport: pedidos repetidos', () => {
     expect(match?.duplicateOf).toBeNull();
   });
 });
+
+describe('previewOrderImport: planilla armada por viandas', () => {
+  // Un Intuitivo "keto, keto, vegan, keto, keto": cada plato es el de esa variedad en esa posición.
+  it('resuelve los platos de un Intuitivo armado por variedades', async () => {
+    await client.exec(`
+      insert into weekly_menu_items (offering_id, slot, dish_name) values
+        ('${OFFER_KETO_400}', 1, 'Keto 1'), ('${OFFER_KETO_400}', 2, 'Keto 2'),
+        ('${OFFER_KETO_400}', 3, 'Keto 3'), ('${OFFER_KETO_400}', 4, 'Keto 4'),
+        ('${OFFER_KETO_400}', 5, 'Keto 5'),
+        ('${OFFER_VEGAN_400}', 1, 'Vegan 1'), ('${OFFER_VEGAN_400}', 2, 'Vegan 2'),
+        ('${OFFER_VEGAN_400}', 3, 'Vegan 3'), ('${OFFER_VEGAN_400}', 4, 'Vegan 4'),
+        ('${OFFER_VEGAN_400}', 5, 'Vegan 5')
+      on conflict do nothing;
+    `);
+    const { match } = await preview(
+      fila({
+        items: [
+          {
+            quantityUnits: 1,
+            size: '400',
+            slotVarieties: ['keto', 'keto', 'vegan', 'keto', 'keto'],
+            variety: 'Intuitivo',
+          },
+        ],
+      }),
+    );
+    expect(match?.itemDishes).toEqual([['Keto 1', 'Keto 2', 'Vegan 3', 'Keto 4', 'Keto 5']]);
+    expect(match?.notices).toEqual([]);
+  });
+
+  it('avisa cuando no encuentra el plato de una variedad', async () => {
+    const { match } = await preview(
+      fila({
+        items: [
+          {
+            quantityUnits: 1,
+            size: '400',
+            slotVarieties: ['keto', 'carnivoro', 'keto', 'keto', 'keto'],
+            variety: 'Intuitivo',
+          },
+        ],
+      }),
+    );
+    expect(match?.itemDishes).toEqual([null]);
+    expect(match?.notices[0]).toMatch(/carnivoro/);
+  });
+
+  // Antes de importar se ve todo lo que el cliente ya tiene en el período, no sólo lo idéntico.
+  it('lista los pedidos que el cliente ya tiene en el período', async () => {
+    const { match } = await preview(
+      fila({
+        customerName: 'Ana Pérez',
+        items: [{ quantityUnits: 1, size: '400', variety: 'Menú Vegan' }],
+        phone: '+5491155550101',
+      }),
+    );
+    expect(match?.duplicateOf).toBeNull();
+    expect(match?.existingOrders).toEqual([
+      { publicNumber: 'ZZZ-00001', summary: 'Menú Paleo & Keto 400 × 2' },
+    ]);
+  });
+});

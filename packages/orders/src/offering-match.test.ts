@@ -64,6 +64,13 @@ describe('matchOffering', () => {
     expect(matchOffering('Menú Vegetariano', '250', menu)).toBeNull();
   });
 
+  // Así llega en las planillas cargadas a mano.
+  it('tolera un error de tipeo de hasta dos letras', () => {
+    expect(matchOffering('vegerariano', '400', menu)).toBe('vegetariano-400');
+    // "Vegan" es corto: dos letras alcanzan para confundirlo con otra cosa.
+    expect(matchOffering('vagen', '250', menu)).toBeNull();
+  });
+
   it('devuelve null para una variedad que no está en el menú', () => {
     expect(matchOffering('Menú Carnívoro', '400', menu)).toBeNull();
   });
