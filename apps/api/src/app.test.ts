@@ -1590,8 +1590,9 @@ describe('API foundation', () => {
       expect(await response.json()).toEqual({
         created: 1,
         failed: [{ reason: 'El menú ya cerró', rowNumber: 1 }],
-        // El mock de createOrder no devuelve id, así que no hay pedidos para ubicar.
+        // El mock de createOrder no devuelve id, así que no hay pedidos para ubicar ni conciliar.
         orderIds: [],
+        results: [],
       });
     });
 
