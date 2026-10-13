@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { RouteMap } from '../components/RouteMap.js';
 import { apiRequest } from '../lib/api.js';
+import { neighborhoodHeading } from '../lib/neighborhoodGroups.js';
 import { formatMoney } from '../lib/operations.js';
 
 interface SheetStop {
@@ -17,6 +18,8 @@ interface SheetStop {
   deliveryWindow: string | null;
   detail: string;
   id: string;
+  /** El barrio del domicilio: agrupa las paradas. */
+  neighborhood: string | null;
   paymentExpectation: string;
   prepaid: boolean;
   publicNumber: string;
@@ -220,140 +223,148 @@ export function DeliverySheetPage() {
       </div>
 
       <ol className="delivery-sheet-stops">
-        {sheet.stops.map((stop) => {
+        {sheet.stops.map((stop, index) => {
           const entregada = stop.status === 'delivered';
           const cerrada = entregada || stop.status === 'skipped';
           const abierta = openStopId === stop.id;
+          const barrio = neighborhoodHeading(sheet.stops, index);
           return (
-            <li className={cerrada ? 'is-done' : ''} key={stop.id}>
-              <article>
-                <header>
-                  <span className="delivery-sheet-seq">{stop.sequence}</span>
-                  <div>
-                    <h2>{stop.customerFirstName}</h2>
-                    <p className="delivery-sheet-number">{stop.publicNumber}</p>
-                  </div>
-                  {entregada ? (
-                    <span className="delivery-sheet-done">Entregada</span>
-                  ) : stop.status === 'skipped' ? (
-                    <span className="delivery-sheet-skipped">No entregada</span>
-                  ) : null}
-                </header>
-
-                {stop.detail ? <p className="delivery-sheet-detail">{stop.detail}</p> : null}
-                <p className="delivery-sheet-address">{stop.deliveryAddress}</p>
-                {stop.deliveryWindow ? (
-                  <p className="delivery-sheet-window">🕒 {stop.deliveryWindow}</p>
-                ) : null}
-                {stop.accessNotes ? (
-                  <p className="delivery-sheet-access">{stop.accessNotes}</p>
-                ) : null}
-                {stop.deliveryNote ? (
-                  <p className="delivery-sheet-access">Nota: {stop.deliveryNote}</p>
-                ) : null}
-
-                <p className={stop.prepaid ? 'delivery-sheet-paid' : 'delivery-sheet-collect'}>
-                  {stop.prepaid
-                    ? 'Ya está pagado · no cobrar'
-                    : `Cobrar ${formatMoney(stop.totalMinor, 'ARS')} · ${stop.paymentExpectation}`}
-                </p>
-
-                <div className="delivery-sheet-actions">
-                  <a href={mapLink(stop)} rel="noreferrer" target="_blank">
-                    Abrir en el mapa
-                  </a>
-                  {cerrada || abierta ? null : (
-                    <button onClick={() => setOpenStopId(stop.id)} type="button">
-                      Confirmar
-                    </button>
-                  )}
-                </div>
-
-                {abierta && !cerrada ? (
-                  <div className="delivery-sheet-confirm">
-                    <label>
-                      Nota (opcional)
-                      <input
-                        onChange={(event) => setNote(event.target.value)}
-                        placeholder="No estaba, dejé con el vecino"
-                        value={note}
-                      />
-                    </label>
+            <Fragment key={stop.id}>
+              {barrio ? (
+                <li aria-hidden="true" className="delivery-sheet-neighborhood">
+                  {barrio}
+                </li>
+              ) : null}
+              <li className={cerrada ? 'is-done' : ''}>
+                <article>
+                  <header>
+                    <span className="delivery-sheet-seq">{stop.sequence}</span>
                     <div>
-                      {stop.prepaid ? (
-                        <button
-                          disabled={busyStopId === stop.id}
-                          onClick={() => void confirm(stop, false)}
-                          type="button"
-                        >
-                          Entregada
-                        </button>
-                      ) : (
-                        <>
-                          <button
-                            className="is-primary"
-                            disabled={busyStopId === stop.id}
-                            onClick={() => void confirm(stop, true)}
-                            type="button"
-                          >
-                            Entregada y cobrada
-                          </button>
-                          {/* Entregar sin cobrar pasa, y esconderlo haría que se marque cobrado lo
-                              que no se cobró, que es peor que un número feo. */}
+                      <h2>{stop.customerFirstName}</h2>
+                      <p className="delivery-sheet-number">{stop.publicNumber}</p>
+                    </div>
+                    {entregada ? (
+                      <span className="delivery-sheet-done">Entregada</span>
+                    ) : stop.status === 'skipped' ? (
+                      <span className="delivery-sheet-skipped">No entregada</span>
+                    ) : null}
+                  </header>
+
+                  {stop.detail ? <p className="delivery-sheet-detail">{stop.detail}</p> : null}
+                  <p className="delivery-sheet-address">{stop.deliveryAddress}</p>
+                  {stop.deliveryWindow ? (
+                    <p className="delivery-sheet-window">🕒 {stop.deliveryWindow}</p>
+                  ) : null}
+                  {stop.accessNotes ? (
+                    <p className="delivery-sheet-access">{stop.accessNotes}</p>
+                  ) : null}
+                  {stop.deliveryNote ? (
+                    <p className="delivery-sheet-access">Nota: {stop.deliveryNote}</p>
+                  ) : null}
+
+                  <p className={stop.prepaid ? 'delivery-sheet-paid' : 'delivery-sheet-collect'}>
+                    {stop.prepaid
+                      ? 'Ya está pagado · no cobrar'
+                      : `Cobrar ${formatMoney(stop.totalMinor, 'ARS')} · ${stop.paymentExpectation}`}
+                  </p>
+
+                  <div className="delivery-sheet-actions">
+                    <a href={mapLink(stop)} rel="noreferrer" target="_blank">
+                      Abrir en el mapa
+                    </a>
+                    {cerrada || abierta ? null : (
+                      <button onClick={() => setOpenStopId(stop.id)} type="button">
+                        Confirmar
+                      </button>
+                    )}
+                  </div>
+
+                  {abierta && !cerrada ? (
+                    <div className="delivery-sheet-confirm">
+                      <label>
+                        Nota (opcional)
+                        <input
+                          onChange={(event) => setNote(event.target.value)}
+                          placeholder="No estaba, dejé con el vecino"
+                          value={note}
+                        />
+                      </label>
+                      <div>
+                        {stop.prepaid ? (
                           <button
                             disabled={busyStopId === stop.id}
                             onClick={() => void confirm(stop, false)}
                             type="button"
                           >
-                            Entregada sin cobrar
+                            Entregada
                           </button>
-                        </>
-                      )}
-                      <button onClick={() => setOpenStopId(null)} type="button">
-                        Cancelar
-                      </button>
-                    </div>
-                    {/* Avisarle al cliente es parte de la parada, no una pantalla aparte: se avisa
+                        ) : (
+                          <>
+                            <button
+                              className="is-primary"
+                              disabled={busyStopId === stop.id}
+                              onClick={() => void confirm(stop, true)}
+                              type="button"
+                            >
+                              Entregada y cobrada
+                            </button>
+                            {/* Entregar sin cobrar pasa, y esconderlo haría que se marque cobrado lo
+                              que no se cobró, que es peor que un número feo. */}
+                            <button
+                              disabled={busyStopId === stop.id}
+                              onClick={() => void confirm(stop, false)}
+                              type="button"
+                            >
+                              Entregada sin cobrar
+                            </button>
+                          </>
+                        )}
+                        <button onClick={() => setOpenStopId(null)} type="button">
+                          Cancelar
+                        </button>
+                      </div>
+                      {/* Avisarle al cliente es parte de la parada, no una pantalla aparte: se avisa
                         al salir hacia ahí y al llegar. Si el mensaje no sale, la entrega sigue. */}
-                    <div className="delivery-sheet-notify">
-                      <button
-                        disabled={avisado.includes(`${stop.id}:ON_MY_WAY`)}
-                        onClick={() => void avisar(stop, 'ON_MY_WAY')}
-                        type="button"
-                      >
-                        Avisar que voy
-                      </button>
-                      <button
-                        disabled={avisado.includes(`${stop.id}:AT_ADDRESS`)}
-                        onClick={() => void avisar(stop, 'AT_ADDRESS')}
-                        type="button"
-                      >
-                        Avisar que llegué
-                      </button>
-                    </div>
-                    {/* Una parada que no se pudo entregar tiene que poder decirse acá: si no, queda
+                      <div className="delivery-sheet-notify">
+                        <button
+                          disabled={avisado.includes(`${stop.id}:ON_MY_WAY`)}
+                          onClick={() => void avisar(stop, 'ON_MY_WAY')}
+                          type="button"
+                        >
+                          Avisar que voy
+                        </button>
+                        <button
+                          disabled={avisado.includes(`${stop.id}:AT_ADDRESS`)}
+                          onClick={() => void avisar(stop, 'AT_ADDRESS')}
+                          type="button"
+                        >
+                          Avisar que llegué
+                        </button>
+                      </div>
+                      {/* Una parada que no se pudo entregar tiene que poder decirse acá: si no, queda
                         pendiente para siempre o se marca entregada, que es peor. */}
-                    <label className="delivery-sheet-failed">
-                      No se pudo entregar
-                      <select
-                        defaultValue=""
-                        disabled={busyStopId === stop.id}
-                        onChange={(event) => {
-                          if (event.target.value) void noEntregada(stop, event.target.value);
-                        }}
-                      >
-                        <option value="">Elegí el motivo…</option>
-                        {sheet.failureReasons.map((reason) => (
-                          <option key={reason.id} value={reason.id}>
-                            {reason.displayName}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                ) : null}
-              </article>
-            </li>
+                      <label className="delivery-sheet-failed">
+                        No se pudo entregar
+                        <select
+                          defaultValue=""
+                          disabled={busyStopId === stop.id}
+                          onChange={(event) => {
+                            if (event.target.value) void noEntregada(stop, event.target.value);
+                          }}
+                        >
+                          <option value="">Elegí el motivo…</option>
+                          {sheet.failureReasons.map((reason) => (
+                            <option key={reason.id} value={reason.id}>
+                              {reason.displayName}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  ) : null}
+                </article>
+              </li>
+            </Fragment>
           );
         })}
       </ol>

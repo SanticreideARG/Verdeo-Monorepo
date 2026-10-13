@@ -7,6 +7,10 @@ import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { CustomerExportDialog } from '../components/CustomerExportDialog.js';
 import { MergeCustomersDialog } from '../components/MergeCustomersDialog.js';
 import { DraftNotice } from '../components/DraftNotice.js';
+import {
+  ImportReconciliation,
+  type CustomerImportRow,
+} from '../components/ImportReconciliation.js';
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { BrandLoading } from '../components/BrandLoading.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
@@ -86,6 +90,12 @@ export function CustomersPage() {
   const [importing, setImporting] = useState(false);
   // El error de la importación se muestra dentro del diálogo: el aviso general queda tapado.
   const [importError, setImportError] = useState('');
+  // La conciliación de la planilla antes de importar, y lo que quedó después.
+  const [importReview, setImportReview] = useState<{
+    rows: CustomerImportRow[];
+    zoneId: string;
+  } | null>(null);
+  const [importResult, setImportResult] = useState<CustomerImportRow[] | null>(null);
   const [message, setMessage] = useState('');
   // Eliminar es a un clic de distancia y no vuelve: se pregunta antes.
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -300,6 +310,15 @@ export function CustomersPage() {
     }
   }
 
+  function importBody(zoneId: string) {
+    const body = new FormData();
+    if (importFile) body.set('file', importFile);
+    // Una planilla con direcciones necesita la zona: sin ella el servidor la rechaza.
+    if (zoneId) body.set('geographicZoneId', zoneId);
+    return body;
+  }
+
+  // Primer paso: leer la planilla y conciliarla contra los clientes que ya están, sin crear nada.
   async function importContacts(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!importFile) {
@@ -308,21 +327,41 @@ export function CustomersPage() {
     }
     const zoneId = formText(new FormData(event.currentTarget), 'geographicZoneId');
     setImportError('');
+    setImportResult(null);
     setImporting(true);
     try {
-      const body = new FormData();
-      body.set('file', importFile);
-      // Una planilla con direcciones necesita la zona: sin ella el servidor la rechaza.
-      if (zoneId) body.set('geographicZoneId', zoneId);
-      const result = await responseJson<{ imported: number }>(
-        await apiRequest('/api/v1/customers/import', { body, method: 'POST' }),
+      const preview = await responseJson<{ rows: CustomerImportRow[] }>(
+        await apiRequest('/api/v1/customers/import/preview', {
+          body: importBody(zoneId),
+          method: 'POST',
+        }),
       );
-      setShowImport(false);
-      setImportFile(null);
+      setImportReview({ rows: preview.rows, zoneId });
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : 'No pudimos leer la planilla.');
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  // Segundo paso: crear los nuevos. Los que ya existen o están repetidos se saltean.
+  async function confirmImport() {
+    if (!importReview) return;
+    setImportError('');
+    setImporting(true);
+    try {
+      const result = await responseJson<{ imported: number; rows: CustomerImportRow[] }>(
+        await apiRequest('/api/v1/customers/import', {
+          body: importBody(importReview.zoneId),
+          method: 'POST',
+        }),
+      );
+      setImportReview(null);
+      setImportResult(result.rows);
       setSearch('');
       await loadDirectory('');
       showToast(
-        `${result.imported} contacto${result.imported === 1 ? '' : 's'} importado${result.imported === 1 ? '' : 's'} correctamente.`,
+        `${String(result.imported)} contacto${result.imported === 1 ? '' : 's'} importado${result.imported === 1 ? '' : 's'}.`,
       );
     } catch (error) {
       setImportError(error instanceof Error ? error.message : 'No pudimos importar los contactos.');
@@ -1247,6 +1286,8 @@ export function CustomersPage() {
               className="button button-secondary"
               onClick={() => {
                 setImportError('');
+                setImportReview(null);
+                setImportResult(null);
                 setShowImport(true);
               }}
             >
@@ -1306,68 +1347,76 @@ export function CustomersPage() {
                 Aceptamos CSV UTF-8 o Excel <code>.xlsx</code>. No se aceptan archivos XML. La
                 primera hoja y hasta 500 filas se procesan en una única operación.
               </p>
-              <div className="crm-import-columns">
-                <div>
-                  <strong>Columna</strong>
-                  <strong>Uso</strong>
-                </div>
-                <div>
-                  <code>Nombre</code>
-                  <span>
-                    Obligatoria. También «Nombre y apellido», «Cliente» o «Nombre» + «Apellido».
-                  </span>
-                </div>
-                <div>
-                  <code>Celular</code>
-                  <span>Se guarda como teléfono y como WhatsApp. También «Móvil».</span>
-                </div>
-                <div>
-                  <code>WhatsApp</code>
-                  <span>Contacto WhatsApp sin verificar, si viene aparte del celular.</span>
-                </div>
-                <div>
-                  <code>Teléfono</code>
-                  <span>Teléfono fijo o alternativo.</span>
-                </div>
-                <div>
-                  <code>Email</code>
-                  <span>También «Mail» o «Correo».</span>
-                </div>
-                <div>
-                  <code>Dirección</code>
-                  <span>
-                    Crea un domicilio para ubicar. También «Domicilio» o «Dirección de entrega».
-                  </span>
-                </div>
-                <div>
-                  <code>Barrio</code>
-                  <span>Se suma a la dirección para ubicarla mejor. También «Localidad».</span>
-                </div>
-                <div>
-                  <code>Forma de pago</code>
-                  <span>Queda como forma de pago preferida en las notas del cliente.</span>
-                </div>
-                <div>
-                  <code>Enlace</code>
-                  <span>Enlace de Maps del domicilio. También «Link» o «Ubicación».</span>
-                </div>
-                <div>
-                  <code>Observaciones</code>
-                  <span>Notas internas del cliente.</span>
-                </div>
-              </div>
-              <p className="crm-import-note">
-                Los encabezados se reconocen con o sin tildes y en cualquier orden, aunque haya
-                filas vacías arriba. Si la dirección trae la forma de pago pegada («Mitre 400
-                transferencia»), se separa sola. Un contacto repetido o una fila con formato
-                inválido detiene la importación sin crear registros parciales.
-              </p>
+              {!importReview && !importResult ? (
+                <>
+                  <div className="crm-import-columns">
+                    <div>
+                      <strong>Columna</strong>
+                      <strong>Uso</strong>
+                    </div>
+                    <div>
+                      <code>Nombre</code>
+                      <span>
+                        Obligatoria. También «Nombre y apellido», «Cliente» o «Nombre» + «Apellido».
+                      </span>
+                    </div>
+                    <div>
+                      <code>Celular</code>
+                      <span>Se guarda como teléfono y como WhatsApp. También «Móvil».</span>
+                    </div>
+                    <div>
+                      <code>WhatsApp</code>
+                      <span>Contacto WhatsApp sin verificar, si viene aparte del celular.</span>
+                    </div>
+                    <div>
+                      <code>Teléfono</code>
+                      <span>Teléfono fijo o alternativo.</span>
+                    </div>
+                    <div>
+                      <code>Email</code>
+                      <span>También «Mail» o «Correo».</span>
+                    </div>
+                    <div>
+                      <code>Dirección</code>
+                      <span>
+                        Crea un domicilio para ubicar. También «Domicilio» o «Dirección de entrega».
+                      </span>
+                    </div>
+                    <div>
+                      <code>Barrio</code>
+                      <span>Se suma a la dirección para ubicarla mejor. También «Localidad».</span>
+                    </div>
+                    <div>
+                      <code>Forma de pago</code>
+                      <span>Queda como forma de pago preferida en las notas del cliente.</span>
+                    </div>
+                    <div>
+                      <code>Enlace</code>
+                      <span>Enlace de Maps del domicilio. También «Link» o «Ubicación».</span>
+                    </div>
+                    <div>
+                      <code>Observaciones</code>
+                      <span>Notas internas del cliente.</span>
+                    </div>
+                  </div>
+                  <p className="crm-import-note">
+                    Los encabezados se reconocen con o sin tildes y en cualquier orden, aunque haya
+                    filas vacías arriba. Si la dirección trae la forma de pago pegada («Mitre 400
+                    transferencia»), se separa sola. Un contacto repetido o una fila con formato
+                    inválido detiene la importación sin crear registros parciales.
+                  </p>
+                </>
+              ) : null}
               <form className="crm-import-form" onSubmit={(event) => void importContacts(event)}>
                 <label className="field field-wide">
                   Archivo de contactos
                   <input
                     accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    onChange={(event) => setImportFile(event.target.files?.[0] ?? null)}
+                    onChange={(event) => {
+                      setImportFile(event.target.files?.[0] ?? null);
+                      setImportReview(null);
+                      setImportResult(null);
+                    }}
                     required
                     type="file"
                   />
@@ -1377,7 +1426,11 @@ export function CustomersPage() {
                 ) : null}
                 <label className="field field-wide">
                   Zona de reparto de las direcciones
-                  <select defaultValue={defaultZoneId} name="geographicZoneId">
+                  <select
+                    defaultValue={defaultZoneId}
+                    name="geographicZoneId"
+                    onChange={() => setImportReview(null)}
+                  >
                     <option value="">Sin direcciones</option>
                     {zones.map((zone) => (
                       <option key={zone.id} value={zone.id}>
@@ -1391,9 +1444,27 @@ export function CustomersPage() {
                     {importError}
                   </p>
                 ) : null}
-                <button className="button button-primary" disabled={importing} type="submit">
-                  {importing ? 'Importando…' : 'Validar e importar'}
-                </button>
+                {importReview ? (
+                  <>
+                    <ImportReconciliation rows={importReview.rows} />
+                    <button
+                      className="button button-primary"
+                      disabled={importing || !importReview.rows.some((row) => row.status === 'new')}
+                      onClick={() => void confirmImport()}
+                      type="button"
+                    >
+                      {importing
+                        ? 'Importando…'
+                        : `Importar ${String(importReview.rows.filter((row) => row.status === 'new').length)} nuevos`}
+                    </button>
+                  </>
+                ) : importResult ? (
+                  <ImportReconciliation done rows={importResult} />
+                ) : (
+                  <button className="button button-primary" disabled={importing} type="submit">
+                    {importing ? 'Revisando…' : 'Revisar planilla'}
+                  </button>
+                )}
               </form>
             </section>
           </div>

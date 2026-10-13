@@ -84,6 +84,32 @@ export const geographicZones = pgTable(
   ],
 );
 
+/**
+ * Los barrios de una zona: el nivel geográfico siguiente, más chico.
+ *
+ * Una zona es un área operativa (la que toma un repartidor, la que define precios y horarios); un
+ * barrio es cómo se agrupan las paradas dentro de ella en la hoja de ruta. Se crean solos al
+ * importar una planilla o al cargar un domicilio con su barrio, y se pueden renombrar o dar de baja.
+ * `name_key` es el nombre sin tildes ni mayúsculas, para que "Núñez" y "nuñez" sean el mismo.
+ */
+export const neighborhoods = pgTable(
+  'neighborhoods',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    geographicZoneId: uuid('geographic_zone_id')
+      .notNull()
+      .references(() => geographicZones.id, { onDelete: 'cascade' }),
+    displayName: text('display_name').notNull(),
+    nameKey: text('name_key').notNull(),
+    active: boolean('active').default(true).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('neighborhoods_zone_name_unique').on(table.geographicZoneId, table.nameKey),
+    check('neighborhoods_name_key_check', sql`length(${table.nameKey}) > 0`),
+  ],
+);
+
 export const userOperatingSites = pgTable(
   'user_operating_sites',
   {

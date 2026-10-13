@@ -21,6 +21,7 @@ import {
   assertCoordinatePair,
   argentinePhoneKey,
   assertTemplateVariables,
+  neighborhoodKey,
   normalizeCustomerIdentity,
   normalizeCustomerText,
   renderTemplate,
@@ -70,6 +71,7 @@ import {
   geocodingCandidates,
   aiExecutions,
   geographicZones,
+  neighborhoods,
   geocodingRequests,
   labelBackgrounds,
   labelSettings,
@@ -1335,6 +1337,118 @@ export class PostgresOperationsService {
    * Imports are deliberately one database transaction: either every contact is
    * persisted (with its audit trail) or the operator can correct the sheet and retry.
    */
+  /**
+   * Concilia una planilla de clientes contra los que ya están, fila por fila, antes de importar.
+   *
+   * Un teléfono se reconoce por su clave de diez dígitos (`argentinePhoneKey`): "1156380959" y
+   * "+54 9 11 5638-0959" son la misma línea. Se compara contra todas las identidades activas,
+   * también las de clientes archivados: siguen ocupando el número, y antes eso hacía fallar la
+   * importación entera con un "ya existe" sin decir quién.
+   */
+  public async reconcileCustomerImport(inputs: readonly CustomerInput[]) {
+    const phonesOf = (input: CustomerInput) =>
+      [
+        ...(input.phone ? [{ type: 'phone' as const, value: input.phone }] : []),
+        ...(input.identities ?? [])
+          .filter((identity) => identity.type === 'whatsapp' || identity.type === 'phone')
+          .map((identity) => ({
+            type: identity.type as 'phone' | 'whatsapp',
+            value: identity.value,
+          })),
+      ]
+        .map((phone) => ({
+          ...phone,
+          key: argentinePhoneKey(phone.value) ?? phone.value.replace(/\D/g, ''),
+        }))
+        .filter((phone) => phone.key.length >= 6);
+    const emailOf = (input: CustomerInput) => {
+      const email =
+        input.email ?? input.identities?.find((identity) => identity.type === 'email')?.value;
+      return email ? email.trim().toLocaleLowerCase('es-AR') : null;
+    };
+
+    const keys = new Set(inputs.flatMap((input) => phonesOf(input).map((phone) => phone.key)));
+    const emails = [...new Set(inputs.map(emailOf).filter((email): email is string => !!email))];
+
+    const existingPhones = new Map<
+      string,
+      { customerId: string; displayName: string; matchedBy: 'phone' | 'whatsapp'; status: string }
+    >();
+    if (keys.size > 0) {
+      const rows = await this.database
+        .select({
+          customerId: customerIdentities.customerId,
+          displayName: customers.displayName,
+          status: customers.status,
+          type: customerIdentities.type,
+          value: customerIdentities.valueNormalized,
+        })
+        .from(customerIdentities)
+        .innerJoin(customers, eq(customers.id, customerIdentities.customerId))
+        .where(
+          and(
+            inArray(customerIdentities.type, ['whatsapp', 'phone']),
+            eq(customerIdentities.active, true),
+          ),
+        );
+      for (const row of rows) {
+        const key = argentinePhoneKey(row.value) ?? row.value.replace(/\D/g, '');
+        if (keys.has(key) && !existingPhones.has(key)) {
+          existingPhones.set(key, {
+            customerId: row.customerId,
+            displayName: row.displayName,
+            matchedBy: row.type === 'whatsapp' ? 'whatsapp' : 'phone',
+            status: row.status,
+          });
+        }
+      }
+    }
+    const existingEmails = new Map<
+      string,
+      { customerId: string; displayName: string; status: string }
+    >();
+    if (emails.length > 0) {
+      const rows = await this.database
+        .select({
+          customerId: customerIdentities.customerId,
+          displayName: customers.displayName,
+          status: customers.status,
+          value: customerIdentities.valueNormalized,
+        })
+        .from(customerIdentities)
+        .innerJoin(customers, eq(customers.id, customerIdentities.customerId))
+        .where(
+          and(
+            eq(customerIdentities.type, 'email'),
+            inArray(customerIdentities.valueNormalized, emails),
+            eq(customerIdentities.active, true),
+          ),
+        );
+      for (const row of rows) existingEmails.set(row.value, row);
+    }
+
+    const seen = new Map<string, number>();
+    return inputs.map((input, index) => {
+      const phones = phonesOf(input);
+      const email = emailOf(input);
+      const phoneMatch = phones.map((phone) => existingPhones.get(phone.key)).find(Boolean);
+      const emailMatch = email ? existingEmails.get(email) : undefined;
+      const match =
+        phoneMatch ?? (emailMatch ? { ...emailMatch, matchedBy: 'email' as const } : undefined);
+      const ownKeys = [
+        ...phones.map((phone) => `t:${phone.key}`),
+        ...(email ? [`e:${email}`] : []),
+      ];
+      const repeatedOf = ownKeys.map((key) => seen.get(key)).find((row) => row !== undefined);
+      for (const key of ownKeys) if (!seen.has(key)) seen.set(key, index);
+      return match
+        ? { match, repeatedOf: null, status: 'existing' as const }
+        : repeatedOf !== undefined
+          ? { match: null, repeatedOf, status: 'repeated' as const }
+          : { match: null, repeatedOf: null, status: 'new' as const };
+    });
+  }
+
   public async importCustomers(inputs: readonly CustomerInput[], context: OperationsContext) {
     return this.database
       .transaction(async (transaction) => {
@@ -1430,15 +1544,21 @@ export class PostgresOperationsService {
     if (identityValues.length > 0)
       await transaction.insert(customerIdentities).values(identityValues);
 
-    const addressValues = (input.addresses ?? []).map((address) => {
+    const addressValues = [];
+    for (const address of input.addresses ?? []) {
       assertCoordinatePair(address.latitude, address.longitude);
-      return {
+      addressValues.push({
         ...address,
         customerId: created.id,
         latitude: address.latitude?.toString(),
         longitude: address.longitude?.toString(),
-      };
-    });
+        neighborhoodId: await this.resolveNeighborhood(
+          transaction,
+          address.geographicZoneId,
+          address.sector,
+        ),
+      });
+    }
     if (addressValues.filter(({ primary }) => primary).length > 1) {
       throw new OperationsConflictError('Sólo puede haber un domicilio principal');
     }
@@ -1713,6 +1833,37 @@ export class PostgresOperationsService {
       .catch(translateDatabaseConflict);
   }
 
+  /**
+   * El barrio de un domicilio a partir de cómo está escrito, dentro de su zona.
+   *
+   * Si no existe, se crea: los barrios aparecen a medida que se cargan domicilios y planillas, sin
+   * que alguien tenga que darlos de alta antes. "Núñez" y "nuñez" son el mismo (`neighborhoodKey`).
+   */
+  private async resolveNeighborhood(
+    transaction: DatabaseTransaction,
+    geographicZoneId: string,
+    name: string | null | undefined,
+  ): Promise<string | null> {
+    const displayName = name ? normalizeCustomerText(name) : '';
+    const nameKey = neighborhoodKey(displayName);
+    if (!nameKey) return null;
+    await transaction
+      .insert(neighborhoods)
+      .values({ displayName, geographicZoneId, nameKey })
+      .onConflictDoNothing({ target: [neighborhoods.geographicZoneId, neighborhoods.nameKey] });
+    const [row] = await transaction
+      .select({ id: neighborhoods.id })
+      .from(neighborhoods)
+      .where(
+        and(
+          eq(neighborhoods.geographicZoneId, geographicZoneId),
+          eq(neighborhoods.nameKey, nameKey),
+        ),
+      )
+      .limit(1);
+    return row?.id ?? null;
+  }
+
   public async addCustomerAddress(
     customerId: string,
     input: CustomerAddressInput,
@@ -1730,6 +1881,11 @@ export class PostgresOperationsService {
             customerId,
             latitude: input.latitude?.toString(),
             longitude: input.longitude?.toString(),
+            neighborhoodId: await this.resolveNeighborhood(
+              transaction,
+              input.geographicZoneId,
+              input.sector,
+            ),
           })
           .returning();
         if (!created) throw new Error('Address creation did not return a row');
@@ -1781,10 +1937,22 @@ export class PostgresOperationsService {
         const nextActive = input.active ?? current.active;
         const nextPrimary = nextActive && (input.primary ?? current.primary);
         if (nextPrimary) await this.clearPrimaryAddress(transaction, customerId);
+        // El barrio sigue al texto del barrio: si cambia, se vuelve a resolver.
+        const neighborhoodChanges =
+          input.sector !== undefined
+            ? {
+                neighborhoodId: await this.resolveNeighborhood(
+                  transaction,
+                  current.geographicZoneId,
+                  input.sector,
+                ),
+              }
+            : {};
         const [updated] = await transaction
           .update(customerAddresses)
           .set({
             ...addressChanges,
+            ...neighborhoodChanges,
             active: nextActive,
             primary: nextPrimary,
             ...(inputLatitude !== undefined

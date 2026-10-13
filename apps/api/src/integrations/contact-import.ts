@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 
 import { CustomerCreateRequestSchema, type CustomerCreateRequest } from '@verdeo/contracts';
+import { canonicalArgentinePhone } from '@verdeo/customers';
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_ROWS = 500;
@@ -172,6 +173,14 @@ export async function parseContactImport(
   file: File,
   geographicZoneId?: string,
 ): Promise<CustomerCreateRequest[]> {
+  return (await parseContactImportRows(file, geographicZoneId)).map(({ customer }) => customer);
+}
+
+/** Cada cliente de la planilla con la fila de la hoja de la que salió, para conciliar. */
+export async function parseContactImportRows(
+  file: File,
+  geographicZoneId?: string,
+): Promise<{ customer: CustomerCreateRequest; rowNumber: number }[]> {
   if (file.size === 0) throw new ContactImportError('El archivo está vacío.');
   if (file.size > MAX_FILE_BYTES) {
     throw new ContactImportError('El archivo supera el límite de 5 MB.');
@@ -273,8 +282,12 @@ export async function parseContactImport(
 
     // Un celular en la Argentina es el WhatsApp: si no hay columna de WhatsApp, se usa ese.
     const mobile = read('mobile');
-    const whatsapp = read('whatsapp') ?? mobile;
-    const phone = read('phone') ?? mobile;
+    // Se guardan como "+549" y los diez dígitos, igual que los que llegan por pedidos: así el mismo
+    // número no queda escrito de dos formas.
+    const whatsappCell = read('whatsapp') ?? mobile;
+    const phoneCell = read('phone') ?? mobile;
+    const whatsapp = whatsappCell ? canonicalArgentinePhone(whatsappCell) : undefined;
+    const phone = phoneCell ? canonicalArgentinePhone(phoneCell) : undefined;
 
     const internalNotes = [
       notes.text || undefined,
@@ -328,6 +341,6 @@ export async function parseContactImport(
         { issues: parsed.error.issues, row: sheetRow },
       );
     }
-    return parsed.data;
+    return { customer: parsed.data, rowNumber: sheetRow };
   });
 }

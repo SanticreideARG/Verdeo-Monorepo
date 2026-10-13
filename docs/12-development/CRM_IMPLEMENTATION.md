@@ -211,12 +211,23 @@ row is the first of the top 10 rows that has a name column (real sheets carry bl
 Required: a name column ("Nombre", "Nombre y apellido", "Cliente", `nombre_completo`, or "Nombre" +
 "Apellido", which are joined). Optional: "Celular"/"Móvil" (stored as phone **and** as an unverified
 WhatsApp identity — in Argentina a mobile is the WhatsApp), "WhatsApp", "Teléfono", "Email"/"Mail",
-"Dirección"/"Domicilio", "Barrio" (stored as `sector` and appended to the written address to help the
+"Dirección"/"Domicilio", "Barrio" (stored as `sector`, resolved to its `neighborhoods` row, and appended to the written address to help the
 locator), "Localidad" (`city`), "Enlace"/"Link", "Forma de pago" and "Observaciones" (`internalNotes`).
 A payment method written inside the address or the notes ("Mitre 400 transferencia", "… POR
 TRANSFERENCIA") is stripped out and stored as "Forma de pago preferida: …" in the customer's internal
 notes (`extractPayment`); there is no dedicated field for it yet. Blank rows are skipped. Addresses are
-created in `NEEDS_LOCATION` state.
+created in `NEEDS_LOCATION` state. Mobile and WhatsApp numbers are stored canonical
+(`+549` + ten digits, `canonicalArgentinePhone`), like the ones that arrive with orders.
+
+**Reconciliation (conciliador).** The import is two steps. `POST /api/v1/customers/import/preview`
+parses the sheet and reconciles every row against existing customers
+(`reconcileCustomerImport`) without writing anything: each row comes back as `new`, `existing`
+(with the customer it matches and whether by WhatsApp, phone or email) or `repeated` (same contact
+as an earlier row). Phones are compared by their ten-digit key (`argentinePhoneKey`), and against
+**every active identity, archived customers included**: those still hold the number in the unique
+index, which is what made a whole import fail with a bare "ya existe un registro" (2026-10-12).
+`POST /api/v1/customers/import` re-runs the reconciliation, creates only the `new` rows and returns
+the same per-row list with `imported`/`skipped`, which the dialog shows as the post-import check.
 The API parses and validates the file server-side, then creates all customer records, identities, addresses,
 audits, and events in one database transaction. A malformed row or a duplicate active identity rolls the
 whole import back; no partial upload is retained.

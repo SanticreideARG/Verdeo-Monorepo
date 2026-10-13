@@ -56,6 +56,8 @@ export const DeliveryStopSchema = z.object({
   deliveryWindow: z.string().nullable(),
   deliveryLongitude: z.number().nullable(),
   id: UuidSchema,
+  /** El barrio del domicilio: agrupa las paradas en la hoja de ruta. */
+  neighborhood: z.string().nullable(),
   orderId: UuidSchema,
   paymentExpectation: z.string(),
   publicNumber: z.string(),
@@ -131,6 +133,8 @@ export const DeliverySheetStopSchema = z.object({
   deliveryWindow: z.string().nullable(),
   detail: z.string(),
   id: UuidSchema,
+  /** El barrio del domicilio: agrupa las paradas en la hoja. */
+  neighborhood: z.string().nullable(),
   paymentExpectation: z.string(),
   prepaid: z.boolean(),
   publicNumber: z.string(),

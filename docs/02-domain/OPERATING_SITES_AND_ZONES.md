@@ -33,6 +33,24 @@ Límite operativo y de autorización para pedidos, cocina, reparto, menús publi
 
 No contiene listas hardcodeadas de ciudades. Los nombres y alcances se administran como datos.
 
+### Neighborhood (barrio)
+
+El nivel siguiente, más chico, dentro de una zona (tabla `neighborhoods`, migración 0057). Pedido
+del usuario el 2026-10-12: sin cambios hacia arriba (operación y zona quedan igual); hacia abajo, el
+barrio.
+
+- pertenece a una zona (`geographic_zone_id`); un domicilio apunta a su barrio con
+  `customer_addresses.neighborhood_id` (opcional, `on delete set null`);
+- se identifica por `name_key` (minúsculas, sin tildes, espacios simples: `neighborhoodKey` en
+  `@verdeo/customers`), único por zona: "Núñez" y "nuñez" son el mismo;
+- se crea solo: el texto del barrio de un domicilio (el campo `sector`) se resuelve contra los
+  barrios de su zona al crear o editar el domicilio y al importar una planilla, y si no existe se
+  da de alta. La migración pasó a barrios los `sector` que ya estaban cargados;
+- se usa para agrupar las paradas en la hoja de ruta (ver DELIVERY_AND_ROUTES.md).
+
+Pendiente: pantalla para renombrar, unir o dar de baja barrios, y elegir el barrio de una lista al
+cargar un domicilio en vez de escribirlo.
+
 ### UserOperatingSite
 
 Membresía que determina qué operaciones puede seleccionar un usuario. Puede existir una membresía

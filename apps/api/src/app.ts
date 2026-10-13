@@ -62,6 +62,7 @@ import {
   CustomerIdentityCreateRequestSchema,
   CustomerIdentitySchema,
   CustomerIdentityUpdateRequestSchema,
+  CustomerImportPreviewResponseSchema,
   CustomerImportResponseSchema,
   CustomerDeleteResponseSchema,
   CustomerListResponseSchema,
@@ -309,7 +310,7 @@ import {
 } from './customer-export.js';
 import { renderEmail, type EmailSender } from '@verdeo/email';
 
-import { ContactImportError, parseContactImport } from './integrations/contact-import.js';
+import { ContactImportError, parseContactImportRows } from './integrations/contact-import.js';
 import { parseOrderEmails, type OrderInquiry } from './integrations/order-email.js';
 import {
   OrderImportError,
@@ -519,6 +520,18 @@ interface OperationsEngine {
     inputs: readonly ScopedInput<CustomerCreateRequest>[],
     context: OperationsContext,
   ): Promise<readonly unknown[]>;
+  reconcileCustomerImport?(inputs: readonly ScopedInput<CustomerCreateRequest>[]): Promise<
+    readonly {
+      match: {
+        customerId: string;
+        displayName: string;
+        matchedBy: 'email' | 'phone' | 'whatsapp';
+        status: string;
+      } | null;
+      repeatedOf: number | null;
+      status: 'existing' | 'new' | 'repeated';
+    }[]
+  >;
   createMenu(input: MenuCreateRequest, context: OperationsContext): Promise<unknown>;
   updateMenu(
     menuId: string,
@@ -4089,7 +4102,12 @@ export function createApp(options: CreateAppOptions) {
     await requireInbound().resolve(params.data.id, 'discarded', [], context.get('session').userId);
     return context.body(null, 204);
   });
-  app.post('/api/v1/customers/import', async (context) => {
+  /**
+   * Lee la planilla y la concilia contra los clientes que ya están: cada fila sale como nueva, ya
+   * existente (y con quién coincide) o repetida dentro de la misma planilla. `dryRun` sólo muestra
+   * el resultado; sin él, importa las nuevas y saltea las demás.
+   */
+  async function reconcileImport(context: Context<{ Variables: AppVariables }>, dryRun: boolean) {
     if (!context.get('session').permissions.includes('customers.create')) return forbidden(context);
     const body = await context.req.parseBody().catch(() => null);
     const file = body?.file;
@@ -4098,27 +4116,58 @@ export function createApp(options: CreateAppOptions) {
     }
     try {
       const zoneField = body?.geographicZoneId;
-      const customers = await parseContactImport(
+      const parsedRows = await parseContactImportRows(
         file,
         typeof zoneField === 'string' && zoneField ? zoneField : undefined,
       );
       const operations = requireOperations();
-      if (!operations.importCustomers) throw new Error('Customer import is not configured');
-      await operations.importCustomers(
-        customers.map((customer) => scoped(context, customer)),
-        {
+      if (!operations.importCustomers || !operations.reconcileCustomerImport) {
+        throw new Error('Customer import is not configured');
+      }
+      const scopedRows = parsedRows.map(({ customer }) => scoped(context, customer));
+      const checks = await operations.reconcileCustomerImport(scopedRows);
+      const rows = parsedRows.map(({ customer, rowNumber }, index) => {
+        const check = checks[index];
+        const address = customer.addresses[0];
+        return {
+          address: address?.writtenAddress ?? null,
+          displayName: customer.displayName,
+          match: check?.match ?? null,
+          neighborhood: address?.sector ?? null,
+          notes: customer.internalNotes ?? null,
+          phone: customer.phone ?? customer.identities[0]?.value ?? null,
+          repeatedOfRow:
+            check?.repeatedOf != null ? (parsedRows[check.repeatedOf]?.rowNumber ?? null) : null,
+          rowNumber,
+          status: check?.status ?? 'new',
+        };
+      });
+      if (dryRun) return context.json(CustomerImportPreviewResponseSchema.parse({ rows }));
+
+      const toImport = scopedRows.filter((_, index) => (checks[index]?.status ?? 'new') === 'new');
+      if (toImport.length > 0) {
+        await operations.importCustomers(toImport, {
           ...operationsContext(context),
           source: 'spreadsheet_import',
-        },
+        });
+      }
+      return context.json(
+        CustomerImportResponseSchema.parse({
+          imported: toImport.length,
+          rows,
+          skipped: rows.length - toImport.length,
+        }),
+        201,
       );
-      return context.json(CustomerImportResponseSchema.parse({ imported: customers.length }), 201);
     } catch (error) {
       if (error instanceof ContactImportError) {
         return badRequest(context, error.message, error.details);
       }
       throw error;
     }
-  });
+  }
+  app.post('/api/v1/customers/import/preview', (context) => reconcileImport(context, true));
+  app.post('/api/v1/customers/import', (context) => reconcileImport(context, false));
 
   app.get('/api/v1/customers/:id', async (context) => {
     const session = context.get('session');

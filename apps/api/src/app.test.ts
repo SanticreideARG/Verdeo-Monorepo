@@ -4477,6 +4477,71 @@ describe('API foundation', () => {
      * The literal segment is registered before `/customers/:id`; if that order ever regresses the
      * router reads "merge-candidates" as an id and this returns the wrong handler's error.
      */
+    // Conciliar la planilla antes de importar: la vista previa no crea nada, y al importar se
+    // saltean los que ya existen en vez de que la tanda entera falle.
+    it('concilia la planilla de clientes y al importar saltea los que ya existen', async () => {
+      const planilla = () => {
+        const body = new FormData();
+        body.set(
+          'file',
+          new File(
+            ['Nombre,Celular\nAna Prueba,1155550101\nBeto Ensayo,1155550102'],
+            'clientes.csv',
+            { type: 'text/csv' },
+          ),
+        );
+        return body;
+      };
+      const reconcileCustomerImport = vi.fn(() =>
+        Promise.resolve([
+          {
+            match: {
+              customerId: SURVIVOR,
+              displayName: 'Ana Vieja',
+              matchedBy: 'whatsapp',
+              status: 'archived',
+            },
+            repeatedOf: null,
+            status: 'existing',
+          },
+          { match: null, repeatedOf: null, status: 'new' },
+        ]),
+      );
+      const importCustomers = vi.fn(() => Promise.resolve([]));
+      const app = buildApp({ importCustomers, reconcileCustomerImport }, ['customers.create']);
+
+      const preview = await app.request('/api/v1/customers/import/preview', {
+        body: planilla(),
+        headers: { cookie },
+        method: 'POST',
+      });
+      expect(preview.status).toBe(200);
+      expect(await preview.json()).toMatchObject({
+        rows: [
+          {
+            displayName: 'Ana Prueba',
+            match: { displayName: 'Ana Vieja' },
+            rowNumber: 2,
+            status: 'existing',
+          },
+          { displayName: 'Beto Ensayo', phone: '+5491155550102', rowNumber: 3, status: 'new' },
+        ],
+      });
+      expect(importCustomers).not.toHaveBeenCalled();
+
+      const imported = await app.request('/api/v1/customers/import', {
+        body: planilla(),
+        headers: { cookie },
+        method: 'POST',
+      });
+      expect(imported.status).toBe(201);
+      expect(await imported.json()).toMatchObject({ imported: 1, skipped: 1 });
+      expect(importCustomers).toHaveBeenCalledWith(
+        [expect.objectContaining({ displayName: 'Beto Ensayo' })],
+        expect.anything(),
+      );
+    });
+
     it('does not read merge-candidates as a customer id', async () => {
       const getCustomer = vi.fn();
       const listMergeCandidates = vi.fn(() => Promise.resolve([]));

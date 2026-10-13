@@ -15,6 +15,7 @@ import {
   deliveryRoutes,
   deliveryStops,
   messageTemplates,
+  neighborhoods,
   operatingSites,
   orderItems,
   orderStatusHistory,
@@ -324,6 +325,8 @@ export class PostgresDeliveryService {
         deliveryLongitude: customerAddresses.longitude,
         deliveryWindow: customerAddresses.deliveryWindow,
         id: deliveryStops.id,
+        // El barrio agrupa las paradas en la hoja: el repartidor ve dónde empieza cada tanda.
+        neighborhood: neighborhoods.displayName,
         orderId: deliveryStops.orderId,
         paymentExpectation: orders.paymentExpectation,
         publicNumber: orders.publicNumber,
@@ -335,6 +338,7 @@ export class PostgresDeliveryService {
       .innerJoin(orders, eq(orders.id, deliveryStops.orderId))
       .innerJoin(customers, eq(customers.id, orders.customerId))
       .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+      .leftJoin(neighborhoods, eq(neighborhoods.id, customerAddresses.neighborhoodId))
       .leftJoin(users, eq(users.id, deliveryStops.assignedUserId))
       .where(eq(deliveryStops.routeId, routeId))
       .orderBy(asc(deliveryStops.sequence));
@@ -743,6 +747,8 @@ export class PostgresDeliveryService {
         deliveryNote: deliveryStops.deliveryNote,
         deliveryWindow: customerAddresses.deliveryWindow,
         id: deliveryStops.id,
+        // El barrio agrupa las paradas en la hoja: el repartidor ve dónde empieza cada tanda.
+        neighborhood: neighborhoods.displayName,
         orderId: deliveryStops.orderId,
         paymentExpectation: orders.paymentExpectation,
         prepaid: sql<boolean>`coalesce(${payments.status} = 'PAID', false)`,
@@ -755,6 +761,7 @@ export class PostgresDeliveryService {
       .innerJoin(orders, eq(orders.id, deliveryStops.orderId))
       .innerJoin(customers, eq(customers.id, orders.customerId))
       .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+      .leftJoin(neighborhoods, eq(neighborhoods.id, customerAddresses.neighborhoodId))
       .leftJoin(payments, eq(payments.orderId, orders.id))
       .where(eq(deliveryStops.routeId, routeId))
       .orderBy(asc(deliveryStops.sequence));

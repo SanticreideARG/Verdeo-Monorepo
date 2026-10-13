@@ -18,7 +18,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { users } from './auth.js';
-import { geographicZones, operatingSites } from './geography.js';
+import { geographicZones, neighborhoods, operatingSites } from './geography.js';
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -143,6 +143,10 @@ export const customerAddresses = pgTable(
     geographicZoneId: uuid('geographic_zone_id')
       .notNull()
       .references(() => geographicZones.id, { onDelete: 'restrict' }),
+    // El barrio dentro de la zona: agrupa las paradas en la hoja de ruta. Opcional.
+    neighborhoodId: uuid('neighborhood_id').references(() => neighborhoods.id, {
+      onDelete: 'set null',
+    }),
     // Pre-regional free text, kept as migration evidence until every address is reclassified.
     operationalZone: text('operational_zone'),
     propertyType: text('property_type'),

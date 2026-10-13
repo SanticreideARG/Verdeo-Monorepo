@@ -22,7 +22,7 @@ describe('parseContactImport', () => {
       expect.objectContaining({ displayName: 'María Pérez', email: 'maria@example.com' }),
     ]);
     expect(rows[0]?.identities).toEqual([
-      expect.objectContaining({ type: 'whatsapp', value: '+54 299 555 0101' }),
+      expect.objectContaining({ type: 'whatsapp', value: '+5492995550101' }),
     ]);
     expect(rows[0]?.addresses).toEqual([
       expect.objectContaining({
@@ -72,9 +72,9 @@ describe('parseContactImport con encabezados libres', () => {
 
   it('toma el celular como teléfono y como WhatsApp', async () => {
     const [ana] = await parseContactImport(csvFile(planilla), ZONA);
-    expect(ana?.phone).toBe('1155550101');
+    expect(ana?.phone).toBe('+5491155550101');
     expect(ana?.identities).toEqual([
-      expect.objectContaining({ type: 'whatsapp', value: '1155550101' }),
+      expect.objectContaining({ type: 'whatsapp', value: '+5491155550101' }),
     ]);
   });
 
@@ -108,7 +108,7 @@ describe('parseContactImport con encabezados libres', () => {
       lastName: 'Inventada',
       phone: '4555-0000',
     });
-    expect(row?.identities[0]?.value).toBe('+54 9 11 5555 0104');
+    expect(row?.identities[0]?.value).toBe('+5491155550104');
     expect(row?.addresses[0]?.writtenAddress).toBe('Corrientes 1607');
   });
 });

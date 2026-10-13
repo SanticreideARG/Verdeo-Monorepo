@@ -14,6 +14,17 @@ export function normalizeCustomerText(value: string): string {
   return value.trim().normalize('NFKC').replace(/\s+/g, ' ');
 }
 
+/**
+ * La clave de un barrio: "Núñez", "nuñez" y " NUÑEZ " son el mismo. La migración 0057 arma la
+ * misma clave en SQL para los barrios que ya estaban escritos en los domicilios.
+ */
+export function neighborhoodKey(name: string): string {
+  return normalizeCustomerText(name)
+    .toLocaleLowerCase('es-AR')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '');
+}
+
 export function normalizeCustomerIdentity(type: string, value: string): string {
   const normalizedType = type.trim().toLowerCase();
   const displayValue = normalizeCustomerText(value);

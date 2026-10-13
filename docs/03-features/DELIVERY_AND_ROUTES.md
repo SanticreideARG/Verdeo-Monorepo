@@ -202,3 +202,11 @@ por email o planilla trae la dirección como texto y no tiene domicilio, así qu
 sin aviso. Ahora Rutas lista los pedidos del día sin ubicación y permite ubicarlos (la IA ordena el
 texto, el mapa lo busca, y se acepta sola sólo con confianza alta dentro de la ciudad). Detalle y
 decisiones en `ADDRESS_SANITIZER_PLAN.md`.
+
+## Barrios en la hoja de ruta
+
+Cada parada trae el barrio de su domicilio (`neighborhood` en `DeliveryStopSchema` y
+`DeliverySheetStopSchema`). Las paradas mantienen el orden de la ruta y el barrio se anuncia cada
+vez que cambia respecto de la anterior (`neighborhoodHeading`): en la vista de Rutas, en la hoja del
+repartidor, en el mensaje de WhatsApp ("📍 Núñez") y como columna "Barrio" del CSV. Si ninguna
+parada tiene barrio no se anuncia nada. Qué es un barrio: OPERATING_SITES_AND_ZONES.md.

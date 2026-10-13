@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Fragment, useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { DashboardShell } from '../components/DashboardShell.js';
@@ -9,6 +9,7 @@ import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { formatDay, formatDayLong, todayInOperation } from '../lib/dates.js';
 import { maskSurname } from '../lib/maskName.js';
+import { neighborhoodHeading } from '../lib/neighborhoodGroups.js';
 import { errorMessage, formatMoney } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { useNarrowViewport } from '../lib/useNarrowViewport.js';
@@ -35,6 +36,8 @@ interface RouteStop {
   /** Cuándo recibe, tal como está cargado en su ficha. Texto libre. */
   deliveryWindow: string | null;
   id: string;
+  /** El barrio del domicilio: agrupa las paradas. */
+  neighborhood: string | null;
   orderId: string;
   paymentExpectation: string;
   publicNumber: string;
@@ -289,8 +292,12 @@ export function RoutesPage() {
    */
   function routeMessage(route: RouteDetail): string {
     const header = `Reparto ${formatDay(route.deliveryDate)}${route.label ? ` · ${route.label}` : ''} — ${String(route.stops.length)} paradas`;
-    const lines = route.stops.map((stop) =>
+    const lines = route.stops.map((stop, index) =>
       [
+        // El barrio encabeza cada tanda de paradas.
+        ...(neighborhoodHeading(route.stops, index)
+          ? [`📍 ${neighborhoodHeading(route.stops, index) ?? ''}`]
+          : []),
         // La ventana va pegada al nombre: es lo que decide si esta parada puede ir acá o no.
         `${String(stop.sequence)}. ${maskSurname(stop.customerDisplayName)}${
           stop.deliveryWindow ? ` · 🕒 ${stop.deliveryWindow}` : ''
@@ -330,6 +337,7 @@ export function RoutesPage() {
     const rows = [
       [
         'Orden',
+        'Barrio',
         'Cliente',
         'Recibe',
         'Qué entregar',
@@ -341,6 +349,7 @@ export function RoutesPage() {
       ],
       ...route.stops.map((stop) => [
         String(stop.sequence),
+        stop.neighborhood ?? '',
         maskSurname(stop.customerDisplayName),
         stop.deliveryWindow ?? '',
         stop.detail,
@@ -756,61 +765,68 @@ export function RoutesPage() {
                   <div className="routes-viewer mt-4">
                     <ol className="routes-stops grid content-start gap-2">
                       {selectedRoute.stops.map((stop, index) => (
-                        <li className="routes-stop" key={stop.id}>
-                          {/*
-                           * El número de parada va en su propia columna, fija.
-                           *
-                           * Estaba adentro del párrafo del nombre, así que al angostarse la
-                           * columna "1. Sofía Romero — NQN-00012" se partía en cuatro renglones y
-                           * el orden de la ruta —que es lo único que se lee de corrido— dejaba de
-                           * leerse. Afuera y en ancho fijo, el número siempre está donde se lo
-                           * busca.
-                           */}
-                          <span className="routes-stop-seq">{stop.sequence}</span>
-                          <div className="routes-stop-body">
-                            <p className="routes-stop-name">{stop.customerDisplayName}</p>
-                            <p className="routes-stop-number">{stop.publicNumber}</p>
-                            {stop.deliveryWindow ? (
-                              <p className="routes-stop-window">🕒 {stop.deliveryWindow}</p>
-                            ) : null}
-                            {stop.detail ? (
-                              <p className="routes-stop-detail">{stop.detail}</p>
-                            ) : null}
-                            <p className="routes-stop-address">{stop.deliveryAddress}</p>
-                            <p className="routes-stop-facts">
-                              {formatMoney(stop.totalMinor, 'ARS')} · {stop.paymentExpectation} ·{' '}
-                              {STOP_STATUS_LABELS[stop.status] ?? stop.status}
-                            </p>
-                          </div>
-                          {/* Reordenar y el estado, en una columna angosta que no empuja al texto:
+                        <Fragment key={stop.id}>
+                          {neighborhoodHeading(selectedRoute.stops, index) ? (
+                            <li aria-hidden="true" className="routes-neighborhood">
+                              {neighborhoodHeading(selectedRoute.stops, index)}
+                            </li>
+                          ) : null}
+                          <li className="routes-stop">
+                            {/*
+                             * El número de parada va en su propia columna, fija.
+                             *
+                             * Estaba adentro del párrafo del nombre, así que al angostarse la
+                             * columna "1. Sofía Romero — NQN-00012" se partía en cuatro renglones y
+                             * el orden de la ruta —que es lo único que se lee de corrido— dejaba de
+                             * leerse. Afuera y en ancho fijo, el número siempre está donde se lo
+                             * busca.
+                             */}
+                            <span className="routes-stop-seq">{stop.sequence}</span>
+                            <div className="routes-stop-body">
+                              <p className="routes-stop-name">{stop.customerDisplayName}</p>
+                              <p className="routes-stop-number">{stop.publicNumber}</p>
+                              {stop.deliveryWindow ? (
+                                <p className="routes-stop-window">🕒 {stop.deliveryWindow}</p>
+                              ) : null}
+                              {stop.detail ? (
+                                <p className="routes-stop-detail">{stop.detail}</p>
+                              ) : null}
+                              <p className="routes-stop-address">{stop.deliveryAddress}</p>
+                              <p className="routes-stop-facts">
+                                {formatMoney(stop.totalMinor, 'ARS')} · {stop.paymentExpectation} ·{' '}
+                                {STOP_STATUS_LABELS[stop.status] ?? stop.status}
+                              </p>
+                            </div>
+                            {/* Reordenar y el estado, en una columna angosta que no empuja al texto:
                               dos botones de flecha no pueden costarle la mitad del ancho al
                               nombre del cliente. */}
-                          <div className="routes-stop-aside">
-                            {canManage ? (
-                              <div className="routes-stop-move">
-                                <button
-                                  aria-label="Subir esta parada"
-                                  disabled={index === 0}
-                                  onClick={() => void move(index, -1)}
-                                  type="button"
-                                >
-                                  ↑
-                                </button>
-                                <button
-                                  aria-label="Bajar esta parada"
-                                  disabled={index === selectedRoute.stops.length - 1}
-                                  onClick={() => void move(index, 1)}
-                                  type="button"
-                                >
-                                  ↓
-                                </button>
-                              </div>
-                            ) : null}
-                            {stop.status === 'delivered' ? (
-                              <span className="routes-stop-done">Entregada</span>
-                            ) : null}
-                          </div>
-                        </li>
+                            <div className="routes-stop-aside">
+                              {canManage ? (
+                                <div className="routes-stop-move">
+                                  <button
+                                    aria-label="Subir esta parada"
+                                    disabled={index === 0}
+                                    onClick={() => void move(index, -1)}
+                                    type="button"
+                                  >
+                                    ↑
+                                  </button>
+                                  <button
+                                    aria-label="Bajar esta parada"
+                                    disabled={index === selectedRoute.stops.length - 1}
+                                    onClick={() => void move(index, 1)}
+                                    type="button"
+                                  >
+                                    ↓
+                                  </button>
+                                </div>
+                              ) : null}
+                              {stop.status === 'delivered' ? (
+                                <span className="routes-stop-done">Entregada</span>
+                              ) : null}
+                            </div>
+                          </li>
+                        </Fragment>
                       ))}
                       {selectedRoute.stops.length === 0 ? (
                         <p className="text-ink-muted">

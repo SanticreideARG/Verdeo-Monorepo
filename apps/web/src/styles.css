@@ -9508,3 +9508,90 @@ body {
 .leaflet-container {
   touch-action: none;
 }
+
+/* El barrio encabeza cada tanda de paradas en la hoja de ruta. */
+.routes-neighborhood,
+.delivery-sheet-neighborhood {
+  margin-top: 0.4rem;
+  padding: 0 0.2rem;
+  color: var(--color-forest);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  list-style: none;
+}
+.routes-neighborhood:first-child,
+.delivery-sheet-neighborhood:first-child {
+  margin-top: 0;
+}
+
+/* Conciliación de la planilla de clientes: fila por fila, qué se crea y qué no. */
+.crm-import-review {
+  display: grid;
+  gap: 0.6rem;
+}
+.crm-import-summary {
+  margin: 0;
+  font-size: 0.92rem;
+}
+.crm-import-rows {
+  display: grid;
+  gap: 0.4rem;
+  max-height: 22rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.crm-import-row {
+  border: 1px solid var(--db-border);
+  border-left-width: 4px;
+  border-radius: 0.6rem;
+  padding: 0.5rem 0.7rem;
+}
+.crm-import-row.is-new {
+  border-left-color: #2f7d4a;
+}
+.crm-import-row.is-existing,
+.crm-import-row.is-repeated {
+  border-left-color: #b7791f;
+}
+.crm-import-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: baseline;
+}
+.crm-import-row-number {
+  color: var(--db-muted, #6b7280);
+  font-size: 0.75rem;
+}
+.crm-import-chip {
+  margin-left: auto;
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.crm-import-chip.is-new {
+  background: rgb(47 125 74 / 14%);
+  color: #23643a;
+}
+.crm-import-chip.is-existing,
+.crm-import-chip.is-repeated {
+  background: rgb(183 121 31 / 16%);
+  color: #8a5a12;
+}
+.crm-import-row-facts,
+.crm-import-row-notes,
+.crm-import-row-why {
+  margin: 0.15rem 0 0;
+  font-size: 0.82rem;
+}
+.crm-import-row-notes {
+  color: var(--db-muted, #6b7280);
+}
+.crm-import-row-why {
+  color: #8a5a12;
+}

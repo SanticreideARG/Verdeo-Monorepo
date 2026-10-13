@@ -164,8 +164,41 @@ export const CustomerImportRequestSchema = z.object({
   customers: z.array(CustomerCreateRequestSchema).min(1).max(500),
 });
 
+/**
+ * Cómo quedó cada fila de una planilla de clientes, para conciliar antes y después de importar.
+ *
+ * - `new`: no hay nadie con ese WhatsApp, teléfono o correo; se crea.
+ * - `existing`: ya hay un cliente con alguno de esos datos (aunque esté archivado, o el número esté
+ *   escrito distinto); no se crea otro.
+ * - `repeated`: el mismo dato aparece en una fila anterior de la planilla.
+ */
+export const CustomerImportRowSchema = z.object({
+  address: z.string().nullable(),
+  displayName: z.string(),
+  match: z
+    .object({
+      customerId: UuidSchema,
+      displayName: z.string(),
+      matchedBy: z.enum(['email', 'phone', 'whatsapp']),
+      status: z.string(),
+    })
+    .nullable(),
+  neighborhood: z.string().nullable(),
+  notes: z.string().nullable(),
+  phone: z.string().nullable(),
+  repeatedOfRow: z.number().int().positive().nullable(),
+  rowNumber: z.number().int().positive(),
+  status: z.enum(['existing', 'new', 'repeated']),
+});
+
+export const CustomerImportPreviewResponseSchema = z.object({
+  rows: z.array(CustomerImportRowSchema),
+});
+
 export const CustomerImportResponseSchema = z.object({
   imported: z.number().int().nonnegative(),
+  rows: z.array(CustomerImportRowSchema).default([]),
+  skipped: z.number().int().nonnegative().default(0),
 });
 
 export const CustomerUpdateRequestSchema = z
@@ -1271,6 +1304,9 @@ export const SurplusWriteoffRequestSchema = z.object({
 
 export type CustomerCreateRequest = z.infer<typeof CustomerCreateRequestSchema>;
 export type CustomerImportRequest = z.infer<typeof CustomerImportRequestSchema>;
+export type CustomerImportRow = z.infer<typeof CustomerImportRowSchema>;
+export type CustomerImportPreviewResponse = z.infer<typeof CustomerImportPreviewResponseSchema>;
+export type CustomerImportResponse = z.infer<typeof CustomerImportResponseSchema>;
 export type CustomerUpdateRequest = z.infer<typeof CustomerUpdateRequestSchema>;
 export type CustomerIdentityCreateRequest = z.infer<typeof CustomerIdentityCreateRequestSchema>;
 export type CustomerIdentityUpdateRequest = z.infer<typeof CustomerIdentityUpdateRequestSchema>;
