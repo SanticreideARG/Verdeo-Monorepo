@@ -84,6 +84,8 @@ export function CustomersPage() {
   const createDraft = useFormDraft(createFormRef, 'customer-create', showCreate);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
+  // El error de la importación se muestra dentro del diálogo: el aviso general queda tapado.
+  const [importError, setImportError] = useState('');
   const [message, setMessage] = useState('');
   // Eliminar es a un clic de distancia y no vuelve: se pregunta antes.
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -301,13 +303,17 @@ export function CustomersPage() {
   async function importContacts(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!importFile) {
-      setMessage('Elegí un archivo CSV o Excel (.xlsx) para continuar.');
+      setImportError('Elegí un archivo CSV o Excel (.xlsx) para continuar.');
       return;
     }
+    const zoneId = formText(new FormData(event.currentTarget), 'geographicZoneId');
+    setImportError('');
     setImporting(true);
     try {
       const body = new FormData();
       body.set('file', importFile);
+      // Una planilla con direcciones necesita la zona: sin ella el servidor la rechaza.
+      if (zoneId) body.set('geographicZoneId', zoneId);
       const result = await responseJson<{ imported: number }>(
         await apiRequest('/api/v1/customers/import', { body, method: 'POST' }),
       );
@@ -319,7 +325,7 @@ export function CustomersPage() {
         `${result.imported} contacto${result.imported === 1 ? '' : 's'} importado${result.imported === 1 ? '' : 's'} correctamente.`,
       );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'No pudimos importar los contactos.');
+      setImportError(error instanceof Error ? error.message : 'No pudimos importar los contactos.');
     } finally {
       setImporting(false);
     }
@@ -1237,7 +1243,13 @@ export function CustomersPage() {
                 guardar cualquier ficha.
               </p>
             </div>
-            <button className="button button-secondary" onClick={() => setShowImport(true)}>
+            <button
+              className="button button-secondary"
+              onClick={() => {
+                setImportError('');
+                setShowImport(true);
+              }}
+            >
               Importar archivo
             </button>
           </section>
@@ -1362,6 +1374,22 @@ export function CustomersPage() {
                 </label>
                 {importFile ? (
                   <span className="crm-import-file">Seleccionado: {importFile.name}</span>
+                ) : null}
+                <label className="field field-wide">
+                  Zona de reparto de las direcciones
+                  <select defaultValue={defaultZoneId} name="geographicZoneId">
+                    <option value="">Sin direcciones</option>
+                    {zones.map((zone) => (
+                      <option key={zone.id} value={zone.id}>
+                        {zone.displayName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {importError ? (
+                  <p className="screen-notice" role="alert">
+                    {importError}
+                  </p>
                 ) : null}
                 <button className="button button-primary" disabled={importing} type="submit">
                   {importing ? 'Importando…' : 'Validar e importar'}
