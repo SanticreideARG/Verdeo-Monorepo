@@ -158,6 +158,31 @@ La fase 1 no depende de la IA ni de la clave de Gemini y se puede hacer primero.
 - Los botones de la ficha del cliente también se benefician: el proveedor envuelto ordena el
   texto antes de buscar, y la ciudad del domicilio orienta al normalizador.
 
+## Sin clave de Google: enlaces cortos, Georef y OpenStreetMap
+
+Orden de búsqueda cuando no hay clave de Google (o Google está caído):
+
+1. **El enlace de ubicación.** Los enlaces cortos de Maps ("maps.app.goo.gl/…", los que se
+   comparten desde el teléfono) no traen coordenadas a la vista; el servidor sigue la redirección
+   leyendo sólo el encabezado `location` (`LinkExpandingGeocodingProvider`), y de ahí toma el pin
+   del lugar (`!3d…!4d…`), que es más preciso que el centro de la vista (`@lat,lng`). Sólo sigue
+   enlaces de Google. Si el pedido trae un enlace y su domicilio no tiene ninguno, se le pasa antes
+   de buscar (antes se ignoraba y se buscaba sólo el texto).
+2. **Georef** (`GeorefGeocodingProvider`, apis.datos.gob.ar): la API de datos abiertos del
+   gobierno nacional, gratis y sin clave, con las alturas de cada cuadra del país. Elegida por el
+   usuario el 2026-10-12 después de que OpenStreetMap no encontrara casi ninguna dirección de CABA
+   (tiene pocos números de puerta cargados). Le viaja sólo la calle con su número y la provincia
+   (más el departamento fuera de la Ciudad), que sale del origen de la ciudad preguntándole a
+   Georef en qué provincia cae. Seguridad: 0,95 si es el único resultado, el único que se llama
+   exactamente como se escribió ("Rivadavia" frente a "Comodoro Martín Rivadavia"), o el único
+   cercano (a menos de 10 km cuando el otro está a más de 20); si no, 0,75 y va a revisión. Lo que
+   queda a más de 60 km del origen se descarta. **Hace falta que la ciudad tenga cargado su
+   origen** para acotar la provincia y para aceptar sola.
+3. **OpenStreetMap** si Georef no encuentra nada o no responde.
+
+Antes de buscar, `searchableAddress` limpia el texto: saca el piso o depto pegado al número
+("8520-17A", "piso 3 dto B") y el nombre de la zona de reparto ("Zona General"), que no son lugares.
+
 ## Respaldo con OpenStreetMap y limpieza de la semilla
 
 - **Sin clave de Google, busca en OpenStreetMap** (`NominatimGeocodingProvider` en

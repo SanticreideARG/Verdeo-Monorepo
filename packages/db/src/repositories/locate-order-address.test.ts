@@ -4,9 +4,9 @@ import { fileURLToPath } from 'node:url';
 
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { GeocodingCandidate, GeocodingProvider } from '@verdeo/geocoding';
+import type { GeocodingCandidate, GeocodingInput, GeocodingProvider } from '@verdeo/geocoding';
 
 import type { Database } from '../index.js';
 import * as schema from '../schema/index.js';
@@ -148,6 +148,33 @@ describe('locateOrderAddress', () => {
       `select latitude from customer_addresses`,
     );
     expect(Number(rows[0]?.latitude)).toBeCloseTo(-34.1);
+  });
+
+  // El pedido llegó con un enlace de Maps y el domicilio guardado no tenía ninguno: antes se
+  // buscaba sólo el texto y el enlace, que es lo más preciso que hay, se ignoraba.
+  it('le pasa al buscador el enlace del pedido y el origen de la ciudad', async () => {
+    const geocode = vi.fn((input: GeocodingInput) =>
+      Promise.resolve(input.locationUrl ? [candidato(-34.5998, -58.44, 1)] : []),
+    );
+    const { client, service } = await base({ geocode, key: 'prueba' });
+    const ADDRESS = '0c000000-0000-4000-8000-000000000009';
+    await client.exec(`
+      insert into customer_addresses (id, customer_id, label, written_address, geographic_zone_id)
+      values ('${ADDRESS}', '${CUSTOMER}', 'Casa', 'Julián Álvarez 1010', '${ZONE}');
+      update orders set delivery_address_id = '${ADDRESS}',
+        delivery_location_url_snapshot = 'https://maps.app.goo.gl/abc123'
+      where id = '${ORDER}';
+    `);
+
+    const result = await service.locateOrderAddress(ORDER, reglas, contexto);
+
+    expect(result.status).toBe('located');
+    expect(geocode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        locationUrl: 'https://maps.app.goo.gl/abc123',
+        origin: { latitude: -34.5997, longitude: -58.4398 },
+      }),
+    );
   });
 
   it('con más de una zona y sin zona en el pedido pide que se asigne', async () => {

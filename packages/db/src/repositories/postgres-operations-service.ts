@@ -1897,6 +1897,7 @@ export class PostgresOperationsService {
         await this.geocodingProvider.geocode({
           idempotencyKey: input.idempotencyKey,
           normalize: geocodingSettings.useAi,
+          ...(geocodingSettings.origin ? { origin: geocodingSettings.origin } : {}),
           ...((geocodingSettings.cityContext ?? initialized.address.city)
             ? { cityHint: geocodingSettings.cityContext ?? initialized.address.city ?? undefined }
             : {}),
@@ -2397,7 +2398,11 @@ export class PostgresOperationsService {
     let addressId = order.deliveryAddressId;
     if (addressId) {
       const [existing] = await this.database
-        .select({ latitude: customerAddresses.latitude, longitude: customerAddresses.longitude })
+        .select({
+          latitude: customerAddresses.latitude,
+          locationUrl: customerAddresses.locationUrl,
+          longitude: customerAddresses.longitude,
+        })
         .from(customerAddresses)
         .where(eq(customerAddresses.id, addressId))
         .limit(1);
@@ -2409,6 +2414,15 @@ export class PostgresOperationsService {
           requestId: null,
           status: 'already_located',
         };
+      }
+      // El enlace de Maps que vino con el pedido (del correo, del WhatsApp) es la mejor pista que
+      // hay: si el domicilio no tiene uno, se le pasa antes de buscar. Antes se ignoraba y el
+      // ubicador buscaba sólo el texto.
+      if (existing && !existing.locationUrl && order.locationUrl) {
+        await this.database
+          .update(customerAddresses)
+          .set({ locationUrl: order.locationUrl, updatedAt: new Date() })
+          .where(eq(customerAddresses.id, addressId));
       }
     } else {
       const zoneId = order.geographicZoneId ?? (await this.soleActiveZone(order.operatingSiteId));
@@ -2610,12 +2624,22 @@ export class PostgresOperationsService {
 
   private async geocodingSettingsForZone(zoneId: string) {
     const [zone] = await this.database
-      .select({ operatingSiteId: geographicZones.operatingSiteId })
+      .select({
+        operatingSiteId: geographicZones.operatingSiteId,
+        originLatitude: operatingSites.originLatitude,
+        originLongitude: operatingSites.originLongitude,
+      })
       .from(geographicZones)
+      .innerJoin(operatingSites, eq(operatingSites.id, geographicZones.operatingSiteId))
       .where(eq(geographicZones.id, zoneId))
       .limit(1);
     const stored = zone ? await this.storedGeocodingSettings(zone.operatingSiteId) : null;
-    return { cityContext: stored?.cityContext ?? null, useAi: stored?.useAi ?? true };
+    // El origen de la ciudad le dice al buscador en qué provincia buscar.
+    const origin =
+      zone?.originLatitude != null && zone.originLongitude != null
+        ? { latitude: Number(zone.originLatitude), longitude: Number(zone.originLongitude) }
+        : null;
+    return { cityContext: stored?.cityContext ?? null, origin, useAi: stored?.useAi ?? true };
   }
 
   public async getGeocodingSettings(operatingSiteId: string) {

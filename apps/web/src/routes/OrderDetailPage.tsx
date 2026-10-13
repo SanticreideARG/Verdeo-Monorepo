@@ -322,7 +322,7 @@ export function OrderDetailPage() {
           </p>
         ) : null}
 
-        <div className="mt-6 flex flex-wrap gap-2">
+        <div className="order-actions mt-6 flex flex-wrap items-start gap-2">
           {order.status === 'DRAFT' && canConfirm ? (
             <button className="button button-primary" onClick={() => void transition('CONFIRMED')}>
               Confirmar

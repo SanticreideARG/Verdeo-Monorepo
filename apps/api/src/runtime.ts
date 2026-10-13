@@ -46,6 +46,8 @@ import {
 } from '@verdeo/db';
 import {
   ConfigurableGeocodingProvider,
+  GeorefGeocodingProvider,
+  LinkExpandingGeocodingProvider,
   NominatimGeocodingProvider,
   NormalizedAddressSchema,
   SanitizingGeocodingProvider,
@@ -181,15 +183,19 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
     database.db,
     // Resolves the maps key per call, so adding it in Ajustes takes effect without a redeploy and
     // falls back to link-parsing when none is configured.
-    new SanitizingGeocodingProvider(
-      new ConfigurableGeocodingProvider(
-        () => integrationCredentials.secretFor('maps'),
-        undefined,
-        // Sin clave de Google (o con Google caído), OpenStreetMap: gratis, sin clave y suficiente
-        // para la mayoría de las paradas mientras se gestiona la de Google.
-        new NominatimGeocodingProvider(),
+    // Los enlaces cortos de Maps ("maps.app.goo.gl/…") se expanden antes de buscar: el largo trae
+    // las coordenadas del lugar, que valen más que cualquier búsqueda por texto.
+    new LinkExpandingGeocodingProvider(
+      new SanitizingGeocodingProvider(
+        new ConfigurableGeocodingProvider(
+          () => integrationCredentials.secretFor('maps'),
+          undefined,
+          // Sin clave de Google (o con Google caído): Georef, la API de datos abiertos del
+          // gobierno, que tiene las alturas de cada cuadra; y si no la encuentra, OpenStreetMap.
+          new GeorefGeocodingProvider(new NominatimGeocodingProvider()),
+        ),
+        addressNormalizer,
       ),
-      addressNormalizer,
     ),
   );
   const avatarStorage = env.VERDEO_READ_WRITE_TOKEN

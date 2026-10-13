@@ -1,3 +1,4 @@
+import { searchableAddress } from './address-query.js';
 import {
   GeocodingProviderError,
   LocationLinkGeocodingProvider,
@@ -64,9 +65,13 @@ export class NominatimGeocodingProvider implements GeocodingProvider {
     if (elapsed < 1_000) await this.wait(1_000 - elapsed);
     this.lastRequestAt = this.now();
 
-    const query = /argentina/i.test(input.writtenAddress)
-      ? input.writtenAddress
-      : `${input.writtenAddress}, Argentina`;
+    // Sin piso ni depto y sin el nombre de la zona de reparto, que no son lugares; con la ciudad,
+    // que orienta la búsqueda.
+    const { places, street } = searchableAddress(input.writtenAddress);
+    const city = input.cityHint?.replace(/,?\s*argentina\s*$/i, '').trim();
+    const query = [street, ...places, ...(city && places.length === 0 ? [city] : []), 'Argentina']
+      .filter((part) => part.length > 0)
+      .join(', ');
     const url = new URL('https://nominatim.openstreetmap.org/search');
     url.searchParams.set('q', query);
     url.searchParams.set('format', 'jsonv2');

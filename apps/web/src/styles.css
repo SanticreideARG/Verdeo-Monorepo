@@ -9213,6 +9213,13 @@ textarea.sr-only {
   gap: 0.4rem;
   justify-items: start;
 }
+/* En la barra del pedido el botón va en fila con los demás; el resultado, en su propio renglón. */
+.order-actions .locate-control {
+  display: contents;
+}
+.order-actions .locate-control > :not(button) {
+  flex-basis: 100%;
+}
 .locate-candidates {
   display: grid;
   gap: 0.4rem;

@@ -16,6 +16,8 @@ export interface GeocodingInput {
   cityHint?: string | undefined;
   idempotencyKey: string;
   locationUrl?: string | undefined;
+  /** El origen de la ciudad: le dice al buscador en qué provincia buscar y qué resultado queda cerca. */
+  origin?: { latitude: number; longitude: number } | undefined;
   requestId: string;
   writtenAddress: string;
 }
@@ -63,6 +65,14 @@ export function parseCoordinatesFromLocationUrl(
     url = new URL(locationUrl);
   } catch {
     return null;
+  }
+  // El pin del lugar ("!3d<lat>!4d<lng>" en los enlaces largos de Maps) es más preciso que el
+  // centro de la vista ("@lat,lng"), que puede estar corrido.
+  const pin = url.href.match(/!3d(-?\d{1,2}(?:\.\d+)?)!4d(-?\d{1,3}(?:\.\d+)?)/);
+  if (pin?.[1] && pin[2]) {
+    const latitude = Number(pin[1]);
+    const longitude = Number(pin[2]);
+    if (validCoordinates(latitude, longitude)) return { latitude, longitude };
   }
   for (const key of ['q', 'query', 'll', 'center']) {
     const parsed = coordinatePair(url.searchParams.get(key));
@@ -301,3 +311,6 @@ export class LocationLinkGeocodingProvider implements GeocodingProvider {
 
 export * from './sanitizer.js';
 export * from './nominatim.js';
+export * from './address-query.js';
+export * from './georef.js';
+export * from './link-expansion.js';
