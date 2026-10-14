@@ -1583,13 +1583,28 @@ export class PostgresOperationsService {
 
     // A customer becomes visible in an operation through an explicit membership, created in the
     // same transaction as the customer itself.
-    if (!input.operatingSiteId)
+    /*
+     * La operación es la elegida arriba; si se está en "Todas las ciudades", la de la zona del
+     * domicilio, que la dice sin lugar a dudas. Antes una planilla importada desde la vista global
+     * se rechazaba entera con un error que no dejaba seguir, aunque la zona ya estaba elegida.
+     */
+    let operatingSiteId = input.operatingSiteId ?? null;
+    const zoneId = input.addresses?.[0]?.geographicZoneId;
+    if (!operatingSiteId && zoneId) {
+      const [zone] = await transaction
+        .select({ operatingSiteId: geographicZones.operatingSiteId })
+        .from(geographicZones)
+        .where(eq(geographicZones.id, zoneId))
+        .limit(1);
+      operatingSiteId = zone?.operatingSiteId ?? null;
+    }
+    if (!operatingSiteId)
       throw new OperationsConflictError(
-        'Un cliente necesita una operación: elegí una ciudad antes de darlo de alta',
+        'Un cliente necesita una ciudad: elegila arriba, o cargale un domicilio con su zona',
       );
     await transaction
       .insert(customerOperatingSites)
-      .values({ customerId: created.id, operatingSiteId: input.operatingSiteId })
+      .values({ customerId: created.id, operatingSiteId })
       .onConflictDoNothing();
 
     const suppliedIdentities: CustomerIdentityInput[] = [

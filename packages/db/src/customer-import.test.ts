@@ -129,6 +129,19 @@ describe('barrios', () => {
     expect(rows).toEqual([{ display_name: 'Núñez', total: 2 }]);
   });
 
+  // Desde "Todas las ciudades" la planilla se rechazaba entera aunque la zona ya estaba elegida.
+  it('sin ciudad elegida arriba, toma la ciudad de la zona del domicilio', async () => {
+    const { client, service } = await base();
+    const sinCiudad = { ...cliente('Fede', '+5491155550606'), operatingSiteId: null };
+
+    await service.importCustomers([sinCiudad], contexto);
+
+    const { rows } = await client.query<{ operating_site_id: string }>(
+      `select operating_site_id from customer_operating_sites`,
+    );
+    expect(rows).toEqual([{ operating_site_id: SITE }]);
+  });
+
   it('un domicilio sin barrio queda sin barrio', async () => {
     const { client, service } = await base();
     await service.importCustomers([cliente('Eva', '+5491155550505')], contexto);

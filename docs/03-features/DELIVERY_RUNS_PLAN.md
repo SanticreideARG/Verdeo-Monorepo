@@ -102,15 +102,13 @@ Cambiar la fecha de pedidos ajenos al reparto sigue pidiendo `orders.edit`.
 Cada fase se puede usar sola: después de la 1 ya se ve qué sale cada día y se mueve un reparto
 entero de fecha; las rutas siguen armándose como hoy hasta la 3.
 
-## Decisiones abiertas
+## Decisiones (resueltas por el usuario el 2026-10-14)
 
-1. **OPEN — ¿Más de un reparto por día?** Propongo que sí (mañana y tarde, o dos repartidores con
-   horarios distintos), con uno marcado como "de siempre" para la creación automática.
-2. **OPEN — ¿Reparto por ciudad o por zona?** Propongo por ciudad, con las hojas por zona: la zona
-   ya decide la hoja, y un reparto por zona multiplicaría los repartos sin aportar.
-3. **OPEN — Pedidos en borrador.** Propongo que entren al reparto (ya tienen fecha) y que consolidar
-   avise cuántos siguen en borrador, sin bloquear.
-4. **OPEN — Avisar al cliente cuando cambia la fecha.** Propongo que, al mover un reparto, se ofrezca
-   copiar el mensaje de aviso para cada cliente (como el de confirmación), sin mandarlo solo.
-5. **OPEN — Fecha fuera de los días de reparto.** Propongo permitirla con aviso: es justo el caso
-   de un feriado.
+1. **Más de un reparto por día: sí** (mañana y tarde, o dos repartidores), con uno marcado como
+   "de siempre" para la creación automática.
+2. **Reparto por ciudad**, con las hojas de ruta por zona.
+3. **Los pedidos en borrador entran al reparto**; consolidar avisa cuántos siguen en borrador, sin
+   bloquear.
+4. **Avisar al cliente cuando cambia la fecha**: al mover un reparto se ofrece copiar el mensaje de
+   aviso para cada cliente, como el de confirmación; nunca se manda solo.
+5. **Fecha fuera de los días de reparto**: se permite, con aviso (el caso de un feriado).
