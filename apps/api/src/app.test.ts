@@ -1596,6 +1596,41 @@ describe('API foundation', () => {
       });
     });
 
+    // Tocar "Importar" dos veces, o reintentar después de un corte, duplicaba los pedidos.
+    it('no vuelve a crear un pedido de una fila que la misma tanda ya importó', async () => {
+      const BATCH = '7b000000-0000-4000-8000-000000000001';
+      const createOrder = vi.fn<(input: unknown) => Promise<unknown>>(() =>
+        Promise.resolve({ id: '0a000000-0000-4000-8000-000000000002', publicNumber: 'CABA-00002' }),
+      );
+      const ordersByImportKeys = vi.fn(() =>
+        Promise.resolve([
+          {
+            id: '0a000000-0000-4000-8000-000000000001',
+            importKey: `${BATCH}:1`,
+            publicNumber: 'CABA-00001',
+          },
+        ]),
+      );
+      const app = buildApp({ createOrder, ordersByImportKeys });
+
+      const response = await post(app, '/api/v1/orders/import', {
+        batchId: BATCH,
+        rows: [
+          fila({ customerId: CLIENTE, rowNumber: 1 }),
+          fila({ customerId: CLIENTE, rowNumber: 2 }),
+        ],
+      });
+
+      expect(createOrder).toHaveBeenCalledTimes(1);
+      expect(createOrder.mock.calls[0]?.[0]).toMatchObject({ importKey: `${BATCH}:2` });
+      expect(await response.json()).toMatchObject({
+        results: [
+          { publicNumber: 'CABA-00001', rowNumber: 1 },
+          { publicNumber: 'CABA-00002', rowNumber: 2 },
+        ],
+      });
+    });
+
     it('crea el cliente sin email cuando el email no es válido, en lugar de rechazar el pedido', async () => {
       const createCustomer = vi.fn<(input: unknown) => Promise<unknown>>(() =>
         Promise.resolve({ id: CLIENTE }),

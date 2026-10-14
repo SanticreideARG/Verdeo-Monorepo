@@ -11,6 +11,7 @@ import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus
 import { DataTable } from '../components/DataTable.js';
 import { OrderDetailDialog } from '../components/OrderDetailDialog.js';
 import { ActionMenu } from '../components/ActionMenu.js';
+import { DuplicateOrdersPanel } from '../components/DuplicateOrdersPanel.js';
 import { InboundEmailsPanel } from '../components/InboundEmailsPanel.js';
 import { OrderImportDialog } from '../components/OrderImportDialog.js';
 import {
@@ -163,6 +164,7 @@ export function OrderIntakePage() {
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const paymentMethods = usePaymentMethods();
   const canConfirm = permissions.includes('orders.confirm');
+  const canDelete = permissions.includes('orders.delete');
   const [message, setMessage] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -1226,6 +1228,10 @@ export function OrderIntakePage() {
         {/* Los pedidos que llegaron solos por correo, esperando revisión. */}
         {permissions.includes('orders.create') ? (
           <InboundEmailsPanel canConfirm={canConfirm} onChanged={() => void loadData()} />
+        ) : null}
+        {/* Los pedidos repetidos del período, para corregirlos. */}
+        {permissions.includes('orders.read') ? (
+          <DuplicateOrdersPanel canDelete={canDelete} onChanged={() => void loadData()} />
         ) : null}
         {formOpen && permissions.includes('orders.create') ? (
           <form

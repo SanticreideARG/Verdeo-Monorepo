@@ -320,3 +320,45 @@ Los avisos del diálogo (errores y el avance de ubicar las direcciones) van en e
 botón: arriba de la lista quedaban fuera de la vista. Un error de validación se dice por pedido
 ("Ana Prueba (fila 4): revisá la dirección"), y la conciliación aparece apenas se crean los pedidos;
 la ubicación de las direcciones sigue después, con su avance, sin frenarla.
+
+### Pedidos repetidos: prevenir y corregir (2026-10-13)
+
+La planilla de pedidos se importó dos veces y quedaron tres clientes con el mismo pedido duplicado.
+
+- **Prevenir, en el servidor** (migración 0058, `orders.import_key`, único): el diálogo arma una
+  tanda (`batchId`) al leer la planilla y la manda con cada intento; cada pedido guarda
+  `<tanda>:<fila>`. Tocar "Importar" dos veces o reintentar después de un corte devuelve los
+  pedidos que esa tanda ya creó en lugar de crear otros (`ordersByImportKeys`).
+- **Prevenir, en la vista previa**: un pedido que repite otro de la misma planilla (mismo cliente
+  por id, celular o nombre, y las mismas variedades y cantidades) sale con `duplicateOf` = "la fila
+  N de esta planilla" y arranca destildado, igual que uno que ya está en el período. Si el mismo
+  cliente aparece con otro pedido, sólo se avisa.
+- **Corregir**: en Pedidos, el panel "Pedidos repetidos en el período" (`GET
+/api/v1/orders/duplicates`, `findDuplicateOrders`) agrupa los pedidos no cancelados del período en
+  curso con el mismo cliente y exactamente el mismo contenido (variedades, cantidades y platos). Se
+  conserva el más viejo; los demás se eliminan con el borrado de siempre (pide confirmación, motivo
+  "Pedido repetido de …" y queda auditado). No se elimina nada solo: dos pedidos iguales pueden ser
+  legítimos.
+
+### Limpiar los datos de prueba antes de producción (2026-10-13)
+
+`pnpm db:purge-test-data --produccion --dry-run` y después `--confirmar` en lugar de `--dry-run`
+(`purge-test-data.ts`). A diferencia de `db:wipe-operations`, que vacía todo, conserva el período en
+curso (el que contiene el momento actual; si no hay, el último que empezó) y lo cargado para él:
+
+- borra los períodos anteriores con sus menús, pedidos (y cobros, rendiciones, conciliaciones y
+  paradas, que frenan el borrado), las rutas que quedan vacías y la producción;
+- borra los clientes creados antes del período en curso que no tienen pedidos que queden (y sus
+  conversaciones); los que sí tienen se conservan y se listan;
+- renumera los pedidos que quedan desde 00001 por ciudad, en el orden en que se cargaron, y deja el
+  contador en el último (pedido del usuario: el período en curso conserva su nombre);
+- las estadísticas salen de los pedidos, así que dejan de mostrar lo de prueba;
+- la auditoría no se borra; la limpieza deja su evento `maintenance.test_data_purged`.
+
+En seco hace todo dentro de una transacción y la deshace, así lo que muestra es exactamente lo que
+pasaría. Bajar un respaldo antes desde `/app/respaldos`.
+
+La misma limpieza en SQL, para el SQL Editor de Neon: `packages/db/scripts/purge-test-data.sql`
+(paso 1, vista previa sin cambios; paso 2, el borrado en un `BEGIN … COMMIT`). Las fechas del
+comando van como texto ISO con `::timestamptz`: el driver de producción (postgres.js) no manda un
+`Date` suelto dentro de un `sql` crudo, aunque PGlite sí, y por eso el primer `--dry-run` falló.

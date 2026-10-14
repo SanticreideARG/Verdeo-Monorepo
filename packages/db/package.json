@@ -34,7 +34,8 @@
     "db:verify-scope": "tsx src/verify-regional-scope.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json",
-    "db:reset-unverified-locations": "tsx src/reset-unverified-locations-cli.ts"
+    "db:reset-unverified-locations": "tsx src/reset-unverified-locations-cli.ts",
+    "db:purge-test-data": "tsx src/purge-test-data-cli.ts"
   },
   "dependencies": {
     "@verdeo/ai": "workspace:*",

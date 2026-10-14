@@ -280,6 +280,8 @@ export interface OrderInput {
   notes?: string | undefined;
   paymentExpectation: string;
   source: string;
+  /** "<tanda>:<fila>" de una importación: el mismo pedido no se crea dos veces. */
+  importKey?: string | undefined;
 }
 
 export interface OrderUpdateInput {
@@ -1337,6 +1339,37 @@ export class PostgresOperationsService {
       }
     }
 
+    /*
+     * Repetidos dentro de la misma planilla: el mismo cliente (por id, celular o nombre) con el
+     * mismo pedido en dos filas. El segundo arranca destildado, igual que uno que ya está en el
+     * período. Si el pedido es distinto, sólo se avisa: puede ser un segundo pedido de verdad.
+     */
+    const vistos = new Map<string, { firma: string | null; rowNumber: number }[]>();
+    const enLaPlanilla = new Map<number, { igual: number | null; otro: number | null }>();
+    for (const coincidencia of coincidencias) {
+      const row = rows.find((candidata) => candidata.rowNumber === coincidencia.rowNumber);
+      if (!row) continue;
+      const clave =
+        coincidencia.customerMatch.customerId ??
+        (row.phone ? argentinePhoneKey(row.phone) : null) ??
+        normalizar(row.customerName);
+      const firma = coincidencia.itemMatches.every((id) => id !== null)
+        ? firmaDe(
+            row.items.map((item, index) => ({
+              offeringId: coincidencia.itemMatches[index] as string,
+              quantityUnits: item.quantityUnits,
+            })),
+          )
+        : null;
+      const anteriores = vistos.get(clave) ?? [];
+      const igual = anteriores.find((anterior) => firma !== null && anterior.firma === firma);
+      enLaPlanilla.set(row.rowNumber, {
+        igual: igual?.rowNumber ?? null,
+        otro: igual ? null : (anteriores[0]?.rowNumber ?? null),
+      });
+      vistos.set(clave, [...anteriores, { firma, rowNumber: row.rowNumber }]);
+    }
+
     return {
       matches: coincidencias.map((coincidencia) => {
         const todasReconocidas = coincidencia.itemMatches.every((id) => id !== null);
@@ -1355,9 +1388,12 @@ export class PostgresOperationsService {
           cliente && firma
             ? (pedidosPorCliente.get(cliente) ?? []).find((pedido) => pedido.firma === firma)
             : undefined;
+        const repetido = enLaPlanilla.get(coincidencia.rowNumber);
         return {
           customerMatch: coincidencia.customerMatch,
-          duplicateOf: igual?.publicNumber ?? null,
+          duplicateOf:
+            igual?.publicNumber ??
+            (repetido?.igual ? `la fila ${String(repetido.igual)} de esta planilla` : null),
           // Todo lo que el cliente ya tiene en el período, igual o no: para ver qué ya está cargado.
           existingOrders: cliente
             ? (pedidosPorCliente.get(cliente) ?? []).map(({ publicNumber, summary }) => ({
@@ -1367,7 +1403,14 @@ export class PostgresOperationsService {
             : [],
           itemDishes: coincidencia.itemDishes,
           itemMatches: coincidencia.itemMatches,
-          notices: coincidencia.notices,
+          notices: [
+            ...coincidencia.notices,
+            ...(repetido?.otro
+              ? [
+                  `Este cliente también aparece en la fila ${String(repetido.otro)} con otro pedido: revisá que no sea el mismo.`,
+                ]
+              : []),
+          ],
           rowNumber: coincidencia.rowNumber,
         };
       }),
@@ -4667,6 +4710,7 @@ export class PostgresOperationsService {
         deliveryDate,
         deliveryLocationUrlSnapshot: deliveryLocationUrl,
         geographicZoneId,
+        importKey: input.importKey,
         notes: input.notes,
         operatingSiteId,
         paymentExpectation: input.paymentExpectation,
@@ -5588,6 +5632,123 @@ export class PostgresOperationsService {
    * pantalla antes de confirmar. Lo que no se hace es borrarlo en silencio — el monto queda escrito
    * en la auditoría.
    */
+  /**
+   * Los pedidos repetidos del período en curso: el mismo cliente con exactamente el mismo pedido
+   * (variedades, cantidades y platos) más de una vez, sin contar los cancelados.
+   *
+   * Es la forma de corregir lo que ya entró duplicado —una planilla importada dos veces, un
+   * pedido cargado a mano y también por correo—. No borra nada: lista los grupos, del más viejo
+   * al más nuevo, y la pantalla deja eliminar los que sobran con el borrado de siempre (que pide
+   * motivo y queda auditado). Dos pedidos iguales pueden ser legítimos: decide una persona.
+   */
+  public async findDuplicateOrders(operatingSiteId?: string | null) {
+    const [cycle] = await this.database
+      .select({ id: salesCycles.id })
+      .from(salesCycles)
+      .where(lte(salesCycles.openAt, new Date()))
+      .orderBy(desc(sql`${salesCycles.closeAt} >= now()`), desc(salesCycles.openAt))
+      .limit(1);
+    if (!cycle) return [];
+
+    const rows = await this.database
+      .select({
+        createdAt: orders.createdAt,
+        customerId: orders.customerId,
+        customerName: customers.displayName,
+        dishes: sql<string>`coalesce((
+          select string_agg(s.dish_name_snapshot, ',' order by s.dish_name_snapshot)
+          from order_item_selections s where s.order_item_id = ${orderItems.id}
+        ), '')`,
+        familyName: orderItems.productNameSnapshot,
+        id: orders.id,
+        offeringId: orderItems.offeringId,
+        paidAt: orders.paidAt,
+        publicNumber: orders.publicNumber,
+        quantityUnits: orderItems.quantityUnits,
+        source: orders.source,
+        status: orders.status,
+        totalMinor: orders.totalMinor,
+        variantName: orderItems.variantSnapshot,
+      })
+      .from(orders)
+      .innerJoin(customers, eq(customers.id, orders.customerId))
+      .innerJoin(orderItems, eq(orderItems.orderId, orders.id))
+      .where(
+        and(
+          eq(orders.salesCycleId, cycle.id),
+          ne(orders.status, 'CANCELLED'),
+          ...(operatingSiteId ? [eq(orders.operatingSiteId, operatingSiteId)] : []),
+        ),
+      )
+      .orderBy(asc(orders.createdAt));
+
+    type Pedido = {
+      createdAt: Date;
+      customerId: string;
+      customerName: string;
+      id: string;
+      lines: { firma: string; label: string }[];
+      paid: boolean;
+      publicNumber: string;
+      source: string;
+      status: string;
+      totalMinor: number;
+    };
+    const porPedido = new Map<string, Pedido>();
+    for (const row of rows) {
+      const pedido = porPedido.get(row.id) ?? {
+        createdAt: row.createdAt,
+        customerId: row.customerId,
+        customerName: row.customerName,
+        id: row.id,
+        lines: [],
+        paid: row.paidAt !== null,
+        publicNumber: row.publicNumber,
+        source: row.source,
+        status: row.status,
+        totalMinor: row.totalMinor,
+      };
+      pedido.lines.push({
+        firma: `${row.offeringId ?? `${row.familyName}/${row.variantName}`}×${String(row.quantityUnits)}[${row.dishes}]`,
+        label: `${`${row.familyName} ${row.variantName}`.trim()} × ${String(row.quantityUnits)}`,
+      });
+      porPedido.set(row.id, pedido);
+    }
+
+    const grupos = new Map<string, Pedido[]>();
+    for (const pedido of porPedido.values()) {
+      const clave = `${pedido.customerId}|${pedido.lines
+        .map((line) => line.firma)
+        .sort()
+        .join('+')}`;
+      grupos.set(clave, [...(grupos.get(clave) ?? []), pedido]);
+    }
+    return [...grupos.values()]
+      .filter((grupo) => grupo.length > 1)
+      .map((grupo) => ({
+        customerName: grupo[0]?.customerName ?? '',
+        orders: grupo.map((pedido) => ({
+          createdAt: pedido.createdAt.toISOString(),
+          id: pedido.id,
+          paid: pedido.paid,
+          publicNumber: pedido.publicNumber,
+          source: pedido.source,
+          status: pedido.status,
+          totalMinor: pedido.totalMinor,
+        })),
+        summary: (grupo[0]?.lines ?? []).map((line) => line.label).join(' + '),
+      }));
+  }
+
+  /** Los pedidos ya creados por una importación, por su clave "<tanda>:<fila>". */
+  public async ordersByImportKeys(keys: readonly string[]) {
+    if (keys.length === 0) return [];
+    return this.database
+      .select({ id: orders.id, importKey: orders.importKey, publicNumber: orders.publicNumber })
+      .from(orders)
+      .where(inArray(orders.importKey, [...keys]));
+  }
+
   public async deleteOrder(orderId: string, reason: string, context: OperationsContext) {
     return this.database.transaction(async (transaction) => {
       const [existing] = await transaction

@@ -407,6 +407,13 @@
       "when": 1791856932390,
       "tag": "0057_swift_lady_mastermind",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1791939757462,
+      "tag": "0058_woozy_talkback",
+      "breakpoints": true
     }
   ]
 }

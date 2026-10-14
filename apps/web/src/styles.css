@@ -9648,3 +9648,22 @@ body {
   margin: 0;
   font-size: 0.85rem;
 }
+
+/* Pedidos repetidos del período: cada grupo con sus pedidos, del más viejo al más nuevo. */
+.duplicate-orders-group {
+  display: grid;
+  gap: 0.4rem;
+}
+.duplicate-orders-group ol {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.duplicate-orders-group ol li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}

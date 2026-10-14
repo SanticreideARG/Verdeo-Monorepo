@@ -1537,6 +1537,11 @@ export const OrderImportEmailPreviewRequestSchema = z.object({
 
 /** Una fila ya resuelta por una persona: con qué cliente va, o que hay que crearlo. */
 export const OrderImportConfirmRequestSchema = z.object({
+  /**
+   * La tanda de importación: la arma el diálogo al leer la planilla y la repite si se reintenta.
+   * Con ella el servidor no vuelve a crear un pedido de una fila que ya importó.
+   */
+  batchId: UuidSchema.optional(),
   /** Crear los pedidos ya confirmados (pide `orders.confirm`). Sin esto entran como borrador. */
   confirm: z.boolean().optional(),
   rows: z
@@ -1566,6 +1571,29 @@ export const OrderImportConfirmRequestSchema = z.object({
     )
     .min(1)
     .max(500),
+});
+
+/** Un grupo de pedidos repetidos: el mismo cliente con el mismo pedido, del más viejo al más nuevo. */
+export const DuplicateOrdersResponseSchema = z.object({
+  groups: z.array(
+    z.object({
+      customerName: z.string(),
+      orders: z
+        .array(
+          z.object({
+            createdAt: z.string(),
+            id: UuidSchema,
+            paid: z.boolean(),
+            publicNumber: z.string(),
+            source: z.string(),
+            status: z.string(),
+            totalMinor: z.number().int(),
+          }),
+        )
+        .min(2),
+      summary: z.string(),
+    }),
+  ),
 });
 
 export const OrderImportConfirmResponseSchema = z.object({

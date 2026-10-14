@@ -646,9 +646,19 @@ export const orders = pgTable(
     paidByUserId: uuid('paid_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     currency: text('currency').default('ARS').notNull(),
     totalMinor: integer('total_minor').notNull(),
+    /*
+     * De qué tanda de importación y qué fila salió el pedido ("<tanda>:<fila>").
+     *
+     * Único: tocar "Importar" dos veces, o reintentar después de un corte, no crea el mismo
+     * pedido otra vez. Así se duplicaron pedidos el 2026-10-13. Nulo para lo que no se importa.
+     */
+    importKey: text('import_key'),
     ...timestamps,
   },
   (table) => [
+    uniqueIndex('orders_import_key_unique')
+      .on(table.importKey)
+      .where(sql`${table.importKey} is not null`),
     index('orders_cycle_status_idx').on(table.salesCycleId, table.status),
     index('orders_customer_idx').on(table.customerId),
     index('orders_created_at_idx').on(table.createdAt),

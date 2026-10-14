@@ -63,6 +63,7 @@ import {
   CustomerIdentitySchema,
   CustomerIdentityUpdateRequestSchema,
   CustomerImportPreviewResponseSchema,
+  DuplicateOrdersResponseSchema,
   CustomerImportResponseSchema,
   CustomerDeleteResponseSchema,
   CustomerListResponseSchema,
@@ -516,6 +517,10 @@ interface OperationsEngine {
     }[],
     operatingSiteId?: string | null,
   ): Promise<unknown>;
+  findDuplicateOrders?(operatingSiteId: string | null): Promise<unknown[]>;
+  ordersByImportKeys?(
+    keys: readonly string[],
+  ): Promise<readonly { id: string; importKey: string | null; publicNumber: string }[]>;
   importCustomers?(
     inputs: readonly ScopedInput<CustomerCreateRequest>[],
     context: OperationsContext,
@@ -3796,6 +3801,7 @@ export function createApp(options: CreateAppOptions) {
     context: Context<{ Variables: AppVariables }>,
     rows: z.infer<typeof OrderImportConfirmRequestSchema>['rows'],
     initialStatus: 'CONFIRMED' | 'DRAFT' = 'DRAFT',
+    batchId?: string,
   ) => {
     const operations = requireOperations();
     const menu = (await operations.currentPublishedMenu(
@@ -3821,7 +3827,27 @@ export function createApp(options: CreateAppOptions) {
     const orderIds: string[] = [];
     // Qué pedido quedó de cada fila: es lo que muestra la conciliación al terminar.
     const results: { orderId: string; publicNumber: string; rowNumber: number }[] = [];
+    /*
+     * Lo que esta misma tanda ya creó: tocar "Importar" dos veces o reintentar después de un corte
+     * no vuelve a crear esos pedidos, dice cuáles eran. Así se duplicaron pedidos el 2026-10-13.
+     */
+    const keyOf = (rowNumber: number) => (batchId ? `${batchId}:${String(rowNumber)}` : undefined);
+    const yaCreados = new Map(
+      (batchId && operations.ordersByImportKeys
+        ? await operations.ordersByImportKeys(rows.map((row) => keyOf(row.rowNumber) ?? ''))
+        : []
+      ).map((order) => [order.importKey, order] as const),
+    );
     for (const row of rows) {
+      const previo = yaCreados.get(keyOf(row.rowNumber) ?? null);
+      if (previo) {
+        results.push({
+          orderId: previo.id,
+          publicNumber: previo.publicNumber,
+          rowNumber: row.rowNumber,
+        });
+        continue;
+      }
       try {
         let customerId = row.customerId;
         if (!customerId) {
@@ -3868,6 +3894,7 @@ export function createApp(options: CreateAppOptions) {
              * dejaba de poder leerlo. La prueba de este endpoint lee el valor contra el enum.
              */
             source: row.kind === 'email' ? 'email' : 'spreadsheet_import',
+            ...(keyOf(row.rowNumber) ? { importKey: keyOf(row.rowNumber) } : {}),
           } as never,
           operationsContext(context),
         );
@@ -3904,6 +3931,7 @@ export function createApp(options: CreateAppOptions) {
       context,
       input.data.rows,
       input.data.confirm ? 'CONFIRMED' : 'DRAFT',
+      input.data.batchId,
     );
     if ('error' in result) return badRequest(context, result.error);
     const { created, failed, orderIds, results } = result;
@@ -5516,6 +5544,19 @@ export function createApp(options: CreateAppOptions) {
    * planilla para mirarla y reenviarla. Comparten filtros, recorte y auditoría; cambiarlas por dos
    * rutas sería sostener dos veces la misma lista de filtros.
    */
+  /**
+   * Los pedidos repetidos del período en curso, para corregirlos: el mismo cliente con el mismo
+   * pedido más de una vez. Sólo lista; se eliminan con el borrado de siempre.
+   */
+  app.get('/api/v1/orders/duplicates', async (context) => {
+    if (!context.get('session').permissions.includes('orders.read')) return forbidden(context);
+    const operations = requireOperations();
+    const groups = operations.findDuplicateOrders
+      ? await operations.findDuplicateOrders(context.get('scope')?.operatingSiteId ?? null)
+      : [];
+    return context.json(DuplicateOrdersResponseSchema.parse({ groups }));
+  });
+
   app.get('/api/v1/orders/export', async (context) => {
     if (!context.get('session').permissions.includes('orders.read')) return forbidden(context);
     const query = OrderListQuerySchema.safeParse(context.req.query());

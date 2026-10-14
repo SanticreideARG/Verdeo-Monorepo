@@ -27,7 +27,8 @@
     "test": "pnpm -r --workspace-concurrency=2 --if-present test",
     "test:coverage": "pnpm -r --if-present test:coverage",
     "typecheck": "pnpm -r --if-present typecheck",
-    "db:reset-unverified-locations": "pnpm --filter @verdeo/db db:reset-unverified-locations"
+    "db:reset-unverified-locations": "pnpm --filter @verdeo/db db:reset-unverified-locations",
+    "db:purge-test-data": "pnpm --filter @verdeo/db db:purge-test-data"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

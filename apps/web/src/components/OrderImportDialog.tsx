@@ -194,6 +194,12 @@ export function OrderImportDialog({
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   // La conciliación después de importar: qué pedido quedó de cada fila.
   const [outcome, setOutcome] = useState<ImportOutcome[] | null>(null);
+  /*
+   * La tanda de esta importación. Se arma al leer la planilla y viaja con cada intento: si se toca
+   * "Importar" dos veces o se reintenta después de un corte, el servidor reconoce las filas que ya
+   * creó y no las duplica.
+   */
+  const [batchId, setBatchId] = useState(() => crypto.randomUUID());
   const paymentMethods = usePaymentMethods();
   /*
    * El medio de pago de los pedidos que no lo traen.
@@ -222,6 +228,7 @@ export function OrderImportDialog({
 
   function load(next: Preview) {
     setPreview(next);
+    setBatchId(crypto.randomUUID());
     setDecisions(
       Object.fromEntries(
         next.items.map((row) => [row.rowNumber, row.customerMatch.customerId ?? 'nuevo']),
@@ -324,6 +331,7 @@ export function OrderImportDialog({
     const path = inbound ? `/api/v1/inbound-emails/${inbound.id}/approve` : '/api/v1/orders/import';
     const response = await apiRequest(path, {
       body: JSON.stringify({
+        batchId,
         ...(confirmNow ? { confirm: true } : {}),
         rows: ready.map((row) => {
           const decision = decisions[row.rowNumber] ?? 'nuevo';
@@ -730,8 +738,8 @@ export function OrderImportDialog({
 
                     {row.duplicateOf ? (
                       <p className="order-import-row-blocked">
-                        Este cliente ya tiene un pedido igual en este período ({row.duplicateOf}).
-                        Por eso arranca destildado.
+                        Ya hay un pedido igual de este cliente: {row.duplicateOf}. Por eso arranca
+                        destildado.
                       </p>
                     ) : null}
                     {row.warnings.map((warning) => (

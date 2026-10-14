@@ -386,3 +386,56 @@ describe('previewOrderImport: planilla armada por viandas', () => {
     ]);
   });
 });
+
+describe('pedidos repetidos', () => {
+  it('marca el pedido que repite otro de la misma planilla y avisa si el cliente pide otra cosa', async () => {
+    const result = await operations.previewOrderImport(
+      [
+        fila({ customerName: 'Zoe Nueva', phone: '+5491155559999', rowNumber: 4 }),
+        fila({ customerName: 'Otra Persona', rowNumber: 5 }),
+        fila({ customerName: 'Zoe Nueva', phone: '+5491155559999', rowNumber: 6 }),
+        fila({
+          customerName: 'Zoe Nueva',
+          items: [{ quantityUnits: 1, size: '400', variety: 'Menú Vegan' }],
+          phone: '+5491155559999',
+          rowNumber: 7,
+        }),
+      ],
+      null,
+    );
+    const porFila = new Map(result.matches.map((match) => [match.rowNumber, match]));
+    expect(porFila.get(4)?.duplicateOf).toBeNull();
+    expect(porFila.get(6)?.duplicateOf).toBe('la fila 4 de esta planilla');
+    expect(porFila.get(7)?.duplicateOf).toBeNull();
+    expect(porFila.get(7)?.notices[0]).toMatch(/fila 4/);
+  });
+
+  it('encuentra en el período al mismo cliente con el mismo pedido dos veces', async () => {
+    await client.exec(`
+      insert into orders (id, public_number, customer_id, sales_cycle_id, weekly_menu_id, source,
+                          status, delivery_date, delivery_address_snapshot, payment_expectation,
+                          total_minor, operating_site_id)
+      values ('0a000000-0000-4000-8000-000000000009', 'ZZZ-00009', '${ANA}', '${CYCLE}', '${MENU}',
+              'spreadsheet_import', 'DRAFT', '2026-10-08', 'Calle 1', 'Efectivo', 5000000, '${SITE}');
+      insert into order_items (order_id, product_variant_id, offering_id, product_name_snapshot,
+                              variant_snapshot, quantity_units, unit_price_minor, total_minor)
+      values ('0a000000-0000-4000-8000-000000000009', '${KETO_400}', '${OFFER_KETO_400}',
+              'Menú Paleo & Keto', '400', 2, 2500000, 5000000);
+    `);
+
+    const grupos = await operations.findDuplicateOrders(null);
+
+    expect(grupos).toEqual([
+      expect.objectContaining({
+        customerName: 'Ana Pérez',
+        // El más viejo primero: es el que se conserva.
+        orders: [
+          expect.objectContaining({ publicNumber: 'ZZZ-00001' }),
+          expect.objectContaining({ publicNumber: 'ZZZ-00009' }),
+        ],
+        summary: 'Menú Paleo & Keto 400 × 2',
+      }),
+    ]);
+    // El de Beto está cancelado: no cuenta como repetido.
+  });
+});
