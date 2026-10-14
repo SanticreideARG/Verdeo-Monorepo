@@ -13,7 +13,7 @@ import {
 
 import { users } from './auth.js';
 import { operatingSites } from './geography.js';
-import { orders } from './operations.js';
+import { deliveryRuns, orders } from './operations.js';
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -37,6 +37,10 @@ export const deliveryRoutes = pgTable(
     deliveryDate: date('delivery_date').notNull(),
     label: text('label'),
     status: text('status').default('draft').notNull(),
+    // De qué reparto salió la hoja (DELIVERY_RUNS_PLAN.md).
+    deliveryRunId: uuid('delivery_run_id').references(() => deliveryRuns.id, {
+      onDelete: 'set null',
+    }),
     createdByUserId: uuid('created_by_user_id').references(() => users.id, {
       onDelete: 'set null',
     }),

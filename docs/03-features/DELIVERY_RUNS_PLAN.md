@@ -112,3 +112,20 @@ entero de fecha; las rutas siguen armándose como hoy hasta la 3.
 4. **Avisar al cliente cuando cambia la fecha**: al mover un reparto se ofrece copiar el mensaje de
    aviso para cada cliente, como el de confirmación; nunca se manda solo.
 5. **Fecha fuera de los días de reparto**: se permite, con aviso (el caso de un feriado).
+
+## Estado
+
+**Fase 1 hecha (2026-10-14).** Migración 0060: `delivery_runs`, `orders.delivery_run_id` y
+`delivery_routes.delivery_run_id`, con la carga inicial (un reparto por ciudad y fecha con pedidos
+no cancelados; los de fechas pasadas, cerrados). La asignación vive en
+`repositories/delivery-runs.ts` (`assignOrderToRun`, `leaveRun`, `dropEmptyAutoRun`) y la llaman
+`createOrder` (también el importador y los correos aprobados), `updateOrder` cuando cambia la fecha,
+`transitionOrder` (cancelar saca del reparto, reactivar vuelve a entrar) y `deleteOrder`. API:
+`GET/POST /api/v1/delivery/runs` y `PATCH/DELETE /api/v1/delivery/runs/:id` (`routes.read` /
+`routes.manage`). Pantalla: "Rutas y repartos" con las pestañas Repartos (la primera) y Hojas de
+ruta. Cambiar la fecha de un reparto mueve sus pedidos (auditados como `order.rescheduled`) y sus
+hojas en borrador, avisa si la fecha no es un día de reparto, y ofrece el aviso para cada cliente
+(copiar o abrir en WhatsApp).
+
+Pendiente: fases 2 (detalle del reparto, mover pedidos entre repartos, consolidar, "Pedidos sin
+reparto", la alerta del día apuntando al reparto) y 3 (rutas desde el reparto).

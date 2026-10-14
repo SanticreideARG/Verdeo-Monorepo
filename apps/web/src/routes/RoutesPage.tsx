@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useState, type FormEvent } from 'reac
 
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { DashboardShell } from '../components/DashboardShell.js';
+import { DeliveryRunsPanel } from '../components/DeliveryRunsPanel.js';
 import { UnlocatedOrdersPanel } from '../components/LocateAddress.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { RouteMap } from '../components/RouteMap.js';
@@ -103,6 +104,7 @@ export function RoutesPage() {
     ? selectedDate
     : (routableDates[0]?.deliveryDate ?? '');
   const [zoneId, setZoneId] = useState('');
+  const [tab, setTab] = useState<'hojas' | 'repartos'>('repartos');
   const [routes, setRoutes] = useState<RouteSummary[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteDetail | null>(null);
   const [message, setMessage] = useState('');
@@ -465,9 +467,9 @@ export function RoutesPage() {
         <header className="flex items-center justify-between">
           <div>
             <p className="dashboard-kicker">Operación</p>
-            <h1 className="text-2xl font-semibold text-forest">Rutas de reparto</h1>
+            <h1 className="text-2xl font-semibold text-forest">Rutas y repartos</h1>
           </div>
-          {canManage ? (
+          {canManage && tab === 'hojas' ? (
             <button
               className="button button-secondary"
               onClick={() => setFormOpen((open) => !open)}
@@ -478,374 +480,402 @@ export function RoutesPage() {
           ) : null}
         </header>
 
-        {message ? <p className="mt-4 text-sm text-red-600">{message}</p> : null}
-
-        {formOpen ? (
-          <form
-            className="mt-6 grid gap-3 rounded-2xl border border-forest/10 bg-[var(--db-surface)] p-6 sm:grid-cols-3"
-            onSubmit={(event) => void createRoute(event)}
+        {/*
+          Primero los repartos —qué sale cada día y con qué pedidos— y después las hojas de ruta,
+          que salen de ellos (DELIVERY_RUNS_PLAN.md).
+        */}
+        <div className="order-import-tabs routes-tabs" role="tablist">
+          <button
+            aria-selected={tab === 'repartos'}
+            className={tab === 'repartos' ? 'is-active' : ''}
+            onClick={() => setTab('repartos')}
+            role="tab"
+            type="button"
           >
-            {/*
+            Repartos
+          </button>
+          <button
+            aria-selected={tab === 'hojas'}
+            className={tab === 'hojas' ? 'is-active' : ''}
+            onClick={() => setTab('hojas')}
+            role="tab"
+            type="button"
+          >
+            Hojas de ruta
+          </button>
+        </div>
+        {tab === 'repartos' ? <DeliveryRunsPanel canManage={canManage} /> : null}
+        <div hidden={tab !== 'hojas'}>
+          {message ? <p className="mt-4 text-sm text-red-600">{message}</p> : null}
+
+          {formOpen ? (
+            <form
+              className="mt-6 grid gap-3 rounded-2xl border border-forest/10 bg-[var(--db-surface)] p-6 sm:grid-cols-3"
+              onSubmit={(event) => void createRoute(event)}
+            >
+              {/*
               La ciudad ya está elegida arriba, en el selector de la barra: volver a preguntarla acá
               es pedir dos veces lo mismo y dejar abierta la posibilidad de armar una ruta para una
               ciudad distinta de la que se está mirando. Lo que sí hace falta elegir es la zona: el
               reparto sale por zona, y una hoja por zona es una hoja que se puede seguir.
             */}
-            <label className="field">
-              Zona
-              <select
-                name="geographicZoneId"
-                onChange={(event) => setZoneId(event.target.value)}
-                value={zoneId}
-              >
-                <option value="">Toda la ciudad</option>
-                {zones.map((zone) => (
-                  <option key={zone.id} value={zone.id}>
-                    {zone.displayName}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              Fecha de entrega
-              {/*
-               * Sólo los días que tienen pedidos, con cuántos entrarían en la hoja. Un campo de
-               * fecha libre dejaba proponer rutas para días vacíos, que es lo que venía pasando.
-               */}
-              {routableDates.length > 0 ? (
+              <label className="field">
+                Zona
                 <select
-                  name="deliveryDate"
-                  onChange={(event) => setSelectedDate(event.target.value)}
-                  required
-                  value={activeDate}
+                  name="geographicZoneId"
+                  onChange={(event) => setZoneId(event.target.value)}
+                  value={zoneId}
                 >
-                  {routableDates.map((date) => (
-                    <option key={date.deliveryDate} value={date.deliveryDate}>
-                      {formatDayLong(date.deliveryDate)} · {String(date.geocoded)} para rutear
-                      {date.routed > 0 ? ` (${String(date.routed)} ya en ruta)` : ''}
+                  <option value="">Toda la ciudad</option>
+                  {zones.map((zone) => (
+                    <option key={zone.id} value={zone.id}>
+                      {zone.displayName}
                     </option>
                   ))}
                 </select>
-              ) : (
-                <input disabled placeholder="No hay pedidos por repartir" />
-              )}
-            </label>
-            <label className="field">
-              Etiqueta (opcional)
-              <input name="label" placeholder="Ej. Turno mañana" />
-            </label>
-            <button
-              className="button button-primary sm:col-span-3"
-              disabled={routableDates.length === 0}
-              type="submit"
-            >
-              Proponer ruta
-            </button>
-            {/*
-             * Por qué no hay nada que rutear, cuando no lo hay. "0 paradas" tiene dos causas muy
-             * distintas —sin geocodificar, o ya en otra ruta— y sin decirlas no hay forma de saber
-             * qué hacer al respecto.
-             */}
-            {routableDates.length === 0 ? (
-              <p className="text-sm text-ink-muted sm:col-span-3">
-                No hay pedidos por repartir en esta ciudad
-                {zoneId ? ' y esta zona' : ''}. Un pedido entra en una hoja de ruta cuando está
-                confirmado o listo, y su domicilio está geocodificado.
-              </p>
-            ) : (
-              <>
+              </label>
+              <label className="field">
+                Fecha de entrega
                 {/*
-                 * Los pedidos sin ubicación del día elegido, que antes se omitían de la hoja sin
-                 * avisar: se listan y se pueden ubicar acá, antes de proponer la ruta.
+                 * Sólo los días que tienen pedidos, con cuántos entrarían en la hoja. Un campo de
+                 * fecha libre dejaba proponer rutas para días vacíos, que es lo que venía pasando.
                  */}
-                {activeDate ? (
-                  <UnlocatedOrdersPanel
-                    deliveryDate={activeDate}
-                    onChanged={() => setDatesVersion((version) => version + 1)}
-                  />
-                ) : null}
+                {routableDates.length > 0 ? (
+                  <select
+                    name="deliveryDate"
+                    onChange={(event) => setSelectedDate(event.target.value)}
+                    required
+                    value={activeDate}
+                  >
+                    {routableDates.map((date) => (
+                      <option key={date.deliveryDate} value={date.deliveryDate}>
+                        {formatDayLong(date.deliveryDate)} · {String(date.geocoded)} para rutear
+                        {date.routed > 0 ? ` (${String(date.routed)} ya en ruta)` : ''}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input disabled placeholder="No hay pedidos por repartir" />
+                )}
+              </label>
+              <label className="field">
+                Etiqueta (opcional)
+                <input name="label" placeholder="Ej. Turno mañana" />
+              </label>
+              <button
+                className="button button-primary sm:col-span-3"
+                disabled={routableDates.length === 0}
+                type="submit"
+              >
+                Proponer ruta
+              </button>
+              {/*
+               * Por qué no hay nada que rutear, cuando no lo hay. "0 paradas" tiene dos causas muy
+               * distintas —sin geocodificar, o ya en otra ruta— y sin decirlas no hay forma de saber
+               * qué hacer al respecto.
+               */}
+              {routableDates.length === 0 ? (
                 <p className="text-sm text-ink-muted sm:col-span-3">
-                  {routableDates.reduce(
-                    (total, date) => total + date.total - date.geocoded - date.routed,
-                    0,
-                  ) > 0
-                    ? `Hay ${String(routableDates.reduce((total, date) => total + date.total - date.geocoded - date.routed, 0))} pedidos por repartir que no entran en ninguna hoja porque su domicilio no está geocodificado.`
-                    : 'Todos los pedidos por repartir tienen domicilio geocodificado.'}
+                  No hay pedidos por repartir en esta ciudad
+                  {zoneId ? ' y esta zona' : ''}. Un pedido entra en una hoja de ruta cuando está
+                  confirmado o listo, y su domicilio está geocodificado.
                 </p>
-              </>
-            )}
-          </form>
-        ) : null}
-
-        {loading ? (
-          <p className="mt-6 text-ink-muted">Cargando…</p>
-        ) : (
-          <div className={`routes-layout mt-6 ${narrow && selectedRoute ? 'is-detail' : ''}`}>
-            {/*
-             * `content-start` es el arreglo de la lista rota: la columna mide lo que mide el visor
-             * de al lado —que con veinte paradas es larguísimo— y sin esto cada tarjeta se repartía
-             * ese alto, quedando fichas gigantes y casi vacías.
-             */}
-            <ul className="routes-list grid content-start gap-2">
-              {rutasVisibles.map((route) => (
-                <li key={route.id}>
-                  <button
-                    className={`w-full rounded-xl border px-4 py-3 text-left ${
-                      selectedRoute?.id === route.id
-                        ? 'border-forest bg-forest/5'
-                        : 'border-forest/10 bg-[var(--db-surface)]'
-                    }`}
-                    onClick={() => void loadRouteDetail(route.id)}
-                    type="button"
-                  >
-                    <p className="font-semibold text-forest">
-                      {formatDay(route.deliveryDate)} {route.label ? `· ${route.label}` : ''}
-                    </p>
-                    <p className="text-xs text-ink-muted">
-                      {route.stopCount} paradas ·{' '}
-                      {route.status === 'draft'
-                        ? 'Borrador'
-                        : route.status === 'published'
-                          ? 'Publicada'
-                          : 'Completada'}
-                    </p>
-                  </button>
-                </li>
-              ))}
-              {rutasViejas.length > 0 ? (
-                <li>
-                  <button
-                    className="routes-older"
-                    onClick={() => setMostrarViejas((current) => !current)}
-                    type="button"
-                  >
-                    {mostrarViejas
-                      ? 'Ocultar las anteriores'
-                      : `Ver ${String(rutasViejas.length)} anteriores`}
-                  </button>
-                </li>
-              ) : null}
-              {rutasVisibles.length === 0 ? (
-                <EmptyState
-                  action={
-                    canManage ? (
-                      <button
-                        className="button button-primary"
-                        onClick={() => setFormOpen(true)}
-                        type="button"
-                      >
-                        + Proponer ruta
-                      </button>
-                    ) : null
-                  }
-                  body="Se arma con los pedidos por repartir de una zona y una fecha, y no sale a la app del repartidor hasta que la publiques."
-                  title="Todavía no hay ninguna ruta"
-                />
-              ) : null}
-            </ul>
-
-            <div className="rounded-2xl border border-forest/10 bg-[var(--db-surface)] p-4">
-              {!selectedRoute ? (
-                <p className="text-ink-muted">Elegí una ruta para ver sus paradas.</p>
               ) : (
                 <>
-                  {/* En el teléfono el detalle reemplaza a la lista, así que hay que poder
-                      volver. En escritorio están los dos a la vez y este botón no existe. */}
-                  {narrow ? (
-                    <button
-                      className="routes-back"
-                      onClick={() => setSelectedRoute(null)}
-                      type="button"
-                    >
-                      ← Todas las rutas
-                    </button>
+                  {/*
+                   * Los pedidos sin ubicación del día elegido, que antes se omitían de la hoja sin
+                   * avisar: se listan y se pueden ubicar acá, antes de proponer la ruta.
+                   */}
+                  {activeDate ? (
+                    <UnlocatedOrdersPanel
+                      deliveryDate={activeDate}
+                      onChanged={() => setDatesVersion((version) => version + 1)}
+                    />
                   ) : null}
-
-                  {/* Cómo va la ruta: lo mismo que ve quien reparte. Que las dos pantallas
-                      discrepen sobre cuánta plata hay en la calle sería peor que no mostrarlo. */}
-                  {progress && selectedRoute.status === 'published' ? (
-                    <p className="route-progress">
-                      <span>
-                        {progress.deliveredCount} de {progress.stopCount} entregadas
-                      </span>
-                      <span>Cobrado {formatMoney(progress.collectedMinor, 'ARS')}</span>
-                      {progress.pendingCollectionMinor > 0 ? (
-                        <span>
-                          Falta cobrar {formatMoney(progress.pendingCollectionMinor, 'ARS')}
-                        </span>
-                      ) : null}
-                    </p>
-                  ) : null}
-
-                  {issuedLink ? (
-                    <div className="route-link">
-                      <p>
-                        Pasale este enlace a quien reparte. Abre la hoja del día en el teléfono, sin
-                        clave. Vence el {new Date(issuedLink.expiresAt).toLocaleString('es-AR')}.
-                      </p>
-                      <code>{issuedLink.url}</code>
-                      <div>
-                        <button
-                          onClick={() => void navigator.clipboard.writeText(issuedLink.url)}
-                          type="button"
-                        >
-                          Copiar
-                        </button>
-                        <button onClick={() => void revokeLink(selectedRoute.id)} type="button">
-                          Dar de baja el enlace
-                        </button>
-                        <button onClick={() => setIssuedLink(null)} type="button">
-                          Listo
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold text-forest">
-                      {formatDay(selectedRoute.deliveryDate)}{' '}
-                      {selectedRoute.label ? `· ${selectedRoute.label}` : ''}
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {/* Lo que faltaba: poder sacar la ruta de la pantalla. */}
-                      {selectedRoute.stops.length > 0 ? (
-                        <>
-                          <button
-                            className="button button-secondary"
-                            onClick={() => void copyRoute(selectedRoute)}
-                            type="button"
-                          >
-                            Copiar para el repartidor
-                          </button>
-                          <button
-                            className="button button-secondary"
-                            onClick={() => downloadRouteCsv(selectedRoute)}
-                            type="button"
-                          >
-                            Descargar planilla
-                          </button>
-                          {/* El enlace del repartidor. Sólo con la ruta publicada: un borrador se
-                              puede reordenar, y una hoja que cambia debajo de quien ya salió es
-                              peor que no tener hoja. */}
-                          {canPublish && selectedRoute.status === 'published' ? (
-                            <button
-                              className="button button-primary"
-                              disabled={linkBusy}
-                              onClick={() => void issueLink(selectedRoute.id)}
-                              type="button"
-                            >
-                              {linkBusy ? 'Generando…' : 'Enlace para el repartidor'}
-                            </button>
-                          ) : null}
-                        </>
-                      ) : null}
-                      {canPublish && selectedRoute.status === 'draft' ? (
-                        <button
-                          className="button button-primary"
-                          onClick={() =>
-                            setPending({ kind: 'publicar', routeId: selectedRoute.id })
-                          }
-                          type="button"
-                        >
-                          Publicar
-                        </button>
-                      ) : null}
-                      {canManage && selectedRoute.status === 'draft' ? (
-                        <button
-                          className="button button-danger"
-                          onClick={() =>
-                            setPending({ kind: 'descartar', routeId: selectedRoute.id })
-                          }
-                          type="button"
-                        >
-                          Descartar propuesta
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="routes-viewer mt-4">
-                    <ol className="routes-stops grid content-start gap-2">
-                      {selectedRoute.stops.map((stop, index) => (
-                        <Fragment key={stop.id}>
-                          {neighborhoodHeading(selectedRoute.stops, index) ? (
-                            <li aria-hidden="true" className="routes-neighborhood">
-                              {neighborhoodHeading(selectedRoute.stops, index)}
-                            </li>
-                          ) : null}
-                          <li className="routes-stop">
-                            {/*
-                             * El número de parada va en su propia columna, fija.
-                             *
-                             * Estaba adentro del párrafo del nombre, así que al angostarse la
-                             * columna "1. Sofía Romero — NQN-00012" se partía en cuatro renglones y
-                             * el orden de la ruta —que es lo único que se lee de corrido— dejaba de
-                             * leerse. Afuera y en ancho fijo, el número siempre está donde se lo
-                             * busca.
-                             */}
-                            <span className="routes-stop-seq">{stop.sequence}</span>
-                            <div className="routes-stop-body">
-                              <p className="routes-stop-name">{stop.customerDisplayName}</p>
-                              <p className="routes-stop-number">{stop.publicNumber}</p>
-                              {stop.deliveryWindow ? (
-                                <p className="routes-stop-window">🕒 {stop.deliveryWindow}</p>
-                              ) : null}
-                              {stop.detail ? (
-                                <p className="routes-stop-detail">{stop.detail}</p>
-                              ) : null}
-                              <p className="routes-stop-address">{stop.deliveryAddress}</p>
-                              <p className="routes-stop-facts">
-                                {formatMoney(stop.totalMinor, 'ARS')} · {stop.paymentExpectation} ·{' '}
-                                {STOP_STATUS_LABELS[stop.status] ?? stop.status}
-                              </p>
-                            </div>
-                            {/* Reordenar y el estado, en una columna angosta que no empuja al texto:
-                              dos botones de flecha no pueden costarle la mitad del ancho al
-                              nombre del cliente. */}
-                            <div className="routes-stop-aside">
-                              {canManage ? (
-                                <div className="routes-stop-move">
-                                  <button
-                                    aria-label="Subir esta parada"
-                                    disabled={index === 0}
-                                    onClick={() => void move(index, -1)}
-                                    type="button"
-                                  >
-                                    ↑
-                                  </button>
-                                  <button
-                                    aria-label="Bajar esta parada"
-                                    disabled={index === selectedRoute.stops.length - 1}
-                                    onClick={() => void move(index, 1)}
-                                    type="button"
-                                  >
-                                    ↓
-                                  </button>
-                                </div>
-                              ) : null}
-                              {stop.status === 'delivered' ? (
-                                <span className="routes-stop-done">Entregada</span>
-                              ) : null}
-                            </div>
-                          </li>
-                        </Fragment>
-                      ))}
-                      {selectedRoute.stops.length === 0 ? (
-                        <p className="text-ink-muted">
-                          No hay pedidos por repartir en esa fecha y esa zona.
-                        </p>
-                      ) : null}
-                    </ol>
-                    {/* Todas las paradas juntas: es la única forma de ver si el orden propuesto
-                      tiene sentido antes de publicarlo. */}
-                    {selectedRoute.stops.length > 0 ? (
-                      <RouteMap stops={selectedRoute.stops} />
-                    ) : null}
-                  </div>
+                  <p className="text-sm text-ink-muted sm:col-span-3">
+                    {routableDates.reduce(
+                      (total, date) => total + date.total - date.geocoded - date.routed,
+                      0,
+                    ) > 0
+                      ? `Hay ${String(routableDates.reduce((total, date) => total + date.total - date.geocoded - date.routed, 0))} pedidos por repartir que no entran en ninguna hoja porque su domicilio no está geocodificado.`
+                      : 'Todos los pedidos por repartir tienen domicilio geocodificado.'}
+                  </p>
                 </>
               )}
+            </form>
+          ) : null}
+
+          {loading ? (
+            <p className="mt-6 text-ink-muted">Cargando…</p>
+          ) : (
+            <div className={`routes-layout mt-6 ${narrow && selectedRoute ? 'is-detail' : ''}`}>
+              {/*
+               * `content-start` es el arreglo de la lista rota: la columna mide lo que mide el visor
+               * de al lado —que con veinte paradas es larguísimo— y sin esto cada tarjeta se repartía
+               * ese alto, quedando fichas gigantes y casi vacías.
+               */}
+              <ul className="routes-list grid content-start gap-2">
+                {rutasVisibles.map((route) => (
+                  <li key={route.id}>
+                    <button
+                      className={`w-full rounded-xl border px-4 py-3 text-left ${
+                        selectedRoute?.id === route.id
+                          ? 'border-forest bg-forest/5'
+                          : 'border-forest/10 bg-[var(--db-surface)]'
+                      }`}
+                      onClick={() => void loadRouteDetail(route.id)}
+                      type="button"
+                    >
+                      <p className="font-semibold text-forest">
+                        {formatDay(route.deliveryDate)} {route.label ? `· ${route.label}` : ''}
+                      </p>
+                      <p className="text-xs text-ink-muted">
+                        {route.stopCount} paradas ·{' '}
+                        {route.status === 'draft'
+                          ? 'Borrador'
+                          : route.status === 'published'
+                            ? 'Publicada'
+                            : 'Completada'}
+                      </p>
+                    </button>
+                  </li>
+                ))}
+                {rutasViejas.length > 0 ? (
+                  <li>
+                    <button
+                      className="routes-older"
+                      onClick={() => setMostrarViejas((current) => !current)}
+                      type="button"
+                    >
+                      {mostrarViejas
+                        ? 'Ocultar las anteriores'
+                        : `Ver ${String(rutasViejas.length)} anteriores`}
+                    </button>
+                  </li>
+                ) : null}
+                {rutasVisibles.length === 0 ? (
+                  <EmptyState
+                    action={
+                      canManage ? (
+                        <button
+                          className="button button-primary"
+                          onClick={() => setFormOpen(true)}
+                          type="button"
+                        >
+                          + Proponer ruta
+                        </button>
+                      ) : null
+                    }
+                    body="Se arma con los pedidos por repartir de una zona y una fecha, y no sale a la app del repartidor hasta que la publiques."
+                    title="Todavía no hay ninguna ruta"
+                  />
+                ) : null}
+              </ul>
+
+              <div className="rounded-2xl border border-forest/10 bg-[var(--db-surface)] p-4">
+                {!selectedRoute ? (
+                  <p className="text-ink-muted">Elegí una ruta para ver sus paradas.</p>
+                ) : (
+                  <>
+                    {/* En el teléfono el detalle reemplaza a la lista, así que hay que poder
+                      volver. En escritorio están los dos a la vez y este botón no existe. */}
+                    {narrow ? (
+                      <button
+                        className="routes-back"
+                        onClick={() => setSelectedRoute(null)}
+                        type="button"
+                      >
+                        ← Todas las rutas
+                      </button>
+                    ) : null}
+
+                    {/* Cómo va la ruta: lo mismo que ve quien reparte. Que las dos pantallas
+                      discrepen sobre cuánta plata hay en la calle sería peor que no mostrarlo. */}
+                    {progress && selectedRoute.status === 'published' ? (
+                      <p className="route-progress">
+                        <span>
+                          {progress.deliveredCount} de {progress.stopCount} entregadas
+                        </span>
+                        <span>Cobrado {formatMoney(progress.collectedMinor, 'ARS')}</span>
+                        {progress.pendingCollectionMinor > 0 ? (
+                          <span>
+                            Falta cobrar {formatMoney(progress.pendingCollectionMinor, 'ARS')}
+                          </span>
+                        ) : null}
+                      </p>
+                    ) : null}
+
+                    {issuedLink ? (
+                      <div className="route-link">
+                        <p>
+                          Pasale este enlace a quien reparte. Abre la hoja del día en el teléfono,
+                          sin clave. Vence el{' '}
+                          {new Date(issuedLink.expiresAt).toLocaleString('es-AR')}.
+                        </p>
+                        <code>{issuedLink.url}</code>
+                        <div>
+                          <button
+                            onClick={() => void navigator.clipboard.writeText(issuedLink.url)}
+                            type="button"
+                          >
+                            Copiar
+                          </button>
+                          <button onClick={() => void revokeLink(selectedRoute.id)} type="button">
+                            Dar de baja el enlace
+                          </button>
+                          <button onClick={() => setIssuedLink(null)} type="button">
+                            Listo
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold text-forest">
+                        {formatDay(selectedRoute.deliveryDate)}{' '}
+                        {selectedRoute.label ? `· ${selectedRoute.label}` : ''}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {/* Lo que faltaba: poder sacar la ruta de la pantalla. */}
+                        {selectedRoute.stops.length > 0 ? (
+                          <>
+                            <button
+                              className="button button-secondary"
+                              onClick={() => void copyRoute(selectedRoute)}
+                              type="button"
+                            >
+                              Copiar para el repartidor
+                            </button>
+                            <button
+                              className="button button-secondary"
+                              onClick={() => downloadRouteCsv(selectedRoute)}
+                              type="button"
+                            >
+                              Descargar planilla
+                            </button>
+                            {/* El enlace del repartidor. Sólo con la ruta publicada: un borrador se
+                              puede reordenar, y una hoja que cambia debajo de quien ya salió es
+                              peor que no tener hoja. */}
+                            {canPublish && selectedRoute.status === 'published' ? (
+                              <button
+                                className="button button-primary"
+                                disabled={linkBusy}
+                                onClick={() => void issueLink(selectedRoute.id)}
+                                type="button"
+                              >
+                                {linkBusy ? 'Generando…' : 'Enlace para el repartidor'}
+                              </button>
+                            ) : null}
+                          </>
+                        ) : null}
+                        {canPublish && selectedRoute.status === 'draft' ? (
+                          <button
+                            className="button button-primary"
+                            onClick={() =>
+                              setPending({ kind: 'publicar', routeId: selectedRoute.id })
+                            }
+                            type="button"
+                          >
+                            Publicar
+                          </button>
+                        ) : null}
+                        {canManage && selectedRoute.status === 'draft' ? (
+                          <button
+                            className="button button-danger"
+                            onClick={() =>
+                              setPending({ kind: 'descartar', routeId: selectedRoute.id })
+                            }
+                            type="button"
+                          >
+                            Descartar propuesta
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="routes-viewer mt-4">
+                      <ol className="routes-stops grid content-start gap-2">
+                        {selectedRoute.stops.map((stop, index) => (
+                          <Fragment key={stop.id}>
+                            {neighborhoodHeading(selectedRoute.stops, index) ? (
+                              <li aria-hidden="true" className="routes-neighborhood">
+                                {neighborhoodHeading(selectedRoute.stops, index)}
+                              </li>
+                            ) : null}
+                            <li className="routes-stop">
+                              {/*
+                               * El número de parada va en su propia columna, fija.
+                               *
+                               * Estaba adentro del párrafo del nombre, así que al angostarse la
+                               * columna "1. Sofía Romero — NQN-00012" se partía en cuatro renglones y
+                               * el orden de la ruta —que es lo único que se lee de corrido— dejaba de
+                               * leerse. Afuera y en ancho fijo, el número siempre está donde se lo
+                               * busca.
+                               */}
+                              <span className="routes-stop-seq">{stop.sequence}</span>
+                              <div className="routes-stop-body">
+                                <p className="routes-stop-name">{stop.customerDisplayName}</p>
+                                <p className="routes-stop-number">{stop.publicNumber}</p>
+                                {stop.deliveryWindow ? (
+                                  <p className="routes-stop-window">🕒 {stop.deliveryWindow}</p>
+                                ) : null}
+                                {stop.detail ? (
+                                  <p className="routes-stop-detail">{stop.detail}</p>
+                                ) : null}
+                                <p className="routes-stop-address">{stop.deliveryAddress}</p>
+                                <p className="routes-stop-facts">
+                                  {formatMoney(stop.totalMinor, 'ARS')} · {stop.paymentExpectation}{' '}
+                                  · {STOP_STATUS_LABELS[stop.status] ?? stop.status}
+                                </p>
+                              </div>
+                              {/* Reordenar y el estado, en una columna angosta que no empuja al texto:
+                              dos botones de flecha no pueden costarle la mitad del ancho al
+                              nombre del cliente. */}
+                              <div className="routes-stop-aside">
+                                {canManage ? (
+                                  <div className="routes-stop-move">
+                                    <button
+                                      aria-label="Subir esta parada"
+                                      disabled={index === 0}
+                                      onClick={() => void move(index, -1)}
+                                      type="button"
+                                    >
+                                      ↑
+                                    </button>
+                                    <button
+                                      aria-label="Bajar esta parada"
+                                      disabled={index === selectedRoute.stops.length - 1}
+                                      onClick={() => void move(index, 1)}
+                                      type="button"
+                                    >
+                                      ↓
+                                    </button>
+                                  </div>
+                                ) : null}
+                                {stop.status === 'delivered' ? (
+                                  <span className="routes-stop-done">Entregada</span>
+                                ) : null}
+                              </div>
+                            </li>
+                          </Fragment>
+                        ))}
+                        {selectedRoute.stops.length === 0 ? (
+                          <p className="text-ink-muted">
+                            No hay pedidos por repartir en esa fecha y esa zona.
+                          </p>
+                        ) : null}
+                      </ol>
+                      {/* Todas las paradas juntas: es la única forma de ver si el orden propuesto
+                      tiene sentido antes de publicarlo. */}
+                      {selectedRoute.stops.length > 0 ? (
+                        <RouteMap stops={selectedRoute.stops} />
+                      ) : null}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </section>
 
       {pending ? (

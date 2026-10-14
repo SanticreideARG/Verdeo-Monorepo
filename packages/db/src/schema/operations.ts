@@ -595,6 +595,46 @@ export const cancellationReasons = pgTable(
   ],
 );
 
+/**
+ * Un reparto: una salida planificada de una ciudad en una fecha, con sus pedidos
+ * (DELIVERY_RUNS_PLAN.md). Puede haber más de uno por día (mañana y tarde); el marcado
+ * `is_default` es al que entran solos los pedidos nuevos de esa fecha. Las hojas de ruta salen de
+ * un reparto.
+ *
+ * Estados: `planned` (abierto, entran pedidos) → `consolidated` (lista cerrada) → `dispatched`
+ * (hojas en la calle) → `closed`; además `cancelled`.
+ */
+export const deliveryRuns = pgTable(
+  'delivery_runs',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    operatingSiteId: uuid('operating_site_id')
+      .notNull()
+      .references(() => operatingSites.id, { onDelete: 'restrict' }),
+    deliveryDate: date('delivery_date').notNull(),
+    label: text('label').notNull(),
+    // Texto libre: "de 11 a 14h". Lo lee una persona.
+    timeWindow: text('time_window'),
+    status: text('status').default('planned').notNull(),
+    isDefault: boolean('is_default').default(true).notNull(),
+    // Creado solo al llegar un pedido con esa fecha: si se queda sin pedidos, se borra solo.
+    autoCreated: boolean('auto_created').default(false).notNull(),
+    notes: text('notes'),
+    createdByUserId: uuid('created_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    consolidatedAt: timestamp('consolidated_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index('delivery_runs_site_date_idx').on(table.operatingSiteId, table.deliveryDate),
+    check(
+      'delivery_runs_status_check',
+      sql`${table.status} in ('planned', 'consolidated', 'dispatched', 'closed', 'cancelled')`,
+    ),
+  ],
+);
+
 export const orders = pgTable(
   'orders',
   {
@@ -653,9 +693,14 @@ export const orders = pgTable(
      * pedido otra vez. Así se duplicaron pedidos el 2026-10-13. Nulo para lo que no se importa.
      */
     importKey: text('import_key'),
+    // El reparto al que pertenece. Su fecha es siempre la del reparto. Nulo: "sin reparto".
+    deliveryRunId: uuid('delivery_run_id').references(() => deliveryRuns.id, {
+      onDelete: 'set null',
+    }),
     ...timestamps,
   },
   (table) => [
+    index('orders_delivery_run_idx').on(table.deliveryRunId),
     uniqueIndex('orders_import_key_unique')
       .on(table.importKey)
       .where(sql`${table.importKey} is not null`),

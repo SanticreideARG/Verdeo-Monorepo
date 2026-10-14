@@ -158,6 +158,10 @@ import {
   OrderImportEmailPreviewRequestSchema,
   GeocodingMetricsSchema,
   DeliveryOptionsResponseSchema,
+  DeliveryRunCreateRequestSchema,
+  DeliveryRunListResponseSchema,
+  DeliveryRunUpdateRequestSchema,
+  DeliveryRunUpdateResponseSchema,
   DeliverySettingsSchema,
   DispatchSummarySchema,
   GeocodingSettingsSchema,
@@ -609,6 +613,18 @@ interface OperationsEngine {
     operatingSiteId: string,
   ): Promise<{ defaultDate: string; options: { date: string; weekday: number }[] }>;
   dispatchSummary?(date: string, operatingSiteId: string | null): Promise<unknown>;
+  listDeliveryRuns?(operatingSiteId: string | null, fromDate: string): Promise<unknown>;
+  createDeliveryRun?(
+    operatingSiteId: string,
+    input: z.infer<typeof DeliveryRunCreateRequestSchema>,
+    context: OperationsContext,
+  ): Promise<{ id: string }>;
+  updateDeliveryRun?(
+    runId: string,
+    input: z.infer<typeof DeliveryRunUpdateRequestSchema>,
+    context: OperationsContext,
+  ): Promise<unknown>;
+  deleteDeliveryRun?(runId: string, context: OperationsContext): Promise<void>;
   updateGeocodingSettings(
     operatingSiteId: string,
     input: GeocodingSettings,
@@ -2598,6 +2614,8 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/delivery/locate-missing', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/delivery/settings', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/delivery/options', requireAuthentication, resolveScopeSelection);
+  app.use('/api/v1/delivery/runs', requireAuthentication, resolveScopeSelection);
+  app.use('/api/v1/delivery/runs/*', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/delivery/*', requireAuthentication);
   app.use('/api/v1/payments/*', requireAuthentication);
   app.use('/api/v1/stats', requireAuthentication);
@@ -4992,6 +5010,69 @@ export function createApp(options: CreateAppOptions) {
         ),
       ),
     );
+  });
+
+  /*
+   * Los repartos (DELIVERY_RUNS_PLAN.md): las salidas de cada día, con sus pedidos. Ver pide
+   * `routes.read`; crear, cambiar y borrar, `routes.manage`.
+   */
+  app.get('/api/v1/delivery/runs', async (context) => {
+    if (!context.get('session').permissions.includes('routes.read')) return forbidden(context);
+    const from = z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .catch(deliveryDateFor(new Date()))
+      .parse(context.req.query('from'));
+    const operations = requireOperations();
+    if (!operations.listDeliveryRuns) return context.json({ runs: [], unassigned: 0 });
+    return context.json(
+      DeliveryRunListResponseSchema.parse(
+        await operations.listDeliveryRuns(context.get('scope')?.operatingSiteId ?? null, from),
+      ),
+    );
+  });
+
+  app.post('/api/v1/delivery/runs', async (context) => {
+    if (!context.get('session').permissions.includes('routes.manage')) return forbidden(context);
+    const operatingSiteId = context.get('scope')?.operatingSiteId;
+    if (!operatingSiteId) return badRequest(context, 'Elegí una ciudad para crear el reparto.');
+    const input = DeliveryRunCreateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) return badRequest(context, 'Revisá el reparto.', input.error.issues);
+    const operations = requireOperations();
+    if (!operations.createDeliveryRun) throw new Error('Delivery runs are not configured');
+    return context.json(
+      await operations.createDeliveryRun(operatingSiteId, input.data, operationsContext(context)),
+      201,
+    );
+  });
+
+  app.patch('/api/v1/delivery/runs/:id', async (context) => {
+    if (!context.get('session').permissions.includes('routes.manage')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El reparto no es válido.');
+    const input = DeliveryRunUpdateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) return badRequest(context, 'Revisá el reparto.', input.error.issues);
+    const operations = requireOperations();
+    if (!operations.updateDeliveryRun) throw new Error('Delivery runs are not configured');
+    return context.json(
+      DeliveryRunUpdateResponseSchema.parse(
+        await operations.updateDeliveryRun(params.data.id, input.data, operationsContext(context)),
+      ),
+    );
+  });
+
+  app.delete('/api/v1/delivery/runs/:id', async (context) => {
+    if (!context.get('session').permissions.includes('routes.manage')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El reparto no es válido.');
+    const operations = requireOperations();
+    if (!operations.deleteDeliveryRun) throw new Error('Delivery runs are not configured');
+    await operations.deleteDeliveryRun(params.data.id, operationsContext(context));
+    return context.body(null, 204);
   });
 
   /** Las fechas de reparto que se pueden elegir para un menú en la ciudad elegida arriba. */

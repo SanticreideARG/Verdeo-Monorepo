@@ -133,7 +133,12 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         label: 'Etiquetas',
         permission: 'production.read',
       },
-      { href: '/app/reparto/rutas', icon: 'delivery', label: 'Rutas', permission: 'routes.read' },
+      {
+        href: '/app/reparto/rutas',
+        icon: 'delivery',
+        label: 'Rutas y repartos',
+        permission: 'routes.read',
+      },
     ],
   },
   {

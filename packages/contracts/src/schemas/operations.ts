@@ -1680,6 +1680,63 @@ export const DeliveryOptionsResponseSchema = z.object({
   options: z.array(z.object({ date: z.string(), weekday: z.number().int().min(0).max(6) })),
 });
 
+const IsoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+/** Un reparto: una salida planificada de una ciudad en una fecha (DELIVERY_RUNS_PLAN.md). */
+export const DeliveryRunSchema = z.object({
+  autoCreated: z.boolean(),
+  deliveryDate: z.string(),
+  drafts: z.number().int(),
+  id: UuidSchema,
+  isDefault: z.boolean(),
+  label: z.string(),
+  noPayment: z.number().int(),
+  notes: z.string().nullable(),
+  operatingSiteId: UuidSchema,
+  orders: z.number().int(),
+  routes: z.number().int(),
+  status: z.enum(['planned', 'consolidated', 'dispatched', 'closed', 'cancelled']),
+  timeWindow: z.string().nullable(),
+  unlocated: z.number().int(),
+  varieties: z.array(z.object({ label: z.string(), units: z.number().int() })),
+});
+
+export const DeliveryRunListResponseSchema = z.object({
+  runs: z.array(DeliveryRunSchema),
+  /** Pedidos con fecha desde hoy que no están en ningún reparto (lista cerrada o varios a elegir). */
+  unassigned: z.number().int(),
+});
+
+export const DeliveryRunCreateRequestSchema = z.object({
+  deliveryDate: IsoDateSchema,
+  isDefault: z.boolean().optional(),
+  label: z.string().trim().max(80).optional(),
+  timeWindow: z.string().trim().max(80).nullable().optional(),
+});
+
+export const DeliveryRunUpdateRequestSchema = z
+  .object({
+    deliveryDate: IsoDateSchema.optional(),
+    isDefault: z.boolean().optional(),
+    label: z.string().trim().max(80).optional(),
+    timeWindow: z.string().trim().max(80).nullable().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, { message: 'No hay cambios para aplicar.' });
+
+export const DeliveryRunUpdateResponseSchema = z.object({
+  /** Los pedidos que se movieron de fecha, para ofrecer el aviso a cada cliente. */
+  moved: z.array(
+    z.object({
+      customerName: z.string(),
+      orderId: UuidSchema,
+      phone: z.string().nullable(),
+      publicNumber: z.string(),
+    }),
+  ),
+  /** La nueva fecha no es uno de los días de reparto de la ciudad: se permite, con aviso. */
+  outsideDeliveryDays: z.boolean(),
+});
+
 /** Lo que hay que despachar en un día, para la alerta y para armar las hojas de ruta. */
 export const DispatchSummarySchema = z.object({
   date: z.string(),

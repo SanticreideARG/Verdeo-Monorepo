@@ -1949,6 +1949,46 @@ describe('API foundation', () => {
         expect(dispatchSummary).toHaveBeenCalledWith('2026-10-18', SEDE);
       });
 
+      it('lista, crea y mueve repartos con routes.manage, y los niega sin el permiso', async () => {
+        const createDeliveryRun = vi.fn(() => Promise.resolve({ id: ORDEN }));
+        const updateDeliveryRun = vi.fn(() =>
+          Promise.resolve({ moved: [], outsideDeliveryDays: false }),
+        );
+        const listDeliveryRuns = vi.fn(() => Promise.resolve({ runs: [], unassigned: 2 }));
+        const operations = { createDeliveryRun, listDeliveryRuns, updateDeliveryRun };
+        const headers = { 'content-type': 'application/json', cookie, [SITE_SCOPE_HEADER]: SEDE };
+
+        const app = buildApp(operations, ['routes.read', 'routes.manage']);
+        const listado = await app.request('/api/v1/delivery/runs?from=2026-10-14', { headers });
+        expect(await listado.json()).toEqual({ runs: [], unassigned: 2 });
+        expect(listDeliveryRuns).toHaveBeenCalledWith(SEDE, '2026-10-14');
+
+        const creado = await app.request('/api/v1/delivery/runs', {
+          body: JSON.stringify({ deliveryDate: '2026-10-18', label: 'Mañana' }),
+          headers,
+          method: 'POST',
+        });
+        expect(creado.status).toBe(201);
+        expect(createDeliveryRun).toHaveBeenCalledWith(
+          SEDE,
+          { deliveryDate: '2026-10-18', label: 'Mañana' },
+          expect.anything(),
+        );
+
+        const movido = await app.request(`/api/v1/delivery/runs/${ORDEN}`, {
+          body: JSON.stringify({ deliveryDate: '2026-10-19' }),
+          headers,
+          method: 'PATCH',
+        });
+        expect(movido.status).toBe(200);
+
+        const sinPermiso = await buildApp(operations, ['routes.read']).request(
+          '/api/v1/delivery/runs',
+          { body: JSON.stringify({ deliveryDate: '2026-10-18' }), headers, method: 'POST' },
+        );
+        expect(sinPermiso.status).toBe(403);
+      });
+
       it('lista los pedidos del día sin ubicación', async () => {
         const unlocatedOrders = vi.fn(() => Promise.resolve([pedido]));
         const response = await buildApp({ unlocatedOrders }, ['routes.read']).request(

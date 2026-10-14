@@ -43,6 +43,7 @@ import {
   calculateOrderTotal,
   deliveryOptions,
   resolveDeliveryDate,
+  weekdayOf,
   matchOffering,
   mergeByLooseName,
   normalizeMenuName,
@@ -67,6 +68,7 @@ import {
   customerRestrictions,
   customers,
   deliveryRoutes,
+  deliveryRuns,
   deliveryStops,
   domainEvents,
   geocodingCandidates,
@@ -104,6 +106,7 @@ import {
   weeklyMenus,
 } from '../schema/index.js';
 import { findMergeCandidates, mergeCustomers } from './customer-merge.js';
+import { assignOrderToRun, leaveRun, runLabel } from './delivery-runs.js';
 import { PostgresAuditSink } from './postgres-audit-sink.js';
 
 type DatabaseTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -3100,6 +3103,390 @@ export class PostgresOperationsService {
     };
   }
 
+  /**
+   * Los repartos de una ciudad (o de todas) desde una fecha, con lo que hace falta para decidir:
+   * pedidos, viandas por variedad, cuántos siguen en borrador, cuántos no tienen ubicación ni medio
+   * de pago, y cuántas hojas salieron. También cuántos pedidos de esas fechas quedaron sin reparto.
+   */
+  public async listDeliveryRuns(operatingSiteId: string | null, fromDate: string) {
+    const runs = await this.database
+      .select({
+        autoCreated: deliveryRuns.autoCreated,
+        deliveryDate: deliveryRuns.deliveryDate,
+        id: deliveryRuns.id,
+        isDefault: deliveryRuns.isDefault,
+        label: deliveryRuns.label,
+        notes: deliveryRuns.notes,
+        operatingSiteId: deliveryRuns.operatingSiteId,
+        status: deliveryRuns.status,
+        timeWindow: deliveryRuns.timeWindow,
+      })
+      .from(deliveryRuns)
+      .where(
+        and(
+          gte(deliveryRuns.deliveryDate, fromDate),
+          ne(deliveryRuns.status, 'cancelled'),
+          ...(operatingSiteId ? [eq(deliveryRuns.operatingSiteId, operatingSiteId)] : []),
+        ),
+      )
+      .orderBy(
+        asc(deliveryRuns.deliveryDate),
+        desc(deliveryRuns.isDefault),
+        asc(deliveryRuns.label),
+      );
+    const ids = runs.map((run) => run.id);
+    const stats =
+      ids.length === 0
+        ? []
+        : await this.database
+            .select({
+              drafts: sql<number>`count(*) filter (where ${orders.status} = 'DRAFT')::int`,
+              noPayment: sql<number>`count(*) filter (where coalesce(trim(${orders.paymentExpectation}), '') = '')::int`,
+              orders: sql<number>`count(*)::int`,
+              runId: orders.deliveryRunId,
+              unlocated: sql<number>`count(*) filter (where ${customerAddresses.latitude} is null)::int`,
+            })
+            .from(orders)
+            .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+            .where(and(inArray(orders.deliveryRunId, ids), ne(orders.status, 'CANCELLED')))
+            .groupBy(orders.deliveryRunId);
+    const items =
+      ids.length === 0
+        ? []
+        : await this.database
+            .select({
+              label: sql<string>`trim(${orderItems.productNameSnapshot} || ' ' || ${orderItems.variantSnapshot})`,
+              runId: orders.deliveryRunId,
+              units: sql<number>`sum(${orderItems.quantityUnits})::int`,
+            })
+            .from(orderItems)
+            .innerJoin(orders, eq(orders.id, orderItems.orderId))
+            .where(and(inArray(orders.deliveryRunId, ids), ne(orders.status, 'CANCELLED')))
+            .groupBy(
+              orders.deliveryRunId,
+              orderItems.productNameSnapshot,
+              orderItems.variantSnapshot,
+            );
+    const routes =
+      ids.length === 0
+        ? []
+        : await this.database
+            .select({ runId: deliveryRoutes.deliveryRunId, total: sql<number>`count(*)::int` })
+            .from(deliveryRoutes)
+            .where(inArray(deliveryRoutes.deliveryRunId, ids))
+            .groupBy(deliveryRoutes.deliveryRunId);
+    const [sinReparto] = await this.database
+      .select({ total: sql<number>`count(*)::int` })
+      .from(orders)
+      .where(
+        and(
+          isNull(orders.deliveryRunId),
+          ne(orders.status, 'CANCELLED'),
+          gte(orders.deliveryDate, fromDate),
+          ...(operatingSiteId ? [eq(orders.operatingSiteId, operatingSiteId)] : []),
+        ),
+      );
+    return {
+      runs: runs.map((run) => {
+        const stat = stats.find((row) => row.runId === run.id);
+        return {
+          ...run,
+          deliveryDate: String(run.deliveryDate),
+          drafts: stat?.drafts ?? 0,
+          noPayment: stat?.noPayment ?? 0,
+          orders: stat?.orders ?? 0,
+          routes: routes.find((row) => row.runId === run.id)?.total ?? 0,
+          unlocated: stat?.unlocated ?? 0,
+          varieties: items
+            .filter((row) => row.runId === run.id)
+            .map((row) => ({ label: row.label, units: row.units }))
+            .sort((a, b) => b.units - a.units),
+        };
+      }),
+      unassigned: sinReparto?.total ?? 0,
+    };
+  }
+
+  /** Un reparto a mano: una salida extra, o separar mañana y tarde (regla 2). */
+  public async createDeliveryRun(
+    operatingSiteId: string,
+    input: {
+      deliveryDate: string;
+      isDefault?: boolean | undefined;
+      label?: string | undefined;
+      timeWindow?: string | null | undefined;
+    },
+    context: OperationsContext,
+  ) {
+    return this.database.transaction(async (transaction) => {
+      const [otro] = await transaction
+        .select({ id: deliveryRuns.id })
+        .from(deliveryRuns)
+        .where(
+          and(
+            eq(deliveryRuns.operatingSiteId, operatingSiteId),
+            eq(deliveryRuns.deliveryDate, input.deliveryDate),
+            eq(deliveryRuns.isDefault, true),
+            ne(deliveryRuns.status, 'cancelled'),
+          ),
+        )
+        .limit(1);
+      const isDefault = input.isDefault ?? !otro;
+      if (isDefault && otro) {
+        await transaction
+          .update(deliveryRuns)
+          .set({ isDefault: false })
+          .where(eq(deliveryRuns.id, otro.id));
+      }
+      const [created] = await transaction
+        .insert(deliveryRuns)
+        .values({
+          createdByUserId: context.actorUserId ?? null,
+          deliveryDate: input.deliveryDate,
+          isDefault,
+          label: input.label?.trim() || runLabel(input.deliveryDate),
+          operatingSiteId,
+          timeWindow: input.timeWindow?.trim() || null,
+        })
+        .returning({ id: deliveryRuns.id });
+      if (!created) throw new Error('Delivery run creation did not return a row');
+      await new AuditService(new PostgresAuditSink(transaction)).record({
+        action: 'delivery_run.created',
+        actor: auditActor(context),
+        after: { deliveryDate: input.deliveryDate, isDefault, label: input.label ?? null },
+        correlationId: context.correlationId,
+        entityId: created.id,
+        entityType: 'delivery_run',
+        requestId: context.requestId,
+        source: context.source,
+      });
+      return created;
+    });
+  }
+
+  /**
+   * Cambiar nombre, franja, "de siempre" o fecha de un reparto.
+   *
+   * Cambiar la fecha mueve todos sus pedidos a la nueva (regla 3), cada uno auditado. Con hojas ya
+   * publicadas no se mueve: primero se despublican. Fuera de los días de reparto de la ciudad se
+   * permite y se avisa (`outsideDeliveryDays`). Devuelve los pedidos movidos, con el teléfono del
+   * cliente, para ofrecer el aviso de cambio de fecha (nunca se manda solo).
+   */
+  public async updateDeliveryRun(
+    runId: string,
+    input: {
+      deliveryDate?: string | undefined;
+      isDefault?: boolean | undefined;
+      label?: string | undefined;
+      timeWindow?: string | null | undefined;
+    },
+    context: OperationsContext,
+  ) {
+    return this.database.transaction(async (transaction) => {
+      const [run] = await transaction
+        .select()
+        .from(deliveryRuns)
+        .where(eq(deliveryRuns.id, runId))
+        .for('update')
+        .limit(1);
+      if (!run) throw new OperationsNotFoundError('No se encontró el reparto');
+      const before = {
+        deliveryDate: String(run.deliveryDate),
+        isDefault: run.isDefault,
+        label: run.label,
+        timeWindow: run.timeWindow,
+      };
+      const nuevaFecha =
+        input.deliveryDate !== undefined && input.deliveryDate !== String(run.deliveryDate)
+          ? input.deliveryDate
+          : null;
+
+      if (nuevaFecha) {
+        const [publicada] = await transaction
+          .select({ id: deliveryRoutes.id })
+          .from(deliveryRoutes)
+          .where(
+            and(eq(deliveryRoutes.deliveryRunId, runId), eq(deliveryRoutes.status, 'published')),
+          )
+          .limit(1);
+        if (publicada) {
+          throw new OperationsConflictError(
+            'El reparto tiene hojas de ruta publicadas: despublicalas antes de cambiarle la fecha.',
+          );
+        }
+      }
+      const fecha = nuevaFecha ?? String(run.deliveryDate);
+      const isDefault = input.isDefault ?? run.isDefault;
+      if (isDefault && (input.isDefault === true || nuevaFecha)) {
+        // Uno solo "de siempre" por ciudad y día.
+        await transaction
+          .update(deliveryRuns)
+          .set({ isDefault: false })
+          .where(
+            and(
+              eq(deliveryRuns.operatingSiteId, run.operatingSiteId),
+              eq(deliveryRuns.deliveryDate, fecha),
+              ne(deliveryRuns.id, runId),
+            ),
+          );
+      }
+      await transaction
+        .update(deliveryRuns)
+        .set({
+          deliveryDate: fecha,
+          isDefault,
+          ...(input.label !== undefined ? { label: input.label.trim() || runLabel(fecha) } : {}),
+          // Un reparto creado solo y renombrado a mano ya no se borra solo.
+          ...(input.label !== undefined ? { autoCreated: false } : {}),
+          ...(input.timeWindow !== undefined
+            ? { timeWindow: input.timeWindow?.trim() || null }
+            : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(deliveryRuns.id, runId));
+
+      let moved: {
+        customerName: string;
+        orderId: string;
+        phone: string | null;
+        publicNumber: string;
+      }[] = [];
+      if (nuevaFecha) {
+        const pedidos = await transaction
+          .update(orders)
+          .set({ deliveryDate: nuevaFecha, updatedAt: new Date() })
+          .where(and(eq(orders.deliveryRunId, runId), ne(orders.status, 'CANCELLED')))
+          .returning({
+            customerId: orders.customerId,
+            id: orders.id,
+            publicNumber: orders.publicNumber,
+          });
+        // Las rutas en borrador del reparto se van con él: ya no son de ese día.
+        await transaction
+          .update(deliveryRoutes)
+          .set({ deliveryDate: nuevaFecha, updatedAt: new Date() })
+          .where(and(eq(deliveryRoutes.deliveryRunId, runId), eq(deliveryRoutes.status, 'draft')));
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        for (const pedido of pedidos) {
+          await audit.record({
+            action: 'order.rescheduled',
+            actor: auditActor(context),
+            after: { deliveryDate: nuevaFecha },
+            before: { deliveryDate: String(run.deliveryDate) },
+            correlationId: context.correlationId,
+            entityId: pedido.id,
+            entityType: 'order',
+            metadata: { deliveryRunId: runId },
+            requestId: context.requestId,
+            source: context.source,
+          });
+        }
+        const clientes =
+          pedidos.length === 0
+            ? []
+            : await transaction
+                .select({
+                  customerId: customers.id,
+                  displayName: customers.displayName,
+                  type: customerIdentities.type,
+                  value: customerIdentities.valueDisplay,
+                })
+                .from(customers)
+                .leftJoin(
+                  customerIdentities,
+                  and(
+                    eq(customerIdentities.customerId, customers.id),
+                    eq(customerIdentities.active, true),
+                    inArray(customerIdentities.type, ['whatsapp', 'phone']),
+                  ),
+                )
+                .where(
+                  inArray(
+                    customers.id,
+                    pedidos.map((pedido) => pedido.customerId),
+                  ),
+                );
+        moved = pedidos.map((pedido) => {
+          const delCliente = clientes.filter((cliente) => cliente.customerId === pedido.customerId);
+          const telefono =
+            delCliente.find((cliente) => cliente.type === 'whatsapp')?.value ??
+            delCliente.find((cliente) => cliente.value)?.value ??
+            null;
+          return {
+            customerName: delCliente[0]?.displayName ?? '',
+            orderId: pedido.id,
+            phone: telefono,
+            publicNumber: pedido.publicNumber,
+          };
+        });
+      }
+
+      await new AuditService(new PostgresAuditSink(transaction)).record({
+        action: nuevaFecha ? 'delivery_run.rescheduled' : 'delivery_run.updated',
+        actor: auditActor(context),
+        after: {
+          deliveryDate: fecha,
+          isDefault,
+          label: input.label ?? run.label,
+          movedOrders: moved.length,
+          timeWindow: input.timeWindow ?? run.timeWindow,
+        },
+        before,
+        correlationId: context.correlationId,
+        entityId: runId,
+        entityType: 'delivery_run',
+        requestId: context.requestId,
+        source: context.source,
+      });
+
+      const settings = await this.getDeliverySettings(run.operatingSiteId, transaction);
+      return {
+        moved,
+        outsideDeliveryDays:
+          nuevaFecha !== null &&
+          settings.weekdays.length > 0 &&
+          !settings.weekdays.includes(weekdayOf(nuevaFecha)),
+      };
+    });
+  }
+
+  /** Borrar un reparto: sólo si no tiene pedidos ni hojas. */
+  public async deleteDeliveryRun(runId: string, context: OperationsContext) {
+    return this.database.transaction(async (transaction) => {
+      const [pedido] = await transaction
+        .select({ id: orders.id })
+        .from(orders)
+        .where(eq(orders.deliveryRunId, runId))
+        .limit(1);
+      if (pedido) {
+        throw new OperationsConflictError(
+          'El reparto tiene pedidos: movelos a otro reparto antes de borrarlo.',
+        );
+      }
+      const [hoja] = await transaction
+        .select({ id: deliveryRoutes.id })
+        .from(deliveryRoutes)
+        .where(eq(deliveryRoutes.deliveryRunId, runId))
+        .limit(1);
+      if (hoja)
+        throw new OperationsConflictError('El reparto tiene hojas de ruta: borralas primero.');
+      const [borrado] = await transaction
+        .delete(deliveryRuns)
+        .where(eq(deliveryRuns.id, runId))
+        .returning({ id: deliveryRuns.id });
+      if (!borrado) throw new OperationsNotFoundError('No se encontró el reparto');
+      await new AuditService(new PostgresAuditSink(transaction)).record({
+        action: 'delivery_run.deleted',
+        actor: auditActor(context),
+        correlationId: context.correlationId,
+        entityId: runId,
+        entityType: 'delivery_run',
+        requestId: context.requestId,
+        source: context.source,
+      });
+    });
+  }
+
   public async updateGeocodingSettings(
     operatingSiteId: string,
     input: {
@@ -4641,6 +5028,8 @@ export class PostgresOperationsService {
         }
       }
       await transaction.update(orders).set(changes).where(eq(orders.id, orderId));
+      // Con otra fecha, otro reparto.
+      if (input.deliveryDate !== undefined) await assignOrderToRun(transaction, orderId);
 
       const audit = new AuditService(new PostgresAuditSink(transaction));
       await audit.record({
@@ -4909,6 +5298,8 @@ export class PostgresOperationsService {
       })
       .returning({ id: orders.id });
     if (!createdOrder) throw new Error('Order creation did not return a row');
+    // Entra al reparto de su fecha en su ciudad; si no hay ninguno, se crea (DELIVERY_RUNS_PLAN.md).
+    await assignOrderToRun(transaction, createdOrder.id);
 
     await this.persistOrderItems(transaction, createdOrder.id, resolvedItems);
     if (input.dietaryInstructions.length > 0) {
@@ -6001,6 +6392,7 @@ export class PostgresOperationsService {
       await transaction.delete(deliveryStops).where(eq(deliveryStops.orderId, orderId));
       // Sin clave foránea, así que no cae solo: ver el comentario de `manual_notices`.
       await transaction.delete(manualNotices).where(eq(manualNotices.orderId, orderId));
+      await leaveRun(transaction, orderId);
       await transaction.delete(orders).where(eq(orders.id, orderId));
 
       return {
@@ -6059,6 +6451,9 @@ export class PostgresOperationsService {
             : { cancellationNotes: null, cancellationReasonId: null }),
         })
         .where(eq(orders.id, orderId));
+      // Cancelado sale de su reparto; si se reactiva, vuelve al de su fecha.
+      if (targetStatus === 'CANCELLED') await leaveRun(transaction, orderId);
+      else if (fromStatus === 'CANCELLED') await assignOrderToRun(transaction, orderId);
       await transaction.insert(orderStatusHistory).values({
         actorUserId: context.actorUserId,
         fromStatus,

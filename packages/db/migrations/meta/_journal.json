@@ -421,6 +421,13 @@
       "when": 1791946519721,
       "tag": "0059_lame_ricochet",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1791977391867,
+      "tag": "0060_dry_dreadnoughts",
+      "breakpoints": true
     }
   ]
 }

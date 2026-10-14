@@ -1,0 +1,179 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { PGlite } from '@electric-sql/pglite';
+import { drizzle } from 'drizzle-orm/pglite';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import type { Database } from './index.js';
+import { PostgresOperationsService } from './repositories/postgres-operations-service.js';
+import * as schema from './schema/index.js';
+
+const migrationsFolder = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
+const SITE = 'a0000000-0000-4000-8000-000000000009';
+const CUSTOMER = 'c0000000-0000-4000-8000-000000000001';
+const CYCLE = 'd0000000-0000-4000-8000-000000000001';
+const MENU = 'e0000000-0000-4000-8000-000000000001';
+const FAMILY = 'f0000000-0000-4000-8000-000000000001';
+const SIZE = 'f1000000-0000-4000-8000-000000000001';
+const VARIANT = 'f2000000-0000-4000-8000-000000000001';
+const OFFERING = 'f3000000-0000-4000-8000-000000000001';
+
+// El período cierra el domingo 18 de octubre de 2026 a las 23:15 en Argentina.
+const seed = `
+  insert into operating_sites (id, slug, display_name, order_prefix)
+  values ('${SITE}', 'caba', 'CABA', 'CABA');
+  insert into customers (id, display_name) values ('${CUSTOMER}', 'Ana Prueba');
+  insert into customer_identities (customer_id, type, value_display, value_normalized, "primary")
+  values ('${CUSTOMER}', 'whatsapp', '+54 9 11 5555-0101', '+5491155550101', true);
+  insert into sales_cycles (id, alias, open_at, partial_kitchen_cutoff_at, close_at)
+  values ('${CYCLE}', 'Octubre 3', '2026-10-12T12:00:00Z', '2026-10-17T12:00:00Z',
+          '2026-10-19T02:15:00Z');
+  insert into weekly_menus (id, sales_cycle_id, status) values ('${MENU}', '${CYCLE}', 'PUBLISHED');
+  insert into product_families (id, code, display_name, kind)
+  values ('${FAMILY}', 'keto', 'Keto', 'FIXED');
+  insert into product_families (code, display_name, kind) values ('intuitivo', 'Intuitivo', 'COMPOSABLE');
+  insert into product_sizes (id, code, display_name) values ('${SIZE}', '250', '250');
+  insert into product_variants (id, product_family_id, product_size_id, code, display_name)
+  values ('${VARIANT}', '${FAMILY}', '${SIZE}', 'keto-250', '250');
+  insert into weekly_menu_prices (weekly_menu_id, product_size_id, unit_price_minor)
+  values ('${MENU}', '${SIZE}', 7000000);
+  insert into weekly_menu_offerings (id, weekly_menu_id, product_variant_id)
+  values ('${OFFERING}', '${MENU}', '${VARIANT}');
+  insert into weekly_menu_items (offering_id, slot, dish_name) values
+    ('${OFFERING}', 1, 'A'), ('${OFFERING}', 2, 'B'), ('${OFFERING}', 3, 'C'),
+    ('${OFFERING}', 4, 'D'), ('${OFFERING}', 5, 'E');
+`;
+
+let close: (() => Promise<void>) | null = null;
+afterEach(async () => {
+  await close?.();
+  close = null;
+});
+
+async function base() {
+  const client = new PGlite();
+  await client.waitReady;
+  for (const file of readdirSync(migrationsFolder)
+    .filter((name) => name.endsWith('.sql'))
+    .sort()) {
+    for (const statement of readFileSync(join(migrationsFolder, file), 'utf8')
+      .split('--> statement-breakpoint')
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0 && !/^(--[^\n]*\n?)*$/.test(part))) {
+      await client.exec(statement);
+    }
+  }
+  await client.exec(seed);
+  close = () => client.close();
+  const db = drizzle(client, { schema }) as unknown as Database;
+  return {
+    client,
+    service: new PostgresOperationsService(db, { geocode: () => Promise.resolve([]), key: 'x' }),
+  };
+}
+
+const contexto = { correlationId: 'c', requestId: 'r', source: 'test' };
+const pedido = (deliveryDate: string) => ({
+  customerId: CUSTOMER,
+  deliveryAddress: 'Calle 1',
+  deliveryDate,
+  dietaryInstructions: [],
+  items: [{ offeringId: OFFERING, quantityUnits: 1 }],
+  menuId: MENU,
+  operatingSiteId: SITE,
+  paymentExpectation: 'Efectivo',
+  source: 'manual',
+});
+
+async function runs(client: PGlite) {
+  const { rows } = await client.query<{
+    date: string;
+    id: string;
+    label: string;
+    pedidos: number;
+    status: string;
+  }>(`
+    select r.id, r.label, r.delivery_date::text as date, r.status,
+      (select count(*)::int from orders o where o.delivery_run_id = r.id) as pedidos
+    from delivery_runs r order by r.delivery_date, r.label`);
+  return rows;
+}
+
+describe('repartos', () => {
+  it('un pedido con una fecha nueva crea su reparto, y los siguientes de ese día entran ahí', async () => {
+    const { client, service } = await base();
+    await service.createOrder(pedido('2026-10-18'), contexto);
+    await service.createOrder(pedido('2026-10-18'), contexto);
+    expect(await runs(client)).toMatchObject([
+      { date: '2026-10-18', label: 'Domingo 18', pedidos: 2 },
+    ]);
+  });
+
+  it('al cancelar el último pedido, el reparto creado solo se borra solo', async () => {
+    const { client, service } = await base();
+    const order = (await service.createOrder(pedido('2026-10-18'), contexto)) as { id: string };
+    await service.transitionOrder(order.id, 'CANCELLED', 'prueba', false, true, contexto);
+    expect(await runs(client)).toEqual([]);
+  });
+
+  it('cambiar la fecha del reparto mueve sus pedidos y dice a quién avisar', async () => {
+    const { client, service } = await base();
+    await service.updateDeliverySettings(SITE, { defaultWeekday: 0, weekdays: [0, 6] }, contexto);
+    await service.createOrder(pedido('2026-10-18'), contexto);
+    const [reparto] = await runs(client);
+
+    // Lunes 19: fuera de los días de reparto, se permite y se avisa.
+    const result = await service.updateDeliveryRun(
+      reparto?.id ?? '',
+      { deliveryDate: '2026-10-19' },
+      contexto,
+    );
+
+    expect(result.outsideDeliveryDays).toBe(true);
+    expect(result.moved).toEqual([
+      expect.objectContaining({ customerName: 'Ana Prueba', phone: '+54 9 11 5555-0101' }),
+    ]);
+    const { rows } = await client.query<{ delivery_date: string }>(
+      'select delivery_date::text from orders',
+    );
+    expect(rows).toEqual([{ delivery_date: '2026-10-19' }]);
+  });
+
+  it('con la lista consolidada, un pedido nuevo de ese día queda sin reparto', async () => {
+    const { client, service } = await base();
+    await service.createOrder(pedido('2026-10-18'), contexto);
+    await client.exec(`update delivery_runs set status = 'consolidated'`);
+    await service.createOrder(pedido('2026-10-18'), contexto);
+    const listado = await service.listDeliveryRuns(SITE, '2026-10-01');
+    expect(listado.unassigned).toBe(1);
+    expect(listado.runs).toMatchObject([{ orders: 1, status: 'consolidated' }]);
+  });
+
+  it('con mañana y tarde, los pedidos nuevos van al de siempre', async () => {
+    const { client, service } = await base();
+    await service.createDeliveryRun(
+      SITE,
+      { deliveryDate: '2026-10-18', label: 'Mañana' },
+      contexto,
+    );
+    await service.createDeliveryRun(
+      SITE,
+      { deliveryDate: '2026-10-18', isDefault: true, label: 'Tarde' },
+      contexto,
+    );
+    await service.createOrder(pedido('2026-10-18'), contexto);
+    expect((await runs(client)).map(({ label, pedidos }) => [label, pedidos])).toEqual([
+      ['Mañana', 0],
+      ['Tarde', 1],
+    ]);
+  });
+
+  it('no se borra un reparto con pedidos', async () => {
+    const { client, service } = await base();
+    await service.createOrder(pedido('2026-10-18'), contexto);
+    const [reparto] = await runs(client);
+    await expect(service.deleteDeliveryRun(reparto?.id ?? '', contexto)).rejects.toThrow(/pedidos/);
+  });
+});
