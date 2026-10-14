@@ -362,3 +362,14 @@ La misma limpieza en SQL, para el SQL Editor de Neon: `packages/db/scripts/purge
 (paso 1, vista previa sin cambios; paso 2, el borrado en un `BEGIN … COMMIT`). Las fechas del
 comando van como texto ISO con `::timestamptz`: el driver de producción (postgres.js) no manda un
 `Date` suelto dentro de un `sql` crudo, aunque PGlite sí, y por eso el primer `--dry-run` falló.
+
+### Medio de pago: uno de los configurados, nunca el texto (2026-10-13)
+
+Un "trasferencia" mal escrito quedó pegado a la dirección y llegó así al mensaje de confirmación.
+`matchPaymentMethod` (`@verdeo/orders`) reconoce el medio contra los configurados y activos (por
+nombre o código; si no, por la forma de pago que nombra el texto, con errores de tipeo de hasta dos
+letras: "trasferencia", "transf.", "efvo", "mercadopago"), y no decide si dos medios podrían ser.
+La vista previa del importador guarda el medio normalizado o lo deja vacío para elegir, con un
+aviso; al importar, una fila con un medio que no es de los configurados no entra y se dice por qué.
+`extractPayment` usa el mismo reconocimiento para sacar la forma de pago de la dirección, con sus
+palabras de enlace ("pago en", "por", el paréntesis).

@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 
 import { CustomerCreateRequestSchema, type CustomerCreateRequest } from '@verdeo/contracts';
 import { canonicalArgentinePhone } from '@verdeo/customers';
+import { PAYMENT_KIND_LABELS, paymentKindOfWord } from '@verdeo/orders';
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_ROWS = 500;
@@ -123,31 +124,67 @@ function cleanValue(value: unknown): string | undefined {
   return text.trim().replace(/\s+/g, ' ') || undefined;
 }
 
-const PAYMENT_WORDS =
-  /[\s,;(-]*\b(?:pago\s+|paga\s+)?(?:por\s+|con\s+|en\s+)?(transferencia|transf\.?|efectivo|mercado\s*pago)\b\.?\)?/gi;
-
-function paymentLabel(word: string): string {
-  const normalized = normalizeHeader(word);
-  if (normalized.startsWith('transf')) return 'Transferencia';
-  if (normalized.startsWith('efectivo')) return 'Efectivo';
-  return 'Mercado Pago';
-}
+// Las palabras que acompañan a la forma de pago y se van con ella: "pago en efectivo", "por transf.".
+const PAYMENT_CONNECTORS = new Set([
+  'abona',
+  'abonar',
+  'con',
+  'en',
+  'paga',
+  'pagar',
+  'pago',
+  'por',
+]);
 
 /**
  * Saca de un texto la forma de pago que viene pegada ("Lavalle 1234 - 3B transferencia",
- * "… POR TRANSFERENCIA") y la devuelve aparte: no es parte de la dirección y confunde al
- * ubicador.
+ * "… POR TRANSFERENCIA", "… 7B trasferencia, palermo") y la devuelve aparte con su nombre
+ * canónico: no es parte de la dirección, confunde al ubicador y terminaba en el mensaje al cliente.
+ *
+ * Tolera errores de tipeo (`paymentKindOfWord`): "trasferencia" se pasó tal cual a un cliente.
  */
 export function extractPayment(text: string): { payment?: string; text: string } {
+  const words = [...text.matchAll(/[\p{L}\p{N}.]+/gu)].map((match) => ({
+    end: match.index + match[0].length,
+    start: match.index,
+    word: match[0],
+  }));
+  const spans: { end: number; start: number }[] = [];
   let payment: string | undefined;
-  const cleaned = text
-    .replace(PAYMENT_WORDS, (_match, word: string) => {
-      payment ??= paymentLabel(word);
-      return '';
-    })
+  for (let index = 0; index < words.length; index += 1) {
+    const current = words[index];
+    if (!current) continue;
+    const next = words[index + 1];
+    const isMercadoPago =
+      normalizeHeader(current.word) === 'mercado' && normalizeHeader(next?.word ?? '') === 'pago';
+    const kind = isMercadoPago ? 'mercado_pago' : paymentKindOfWord(current.word);
+    if (!kind) continue;
+    payment ??= PAYMENT_KIND_LABELS[kind];
+    let first = index;
+    while (first > 0 && PAYMENT_CONNECTORS.has(normalizeHeader(words[first - 1]?.word ?? ''))) {
+      first -= 1;
+    }
+    const last = isMercadoPago && next ? next : current;
+    spans.push({ end: last.end, start: words[first]?.start ?? current.start });
+    if (isMercadoPago) index += 1;
+  }
+  if (!payment) return { text: text.trim() };
+
+  let cleaned = text;
+  for (const span of [...spans].reverse()) {
+    // Con el paréntesis que la envuelve, si lo hay: "(pago en efectivo)".
+    const before = cleaned.slice(0, span.start).replace(/\(\s*$/, '');
+    const after = cleaned.slice(span.end).replace(/^\s*\)/, '');
+    cleaned = `${before} ${after}`;
+  }
+  cleaned = cleaned
+    .replace(/\s+([,;])/g, '$1')
+    .replace(/([,;-])\s*(?=[,;])/g, '')
+    .replace(/\s{2,}/g, ' ')
     .replace(/[\s,;-]+$/, '')
+    .replace(/^[\s,;-]+/, '')
     .trim();
-  return payment ? { payment, text: cleaned } : { text: cleaned };
+  return { payment, text: cleaned };
 }
 
 export class ContactImportError extends Error {

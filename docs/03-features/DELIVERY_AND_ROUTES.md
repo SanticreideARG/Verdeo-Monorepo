@@ -210,3 +210,12 @@ Cada parada trae el barrio de su domicilio (`neighborhood` en `DeliveryStopSchem
 vez que cambia respecto de la anterior (`neighborhoodHeading`): en la vista de Rutas, en la hoja del
 repartidor, en el mensaje de WhatsApp ("📍 Núñez") y como columna "Barrio" del CSV. Si ninguna
 parada tiene barrio no se anuncia nada. Qué es un barrio: OPERATING_SITES_AND_ZONES.md.
+
+## Abrir en Google Maps (2026-10-13)
+
+`googleMapsLink` (`apps/web/src/lib/mapLinks.ts`) arma el enlace de un domicilio con este orden:
+las **coordenadas** del domicilio (las que encontró el ubicador o se confirmaron a mano), después el
+enlace que compartió el cliente (a veces es una búsqueda por texto, no un punto) y por último una
+búsqueda por la dirección escrita. Antes el enlace compartido iba primero. Lo usan el mapa del
+detalle del pedido (botón "Abrir en Google Maps", con las coordenadas del pin que se ve), la vista de
+Rutas, el mensaje de WhatsApp y el CSV de la ruta, y la hoja del repartidor.

@@ -1,3 +1,5 @@
+import { googleMapsLink } from '../lib/mapLinks.js';
+
 /**
  * El domicilio de entrega en un mapa, dentro de la ficha.
  *
@@ -61,6 +63,15 @@ export function DeliveryMap({
         src={`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${marker}`}
       />
       <div className="delivery-map-links">
+        {/* Con las coordenadas, no con el enlace: es el punto que se ve en el mapa de arriba. */}
+        <a
+          className="button button-secondary"
+          href={googleMapsLink({ address, latitude, locationUrl: null, longitude })}
+          rel="noreferrer"
+          target="_blank"
+        >
+          Abrir en Google Maps
+        </a>
         <a
           href={`https://www.openstreetmap.org/?mlat=${String(latitude)}&mlon=${String(longitude)}#map=17/${String(latitude)}/${String(longitude)}`}
           rel="noreferrer"

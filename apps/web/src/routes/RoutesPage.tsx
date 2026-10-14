@@ -8,6 +8,7 @@ import { RouteMap } from '../components/RouteMap.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { formatDay, formatDayLong, todayInOperation } from '../lib/dates.js';
+import { googleMapsLink } from '../lib/mapLinks.js';
 import { maskSurname } from '../lib/maskName.js';
 import { neighborhoodHeading } from '../lib/neighborhoodGroups.js';
 import { errorMessage, formatMoney } from '../lib/operations.js';
@@ -267,17 +268,17 @@ export function RoutesPage() {
   /**
    * El enlace de mapa de una parada.
    *
-   * Prioridad a la ubicación que el cliente compartió: es la puerta exacta, dicha por quien vive
-   * ahí. Si no hay, se arma con las coordenadas del domicilio. Y si tampoco hay coordenadas, una
-   * búsqueda por la dirección escrita: peor que un pin, muchísimo mejor que tipearla a mano en el
-   * teléfono, parado en la vereda.
+   * Primero las coordenadas del domicilio, que ya pasaron por el ubicador; después el enlace que
+   * compartió el cliente (a veces es una búsqueda por texto, no un punto); y si no hay ninguno, una
+   * búsqueda por la dirección escrita. Ver `googleMapsLink`.
    */
   function stopMapLink(stop: RouteStop): string {
-    if (stop.deliveryLocationUrl) return stop.deliveryLocationUrl;
-    if (stop.deliveryLatitude !== null && stop.deliveryLongitude !== null) {
-      return `https://www.google.com/maps/search/?api=1&query=${String(stop.deliveryLatitude)},${String(stop.deliveryLongitude)}`;
-    }
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stop.deliveryAddress)}`;
+    return googleMapsLink({
+      address: stop.deliveryAddress,
+      latitude: stop.deliveryLatitude,
+      locationUrl: stop.deliveryLocationUrl,
+      longitude: stop.deliveryLongitude,
+    });
   }
 
   /**

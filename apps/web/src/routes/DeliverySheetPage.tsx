@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 
 import { RouteMap } from '../components/RouteMap.js';
 import { apiRequest } from '../lib/api.js';
+import { googleMapsLink } from '../lib/mapLinks.js';
 import { neighborhoodHeading } from '../lib/neighborhoodGroups.js';
 import { formatMoney } from '../lib/operations.js';
 
@@ -53,11 +54,12 @@ function dateLabel(value: string): string {
 }
 
 function mapLink(stop: SheetStop): string {
-  if (stop.deliveryLocationUrl) return stop.deliveryLocationUrl;
-  if (stop.deliveryLatitude !== null && stop.deliveryLongitude !== null) {
-    return `https://www.google.com/maps?q=${String(stop.deliveryLatitude)},${String(stop.deliveryLongitude)}`;
-  }
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stop.deliveryAddress)}`;
+  return googleMapsLink({
+    address: stop.deliveryAddress,
+    latitude: stop.deliveryLatitude,
+    locationUrl: stop.deliveryLocationUrl,
+    longitude: stop.deliveryLongitude,
+  });
 }
 
 /**

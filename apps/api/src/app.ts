@@ -322,7 +322,13 @@ import { buildKitchenLabelsPrintHtml } from './kitchen-labels-export.js';
 import { buildLabelsPrintHtml } from './labels-export.js';
 import { RequestStats } from './request-stats.js';
 import { buildOrdersExcel } from './orders-excel.js';
-import { buildOrdersCsv, deliveryDateFor, maskSurname, type OrderExportRow } from '@verdeo/orders';
+import {
+  buildOrdersCsv,
+  deliveryDateFor,
+  maskSurname,
+  matchPaymentMethod,
+  type OrderExportRow,
+} from '@verdeo/orders';
 import {
   buildProductionExcel,
   buildProductionPrintHtml,
@@ -1463,6 +1469,22 @@ export function createApp(options: CreateAppOptions) {
   const requirePayments = () => {
     if (!payments) throw new Error('Payments engine is not configured');
     return payments;
+  };
+
+  /**
+   * Los medios de pago configurados y activos, para normalizar lo que llega escrito a mano.
+   * Sin motor de pagos (algunas pruebas) no hay contra qué normalizar y se deja pasar.
+   */
+  const activePaymentMethods = async (): Promise<
+    readonly { code: string; displayName: string }[] | null
+  > => {
+    if (!payments) return null;
+    const items = (await payments.listPaymentMethods()) as readonly {
+      active: boolean;
+      code: string;
+      displayName: string;
+    }[];
+    return items.filter((method) => method.active);
   };
 
   const paymentsContext = (context: Context<{ Variables: AppVariables }>): PaymentsContext => ({
@@ -3712,12 +3734,26 @@ export function createApp(options: CreateAppOptions) {
       }[];
       offerings: readonly { id: string; label: string }[];
     };
+    const methods = await activePaymentMethods();
     return OrderImportPreviewResponseSchema.parse({
       inquiries: parsed.inquiries ?? [],
       items: parsed.rows.map((row) => {
         const match = preview.matches.find((item) => item.rowNumber === row.rowNumber);
+        /*
+         * El medio de pago es uno de los configurados, nunca el texto como vino: "trasferencia"
+         * se guardó tal cual y llegó así al mensaje del cliente. Lo que no se reconoce queda vacío
+         * para elegirlo, con un aviso.
+         */
+        const payment = methods
+          ? matchPaymentMethod(row.paymentExpectation, methods)
+          : row.paymentExpectation;
+        const paymentNotice =
+          row.paymentExpectation && !payment
+            ? [`No reconocimos el medio de pago «${row.paymentExpectation}»: elegilo de la lista.`]
+            : [];
         return {
           ...row,
+          paymentExpectation: payment,
           customerMatch: match?.customerMatch ?? {
             candidates: [],
             customerId: null,
@@ -3732,7 +3768,11 @@ export function createApp(options: CreateAppOptions) {
             dishes: match?.itemDishes?.[index] ?? item.dishes,
             offeringId: match?.itemMatches[index] ?? null,
           })),
-          notices: [...((row as { notices?: string[] }).notices ?? []), ...(match?.notices ?? [])],
+          notices: [
+            ...((row as { notices?: string[] }).notices ?? []),
+            ...(match?.notices ?? []),
+            ...paymentNotice,
+          ],
         };
       }),
       offerings: preview.offerings,
@@ -3838,8 +3878,19 @@ export function createApp(options: CreateAppOptions) {
         : []
       ).map((order) => [order.importKey, order] as const),
     );
+    const methods = await activePaymentMethods();
     for (const row of rows) {
       const previo = yaCreados.get(keyOf(row.rowNumber) ?? null);
+      const payment = methods
+        ? matchPaymentMethod(row.paymentExpectation, methods)
+        : row.paymentExpectation;
+      if (!payment && !previo) {
+        failed.push({
+          reason: `El medio de pago «${row.paymentExpectation}» no es uno de los configurados.`,
+          rowNumber: row.rowNumber,
+        });
+        continue;
+      }
       if (previo) {
         results.push({
           orderId: previo.id,
@@ -3885,7 +3936,7 @@ export function createApp(options: CreateAppOptions) {
             menuId: menu.id,
             ...(row.notes ? { notes: row.notes } : {}),
             operatingSiteId: context.get('scope')?.operatingSiteId ?? null,
-            paymentExpectation: row.paymentExpectation,
+            paymentExpectation: payment,
             /*
              * El origen sale de la fila y es un valor que la API sabe leer de vuelta.
              *

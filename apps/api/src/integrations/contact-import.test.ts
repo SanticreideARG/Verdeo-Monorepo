@@ -129,4 +129,20 @@ describe('extractPayment', () => {
     });
     expect(extractPayment('Mitre 400')).toEqual({ text: 'Mitre 400' });
   });
+
+  // Con el error de tipeo quedaba en la dirección y llegaba así al mensaje del cliente.
+  it('reconoce la forma de pago mal escrita en medio de la dirección', () => {
+    expect(extractPayment('República de la India 2851 7B trasferencia, palermo')).toEqual({
+      payment: 'Transferencia',
+      text: 'República de la India 2851 7B, palermo',
+    });
+    expect(extractPayment('Lavalle 100 POR TRANSFERENCIA')).toEqual({
+      payment: 'Transferencia',
+      text: 'Lavalle 100',
+    });
+    expect(extractPayment('Gorriti 300 (paga con mercado pago)')).toEqual({
+      payment: 'Mercado Pago',
+      text: 'Gorriti 300',
+    });
+  });
 });

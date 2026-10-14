@@ -4,6 +4,7 @@ export * from './intuitivo-pricing.js';
 export * from './label-sheet.js';
 export * from './menu-names.js';
 export * from './offering-match.js';
+export * from './payment-match.js';
 export * from './order-engine.js';
 export * from './order-export.js';
 export * from './stats-merge.js';
