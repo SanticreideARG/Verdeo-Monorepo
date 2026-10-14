@@ -59,8 +59,11 @@ export async function purgeTestData(
   const nowIso = now.toISOString();
   try {
     return await db.transaction(async (tx) => {
-      const run = async <T>(query: ReturnType<typeof sql>) =>
-        ((await tx.execute(query)) as unknown as Rows<T>).rows;
+      // postgres.js (producción) devuelve la lista de filas; PGlite (tests), un objeto con `rows`.
+      const run = async <T>(query: ReturnType<typeof sql>): Promise<T[]> => {
+        const result = (await tx.execute(query)) as unknown as Rows<T> | T[];
+        return Array.isArray(result) ? result : result.rows;
+      };
 
       const [kept] = await run<{ alias: string; id: string; open_at: Date | string }>(sql`
         select id, alias, open_at from sales_cycles
@@ -73,8 +76,13 @@ export async function purgeTestData(
       const keptOpenIso = keptOpenAt.toISOString();
 
       await tx.execute(sql`
-        create temp table purge_cycles on commit drop as
-        select id, alias from sales_cycles where open_at < ${keptOpenIso}::timestamptz and id <> ${kept.id}`);
+        create temp table purge_cycles (id uuid primary key, alias text not null) on commit drop`);
+      // Postgres no acepta parámetros en CREATE TABLE … AS: la tabla se crea vacía y se llena con
+      // un INSERT, que sí los acepta.
+      await tx.execute(sql`
+        insert into purge_cycles (id, alias)
+        select id, alias from sales_cycles
+        where open_at < ${keptOpenIso}::timestamptz and id <> ${kept.id}::uuid`);
       await tx.execute(sql`
         create temp table purge_orders on commit drop as
         select id from orders where sales_cycle_id in (select id from purge_cycles)`);
@@ -114,7 +122,10 @@ export async function purgeTestData(
 
       // Clientes ficticios: cargados antes del período en curso y sin pedidos que queden.
       await tx.execute(sql`
-        create temp table purge_customers on commit drop as
+        create temp table purge_customers (id uuid primary key, display_name text not null)
+        on commit drop`);
+      await tx.execute(sql`
+        insert into purge_customers (id, display_name)
         select c.id, c.display_name from customers c
         where c.created_at < ${keptOpenIso}::timestamptz
           and not exists (select 1 from orders o where o.customer_id = c.id)`);
