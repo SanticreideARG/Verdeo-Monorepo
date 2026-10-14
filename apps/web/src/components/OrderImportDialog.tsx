@@ -71,6 +71,51 @@ interface Preview {
   unreadable: number;
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  customerName: 'el nombre del cliente',
+  deliveryAddress: 'la dirección',
+  dishes: 'los platos',
+  email: 'el correo',
+  items: 'las variedades',
+  notes: 'las notas',
+  offeringId: 'la variedad',
+  paymentExpectation: 'el medio de pago',
+  phone: 'el teléfono',
+  quantityUnits: 'la cantidad',
+};
+
+/**
+ * El error de importar, dicho por pedido: "Ana Prueba (fila 4): revisá la dirección".
+ *
+ * La API contesta "Revisá las filas." con el detalle de cada campo; mostrar sólo eso obligaba a
+ * adivinar cuál de los pedidos estaba mal.
+ */
+async function importErrorText(
+  response: Response,
+  sent: readonly { customerName: string; rowNumber: number }[],
+): Promise<string> {
+  const body = (await response
+    .clone()
+    .json()
+    .catch(() => null)) as {
+    error?: { details?: { message?: string; path?: (string | number)[] }[]; message?: string };
+  } | null;
+  const issues = Array.isArray(body?.error?.details) ? body.error.details : [];
+  const porPedido = issues
+    .map((issue) => {
+      const [scope, index, ...rest] = issue.path ?? [];
+      if (scope !== 'rows' || typeof index !== 'number') return null;
+      const row = sent[index];
+      const field = rest.filter((part): part is string => typeof part === 'string').at(-1);
+      return `${row?.customerName ?? 'Un pedido'} (fila ${String(row?.rowNumber ?? index + 1)}): revisá ${
+        (field && FIELD_LABELS[field]) ?? 'los datos'
+      }`;
+    })
+    .filter((text): text is string => text !== null);
+  if (porPedido.length > 0) return [...new Set(porPedido)].slice(0, 5).join('. ') + '.';
+  return errorMessage(response);
+}
+
 function matchLabel(kind: PreviewRow['customerMatch']['kind']): string {
   switch (kind) {
     case 'telefono':
@@ -167,6 +212,8 @@ export function OrderImportDialog({
   const [locateAfter, setLocateAfter] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  // El avance de ubicar las direcciones después de importar.
+  const [locating, setLocating] = useState('');
 
   useEffect(() => {
     if (inbound?.preview) load(inbound.preview);
@@ -304,7 +351,7 @@ export function OrderImportDialog({
     });
     setBusy(false);
     if (!response.ok) {
-      setMessage(await errorMessage(response));
+      setMessage(await importErrorText(response, ready));
       return;
     }
     const payload = (await response.json()) as {
@@ -314,47 +361,20 @@ export function OrderImportDialog({
       results?: { orderId: string; publicNumber: string; rowNumber: number }[];
     };
     onImported();
-    let locateNote = '';
-    if (locateAfter && (payload.orderIds?.length ?? 0) > 0) {
-      setBusy(true);
-      setMessage('Ubicando las direcciones…');
-      let located = 0;
-      let toReview = 0;
-      const ids = payload.orderIds ?? [];
-      for (let start = 0; start < ids.length; start += 5) {
-        const located5 = await apiRequest('/api/v1/orders/locate', {
-          body: JSON.stringify({ orderIds: ids.slice(start, start + 5) }),
-          method: 'POST',
-          notify: false,
-        });
-        if (!located5.ok) break;
-        for (const result of ((await located5.json()) as { results: { status: string }[] })
-          .results) {
-          if (result.status === 'located' || result.status === 'already_located') located += 1;
-          else toReview += 1;
-        }
-      }
-      setBusy(false);
-      locateNote =
-        toReview > 0
-          ? ` ${String(located)} con ubicación; ${String(toReview)} para revisar desde Rutas o el pedido.`
-          : ` ${String(located)} con ubicación.`;
-    }
     if (inbound && payload.failed.length > 0) {
       setMessage(payload.failed.map((fail) => fail.reason).join('; '));
       return;
     }
     if (inbound) {
-      showToast(
-        `${confirmNow ? 'Pedido aprobado y confirmado.' : 'Pedido aprobado como borrador.'}${locateNote}`,
-      );
+      showToast(confirmNow ? 'Pedido aprobado y confirmado.' : 'Pedido aprobado como borrador.');
+      void locateOrders(payload.orderIds ?? []);
       onClose();
       return;
     }
     /*
-     * La conciliación: el diálogo se queda abierto con qué pedido quedó de cada fila, cuáles no
-     * entraron y por qué, y cuáles se dejaron afuera. Cerrarlo con un cartel de tres segundos
-     * obligaba a adivinar qué había que volver a cargar.
+     * La conciliación aparece apenas se crean los pedidos: qué pedido quedó de cada fila, cuáles no
+     * entraron y por qué, y cuáles se dejaron afuera. Antes se esperaba a terminar de ubicar las
+     * direcciones, que con varios pedidos tarda, y mientras tanto parecía que no pasaba nada.
      */
     setOutcome(
       rows.map((row) => {
@@ -373,7 +393,38 @@ export function OrderImportDialog({
     showToast(
       `${String(payload.created)} pedido${payload.created === 1 ? '' : 's'} importado${
         payload.created === 1 ? '' : 's'
-      } como ${confirmNow ? 'confirmado' : 'borrador'}.${locateNote}`,
+      } como ${confirmNow ? 'confirmado' : 'borrador'}.`,
+    );
+    void locateOrders(payload.orderIds ?? []);
+  }
+
+  /** Ubica las direcciones de los pedidos recién creados, de a cinco, con el avance a la vista. */
+  async function locateOrders(ids: readonly string[]) {
+    if (!locateAfter || ids.length === 0) return;
+    let located = 0;
+    let toReview = 0;
+    try {
+      for (let start = 0; start < ids.length; start += 5) {
+        setLocating(`Ubicando las direcciones: ${String(start)} de ${String(ids.length)}…`);
+        const response = await apiRequest('/api/v1/orders/locate', {
+          body: JSON.stringify({ orderIds: ids.slice(start, start + 5) }),
+          method: 'POST',
+          notify: false,
+        });
+        if (!response.ok) break;
+        for (const result of ((await response.json()) as { results: { status: string }[] })
+          .results) {
+          if (result.status === 'located' || result.status === 'already_located') located += 1;
+          else toReview += 1;
+        }
+      }
+    } catch {
+      // Sin conexión a mitad de camino: lo que no se ubicó queda para Rutas.
+    }
+    setLocating(
+      toReview > 0
+        ? `${String(located)} con ubicación; ${String(toReview)} para revisar desde Rutas o el pedido.`
+        : `${String(located)} con ubicación.`,
     );
   }
 
@@ -780,6 +831,16 @@ export function OrderImportDialog({
         </div>
 
         <footer className="order-import-foot">
+          {/*
+           * El aviso va acá, al lado del botón: arriba de la lista quedaba fuera de la vista cuando
+           * la lista era larga, y al tocar "Importar" parecía que no pasaba nada.
+           */}
+          {message ? (
+            <p className="screen-notice order-import-foot-message" role="alert">
+              {message}
+            </p>
+          ) : null}
+          {locating ? <p className="order-import-foot-message">{locating}</p> : null}
           {outcome ? null : inbound && preview === null ? null : preview === null ? (
             mode === 'email' ? (
               <button

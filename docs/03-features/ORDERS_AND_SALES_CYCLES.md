@@ -315,3 +315,8 @@ destildado), **todos los pedidos que el cliente ya tiene en el período** (`exis
 pedido se puede corregir antes de importar: nombre del cliente nuevo, dirección, medio de pago,
 cantidad y variedad de cada ítem. Al importar el diálogo no se cierra: muestra fila por fila qué
 pedido quedó (`results` con el número), cuáles no entraron y por qué, y cuáles quedaron afuera.
+
+Los avisos del diálogo (errores y el avance de ubicar las direcciones) van en el pie, al lado del
+botón: arriba de la lista quedaban fuera de la vista. Un error de validación se dice por pedido
+("Ana Prueba (fila 4): revisá la dirección"), y la conciliación aparece apenas se crean los pedidos;
+la ubicación de las direcciones sigue después, con su avance, sin frenarla.

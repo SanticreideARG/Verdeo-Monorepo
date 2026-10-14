@@ -9642,3 +9642,9 @@ body {
 .order-import-outcome-row.is-skipped {
   border-left-color: #b7791f;
 }
+/* El aviso del pie: arriba de los botones, a todo el ancho. */
+.order-import-foot-message {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.85rem;
+}
