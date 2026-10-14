@@ -579,6 +579,7 @@ interface OperationsEngine {
     orderId: string,
     rules: { radiusKm: number; threshold: number },
     context: OperationsContext,
+    retry?: { address?: string | undefined; locationUrl?: string | undefined },
   ): Promise<{
     addressId: string | null;
     candidates: { confidence: number; formattedAddress: string; id: string }[];
@@ -5793,11 +5794,47 @@ export function createApp(options: CreateAppOptions) {
     if (!context.get('session').permissions.includes('orders.edit')) return forbidden(context);
     const params = IdParamSchema.safeParse(context.req.param());
     if (!params.success) return badRequest(context, 'El pedido no es válido.');
-    const result = await requireOperations().locateOrderAddress(
-      params.data.id,
-      LOCATE_RULES,
-      operationsContext(context),
-    );
+    /*
+     * Sin cuerpo, ubica con lo que tiene. Con cuerpo, busca de nuevo con una dirección corregida
+     * o con una ubicación pegada: un enlace de Maps o coordenadas ("-34.58, -58.41").
+     */
+    const body = (await context.req.json().catch(() => null)) as {
+      address?: unknown;
+      location?: unknown;
+    } | null;
+    const address = typeof body?.address === 'string' ? body.address.trim() : '';
+    const location = typeof body?.location === 'string' ? body.location.trim() : '';
+    if (address && (address.length < 4 || address.length > 500)) {
+      return badRequest(context, 'Escribí la dirección completa: calle y altura.');
+    }
+    let locationUrl: string | undefined;
+    if (location) {
+      const pair = /^(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$/.exec(location);
+      if (pair) {
+        locationUrl = `https://www.google.com/maps/search/?api=1&query=${pair[1] ?? ''},${pair[2] ?? ''}`;
+      } else if (/^https?:\/\//i.test(location) && location.length <= 2_000) {
+        locationUrl = location;
+      } else {
+        return badRequest(
+          context,
+          'Pegá un enlace de Google Maps o las coordenadas, como "-34.58, -58.41".',
+        );
+      }
+    }
+    const operations = requireOperations();
+    const result =
+      address || locationUrl
+        ? await operations.locateOrderAddress(
+            params.data.id,
+            LOCATE_RULES,
+            operationsContext(context),
+            { address: address || undefined, locationUrl },
+          )
+        : await operations.locateOrderAddress(
+            params.data.id,
+            LOCATE_RULES,
+            operationsContext(context),
+          );
     return context.json(result);
   });
 

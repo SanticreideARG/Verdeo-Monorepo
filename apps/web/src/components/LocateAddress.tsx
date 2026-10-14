@@ -89,23 +89,34 @@ function CandidateChooser({
 /**
  * "Ubicar dirección" en el detalle del pedido: ordena el texto, lo busca en el mapa y, si el
  * resultado es seguro y cae dentro de la ciudad, lo deja confirmado. Si no, muestra los candidatos.
+ *
+ * Si no la encuentra, o la que encontró no es, deja corregir la dirección o pegar la ubicación (un
+ * enlace de Google Maps o coordenadas) y buscar de nuevo. Antes un "no se encontró" no dejaba
+ * ninguna salida desde acá: había que editar el pedido y volver a probar a ciegas.
  */
 export function LocateOrderControl({
+  address,
   onLocated,
   orderId,
 }: {
+  /** La dirección del pedido, para corregirla y volver a buscar. */
+  address: string;
   onLocated: () => void;
   orderId: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<LocateResult | null>(null);
   const [message, setMessage] = useState('');
+  const [retrying, setRetrying] = useState(false);
+  const [draftAddress, setDraftAddress] = useState(address);
+  const [draftLocation, setDraftLocation] = useState('');
 
-  async function locate() {
+  async function locate(retry?: { address?: string; location?: string }) {
     setBusy(true);
     setMessage('');
     setResult(null);
     const response = await apiRequest(`/api/v1/orders/${orderId}/locate`, {
+      ...(retry ? { body: JSON.stringify(retry) } : {}),
       method: 'POST',
       notify: false,
     });
@@ -116,8 +127,13 @@ export function LocateOrderControl({
     }
     const body = (await response.json()) as LocateResult;
     setResult(body);
-    if (body.status === 'located') onLocated();
+    if (body.status === 'located') setRetrying(false);
+    // Con una dirección corregida el pedido cambió: se vuelve a leer aunque no se haya ubicado.
+    if (body.status === 'located' || retry) onLocated();
   }
+
+  const unresolved =
+    result !== null && result.status !== 'located' && result.status !== 'needs_zone';
 
   return (
     <div className="locate-control">
@@ -132,17 +148,75 @@ export function LocateOrderControl({
       {message ? <p className="text-sm text-ink-muted">{message}</p> : null}
       {result ? (
         <>
-          <p className="text-sm text-ink-muted">{locateStatusText(result)}</p>
+          <p className="text-sm text-ink-muted">
+            {result.status === 'already_located'
+              ? 'Ya tenía ubicación. Si no es ahí, corregila y buscá de nuevo.'
+              : locateStatusText(result)}
+          </p>
           {result.status === 'review' ? (
             <CandidateChooser
               onConfirmed={() => {
                 setResult({ ...result, candidates: [], status: 'located' });
+                setRetrying(false);
                 onLocated();
               }}
               result={result}
             />
           ) : null}
         </>
+      ) : null}
+      {unresolved && !retrying ? (
+        <button className="locate-retry-open" onClick={() => setRetrying(true)} type="button">
+          Corregir la dirección o pegar la ubicación
+        </button>
+      ) : null}
+      {retrying ? (
+        <form
+          className="locate-retry"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const changedAddress =
+              draftAddress.trim() !== address.trim() ? draftAddress.trim() : '';
+            void locate({
+              ...(changedAddress ? { address: changedAddress } : {}),
+              ...(draftLocation.trim() ? { location: draftLocation.trim() } : {}),
+            });
+          }}
+        >
+          <label className="field">
+            Dirección (calle y altura; el resto va en las notas)
+            <input
+              minLength={4}
+              onChange={(event) => setDraftAddress(event.target.value)}
+              value={draftAddress}
+            />
+          </label>
+          <label className="field">
+            O pegá la ubicación
+            <input
+              inputMode="url"
+              onChange={(event) => setDraftLocation(event.target.value)}
+              placeholder="Enlace de Google Maps o -34.58, -58.41"
+              value={draftLocation}
+            />
+          </label>
+          <div className="locate-retry-actions">
+            <button
+              className="button button-primary"
+              disabled={busy || (draftAddress.trim() === address.trim() && !draftLocation.trim())}
+              type="submit"
+            >
+              {busy ? 'Buscando…' : 'Buscar de nuevo'}
+            </button>
+            <button
+              className="button button-secondary"
+              onClick={() => setRetrying(false)}
+              type="button"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
       ) : null}
     </div>
   );

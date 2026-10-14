@@ -9667,3 +9667,25 @@ body {
   gap: 0.5rem;
   align-items: center;
 }
+
+/* Corregir la dirección o pegar la ubicación y buscar de nuevo, debajo de "Ubicar dirección". */
+.locate-retry-open {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--color-forest);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.locate-retry {
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 32rem;
+}
+.locate-retry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

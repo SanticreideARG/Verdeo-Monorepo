@@ -351,7 +351,13 @@ export function OrderDetailPage() {
             </button>
           ) : null}
           {/* Las etiquetas salen en lote desde Etiquetas (por zona); acá, ubicar la dirección. */}
-          {canEdit ? <LocateOrderControl onLocated={() => void load()} orderId={order.id} /> : null}
+          {canEdit ? (
+            <LocateOrderControl
+              address={order.deliveryAddress}
+              onLocated={() => void load()}
+              orderId={order.id}
+            />
+          ) : null}
         </div>
 
         {editing && canEdit ? (

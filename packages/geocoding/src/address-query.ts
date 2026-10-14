@@ -20,6 +20,22 @@ const UNIT_WORDS =
 // "8520-17A", "8520/3", "8520 - 4B": lo que va después de la altura, separado por guion o barra.
 const UNIT_AFTER_NUMBER = /^(.*?\d+)\s*[-/]\s*[0-9a-z°º]+.*$/i;
 
+/**
+ * La calle hasta su altura: lo que viene después no lo entiende un buscador.
+ *
+ * "Silvio Ruggieri 299 Edif San Marcos 29 B dejar al guardia" se buscaba entero y no aparecía nada;
+ * es "Silvio Ruggieri 299". La altura es el primer número que viene después de una palabra, así
+ * que "25 de Mayo 300" sigue siendo "25 de Mayo 300". "N°" y "nro" antes de la altura se respetan.
+ */
+function cutAfterHouseNumber(street: string): string {
+  // Con "Calle 7 n° 1234" (La Plata) la altura es la que sigue al "n°".
+  const match =
+    /^(.*?\p{L}[\p{L}.'’]*\.?\s+(?:n[°ºo.]?\s*|nro\.?\s*)?\d{1,5}(?:\s+(?:n[°º]|nro\.?)\s*\d{1,5})?)(?!\d)/iu.exec(
+      street,
+    );
+  return match?.[1]?.trim() ?? street;
+}
+
 export function searchableAddress(written: string): SearchableAddress {
   const segments = written
     .split(',')
@@ -27,10 +43,9 @@ export function searchableAddress(written: string): SearchableAddress {
     .filter((segment) => segment.length > 0);
   const streetIndex = segments.findIndex((segment) => /\d/.test(segment));
   const index = streetIndex === -1 ? 0 : streetIndex;
-  const street = (segments[index] ?? '')
-    .replace(UNIT_WORDS, '')
-    .replace(UNIT_AFTER_NUMBER, '$1')
-    .trim();
+  const street = cutAfterHouseNumber(
+    (segments[index] ?? '').replace(UNIT_WORDS, '').replace(UNIT_AFTER_NUMBER, '$1').trim(),
+  );
   const places = segments
     .filter((_, position) => position !== index)
     .filter((segment) => !/^zona\b/i.test(segment))

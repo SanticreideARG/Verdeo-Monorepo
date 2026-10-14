@@ -219,3 +219,16 @@ Antes de buscar, `searchableAddress` limpia el texto: saca el piso o depto pegad
   ciudad (confirmadas con su porcentaje, esperando revisión, no encontradas, con error) y lo que
   usó la IA (llamadas, fallidas, tokens, demora media; esto último es de todo el sistema). Sirve
   para calibrar el umbral con datos.
+
+## Buscar de nuevo desde el pedido (2026-10-13)
+
+- `searchableAddress` corta la calle en la altura: lo que viene después ("Edif San Marcos 29 B
+  dejar al guardia") no lo entiende un buscador y hacía que no apareciera nada. La altura es el
+  primer número que sigue a una palabra ("25 de Mayo 300" queda entero; "Calle 7 n° 1234" también).
+- "Ubicar dirección" en el detalle del pedido, si no encuentra la dirección o no está seguro, deja
+  **corregir la dirección** o **pegar la ubicación** (enlace de Google Maps o coordenadas
+  "-34.58, -58.41") y buscar de nuevo (`POST /orders/:id/locate` con `{ address?, location? }`).
+  Lo corregido se guarda en el pedido y en su domicilio (auditado como
+  `customer.address_relocated_from_order`), y el domicilio se vuelve a buscar aunque ya tuviera
+  coordenadas. Una dirección corregida sin enlace nuevo borra el enlace viejo, que apuntaba a lo de
+  antes. Cuando hay candidatos dudosos se siguen mostrando para elegir.

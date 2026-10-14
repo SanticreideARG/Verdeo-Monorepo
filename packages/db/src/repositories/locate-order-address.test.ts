@@ -177,6 +177,56 @@ describe('locateOrderAddress', () => {
     );
   });
 
+  // "No se encontró" tenía que tener salida: corregir la dirección y volver a buscar.
+  it('busca de nuevo con la dirección corregida y la guarda en el pedido y el domicilio', async () => {
+    const geocode = vi.fn((input: GeocodingInput) =>
+      Promise.resolve(
+        input.writtenAddress.startsWith('Silvio Ruggieri 299')
+          ? [candidato(-34.58, -58.41, 1)]
+          : [],
+      ),
+    );
+    const { client, service } = await base({ geocode, key: 'prueba' });
+
+    expect((await service.locateOrderAddress(ORDER, reglas, contexto)).status).toBe('no_match');
+    const result = await service.locateOrderAddress(ORDER, reglas, contexto, {
+      address: 'Silvio Ruggieri 299, Recoleta',
+    });
+
+    expect(result.status).toBe('located');
+    const pedido = await client.query<{ delivery_address_snapshot: string }>(
+      `select delivery_address_snapshot from orders where id = '${ORDER}'`,
+    );
+    expect(pedido.rows[0]?.delivery_address_snapshot).toBe('Silvio Ruggieri 299, Recoleta');
+    const domicilio = await client.query<{ written_address: string; latitude: string }>(
+      `select written_address, latitude from customer_addresses`,
+    );
+    expect(domicilio.rows[0]?.written_address).toBe('Silvio Ruggieri 299, Recoleta');
+    expect(Number(domicilio.rows[0]?.latitude)).toBeCloseTo(-34.58);
+  });
+
+  it('con una ubicación pegada vuelve a ubicar aunque ya tuviera coordenadas', async () => {
+    const geocode = vi.fn((input: GeocodingInput) =>
+      Promise.resolve(
+        input.locationUrl?.includes('-34.61')
+          ? [candidato(-34.61, -58.42, 1)]
+          : [candidato(-34.5998, -58.44, 1)],
+      ),
+    );
+    const { client, service } = await base({ geocode, key: 'prueba' });
+    await service.locateOrderAddress(ORDER, reglas, contexto);
+
+    const result = await service.locateOrderAddress(ORDER, reglas, contexto, {
+      locationUrl: 'https://www.google.com/maps/search/?api=1&query=-34.61,-58.42',
+    });
+
+    expect(result.status).toBe('located');
+    const { rows } = await client.query<{ latitude: string }>(
+      `select latitude from customer_addresses`,
+    );
+    expect(Number(rows[0]?.latitude)).toBeCloseTo(-34.61);
+  });
+
   it('con más de una zona y sin zona en el pedido pide que se asigne', async () => {
     const { client, service } = await base(proveedor([candidato(-34.5998, -58.44, 1)]));
     await client.exec(

@@ -1883,6 +1883,34 @@ describe('API foundation', () => {
         expect(denied.status).toBe(403);
       });
 
+      it('busca de nuevo con la dirección corregida o las coordenadas pegadas', async () => {
+        const locateOrderAddress = vi.fn(() => Promise.resolve(ubicado));
+        const app = buildApp({ locateOrderAddress }, ['orders.edit']);
+        const locate = (body: unknown) =>
+          app.request(`/api/v1/orders/${ORDEN}/locate`, {
+            body: JSON.stringify(body),
+            headers: { 'content-type': 'application/json', cookie },
+            method: 'POST',
+          });
+
+        expect(
+          (await locate({ address: 'Silvio Ruggieri 299', location: '-34.58, -58.41' })).status,
+        ).toBe(200);
+        expect(locateOrderAddress).toHaveBeenCalledWith(
+          ORDEN,
+          expect.anything(),
+          expect.anything(),
+          {
+            address: 'Silvio Ruggieri 299',
+            locationUrl: 'https://www.google.com/maps/search/?api=1&query=-34.58,-58.41',
+          },
+        );
+
+        // Lo que no es ni un enlace ni coordenadas se rechaza con un mensaje claro.
+        const rejected = await locate({ location: 'en la esquina' });
+        expect(rejected.status).toBe(400);
+      });
+
       it('lista los pedidos del día sin ubicación', async () => {
         const unlocatedOrders = vi.fn(() => Promise.resolve([pedido]));
         const response = await buildApp({ unlocatedOrders }, ['routes.read']).request(

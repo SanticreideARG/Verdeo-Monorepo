@@ -2634,6 +2634,12 @@ export class PostgresOperationsService {
     orderId: string,
     rules: Pick<AutoAcceptRules, 'radiusKm' | 'threshold'>,
     context: OperationsContext,
+    /**
+     * Buscar de nuevo con una dirección corregida o con una ubicación pegada (enlace de Maps o
+     * coordenadas). Se guarda en el pedido y en su domicilio, y el domicilio vuelve a buscarse
+     * aunque ya tuviera coordenadas: es lo que se hace cuando la que encontró no era.
+     */
+    retry?: { address?: string | undefined; locationUrl?: string | undefined },
   ): Promise<{
     addressId: string | null;
     candidates: { confidence: number; formattedAddress: string; id: string }[];
@@ -2659,6 +2665,50 @@ export class PostgresOperationsService {
       .where(eq(orders.id, orderId))
       .limit(1);
     if (!order) throw new OperationsNotFoundError('No se encontró el pedido');
+
+    const newAddress = retry?.address?.trim().replace(/\s+/g, ' ');
+    const newLocationUrl = retry?.locationUrl?.trim();
+    if (newAddress || newLocationUrl) {
+      await this.database.transaction(async (transaction) => {
+        await transaction
+          .update(orders)
+          .set({
+            ...(newAddress ? { deliveryAddressSnapshot: newAddress } : {}),
+            ...(newLocationUrl ? { deliveryLocationUrlSnapshot: newLocationUrl } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(orders.id, orderId));
+        if (order.deliveryAddressId) {
+          await transaction
+            .update(customerAddresses)
+            .set({
+              ...(newAddress ? { writtenAddress: newAddress } : {}),
+              // Una dirección corregida sin enlace nuevo: el enlace viejo apuntaba a lo de antes.
+              locationUrl: newLocationUrl ?? (newAddress ? null : undefined),
+              geocodingStatus: 'NEEDS_LOCATION',
+              latitude: null,
+              longitude: null,
+              updatedAt: new Date(),
+            })
+            .where(eq(customerAddresses.id, order.deliveryAddressId));
+        }
+        await this.auditCustomerMutation(
+          transaction,
+          order.customerId,
+          'customer.address_relocated_from_order',
+          context,
+          {
+            metadata: {
+              ...(newAddress ? { address: newAddress } : {}),
+              ...(newLocationUrl ? { locationUrl: newLocationUrl } : {}),
+              orderId,
+            },
+          },
+        );
+      });
+      if (newAddress) order.snapshot = newAddress;
+      if (newLocationUrl) order.locationUrl = newLocationUrl;
+    }
 
     let addressId = order.deliveryAddressId;
     if (addressId) {

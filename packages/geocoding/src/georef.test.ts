@@ -54,6 +54,16 @@ describe('searchableAddress', () => {
     expect(searchableAddress('Mitre 400 / 2').street).toBe('Mitre 400');
   });
 
+  // Se buscaba entero y no aparecía nada.
+  it('corta la calle en la altura: lo que sigue no lo entiende un buscador', () => {
+    expect(
+      searchableAddress('Silvio Ruggieri 299 Edif San Marcos 29 B dejar al guardia, Recoleta'),
+    ).toEqual({ places: ['Recoleta'], street: 'Silvio Ruggieri 299' });
+    expect(searchableAddress('25 de Mayo 300').street).toBe('25 de Mayo 300');
+    expect(searchableAddress('Calle 7 n° 1234, La Plata').street).toBe('Calle 7 n° 1234');
+    expect(searchableAddress('Gallo 606 torre 1 6to 4').street).toBe('Gallo 606');
+  });
+
   it('descarta la zona de reparto, que no es un lugar', () => {
     expect(searchableAddress('Av. Rivadavia 1470, Zona General, Buenos Aires')).toEqual({
       places: ['Buenos Aires'],
