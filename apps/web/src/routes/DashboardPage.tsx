@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
+import { DispatchTodayBanner } from '../components/DispatchTodayBanner.js';
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import {
   DEFAULT_LAYOUT,
@@ -290,6 +291,9 @@ export function DashboardPage() {
           </Link>
         </div>
       </section>
+
+      {/* Lo que sale hoy: es lo primero que hay que ver al abrir el panel. */}
+      {profile.permissions.includes('orders.read') ? <DispatchTodayBanner /> : null}
 
       <section aria-label="Tu tablero" className="widget-board">
         <header className="widget-board-head">

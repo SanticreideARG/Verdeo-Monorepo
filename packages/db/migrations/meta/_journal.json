@@ -414,6 +414,13 @@
       "when": 1791939757462,
       "tag": "0058_woozy_talkback",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1791946519721,
+      "tag": "0059_lame_ricochet",
+      "breakpoints": true
     }
   ]
 }

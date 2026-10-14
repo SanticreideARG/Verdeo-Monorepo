@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { Link, useParams } from 'react-router-dom';
 
+import { DeliveryDayPicker, useDeliveryOptions } from '../components/DeliveryDayPicker.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { CancelOrderDialog } from '../components/CancelOrderDialog.js';
 import { DeliveryMap } from '../components/DeliveryMap.js';
@@ -65,6 +66,13 @@ export function OrderDetailPage() {
   const [message, setMessage] = useState('');
   const [cancelOpen, setCancelOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  /*
+   * El día de reparto en la edición: uno de los de la ciudad para el menú del pedido, u "otra
+   * fecha" para un caso puntual (alguien que no está ese día).
+   */
+  const deliveryChoices = useDeliveryOptions(order?.menuId ?? null);
+  const [editDeliveryDate, setEditDeliveryDate] = useState<string | null>(null);
+  const [otherDate, setOtherDate] = useState(false);
   /*
    * Los ítems se editan como estado y no como campos del formulario: son una lista de largo
    * variable con una sublista de platos adentro, que en `FormData` habría que serializar a mano y
@@ -372,10 +380,38 @@ export function OrderDetailPage() {
                   required
                 />
               </label>
-              <label className="field">
-                Entrega
-                <input defaultValue={order.deliveryDate} name="deliveryDate" required type="date" />
-              </label>
+              {deliveryChoices.options.length > 1 && !otherDate ? (
+                <div className="field field-wide">
+                  <DeliveryDayPicker
+                    label="Entrega"
+                    onChange={setEditDeliveryDate}
+                    options={deliveryChoices.options}
+                    value={editDeliveryDate ?? order.deliveryDate}
+                  />
+                  <input
+                    name="deliveryDate"
+                    type="hidden"
+                    value={editDeliveryDate ?? order.deliveryDate}
+                  />
+                  <button
+                    className="locate-retry-open"
+                    onClick={() => setOtherDate(true)}
+                    type="button"
+                  >
+                    Otra fecha
+                  </button>
+                </div>
+              ) : (
+                <label className="field">
+                  Entrega
+                  <input
+                    defaultValue={order.deliveryDate}
+                    name="deliveryDate"
+                    required
+                    type="date"
+                  />
+                </label>
+              )}
               <label className="field">
                 Medio de pago
                 {paymentMethods.length > 0 ? (

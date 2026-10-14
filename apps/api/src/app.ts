@@ -157,6 +157,9 @@ import {
   OrderImportConfirmRequestSchema,
   OrderImportEmailPreviewRequestSchema,
   GeocodingMetricsSchema,
+  DeliveryOptionsResponseSchema,
+  DeliverySettingsSchema,
+  DispatchSummarySchema,
   GeocodingSettingsSchema,
   OrderExtractRequestSchema,
   OrderExtractResponseSchema,
@@ -299,6 +302,7 @@ import {
   type UserPermissionOverridesUpdateRequest,
   SystemStatusResponseSchema,
   SystemTableMapResponseSchema,
+  type DeliverySettings,
   type GeocodingSettings,
 } from '@verdeo/contracts';
 import { createRequestId, type Logger } from '@verdeo/observability';
@@ -594,6 +598,17 @@ interface OperationsEngine {
     zone?: string,
   ): Promise<unknown[]>;
   getGeocodingSettings(operatingSiteId: string): Promise<GeocodingSettings>;
+  getDeliverySettings?(operatingSiteId: string): Promise<DeliverySettings>;
+  updateDeliverySettings?(
+    operatingSiteId: string,
+    input: DeliverySettings,
+    context: OperationsContext,
+  ): Promise<DeliverySettings>;
+  deliveryOptionsForMenu?(
+    menuId: string,
+    operatingSiteId: string,
+  ): Promise<{ defaultDate: string; options: { date: string; weekday: number }[] }>;
+  dispatchSummary?(date: string, operatingSiteId: string | null): Promise<unknown>;
   updateGeocodingSettings(
     operatingSiteId: string,
     input: GeocodingSettings,
@@ -2581,6 +2596,8 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/inbound-emails/*', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/delivery/unlocated', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/delivery/locate-missing', requireAuthentication, resolveScopeSelection);
+  app.use('/api/v1/delivery/settings', requireAuthentication, resolveScopeSelection);
+  app.use('/api/v1/delivery/options', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/delivery/*', requireAuthentication);
   app.use('/api/v1/payments/*', requireAuthentication);
   app.use('/api/v1/stats', requireAuthentication);
@@ -3926,7 +3943,8 @@ export function createApp(options: CreateAppOptions) {
           {
             customerId,
             deliveryAddress: row.deliveryAddress ?? '',
-            deliveryDate: deliveryDateFor(menu.cycle.closeAt),
+            // El elegido en la vista previa; el servidor lo valida contra los días de la ciudad.
+            deliveryDate: row.deliveryDate ?? deliveryDateFor(menu.cycle.closeAt),
             dietaryInstructions: [],
             initialStatus,
             items: row.items.map((item) => ({
@@ -4939,6 +4957,68 @@ export function createApp(options: CreateAppOptions) {
   });
 
   /*
+   * Los días de reparto de la ciudad elegida arriba. Hace falta una ciudad: son de cada una.
+   */
+  app.get('/api/v1/delivery/settings', async (context) => {
+    if (!context.get('session').permissions.includes('sites.read')) return forbidden(context);
+    const operatingSiteId = context.get('scope')?.operatingSiteId;
+    if (!operatingSiteId)
+      return badRequest(context, 'Elegí una ciudad para ver sus días de reparto.');
+    const operations = requireOperations();
+    if (!operations.getDeliverySettings)
+      return context.json({ defaultWeekday: null, weekdays: [] });
+    return context.json(
+      DeliverySettingsSchema.parse(await operations.getDeliverySettings(operatingSiteId)),
+    );
+  });
+
+  app.put('/api/v1/delivery/settings', async (context) => {
+    if (!context.get('session').permissions.includes('sites.manage')) return forbidden(context);
+    const operatingSiteId = context.get('scope')?.operatingSiteId;
+    if (!operatingSiteId) {
+      return badRequest(context, 'Elegí una ciudad para guardar sus días de reparto.');
+    }
+    const input = DeliverySettingsSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success)
+      return badRequest(context, 'Revisá los días de reparto.', input.error.issues);
+    const operations = requireOperations();
+    if (!operations.updateDeliverySettings) throw new Error('Delivery settings are not configured');
+    return context.json(
+      DeliverySettingsSchema.parse(
+        await operations.updateDeliverySettings(
+          operatingSiteId,
+          input.data,
+          operationsContext(context),
+        ),
+      ),
+    );
+  });
+
+  /** Las fechas de reparto que se pueden elegir para un menú en la ciudad elegida arriba. */
+  app.get('/api/v1/delivery/options', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (!permissions.includes('orders.create') && !permissions.includes('orders.edit')) {
+      return forbidden(context);
+    }
+    const operatingSiteId = context.get('scope')?.operatingSiteId;
+    const operations = requireOperations();
+    if (!operatingSiteId || !operations.deliveryOptionsForMenu) {
+      return context.json({ defaultDate: '', options: [] });
+    }
+    // Sin menú, el publicado de la ciudad: es el que usa el importador.
+    const menuQuery = z.uuid().safeParse(context.req.query('menuId'));
+    const menuId = menuQuery.success
+      ? menuQuery.data
+      : ((await operations.currentPublishedMenu(operatingSiteId)) as { id: string } | null)?.id;
+    if (!menuId) return context.json({ defaultDate: '', options: [] });
+    return context.json(
+      DeliveryOptionsResponseSchema.parse(
+        await operations.deliveryOptionsForMenu(menuId, operatingSiteId),
+      ),
+    );
+  });
+
+  /*
    * Ajustes de ubicación de direcciones de la ciudad elegida arriba (umbral, radio, IA, aceptar
    * sola). Hace falta una ciudad: son de cada ciudad, no globales.
    */
@@ -5600,6 +5680,28 @@ export function createApp(options: CreateAppOptions) {
    * Los pedidos repetidos del período en curso, para corregirlos: el mismo cliente con el mismo
    * pedido más de una vez. Sólo lista; se eliminan con el borrado de siempre.
    */
+  /*
+   * Lo que hay que despachar en un día (hoy, si no se dice otro): la alerta del panel y de Pedidos,
+   * y lo que determina las hojas de ruta de ese día.
+   */
+  app.get('/api/v1/orders/dispatch', async (context) => {
+    if (!context.get('session').permissions.includes('orders.read')) return forbidden(context);
+    const date = z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .catch(deliveryDateFor(new Date()))
+      .parse(context.req.query('date'));
+    const operations = requireOperations();
+    if (!operations.dispatchSummary) {
+      return context.json({ date, drafts: 0, next: null, total: 0, unlocated: 0, unrouted: 0 });
+    }
+    return context.json(
+      DispatchSummarySchema.parse(
+        await operations.dispatchSummary(date, context.get('scope')?.operatingSiteId ?? null),
+      ),
+    );
+  });
+
   app.get('/api/v1/orders/duplicates', async (context) => {
     if (!context.get('session').permissions.includes('orders.read')) return forbidden(context);
     const operations = requireOperations();

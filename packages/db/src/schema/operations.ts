@@ -832,3 +832,30 @@ export const siteGeocodingSettings = pgTable('site_geocoding_settings', {
   useAi: boolean('use_ai').default(true).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+/**
+ * Los días de la semana en que reparte cada ciudad (0 = domingo … 6 = sábado) y cuál es el de
+ * siempre. Con días configurados, cada pedido elige uno de ellos; sin fila, se reparte el día del
+ * cierre del período, como antes.
+ */
+export const siteDeliverySettings = pgTable(
+  'site_delivery_settings',
+  {
+    operatingSiteId: uuid('operating_site_id')
+      .primaryKey()
+      .references(() => operatingSites.id, { onDelete: 'cascade' }),
+    weekdays: integer('weekdays')
+      .array()
+      .default(sql`'{}'::integer[]`)
+      .notNull(),
+    defaultWeekday: integer('default_weekday'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    check('site_delivery_settings_weekdays_check', sql`${table.weekdays} <@ array[0,1,2,3,4,5,6]`),
+    check(
+      'site_delivery_settings_default_check',
+      sql`${table.defaultWeekday} is null or ${table.defaultWeekday} between 0 and 6`,
+    ),
+  ],
+);

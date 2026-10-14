@@ -1,6 +1,7 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 
 import { apiRequest } from '../lib/api.js';
+import { DeliveryDayPicker, useDeliveryOptions, weekdayName } from './DeliveryDayPicker.js';
 import { formatDay } from '../lib/dates.js';
 import { errorMessage } from '../lib/operations.js';
 import { whatsappHref } from '../lib/phone.js';
@@ -189,8 +190,23 @@ export function OrderImportDialog({
    * es más rápido que volver al Excel y subirla de nuevo.
    */
   const [edits, setEdits] = useState<
-    Record<number, { customerName?: string; deliveryAddress?: string; paymentExpectation?: string }>
+    Record<
+      number,
+      {
+        customerName?: string;
+        deliveryAddress?: string;
+        deliveryDate?: string;
+        paymentExpectation?: string;
+      }
+    >
   >({});
+  /*
+   * El día de reparto: uno para todos, que se puede cambiar pedido por pedido. Las opciones son
+   * los días de reparto de la ciudad para el menú publicado; con uno solo no se elige nada.
+   */
+  const deliveryChoices = useDeliveryOptions(null);
+  const [deliveryForAll, setDeliveryForAll] = useState('');
+  const defaultDelivery = deliveryForAll || deliveryChoices.defaultDate;
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   // La conciliación después de importar: qué pedido quedó de cada fila.
   const [outcome, setOutcome] = useState<ImportOutcome[] | null>(null);
@@ -304,7 +320,12 @@ export function OrderImportDialog({
   });
   const editRow = (
     row: PreviewRow,
-    change: { customerName?: string; deliveryAddress?: string; paymentExpectation?: string },
+    change: {
+      customerName?: string;
+      deliveryAddress?: string;
+      deliveryDate?: string;
+      paymentExpectation?: string;
+    },
   ) =>
     setEdits((current) => ({
       ...current,
@@ -339,6 +360,9 @@ export function OrderImportDialog({
             customerId: decision === 'nuevo' ? null : decision,
             customerName: edited(row).customerName.trim() || row.customerName,
             deliveryAddress: edited(row).deliveryAddress?.trim() || null,
+            ...((edits[row.rowNumber]?.deliveryDate ?? defaultDelivery)
+              ? { deliveryDate: edits[row.rowNumber]?.deliveryDate ?? defaultDelivery }
+              : {}),
             email: row.email,
             items: row.items.map((item, index) => ({
               // Los platos van con la variedad que los trajo: si se eligió otra, no aplican.
@@ -644,6 +668,22 @@ export function OrderImportDialog({
                           value={edited(row).deliveryAddress ?? ''}
                         />
                       </label>
+                      {deliveryChoices.options.length > 1 ? (
+                        <label className="field">
+                          Día de reparto
+                          <select
+                            onChange={(event) => editRow(row, { deliveryDate: event.target.value })}
+                            value={edits[row.rowNumber]?.deliveryDate ?? defaultDelivery}
+                          >
+                            {deliveryChoices.options.map((option) => (
+                              <option key={option.date} value={option.date}>
+                                {weekdayName(option.weekday)} {option.date.slice(8, 10)}/
+                                {option.date.slice(5, 7)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
                       <label className="field">
                         Medio de pago
                         <select
@@ -880,6 +920,16 @@ export function OrderImportDialog({
                 />
                 <span>Ubicar las direcciones</span>
               </label>
+              {deliveryChoices.options.length > 1 ? (
+                <div className="order-import-foot-message">
+                  <DeliveryDayPicker
+                    label="Día de reparto para todos"
+                    onChange={setDeliveryForAll}
+                    options={deliveryChoices.options}
+                    value={defaultDelivery}
+                  />
+                </div>
+              ) : null}
               <label className="order-import-payment">
                 <span>Medio de pago</span>
                 <select onChange={(event) => setPayment(event.target.value)} value={payment}>

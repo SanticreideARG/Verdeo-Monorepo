@@ -24,6 +24,7 @@ import { DeliverySheetPage } from './DeliverySheetPage.js';
 import { AuditLogPage } from './AuditLogPage.js';
 import { SystemPage } from './SystemPage.js';
 import { AddressSettingsPage } from './AddressSettingsPage.js';
+import { DeliverySettingsPage } from './DeliverySettingsPage.js';
 import { BackupsPage } from './BackupsPage.js';
 import { GeographySettingsPage } from './GeographySettingsPage.js';
 import { MenuCatalogSettingsPage } from './MenuCatalogSettingsPage.js';
@@ -369,6 +370,7 @@ export function App() {
         <Route path="/app/auditoria" element={<AuditLogPage />} />
         <Route path="/app/sistema" element={<SystemPage />} />
         <Route path="/app/ajustes/direcciones" element={<AddressSettingsPage />} />
+        <Route path="/app/ajustes/reparto" element={<DeliverySettingsPage />} />
         <Route path="/app/respaldos" element={<BackupsPage />} />
         <Route path="/app/ajustes/chat" element={<ChatLinksPage />} />
         <Route path="/app/ayuda" element={<HelpPage />} />

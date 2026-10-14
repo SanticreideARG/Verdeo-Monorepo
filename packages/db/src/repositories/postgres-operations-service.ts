@@ -41,7 +41,8 @@ import {
   calculateLineTotal,
   intuitivoUnitPriceMinor,
   calculateOrderTotal,
-  deliveryDateFor,
+  deliveryOptions,
+  resolveDeliveryDate,
   matchOffering,
   mergeByLooseName,
   normalizeMenuName,
@@ -79,6 +80,7 @@ import {
   messageTemplates,
   operatingSiteOrderCounters,
   operatingSites,
+  siteDeliverySettings,
   siteGeocodingSettings,
   orderDietaryInstructions,
   orderItemSelections,
@@ -2968,6 +2970,121 @@ export class PostgresOperationsService {
     };
   }
 
+  /** Los días de reparto de una ciudad; sin fila guardada, ninguno (se reparte el día del cierre). */
+  public async getDeliverySettings(
+    operatingSiteId: string,
+    // Dentro de una transacción se lee con ella: otra conexión esperaría a que termine.
+    executor: Pick<Database, 'select'> = this.database,
+  ) {
+    const [stored] = await executor
+      .select({
+        defaultWeekday: siteDeliverySettings.defaultWeekday,
+        weekdays: siteDeliverySettings.weekdays,
+      })
+      .from(siteDeliverySettings)
+      .where(eq(siteDeliverySettings.operatingSiteId, operatingSiteId))
+      .limit(1);
+    const weekdays = [...new Set(stored?.weekdays ?? [])].sort((a, b) => a - b);
+    return {
+      defaultWeekday:
+        stored?.defaultWeekday != null && weekdays.includes(stored.defaultWeekday)
+          ? stored.defaultWeekday
+          : (weekdays[0] ?? null),
+      weekdays,
+    };
+  }
+
+  public async updateDeliverySettings(
+    operatingSiteId: string,
+    input: { defaultWeekday: number | null; weekdays: readonly number[] },
+    context: OperationsContext,
+  ) {
+    const before = await this.getDeliverySettings(operatingSiteId);
+    const weekdays = [...new Set(input.weekdays)].filter((day) => day >= 0 && day <= 6).sort();
+    const defaultWeekday =
+      input.defaultWeekday !== null && weekdays.includes(input.defaultWeekday)
+        ? input.defaultWeekday
+        : (weekdays[0] ?? null);
+    await this.database
+      .insert(siteDeliverySettings)
+      .values({ defaultWeekday, operatingSiteId, weekdays })
+      .onConflictDoUpdate({
+        set: { defaultWeekday, updatedAt: new Date(), weekdays },
+        target: siteDeliverySettings.operatingSiteId,
+      });
+    const audit = new AuditService(new PostgresAuditSink(this.database));
+    await audit.record({
+      action: 'delivery.settings_updated',
+      actor: auditActor(context),
+      after: { defaultWeekday, weekdays },
+      before,
+      correlationId: context.correlationId,
+      entityId: operatingSiteId,
+      entityType: 'operating_site',
+      requestId: context.requestId,
+      source: context.source,
+    });
+    return this.getDeliverySettings(operatingSiteId);
+  }
+
+  /**
+   * Las fechas de reparto que se pueden elegir para un menú en una ciudad, y la que va por
+   * defecto: cada día de reparto configurado, desde el cierre del período.
+   */
+  public async deliveryOptionsForMenu(menuId: string, operatingSiteId: string) {
+    const [menu] = await this.database
+      .select({ closeAt: salesCycles.closeAt })
+      .from(weeklyMenus)
+      .innerJoin(salesCycles, eq(salesCycles.id, weeklyMenus.salesCycleId))
+      .where(eq(weeklyMenus.id, menuId))
+      .limit(1);
+    if (!menu) throw new OperationsNotFoundError('No se encontró el menú semanal');
+    const settings = await this.getDeliverySettings(operatingSiteId);
+    const options = deliveryOptions(menu.closeAt, settings.weekdays);
+    return {
+      defaultDate: resolveDeliveryDate(options, null, settings.defaultWeekday),
+      options,
+    };
+  }
+
+  /**
+   * Lo que hay que despachar en un día: los pedidos no cancelados con esa fecha de entrega,
+   * cuántos todavía no están en una hoja de ruta, cuántos siguen en borrador y cuántos no tienen
+   * ubicación. Si ese día no hay nada, dice cuál es el próximo día con pedidos.
+   */
+  public async dispatchSummary(date: string, operatingSiteId?: string | null) {
+    const scope = and(
+      ne(orders.status, 'CANCELLED'),
+      ...(operatingSiteId ? [eq(orders.operatingSiteId, operatingSiteId)] : []),
+    );
+    const [today] = await this.database
+      .select({
+        drafts: sql<number>`count(*) filter (where ${orders.status} = 'DRAFT')::int`,
+        total: sql<number>`count(*)::int`,
+        unlocated: sql<number>`count(*) filter (where ${customerAddresses.latitude} is null)::int`,
+        unrouted: sql<number>`count(*) filter (where not exists (
+          select 1 from delivery_stops s where s.order_id = ${orders.id}))::int`,
+      })
+      .from(orders)
+      .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+      .where(and(scope, eq(orders.deliveryDate, date)));
+    const [next] = await this.database
+      .select({ date: orders.deliveryDate, total: sql<number>`count(*)::int` })
+      .from(orders)
+      .where(and(scope, gt(orders.deliveryDate, date)))
+      .groupBy(orders.deliveryDate)
+      .orderBy(asc(orders.deliveryDate))
+      .limit(1);
+    return {
+      date,
+      drafts: today?.drafts ?? 0,
+      next: next ? { date: String(next.date), total: next.total } : null,
+      total: today?.total ?? 0,
+      unlocated: today?.unlocated ?? 0,
+      unrouted: today?.unrouted ?? 0,
+    };
+  }
+
   public async updateGeocodingSettings(
     operatingSiteId: string,
     input: {
@@ -4650,15 +4767,6 @@ export class PostgresOperationsService {
     if (menu.status !== 'PUBLISHED')
       throw new OperationsConflictError('Para cargar pedidos hace falta un menú publicado');
 
-    /*
-     * El día de entrega lo decide el ciclo, no quien llama.
-     *
-     * Antes se guardaba el que mandaba el navegador, y cada pantalla (y cada script) lo calculaba a
-     * su manera: un cálculo en UTC corría un día todos los pedidos de un ciclo que cierra de noche.
-     * La fecha que llega en el pedido se ignora; la fuente es el cierre, en hora de la operación.
-     */
-    const deliveryDate = deliveryDateFor(menu.closeAt);
-
     const [customer] = await transaction
       .select({ id: customers.id })
       .from(customers)
@@ -4737,6 +4845,19 @@ export class PostgresOperationsService {
       throw new OperationsConflictError(
         'Un pedido necesita una operación: elegí una ciudad o un domicilio con zona asignada',
       );
+
+    /*
+     * El día de reparto lo deciden el período y la ciudad, no quien llama: el que se pidió, si es uno
+     * de los días de reparto de la ciudad desde el cierre (en hora de la operación); si no, el de
+     * siempre de la ciudad. Sin días configurados es el del cierre, como antes. Antes cada pantalla
+     * lo calculaba a su manera, y un cálculo en UTC corría un día los pedidos de un cierre de noche.
+     */
+    const deliverySettings = await this.getDeliverySettings(operatingSiteId, transaction);
+    const deliveryDate = resolveDeliveryDate(
+      deliveryOptions(menu.closeAt, deliverySettings.weekdays),
+      input.deliveryDate,
+      deliverySettings.defaultWeekday,
+    );
 
     const resolvedItems = await this.resolveOrderItems(
       transaction,

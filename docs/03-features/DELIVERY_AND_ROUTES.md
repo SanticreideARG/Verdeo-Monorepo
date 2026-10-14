@@ -219,3 +219,24 @@ enlace que compartió el cliente (a veces es una búsqueda por texto, no un punt
 búsqueda por la dirección escrita. Antes el enlace compartido iba primero. Lo usan el mapa del
 detalle del pedido (botón "Abrir en Google Maps", con las coordenadas del pin que se ve), la vista de
 Rutas, el mensaje de WhatsApp y el CSV de la ruta, y la hoja del repartidor.
+
+## Días de reparto y alerta de "a despachar hoy" (2026-10-14)
+
+- **Días de reparto por ciudad** (Panel de control → Días de reparto, `/app/ajustes/reparto`;
+  migración 0059, `site_delivery_settings`): los días de la semana en que reparte la ciudad
+  (0 = domingo … 6 = sábado) y el de siempre. Ver pide `sites.read`; guardar, `sites.manage`, y queda
+  auditado (`delivery.settings_updated`).
+- **Las fechas salen del período** (`deliveryOptions` en `@verdeo/orders`): cada día marcado da su
+  primera fecha desde el cierre, inclusive. Un período que cierra el domingo 18 con reparto sábado y
+  domingo reparte el domingo 18 o el sábado 24. Sin días configurados, el reparto es el día del
+  cierre, como antes.
+- **Cada pedido elige el día** con un selector por día de la semana ("**Sábado** 24 oct"): en la
+  carga, en la edición del pedido (con "Otra fecha" para un caso puntual) y en el importador (uno
+  para todos y, si hace falta, uno por pedido). `createOrder` acepta la fecha pedida sólo si es uno
+  de los días de reparto de la ciudad (`resolveDeliveryDate`); si no, usa la de siempre. El pedido
+  web por ahora va siempre al día de siempre. `GET /api/v1/delivery/options[?menuId]` da las fechas
+  (sin menú, las del publicado de la ciudad).
+- **Alerta "a despachar hoy"** (`DispatchTodayBanner`, en el panel principal y en Pedidos;
+  `GET /api/v1/orders/dispatch[?date]`, `dispatchSummary`): cuántos pedidos no cancelados salen hoy,
+  cuántos todavía no están en una hoja de ruta, cuántos siguen en borrador y cuántos no tienen
+  ubicación, con un botón a Rutas. Si hoy no hay reparto, dice cuál es el próximo día con pedidos.

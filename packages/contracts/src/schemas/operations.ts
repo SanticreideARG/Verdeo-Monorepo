@@ -1551,6 +1551,11 @@ export const OrderImportConfirmRequestSchema = z.object({
         customerId: UuidSchema.nullable(),
         customerName: z.string().trim().min(1).max(160),
         deliveryAddress: z.string().trim().max(500).nullable(),
+        /** El día de reparto elegido; el servidor lo valida contra los días de la ciudad. */
+        deliveryDate: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
         email: z.string().trim().max(320).nullable(),
         items: z
           .array(
@@ -1662,6 +1667,29 @@ export const OrderDeleteResponseSchema = z.object({
 });
 
 /** Cómo se ubican las direcciones en una ciudad. */
+/** Los días de la semana en que reparte una ciudad (0 = domingo … 6 = sábado) y el de siempre. */
+export const DeliverySettingsSchema = z.object({
+  defaultWeekday: z.number().int().min(0).max(6).nullable(),
+  weekdays: z.array(z.number().int().min(0).max(6)).max(7),
+});
+export type DeliverySettings = z.infer<typeof DeliverySettingsSchema>;
+
+/** Las fechas de reparto que se pueden elegir para un menú, y la que va por defecto. */
+export const DeliveryOptionsResponseSchema = z.object({
+  defaultDate: z.string(),
+  options: z.array(z.object({ date: z.string(), weekday: z.number().int().min(0).max(6) })),
+});
+
+/** Lo que hay que despachar en un día, para la alerta y para armar las hojas de ruta. */
+export const DispatchSummarySchema = z.object({
+  date: z.string(),
+  drafts: z.number().int(),
+  next: z.object({ date: z.string(), total: z.number().int() }).nullable(),
+  total: z.number().int(),
+  unlocated: z.number().int(),
+  unrouted: z.number().int(),
+});
+
 export const GeocodingSettingsSchema = z.object({
   autoAccept: z.boolean(),
   cityContext: z.string().trim().max(120).nullable(),

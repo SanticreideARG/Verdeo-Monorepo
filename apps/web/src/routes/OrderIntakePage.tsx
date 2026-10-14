@@ -11,6 +11,7 @@ import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus
 import { DataTable } from '../components/DataTable.js';
 import { OrderDetailDialog } from '../components/OrderDetailDialog.js';
 import { ActionMenu } from '../components/ActionMenu.js';
+import { DispatchTodayBanner } from '../components/DispatchTodayBanner.js';
 import { DuplicateOrdersPanel } from '../components/DuplicateOrdersPanel.js';
 import { InboundEmailsPanel } from '../components/InboundEmailsPanel.js';
 import { OrderImportDialog } from '../components/OrderImportDialog.js';
@@ -32,6 +33,7 @@ import { EmptyState } from '../components/EmptyState.js';
 import { ReasonDialog } from '../components/ReasonDialog.js';
 import { ErrorNotice } from '../components/ErrorNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
+import { DeliveryDayPicker, useDeliveryOptions } from '../components/DeliveryDayPicker.js';
 import { deliveryDateFor, deliveryDateLabel } from '../lib/dates.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { describeResponse, type AppError } from '../lib/errors.js';
@@ -410,6 +412,16 @@ export function OrderIntakePage() {
 
   const publishedMenus = menus.filter((menu) => menu.status === 'PUBLISHED');
   const selectedMenu = menus.find((menu) => menu.id === selectedMenuId) ?? null;
+  /*
+   * El día de reparto, entre los de la ciudad para este menú. Arranca en el de siempre; si la
+   * ciudad no tiene días configurados hay uno solo, el del cierre, y no se elige nada.
+   */
+  const deliveryChoices = useDeliveryOptions(selectedMenu?.id ?? null);
+  const [chosenDeliveryDate, setChosenDeliveryDate] = useState('');
+  const deliveryDate =
+    deliveryChoices.options.find((option) => option.date === chosenDeliveryDate)?.date ??
+    (deliveryChoices.defaultDate ||
+      (selectedMenu ? deliveryDateFor(selectedMenu.cycle.closeAt) : ''));
   /*
    * Lo que la ciudad permite y cómo cobra los platos de más.
    *
@@ -810,7 +822,7 @@ export function OrderIntakePage() {
       const createdOrder = await mutate('/api/v1/orders', {
         customerId,
         deliveryAddress: formText(form, 'deliveryAddress'),
-        deliveryDate: selectedMenu ? deliveryDateFor(selectedMenu.cycle.closeAt) : '',
+        deliveryDate,
         // Un solo comentario para la cocina por pedido: no hay indicaciones por plato.
         dietaryInstructions: formText(form, 'dietaryInstructions').trim()
           ? [formText(form, 'dietaryInstructions').trim().replace(/\s+/g, ' ')]
@@ -1225,6 +1237,8 @@ export function OrderIntakePage() {
           </div>
         ) : null}
 
+        {/* Lo que sale hoy, y lo que falta para que salga. */}
+        {permissions.includes('orders.read') ? <DispatchTodayBanner /> : null}
         {/* Los pedidos que llegaron solos por correo, esperando revisión. */}
         {permissions.includes('orders.create') ? (
           <InboundEmailsPanel canConfirm={canConfirm} onChanged={() => void loadData()} />
@@ -1474,15 +1488,28 @@ export function OrderIntakePage() {
                   value={units}
                 />
               </label>
-              <div className="field">
-                Entrega
-                <p className="field-static">
-                  {selectedMenu ? deliveryDateLabel(selectedMenu.cycle.closeAt) : '—'}
-                </p>
-                {selectedMenu ? (
-                  <small className="field-hint">{selectedMenu.cycle.alias}</small>
-                ) : null}
-              </div>
+              {deliveryChoices.options.length > 1 ? (
+                <div className="field field-wide">
+                  <DeliveryDayPicker
+                    onChange={setChosenDeliveryDate}
+                    options={deliveryChoices.options}
+                    value={deliveryDate}
+                  />
+                  {selectedMenu ? (
+                    <small className="field-hint">{selectedMenu.cycle.alias}</small>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="field">
+                  Entrega
+                  <p className="field-static">
+                    {selectedMenu ? deliveryDateLabel(selectedMenu.cycle.closeAt) : '—'}
+                  </p>
+                  {selectedMenu ? (
+                    <small className="field-hint">{selectedMenu.cycle.alias}</small>
+                  ) : null}
+                </div>
+              )}
               <label className="field field-wide">
                 Dirección
                 <input

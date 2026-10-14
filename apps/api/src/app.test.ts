@@ -1911,6 +1911,44 @@ describe('API foundation', () => {
         expect(rejected.status).toBe(400);
       });
 
+      it('guarda los días de reparto de la ciudad elegida y resume lo que sale hoy', async () => {
+        const updateDeliverySettings = vi.fn(() =>
+          Promise.resolve({ defaultWeekday: 0, weekdays: [0, 6] }),
+        );
+        const dispatchSummary = vi.fn(() =>
+          Promise.resolve({
+            date: '2026-10-18',
+            drafts: 1,
+            next: null,
+            total: 3,
+            unlocated: 0,
+            unrouted: 2,
+          }),
+        );
+        const app = buildApp({ dispatchSummary, updateDeliverySettings }, [
+          'sites.manage',
+          'orders.read',
+        ]);
+
+        const saved = await app.request('/api/v1/delivery/settings', {
+          body: JSON.stringify({ defaultWeekday: 0, weekdays: [6, 0] }),
+          headers: { 'content-type': 'application/json', cookie, [SITE_SCOPE_HEADER]: SEDE },
+          method: 'PUT',
+        });
+        expect(saved.status).toBe(200);
+        expect(updateDeliverySettings).toHaveBeenCalledWith(
+          SEDE,
+          { defaultWeekday: 0, weekdays: [6, 0] },
+          expect.anything(),
+        );
+
+        const dispatch = await app.request('/api/v1/orders/dispatch?date=2026-10-18', {
+          headers: { cookie, [SITE_SCOPE_HEADER]: SEDE },
+        });
+        expect(await dispatch.json()).toMatchObject({ total: 3, unrouted: 2 });
+        expect(dispatchSummary).toHaveBeenCalledWith('2026-10-18', SEDE);
+      });
+
       it('lista los pedidos del día sin ubicación', async () => {
         const unlocatedOrders = vi.fn(() => Promise.resolve([pedido]));
         const response = await buildApp({ unlocatedOrders }, ['routes.read']).request(

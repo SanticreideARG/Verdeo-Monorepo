@@ -9689,3 +9689,81 @@ body {
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
+/* El día de reparto, elegido por el día de la semana: el nombre grande, la fecha chica abajo. */
+.delivery-days {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.delivery-days legend {
+  margin-bottom: 0.35rem;
+  font-weight: 600;
+}
+.delivery-days-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.delivery-days-options button {
+  display: grid;
+  min-width: 6.5rem;
+  gap: 0.1rem;
+  justify-items: center;
+  border: 1px solid var(--db-border);
+  border-radius: 0.8rem;
+  padding: 0.55rem 0.9rem;
+  background: var(--db-surface-solid, #fff);
+  color: inherit;
+  cursor: pointer;
+}
+.delivery-days-options button strong {
+  font-size: 1.05rem;
+}
+.delivery-days-options button small {
+  color: var(--db-muted, #6b7280);
+}
+.delivery-days-options button.is-selected {
+  border-color: var(--color-forest);
+  background: var(--color-forest);
+  color: #fff;
+}
+.delivery-days-options button.is-selected small {
+  color: rgb(255 255 255 / 80%);
+}
+.delivery-days-options button:disabled {
+  cursor: default;
+}
+
+/* La alerta de lo que hay que despachar hoy. */
+.dispatch-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 1rem;
+  border: 1px solid var(--db-border);
+  border-left-width: 5px;
+  border-radius: 0.8rem;
+  padding: 0.8rem 1rem;
+  background: var(--db-surface-solid, #fff);
+}
+.dispatch-banner p {
+  margin: 0;
+}
+.dispatch-banner.is-pending {
+  border-left-color: #b7791f;
+}
+.dispatch-banner.is-ready {
+  border-left-color: #2f7d4a;
+}
+.dispatch-banner.is-quiet {
+  border-left-color: var(--db-border);
+}
+.dispatch-banner-detail {
+  color: var(--db-muted, #6b7280);
+  font-size: 0.88rem;
+}

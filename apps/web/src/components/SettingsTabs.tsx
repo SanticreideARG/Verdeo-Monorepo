@@ -36,6 +36,7 @@ const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     label: 'Operación',
     tabs: [
       { href: '/app/ajustes/zonas', label: 'Zonas geográficas', permission: 'sites.read' },
+      { href: '/app/ajustes/reparto', label: 'Días de reparto', permission: 'sites.read' },
       { href: '/app/ajustes/menu', label: 'Menú personalizado', permission: 'production.read' },
       { href: '/app/ajustes/pagos', label: 'Métodos de pago', permission: 'payments.read' },
     ],
