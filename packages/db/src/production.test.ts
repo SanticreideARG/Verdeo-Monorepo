@@ -491,3 +491,96 @@ describe('opportunity sale stock', () => {
     expect(order.id).toBeDefined();
   });
 });
+
+describe('stock para la venta (STOCK_PLAN.md)', () => {
+  const keto = async (service: PostgresOperationsService) =>
+    (await service.surplusReport(CYCLE)).items.find(
+      (item) => item.familyName === 'Keto' && item.variantName === '250',
+    );
+
+  it('suma el stock a lo que hay que producir y a lo disponible, antes de informar lo real', async () => {
+    const service = await seededService();
+    await service.setProductionStock(
+      CYCLE,
+      [{ familyName: 'Keto', quantityUnits: 3, variantName: '250' }],
+      context,
+    );
+
+    const row = await keto(service);
+    // 4 pedidos + 3 de stock.
+    expect(row?.stockPlanificado).toBe(3);
+    expect(row?.produccionPlanificada).toBe(7);
+    expect(row?.disponible).toBe(3);
+
+    const summary = await service.kitchenSummary(CYCLE);
+    expect(summary.stock).toEqual([{ familyName: 'Keto', quantityUnits: 3, variantName: '250' }]);
+    // El stock no es un pedido: no suma a los totales de pedidos.
+    expect(summary.totalUnits).toBe(4);
+  });
+
+  it('se vende del stock como venta de oportunidad, hasta lo que hay', async () => {
+    const service = await seededService();
+    await service.setProductionStock(
+      CYCLE,
+      [{ familyName: 'Keto', quantityUnits: 2, variantName: '250' }],
+      context,
+    );
+    const sale = (quantityUnits: number) =>
+      service.createOrder(
+        {
+          customerId: CUSTOMER,
+          operatingSiteId: SITE,
+          deliveryAddress: 'Calle 9',
+          deliveryDate: '2026-08-26',
+          dietaryInstructions: [],
+          initialStatus: 'CONFIRMED',
+          items: [{ offeringId: OFFERING, quantityUnits }],
+          menuId: MENU,
+          paymentExpectation: 'efectivo',
+          source: 'opportunity_sale',
+        },
+        context,
+      );
+
+    await sale(2);
+    expect((await keto(service))?.disponible).toBe(0);
+    await expect(sale(1)).rejects.toThrow(OperationsConflictError);
+  });
+
+  it('guardar reemplaza el stock entero, suma repetidos y con cero lo saca', async () => {
+    const service = await seededService();
+    await service.setProductionStock(
+      CYCLE,
+      [
+        { familyName: 'Keto', quantityUnits: 2, variantName: '250' },
+        { familyName: 'Keto', quantityUnits: 1, variantName: '250' },
+        { familyName: 'Veggie', quantityUnits: 5, variantName: '300' },
+      ],
+      context,
+    );
+    expect(
+      (await service.listProductionStock(CYCLE)).map((row) => [row.familyName, row.quantityUnits]),
+    ).toEqual([
+      ['Keto', 3],
+      ['Veggie', 5],
+    ]);
+
+    await service.setProductionStock(
+      CYCLE,
+      [{ familyName: 'Veggie', quantityUnits: 0, variantName: '300' }],
+      context,
+    );
+    expect(await service.listProductionStock(CYCLE)).toEqual([]);
+  });
+
+  it('al cerrar el período da de baja el stock que no se vendió', async () => {
+    const service = await seededService();
+    await service.setProductionStock(
+      CYCLE,
+      [{ familyName: 'Keto', quantityUnits: 3, variantName: '250' }],
+      context,
+    );
+
+    expect((await service.setCycleClosed(CYCLE, true, context)).writtenOffUnits).toBe(3);
+  });
+});

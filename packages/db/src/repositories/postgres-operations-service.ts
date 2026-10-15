@@ -99,6 +99,7 @@ import {
   salesCycles,
   surplusConfigs,
   surplusWriteoffs,
+  productionStock,
   transferReconciliations,
   weeklyMenuItems,
   weeklyMenuOfferings,
@@ -484,6 +485,8 @@ interface SurplusRow {
   familyName: string;
   produccionPlanificada: number;
   produccionReal: number | null;
+  /** El stock para la venta cargado para el período (STOCK_PLAN.md). */
+  stockPlanificado: number;
   variantName: string;
   vendidoOportunidad: number;
 }
@@ -6858,7 +6861,18 @@ export class PostgresOperationsService {
       operatingSiteId,
       ...(deliveryRunId ? { deliveryRunId } : {}),
     });
-    return { ...buildKitchenSummary(lines), cycle, generatedAt: new Date() };
+    // El stock para la venta también se cocina: va aparte, para que se vea de dónde sale el número.
+    const stock = deliveryRunId ? [] : await this.listProductionStock(cycleId);
+    return {
+      ...buildKitchenSummary(lines),
+      cycle,
+      generatedAt: new Date(),
+      stock: stock.map(({ familyName, quantityUnits, variantName }) => ({
+        familyName,
+        quantityUnits,
+        variantName,
+      })),
+    };
   }
 
   // --- Kitchen labels: one entry per physical unit, one per order/cycle print run ----------------
@@ -7554,6 +7568,14 @@ export class PostgresOperationsService {
       })
       .from(surplusWriteoffs)
       .where(eq(surplusWriteoffs.salesCycleId, cycleId));
+    const stock = await database
+      .select({
+        familyName: productionStock.familyName,
+        quantityUnits: productionStock.quantityUnits,
+        variantName: productionStock.variantName,
+      })
+      .from(productionStock)
+      .where(eq(productionStock.salesCycleId, cycleId));
 
     const rows = new Map<string, SurplusRow>();
     const ensure = (familyName: string, variantName: string) => {
@@ -7568,6 +7590,7 @@ export class PostgresOperationsService {
           familyName,
           produccionPlanificada: 0,
           produccionReal: null,
+          stockPlanificado: 0,
           variantName,
           vendidoOportunidad: 0,
         };
@@ -7589,14 +7612,107 @@ export class PostgresOperationsService {
       const row = ensure(writeoff.familyName, writeoff.variantName);
       row.bajaMerma += writeoff.quantityUnits;
     }
+    for (const item of stock) {
+      const row = ensure(item.familyName, item.variantName);
+      row.stockPlanificado += item.quantityUnits;
+    }
 
     for (const row of rows.values()) {
-      row.produccionPlanificada = Math.ceil(row.demandaConfirmada * (1 + coefficientPercent / 100));
-      const real = row.produccionReal ?? 0;
-      row.excedenteEfectivo = Math.max(0, real - row.demandaConfirmada);
+      // Lo que hay que cocinar: lo pedido con su coeficiente, más el stock para la venta.
+      row.produccionPlanificada =
+        Math.ceil(row.demandaConfirmada * (1 + coefficientPercent / 100)) + row.stockPlanificado;
+      /*
+       * Lo que se puede vender del stock. Con la producción real informada, lo que sobró de verdad;
+       * antes de informarla, el stock planificado: así se puede vender el stock mientras se cocina.
+       */
+      row.excedenteEfectivo =
+        row.produccionReal === null
+          ? row.stockPlanificado
+          : Math.max(0, row.produccionReal - row.demandaConfirmada);
       row.disponible = Math.max(0, row.excedenteEfectivo - row.vendidoOportunidad - row.bajaMerma);
     }
     return rows;
+  }
+
+  /** El stock para la venta del período, por variedad y tamaño. */
+  public async listProductionStock(cycleId: string) {
+    return this.database
+      .select({
+        familyName: productionStock.familyName,
+        notes: productionStock.notes,
+        quantityUnits: productionStock.quantityUnits,
+        updatedAt: productionStock.updatedAt,
+        variantName: productionStock.variantName,
+      })
+      .from(productionStock)
+      .where(eq(productionStock.salesCycleId, cycleId))
+      .orderBy(asc(productionStock.familyName), asc(productionStock.variantName));
+  }
+
+  /**
+   * Guardar el stock del período: lo que se manda reemplaza lo que había (con cero se saca esa
+   * variedad). Queda auditado con el antes y el después.
+   */
+  public async setProductionStock(
+    cycleId: string,
+    entries: readonly { familyName: string; quantityUnits: number; variantName: string }[],
+    context: OperationsContext,
+  ) {
+    return this.database.transaction(async (transaction) => {
+      const [cycle] = await transaction
+        .select({ id: salesCycles.id })
+        .from(salesCycles)
+        .where(eq(salesCycles.id, cycleId))
+        .limit(1);
+      if (!cycle) throw new OperationsNotFoundError('No se encontró el período de venta');
+      const before = await transaction
+        .select({
+          familyName: productionStock.familyName,
+          quantityUnits: productionStock.quantityUnits,
+          variantName: productionStock.variantName,
+        })
+        .from(productionStock)
+        .where(eq(productionStock.salesCycleId, cycleId));
+      await transaction.delete(productionStock).where(eq(productionStock.salesCycleId, cycleId));
+      const merged = new Map<
+        string,
+        { familyName: string; quantityUnits: number; variantName: string }
+      >();
+      for (const entry of entries) {
+        const familyName = entry.familyName.trim();
+        const variantName = entry.variantName.trim();
+        if (!familyName || !variantName) continue;
+        const key = surplusKey(familyName, variantName);
+        const current = merged.get(key);
+        merged.set(key, {
+          familyName,
+          quantityUnits: (current?.quantityUnits ?? 0) + entry.quantityUnits,
+          variantName,
+        });
+      }
+      const rows = [...merged.values()].filter((row) => row.quantityUnits > 0);
+      if (rows.length > 0) {
+        await transaction.insert(productionStock).values(
+          rows.map((row) => ({
+            ...row,
+            actorUserId: context.actorUserId ?? null,
+            salesCycleId: cycleId,
+          })),
+        );
+      }
+      await new AuditService(new PostgresAuditSink(transaction)).record({
+        action: 'production.stock_updated',
+        actor: auditActor(context),
+        after: rows,
+        before,
+        correlationId: context.correlationId,
+        entityId: cycleId,
+        entityType: 'sales_cycle',
+        requestId: context.requestId,
+        source: context.source,
+      });
+      return rows;
+    });
   }
 
   public async surplusReport(cycleId: string) {

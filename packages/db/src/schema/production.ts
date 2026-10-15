@@ -211,3 +211,33 @@ export const labelSettings = pgTable(
     ),
   ],
 );
+
+/**
+ * El stock para la venta de un período (STOCK_PLAN.md): lo que se cocina de más para tener
+ * disponible, por variedad y tamaño. No es un pedido ni tiene cliente, así que no cuenta en las
+ * ventas ni entra a repartos ni rutas; cuenta para producción y para lo que se puede vender del
+ * stock. Es sólo de su período: lo que no se vende se da de baja al cerrarlo.
+ */
+export const productionStock = pgTable(
+  'production_stock',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    salesCycleId: uuid('sales_cycle_id')
+      .notNull()
+      .references(() => salesCycles.id, { onDelete: 'cascade' }),
+    familyName: text('family_name').notNull(),
+    variantName: text('variant_name').notNull(),
+    quantityUnits: integer('quantity_units').notNull(),
+    notes: text('notes'),
+    actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('production_stock_cycle_variant_unique').on(
+      table.salesCycleId,
+      table.familyName,
+      table.variantName,
+    ),
+    check('production_stock_quantity_positive_check', sql`${table.quantityUnits} > 0`),
+  ],
+);

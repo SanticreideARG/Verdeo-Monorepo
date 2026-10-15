@@ -275,6 +275,8 @@ export interface KitchenSummary {
   /** Los platos de todos los Intuitivos, sumados y de mayor a menor. */
   dishTally: { dishName: string; portions: number }[];
   generatedAt: string;
+  /** El stock para la venta del período: se cocina, pero no es de ningún pedido. */
+  stock: { familyName: string; quantityUnits: number; variantName: string }[];
   totalOrders: number;
   totalUnits: number;
 }
@@ -313,6 +315,8 @@ export interface SurplusItem {
   familyName: string;
   produccionPlanificada: number;
   produccionReal: number | null;
+  /** Ya sumado en `produccionPlanificada`. */
+  stockPlanificado: number;
   variantName: string;
   vendidoOportunidad: number;
 }

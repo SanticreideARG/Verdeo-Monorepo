@@ -237,7 +237,15 @@ Datos:
 - producción real;
 - excedente efectivo;
 - vendido;
-- baja/merma.
+- baja/merma;
+- stock para la venta (STOCK_PLAN.md).
+
+Las cuentas, por variedad y tamaño:
+
+- producción planificada = demanda × (1 + coeficiente) + stock;
+- excedente efectivo = producción real − demanda; **antes de informar la producción real**, el stock
+  cargado (así se puede vender el stock mientras se cocina);
+- disponible = excedente efectivo − vendido por oportunidad − bajas.
 
 Cocina informa cuántos productos "salieron". Isabella/Tamara resuelven faltantes operativamente.
 

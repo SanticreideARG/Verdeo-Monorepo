@@ -1023,6 +1023,20 @@ export const KitchenSummaryResponseSchema = z.object({
   // Los platos de todos los Intuitivos, sumados: es la pregunta que cocina se hace antes de comprar.
   dishTally: z.array(z.object({ dishName: z.string(), portions: z.number().int() })),
   generatedAt: IsoDateTimeSchema,
+  /**
+   * El stock para la venta del período (STOCK_PLAN.md): también se cocina, pero va aparte de lo
+   * pedido para que se vea de dónde sale cada número. No suma a `totalUnits` ni a `totalOrders`,
+   * que son de pedidos. Vacío en el resumen de un reparto: el stock no tiene reparto.
+   */
+  stock: z
+    .array(
+      z.object({
+        familyName: z.string(),
+        quantityUnits: z.number().int(),
+        variantName: z.string(),
+      }),
+    )
+    .default([]),
   totalOrders: z.number().int(),
   totalUnits: z.number().int(),
 });
@@ -1192,6 +1206,26 @@ export const ProductionActualListResponseSchema = z.object({
   items: z.array(ProductionActualSchema),
 });
 
+/** Una variedad y tamaño de stock para la venta (STOCK_PLAN.md). Con cero se saca. */
+export const ProductionStockEntrySchema = ProductionActualEntrySchema;
+
+export const ProductionStockRequestSchema = z.object({
+  // Reemplaza el stock entero del período: una lista vacía lo borra.
+  entries: z.array(ProductionStockEntrySchema).max(200),
+});
+
+export const ProductionStockSchema = z.object({
+  familyName: z.string(),
+  notes: z.string().nullable(),
+  quantityUnits: z.number().int(),
+  updatedAt: IsoDateTimeSchema,
+  variantName: z.string(),
+});
+
+export const ProductionStockListResponseSchema = z.object({
+  items: z.array(ProductionStockSchema),
+});
+
 export const ProductionSnapshotKindSchema = z.enum(['partial', 'final']);
 
 export const ProductionSnapshotRequestSchema = z.object({
@@ -1235,6 +1269,8 @@ export const SurplusItemSchema = z.object({
   familyName: z.string(),
   produccionPlanificada: z.number().int(),
   produccionReal: z.number().int().nullable(),
+  // El stock para la venta del período, que ya está sumado en `produccionPlanificada`.
+  stockPlanificado: z.number().int().default(0),
   variantName: z.string(),
   vendidoOportunidad: z.number().int(),
 });

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
+import { ProductionStockPanel } from '../components/ProductionStockPanel.js';
 import { RunFilter } from '../components/RunFilter.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { DataTable, type DataColumn } from '../components/DataTable.js';
@@ -36,12 +37,40 @@ const SURPLUS_COLUMNS: readonly DataColumn<SurplusItem>[] = [
     render: (item) => `${item.familyName} ${item.variantName}`,
   },
   { key: 'demanda', label: 'Demanda', render: (item) => item.demandaConfirmada },
+  { key: 'stock', label: 'Stock', render: (item) => item.stockPlanificado || '—' },
   { key: 'real', label: 'Real', render: (item) => item.produccionReal ?? '—' },
   { key: 'efectivo', label: 'Efectivo', render: (item) => item.excedenteEfectivo },
   { key: 'oportunidad', label: 'Vendido oport.', render: (item) => item.vendidoOportunidad },
   { key: 'baja', label: 'Baja', render: (item) => item.bajaMerma },
   { emphasis: true, key: 'disponible', label: 'Disponible', render: (item) => item.disponible },
 ];
+
+function stockUnits(kitchen: KitchenSummary): number {
+  return (kitchen.stock ?? []).reduce((sum, item) => sum + item.quantityUnits, 0);
+}
+
+/**
+ * Lo que se informa como producción real: cada variedad pedida más su stock, y las que sólo tienen
+ * stock. El número propuesto es lo que se esperaba cocinar.
+ */
+function productionLines(
+  kitchen: KitchenSummary,
+): { familyName: string; quantityUnits: number; variantName: string }[] {
+  const lines = new Map<
+    string,
+    { familyName: string; quantityUnits: number; variantName: string }
+  >();
+  for (const line of [...kitchen.base, ...(kitchen.stock ?? [])]) {
+    const key = `${line.familyName}::${line.variantName}`;
+    const current = lines.get(key);
+    lines.set(key, {
+      familyName: line.familyName,
+      quantityUnits: (current?.quantityUnits ?? 0) + line.quantityUnits,
+      variantName: line.variantName,
+    });
+  }
+  return [...lines.values()];
+}
 
 async function downloadExport(cycleId: string, kind: 'final' | 'partial', format: 'pdf' | 'xlsx') {
   const response = await apiRequest(
@@ -187,7 +216,7 @@ export function KitchenPage() {
     event.preventDefault();
     if (!kitchen || !selectedMenu) return;
     const form = new FormData(event.currentTarget);
-    const entries = kitchen.base
+    const entries = productionLines(kitchen)
       .map((line) => {
         const raw = formText(form, `${line.familyName}::${line.variantName}`);
         if (!raw.trim()) return null;
@@ -474,8 +503,21 @@ export function KitchenPage() {
                   <p className="text-right font-bold text-forest lg:col-span-2">
                     Total: {kitchen.totalUnits} unidades en {kitchen.totalOrders}{' '}
                     {kitchen.totalOrders === 1 ? 'pedido' : 'pedidos'}
+                    {stockUnits(kitchen) > 0
+                      ? ` + ${String(stockUnits(kitchen))} de stock = ${String(kitchen.totalUnits + stockUnits(kitchen))} a cocinar`
+                      : ''}
                   </p>
                 </div>
+
+                {selectedMenu && !runId ? (
+                  <ProductionStockPanel
+                    canEdit={canReport}
+                    cycleId={selectedMenu.cycle.id}
+                    offerings={selectedMenu.offerings}
+                    onSaved={() => void generate()}
+                    surplus={surplus?.items ?? []}
+                  />
+                ) : null}
 
                 {canReport ? (
                   <form
@@ -487,7 +529,7 @@ export function KitchenPage() {
                       Cargá cuánto salió efectivamente de cada variedad y tamaño.
                     </p>
                     <div className="form-grid mt-4">
-                      {kitchen.base.map((item) => (
+                      {productionLines(kitchen).map((item) => (
                         <label className="field" key={`${item.familyName}-${item.variantName}`}>
                           {item.familyName} {item.variantName}
                           <input

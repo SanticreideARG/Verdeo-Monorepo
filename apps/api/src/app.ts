@@ -198,6 +198,8 @@ import {
   ProfileUpdateRequestSchema,
   ProductionActualListResponseSchema,
   ProductionReportRequestSchema,
+  ProductionStockListResponseSchema,
+  ProductionStockRequestSchema,
   ProductionSnapshotListResponseSchema,
   ProductionSnapshotRequestSchema,
   ProductionSnapshotSchema,
@@ -828,6 +830,12 @@ interface OperationsEngine {
   setLabelSettings(input: LabelSettingsUpdateRequest, context: OperationsContext): Promise<unknown>;
   setSurplusConfig(coefficientPercent: number, context: OperationsContext): Promise<unknown>;
   surplusReport(cycleId: string): Promise<unknown>;
+  listProductionStock(cycleId: string): Promise<unknown[]>;
+  setProductionStock(
+    cycleId: string,
+    entries: readonly { familyName: string; quantityUnits: number; variantName: string }[],
+    context: OperationsContext,
+  ): Promise<unknown>;
   writeOffSurplus(
     cycleId: string,
     entries: SurplusWriteoffRequest['entries'],
@@ -6339,6 +6347,37 @@ export function createApp(options: CreateAppOptions) {
       operationsContext(context),
     );
     return context.json(ProductionActualListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  // El stock para la venta del período (STOCK_PLAN.md): lo carga quien informa la producción.
+  app.get('/api/v1/production/:cycleId/stock', async (context) => {
+    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El ciclo indicado no es válido.');
+    const items = await requireOperations().listProductionStock(params.data.cycleId);
+    return context.json(ProductionStockListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.put('/api/v1/production/:cycleId/stock', async (context) => {
+    if (!context.get('session').permissions.includes('production.report'))
+      return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    const input = ProductionStockRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá las cantidades del stock.',
+        input.success ? undefined : input.error.issues,
+      );
+    await requireOperations().setProductionStock(
+      params.data.cycleId,
+      input.data.entries,
+      operationsContext(context),
+    );
+    const items = await requireOperations().listProductionStock(params.data.cycleId);
+    return context.json(ProductionStockListResponseSchema.parse({ items: contractValue(items) }));
   });
 
   app.get('/api/v1/production/:cycleId/snapshots', async (context) => {

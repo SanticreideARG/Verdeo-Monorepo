@@ -93,6 +93,8 @@ const customerOperationsStubs = {
   setLabelSettings: vi.fn(),
   setSurplusConfig: vi.fn(),
   surplusReport: vi.fn(),
+  listProductionStock: vi.fn(),
+  setProductionStock: vi.fn(),
   trackPublicOrder: vi.fn(),
   updateCustomer: vi.fn(),
   updateCustomerAddress: vi.fn(),
@@ -1719,6 +1721,42 @@ describe('API foundation', () => {
         method: 'POST',
       });
       expect(deniedResponse.status).toBe(403);
+    });
+
+    it('guarda el stock del período con production.report y lo niega sin él', async () => {
+      const setProductionStock = vi.fn(() => Promise.resolve([]));
+      const listProductionStock = vi.fn(() =>
+        Promise.resolve([
+          {
+            familyName: 'Keto',
+            notes: null,
+            quantityUnits: 3,
+            updatedAt: new Date('2026-10-16T12:00:00.000Z'),
+            variantName: '250',
+          },
+        ]),
+      );
+      const app = buildApp({ listProductionStock, setProductionStock }, ['production.report']);
+      const request = (target: typeof app) =>
+        target.request(`/api/v1/production/${CYCLE}/stock`, {
+          body: JSON.stringify({
+            entries: [{ familyName: 'Keto', quantityUnits: 3, variantName: '250' }],
+          }),
+          headers: { cookie, 'content-type': 'application/json' },
+          method: 'PUT',
+        });
+
+      const response = await request(app);
+      expect(response.status).toBe(200);
+      expect(setProductionStock).toHaveBeenCalledWith(
+        CYCLE,
+        [{ familyName: 'Keto', quantityUnits: 3, variantName: '250' }],
+        expect.objectContaining({ actorUserId: '55276601-ec66-4f63-9f2f-edf73904ede0' }),
+      );
+      expect(((await response.json()) as { items: unknown[] }).items).toHaveLength(1);
+
+      const denied = buildApp({ setProductionStock: vi.fn() }, ['production.read']);
+      expect((await request(denied)).status).toBe(403);
     });
 
     it('generates a snapshot with production.generate and denies without it', async () => {

@@ -16,10 +16,11 @@ rutas.
 
 ## Modelo
 
-- **`production_stock`** (nueva): `sales_cycle_id`, `operating_site_id`, `product_variant_id`,
-  `quantity_units`, `notes`, `created_by_user_id`, timestamps. Una fila por variedad y tamaño por
-  período y ciudad (se suma al cargar de nuevo). Es **sólo de su período** (decisión 3): no pasa al
-  siguiente.
+- **`production_stock`** (migración 0061): `sales_cycle_id`, `family_name`, `variant_name`,
+  `quantity_units` (> 0), `notes`, `actor_user_id`, `updated_at`. Una fila por variedad y tamaño
+  por período. Va por nombre de variedad y tamaño, igual que la producción real y las bajas, para
+  que el excedente cruce las tres tablas con la misma clave. Es **sólo de su período** (decisión 3):
+  se borra con el período y no pasa al siguiente. Sin ciudad: el período ya es la unidad de cocina.
 - No es un pedido ni tiene cliente: no entra en estadísticas de venta, ni en la lista de pedidos, ni
   en repartos ni en rutas.
 
@@ -48,8 +49,28 @@ rutas.
 - **Carga de pedidos**: "Del stock" como origen, con el disponible a la vista.
 - **Etiquetas**: la opción "Incluir el stock".
 
+## Cómo quedó la fase 1 (2026-10-16)
+
+- **API**: `GET /api/v1/production/:cycleId/stock` (`production.read`) y
+  `PUT /api/v1/production/:cycleId/stock` (`production.report`, el mismo que informa la producción
+  real). El PUT reemplaza el stock entero del período —con cero se saca una variedad, los repetidos
+  se suman— y queda auditado (`production.stock_updated`, con el antes y el después).
+- **Cocina → Stock del período**: una casilla por variedad fija del menú (Intuitivo no: se arma por
+  cliente), con lo vendido y lo disponible al lado. El total dice "12 unidades en 5 pedidos + 3 de
+  stock = 15 a cocinar"; "Informar producción real" propone pedidos + stock e incluye las variedades
+  que sólo tienen stock. No aparece al filtrar por reparto: el stock no tiene reparto.
+- **Excedente**: columna "Stock". Antes de informar la producción real, lo disponible es el stock
+  menos lo vendido; después, lo que sobró de verdad. Al cerrar el período, lo no vendido se da de
+  baja como cualquier remanente.
+- **Resumen de cocina**: trae `stock` aparte; `totalUnits` y `totalOrders` siguen siendo de pedidos.
+- **El cliente STOCK**: `packages/db/scripts/convert-stock-customer.sql`, para el editor de Neon, en
+  dos pasos (vista previa y conversión). Pasa sus pedidos no cancelados del período en curso a
+  stock (sumando a lo que ya hubiera), borra esos pedidos sin renumerar los demás, archiva el
+  cliente y deja un evento de auditoría. Probado contra una base de prueba en
+  `convert-stock-customer.test.ts`.
+
 ## Fases
 
-1. Modelo, carga en Cocina, suma en producción y en el disponible, y conversión del cliente STOCK.
+1. ✅ Modelo, carga en Cocina, suma en producción y en el disponible, y conversión del cliente STOCK.
 2. Vender del stock desde la carga de pedidos.
 3. Etiquetas del stock al producirse.
