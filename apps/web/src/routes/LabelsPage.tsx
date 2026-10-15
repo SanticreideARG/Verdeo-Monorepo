@@ -5,6 +5,7 @@ import { KitchenLabelsPanel } from '../components/KitchenLabelsPanel.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { PeriodPicker } from '../components/PeriodPicker.js';
+import { RunFilter } from '../components/RunFilter.js';
 import { apiRequest } from '../lib/api.js';
 import { labelCanvas, SHEET_PRESETS } from '../lib/labelSheet.js';
 import { maskSurname } from '../lib/maskName.js';
@@ -290,6 +291,8 @@ export function LabelsPage() {
   const [periods, setPeriods] = useState<Period[]>([]);
   const [cycleId, setCycleId] = useState('');
   const [zone, setZone] = useState('');
+  // Un reparto: las etiquetas de esa salida, no las del período entero.
+  const [runId, setRunId] = useState('');
   const [labels, setLabels] = useState<Label[]>([]);
   /** La biblioteca de fondos guardados. Cuál está en uso lo dice `settings`. */
   const [backgrounds, setBackgrounds] = useState<LabelBackground[]>([]);
@@ -363,7 +366,7 @@ export function LabelsPage() {
     }
     let active = true;
     setLabelsLoading(true);
-    void apiRequest(`/api/v1/production/${cycleId}/labels`)
+    void apiRequest(`/api/v1/production/${cycleId}/labels${runId ? `?reparto=${runId}` : ''}`)
       .then(async (response) => {
         if (!active) return;
         if (!response.ok) {
@@ -378,7 +381,7 @@ export function LabelsPage() {
     return () => {
       active = false;
     };
-  }, [canRead, cycleId, settings?.onePerDish]);
+  }, [canRead, cycleId, settings?.onePerDish, runId]);
 
   // Busca a los 350 ms de dejar de tipear, y desde dos caracteres: con uno, la lista no dice nada.
   useEffect(() => {
@@ -506,7 +509,10 @@ export function LabelsPage() {
    */
   async function print() {
     setMessage('');
-    const query = zone ? `?zone=${encodeURIComponent(zone)}` : '';
+    const params = new URLSearchParams();
+    if (zone) params.set('zone', zone);
+    if (runId) params.set('reparto', runId);
+    const query = params.size > 0 ? `?${params.toString()}` : '';
     const response = await apiRequest(`/api/v1/production/${cycleId}/labels/export${query}`);
     if (!response.ok) {
       setMessage(await errorMessage(response));
@@ -612,10 +618,12 @@ export function LabelsPage() {
                     ))}
                   </select>
                 </label>
+                <RunFilter onChange={setRunId} value={runId} />
                 {settings?.kitchenMode ? (
                   <KitchenLabelsPanel
                     cycleId={cycleId}
                     labelsPerPage={settings.labelsPerPage}
+                    runId={runId}
                     zone={zone}
                   />
                 ) : (

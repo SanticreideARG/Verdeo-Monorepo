@@ -35,12 +35,19 @@ export function IntuitivoDishPicker({
   minDishes,
   offerings,
   onChange,
+  priceLabel,
   selected,
 }: {
   maxDishes: number;
   minDishes: number;
   offerings: readonly MenuOffering[];
   onChange: (next: string[]) => void;
+  /**
+   * El precio de la unidad con los platos elegidos, ya escrito ("$ 98.000,00"). Con platos de más
+   * se muestra en el contador: "el precio se recalcula" no decía cuánto, y alguien podía creer que
+   * catorce platos salían al precio de cinco.
+   */
+  priceLabel?: string | undefined;
   selected: readonly string[];
 }) {
   const groups = dishGroups(offerings);
@@ -72,6 +79,7 @@ export function IntuitivoDishPicker({
    * más platos no sabía que el selector se lo permitía.
    */
   const margen = maxDishes - total;
+  const recalculo = priceLabel ? `cada unidad pasa a ${priceLabel}` : 'el precio se recalcula';
   const estado =
     faltan > 0
       ? `elegí ${String(faltan)} más`
@@ -80,8 +88,8 @@ export function IntuitivoDishPicker({
           ? `listo · podés sumar hasta ${String(margen)} más`
           : 'listo'
         : margen > 0
-          ? `${String(total - minDishes)} de más · podés sumar ${String(margen)} más · el precio se recalcula`
-          : `${String(total - minDishes)} de más · el precio se recalcula`;
+          ? `${String(total - minDishes)} de más · podés sumar ${String(margen)} más · ${recalculo}`
+          : `${String(total - minDishes)} de más · ${recalculo}`;
 
   return (
     <div className="intuitivo-picker">

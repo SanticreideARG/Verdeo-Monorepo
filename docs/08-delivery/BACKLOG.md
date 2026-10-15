@@ -167,7 +167,7 @@ construimos no es el envío sino la cuenta de a quién ya se le avisó.
       cuando son más de una. Lo arma el servidor una vez por ruta, así que la vista, el mensaje de
       WhatsApp, el CSV (columna "Qué entregar") y la app del repartidor dicen exactamente lo mismo.
 - [x] Días de reparto por ciudad y alerta de "a despachar hoy" (ver DELIVERY_AND_ROUTES.md).
-- [ ] **Rutas y repartos** (plan en DELIVERY_RUNS_PLAN.md): repartos por ciudad y fecha entre los
+- [x] **Rutas y repartos** (plan en DELIVERY_RUNS_PLAN.md, las tres fases hechas el 2026-10-14): repartos por ciudad y fecha entre los
       pedidos y las hojas de ruta. Fase 1: modelo, creación automática y lista; fase 2: mover pedidos
       y consolidar; fase 3: rutas desde el reparto. Decisiones abiertas en el plan.
 

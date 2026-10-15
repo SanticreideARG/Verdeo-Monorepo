@@ -164,6 +164,8 @@ import {
   DeliveryRunMoveRequestSchema,
   DeliveryRunMoveResponseSchema,
   DeliveryRunOrderSchema,
+  DeliveryRunRoutesRequestSchema,
+  DeliveryRunRoutesResponseSchema,
   DeliveryRunListResponseSchema,
   DeliveryRunUpdateRequestSchema,
   DeliveryRunUpdateResponseSchema,
@@ -605,6 +607,7 @@ interface OperationsEngine {
     cycleId: string,
     operatingSiteId?: string | null,
     zone?: string,
+    deliveryRunId?: string,
   ): Promise<unknown[]>;
   getGeocodingSettings(operatingSiteId: string): Promise<GeocodingSettings>;
   getDeliverySettings?(operatingSiteId: string): Promise<DeliverySettings>;
@@ -695,7 +698,12 @@ interface OperationsEngine {
     operatingSiteId?: string | undefined;
     to?: string | undefined;
   }): Promise<unknown>;
-  cycleLabels(cycleId: string, operatingSiteId: string | null, zone?: string): Promise<unknown>;
+  cycleLabels(
+    cycleId: string,
+    operatingSiteId: string | null,
+    zone?: string,
+    deliveryRunId?: string,
+  ): Promise<unknown>;
   getLabelSettings(): Promise<unknown>;
   listLabelBackgrounds(): Promise<unknown>;
   addLabelBackground(input: {
@@ -704,7 +712,11 @@ interface OperationsEngine {
     imageUrl: string;
   }): Promise<unknown>;
   deleteLabelBackground(id: string): Promise<unknown>;
-  kitchenSummary(cycleId: string, operatingSiteId: string | null): Promise<unknown>;
+  kitchenSummary(
+    cycleId: string,
+    operatingSiteId: string | null,
+    deliveryRunId?: string,
+  ): Promise<unknown>;
   listCustomers(input: ScopedInput<CustomerListQuery>, includeSensitive: boolean): Promise<unknown>;
   listMessageTemplates(): Promise<unknown>;
   listMenus(onlyPublished?: boolean): Promise<unknown>;
@@ -1090,6 +1102,11 @@ interface DeliveryEngine {
     geographicZoneId?: string,
   ): Promise<unknown>;
   deleteRoute(routeId: string, context: DeliveryContext): Promise<unknown>;
+  createRoutesFromRun?(
+    runId: string,
+    input: { count?: number | undefined; mode: 'by_zone' | 'single' | 'split' },
+    context: DeliveryContext,
+  ): Promise<unknown>;
   routableDates(
     operatingSiteId: string,
     geographicZoneId?: string,
@@ -5121,6 +5138,26 @@ export function createApp(options: CreateAppOptions) {
     });
   }
 
+  /** Armar las hojas de ruta de un reparto (fase 3): una, una por zona, o N. */
+  app.post('/api/v1/delivery/runs/:id/routes', async (context) => {
+    if (!context.get('session').permissions.includes('routes.manage')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El reparto no es válido.');
+    const input = DeliveryRunRoutesRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'Elegí cómo armar las hojas.', input.error.issues);
+    const delivery = requireDelivery();
+    if (!delivery.createRoutesFromRun) throw new Error('Delivery runs are not configured');
+    return context.json(
+      DeliveryRunRoutesResponseSchema.parse(
+        await delivery.createRoutesFromRun(params.data.id, input.data, deliveryContext(context)),
+      ),
+      201,
+    );
+  });
+
   app.post('/api/v1/delivery/runs', async (context) => {
     if (!context.get('session').permissions.includes('routes.manage')) return forbidden(context);
     const operatingSiteId = context.get('scope')?.operatingSiteId;
@@ -6239,6 +6276,12 @@ export function createApp(options: CreateAppOptions) {
     return context.json(OrderReadyBatchResponseSchema.parse({ results }));
   });
 
+  /** `?reparto=<id>`: la cocina y las etiquetas de una sola salida (DELIVERY_RUNS_PLAN.md, fase 3). */
+  const runFromQuery = (context: Context<{ Variables: AppVariables }>) => {
+    const parsed = z.uuid().safeParse(context.req.query('reparto'));
+    return parsed.success ? parsed.data : undefined;
+  };
+
   app.get('/api/v1/production/:cycleId', async (context) => {
     if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
     const params = CycleIdParamSchema.safeParse(context.req.param());
@@ -6255,10 +6298,17 @@ export function createApp(options: CreateAppOptions) {
         statusForCode(code),
       );
     }
-    const summary = await requireOperations().kitchenSummary(
-      params.data.cycleId,
-      context.get('scope')?.operatingSiteId ?? null,
-    );
+    const reparto = runFromQuery(context);
+    const summary = reparto
+      ? await requireOperations().kitchenSummary(
+          params.data.cycleId,
+          context.get('scope')?.operatingSiteId ?? null,
+          reparto,
+        )
+      : await requireOperations().kitchenSummary(
+          params.data.cycleId,
+          context.get('scope')?.operatingSiteId ?? null,
+        );
     return context.json(KitchenSummaryResponseSchema.parse(contractValue(summary)));
   });
 
@@ -6540,6 +6590,7 @@ export function createApp(options: CreateAppOptions) {
       params.data.cycleId,
       context.get('scope')?.operatingSiteId ?? null,
       context.req.query('zone')?.trim() || undefined,
+      runFromQuery(context),
     );
     return context.json(KitchenLabelListResponseSchema.parse({ items }));
   });
@@ -6556,6 +6607,7 @@ export function createApp(options: CreateAppOptions) {
         params.data.cycleId,
         context.get('scope')?.operatingSiteId ?? null,
         context.req.query('zone')?.trim() || undefined,
+        runFromQuery(context),
       ),
       requireOperations().getLabelSettings(),
     ]);
@@ -6580,6 +6632,7 @@ export function createApp(options: CreateAppOptions) {
       params.data.cycleId,
       context.get('scope')?.operatingSiteId ?? null,
       zone || undefined,
+      runFromQuery(context),
     );
     return context.json(LabelListResponseSchema.parse({ items: contractValue(items) }));
   });
@@ -6593,6 +6646,7 @@ export function createApp(options: CreateAppOptions) {
         params.data.cycleId,
         context.get('scope')?.operatingSiteId ?? null,
         context.req.query('zone')?.trim() || undefined,
+        runFromQuery(context),
       ),
       requireOperations().getLabelSettings(),
     ]);

@@ -15,10 +15,13 @@ import { errorMessage } from '../lib/operations.js';
 export function KitchenLabelsPanel({
   cycleId,
   labelsPerPage,
+  runId = '',
   zone,
 }: {
   cycleId: string;
   labelsPerPage: number;
+  /** Un reparto: sólo sus etiquetas. Vacío: todo el período. */
+  runId?: string;
   zone: string;
 }) {
   const [elaboratedOn, setElaboratedOn] = useState(todayInOperation());
@@ -29,6 +32,7 @@ export function KitchenLabelsPanel({
   const query = () => {
     const params = new URLSearchParams({ elab: elaboratedOn });
     if (zone) params.set('zone', zone);
+    if (runId) params.set('reparto', runId);
     return params.toString();
   };
 
@@ -37,6 +41,7 @@ export function KitchenLabelsPanel({
     let active = true;
     setCount(null);
     const params = new URLSearchParams(zone ? { zone } : {});
+    if (runId) params.set('reparto', runId);
     void Promise.all([
       apiRequest(`/api/v1/production/${cycleId}/kitchen-labels?${params.toString()}`, {
         notify: false,
@@ -54,7 +59,7 @@ export function KitchenLabelsPanel({
       active = false;
     };
     // `query` sale de estos mismos valores.
-  }, [cycleId, elaboratedOn, zone]);
+  }, [cycleId, elaboratedOn, zone, runId]);
 
   async function print() {
     setMessage('');

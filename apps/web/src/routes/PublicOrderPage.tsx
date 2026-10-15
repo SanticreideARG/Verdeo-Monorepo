@@ -263,6 +263,25 @@ export function PublicOrderPage() {
     );
   }
 
+  /*
+   * El precio de una unidad con lo que se eligió: con platos de más que los del tamaño no es el
+   * del menú. Es el mismo en la tarjeta de la selección, en el contador de platos y en el total,
+   * para que nadie vea un precio y le cobren otro.
+   */
+  const extraDishes = offering?.composable
+    ? Math.max(0, selectedDishes.length - offering.mealsPerUnit)
+    : 0;
+  const unitPriceMinor = !offering
+    ? 0
+    : offering.composable && menu
+      ? intuitivoUnitPriceMinor({
+          baseDishes: offering.mealsPerUnit,
+          basePriceMinor: offering.unitPriceMinor,
+          dishes: Math.max(selectedDishes.length, offering.mealsPerUnit),
+          rule: menu.intuitivoPricing,
+        })
+      : offering.unitPriceMinor;
+
   return (
     <div className="min-h-screen bg-cream text-ink">
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-5 sm:px-8">
@@ -282,7 +301,8 @@ export function PublicOrderPage() {
       </header>
       <main className="mx-auto grid w-full max-w-6xl gap-8 px-5 pb-16 pt-6 sm:px-8 lg:grid-cols-[0.9fr_1.1fr]">
         <section>
-          <p className="eyebrow">{menu?.cycle.alias ?? 'Menú semanal'}</p>
+          {/* El nombre del período ("OCTUBRE 3") es interno: al cliente no le dice nada. */}
+          <p className="eyebrow">Menú semanal</p>
           <h1 className="mt-4 text-4xl font-semibold tracking-[-0.04em] text-forest sm:text-6xl">
             Armá tu pedido.
           </h1>
@@ -299,7 +319,12 @@ export function PublicOrderPage() {
                 <p className="mt-2 text-white/80">{offering.description}</p>
               ) : null}
               <p className="mt-2 font-semibold text-lime">
-                {formatMoney(offering.unitPriceMinor, offering.currency)}
+                {formatMoney(unitPriceMinor, offering.currency)}
+                {extraDishes > 0 ? (
+                  <span className="block text-sm font-normal text-white/80">
+                    con {selectedDishes.length} platos ({extraDishes} de más)
+                  </span>
+                ) : null}
               </p>
               <ol className="mt-5 grid gap-2 text-sm text-white/80">
                 {offering.dishes.map((dish) => (
@@ -469,6 +494,7 @@ export function PublicOrderPage() {
                     minDishes={offering.mealsPerUnit}
                     offerings={menu.offerings}
                     onChange={setSelectedDishes}
+                    priceLabel={formatMoney(unitPriceMinor, offering.currency)}
                     selected={selectedDishes}
                   />
                 </div>
@@ -502,14 +528,7 @@ export function PublicOrderPage() {
                        * son distintos, y mostrar uno mientras se cobra el otro es peor que no
                        * mostrar nada. Mientras todavía se está eligiendo vale el del tamaño.
                        */
-                      (offering.composable && menu
-                        ? intuitivoUnitPriceMinor({
-                            baseDishes: offering.mealsPerUnit,
-                            basePriceMinor: offering.unitPriceMinor,
-                            dishes: Math.max(selectedDishes.length, offering.mealsPerUnit),
-                            rule: menu.intuitivoPricing,
-                          })
-                        : offering.unitPriceMinor) * units,
+                      unitPriceMinor * units,
                       offering.currency,
                     )}
                   </strong>

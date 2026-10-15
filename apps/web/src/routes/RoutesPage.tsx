@@ -512,7 +512,14 @@ export function RoutesPage() {
           </button>
         </div>
         {tab === 'repartos' ? (
-          <DeliveryRunsPanel canManage={canManage} openRunId={runToOpen} />
+          <DeliveryRunsPanel
+            canManage={canManage}
+            onRoutesCreated={() => {
+              setTab('hojas');
+              void loadRoutes();
+            }}
+            openRunId={runToOpen}
+          />
         ) : null}
         <div hidden={tab !== 'hojas'}>
           {message ? <p className="mt-4 text-sm text-red-600">{message}</p> : null}

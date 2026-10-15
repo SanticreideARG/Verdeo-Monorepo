@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm';
 
 import { AuditService } from '@verdeo/audit';
 import { createAccessToken, hashAccessToken } from '@verdeo/auth';
@@ -13,6 +13,8 @@ import {
   customerAddresses,
   customers,
   deliveryRoutes,
+  deliveryRuns,
+  geographicZones,
   deliveryStops,
   messageTemplates,
   neighborhoods,
@@ -61,6 +63,62 @@ type StopStatus = 'pending' | 'en_route' | 'at_address' | 'delivered' | 'skipped
  * Un borrador todavía no está vendido, un cancelado no se reparte y un entregado ya salió.
  */
 const ROUTABLE_STATUSES = ['CONFIRMED', 'READY'] as const;
+
+/** El origen de la ciudad, si lo tiene: desde ahí arranca el recorrido. */
+function siteOrigin(site: {
+  originLatitude: string | null;
+  originLongitude: string | null;
+}): { latitude: number; longitude: number } | null {
+  return site.originLatitude !== null && site.originLongitude !== null
+    ? { latitude: Number(site.originLatitude), longitude: Number(site.originLongitude) }
+    : null;
+}
+
+/**
+ * Repartir pedidos en N hojas por cercanía, sin partir un barrio.
+ *
+ * Barrido: cada pedido tiene un ángulo alrededor del origen (o del centro de los pedidos, si la
+ * ciudad no tiene origen); los barrios se ordenan por el ángulo promedio de sus pedidos y se van
+ * llenando las hojas en ese orden hasta su parte del total. Un barrio que no entra entero en lo
+ * que le queda a una hoja se parte. Es lo que haría alguien con el mapa: cortar la ciudad en
+ * porciones como una torta.
+ */
+export function splitByProximity<
+  T extends { latitude: string; longitude: string; neighborhood: string | null },
+>(
+  orders: readonly T[],
+  count: number,
+  origin: { latitude: number; longitude: number } | null,
+): T[][] {
+  const hojas = Math.max(1, Math.min(count, orders.length));
+  const centro = origin ?? {
+    latitude: orders.reduce((sum, order) => sum + Number(order.latitude), 0) / orders.length,
+    longitude: orders.reduce((sum, order) => sum + Number(order.longitude), 0) / orders.length,
+  };
+  const angulo = (order: T) =>
+    Math.atan2(
+      Number(order.latitude) - centro.latitude,
+      Number(order.longitude) - centro.longitude,
+    );
+  const barrios = new Map<string, T[]>();
+  for (const order of orders) {
+    const clave = order.neighborhood ?? `sin-barrio:${String(angulo(order))}`;
+    barrios.set(clave, [...(barrios.get(clave) ?? []), order]);
+  }
+  const ordenados = [...barrios.values()]
+    .map((grupo) => ({
+      angulo: grupo.reduce((sum, order) => sum + angulo(order), 0) / grupo.length,
+      grupo: [...grupo].sort((a, b) => angulo(a) - angulo(b)),
+    }))
+    .sort((a, b) => a.angulo - b.angulo)
+    .flatMap(({ grupo }) => grupo);
+  const tamaño = Math.ceil(ordenados.length / hojas);
+  const resultado: T[][] = [];
+  for (let index = 0; index < ordenados.length; index += tamaño) {
+    resultado.push(ordenados.slice(index, index + tamaño));
+  }
+  return resultado;
+}
 
 // Also the messageTemplates.actionKey an operator configures a template against — kept as a type
 // rather than a lookup table since the trigger name already IS the action key.
@@ -163,56 +221,219 @@ export class PostgresDeliveryService {
           candidate.latitude !== null && candidate.longitude !== null,
       );
 
-      const [route] = await transaction
-        .insert(deliveryRoutes)
-        .values({
-          createdByUserId: context.actorUserId ?? null,
-          deliveryDate,
-          label: label ?? null,
-          operatingSiteId,
-        })
-        .returning();
-      if (!route) throw new Error('Route creation did not return a row');
-
-      if (geocoded.length > 0) {
-        const origin =
-          site.originLatitude !== null && site.originLongitude !== null
-            ? { latitude: Number(site.originLatitude), longitude: Number(site.originLongitude) }
-            : null;
-        const sequenced = this.optimizer.sequence(
-          origin,
-          geocoded.map((order) => ({
-            id: order.id,
-            latitude: Number(order.latitude),
-            longitude: Number(order.longitude),
-          })),
-        );
-        await transaction.insert(deliveryStops).values(
-          sequenced.map((stop, index) => ({
-            orderId: stop.id,
-            routeId: route.id,
-            sequence: index + 1,
-          })),
-        );
-      }
-
-      const audit = new AuditService(new PostgresAuditSink(transaction));
-      await audit.record({
-        action: 'delivery.route_created',
-        actor: context.actorUserId
-          ? { type: 'user', userId: context.actorUserId }
-          : { type: 'system' },
-        // La zona queda en la auditoría: la ruta no la guarda como columna, así que si no está acá
-        // no hay forma de saber después por qué esa hoja tenía sólo una parte de la ciudad.
-        after: { geographicZoneId: geographicZoneId ?? null, stopCount: geocoded.length },
-        correlationId: context.correlationId,
-        entityId: route.id,
-        entityType: 'delivery_route',
-        requestId: context.requestId,
-        source: context.source,
+      // La hoja es del reparto de siempre de ese día, si hay uno.
+      const [reparto] = await transaction
+        .select({ id: deliveryRuns.id })
+        .from(deliveryRuns)
+        .where(
+          and(
+            eq(deliveryRuns.operatingSiteId, operatingSiteId),
+            eq(deliveryRuns.deliveryDate, deliveryDate),
+            ne(deliveryRuns.status, 'cancelled'),
+          ),
+        )
+        .orderBy(desc(deliveryRuns.isDefault))
+        .limit(1);
+      const route = await this.insertRouteWithStops(transaction, {
+        context,
+        deliveryDate,
+        deliveryRunId: reparto?.id ?? null,
+        geographicZoneId: geographicZoneId ?? null,
+        label: label ?? null,
+        operatingSiteId,
+        orders: geocoded,
+        origin: siteOrigin(site),
       });
 
       return this.loadRouteDetail(transaction, route.id);
+    });
+  }
+
+  /**
+   * Una hoja con sus paradas, en el orden que propone el optimizador. La usan "Proponer ruta" y
+   * "Armar las rutas" de un reparto.
+   */
+  private async insertRouteWithStops(
+    transaction: Parameters<Parameters<Database['transaction']>[0]>[0],
+    args: {
+      context: DeliveryContext;
+      deliveryDate: string;
+      deliveryRunId: string | null;
+      geographicZoneId: string | null;
+      label: string | null;
+      operatingSiteId: string;
+      orders: readonly { id: string; latitude: string; longitude: string }[];
+      origin: { latitude: number; longitude: number } | null;
+    },
+  ) {
+    const [route] = await transaction
+      .insert(deliveryRoutes)
+      .values({
+        createdByUserId: args.context.actorUserId ?? null,
+        deliveryDate: args.deliveryDate,
+        deliveryRunId: args.deliveryRunId,
+        label: args.label,
+        operatingSiteId: args.operatingSiteId,
+      })
+      .returning();
+    if (!route) throw new Error('Route creation did not return a row');
+
+    if (args.orders.length > 0) {
+      const sequenced = this.optimizer.sequence(
+        args.origin,
+        args.orders.map((order) => ({
+          id: order.id,
+          latitude: Number(order.latitude),
+          longitude: Number(order.longitude),
+        })),
+      );
+      await transaction.insert(deliveryStops).values(
+        sequenced.map((stop, index) => ({
+          orderId: stop.id,
+          routeId: route.id,
+          sequence: index + 1,
+        })),
+      );
+    }
+
+    const audit = new AuditService(new PostgresAuditSink(transaction));
+    await audit.record({
+      action: 'delivery.route_created',
+      actor: args.context.actorUserId
+        ? { type: 'user', userId: args.context.actorUserId }
+        : { type: 'system' },
+      // La zona queda en la auditoría: la ruta no la guarda como columna, así que si no está acá
+      // no hay forma de saber después por qué esa hoja tenía sólo una parte de la ciudad.
+      after: {
+        deliveryRunId: args.deliveryRunId,
+        geographicZoneId: args.geographicZoneId,
+        stopCount: args.orders.length,
+      },
+      correlationId: args.context.correlationId,
+      entityId: route.id,
+      entityType: 'delivery_route',
+      requestId: args.context.requestId,
+      source: args.context.source,
+    });
+    return route;
+  }
+
+  /**
+   * Armar las hojas de ruta de un reparto (DELIVERY_RUNS_PLAN.md, fase 3, regla 6).
+   *
+   * - `single`: una hoja con todo el reparto.
+   * - `by_zone`: una hoja por zona: es como sale el repartidor en una ciudad con varias.
+   * - `split`: N hojas (N repartidores). Se reparten por cercanía —barrido alrededor del origen
+   *   de la ciudad— y sin partir un barrio, salvo que uno solo no entre en una hoja.
+   *
+   * Entran los pedidos del reparto confirmados o listos, con ubicación y que no estén ya en otra
+   * hoja. Los que no, se cuentan aparte para decirlos.
+   */
+  public async createRoutesFromRun(
+    runId: string,
+    input: { count?: number | undefined; mode: 'by_zone' | 'single' | 'split' },
+    context: DeliveryContext,
+  ) {
+    return this.database.transaction(async (transaction) => {
+      const [run] = await transaction
+        .select({
+          deliveryDate: deliveryRuns.deliveryDate,
+          label: deliveryRuns.label,
+          operatingSiteId: deliveryRuns.operatingSiteId,
+          originLatitude: operatingSites.originLatitude,
+          originLongitude: operatingSites.originLongitude,
+          status: deliveryRuns.status,
+        })
+        .from(deliveryRuns)
+        .innerJoin(operatingSites, eq(operatingSites.id, deliveryRuns.operatingSiteId))
+        .where(eq(deliveryRuns.id, runId))
+        .limit(1);
+      if (!run) throw new DeliveryNotFoundError('No se encontró el reparto');
+      if (run.status === 'closed' || run.status === 'cancelled') {
+        throw new DeliveryConflictError('El reparto ya está cerrado.');
+      }
+
+      const enHojas = await transaction
+        .select({ orderId: deliveryStops.orderId })
+        .from(deliveryStops)
+        .innerJoin(deliveryRoutes, eq(deliveryRoutes.id, deliveryStops.routeId))
+        .where(inArray(deliveryRoutes.status, ['draft', 'published']));
+      const ocupados = new Set(enHojas.map((row) => row.orderId));
+
+      const pedidos = await transaction
+        .select({
+          id: orders.id,
+          latitude: customerAddresses.latitude,
+          longitude: customerAddresses.longitude,
+          neighborhood: neighborhoods.displayName,
+          status: orders.status,
+          zoneId: customerAddresses.geographicZoneId,
+          zoneName: geographicZones.displayName,
+        })
+        .from(orders)
+        .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+        .leftJoin(neighborhoods, eq(neighborhoods.id, customerAddresses.neighborhoodId))
+        .leftJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
+        .where(and(eq(orders.deliveryRunId, runId), ne(orders.status, 'CANCELLED')));
+
+      const libres = pedidos.filter((pedido) => !ocupados.has(pedido.id));
+      const ruteables = libres.filter(
+        (pedido): pedido is typeof pedido & { latitude: string; longitude: string } =>
+          (ROUTABLE_STATUSES as readonly string[]).includes(pedido.status) &&
+          pedido.latitude !== null &&
+          pedido.longitude !== null,
+      );
+      const skipped = {
+        alreadyRouted: pedidos.length - libres.length,
+        drafts: libres.filter((pedido) => pedido.status === 'DRAFT').length,
+        unlocated: libres.filter(
+          (pedido) =>
+            (ROUTABLE_STATUSES as readonly string[]).includes(pedido.status) &&
+            (pedido.latitude === null || pedido.longitude === null),
+        ).length,
+      };
+      if (ruteables.length === 0) {
+        throw new DeliveryConflictError(
+          'No hay pedidos para armar hojas: tienen que estar confirmados o listos, con ubicación y sin hoja.',
+        );
+      }
+
+      const origin = siteOrigin(run);
+      const grupos: { label: string; orders: typeof ruteables; zoneId: string | null }[] =
+        input.mode === 'by_zone'
+          ? [...new Set(ruteables.map((pedido) => pedido.zoneId))].map((zoneId) => {
+              const deLaZona = ruteables.filter((pedido) => pedido.zoneId === zoneId);
+              return {
+                label: `${run.label} · ${deLaZona[0]?.zoneName ?? 'Sin zona'}`,
+                orders: deLaZona,
+                zoneId,
+              };
+            })
+          : input.mode === 'split'
+            ? splitByProximity(ruteables, Math.max(1, Math.min(input.count ?? 2, 20)), origin).map(
+                (grupo, index, todos) => ({
+                  label: `${run.label} · Hoja ${String(index + 1)} de ${String(todos.length)}`,
+                  orders: grupo,
+                  zoneId: null,
+                }),
+              )
+            : [{ label: run.label, orders: ruteables, zoneId: null }];
+
+      const rutas = [];
+      for (const grupo of grupos) {
+        const route = await this.insertRouteWithStops(transaction, {
+          context,
+          deliveryDate: String(run.deliveryDate),
+          deliveryRunId: runId,
+          geographicZoneId: grupo.zoneId,
+          label: grupo.label,
+          operatingSiteId: run.operatingSiteId,
+          orders: grupo.orders,
+          origin,
+        });
+        rutas.push({ id: route.id, label: grupo.label, stops: grupo.orders.length });
+      }
+      return { routes: rutas, skipped };
     });
   }
 
@@ -428,6 +649,23 @@ export class PostgresDeliveryService {
         .update(deliveryRoutes)
         .set({ publishedAt: new Date(), status: 'published', updatedAt: new Date() })
         .where(eq(deliveryRoutes.id, routeId));
+      // Con una hoja en la calle, su reparto también está en la calle.
+      const [hoja] = await transaction
+        .select({ deliveryRunId: deliveryRoutes.deliveryRunId })
+        .from(deliveryRoutes)
+        .where(eq(deliveryRoutes.id, routeId))
+        .limit(1);
+      if (hoja?.deliveryRunId) {
+        await transaction
+          .update(deliveryRuns)
+          .set({ status: 'dispatched', updatedAt: new Date() })
+          .where(
+            and(
+              eq(deliveryRuns.id, hoja.deliveryRunId),
+              inArray(deliveryRuns.status, ['planned', 'consolidated']),
+            ),
+          );
+      }
 
       const audit = new AuditService(new PostgresAuditSink(transaction));
       await audit.record({

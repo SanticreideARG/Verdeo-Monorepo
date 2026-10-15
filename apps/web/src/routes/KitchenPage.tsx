@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
+import { RunFilter } from '../components/RunFilter.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { DataTable, type DataColumn } from '../components/DataTable.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
@@ -71,6 +72,8 @@ async function copyWhatsAppText(cycleId: string, kind: 'final' | 'partial') {
 
 export function KitchenPage() {
   const { failed, logout, profile } = useDashboardProfile();
+  // Un reparto: lo que hay que cocinar para esa salida.
+  const [runId, setRunId] = useState('');
   const [menus, setMenus] = useState<WeeklyMenu[]>([]);
   const [selectedMenuId, setSelectedMenuId] = useState('');
   const [kitchen, setKitchen] = useState<KitchenSummary | null>(null);
@@ -168,7 +171,9 @@ export function KitchenPage() {
     if (!selectedMenu) return;
     setMessage('');
     try {
-      const response = await apiRequest(`/api/v1/production/${selectedMenu.cycle.id}`);
+      const response = await apiRequest(
+        `/api/v1/production/${selectedMenu.cycle.id}${runId ? `?reparto=${runId}` : ''}`,
+      );
       if (!response.ok) throw new Error(await errorMessage(response));
       setKitchen((await response.json()) as KitchenSummary);
       await loadSnapshots(selectedMenu.cycle.id);
@@ -315,6 +320,8 @@ export function KitchenPage() {
                   ))}
                 </select>
               </label>
+              {/* Un reparto: lo que hay que cocinar para esa salida, no para el período entero. */}
+              <RunFilter onChange={setRunId} value={runId} />
               <button
                 className="button button-primary"
                 disabled={!selectedMenu}

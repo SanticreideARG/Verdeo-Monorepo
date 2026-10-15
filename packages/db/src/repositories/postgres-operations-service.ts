@@ -6712,7 +6712,13 @@ export class PostgresOperationsService {
   // narrow to a whole production run, same bounding as ADR-028.
   private async loadKitchenLines(
     filter:
-      | { cycleId: string; operatingSiteId?: string | null | undefined; zone?: string | undefined }
+      | {
+          cycleId: string;
+          /** Sólo los pedidos de un reparto: cocina y etiquetas de esa salida. */
+          deliveryRunId?: string | undefined;
+          operatingSiteId?: string | null | undefined;
+          zone?: string | undefined;
+        }
       | { orderId: string },
   ): Promise<readonly KitchenSourceLine[]> {
     const lines = await this.database
@@ -6752,6 +6758,7 @@ export class PostgresOperationsService {
               // Imprimir por zona: cocina termina una zona entera y la etiqueta de esa tanda es lo
               // único que hace falta, no las ciento cincuenta del ciclo.
               ...(filter.zone ? [eq(customerAddresses.operationalZone, filter.zone)] : []),
+              ...(filter.deliveryRunId ? [eq(orders.deliveryRunId, filter.deliveryRunId)] : []),
               inArray(orders.status, ['CONFIRMED', 'READY', 'DELIVERED']),
             ),
       )
@@ -6834,7 +6841,11 @@ export class PostgresOperationsService {
 
   // Production is bounded by the operation (ADR-028): a global scope consolidates every operation,
   // a concrete one cooks only its own demand.
-  public async kitchenSummary(cycleId: string, operatingSiteId?: string | null) {
+  public async kitchenSummary(
+    cycleId: string,
+    operatingSiteId?: string | null,
+    deliveryRunId?: string,
+  ) {
     const [cycle] = await this.database
       .select({ alias: salesCycles.alias, id: salesCycles.id })
       .from(salesCycles)
@@ -6842,7 +6853,11 @@ export class PostgresOperationsService {
       .limit(1);
     if (!cycle) throw new OperationsNotFoundError('No se encontró el período de venta');
 
-    const lines = await this.loadKitchenLines({ cycleId, operatingSiteId });
+    const lines = await this.loadKitchenLines({
+      cycleId,
+      operatingSiteId,
+      ...(deliveryRunId ? { deliveryRunId } : {}),
+    });
     return { ...buildKitchenSummary(lines), cycle, generatedAt: new Date() };
   }
 
@@ -6852,15 +6867,30 @@ export class PostgresOperationsService {
    * Las etiquetas de cocina de un período: una por plato, sin cliente, con los platos
    * intercalados (ver `buildKitchenLabels`). Usa los mismos pedidos que las de vianda.
    */
-  public async cycleKitchenLabels(cycleId: string, operatingSiteId?: string | null, zone?: string) {
+  public async cycleKitchenLabels(
+    cycleId: string,
+    operatingSiteId?: string | null,
+    zone?: string,
+    deliveryRunId?: string,
+  ) {
     const ajustes = await this.getLabelSettings();
     return buildKitchenLabels(
-      await this.loadKitchenLines({ cycleId, operatingSiteId, ...(zone ? { zone } : {}) }),
+      await this.loadKitchenLines({
+        cycleId,
+        operatingSiteId,
+        ...(zone ? { zone } : {}),
+        ...(deliveryRunId ? { deliveryRunId } : {}),
+      }),
       { intuitivoCustomerName: ajustes.intuitivoCustomerName, showSize: ajustes.showSize },
     );
   }
 
-  public async cycleLabels(cycleId: string, operatingSiteId?: string | null, zone?: string) {
+  public async cycleLabels(
+    cycleId: string,
+    operatingSiteId?: string | null,
+    zone?: string,
+    deliveryRunId?: string,
+  ) {
     const [cycle] = await this.database
       .select({ id: salesCycles.id })
       .from(salesCycles)
@@ -6871,7 +6901,12 @@ export class PostgresOperationsService {
     // pantalla, la impresión de la tanda y la de un pedido suelto no pueden discrepar.
     const ajustes = await this.getLabelSettings();
     return buildLabels(
-      await this.loadKitchenLines({ cycleId, operatingSiteId, ...(zone ? { zone } : {}) }),
+      await this.loadKitchenLines({
+        cycleId,
+        operatingSiteId,
+        ...(zone ? { zone } : {}),
+        ...(deliveryRunId ? { deliveryRunId } : {}),
+      }),
       { perDish: ajustes.onePerDish },
     );
   }

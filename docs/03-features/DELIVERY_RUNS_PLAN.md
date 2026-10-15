@@ -139,5 +139,16 @@ pedidos quedan sin ubicación, en borrador o sin medio de pago. "Pedidos sin rep
 del día trae los repartos de ese día (`runs` en `DispatchSummarySchema`) y lleva al de siempre
 (`/app/reparto/rutas?reparto=<id>`).
 
-Pendiente: fase 3 (armar las rutas desde el reparto, por zona o en N hojas; etiquetas y cocina por
-reparto).
+**Fase 3 hecha (2026-10-14).** "Armar las rutas" en cada reparto
+(`POST /api/v1/delivery/runs/:id/routes`, `createRoutesFromRun`): una sola hoja, una por zona, o en
+N hojas (N repartidores) con `splitByProximity`, que barre alrededor del origen de la ciudad y
+reparte los barrios enteros, partiendo uno sólo si no entra. Entran los pedidos del reparto
+confirmados o listos, con ubicación y sin otra hoja; lo que queda afuera se dice (en borrador, sin
+ubicación, ya en otra hoja). Las hojas quedan en borrador, con el reparto de origen
+(`delivery_routes.delivery_run_id`) y nombres como "Domingo 18 · Norte" u "Hoja 1 de 2"; la
+pantalla pasa a "Hojas de ruta" para revisarlas y publicarlas. "Proponer ruta" (lo de antes)
+engancha la hoja al reparto de siempre de ese día. Publicar una hoja pasa su reparto a "en la
+calle". Cocina (`GET /production/:cycleId?reparto=`) y etiquetas (vianda y cocina, en pantalla y
+para imprimir) se acotan a un reparto con el selector "Reparto".
+
+Las tres fases están hechas.

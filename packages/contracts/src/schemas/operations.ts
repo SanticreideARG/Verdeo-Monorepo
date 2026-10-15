@@ -1748,6 +1748,22 @@ export const DeliveryRunMoveResponseSchema = z.object({
   total: z.number().int(),
 });
 
+/** Armar las hojas de ruta de un reparto: una, una por zona, o N (N repartidores). */
+export const DeliveryRunRoutesRequestSchema = z.object({
+  count: z.number().int().min(1).max(20).optional(),
+  mode: z.enum(['single', 'by_zone', 'split']),
+});
+
+export const DeliveryRunRoutesResponseSchema = z.object({
+  routes: z.array(z.object({ id: UuidSchema, label: z.string(), stops: z.number().int() })),
+  /** Lo que no entró en ninguna hoja, para decirlo. */
+  skipped: z.object({
+    alreadyRouted: z.number().int(),
+    drafts: z.number().int(),
+    unlocated: z.number().int(),
+  }),
+});
+
 /** Lo que falta resolver al cerrar la lista de un reparto. */
 export const DeliveryRunConsolidateResponseSchema = z.object({
   drafts: z.number().int(),

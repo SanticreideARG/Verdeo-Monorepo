@@ -60,14 +60,21 @@ function rescheduleMessage(moved: Moved, date: string): string {
  */
 export function DeliveryRunsPanel({
   canManage,
+  onRoutesCreated,
   openRunId = null,
 }: {
   canManage: boolean;
+  /** Después de armar las hojas: la página pasa a "Hojas de ruta" para revisarlas y publicarlas. */
+  onRoutesCreated?: () => void;
   /** Un reparto para abrir de entrada: la alerta del día lleva al de hoy. */
   openRunId?: string | null;
 }) {
   // El reparto abierto, con sus pedidos, y los pedidos sin reparto.
   const [openRun, setOpenRun] = useState<string | null>(openRunId);
+  // El reparto del que se están armando las hojas, y cómo.
+  const [building, setBuilding] = useState<string | null>(null);
+  const [buildMode, setBuildMode] = useState<'by_zone' | 'single' | 'split'>('by_zone');
+  const [buildCount, setBuildCount] = useState(2);
   const [runOrders, setRunOrders] = useState<RunOrder[]>([]);
   const [showUnassigned, setShowUnassigned] = useState(false);
   const [unassignedOrders, setUnassignedOrders] = useState<RunOrder[]>([]);
@@ -135,6 +142,41 @@ export function DeliveryRunsPanel({
     await load();
     if (openRun) await loadRunOrders(openRun);
     if (showUnassigned) await loadUnassigned();
+  }
+
+  async function buildRoutes(run: DeliveryRun) {
+    const response = await apiRequest(`/api/v1/delivery/runs/${run.id}/routes`, {
+      body: JSON.stringify({
+        mode: buildMode,
+        ...(buildMode === 'split' ? { count: buildCount } : {}),
+      }),
+      method: 'POST',
+      notify: false,
+    });
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    const result = (await response.json()) as {
+      routes: { label: string; stops: number }[];
+      skipped: { alreadyRouted: number; drafts: number; unlocated: number };
+    };
+    const afuera = [
+      result.skipped.drafts > 0 ? `${String(result.skipped.drafts)} en borrador` : null,
+      result.skipped.unlocated > 0 ? `${String(result.skipped.unlocated)} sin ubicación` : null,
+      result.skipped.alreadyRouted > 0
+        ? `${String(result.skipped.alreadyRouted)} ya en otra hoja`
+        : null,
+    ].filter(Boolean);
+    setBuilding(null);
+    setMessage('');
+    showToast(
+      `Se ${result.routes.length === 1 ? 'armó 1 hoja' : `armaron ${String(result.routes.length)} hojas`}${
+        afuera.length > 0 ? `. Quedaron afuera: ${afuera.join(', ')}` : ''
+      }.`,
+    );
+    await load();
+    onRoutesCreated?.();
   }
 
   async function consolidate(run: DeliveryRun, close: boolean) {
@@ -448,7 +490,62 @@ export function DeliveryRunsPanel({
                       Reabrir
                     </button>
                   ) : null}
+                  {canManage && run.orders > 0 && run.status !== 'closed' ? (
+                    <button
+                      className="button button-primary"
+                      onClick={() => setBuilding(building === run.id ? null : run.id)}
+                      type="button"
+                    >
+                      Armar las rutas
+                    </button>
+                  ) : null}
                 </div>
+                {building === run.id ? (
+                  <form
+                    className="delivery-runs-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void buildRoutes(run);
+                    }}
+                  >
+                    <label className="field">
+                      Cómo
+                      <select
+                        onChange={(event) =>
+                          setBuildMode(event.target.value as 'by_zone' | 'single' | 'split')
+                        }
+                        value={buildMode}
+                      >
+                        <option value="by_zone">Una hoja por zona</option>
+                        <option value="single">Una sola hoja</option>
+                        <option value="split">En varias hojas (una por repartidor)</option>
+                      </select>
+                    </label>
+                    {buildMode === 'split' ? (
+                      <label className="field">
+                        Cuántas hojas
+                        <input
+                          max={20}
+                          min={2}
+                          onChange={(event) =>
+                            setBuildCount(
+                              Math.max(2, Math.min(20, Number(event.target.value) || 2)),
+                            )
+                          }
+                          type="number"
+                          value={buildCount}
+                        />
+                      </label>
+                    ) : null}
+                    <button className="button button-primary" type="submit">
+                      Armar
+                    </button>
+                    <small className="text-ink-muted">
+                      Entran los pedidos confirmados o listos, con ubicación y sin hoja. Las hojas
+                      quedan en borrador para revisarlas y publicarlas.
+                    </small>
+                  </form>
+                ) : null}
                 {openRun === run.id ? (
                   <DeliveryRunOrders
                     canManage={canManage}

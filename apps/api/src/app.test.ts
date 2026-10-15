@@ -3224,12 +3224,17 @@ describe('API foundation', () => {
   });
 
   describe('delivery', () => {
-    function buildDeliveryApp(delivery: Record<string, unknown>, permissions: string[]) {
+    function buildDeliveryApp(
+      delivery: Record<string, unknown>,
+      permissions: string[],
+      geography?: typeof singleSiteGeography,
+    ) {
       return createApp({
         appOrigin: 'http://localhost:5173',
         cookieSameSite: 'Lax',
         credentials: emptyCredentials,
         delivery: delivery as never,
+        ...(geography ? { geography } : {}),
         logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
         sessions: {
           ...emptySessions,
@@ -3285,6 +3290,42 @@ describe('API foundation', () => {
         method: 'POST',
       });
       expect(deniedResponse.status).toBe(403);
+    });
+
+    it('arma las hojas de un reparto con routes.manage', async () => {
+      const createRoutesFromRun = vi.fn(() =>
+        Promise.resolve({
+          routes: [{ id: routeId, label: 'Domingo 18 · Norte', stops: 3 }],
+          skipped: { alreadyRouted: 0, drafts: 1, unlocated: 0 },
+        }),
+      );
+      const response = await buildDeliveryApp(
+        { createRoutesFromRun },
+        ['routes.manage'],
+        singleSiteGeography,
+      ).request(`/api/v1/delivery/runs/${routeId}/routes`, {
+        body: JSON.stringify({ mode: 'by_zone' }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(201);
+      expect(await response.json()).toMatchObject({ skipped: { drafts: 1 } });
+      expect(createRoutesFromRun).toHaveBeenCalledWith(
+        routeId,
+        { mode: 'by_zone' },
+        expect.anything(),
+      );
+
+      const malPedido = await buildDeliveryApp(
+        { createRoutesFromRun },
+        ['routes.manage'],
+        singleSiteGeography,
+      ).request(`/api/v1/delivery/runs/${routeId}/routes`, {
+        body: JSON.stringify({ mode: 'al azar' }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(malPedido.status).toBe(400);
     });
 
     it('turns a route-not-found error into a 404', async () => {
