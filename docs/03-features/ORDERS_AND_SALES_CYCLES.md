@@ -373,3 +373,18 @@ La vista previa del importador guarda el medio normalizado o lo deja vacío para
 aviso; al importar, una fila con un medio que no es de los configurados no entra y se dice por qué.
 `extractPayment` usa el mismo reconocimiento para sacar la forma de pago de la dirección, con sus
 palabras de enlace ("pago en", "por", el paréntesis).
+
+### Pedido web en tres pasos (2026-10-15)
+
+`/pedido` es secuencial: **1. Tu pedido** (ciudad, variedad, tamaño, cantidad y, en un Intuitivo,
+los platos, con la tarjeta de la selección: qué trae, precio por unidad con los platos de más,
+entrega, medios de pago y total), **2. Envío y confirmación** (nombre, contacto, dirección, medio
+de pago y notas, con el resumen al lado y "Cambiar el pedido") y **3. Listo** (un representante se
+comunica para confirmar, el código de seguimiento con "Copiar" y "Seguir mi pedido" —que abre
+`/seguimiento?pedido=<código>` con el código ya escrito— y las redes de Verdeo: Instagram, Facebook
+y WhatsApp, leídas del pie de la portada en el CMS, que suma `instagramUrl`). Es un solo formulario
+con los pasos escondidos, así el borrador guarda todo y volver no borra nada. El asistente de la
+portada también está en `/pedido`.
+
+En el detalle de un pedido, en escritorio, "Anterior" y "Siguiente" recorren la lista de la que se
+vino, con sus filtros y su orden (`lib/orderNavigation.ts`, guardado en la pestaña).

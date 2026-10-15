@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { DeliveryDayPicker, useDeliveryOptions } from '../components/DeliveryDayPicker.js';
+import { neighboursOf } from '../lib/orderNavigation.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { CancelOrderDialog } from '../components/CancelOrderDialog.js';
 import { DeliveryMap } from '../components/DeliveryMap.js';
@@ -157,6 +158,14 @@ export function OrderDetailPage() {
     void load();
   }, [load, profile?.permissions]);
 
+  // Con Anterior y Siguiente se pasa a otro pedido sin salir de la página: lo abierto se cierra.
+  useEffect(() => {
+    setEditing(false);
+    setMessage('');
+    setEditDeliveryDate(null);
+    setOtherDate(false);
+  }, [id]);
+
   async function transition(status: OrderSummary['status']) {
     if (!order) return;
     if (status === 'CANCELLED') {
@@ -301,6 +310,7 @@ export function OrderDetailPage() {
   }
 
   const canEdit = profile.permissions.includes('orders.edit');
+  const neighbours = neighboursOf(order.id);
   // De READY en adelante el servidor rechaza cambios en lo que se cocina.
   const compositionEditable = order.status === 'DRAFT' || order.status === 'CONFIRMED';
   const canConfirm = profile.permissions.includes('orders.confirm');
@@ -319,9 +329,40 @@ export function OrderDetailPage() {
             {/* El número queda a mano —es lo que se dicta por teléfono— pero sin encabezar. */}
             <p className="order-card-meta mt-2">{order.publicNumber}</p>
           </div>
-          <Link className="button button-secondary" to="/app/pedidos">
-            Volver a Ver pedidos
-          </Link>
+          <div className="order-detail-nav">
+            {/*
+              Anterior y siguiente, en el orden de la lista de la que se vino (con sus filtros):
+              revisar los pedidos del día uno detrás del otro sin volver a la lista cada vez.
+            */}
+            {neighbours.position ? (
+              <span className="order-detail-nav-steps">
+                {neighbours.previous ? (
+                  <Link
+                    aria-label={`Pedido anterior: ${neighbours.previous.publicNumber}`}
+                    className="button button-secondary"
+                    to={`/app/pedidos/${neighbours.previous.id}`}
+                  >
+                    ← Anterior
+                  </Link>
+                ) : null}
+                <small>
+                  {neighbours.position.index} de {neighbours.position.total}
+                </small>
+                {neighbours.next ? (
+                  <Link
+                    aria-label={`Pedido siguiente: ${neighbours.next.publicNumber}`}
+                    className="button button-secondary"
+                    to={`/app/pedidos/${neighbours.next.id}`}
+                  >
+                    Siguiente →
+                  </Link>
+                ) : null}
+              </span>
+            ) : null}
+            <Link className="button button-secondary" to="/app/pedidos">
+              Volver a Ver pedidos
+            </Link>
+          </div>
         </header>
 
         {message ? (
@@ -361,6 +402,7 @@ export function OrderDetailPage() {
           {/* Las etiquetas salen en lote desde Etiquetas (por zona); acá, ubicar la dirección. */}
           {canEdit ? (
             <LocateOrderControl
+              key={order.id}
               address={order.deliveryAddress}
               onLocated={() => void load()}
               orderId={order.id}

@@ -9939,3 +9939,24 @@ body {
 .orders-footer-ready select {
   min-width: 10rem;
 }
+
+/* Anterior y siguiente en el detalle del pedido: en escritorio; en el teléfono, la lista. */
+.order-detail-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.order-detail-nav-steps {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.order-detail-nav-steps small {
+  color: var(--db-muted, #6b7280);
+}
+@media (max-width: 767px) {
+  .order-detail-nav-steps {
+    display: none;
+  }
+}

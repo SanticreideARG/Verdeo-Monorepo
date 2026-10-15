@@ -7,6 +7,7 @@ import { CancelOrderDialog } from '../components/CancelOrderDialog.js';
 import { ColumnPicker } from '../components/ColumnPicker.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { DashboardShell } from '../components/DashboardShell.js';
+import { rememberOrderList } from '../lib/orderNavigation.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { DataTable } from '../components/DataTable.js';
 import { OrderDetailDialog } from '../components/OrderDetailDialog.js';
@@ -164,6 +165,10 @@ export function OrderIntakePage() {
   const [permissions, setPermissions] = useState<string[]>([]);
   const [menus, setMenus] = useState<WeeklyMenu[]>([]);
   const [orders, setOrders] = useState<OrderSummary[]>([]);
+  // El orden de la lista, para "Anterior" y "Siguiente" en el detalle de un pedido.
+  useEffect(() => {
+    rememberOrderList(orders);
+  }, [orders]);
   const paymentMethods = usePaymentMethods();
   const canConfirm = permissions.includes('orders.confirm');
   const canDelete = permissions.includes('orders.delete');
