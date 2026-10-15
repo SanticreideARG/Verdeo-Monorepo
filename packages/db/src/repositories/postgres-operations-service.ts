@@ -112,6 +112,22 @@ import { PostgresAuditSink } from './postgres-audit-sink.js';
 
 type DatabaseTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
+/** Lo que devuelve ubicar un domicilio (desde un pedido o desde el asistente de ubicaciones). */
+export interface LocateAddressResult {
+  addressId: string | null;
+  candidates: {
+    confidence: number;
+    formattedAddress: string;
+    id: string;
+    latitude?: number;
+    longitude?: number;
+  }[];
+  customerId: string;
+  reason?: string;
+  requestId: string | null;
+  status: 'already_located' | 'failed' | 'located' | 'needs_zone' | 'no_match' | 'review';
+}
+
 export interface OperationsContext {
   actorUserId?: string | undefined;
   correlationId: string;
@@ -2663,14 +2679,7 @@ export class PostgresOperationsService {
      * aunque ya tuviera coordenadas: es lo que se hace cuando la que encontró no era.
      */
     retry?: { address?: string | undefined; locationUrl?: string | undefined },
-  ): Promise<{
-    addressId: string | null;
-    candidates: { confidence: number; formattedAddress: string; id: string }[];
-    customerId: string;
-    reason?: string;
-    requestId: string | null;
-    status: 'already_located' | 'failed' | 'located' | 'needs_zone' | 'no_match' | 'review';
-  }> {
+  ): Promise<LocateAddressResult> {
     const [order] = await this.database
       .select({
         customerId: orders.customerId,
@@ -2808,22 +2817,50 @@ export class PostgresOperationsService {
       });
     }
 
-    const request = await this.requestAddressGeocoding(
+    return this.geocodeAndDecide(
       order.customerId,
       addressId,
-      { idempotencyKey: `locate:${orderId}:${String(Date.now())}` },
+      order.operatingSiteId,
+      { latitude: order.originLatitude, longitude: order.originLongitude },
+      rules,
+      context,
+      `locate:${orderId}:${String(Date.now())}`,
+    );
+  }
+
+  /**
+   * Buscar en el mapa un domicilio y decidir: si el resultado es seguro y cae en la ciudad, queda
+   * confirmado; si no, vuelven los candidatos para que elija una persona. Lo comparten "Ubicar
+   * dirección" del pedido y el asistente de ubicaciones.
+   */
+  private async geocodeAndDecide(
+    customerId: string,
+    addressId: string,
+    operatingSiteId: string,
+    siteOrigin: { latitude: string | null; longitude: string | null },
+    rules: Pick<AutoAcceptRules, 'radiusKm' | 'threshold'>,
+    context: OperationsContext,
+    idempotencyKey: string,
+  ): Promise<LocateAddressResult> {
+    const request = await this.requestAddressGeocoding(
+      customerId,
+      addressId,
+      { idempotencyKey },
       context,
     );
+    // Con las coordenadas, para ver en un mapa dónde cae cada candidato antes de elegirlo.
     const summary = request.candidates.map((candidate) => ({
       confidence: candidate.confidence,
       formattedAddress: candidate.formattedAddress,
       id: candidate.id,
+      latitude: Number(candidate.latitude),
+      longitude: Number(candidate.longitude),
     }));
     if (request.status === 'FAILED') {
       return {
         addressId,
         candidates: [],
-        customerId: order.customerId,
+        customerId: customerId,
         reason: 'El buscador de direcciones no respondió.',
         requestId: request.id,
         status: 'failed',
@@ -2833,18 +2870,18 @@ export class PostgresOperationsService {
       return {
         addressId,
         candidates: [],
-        customerId: order.customerId,
+        customerId: customerId,
         requestId: request.id,
         status: 'no_match',
       };
     }
 
-    const stored = await this.storedGeocodingSettings(order.operatingSiteId);
+    const stored = await this.storedGeocodingSettings(operatingSiteId);
     if (stored && !stored.autoAccept) {
       return {
         addressId,
         candidates: summary,
-        customerId: order.customerId,
+        customerId: customerId,
         reason: 'La ciudad está configurada para revisar todas las ubicaciones a mano.',
         requestId: request.id,
         status: 'review',
@@ -2859,9 +2896,9 @@ export class PostgresOperationsService {
      * desde ahí, las siguientes se comparan con ella y con las que se vayan confirmando.
      */
     const origin =
-      order.originLatitude !== null && order.originLongitude !== null
-        ? { latitude: Number(order.originLatitude), longitude: Number(order.originLongitude) }
-        : await this.confirmedAddressesCenter(order.operatingSiteId);
+      siteOrigin.latitude !== null && siteOrigin.longitude !== null
+        ? { latitude: Number(siteOrigin.latitude), longitude: Number(siteOrigin.longitude) }
+        : await this.confirmedAddressesCenter(operatingSiteId);
     const decision = decideAutoAccept(
       request.candidates.map((candidate) => ({
         confidence: candidate.confidence,
@@ -2887,7 +2924,7 @@ export class PostgresOperationsService {
       return {
         addressId,
         candidates: summary,
-        customerId: order.customerId,
+        customerId: customerId,
         reason: reasons[decision.reason] ?? decision.reason,
         requestId: request.id,
         status: 'review',
@@ -2896,19 +2933,156 @@ export class PostgresOperationsService {
 
     // El candidato se identificó con su id de base al armar la decisión.
     const candidateId = decision.candidate.providerCandidateId;
-    await this.confirmAddressGeocoding(
-      order.customerId,
-      addressId,
-      request.id,
-      { candidateId },
-      context,
-    );
+    await this.confirmAddressGeocoding(customerId, addressId, request.id, { candidateId }, context);
     return {
       addressId,
       candidates: summary,
-      customerId: order.customerId,
+      customerId: customerId,
       requestId: request.id,
       status: 'located',
+    };
+  }
+
+  /**
+   * Ubicar un domicilio de un cliente, sin pasar por un pedido: el asistente de ubicaciones.
+   *
+   * Con `retry`, guarda la dirección corregida o la ubicación pegada (un enlace de Maps o
+   * coordenadas) y busca de nuevo aunque ya tuviera coordenadas.
+   */
+  public async locateCustomerAddress(
+    customerId: string,
+    addressId: string,
+    rules: Pick<AutoAcceptRules, 'radiusKm' | 'threshold'>,
+    context: OperationsContext,
+    retry?: { address?: string | undefined; locationUrl?: string | undefined },
+  ): Promise<LocateAddressResult> {
+    const [address] = await this.database
+      .select({
+        latitude: customerAddresses.latitude,
+        longitude: customerAddresses.longitude,
+        operatingSiteId: geographicZones.operatingSiteId,
+        originLatitude: operatingSites.originLatitude,
+        originLongitude: operatingSites.originLongitude,
+      })
+      .from(customerAddresses)
+      .innerJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
+      .innerJoin(operatingSites, eq(operatingSites.id, geographicZones.operatingSiteId))
+      .where(and(eq(customerAddresses.id, addressId), eq(customerAddresses.customerId, customerId)))
+      .limit(1);
+    if (!address) throw new OperationsNotFoundError('No se encontró el domicilio');
+
+    const newAddress = retry?.address?.trim().replace(/\s+/g, ' ');
+    const newLocationUrl = retry?.locationUrl?.trim();
+    if (newAddress || newLocationUrl) {
+      await this.database.transaction(async (transaction) => {
+        await transaction
+          .update(customerAddresses)
+          .set({
+            ...(newAddress ? { writtenAddress: newAddress } : {}),
+            // Una dirección corregida sin enlace nuevo: el enlace viejo apuntaba a lo de antes.
+            locationUrl: newLocationUrl ?? (newAddress ? null : undefined),
+            geocodingStatus: 'NEEDS_LOCATION',
+            latitude: null,
+            longitude: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(customerAddresses.id, addressId));
+        await this.auditCustomerMutation(
+          transaction,
+          customerId,
+          'customer.address_relocated',
+          context,
+          {
+            metadata: {
+              ...(newAddress ? { address: newAddress } : {}),
+              ...(newLocationUrl ? { locationUrl: newLocationUrl } : {}),
+              addressId,
+            },
+          },
+        );
+      });
+    } else if (address.latitude !== null && address.longitude !== null) {
+      return { addressId, candidates: [], customerId, requestId: null, status: 'already_located' };
+    }
+
+    return this.geocodeAndDecide(
+      customerId,
+      addressId,
+      address.operatingSiteId,
+      { latitude: address.originLatitude, longitude: address.originLongitude },
+      rules,
+      context,
+      `locate-address:${addressId}:${String(Date.now())}`,
+    );
+  }
+
+  /**
+   * Los domicilios activos de clientes activos que no tienen ubicación, para el asistente.
+   *
+   * Primero los de quienes tienen pedidos en un período abierto (son los que salen en la próxima
+   * hoja de ruta), después por el último pedido y por nombre. Con la cuenta total y las ubicadas,
+   * para mostrar el avance.
+   */
+  public async listUnlocatedAddresses(operatingSiteId: string | null, limit = 200) {
+    const now = new Date().toISOString();
+    const siteFilter = operatingSiteId
+      ? sql`and z.operating_site_id = ${operatingSiteId}::uuid`
+      : sql``;
+    const raw = (await this.database.execute(sql`
+      select a.id as address_id, a.customer_id, c.display_name as customer_name, a.label,
+             a.written_address, a.location_url, a.geocoding_status, z.display_name as zone_name,
+             n.display_name as neighborhood_name,
+             (select count(*)::int from orders o
+                join sales_cycles s on s.id = o.sales_cycle_id
+                where o.delivery_address_id = a.id and o.status <> 'CANCELLED'
+                  and s.close_at >= ${now}::timestamptz) as open_orders,
+             (select max(o.created_at) from orders o where o.customer_id = a.customer_id)
+               as last_order_at
+      from customer_addresses a
+      join customers c on c.id = a.customer_id
+      join geographic_zones z on z.id = a.geographic_zone_id
+      left join neighborhoods n on n.id = a.neighborhood_id
+      where a.active = true and c.status = 'active' and a.latitude is null ${siteFilter}
+      order by open_orders desc, last_order_at desc nulls last, c.display_name
+      limit ${limit}`)) as unknown;
+    const rows = (Array.isArray(raw) ? raw : (raw as { rows: unknown[] }).rows) as {
+      address_id: string;
+      customer_id: string;
+      customer_name: string;
+      geocoding_status: string;
+      label: string;
+      last_order_at: Date | string | null;
+      location_url: string | null;
+      neighborhood_name: string | null;
+      open_orders: number | string;
+      written_address: string;
+      zone_name: string;
+    }[];
+    const countsRaw = (await this.database.execute(sql`
+      select count(*)::int as total, count(a.latitude)::int as located
+      from customer_addresses a
+      join customers c on c.id = a.customer_id
+      join geographic_zones z on z.id = a.geographic_zone_id
+      where a.active = true and c.status = 'active' ${siteFilter}`)) as unknown;
+    const [counts] = (
+      Array.isArray(countsRaw) ? countsRaw : (countsRaw as { rows: unknown[] }).rows
+    ) as Record<string, unknown>[];
+    return {
+      items: rows.map((row) => ({
+        addressId: row.address_id,
+        customerId: row.customer_id,
+        customerName: row.customer_name,
+        geocodingStatus: row.geocoding_status,
+        label: row.label,
+        lastOrderAt: row.last_order_at === null ? null : new Date(row.last_order_at),
+        locationUrl: row.location_url,
+        neighborhoodName: row.neighborhood_name,
+        openOrders: Number(row.open_orders),
+        writtenAddress: row.written_address,
+        zoneName: row.zone_name,
+      })),
+      located: Number(counts?.located ?? 0),
+      total: Number(counts?.total ?? 0),
     };
   }
 

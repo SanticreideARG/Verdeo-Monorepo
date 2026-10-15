@@ -8,7 +8,7 @@ import { addDaysIso, todayInOperation } from './dates.js';
  * repetidos no recibe la tarjeta de repetidos. La clave incluye lo que la tarjeta dice
  * ("duplicados:3"): marcarla como hecha la esconde a ella, y si mañana son cuatro, es otra.
  */
-export type FeedCardKind = 'agenda' | 'alerta' | 'mensajes';
+export type FeedCardKind = 'agenda' | 'alerta' | 'consejo' | 'mensajes';
 
 export interface FeedCard {
   count: number | null;
@@ -31,7 +31,7 @@ export async function loadFeedCards(permissions: readonly string[]): Promise<Fee
   const today = todayInOperation();
   const tomorrow = addDaysIso(today, 1);
 
-  const [duplicates, inbound, drafts, calendar, chat] = await Promise.all([
+  const [duplicates, inbound, drafts, calendar, chat, tips] = await Promise.all([
     can('orders.read') ? json<{ groups: unknown[] }>('/api/v1/orders/duplicates') : null,
     can('orders.create') ? json<{ items: unknown[] }>('/api/v1/inbound-emails') : null,
     can('orders.confirm')
@@ -51,6 +51,10 @@ export async function loadFeedCards(permissions: readonly string[]): Promise<Fee
             unreadCount: number;
           }[];
         }>('/api/v1/chat/conversations')
+      : null,
+    // Los consejos del día salen de la API, que ya los filtra por permiso.
+    can('feed.post')
+      ? json<{ items: { href: string; key: string; text: string }[] }>('/api/v1/feed/tips')
       : null,
   ]);
 
@@ -130,6 +134,10 @@ export async function loadFeedCards(permissions: readonly string[]): Promise<Fee
       kind: 'mensajes',
       text: `${plural(conversation.unreadCount, 'mensaje sin leer', 'mensajes sin leer')} de ${who}`,
     });
+  }
+
+  for (const tip of tips?.items ?? []) {
+    cards.push({ count: null, href: tip.href, key: tip.key, kind: 'consejo', text: tip.text });
   }
 
   return cards;

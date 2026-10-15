@@ -136,6 +136,12 @@ construimos no es el envío sino la cuenta de a quién ya se le avisó.
 - [ ] Stock, fase 2: "Del stock" en la carga de pedidos.
 - [ ] Stock, fase 3: etiquetas del stock al producirse ("Incluir el stock").
 
+## P1 - Ubicaciones
+
+- [x] Asistente de ubicaciones (ADDRESS_SANITIZER_PLAN.md): pasada automática y revisión uno por
+      uno de los domicilios sin ubicación, con avance.
+- [ ] Darle al asistente su lugar en el menú (hoy se entra desde el tablero).
+
 ## P1 - Tablero
 
 - [x] Feed, fase 1 (DASHBOARD_FEED_PLAN.md): publicaciones del equipo (aviso, cambio, novedad del
@@ -143,7 +149,8 @@ construimos no es el envío sino la cuenta de a quién ya se le avisó.
 - [x] Feed, fase 2: punto de nuevas, avisos del navegador, respuestas y 👍, agenda y mensajes,
       hecho y mañana por persona.
 - [ ] Feed: imagen en una publicación; "sin leer" de WhatsApp de clientes.
-- [ ] Feed, fase 3: consejos del día.
+- [x] Feed, fase 3: consejos del día (habituales que faltan, sin ubicación, sin barrio, lo más
+      pedido, ritmo de ventas para el superadmin).
 
 ## P1 - Logistics
 

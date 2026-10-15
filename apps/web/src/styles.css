@@ -9994,7 +9994,11 @@ label.field:has(> input[type='radio']) {
  */
 .feed {
   display: grid;
+  /* Una columna que nunca crece más que la pantalla: sin esto, la fila de filtros (más ancha que
+     un teléfono) estiraba la grilla y corría toda la página hacia un costado. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.9rem;
+  min-width: 0;
   max-width: 52rem;
   margin: 1.5rem 0;
 }
@@ -10013,8 +10017,12 @@ label.field:has(> input[type='radio']) {
 }
 .feed-filters {
   display: flex;
+  flex: 1 1 auto;
   gap: 0.35rem;
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
+  scrollbar-width: none;
 }
 .feed-filters button {
   min-height: 2.25rem;
@@ -10181,6 +10189,10 @@ label.field:has(> input[type='radio']) {
   .feed-head h2 {
     flex-basis: 100%;
   }
+  /* Los filtros, en su propia fila y deslizables con el dedo. */
+  .feed-filters {
+    flex-basis: 100%;
+  }
   .feed-new {
     margin-left: auto;
   }
@@ -10277,5 +10289,171 @@ label.field:has(> input[type='radio']) {
   .feed-reaction,
   .feed-card-actions .feed-link {
     min-height: 44px;
+  }
+}
+
+/* Consejo del día: el color de lo que se sugiere, no de lo que urge. */
+.feed-alert.kind-consejo {
+  border-left-color: #8b5cf6;
+}
+
+/*
+ * El asistente de ubicaciones: el avance arriba, la pasada automática y, abajo, la cola a la
+ * izquierda con el domicilio en foco a la derecha. En el teléfono, todo en una columna con la cola
+ * deslizable de costado.
+ */
+.location-progress {
+  height: 0.6rem;
+  margin-top: 1.2rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--db-accent) 15%, transparent);
+}
+.location-progress > div {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--db-accent);
+  transition: width 300ms ease;
+}
+.location-progress-text {
+  margin: 0.5rem 0 0;
+  color: var(--db-text-soft);
+  font-size: 0.9rem;
+}
+.location-step {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 1.6rem;
+}
+.location-step h2 {
+  margin: 0;
+  color: var(--db-text);
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+.location-step > p {
+  margin: 0;
+  color: var(--db-text-soft);
+  font-size: 0.9rem;
+}
+.location-auto {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  align-items: center;
+}
+.location-layout {
+  display: grid;
+  grid-template-columns: minmax(14rem, 20rem) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.location-queue {
+  display: grid;
+  gap: 0.35rem;
+  max-height: 70vh;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.location-queue button {
+  display: grid;
+  gap: 0.1rem;
+  width: 100%;
+  border: 1px solid var(--db-border);
+  border-radius: 0.7rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--db-surface);
+  color: var(--db-text);
+  text-align: left;
+  cursor: pointer;
+}
+.location-queue button[aria-current='true'] {
+  border-color: var(--db-accent);
+  box-shadow: inset 3px 0 0 var(--db-accent);
+}
+.location-queue span {
+  overflow: hidden;
+  color: var(--db-text-soft);
+  font-size: 0.85rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.location-queue small {
+  color: var(--db-muted);
+  font-size: 0.75rem;
+}
+.location-focus {
+  display: grid;
+  gap: 0.8rem;
+  min-width: 0;
+  border: 1px solid var(--db-border);
+  border-radius: 0.9rem;
+  padding: 1rem;
+  background: var(--db-surface);
+}
+.location-focus-who {
+  margin: 0;
+  color: var(--db-text-soft);
+  font-size: 0.85rem;
+}
+.location-focus-address {
+  margin: 0;
+  color: var(--db-text);
+  font-size: 1.2rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.location-focus-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin: 0;
+  font-size: 0.85rem;
+}
+.location-focus-links a {
+  color: var(--db-accent);
+  text-decoration: underline;
+}
+.location-focus-status {
+  margin: 0;
+  color: var(--db-text);
+  font-weight: 600;
+}
+.location-candidates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.location-candidates li {
+  display: grid;
+  gap: 0.4rem;
+  border: 1px solid var(--db-border-soft);
+  border-radius: 0.7rem;
+  padding: 0.6rem;
+}
+.location-candidates p {
+  margin: 0;
+  font-size: 0.88rem;
+}
+@media (max-width: 680px) {
+  .location-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .location-queue {
+    display: flex;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .location-queue li {
+    flex: 0 0 78%;
+  }
+  .location-candidates {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

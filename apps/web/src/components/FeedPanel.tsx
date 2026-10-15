@@ -54,7 +54,7 @@ const TAG_LABELS: Record<FeedTag, string> = {
   novedad: 'Novedad del sistema',
 };
 
-type Filter = 'agenda' | 'alertas' | 'comunicaciones' | 'mensajes' | 'todo';
+type Filter = 'agenda' | 'alertas' | 'comunicaciones' | 'consejos' | 'mensajes' | 'todo';
 
 const FILTERS: readonly { label: string; value: Filter }[] = [
   { label: 'Todo', value: 'todo' },
@@ -62,17 +62,20 @@ const FILTERS: readonly { label: string; value: Filter }[] = [
   { label: 'Comunicaciones', value: 'comunicaciones' },
   { label: 'Agenda', value: 'agenda' },
   { label: 'Mensajes', value: 'mensajes' },
+  { label: 'Consejos', value: 'consejos' },
 ];
 
 const CARD_FILTER: Record<FeedCardKind, Filter> = {
   agenda: 'agenda',
   alerta: 'alertas',
+  consejo: 'consejos',
   mensajes: 'mensajes',
 };
 
 const CARD_LABEL: Record<FeedCardKind, string> = {
   agenda: 'Agenda',
   alerta: 'Alerta',
+  consejo: 'Consejo del día',
   mensajes: 'Mensajes',
 };
 
@@ -678,9 +681,11 @@ export function FeedPanel({
               ? 'Nada en la agenda para hoy ni mañana.'
               : filter === 'mensajes'
                 ? 'Sin mensajes por leer.'
-                : canPost
-                  ? 'Todavía nadie publicó nada. Contale algo al equipo con "Publicar".'
-                  : 'Nada nuevo.'}
+                : filter === 'consejos'
+                  ? 'Hoy no hay consejos: todo en orden.'
+                  : canPost
+                    ? 'Todavía nadie publicó nada. Contale algo al equipo con "Publicar".'
+                    : 'Nada nuevo.'}
         </p>
       ) : null}
     </section>

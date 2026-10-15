@@ -30,6 +30,9 @@ describe('loadFeedCards', () => {
         { day: today, done: true, id: 'r2', kind: 'reminder', title: 'Ya hecho' },
       ],
     };
+    responses['/api/v1/feed/tips'] = {
+      items: [{ href: '/app/cocina', key: 'tip:mas-pedido:KETO:400', text: 'Lo más pedido' }],
+    };
     responses['/api/v1/chat/conversations'] = {
       items: [
         { id: 'k1', participants: [{ displayName: 'Ana' }], title: null, unreadCount: 3 },
@@ -43,6 +46,7 @@ describe('loadFeedCards', () => {
       'orders.confirm',
       'calendar.use',
       'chat.use',
+      'feed.post',
     ]);
 
     expect(cards.map((card) => [card.kind, card.key, card.text])).toEqual([
@@ -51,6 +55,7 @@ describe('loadFeedCards', () => {
       ['agenda', `agenda:r1:${today}`, 'Hoy: Llamar al proveedor'],
       ['agenda', `agenda:c1:${addDaysIso(today, 1)}`, 'Mañana, cierra el período: Oct 2'],
       ['mensajes', 'chat:k1:3', 'mensajes sin leer de Ana'],
+      ['consejo', 'tip:mas-pedido:KETO:400', 'Lo más pedido'],
     ]);
   });
 

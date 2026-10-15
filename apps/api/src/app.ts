@@ -114,6 +114,7 @@ import {
   FeedReplyCreateRequestSchema,
   FeedReplyListResponseSchema,
   FeedUnreadResponseSchema,
+  FeedTipListResponseSchema,
   type FeedTag,
   GeographicZoneCreateRequestSchema,
   GeographicZoneListResponseSchema,
@@ -618,6 +619,15 @@ interface OperationsEngine {
     requestId: string | null;
     status: string;
   }>;
+  /** El asistente de ubicaciones: ubicar un domicilio de cliente sin pasar por un pedido. */
+  locateCustomerAddress?(
+    customerId: string,
+    addressId: string,
+    rules: { radiusKm: number; threshold: number },
+    context: OperationsContext,
+    retry?: { address?: string | undefined; locationUrl?: string | undefined },
+  ): Promise<unknown>;
+  listUnlocatedAddresses?(operatingSiteId: string | null): Promise<unknown>;
   cycleKitchenLabels(
     cycleId: string,
     operatingSiteId?: string | null,
@@ -1440,6 +1450,10 @@ interface CreateAppOptions {
     deleteReply(replyId: string, context: FeedContext): Promise<void>;
     setReaction(postId: string, userId: string, on: boolean): Promise<void>;
     hiddenCards(userId: string): Promise<string[]>;
+    tips(input: {
+      operatingSiteId?: string | null;
+      permissions: readonly string[];
+    }): Promise<{ href: string; key: string; text: string }[]>;
     setCardHidden(userId: string, cardKey: string, hiddenUntil: Date | null): Promise<void>;
     updatePost(
       postId: string,
@@ -2781,6 +2795,7 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/dashboard/*', requireAuthentication);
   app.use('/api/v1/calendar', requireAuthentication);
   app.use('/api/v1/feed/*', requireAuthentication, resolveScopeSelection);
+  app.use('/api/v1/address-locations/*', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/calendar/*', requireAuthentication);
   app.use('/api/v1/label-backgrounds', requireAuthentication);
   app.use('/api/v1/label-backgrounds/*', requireAuthentication);
@@ -5017,6 +5032,79 @@ export function createApp(options: CreateAppOptions) {
    */
   const LOCATE_RULES = { radiusKm: 60, threshold: 0.9 } as const;
 
+  /** La dirección corregida o la ubicación pegada (enlace de Maps o coordenadas) para buscar de nuevo. */
+  const parseLocateRetry = (
+    body: unknown,
+  ): { address: string; locationUrl: string | undefined } | { error: string } => {
+    const input = (body ?? {}) as { address?: unknown; location?: unknown };
+    const address = typeof input.address === 'string' ? input.address.trim() : '';
+    const location = typeof input.location === 'string' ? input.location.trim() : '';
+    if (address && (address.length < 4 || address.length > 500)) {
+      return { error: 'Escribí la dirección completa: calle y altura.' };
+    }
+    if (!location) return { address, locationUrl: undefined };
+    const pair = /^(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$/.exec(location);
+    if (pair) {
+      return {
+        address,
+        locationUrl: `https://www.google.com/maps/search/?api=1&query=${pair[1] ?? ''},${pair[2] ?? ''}`,
+      };
+    }
+    if (/^https?:\/\//i.test(location) && location.length <= 2_000) {
+      return { address, locationUrl: location };
+    }
+    return { error: 'Pegá un enlace de Google Maps o las coordenadas, como "-34.58, -58.41".' };
+  };
+
+  /*
+   * El asistente de ubicaciones: los domicilios de clientes sin ubicación y ubicar uno por uno.
+   * Pide los mismos permisos que geocodificar desde la ficha del cliente (la dirección es un dato
+   * sensible).
+   */
+  app.get('/api/v1/address-locations/pending', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (
+      !permissions.includes('customers.read') ||
+      !permissions.includes('customers.view_sensitive')
+    )
+      return forbidden(context);
+    const operations = requireOperations();
+    if (!operations.listUnlocatedAddresses)
+      return context.json({ items: [], located: 0, total: 0 });
+    const result = await operations.listUnlocatedAddresses(
+      context.get('scope')?.operatingSiteId ?? null,
+    );
+    return context.json(contractValue(result));
+  });
+
+  app.post('/api/v1/address-locations/:id/locate', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (
+      !permissions.includes('customers.edit') ||
+      !permissions.includes('customers.view_sensitive')
+    )
+      return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    const body = (await context.req.json().catch(() => null)) as { customerId?: unknown } | null;
+    const customerId = z.uuid().safeParse(body?.customerId);
+    if (!params.success || !customerId.success)
+      return badRequest(context, 'El domicilio no es válido.');
+    const retry = parseLocateRetry(body);
+    if ('error' in retry) return badRequest(context, retry.error);
+    const operations = requireOperations();
+    if (!operations.locateCustomerAddress) throw new Error('Address locator is not configured');
+    const result = await operations.locateCustomerAddress(
+      customerId.data,
+      params.data.id,
+      LOCATE_RULES,
+      operationsContext(context),
+      retry.address || retry.locationUrl
+        ? { address: retry.address || undefined, locationUrl: retry.locationUrl }
+        : undefined,
+    );
+    return context.json(result);
+  });
+
   /*
    * Los pedidos del día que quedarían afuera de la hoja de ruta por no tener ubicación.
    *
@@ -5846,6 +5934,17 @@ export function createApp(options: CreateAppOptions) {
     return context.body(null, 204);
   });
 
+  // Los consejos del día: cada uno con el permiso de lo que muestra (el de ventas, stats.read).
+  app.get('/api/v1/feed/tips', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('feed.post')) return forbidden(context);
+    const items = await requireFeed().tips({
+      operatingSiteId: context.get('scope')?.operatingSiteId ?? null,
+      permissions: session.permissions,
+    });
+    return context.json(FeedTipListResponseSchema.parse({ items }));
+  });
+
   // Hecho y pospuesto de las tarjetas del feed: por persona.
   app.get('/api/v1/feed/cards/hidden', async (context) => {
     const session = context.get('session');
@@ -6349,29 +6448,9 @@ export function createApp(options: CreateAppOptions) {
      * Sin cuerpo, ubica con lo que tiene. Con cuerpo, busca de nuevo con una dirección corregida
      * o con una ubicación pegada: un enlace de Maps o coordenadas ("-34.58, -58.41").
      */
-    const body = (await context.req.json().catch(() => null)) as {
-      address?: unknown;
-      location?: unknown;
-    } | null;
-    const address = typeof body?.address === 'string' ? body.address.trim() : '';
-    const location = typeof body?.location === 'string' ? body.location.trim() : '';
-    if (address && (address.length < 4 || address.length > 500)) {
-      return badRequest(context, 'Escribí la dirección completa: calle y altura.');
-    }
-    let locationUrl: string | undefined;
-    if (location) {
-      const pair = /^(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$/.exec(location);
-      if (pair) {
-        locationUrl = `https://www.google.com/maps/search/?api=1&query=${pair[1] ?? ''},${pair[2] ?? ''}`;
-      } else if (/^https?:\/\//i.test(location) && location.length <= 2_000) {
-        locationUrl = location;
-      } else {
-        return badRequest(
-          context,
-          'Pegá un enlace de Google Maps o las coordenadas, como "-34.58, -58.41".',
-        );
-      }
-    }
+    const retry = parseLocateRetry(await context.req.json().catch(() => null));
+    if ('error' in retry) return badRequest(context, retry.error);
+    const { address, locationUrl } = retry;
     const operations = requireOperations();
     const result =
       address || locationUrl

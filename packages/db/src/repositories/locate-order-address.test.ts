@@ -390,3 +390,56 @@ describe('buscar clientes por teléfono', () => {
     expect(encontrados.items.map((item) => item.id)).toEqual([CUSTOMER]);
   });
 });
+
+describe('asistente de ubicaciones', () => {
+  const ADDRESS = 'f0000000-0000-4000-8000-000000000001';
+  const otro = `
+    insert into customer_addresses (id, customer_id, label, written_address, geographic_zone_id)
+    values ('${ADDRESS}', '${CUSTOMER}', 'Casa', 'Julián Álvarez 1010', '${ZONE}');
+    update orders set delivery_address_id = '${ADDRESS}';
+  `;
+
+  it('lista los domicilios sin ubicación, con su avance, y los ubica sin pasar por un pedido', async () => {
+    const { client, service } = await base(proveedor([candidato(-34.5998, -58.44, 1)]));
+    await client.exec(otro);
+
+    const before = await service.listUnlocatedAddresses(null);
+    expect(before).toMatchObject({ located: 0, total: 1 });
+    expect(before.items[0]).toMatchObject({
+      addressId: ADDRESS,
+      customerName: 'Marta Mera',
+      writtenAddress: 'Julián Álvarez 1010',
+      zoneName: 'CABA',
+    });
+
+    const result = await service.locateCustomerAddress(CUSTOMER, ADDRESS, reglas, contexto);
+    expect(result.status).toBe('located');
+
+    const after = await service.listUnlocatedAddresses(null);
+    expect(after).toMatchObject({ items: [], located: 1, total: 1 });
+  });
+
+  it('con una dirección corregida la guarda y busca de nuevo; los candidatos traen coordenadas', async () => {
+    const { client, service } = await base(proveedor([candidato(-34.5998, -58.44, 0.5)]));
+    await client.exec(otro);
+
+    const result = await service.locateCustomerAddress(CUSTOMER, ADDRESS, reglas, contexto, {
+      address: 'Julián Álvarez 1012',
+    });
+
+    expect(result.status).toBe('review');
+    expect(result.candidates[0]).toMatchObject({ latitude: -34.5998, longitude: -58.44 });
+    const { rows } = await client.query<{ written_address: string }>(
+      `select written_address from customer_addresses where id = '${ADDRESS}'`,
+    );
+    expect(rows[0]?.written_address).toBe('Julián Álvarez 1012');
+  });
+
+  it('no toca un domicilio de otro cliente', async () => {
+    const { client, service } = await base(proveedor([candidato(-34.5998, -58.44, 1)]));
+    await client.exec(otro);
+    await expect(service.locateCustomerAddress(ORDER, ADDRESS, reglas, contexto)).rejects.toThrow(
+      'No se encontró el domicilio',
+    );
+  });
+});

@@ -105,6 +105,27 @@ sin confirmar, sin cobrar.
   enlaces cubre lo de hoy) y los mensajes de WhatsApp de clientes, que no llevan "sin leer"
   todavía.
 
+## Cómo quedó la fase 3 (2026-10-16)
+
+Consejos del día como tarjetas del feed (filtro **Consejos**), armados en la API
+(`GET /api/v1/feed/tips`, `packages/db/src/repositories/feed-tips.ts`) con los datos del período
+en curso y la ciudad del alcance. Cada uno aparece sólo si hay algo que hacer y pide el permiso de
+lo que muestra:
+
+- **Habituales que faltan** (`customers.read`): pidieron en cada uno de los tres períodos
+  anteriores y todavía no en éste, con los nombres.
+- **Pedidos sin ubicación** (`orders.read`) y **domicilios sin barrio** (`customers.read`) del
+  período: sin eso, la hoja de ruta no se arma bien.
+- **Lo más pedido** (`production.read`): la variedad con más unidades.
+- **El ritmo** (`stats.read`, sólo el superadmin): pedidos de este período contra el anterior a
+  la misma altura.
+
+La clave lleva el número (`tip:habituales:3`): "Hecho" lo esconde hasta que cambie.
+
+También en esta entrega: la fila de filtros del feed desbordaba el ancho del teléfono y corría la
+página hacia un costado. La grilla del feed ahora es de una columna que no crece más que la
+pantalla, y los filtros se deslizan con el dedo.
+
 ## Fases
 
 1. ✅ El feed con **comunicaciones** (publicar, fijar, "lo leí"), alertas y actividad, hecho primero
@@ -112,6 +133,6 @@ sin confirmar, sin cobrar.
    tarjetas; las publicaciones tienen su propia API.
 2. ✅ Calendario y mensajes en el feed; respuestas y reacciones; hecho y pospuesto por usuario;
    punto de nuevas y avisos del navegador.
-3. Consejos del día.
+3. ✅ Consejos del día.
 
 Decisión del usuario: el orden queda a criterio de quien lo construye; se empieza por la fase 1.

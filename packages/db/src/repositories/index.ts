@@ -25,6 +25,7 @@ export * from './postgres-user-directory-repository.js';
 export * from './postgres-customer-login-service.js';
 export * from './postgres-calendar-service.js';
 export * from './postgres-feed-service.js';
+export * from './feed-tips.js';
 export * from './postgres-appearance-service.js';
 export * from './postgres-password-reset-service.js';
 export * from './postgres-dashboard-layout-service.js';

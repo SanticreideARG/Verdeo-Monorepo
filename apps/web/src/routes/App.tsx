@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { SettingsGate } from '../components/SettingsGate.js';
+import { LocationWizardPage } from './LocationWizardPage.js';
 
 import { useOperatingSiteId } from '../lib/useOperatingSite.js';
 
@@ -331,6 +332,8 @@ export function App() {
         <Route path="/auth/callback" element={<OAuthCallbackPage />} />
         <Route path="/app" element={<DashboardPage />} />
         <Route path="/app/clientes" element={<CustomersPage />} />
+        {/* El asistente de ubicaciones. Todavía sin lugar en el menú: se entra desde el tablero. */}
+        <Route path="/app/ubicaciones" element={<LocationWizardPage />} />
         <Route path="/app/encuestas" element={<SurveysPage />} />
         <Route path="/app/encuestas/:id/resultados" element={<SurveyResultsPage />} />
         {/* La pantalla de tomar pedidos se fusionó con la de verlos: la ruta vieja redirige para

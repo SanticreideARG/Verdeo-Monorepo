@@ -65,6 +65,12 @@ export function MobileDashboard({ data }: { data: MobileDashboardData }) {
     { href: '/app/cocina', label: 'Ver cocina', permission: 'production.read' },
     { href: '/app/reparto/rutas', label: 'Ruta de hoy', permission: 'routes.read' },
     { href: '/app/clientes', label: 'Buscar un cliente', permission: 'customers.read' },
+    // Provisorio: el asistente de ubicaciones todavía no tiene lugar en el menú.
+    {
+      href: '/app/ubicaciones',
+      label: 'Conciliar ubicaciones',
+      permission: 'customers.view_sensitive',
+    },
   ].filter((action) => data.permissions.includes(action.permission));
 
   return (

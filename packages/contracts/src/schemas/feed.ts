@@ -95,5 +95,10 @@ export const FeedCardStateRequestSchema = z.object({
 
 export const FeedUnreadResponseSchema = z.object({ count: z.number().int() });
 
+/** Un consejo del día: sale de los datos del período (fase 3). */
+export const FeedTipListResponseSchema = z.object({
+  items: z.array(z.object({ href: z.string(), key: z.string(), text: z.string() })),
+});
+
 export type FeedPost = z.infer<typeof FeedPostSchema>;
 export type FeedTag = z.infer<typeof FeedTagSchema>;

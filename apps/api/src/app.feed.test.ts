@@ -25,6 +25,7 @@ function feedEngine() {
     setReaction: vi.fn(() => Promise.resolve()),
     hiddenCards: vi.fn(() => Promise.resolve(['duplicados:3'])),
     setCardHidden: vi.fn(() => Promise.resolve()),
+    tips: vi.fn(() => Promise.resolve([{ href: '/app/cocina', key: 'tip:x', text: 'Consejo' }])),
   };
 }
 
@@ -163,6 +164,10 @@ describe('tablero: publicaciones', () => {
 
     const hidden = await app.request('/api/v1/feed/cards/hidden', { headers: { cookie } });
     expect(await hidden.json()).toEqual({ keys: ['duplicados:3'] });
+
+    const tips = await app.request('/api/v1/feed/tips', { headers: { cookie } });
+    expect(((await tips.json()) as { items: unknown[] }).items).toHaveLength(1);
+    expect(feed.tips).toHaveBeenCalledWith(expect.objectContaining({ permissions: ['feed.post'] }));
 
     const unread = await app.request('/api/v1/feed/unread', { headers: { cookie } });
     expect(await unread.json()).toEqual({ count: 2 });

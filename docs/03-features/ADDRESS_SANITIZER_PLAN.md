@@ -232,3 +232,31 @@ Antes de buscar, `searchableAddress` limpia el texto: saca el piso o depto pegad
   `customer.address_relocated_from_order`), y el domicilio se vuelve a buscar aunque ya tuviera
   coordenadas. Una dirección corregida sin enlace nuevo borra el enlace viejo, que apuntaba a lo de
   antes. Cuando hay candidatos dudosos se siguen mostrando para elegir.
+
+## Asistente de ubicaciones (2026-10-16)
+
+Pedido del usuario: un asistente para dejar con ubicación a todos los clientes que no la tienen,
+con los módulos que ya existen pero ordenados para conciliar de corrido. Todavía sin lugar en el
+menú: se entra desde el tablero ("Conciliar ubicaciones", en los módulos de escritorio y en
+"Empezar algo" del teléfono). Ruta `/app/ubicaciones`.
+
+- **Qué lista**: los domicilios activos de clientes activos sin coordenadas
+  (`GET /api/v1/address-locations/pending`, con la ciudad del alcance). Primero los que tienen
+  pedidos en un período abierto —salen en la próxima hoja de ruta—, después por el último pedido y
+  por nombre. Con la cuenta total y las ubicadas, para la barra de avance.
+- **Paso 1, automático**: recorre los pendientes de a uno con el mismo ubicador de "Ubicar
+  dirección" (la ciudad, su origen y sus reglas de aceptación). Lo seguro y dentro de la ciudad
+  queda confirmado; se puede frenar a mitad.
+- **Paso 2, uno por uno**: la cola a la izquierda (abajo y deslizable en el teléfono) y el domicilio
+  en foco: los candidatos que encontró el mapa, cada uno con su mapa chico para ver dónde cae y
+  "Es ésta"; corregir la dirección o pegar la ubicación (enlace de Maps o coordenadas) y buscar de
+  nuevo; enlaces a Google Maps, a la ubicación que mandó el cliente y a su ficha; y "Saltar por
+  ahora".
+- **Backend**: `locateCustomerAddress` ubica un domicilio sin pasar por un pedido
+  (`POST /api/v1/address-locations/:id/locate` con `{ customerId, address?, location? }`; lo
+  corregido queda auditado como `customer.address_relocated`). Comparte con `locateOrderAddress`
+  la búsqueda y la decisión (`geocodeAndDecide`). Los candidatos ahora traen sus coordenadas.
+- **Permisos**: los mismos que geocodificar desde la ficha del cliente —ver con
+  `customers.read` + `customers.view_sensitive`, ubicar con `customers.edit` además—, porque la
+  dirección es un dato sensible. Hoy eso es el superadmin; si un operador lo tiene que usar, hay que
+  darle `customers.view_sensitive`.

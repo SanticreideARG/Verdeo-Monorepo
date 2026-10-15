@@ -14,6 +14,7 @@ import {
   userRoles,
   users,
 } from '../schema/index.js';
+import { feedTips } from './feed-tips.js';
 import { PostgresAuditSink } from './postgres-audit-sink.js';
 
 export interface FeedContext {
@@ -387,6 +388,11 @@ export class PostgresFeedService {
         set: { hiddenUntil, updatedAt: new Date() },
         target: [feedCardStates.userId, feedCardStates.cardKey],
       });
+  }
+
+  /** Los consejos del día (fase 3), con los permisos de quien mira. */
+  public tips(input: { operatingSiteId?: string | null; permissions: readonly string[] }) {
+    return feedTips(this.database, input);
   }
 
   /** Cuántas publicaciones nuevas no vio: el punto en el ícono del tablero. */

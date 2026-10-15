@@ -26,6 +26,15 @@ const modules = [
     permission: 'customers.read',
     title: 'Clientes',
   },
+  // Provisorio: el asistente de ubicaciones todavía no tiene lugar en el menú.
+  {
+    accent: 'green',
+    cluster: 'Operación',
+    copy: 'Dejar cada domicilio con su punto en el mapa, de corrido: primero lo automático, después uno por uno.',
+    href: '/app/ubicaciones',
+    permission: 'customers.view_sensitive',
+    title: 'Conciliar ubicaciones',
+  },
   {
     accent: 'gold',
     cluster: 'Operación',
