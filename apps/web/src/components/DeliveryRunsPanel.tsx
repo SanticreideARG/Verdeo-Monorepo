@@ -7,6 +7,7 @@ import { whatsappHref } from '../lib/phone.js';
 import { showToast } from '../lib/toast.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { weekdayName } from './DeliveryDayPicker.js';
+import { DeliveryRunOrders, type MovedOrder, type RunOrder } from './DeliveryRunOrders.js';
 
 interface DeliveryRun {
   autoCreated: boolean;
@@ -24,12 +25,7 @@ interface DeliveryRun {
   varieties: { label: string; units: number }[];
 }
 
-interface Moved {
-  customerName: string;
-  orderId: string;
-  phone: string | null;
-  publicNumber: string;
-}
+type Moved = MovedOrder;
 
 const STATUS_LABELS: Record<DeliveryRun['status'], string> = {
   cancelled: 'Cancelado',
@@ -62,7 +58,26 @@ function rescheduleMessage(moved: Moved, date: string): string {
  * para una salida extra o para separar mañana y tarde. Cambiar la fecha de un reparto mueve todos
  * sus pedidos; después se ofrece el aviso para cada cliente, que se copia o se abre en WhatsApp.
  */
-export function DeliveryRunsPanel({ canManage }: { canManage: boolean }) {
+export function DeliveryRunsPanel({
+  canManage,
+  openRunId = null,
+}: {
+  canManage: boolean;
+  /** Un reparto para abrir de entrada: la alerta del día lleva al de hoy. */
+  openRunId?: string | null;
+}) {
+  // El reparto abierto, con sus pedidos, y los pedidos sin reparto.
+  const [openRun, setOpenRun] = useState<string | null>(openRunId);
+  const [runOrders, setRunOrders] = useState<RunOrder[]>([]);
+  const [showUnassigned, setShowUnassigned] = useState(false);
+  const [unassignedOrders, setUnassignedOrders] = useState<RunOrder[]>([]);
+  const [consolidation, setConsolidation] = useState<{
+    drafts: number;
+    noPayment: number;
+    orders: number;
+    runId: string;
+    unlocated: number;
+  } | null>(null);
   const [runs, setRuns] = useState<DeliveryRun[]>([]);
   const [unassigned, setUnassigned] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -94,6 +109,53 @@ export function DeliveryRunsPanel({ canManage }: { canManage: boolean }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const loadRunOrders = useCallback(async (runId: string) => {
+    const response = await apiRequest(`/api/v1/delivery/runs/${runId}`, { notify: false });
+    if (response.ok) setRunOrders(((await response.json()) as { orders: RunOrder[] }).orders);
+  }, []);
+  const loadUnassigned = useCallback(async () => {
+    const response = await apiRequest(
+      `/api/v1/delivery/runs/unassigned?from=${todayInOperation()}`,
+      { notify: false },
+    );
+    if (response.ok) setUnassignedOrders(((await response.json()) as { items: RunOrder[] }).items);
+  }, []);
+
+  useEffect(() => {
+    if (openRun) void loadRunOrders(openRun);
+  }, [openRun, loadRunOrders]);
+  useEffect(() => {
+    if (showUnassigned) void loadUnassigned();
+  }, [showUnassigned, loadUnassigned]);
+
+  async function afterMove(result: { date: string; moved: MovedOrder[] }) {
+    if (result.moved.length > 0)
+      setNotices({ date: result.date, moved: result.moved, outside: false });
+    await load();
+    if (openRun) await loadRunOrders(openRun);
+    if (showUnassigned) await loadUnassigned();
+  }
+
+  async function consolidate(run: DeliveryRun, close: boolean) {
+    const response = await apiRequest(
+      `/api/v1/delivery/runs/${run.id}/${close ? 'consolidate' : 'reopen'}`,
+      { method: 'POST', notify: false },
+    );
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    const result = (await response.json()) as {
+      drafts: number;
+      noPayment: number;
+      orders: number;
+      unlocated: number;
+    };
+    setConsolidation(close ? { ...result, runId: run.id } : null);
+    showToast(close ? 'Lista cerrada.' : 'Reparto reabierto.');
+    await load();
+  }
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -161,6 +223,14 @@ export function DeliveryRunsPanel({ canManage }: { canManage: boolean }) {
   }
 
   const dates = [...new Set(runs.map((run) => run.deliveryDate))];
+  const targets = runs
+    .filter((run) => run.status === 'planned' || run.status === 'consolidated')
+    .map((run) => ({
+      deliveryDate: run.deliveryDate,
+      id: run.id,
+      label: run.label,
+      title: dayTitle(run.deliveryDate),
+    }));
 
   return (
     <section className="delivery-runs">
@@ -187,10 +257,28 @@ export function DeliveryRunsPanel({ canManage }: { canManage: boolean }) {
       ) : null}
 
       {unassigned > 0 ? (
-        <p className="delivery-runs-unassigned" role="status">
-          {unassigned === 1 ? 'Hay 1 pedido' : `Hay ${String(unassigned)} pedidos`} sin reparto: su
-          día tiene la lista cerrada o más de un reparto para elegir.
-        </p>
+        <div className="delivery-runs-unassigned" role="status">
+          <p>
+            {unassigned === 1 ? 'Hay 1 pedido' : `Hay ${String(unassigned)} pedidos`} sin reparto:
+            su día tiene la lista cerrada o más de un reparto para elegir.
+          </p>
+          <button
+            className="locate-retry-open"
+            onClick={() => setShowUnassigned((open) => !open)}
+            type="button"
+          >
+            {showUnassigned ? 'Ocultar' : 'Ver y asignar'}
+          </button>
+          {showUnassigned ? (
+            <DeliveryRunOrders
+              canManage={canManage}
+              currentRunId={null}
+              onMoved={(result) => void afterMove(result)}
+              orders={unassignedOrders}
+              targets={targets}
+            />
+          ) : null}
+        </div>
       ) : null}
 
       {creating ? (
@@ -310,6 +398,65 @@ export function DeliveryRunsPanel({ canManage }: { canManage: boolean }) {
                   <p className="text-sm text-ink-muted">
                     {run.routes} hoja{run.routes === 1 ? '' : 's'} de ruta
                   </p>
+                ) : null}
+
+                {consolidation?.runId === run.id ? (
+                  <p className="delivery-run-warnings" role="status">
+                    Lista cerrada con {consolidation.orders} pedidos.{' '}
+                    {consolidation.unlocated + consolidation.drafts + consolidation.noPayment > 0
+                      ? `Falta: ${[
+                          consolidation.unlocated > 0
+                            ? `${String(consolidation.unlocated)} sin ubicación`
+                            : null,
+                          consolidation.drafts > 0
+                            ? `${String(consolidation.drafts)} en borrador`
+                            : null,
+                          consolidation.noPayment > 0
+                            ? `${String(consolidation.noPayment)} sin medio de pago`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(', ')}.`
+                      : 'No falta nada.'}{' '}
+                    Los pedidos nuevos de este día van a quedar sin reparto.
+                  </p>
+                ) : null}
+
+                <div className="delivery-run-actions">
+                  <button
+                    className="button button-secondary"
+                    onClick={() => setOpenRun(openRun === run.id ? null : run.id)}
+                    type="button"
+                  >
+                    {openRun === run.id ? 'Ocultar pedidos' : 'Ver pedidos'}
+                  </button>
+                  {canManage && run.status === 'planned' && run.orders > 0 ? (
+                    <button
+                      className="button button-secondary"
+                      onClick={() => void consolidate(run, true)}
+                      type="button"
+                    >
+                      Cerrar la lista
+                    </button>
+                  ) : null}
+                  {canManage && run.status === 'consolidated' ? (
+                    <button
+                      className="button button-secondary"
+                      onClick={() => void consolidate(run, false)}
+                      type="button"
+                    >
+                      Reabrir
+                    </button>
+                  ) : null}
+                </div>
+                {openRun === run.id ? (
+                  <DeliveryRunOrders
+                    canManage={canManage}
+                    currentRunId={run.id}
+                    onMoved={(result) => void afterMove(result)}
+                    orders={runOrders}
+                    targets={targets}
+                  />
                 ) : null}
 
                 {canManage && editing === run.id ? (

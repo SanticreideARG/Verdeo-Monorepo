@@ -8,6 +8,8 @@ interface DispatchSummary {
   date: string;
   drafts: number;
   next: { date: string; total: number } | null;
+  /** Los repartos de ese día, el de siempre primero. */
+  runs?: { id: string; label: string }[];
   total: number;
   unlocated: number;
   unrouted: number;
@@ -95,7 +97,14 @@ export function DispatchTodayBanner() {
           {pendientes.length > 0 ? pendientes.join(' · ') : 'Todos en su hoja de ruta.'}
         </p>
       </div>
-      <Link className="button button-primary" to="/app/reparto/rutas">
+      <Link
+        className="button button-primary"
+        to={
+          summary.runs?.[0]
+            ? `/app/reparto/rutas?reparto=${summary.runs[0].id}`
+            : '/app/reparto/rutas?vista=hojas'
+        }
+      >
         {summary.unrouted > 0 ? 'Armar las hojas de ruta' : 'Ver las hojas de ruta'}
       </Link>
     </section>

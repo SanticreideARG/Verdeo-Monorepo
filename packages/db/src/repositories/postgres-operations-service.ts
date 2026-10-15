@@ -106,7 +106,7 @@ import {
   weeklyMenus,
 } from '../schema/index.js';
 import { findMergeCandidates, mergeCustomers } from './customer-merge.js';
-import { assignOrderToRun, leaveRun, runLabel } from './delivery-runs.js';
+import { assignOrderToRun, dropEmptyAutoRun, leaveRun, runLabel } from './delivery-runs.js';
 import { PostgresAuditSink } from './postgres-audit-sink.js';
 
 type DatabaseTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -3093,10 +3093,22 @@ export class PostgresOperationsService {
       .groupBy(orders.deliveryDate)
       .orderBy(asc(orders.deliveryDate))
       .limit(1);
+    const runsOfDay = await this.database
+      .select({ id: deliveryRuns.id, label: deliveryRuns.label })
+      .from(deliveryRuns)
+      .where(
+        and(
+          eq(deliveryRuns.deliveryDate, date),
+          ne(deliveryRuns.status, 'cancelled'),
+          ...(operatingSiteId ? [eq(deliveryRuns.operatingSiteId, operatingSiteId)] : []),
+        ),
+      )
+      .orderBy(desc(deliveryRuns.isDefault), asc(deliveryRuns.label));
     return {
       date,
       drafts: today?.drafts ?? 0,
       next: next ? { date: String(next.date), total: next.total } : null,
+      runs: runsOfDay,
       total: today?.total ?? 0,
       unlocated: today?.unlocated ?? 0,
       unrouted: today?.unrouted ?? 0,
@@ -3381,44 +3393,7 @@ export class PostgresOperationsService {
             source: context.source,
           });
         }
-        const clientes =
-          pedidos.length === 0
-            ? []
-            : await transaction
-                .select({
-                  customerId: customers.id,
-                  displayName: customers.displayName,
-                  type: customerIdentities.type,
-                  value: customerIdentities.valueDisplay,
-                })
-                .from(customers)
-                .leftJoin(
-                  customerIdentities,
-                  and(
-                    eq(customerIdentities.customerId, customers.id),
-                    eq(customerIdentities.active, true),
-                    inArray(customerIdentities.type, ['whatsapp', 'phone']),
-                  ),
-                )
-                .where(
-                  inArray(
-                    customers.id,
-                    pedidos.map((pedido) => pedido.customerId),
-                  ),
-                );
-        moved = pedidos.map((pedido) => {
-          const delCliente = clientes.filter((cliente) => cliente.customerId === pedido.customerId);
-          const telefono =
-            delCliente.find((cliente) => cliente.type === 'whatsapp')?.value ??
-            delCliente.find((cliente) => cliente.value)?.value ??
-            null;
-          return {
-            customerName: delCliente[0]?.displayName ?? '',
-            orderId: pedido.id,
-            phone: telefono,
-            publicNumber: pedido.publicNumber,
-          };
-        });
+        moved = await this.customersToNotify(transaction, pedidos);
       }
 
       await new AuditService(new PostgresAuditSink(transaction)).record({
@@ -3448,6 +3423,247 @@ export class PostgresOperationsService {
           !settings.weekdays.includes(weekdayOf(nuevaFecha)),
       };
     });
+  }
+
+  /**
+   * A quién avisar de un cambio de fecha: el cliente de cada pedido, con su WhatsApp (o su teléfono)
+   * para abrir el mensaje. Nunca se manda solo.
+   */
+  private async customersToNotify(
+    executor: Pick<Database, 'select'>,
+    pedidos: readonly { customerId: string; id: string; publicNumber: string }[],
+  ) {
+    if (pedidos.length === 0) return [];
+    const clientes = await executor
+      .select({
+        customerId: customers.id,
+        displayName: customers.displayName,
+        type: customerIdentities.type,
+        value: customerIdentities.valueDisplay,
+      })
+      .from(customers)
+      .leftJoin(
+        customerIdentities,
+        and(
+          eq(customerIdentities.customerId, customers.id),
+          eq(customerIdentities.active, true),
+          inArray(customerIdentities.type, ['whatsapp', 'phone']),
+        ),
+      )
+      .where(
+        inArray(
+          customers.id,
+          pedidos.map((pedido) => pedido.customerId),
+        ),
+      );
+    return pedidos.map((pedido) => {
+      const delCliente = clientes.filter((cliente) => cliente.customerId === pedido.customerId);
+      return {
+        customerName: delCliente[0]?.displayName ?? '',
+        orderId: pedido.id,
+        phone:
+          delCliente.find((cliente) => cliente.type === 'whatsapp')?.value ??
+          delCliente.find((cliente) => cliente.value)?.value ??
+          null,
+        publicNumber: pedido.publicNumber,
+      };
+    });
+  }
+
+  /** Los pedidos de una lista (los de un reparto, o los sin reparto), para verlos por barrio. */
+  private async runOrders(where: ReturnType<typeof and>) {
+    const rows = await this.database
+      .select({
+        customerName: customers.displayName,
+        deliveryAddress: orders.deliveryAddressSnapshot,
+        deliveryDate: orders.deliveryDate,
+        deliveryRunId: orders.deliveryRunId,
+        id: orders.id,
+        items: sql<string>`coalesce((
+          select string_agg(trim(i.product_name_snapshot || ' ' || i.variant_snapshot)
+            || ' × ' || i.quantity_units::text, ' + ' order by i.product_name_snapshot)
+          from order_items i where i.order_id = ${orders.id}
+        ), '')`,
+        located: sql<boolean>`${customerAddresses.latitude} is not null`,
+        neighborhood: neighborhoods.displayName,
+        paymentExpectation: orders.paymentExpectation,
+        publicNumber: orders.publicNumber,
+        status: orders.status,
+      })
+      .from(orders)
+      .innerJoin(customers, eq(customers.id, orders.customerId))
+      .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+      .leftJoin(neighborhoods, eq(neighborhoods.id, customerAddresses.neighborhoodId))
+      .where(where)
+      .orderBy(asc(neighborhoods.displayName), asc(customers.displayName));
+    return rows.map((row) => ({
+      ...row,
+      deliveryDate: String(row.deliveryDate),
+      located: Boolean(row.located),
+    }));
+  }
+
+  /** Un reparto con sus pedidos (fase 2: el detalle, agrupado por barrio en la pantalla). */
+  public async getDeliveryRun(runId: string) {
+    const [run] = await this.database
+      .select({
+        deliveryDate: deliveryRuns.deliveryDate,
+        id: deliveryRuns.id,
+        label: deliveryRuns.label,
+        operatingSiteId: deliveryRuns.operatingSiteId,
+        status: deliveryRuns.status,
+      })
+      .from(deliveryRuns)
+      .where(eq(deliveryRuns.id, runId))
+      .limit(1);
+    if (!run) throw new OperationsNotFoundError('No se encontró el reparto');
+    return {
+      ...run,
+      deliveryDate: String(run.deliveryDate),
+      orders: await this.runOrders(
+        and(eq(orders.deliveryRunId, runId), ne(orders.status, 'CANCELLED')),
+      ),
+    };
+  }
+
+  /** Los pedidos desde una fecha que no están en ningún reparto, para asignarlos. */
+  public async listUnassignedOrders(operatingSiteId: string | null, fromDate: string) {
+    return this.runOrders(
+      and(
+        isNull(orders.deliveryRunId),
+        ne(orders.status, 'CANCELLED'),
+        gte(orders.deliveryDate, fromDate),
+        ...(operatingSiteId ? [eq(orders.operatingSiteId, operatingSiteId)] : []),
+      ),
+    );
+  }
+
+  /**
+   * Mover pedidos a un reparto (regla 4): pasan a su fecha, cada uno auditado. Se puede mover a un
+   * reparto con la lista cerrada —es una decisión explícita—, no a uno cerrado o cancelado. Los
+   * pedidos que cambian de fecha vuelven con su cliente, para ofrecer el aviso.
+   */
+  public async moveOrdersToRun(
+    runId: string,
+    orderIds: readonly string[],
+    context: OperationsContext,
+  ) {
+    return this.database.transaction(async (transaction) => {
+      const [run] = await transaction
+        .select({
+          deliveryDate: deliveryRuns.deliveryDate,
+          operatingSiteId: deliveryRuns.operatingSiteId,
+          status: deliveryRuns.status,
+        })
+        .from(deliveryRuns)
+        .where(eq(deliveryRuns.id, runId))
+        .limit(1);
+      if (!run) throw new OperationsNotFoundError('No se encontró el reparto');
+      if (run.status === 'closed' || run.status === 'cancelled') {
+        throw new OperationsConflictError('El reparto ya está cerrado: elegí otro.');
+      }
+      const fecha = String(run.deliveryDate);
+      const pedidos = await transaction
+        .select({
+          customerId: orders.customerId,
+          deliveryDate: orders.deliveryDate,
+          deliveryRunId: orders.deliveryRunId,
+          id: orders.id,
+          operatingSiteId: orders.operatingSiteId,
+          publicNumber: orders.publicNumber,
+        })
+        .from(orders)
+        .where(and(inArray(orders.id, [...orderIds]), ne(orders.status, 'CANCELLED')));
+      const otraCiudad = pedidos.find((pedido) => pedido.operatingSiteId !== run.operatingSiteId);
+      if (otraCiudad) {
+        throw new OperationsConflictError(
+          `El pedido ${otraCiudad.publicNumber} es de otra ciudad: no puede ir en este reparto.`,
+        );
+      }
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      for (const pedido of pedidos) {
+        if (pedido.deliveryRunId === runId) continue;
+        await transaction
+          .update(orders)
+          .set({ deliveryDate: fecha, deliveryRunId: runId, updatedAt: new Date() })
+          .where(eq(orders.id, pedido.id));
+        await audit.record({
+          action: 'order.moved_to_run',
+          actor: auditActor(context),
+          after: { deliveryDate: fecha, deliveryRunId: runId },
+          before: {
+            deliveryDate: String(pedido.deliveryDate),
+            deliveryRunId: pedido.deliveryRunId,
+          },
+          correlationId: context.correlationId,
+          entityId: pedido.id,
+          entityType: 'order',
+          requestId: context.requestId,
+          source: context.source,
+        });
+        await dropEmptyAutoRun(transaction, pedido.deliveryRunId);
+      }
+      const conOtraFecha = pedidos.filter((pedido) => String(pedido.deliveryDate) !== fecha);
+      return {
+        moved: await this.customersToNotify(transaction, conOtraFecha),
+        total: pedidos.filter((pedido) => pedido.deliveryRunId !== runId).length,
+      };
+    });
+  }
+
+  /**
+   * Consolidar (cerrar la lista) o reabrir un reparto (regla 5). Al consolidar, lo que entre después
+   * con esa fecha queda "sin reparto" en lugar de colarse. Devuelve lo que falta resolver.
+   */
+  public async setDeliveryRunConsolidated(
+    runId: string,
+    consolidated: boolean,
+    context: OperationsContext,
+  ) {
+    const [run] = await this.database
+      .select({ status: deliveryRuns.status })
+      .from(deliveryRuns)
+      .where(eq(deliveryRuns.id, runId))
+      .limit(1);
+    if (!run) throw new OperationsNotFoundError('No se encontró el reparto');
+    const desde = consolidated ? 'planned' : 'consolidated';
+    if (run.status !== desde) {
+      throw new OperationsConflictError(
+        consolidated
+          ? 'Sólo se puede cerrar la lista de un reparto abierto.'
+          : 'Sólo se puede reabrir un reparto con la lista cerrada.',
+      );
+    }
+    await this.database
+      .update(deliveryRuns)
+      .set({
+        consolidatedAt: consolidated ? new Date() : null,
+        // Un reparto que se cerró a mano ya no se borra solo.
+        autoCreated: false,
+        status: consolidated ? 'consolidated' : 'planned',
+        updatedAt: new Date(),
+      })
+      .where(eq(deliveryRuns.id, runId));
+    await new AuditService(new PostgresAuditSink(this.database)).record({
+      action: consolidated ? 'delivery_run.consolidated' : 'delivery_run.reopened',
+      actor: auditActor(context),
+      after: { status: consolidated ? 'consolidated' : 'planned' },
+      before: { status: run.status },
+      correlationId: context.correlationId,
+      entityId: runId,
+      entityType: 'delivery_run',
+      requestId: context.requestId,
+      source: context.source,
+    });
+    const pedidos = await this.runOrders(
+      and(eq(orders.deliveryRunId, runId), ne(orders.status, 'CANCELLED')),
+    );
+    return {
+      drafts: pedidos.filter((pedido) => pedido.status === 'DRAFT').length,
+      noPayment: pedidos.filter((pedido) => !pedido.paymentExpectation.trim()).length,
+      orders: pedidos.length,
+      unlocated: pedidos.filter((pedido) => !pedido.located).length,
+    };
   }
 
   /** Borrar un reparto: sólo si no tiene pedidos ni hojas. */

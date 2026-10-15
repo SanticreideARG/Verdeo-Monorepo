@@ -170,6 +170,59 @@ describe('repartos', () => {
     ]);
   });
 
+  it('mover pedidos a otro reparto les cambia la fecha y dice a quién avisar', async () => {
+    const { client, service } = await base();
+    const order = (await service.createOrder(pedido('2026-10-18'), contexto)) as { id: string };
+    const sabado = await service.createDeliveryRun(
+      SITE,
+      { deliveryDate: '2026-10-24', label: 'Sábado' },
+      contexto,
+    );
+
+    const result = await service.moveOrdersToRun(sabado.id, [order.id], contexto);
+
+    expect(result).toMatchObject({ moved: [{ customerName: 'Ana Prueba' }], total: 1 });
+    // El reparto del domingo se había creado solo y quedó vacío: se borra.
+    expect((await runs(client)).map(({ label, pedidos }) => [label, pedidos])).toEqual([
+      ['Sábado', 1],
+    ]);
+    const detalle = await service.getDeliveryRun(sabado.id);
+    expect(detalle.orders).toMatchObject([{ deliveryDate: '2026-10-24', id: order.id }]);
+  });
+
+  it('los pedidos sin reparto se listan y se asignan', async () => {
+    const { client, service } = await base();
+    await service.createOrder(pedido('2026-10-18'), contexto);
+    const [domingo] = await runs(client);
+    await service.setDeliveryRunConsolidated(domingo?.id ?? '', true, contexto);
+    const tarde = (await service.createOrder(pedido('2026-10-18'), contexto)) as { id: string };
+
+    expect(await service.listUnassignedOrders(SITE, '2026-10-01')).toMatchObject([
+      { id: tarde.id, located: false },
+    ]);
+    // A una lista cerrada se puede mover a mano: es una decisión explícita.
+    await service.moveOrdersToRun(domingo?.id ?? '', [tarde.id], contexto);
+    expect(await service.listUnassignedOrders(SITE, '2026-10-01')).toEqual([]);
+  });
+
+  it('consolidar avisa lo que falta, y se puede reabrir', async () => {
+    const { client, service } = await base();
+    await service.createOrder(pedido('2026-10-18'), contexto);
+    const [domingo] = await runs(client);
+
+    expect(await service.setDeliveryRunConsolidated(domingo?.id ?? '', true, contexto)).toEqual({
+      drafts: 1,
+      noPayment: 0,
+      orders: 1,
+      unlocated: 1,
+    });
+    await expect(
+      service.setDeliveryRunConsolidated(domingo?.id ?? '', true, contexto),
+    ).rejects.toThrow(/abierto/);
+    await service.setDeliveryRunConsolidated(domingo?.id ?? '', false, contexto);
+    expect((await runs(client))[0]?.status).toBe('planned');
+  });
+
   it('no se borra un reparto con pedidos', async () => {
     const { client, service } = await base();
     await service.createOrder(pedido('2026-10-18'), contexto);

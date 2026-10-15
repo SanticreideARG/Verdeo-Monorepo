@@ -130,12 +130,13 @@ describe('días de reparto', () => {
     await service.createOrder(pedido('2026-10-18'), contexto);
     await service.createOrder(pedido('2026-10-24'), contexto);
 
-    expect(await service.dispatchSummary('2026-10-18', SITE)).toEqual({
+    expect(await service.dispatchSummary('2026-10-18', SITE)).toMatchObject({
       date: '2026-10-18',
       drafts: 2,
       next: { date: '2026-10-24', total: 1 },
       total: 2,
       unlocated: 2,
+      runs: [{ label: 'Domingo 18' }],
       unrouted: 2,
     });
     expect(await service.dispatchSummary('2026-10-17', SITE)).toMatchObject({

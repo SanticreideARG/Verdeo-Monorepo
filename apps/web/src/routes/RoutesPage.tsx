@@ -1,5 +1,7 @@
 import { Fragment, useCallback, useEffect, useState, type FormEvent } from 'react';
 
+import { useSearchParams } from 'react-router-dom';
+
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DeliveryRunsPanel } from '../components/DeliveryRunsPanel.js';
@@ -104,7 +106,12 @@ export function RoutesPage() {
     ? selectedDate
     : (routableDates[0]?.deliveryDate ?? '');
   const [zoneId, setZoneId] = useState('');
-  const [tab, setTab] = useState<'hojas' | 'repartos'>('repartos');
+  // "?reparto=<id>" abre ese reparto (la alerta del día lleva al de hoy); "?vista=hojas", las hojas.
+  const [searchParams] = useSearchParams();
+  const runToOpen = searchParams.get('reparto');
+  const [tab, setTab] = useState<'hojas' | 'repartos'>(
+    searchParams.get('vista') === 'hojas' ? 'hojas' : 'repartos',
+  );
   const [routes, setRoutes] = useState<RouteSummary[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteDetail | null>(null);
   const [message, setMessage] = useState('');
@@ -504,7 +511,9 @@ export function RoutesPage() {
             Hojas de ruta
           </button>
         </div>
-        {tab === 'repartos' ? <DeliveryRunsPanel canManage={canManage} /> : null}
+        {tab === 'repartos' ? (
+          <DeliveryRunsPanel canManage={canManage} openRunId={runToOpen} />
+        ) : null}
         <div hidden={tab !== 'hojas'}>
           {message ? <p className="mt-4 text-sm text-red-600">{message}</p> : null}
 

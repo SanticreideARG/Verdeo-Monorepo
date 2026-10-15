@@ -9882,3 +9882,38 @@ body {
   display: inline-flex;
   gap: 0.4rem;
 }
+
+/* Los pedidos de un reparto, por barrio, con selección para moverlos. */
+.delivery-runs-unassigned p {
+  margin: 0 0 0.3rem;
+}
+.run-orders {
+  display: grid;
+  gap: 0.6rem;
+  border-top: 1px solid var(--db-border);
+  padding-top: 0.6rem;
+}
+.run-orders ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.run-orders li {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+}
+.run-orders li p {
+  margin: 0;
+}
+.run-orders li small {
+  color: var(--db-muted, #6b7280);
+}
+.run-orders-move {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: end;
+}

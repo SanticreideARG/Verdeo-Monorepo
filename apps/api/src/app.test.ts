@@ -1989,6 +1989,39 @@ describe('API foundation', () => {
         expect(sinPermiso.status).toBe(403);
       });
 
+      it('mueve pedidos entre repartos, cierra la lista y lista los que no tienen reparto', async () => {
+        const moveOrdersToRun = vi.fn(() => Promise.resolve({ moved: [], total: 2 }));
+        const setDeliveryRunConsolidated = vi.fn(() =>
+          Promise.resolve({ drafts: 1, noPayment: 0, orders: 3, unlocated: 0 }),
+        );
+        const listUnassignedOrders = vi.fn(() => Promise.resolve([]));
+        const getDeliveryRun = vi.fn();
+        const headers = { 'content-type': 'application/json', cookie, [SITE_SCOPE_HEADER]: SEDE };
+        const app = buildApp(
+          { getDeliveryRun, listUnassignedOrders, moveOrdersToRun, setDeliveryRunConsolidated },
+          ['routes.read', 'routes.manage'],
+        );
+
+        const movido = await app.request(`/api/v1/delivery/runs/${ORDEN}/orders`, {
+          body: JSON.stringify({ orderIds: [ORDEN] }),
+          headers,
+          method: 'POST',
+        });
+        expect(await movido.json()).toEqual({ moved: [], total: 2 });
+
+        const cerrado = await app.request(`/api/v1/delivery/runs/${ORDEN}/consolidate`, {
+          headers,
+          method: 'POST',
+        });
+        expect(await cerrado.json()).toMatchObject({ drafts: 1, orders: 3 });
+        expect(setDeliveryRunConsolidated).toHaveBeenCalledWith(ORDEN, true, expect.anything());
+
+        // "unassigned" no se lee como el id de un reparto.
+        const sinReparto = await app.request('/api/v1/delivery/runs/unassigned', { headers });
+        expect(await sinReparto.json()).toEqual({ items: [] });
+        expect(getDeliveryRun).not.toHaveBeenCalled();
+      });
+
       it('lista los pedidos del día sin ubicación', async () => {
         const unlocatedOrders = vi.fn(() => Promise.resolve([pedido]));
         const response = await buildApp({ unlocatedOrders }, ['routes.read']).request(

@@ -127,5 +127,17 @@ ruta. Cambiar la fecha de un reparto mueve sus pedidos (auditados como `order.re
 hojas en borrador, avisa si la fecha no es un día de reparto, y ofrece el aviso para cada cliente
 (copiar o abrir en WhatsApp).
 
-Pendiente: fases 2 (detalle del reparto, mover pedidos entre repartos, consolidar, "Pedidos sin
-reparto", la alerta del día apuntando al reparto) y 3 (rutas desde el reparto).
+**Fase 2 hecha (2026-10-14).** Cada reparto tiene "Ver pedidos": sus pedidos agrupados por
+barrio (`GET /api/v1/delivery/runs/:id`), con selección para moverlos a otro reparto
+(`POST /api/v1/delivery/runs/:id/orders`, `moveOrdersToRun`): pasan a la fecha del destino,
+auditados como `order.moved_to_run`; un reparto creado solo que queda vacío se borra, y los que
+cambiaron de fecha vuelven con su cliente para el aviso. Se puede mover a una lista cerrada (es una
+decisión explícita), no a un reparto cerrado; no se mezclan ciudades. "Cerrar la lista" y
+"Reabrir" (`POST …/consolidate` y `…/reopen`) cambian el estado y, al cerrar, dicen cuántos
+pedidos quedan sin ubicación, en borrador o sin medio de pago. "Pedidos sin reparto"
+(`GET /api/v1/delivery/runs/unassigned`) se ven y se asignan desde el aviso de arriba. La alerta
+del día trae los repartos de ese día (`runs` en `DispatchSummarySchema`) y lleva al de siempre
+(`/app/reparto/rutas?reparto=<id>`).
+
+Pendiente: fase 3 (armar las rutas desde el reparto, por zona o en N hojas; etiquetas y cocina por
+reparto).

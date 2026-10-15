@@ -158,7 +158,12 @@ import {
   OrderImportEmailPreviewRequestSchema,
   GeocodingMetricsSchema,
   DeliveryOptionsResponseSchema,
+  DeliveryRunConsolidateResponseSchema,
   DeliveryRunCreateRequestSchema,
+  DeliveryRunDetailSchema,
+  DeliveryRunMoveRequestSchema,
+  DeliveryRunMoveResponseSchema,
+  DeliveryRunOrderSchema,
   DeliveryRunListResponseSchema,
   DeliveryRunUpdateRequestSchema,
   DeliveryRunUpdateResponseSchema,
@@ -625,6 +630,18 @@ interface OperationsEngine {
     context: OperationsContext,
   ): Promise<unknown>;
   deleteDeliveryRun?(runId: string, context: OperationsContext): Promise<void>;
+  getDeliveryRun?(runId: string): Promise<unknown>;
+  listUnassignedOrders?(operatingSiteId: string | null, fromDate: string): Promise<unknown[]>;
+  moveOrdersToRun?(
+    runId: string,
+    orderIds: readonly string[],
+    context: OperationsContext,
+  ): Promise<unknown>;
+  setDeliveryRunConsolidated?(
+    runId: string,
+    consolidated: boolean,
+    context: OperationsContext,
+  ): Promise<unknown>;
   updateGeocodingSettings(
     operatingSiteId: string,
     input: GeocodingSettings,
@@ -5031,6 +5048,78 @@ export function createApp(options: CreateAppOptions) {
       ),
     );
   });
+
+  /** Los pedidos desde hoy que no están en ningún reparto. Antes de `/:id`: no es un id. */
+  app.get('/api/v1/delivery/runs/unassigned', async (context) => {
+    if (!context.get('session').permissions.includes('routes.read')) return forbidden(context);
+    const from = z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .catch(deliveryDateFor(new Date()))
+      .parse(context.req.query('from'));
+    const operations = requireOperations();
+    const items = operations.listUnassignedOrders
+      ? await operations.listUnassignedOrders(context.get('scope')?.operatingSiteId ?? null, from)
+      : [];
+    return context.json({ items: z.array(DeliveryRunOrderSchema).parse(items) });
+  });
+
+  app.get('/api/v1/delivery/runs/:id', async (context) => {
+    if (!context.get('session').permissions.includes('routes.read')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El reparto no es válido.');
+    const operations = requireOperations();
+    if (!operations.getDeliveryRun) throw new Error('Delivery runs are not configured');
+    return context.json(
+      DeliveryRunDetailSchema.parse(await operations.getDeliveryRun(params.data.id)),
+    );
+  });
+
+  app.post('/api/v1/delivery/runs/:id/orders', async (context) => {
+    if (!context.get('session').permissions.includes('routes.manage')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El reparto no es válido.');
+    const input = DeliveryRunMoveRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'Elegí los pedidos a mover.', input.error.issues);
+    const operations = requireOperations();
+    if (!operations.moveOrdersToRun) throw new Error('Delivery runs are not configured');
+    return context.json(
+      DeliveryRunMoveResponseSchema.parse(
+        await operations.moveOrdersToRun(
+          params.data.id,
+          input.data.orderIds,
+          operationsContext(context),
+        ),
+      ),
+    );
+  });
+
+  for (const [path, consolidated] of [
+    ['consolidate', true],
+    ['reopen', false],
+  ] as const) {
+    app.post(`/api/v1/delivery/runs/:id/${path}`, async (context) => {
+      if (!context.get('session').permissions.includes('routes.manage')) return forbidden(context);
+      const params = IdParamSchema.safeParse(context.req.param());
+      if (!params.success) return badRequest(context, 'El reparto no es válido.');
+      const operations = requireOperations();
+      if (!operations.setDeliveryRunConsolidated) {
+        throw new Error('Delivery runs are not configured');
+      }
+      return context.json(
+        DeliveryRunConsolidateResponseSchema.parse(
+          await operations.setDeliveryRunConsolidated(
+            params.data.id,
+            consolidated,
+            operationsContext(context),
+          ),
+        ),
+      );
+    });
+  }
 
   app.post('/api/v1/delivery/runs', async (context) => {
     if (!context.get('session').permissions.includes('routes.manage')) return forbidden(context);

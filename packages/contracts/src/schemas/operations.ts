@@ -1707,6 +1707,55 @@ export const DeliveryRunListResponseSchema = z.object({
   unassigned: z.number().int(),
 });
 
+/** Un pedido dentro de un reparto (o sin reparto), para verlo por barrio y moverlo. */
+export const DeliveryRunOrderSchema = z.object({
+  customerName: z.string(),
+  deliveryAddress: z.string(),
+  deliveryDate: z.string(),
+  deliveryRunId: UuidSchema.nullable(),
+  id: UuidSchema,
+  items: z.string(),
+  located: z.boolean(),
+  neighborhood: z.string().nullable(),
+  paymentExpectation: z.string(),
+  publicNumber: z.string(),
+  status: z.string(),
+});
+
+export const DeliveryRunDetailSchema = z.object({
+  deliveryDate: z.string(),
+  id: UuidSchema,
+  label: z.string(),
+  operatingSiteId: UuidSchema,
+  orders: z.array(DeliveryRunOrderSchema),
+  status: z.string(),
+});
+
+export const DeliveryRunMoveRequestSchema = z.object({
+  orderIds: z.array(UuidSchema).min(1).max(500),
+});
+
+export const DeliveryRunMoveResponseSchema = z.object({
+  /** Los que cambiaron de fecha, con su cliente, para ofrecer el aviso. */
+  moved: z.array(
+    z.object({
+      customerName: z.string(),
+      orderId: UuidSchema,
+      phone: z.string().nullable(),
+      publicNumber: z.string(),
+    }),
+  ),
+  total: z.number().int(),
+});
+
+/** Lo que falta resolver al cerrar la lista de un reparto. */
+export const DeliveryRunConsolidateResponseSchema = z.object({
+  drafts: z.number().int(),
+  noPayment: z.number().int(),
+  orders: z.number().int(),
+  unlocated: z.number().int(),
+});
+
 export const DeliveryRunCreateRequestSchema = z.object({
   deliveryDate: IsoDateSchema,
   isDefault: z.boolean().optional(),
@@ -1742,6 +1791,8 @@ export const DispatchSummarySchema = z.object({
   date: z.string(),
   drafts: z.number().int(),
   next: z.object({ date: z.string(), total: z.number().int() }).nullable(),
+  /** Los repartos de ese día, el de siempre primero: la alerta lleva directo. */
+  runs: z.array(z.object({ id: UuidSchema, label: z.string() })).default([]),
   total: z.number().int(),
   unlocated: z.number().int(),
   unrouted: z.number().int(),
