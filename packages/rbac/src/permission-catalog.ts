@@ -110,6 +110,13 @@ export const initialPermissionCatalog: readonly PermissionDefinition[] = [
   { key: 'help.manage', group: 'help', description: 'Editar artículos de ayuda' },
   { key: 'stats.read', group: 'stats', description: 'Ver estadísticas' },
   { key: 'calendar.use', group: 'general', description: 'Ver y anotar en el calendario' },
+  // Las publicaciones del tablero: leer y publicar es de todo el equipo; fijar y moderar, no.
+  { key: 'feed.post', group: 'general', description: 'Leer y publicar en el tablero' },
+  {
+    key: 'feed.moderate',
+    group: 'general',
+    description: 'Fijar publicaciones, publicar novedades del sistema y moderar el tablero',
+  },
   /*
    * Entrar al Panel de control: la configuración general (zonas, días de reparto, menú, métodos de
    * pago, integraciones, usuarios, auditoría, respaldos, el sitio web).

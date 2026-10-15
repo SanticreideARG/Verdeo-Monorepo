@@ -7,6 +7,7 @@ export * from './cms.js';
 export * from './chat.js';
 export * from './delivery.js';
 export * from './events.js';
+export * from './feed.js';
 export * from './geography.js';
 export * from './help.js';
 export * from './integrations.js';

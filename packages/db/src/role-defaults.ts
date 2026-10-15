@@ -59,6 +59,8 @@ const OPERADOR = [
   'payments.settle',
   'surveys.read',
   'calendar.use',
+  // Publicar en el tablero (DASHBOARD_FEED_PLAN.md): comunicarse es de todos. Fijar, no.
+  'feed.post',
   // Sólo el redactado operativo que cubre el catálogo V1 (reescribir un mensaje, extraer un pedido
   // de una conversación, resumir datos de cocina). Los controles de IA quedan de quien administra.
   'ai.use',

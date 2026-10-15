@@ -101,6 +101,9 @@ No usar `if role === ...` como autorización.
 - `calendar.use`
 - `backups.manage`
 - `settings.access` — entrar al Panel de control (ver "El Panel de control", abajo).
+- `feed.post` — leer y publicar en el tablero (operador y superadmin).
+- `feed.moderate` — fijar publicaciones, publicar novedades del sistema, editar o borrar las de
+  otros (sólo superadmin).
 
 ## Roles por defecto
 

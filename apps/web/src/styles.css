@@ -9987,3 +9987,204 @@ label.field:has(> input[type='radio']) {
   align-items: flex-start;
   gap: 0.6rem;
 }
+
+/*
+ * El feed del tablero (DASHBOARD_FEED_PLAN.md): alertas y lo que publica el equipo. Una columna
+ * que en el teléfono ocupa el ancho y en escritorio no pasa de una lectura cómoda.
+ */
+.feed {
+  display: grid;
+  gap: 0.9rem;
+  max-width: 52rem;
+  margin: 1.5rem 0;
+}
+.feed-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+.feed-head h2 {
+  margin: 0;
+  margin-right: auto;
+  color: var(--db-text);
+  font-size: 1.15rem;
+  font-weight: 650;
+}
+.feed-filters {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+}
+.feed-filters button {
+  min-height: 2.25rem;
+  border: 1px solid var(--db-border);
+  border-radius: 999px;
+  padding: 0 0.85rem;
+  background: transparent;
+  color: var(--db-text-soft);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+.feed-filters button[aria-pressed='true'] {
+  border-color: var(--db-accent);
+  background: var(--db-accent);
+  color: #fff;
+}
+.feed-composer {
+  display: grid;
+  gap: 0.7rem;
+  border: 1px solid var(--db-border);
+  border-radius: 0.9rem;
+  padding: 0.9rem;
+  background: var(--db-surface);
+}
+.feed textarea {
+  width: 100%;
+  border: 1px solid var(--db-border);
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  background: var(--db-surface-solid);
+  color: var(--db-text);
+  font: inherit;
+  resize: vertical;
+}
+.feed-composer-options,
+.feed-composer-actions,
+.feed-post-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+.feed-composer-options label {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  color: var(--db-text-soft);
+  font-size: 0.85rem;
+}
+.feed-check input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+}
+.feed-list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.feed-card {
+  display: grid;
+  gap: 0.5rem;
+  border: 1px solid var(--db-border);
+  border-radius: 0.9rem;
+  padding: 0.85rem 1rem;
+  background: var(--db-surface);
+}
+.feed-card.is-pinned {
+  border-color: var(--db-gold);
+}
+.feed-alert {
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+  border-left: 4px solid var(--db-gold);
+}
+.feed-alert a {
+  color: var(--db-text);
+  text-decoration: none;
+}
+.feed-alert strong {
+  font-size: 1.1rem;
+}
+.feed-post-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  color: var(--db-muted);
+  font-size: 0.78rem;
+}
+.feed-tag,
+.feed-pin,
+.feed-fresh {
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.feed-tag {
+  background: color-mix(in srgb, var(--db-accent) 18%, transparent);
+  color: var(--db-text);
+}
+.tag-cambio .feed-tag {
+  background: color-mix(in srgb, var(--db-gold) 28%, transparent);
+}
+.tag-novedad .feed-tag {
+  background: color-mix(in srgb, #3b82f6 22%, transparent);
+}
+.feed-pin {
+  background: var(--db-gold);
+  color: #1d1600;
+}
+.feed-fresh {
+  background: var(--db-accent);
+  color: #fff;
+}
+.feed-post-body {
+  margin: 0;
+  color: var(--db-text);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.feed-post-body a {
+  color: var(--db-accent);
+  text-decoration: underline;
+}
+.feed-link {
+  border: 0;
+  padding: 0.3rem 0;
+  background: none;
+  color: var(--db-text-soft);
+  font-size: 0.82rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.feed-ack-done {
+  color: var(--db-accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.feed-readers {
+  border-top: 1px solid var(--db-border-soft);
+  padding-top: 0.5rem;
+  color: var(--db-text-soft);
+  font-size: 0.85rem;
+}
+.feed-readers p {
+  margin: 0.2rem 0;
+}
+.feed-empty {
+  margin: 0;
+  color: var(--db-muted);
+  font-size: 0.9rem;
+}
+@media (max-width: 680px) {
+  .feed {
+    margin-top: 1.6rem;
+  }
+  .feed-head h2 {
+    flex-basis: 100%;
+  }
+  .feed-new {
+    margin-left: auto;
+  }
+  .feed-post-actions .button {
+    min-height: 44px;
+  }
+}

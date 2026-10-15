@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { DispatchTodayBanner } from '../components/DispatchTodayBanner.js';
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
+import { FeedPanel } from '../components/FeedPanel.js';
 import {
   DEFAULT_LAYOUT,
   resolveWidgets,
@@ -266,6 +267,7 @@ export function DashboardPage() {
         <MobileDashboard
           data={{ loaded, pendingOrders, permissions: profile.permissions, reminders, unreadChat }}
         />
+        <FeedPanel permissions={profile.permissions} userId={profile.user.id} />
       </DashboardShell>
     );
   }
@@ -294,6 +296,9 @@ export function DashboardPage() {
 
       {/* Lo que sale hoy: es lo primero que hay que ver al abrir el panel. */}
       {profile.permissions.includes('orders.read') ? <DispatchTodayBanner /> : null}
+
+      {/* Las alertas y lo que publica el equipo (DASHBOARD_FEED_PLAN.md). */}
+      <FeedPanel permissions={profile.permissions} userId={profile.user.id} />
 
       <section aria-label="Tu tablero" className="widget-board">
         <header className="widget-board-head">

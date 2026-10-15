@@ -8,6 +8,7 @@ export * from './schemas/chat.js';
 export * from './schemas/common.js';
 export * from './schemas/delivery.js';
 export * from './schemas/errors.js';
+export * from './schemas/feed.js';
 export * from './schemas/geography.js';
 export * from './schemas/health.js';
 export * from './schemas/help.js';

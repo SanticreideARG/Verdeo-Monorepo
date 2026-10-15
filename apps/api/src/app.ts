@@ -102,6 +102,13 @@ import {
   DeliveryTriggerResponseSchema,
   HealthResponseSchema,
   CycleIdParamSchema,
+  FeedPostCreateRequestSchema,
+  FeedPostListResponseSchema,
+  FeedPostPinRequestSchema,
+  FeedPostReadRequestSchema,
+  FeedPostReadersResponseSchema,
+  FeedPostUpdateRequestSchema,
+  type FeedTag,
   GeographicZoneCreateRequestSchema,
   GeographicZoneListResponseSchema,
   GeographicZoneSchema,
@@ -1094,6 +1101,14 @@ interface CalendarContext {
   source: string;
 }
 
+interface FeedContext {
+  actorUserId?: string | undefined;
+  canModerate: boolean;
+  correlationId: string;
+  requestId: string;
+  source: string;
+}
+
 interface DeliveryContext {
   actorUserId?: string | undefined;
   correlationId: string;
@@ -1393,6 +1408,33 @@ interface CreateAppOptions {
     reset(userId: string): Promise<void>;
     save(userId: string, widgets: readonly string[]): Promise<string[]>;
   };
+  feed?: {
+    createPost(
+      input: {
+        body: string;
+        operatingSiteId?: string | null | undefined;
+        pinnedUntil?: Date | null | undefined;
+        tag: FeedTag;
+      },
+      context: FeedContext,
+    ): Promise<{ id: string }>;
+    deletePost(postId: string, context: FeedContext): Promise<void>;
+    listPosts(input: {
+      before?: Date | undefined;
+      limit?: number | undefined;
+      operatingSiteId?: string | null | undefined;
+      viewerUserId: string;
+    }): Promise<unknown[]>;
+    markRead(postId: string, userId: string, acknowledge: boolean): Promise<void>;
+    readers(postId: string): Promise<unknown>;
+    setPinned(postId: string, pinnedUntil: Date | null, context: FeedContext): Promise<void>;
+    unreadCount(viewerUserId: string, operatingSiteId?: string | null): Promise<number>;
+    updatePost(
+      postId: string,
+      input: { body?: string | undefined; tag?: FeedTag | undefined },
+      context: FeedContext,
+    ): Promise<void>;
+  };
   calendar?: {
     createReminder(
       input: CalendarReminderCreateRequest,
@@ -1530,6 +1572,19 @@ export function createApp(options: CreateAppOptions) {
     requestId: context.get('requestId'),
     source: 'api',
   });
+
+  const feedContext = (context: Context<{ Variables: AppVariables }>): FeedContext => ({
+    actorUserId: context.get('session')?.userId,
+    canModerate: context.get('session')?.permissions.includes('feed.moderate') ?? false,
+    correlationId: context.get('requestId'),
+    requestId: context.get('requestId'),
+    source: 'api',
+  });
+
+  const requireFeed = () => {
+    if (!options.feed) throw new Error('Feed engine is not configured');
+    return options.feed;
+  };
 
   const calendarContext = (context: Context<{ Variables: AppVariables }>): CalendarContext => ({
     actorUserId: context.get('session')?.userId,
@@ -2713,6 +2768,7 @@ export function createApp(options: CreateAppOptions) {
    */
   app.use('/api/v1/dashboard/*', requireAuthentication);
   app.use('/api/v1/calendar', requireAuthentication);
+  app.use('/api/v1/feed/*', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/calendar/*', requireAuthentication);
   app.use('/api/v1/label-backgrounds', requireAuthentication);
   app.use('/api/v1/label-backgrounds/*', requireAuthentication);
@@ -5633,6 +5689,93 @@ export function createApp(options: CreateAppOptions) {
     return context.body(null, 204);
   });
 
+  /*
+   * Las publicaciones del tablero (DASHBOARD_FEED_PLAN.md, "Comunicaciones"). Leer y publicar con
+   * `feed.post`; fijar y las novedades del sistema con `feed.moderate` (lo valida el servicio).
+   */
+  app.get('/api/v1/feed/posts', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('feed.post')) return forbidden(context);
+    const before = context.req.query('before');
+    const operatingSiteId = context.get('scope')?.operatingSiteId ?? null;
+    const [items, unreadCount] = await Promise.all([
+      requireFeed().listPosts({
+        before: before && !Number.isNaN(Date.parse(before)) ? new Date(before) : undefined,
+        operatingSiteId,
+        viewerUserId: session.userId,
+      }),
+      requireFeed().unreadCount(session.userId, operatingSiteId),
+    ]);
+    return context.json(
+      FeedPostListResponseSchema.parse({ items: contractValue(items), unreadCount }),
+    );
+  });
+
+  app.post('/api/v1/feed/posts', async (context) => {
+    if (!context.get('session').permissions.includes('feed.post')) return forbidden(context);
+    const input = FeedPostCreateRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success) return badRequest(context, 'Revisá la publicación.', input.error.issues);
+    const created = await requireFeed().createPost(
+      {
+        body: input.data.body,
+        operatingSiteId: input.data.operatingSiteId ?? null,
+        pinnedUntil: input.data.pinnedUntil ? new Date(input.data.pinnedUntil) : null,
+        tag: input.data.tag,
+      },
+      feedContext(context),
+    );
+    return context.json(created, 201);
+  });
+
+  app.patch('/api/v1/feed/posts/:id', async (context) => {
+    if (!context.get('session').permissions.includes('feed.post')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = FeedPostUpdateRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success) return badRequest(context, 'Revisá la publicación.');
+    await requireFeed().updatePost(params.data.id, input.data, feedContext(context));
+    return context.body(null, 204);
+  });
+
+  app.delete('/api/v1/feed/posts/:id', async (context) => {
+    if (!context.get('session').permissions.includes('feed.post')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    if (!params.success) return badRequest(context, 'La publicación no es válida.');
+    await requireFeed().deletePost(params.data.id, feedContext(context));
+    return context.body(null, 204);
+  });
+
+  app.put('/api/v1/feed/posts/:id/pin', async (context) => {
+    if (!context.get('session').permissions.includes('feed.moderate')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = FeedPostPinRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success) return badRequest(context, 'Revisá la fecha.');
+    await requireFeed().setPinned(
+      params.data.id,
+      input.data.pinnedUntil ? new Date(input.data.pinnedUntil) : null,
+      feedContext(context),
+    );
+    return context.body(null, 204);
+  });
+
+  app.post('/api/v1/feed/posts/:id/read', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('feed.post')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = FeedPostReadRequestSchema.safeParse(await context.req.json().catch(() => ({})));
+    if (!params.success || !input.success)
+      return badRequest(context, 'La publicación no es válida.');
+    await requireFeed().markRead(params.data.id, session.userId, input.data.acknowledge);
+    return context.body(null, 204);
+  });
+
+  app.get('/api/v1/feed/posts/:id/readers', async (context) => {
+    if (!context.get('session').permissions.includes('feed.post')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    if (!params.success) return badRequest(context, 'La publicación no es válida.');
+    const readers = await requireFeed().readers(params.data.id);
+    return context.json(FeedPostReadersResponseSchema.parse(contractValue(readers)));
+  });
+
   app.get('/api/v1/cancellation-reasons', async (context) => {
     if (!context.get('session').permissions.includes('orders.read')) return forbidden(context);
     // Only the active ones for the cancel picker; the settings screen asks for all of them.
@@ -7441,7 +7584,8 @@ export function createApp(options: CreateAppOptions) {
       error.name === 'AIPromptNotFoundError' ||
       error.name === 'AITaskNotFoundError' ||
       error.name === 'SurveyNotFoundError' ||
-      error.name === 'HelpArticleNotFoundError'
+      error.name === 'HelpArticleNotFoundError' ||
+      error.name === 'FeedNotFoundError'
     ) {
       const code: ApiErrorCode = 'NOT_FOUND';
       return context.json(
@@ -7449,7 +7593,7 @@ export function createApp(options: CreateAppOptions) {
         statusForCode(code),
       );
     }
-    if (error.name === 'ChatForbiddenError') {
+    if (error.name === 'ChatForbiddenError' || error.name === 'FeedForbiddenError') {
       const code: ApiErrorCode = 'FORBIDDEN';
       return context.json(
         { error: { code, message: error.message, requestId: context.get('requestId') } },

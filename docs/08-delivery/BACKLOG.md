@@ -136,6 +136,13 @@ construimos no es el envío sino la cuenta de a quién ya se le avisó.
 - [ ] Stock, fase 2: "Del stock" en la carga de pedidos.
 - [ ] Stock, fase 3: etiquetas del stock al producirse ("Incluir el stock").
 
+## P1 - Tablero
+
+- [x] Feed, fase 1 (DASHBOARD_FEED_PLAN.md): publicaciones del equipo (aviso, cambio, novedad del
+      sistema), fijadas, "lo leí" con quién falta, alertas de repetidos y correos por revisar.
+- [ ] Feed, fase 2: punto de nuevas, notificación, respuestas y reacciones, agenda y mensajes.
+- [ ] Feed, fase 3: consejos del día.
+
 ## P1 - Logistics
 
 - [x] Route CRUD.

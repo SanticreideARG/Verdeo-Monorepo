@@ -60,9 +60,32 @@ Los números de ventas del encabezado ("vendido") y los consejos con datos de ve
 `stats.read`, que es sólo del superadmin (RBAC_MATRIX.md). El operador ve lo operativo: pedidos,
 sin confirmar, sin cobrar.
 
+## Cómo quedó la fase 1 (2026-10-16)
+
+- **Modelo** (migración 0062): `feed_posts` (autor, ciudad o todas, etiqueta `aviso`/`cambio`/
+  `novedad`, texto de hasta 4000 caracteres, `pinned_until`, `edited_at`, borrado lógico) y
+  `feed_post_reads` (quién la vio y cuándo confirmó "lo leí").
+- **Permisos**: `feed.post` (leer y publicar; lo traen el operador y el superadmin) y
+  `feed.moderate` (fijar, publicar **Novedad del sistema**, editar o borrar lo de otros; sólo el
+  superadmin). El servicio valida las reglas aunque la pantalla no ofrezca la opción.
+- **API** (`/api/v1/feed/posts`, con el alcance de la ciudad): listar (fijadas vigentes primero,
+  después de la más nueva a la más vieja, y cuántas no vio en las últimas dos semanas), publicar,
+  editar, borrar, fijar (`PUT …/pin`), marcar vista o confirmar (`POST …/read`) y quién la vio y
+  quién falta (`GET …/readers`; "el equipo" es quien tiene `feed.post` por sus roles).
+- **Pantalla**: "Novedades" en el Dashboard, debajo de "Lo que sale hoy" en escritorio y debajo de
+  "Esperando por vos" en el teléfono. Filtros Todo · Alertas · Comunicaciones. Las publicaciones
+  que no había visto se marcan vistas al abrir pero siguen diciendo "Nueva" hasta recargar. Las
+  fijadas y los **Cambio** piden "Lo leí" y muestran cuántos confirmaron; tocando el número se ve
+  quién la vio y quién falta.
+- **Alertas** de la fase 1, armadas en la pantalla con lo que la API ya da: pedidos repetidos en el
+  período y pedidos por correo para revisar. Los borradores sin confirmar siguen en el widget y en
+  "Esperando por vos"; lo que sale hoy, en su aviso de arriba.
+- Queda para la fase 2: el punto de "nuevas" en el ícono del tablero, notificación del navegador,
+  respuestas y reacciones, imagen, agenda y mensajes en el feed.
+
 ## Fases
 
-1. El feed con **comunicaciones** (publicar, fijar, "lo leí"), alertas y actividad, hecho primero
+1. ✅ El feed con **comunicaciones** (publicar, fijar, "lo leí"), alertas y actividad, hecho primero
    para el teléfono (es el home mobile nuevo) y ancho en escritorio. `GET /api/v1/feed` arma las
    tarjetas; las publicaciones tienen su propia API.
 2. Calendario y mensajes en el feed; respuestas y reacciones; hecho y pospuesto por usuario.
