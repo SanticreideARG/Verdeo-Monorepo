@@ -855,6 +855,12 @@ function SectionFields({
             placeholder="URL de Facebook"
             value={field('facebookUrl')}
           />
+          <input
+            disabled={disabled}
+            onChange={(event) => onChange({ instagramUrl: event.target.value })}
+            placeholder="URL de Instagram"
+            value={field('instagramUrl')}
+          />
           <label className="mt-1 text-xs font-semibold text-forest">Bajada del footer</label>
           <textarea
             className="w-full"

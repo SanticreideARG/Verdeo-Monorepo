@@ -172,6 +172,7 @@ const ContactSectionSchema = SectionBaseSchema.extend({
     .optional(),
   email: z.string().trim().max(320).optional(),
   facebookUrl: z.string().trim().max(500).optional(),
+  instagramUrl: z.string().trim().max(500).optional(),
   heading: z.string().trim().max(200).optional(),
   intro: z.string().trim().max(400).optional(),
   phone: z.string().trim().max(60).optional(),

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import { ActionButton } from '../components/ActionButton.js';
 import { AfterSaveDialog } from '../components/AfterSaveDialog.js';
@@ -227,6 +227,8 @@ export function OrderIntakePage() {
   // La zona cuyo lote se está marcando: deshabilita todos los botones mientras corre, para que dos
   // clics seguidos no manden la misma tanda dos veces.
   const [markingZone, setMarkingZone] = useState<string | null>(null);
+  // La zona elegida en la barra del pie para marcar lista.
+  const [readyZone, setReadyZone] = useState('');
   /*
    * El lote que se está por marcar listo.
    *
@@ -1112,6 +1114,8 @@ export function OrderIntakePage() {
       },
     },
   ];
+  const readyBatchToMark =
+    readyBatches.find((batch) => batch.zone === readyZone) ?? readyBatches[0] ?? null;
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
@@ -1719,27 +1723,6 @@ export function OrderIntakePage() {
          * Sólo aparecen las zonas que tienen algo que marcar, y el botón dice cuántos son: "Marcar
          * listos" a secas obliga a contar las filas antes de animarse a tocarlo.
          */}
-        {permissions.includes('orders.edit') && readyBatches.length > 0 ? (
-          <div className="ready-batches mt-6">
-            <p className="ready-batches-title">Marcar listos por zona</p>
-            <div className="ready-batches-row">
-              {readyBatches.map((batch) => (
-                <button
-                  className="button button-secondary"
-                  disabled={markingZone !== null}
-                  key={batch.zone}
-                  onClick={() => setConfirmingBatch(batch)}
-                  type="button"
-                >
-                  {markingZone === batch.zone
-                    ? 'Marcando…'
-                    : `${batch.zone} · ${String(batch.orders.length)}`}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
         <div className="mt-6">
           {/* Cuántos pedidos hay en la cola: una lista sin número no dice si es un rato de
               trabajo o una tarde. */}
@@ -1866,6 +1849,57 @@ export function OrderIntakePage() {
             >
               Cargar más
             </button>
+          ) : null}
+          {/*
+            Al pie, en una línea: marcar listos por zona (cocina termina por lote) y lo que viene
+            después en el día —imprimir las etiquetas y armar el reparto—. Arriba ocupaba un bloque
+            entero para uno o dos botones.
+          */}
+          {orders.length > 0 ? (
+            <div className="orders-footer-bar">
+              {permissions.includes('orders.edit') && readyBatches.length > 0 ? (
+                <div className="orders-footer-ready">
+                  <label className="sr-only" htmlFor="ready-zone">
+                    Zona para marcar lista
+                  </label>
+                  <select
+                    id="ready-zone"
+                    onChange={(event) => setReadyZone(event.target.value)}
+                    value={readyBatchToMark?.zone ?? ''}
+                  >
+                    {readyBatches.map((batch) => (
+                      <option key={batch.zone} value={batch.zone}>
+                        {batch.zone} · {batch.orders.length}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="button button-secondary"
+                    disabled={markingZone !== null || !readyBatchToMark}
+                    onClick={() => {
+                      if (readyBatchToMark) setConfirmingBatch(readyBatchToMark);
+                    }}
+                    type="button"
+                  >
+                    {markingZone
+                      ? 'Marcando…'
+                      : `Marcar listos (${String(readyBatchToMark?.orders.length ?? 0)})`}
+                  </button>
+                </div>
+              ) : null}
+              <div className="orders-footer-links">
+                {permissions.includes('production.read') ? (
+                  <Link className="button button-secondary" to="/app/etiquetas">
+                    Etiquetas
+                  </Link>
+                ) : null}
+                {permissions.includes('routes.read') ? (
+                  <Link className="button button-secondary" to="/app/reparto/rutas">
+                    Rutas y repartos
+                  </Link>
+                ) : null}
+              </div>
+            </div>
           ) : null}
         </div>
       </section>

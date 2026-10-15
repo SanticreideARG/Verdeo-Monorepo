@@ -9917,3 +9917,25 @@ body {
   gap: 0.5rem;
   align-items: end;
 }
+
+/* La barra al pie de la lista de pedidos: marcar listos por zona y lo que sigue en el día. */
+.orders-footer-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.8rem;
+  border-top: 1px solid var(--db-border);
+  padding-top: 0.7rem;
+}
+.orders-footer-ready,
+.orders-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.orders-footer-ready select {
+  min-width: 10rem;
+}

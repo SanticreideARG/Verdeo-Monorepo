@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
+import { FacebookIcon, InstagramIcon } from '../components/CmsSections.js';
 import { DraftNotice } from '../components/DraftNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
 import { BrandLoading } from '../components/BrandLoading.js';
+import { LandingAssistant } from '../components/LandingAssistant.js';
 import { deliveryDateFor, deliveryDateLabel } from '../lib/dates.js';
 import { apiRequest } from '../lib/api.js';
 import { brandingKey, useMenuBranding } from '../lib/menuBranding.js';
 import { intuitivoUnitPriceMinor } from '../lib/orderCart.js';
+import { whatsappHref } from '../lib/phone.js';
+import { showToast } from '../lib/toast.js';
 import { useFormDraft } from '../lib/useFormDraft.js';
 import { useOrderFormSettings } from '../lib/useOrderFormSettings.js';
 import {
@@ -24,6 +28,85 @@ function formText(form: FormData, key: string): string {
   return typeof value === 'string' ? value : '';
 }
 
+type Step = 'datos' | 'pedido';
+
+/** Las redes y el WhatsApp de Verdeo, tal como están cargados en el pie de la portada (CMS). */
+interface Socials {
+  facebookUrl?: string | undefined;
+  instagramUrl?: string | undefined;
+  whatsapp?: string | undefined;
+}
+
+function useSocials(): Socials {
+  const [socials, setSocials] = useState<Socials>({});
+  useEffect(() => {
+    let active = true;
+    void apiRequest('/api/v1/public/pages/home', { notify: false })
+      .then(async (response) =>
+        response.ok
+          ? ((await response.json()) as { sections?: Record<string, unknown>[] }).sections
+          : [],
+      )
+      .catch(() => [])
+      .then((sections) => {
+        if (!active || !Array.isArray(sections)) return;
+        const contacto = sections.find((section) => section.type === 'CONTACT') ?? {};
+        const texto = (key: string) =>
+          typeof contacto[key] === 'string' && contacto[key].trim()
+            ? contacto[key].trim()
+            : undefined;
+        const region = Array.isArray(contacto.regions)
+          ? (contacto.regions as { whatsapp?: string }[]).find((item) => item.whatsapp)
+          : undefined;
+        setSocials({
+          ...(texto('facebookUrl') ? { facebookUrl: texto('facebookUrl') } : {}),
+          ...(texto('instagramUrl') ? { instagramUrl: texto('instagramUrl') } : {}),
+          ...((texto('whatsapp') ?? region?.whatsapp)
+            ? { whatsapp: texto('whatsapp') ?? region?.whatsapp }
+            : {}),
+        });
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  return socials;
+}
+
+/** En qué paso está quien compra: elegir, completar el envío, listo. */
+function Steps({ current }: { current: 'datos' | 'listo' | 'pedido' }) {
+  const pasos = [
+    { key: 'pedido', label: 'Tu pedido' },
+    { key: 'datos', label: 'Envío y confirmación' },
+    { key: 'listo', label: 'Listo' },
+  ] as const;
+  const indice = pasos.findIndex((paso) => paso.key === current);
+  return (
+    <ol aria-label="Pasos del pedido" className="order-steps">
+      {pasos.map((paso, index) => (
+        <li
+          aria-current={index === indice ? 'step' : undefined}
+          className={index === indice ? 'is-current' : index < indice ? 'is-done' : ''}
+          key={paso.key}
+        >
+          <span>{index + 1}</span> {paso.label}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/**
+ * El pedido web, en tres pasos.
+ *
+ * 1. **Tu pedido**: variedad, tamaño, cantidad y, en un Intuitivo, los platos; con lo que hace
+ *    falta para decidir (qué trae, cuánto sale con los platos elegidos, cuándo llega).
+ * 2. **Envío y confirmación**: los datos para entregarlo y el medio de pago, con el resumen al lado.
+ * 3. **Listo**: un representante se comunica para confirmar, el código de seguimiento y las redes.
+ *
+ * Es un solo formulario con los pasos escondidos, no tres: así el borrador guarda todo junto y volver
+ * al paso anterior no borra lo que se escribió.
+ */
 export function PublicOrderPage() {
   /*
    * La ciudad puede venir elegida desde la portada: los chips de "Dónde entregamos" son la primera
@@ -35,6 +118,7 @@ export function PublicOrderPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [createdOrder, setCreatedOrder] = useState<OrderSummary | null>(null);
+  const [step, setStep] = useState<Step>('pedido');
   const [offeringId, setOfferingId] = useState('');
   const [sites, setSites] = useState<{ displayName: string; slug: string }[]>([]);
   const [siteSlug, setSiteSlug] = useState(() => searchParams.get('ciudad') ?? '');
@@ -55,6 +139,7 @@ export function PublicOrderPage() {
   const draft = useFormDraft(formRef, 'public-order');
   // Si esta ciudad pide indicaciones alimentarias. Vienen apagadas: se pidió sacarlas.
   const { dietaryInstructionsEnabled } = useOrderFormSettings({ slug: siteSlug });
+  const socials = useSocials();
 
   useEffect(() => {
     void apiRequest('/api/v1/public/payment-methods')
@@ -107,20 +192,19 @@ export function PublicOrderPage() {
   );
 
   /*
-   * Variedad y tamaño, elegidos por separado.
-   *
-   * El menú trae una oferta por cada combinación —cinco variedades por dos tamaños— y el formulario
-   * las mostraba las diez como si fueran diez cosas distintas, cuando son cinco elecciones y una
-   * segunda de dos. Ahora son cinco tarjetas y un selector de tamaño; por dentro sigue habiendo una
-   * sola oferta elegida, que es lo que se envía, así que la API no se entera del cambio.
-   */
-  /*
    * El logo de cada menú en su tarjeta: los mismos que la portada y el asistente, leídos de la
    * misma sección. Quien llega desde la landing reconoce el menú por el dibujo antes que por el
    * nombre, y sin el logo el formulario era el único lugar donde no estaba.
    */
   const branding = useMenuBranding();
 
+  /*
+   * Variedad y tamaño, elegidos por separado.
+   *
+   * El menú trae una oferta por cada combinación —cinco variedades por dos tamaños— y el formulario
+   * las mostraba las diez como si fueran diez cosas distintas, cuando son cinco elecciones y una
+   * segunda de dos. Por dentro sigue habiendo una sola oferta elegida, que es lo que se envía.
+   */
   const families = useMemo(() => {
     const firstByFamily = new Map<string, MenuOffering>();
     for (const item of offeringsForPicking(menu?.offerings ?? [])) {
@@ -146,7 +230,7 @@ export function PublicOrderPage() {
   /*
    * Al cambiar de variedad se conserva el tamaño; si esa variedad no lo tiene, se toma el primero
    * que tenga. Los platos de un Intuitivo sólo se vacían si cambia la variedad: cambiar el tamaño
-   * de un Intuitivo no cambia qué platos se eligieron, y borrarlos obligaba a elegirlos de nuevo.
+   * de un Intuitivo no cambia qué platos se eligieron.
    */
   function choose(next: MenuOffering | undefined) {
     if (!next) return;
@@ -165,29 +249,51 @@ export function PublicOrderPage() {
     choose(findOffering(offering?.familyName ?? '', variantName));
   }
 
+  /** Lo que hace falta para pasar del pedido al envío. */
+  function orderProblem(): string | null {
+    if (!offering) return 'Elegí una variedad.';
+    if (!siteSlug) return 'Elegí la ciudad donde querés recibir el pedido.';
+    /*
+     * Al menos los platos del tamaño, y hasta el máximo de la ciudad. Antes exigía exactamente
+     * cinco, y el selector ya dejaba elegir hasta quince.
+     */
+    if (offering.composable && selectedDishes.length < offering.mealsPerUnit) {
+      return `Elegí al menos ${String(offering.mealsPerUnit)} platos para tu Intuitivo.`;
+    }
+    if (offering.composable && menu && selectedDishes.length > menu.intuitivoMaxDishes) {
+      return `Un Intuitivo lleva hasta ${String(menu.intuitivoMaxDishes)} platos.`;
+    }
+    return null;
+  }
+
+  function goTo(next: Step) {
+    if (next === 'datos') {
+      const problem = orderProblem();
+      if (problem) {
+        setMessage(problem);
+        return;
+      }
+    }
+    setMessage('');
+    setStep(next);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // Enter en el primer paso no manda el pedido: pasa al siguiente.
+    if (step === 'pedido') {
+      goTo('datos');
+      return;
+    }
     setMessage('');
+    const problem = orderProblem();
+    if (problem) {
+      setMessage(problem);
+      setStep('pedido');
+      return;
+    }
     const form = new FormData(event.currentTarget);
-    /*
-     * Al menos los platos del tamaño, y hasta el máximo de la ciudad.
-     *
-     * Antes exigía exactamente cinco, y el selector ya dejaba elegir hasta quince: se podían
-     * elegir siete platos y recibir un error que decía que tenían que ser cinco.
-     */
-    if (offering?.composable && selectedDishes.length < offering.mealsPerUnit) {
-      setMessage(`Elegí al menos ${String(offering.mealsPerUnit)} platos para tu Intuitivo.`);
-      return;
-    }
-    if (offering?.composable && menu && selectedDishes.length > menu.intuitivoMaxDishes) {
-      setMessage(`Un Intuitivo lleva hasta ${String(menu.intuitivoMaxDishes)} platos.`);
-      return;
-    }
-
-    if (!siteSlug) {
-      setMessage('Elegí la ciudad donde querés recibir el pedido.');
-      return;
-    }
 
     const payload = {
       customer: {
@@ -204,7 +310,7 @@ export function PublicOrderPage() {
       items: [
         {
           offeringId,
-          quantityUnits: Number(form.get('quantityUnits')),
+          quantityUnits: units,
           // Los platos sólo viajan con un Intuitivo: sobre una vianda estándar la convertirían en
           // una composición propia.
           ...(offering?.composable ? { selectedDishNames: selectedDishes } : {}),
@@ -236,30 +342,120 @@ export function PublicOrderPage() {
     return <BrandLoading message="Cargando el menú…" />;
   }
 
+  const header = (
+    <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-5 sm:px-8">
+      <Link className="brand" to="/">
+        <img
+          className="brand-icon"
+          src="/brand/verdeo-icon-128.webp"
+          alt=""
+          width="36"
+          height="36"
+        />
+        verdeo<span>.</span>
+      </Link>
+      <Link className="button button-secondary" to="/">
+        Volver
+      </Link>
+    </header>
+  );
+
   if (createdOrder) {
+    const hayRedes = Boolean(socials.facebookUrl ?? socials.instagramUrl ?? socials.whatsapp);
     return (
-      <main className="grid min-h-screen place-items-center bg-cream px-5 py-12">
-        <section className="w-full max-w-xl rounded-[2rem] border border-forest/10 bg-white p-8 shadow-sm sm:p-12">
-          <p className="eyebrow">Pedido confirmado</p>
-          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-forest">
-            {createdOrder.publicNumber}
-          </h1>
-          <p className="mt-4 leading-7 text-ink-muted">
-            Recibimos tu pedido por {formatMoney(createdOrder.totalMinor, createdOrder.currency)}.
-            El equipo de Verdeo coordinará la disponibilidad y la entrega. Guardá el número de
-            pedido: podés consultar su estado en cualquier momento desde &quot;Seguir mi
-            pedido&quot;.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link className="button button-primary" to="/">
-              Volver al inicio
-            </Link>
-            <Link className="button button-secondary" to="/seguimiento">
-              Seguir mi pedido
-            </Link>
-          </div>
-        </section>
-      </main>
+      <div className="min-h-screen bg-cream text-ink">
+        {header}
+        <main className="mx-auto grid w-full max-w-3xl gap-6 px-5 pb-16 pt-6 sm:px-8">
+          <Steps current="listo" />
+          <section className="rounded-[2rem] border border-forest/10 bg-white p-8 shadow-sm sm:p-12">
+            <p className="eyebrow">Pedido recibido</p>
+            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-forest">
+              ¡Gracias, {createdOrder.customer.displayName.split(' ')[0]}!
+            </h1>
+            <p className="mt-4 leading-7 text-ink-muted">
+              Recibimos tu pedido por{' '}
+              <strong>{formatMoney(createdOrder.totalMinor, createdOrder.currency)}</strong>. Un
+              representante de Verdeo se va a comunicar con vos para confirmarlo y coordinar la
+              entrega.
+            </p>
+
+            <div className="order-tracking-code">
+              <p>Tu código de seguimiento</p>
+              <strong>{createdOrder.publicNumber}</strong>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className="button button-secondary"
+                  onClick={() =>
+                    void navigator.clipboard
+                      .writeText(createdOrder.publicNumber)
+                      .then(() => showToast('Código copiado.'))
+                  }
+                  type="button"
+                >
+                  Copiar código
+                </button>
+                <Link
+                  className="button button-secondary"
+                  to={`/seguimiento?pedido=${encodeURIComponent(createdOrder.publicNumber)}`}
+                >
+                  Seguir mi pedido
+                </Link>
+              </div>
+              <small>
+                Guardalo: con el código y el teléfono o el email que usaste podés ver cómo va tu
+                pedido.
+              </small>
+            </div>
+
+            {hayRedes ? (
+              <div className="order-socials">
+                <p>Seguinos</p>
+                <div className="flex flex-wrap gap-2">
+                  {socials.instagramUrl ? (
+                    <a
+                      className="button button-secondary"
+                      href={socials.instagramUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <InstagramIcon /> Instagram
+                    </a>
+                  ) : null}
+                  {socials.facebookUrl ? (
+                    <a
+                      className="button button-secondary"
+                      href={socials.facebookUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <FacebookIcon /> Facebook
+                    </a>
+                  ) : null}
+                  {socials.whatsapp ? (
+                    <a
+                      className="button button-secondary"
+                      href={whatsappHref(
+                        socials.whatsapp,
+                        `Hola! Hice el pedido ${createdOrder.publicNumber}.`,
+                      )}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                    >
+                      WhatsApp
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-8">
+              <Link className="button button-primary" to="/">
+                Volver al inicio
+              </Link>
+            </div>
+          </section>
+        </main>
+      </div>
     );
   }
 
@@ -281,33 +477,24 @@ export function PublicOrderPage() {
           rule: menu.intuitivoPricing,
         })
       : offering.unitPriceMinor;
+  const totalMinor = unitPriceMinor * units;
+  const siteName = sites.find((site) => site.slug === siteSlug)?.displayName;
 
   return (
     <div className="min-h-screen bg-cream text-ink">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-5 sm:px-8">
-        <Link className="brand" to="/">
-          <img
-            className="brand-icon"
-            src="/brand/verdeo-icon-128.webp"
-            alt=""
-            width="36"
-            height="36"
-          />
-          verdeo<span>.</span>
-        </Link>
-        <Link className="button button-secondary" to="/">
-          Volver
-        </Link>
-      </header>
+      {header}
       <main className="mx-auto grid w-full max-w-6xl gap-8 px-5 pb-16 pt-6 sm:px-8 lg:grid-cols-[0.9fr_1.1fr]">
         <section>
+          <Steps current={step} />
           {/* El nombre del período ("OCTUBRE 3") es interno: al cliente no le dice nada. */}
-          <p className="eyebrow">Menú semanal</p>
+          <p className="eyebrow mt-6">Menú semanal</p>
           <h1 className="mt-4 text-4xl font-semibold tracking-[-0.04em] text-forest sm:text-6xl">
-            Armá tu pedido.
+            {step === 'pedido' ? 'Armá tu pedido.' : 'A dónde te lo llevamos.'}
           </h1>
           <p className="mt-4 max-w-lg leading-7 text-ink-muted">
-            Cada unidad incluye cinco comidas. Podés repetir platos al armar una opción Intuitivo.
+            {step === 'pedido'
+              ? 'Cada unidad incluye cinco comidas. Elegí una variedad del menú de la semana, o armá un Intuitivo con los platos que quieras (podés repetir).'
+              : 'Completá tus datos para la entrega. Un representante de Verdeo se comunica con vos para confirmar el pedido.'}
           </p>
           {offering ? (
             <article className="mt-8 rounded-3xl bg-forest p-6 text-white">
@@ -319,18 +506,70 @@ export function PublicOrderPage() {
                 <p className="mt-2 text-white/80">{offering.description}</p>
               ) : null}
               <p className="mt-2 font-semibold text-lime">
-                {formatMoney(unitPriceMinor, offering.currency)}
+                {formatMoney(unitPriceMinor, offering.currency)} por unidad
                 {extraDishes > 0 ? (
                   <span className="block text-sm font-normal text-white/80">
                     con {selectedDishes.length} platos ({extraDishes} de más)
                   </span>
                 ) : null}
               </p>
-              <ol className="mt-5 grid gap-2 text-sm text-white/80">
-                {offering.dishes.map((dish) => (
-                  <li key={dish}>{dish}</li>
-                ))}
-              </ol>
+              {offering.composable ? (
+                selectedDishes.length > 0 ? (
+                  <ol className="mt-5 grid gap-2 text-sm text-white/80">
+                    {selectedDishes.map((dish, index) => (
+                      <li key={`${dish}-${String(index)}`}>{dish}</li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="mt-5 text-sm text-white/80">
+                    Elegí tus platos en el formulario: al menos {offering.mealsPerUnit}.
+                  </p>
+                )
+              ) : (
+                <ol className="mt-5 grid gap-2 text-sm text-white/80">
+                  {offering.dishes.map((dish) => (
+                    <li key={dish}>{dish}</li>
+                  ))}
+                </ol>
+              )}
+              <dl className="order-facts-public">
+                <div>
+                  <dt>Cantidad</dt>
+                  <dd>
+                    {units} unidad{units === 1 ? '' : 'es'}
+                  </dd>
+                </div>
+                {menu ? (
+                  <div>
+                    <dt>Entrega</dt>
+                    <dd>
+                      {deliveryDateLabel(menu.cycle.closeAt)}
+                      {siteName ? ` · ${siteName}` : ''}
+                    </dd>
+                  </div>
+                ) : null}
+                {paymentMethods.length > 0 ? (
+                  <div>
+                    <dt>Medios de pago</dt>
+                    <dd>{paymentMethods.map((method) => method.displayName).join(', ')}</dd>
+                  </div>
+                ) : null}
+                <div>
+                  <dt>Total</dt>
+                  <dd>
+                    <strong>{formatMoney(totalMinor, offering.currency)}</strong>
+                  </dd>
+                </div>
+              </dl>
+              {step === 'datos' ? (
+                <button
+                  className="button button-secondary mt-5"
+                  onClick={() => goTo('pedido')}
+                  type="button"
+                >
+                  Cambiar el pedido
+                </button>
+              ) : null}
             </article>
           ) : null}
         </section>
@@ -342,7 +581,20 @@ export function PublicOrderPage() {
             ref={formRef}
           >
             {draft.restored ? <DraftNotice onDiscard={draft.dismissNotice} /> : null}
-            <div className="form-grid">
+
+            {/* Paso 1: el pedido. Se esconde en el paso 2 sin desmontarse, para no perder nada. */}
+            <div className="form-grid" hidden={step !== 'pedido'}>
+              <label className="field field-wide">
+                Ciudad
+                <select onChange={(event) => setSiteSlug(event.target.value)} value={siteSlug}>
+                  <option value="">Elegí tu ciudad</option>
+                  {sites.map((site) => (
+                    <option key={site.slug} value={site.slug}>
+                      {site.displayName}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <fieldset className="field field-wide offering-picker">
                 <legend>Variedad</legend>
                 <div className="offering-picker-grid">
@@ -384,8 +636,7 @@ export function PublicOrderPage() {
               </fieldset>
               {/*
                * El precio va con el tamaño y no en cada tarjeta: depende del tamaño, no de la
-               * variedad (ADR-030), y repetirlo cinco veces no dice nada que no diga una. Se toma de
-               * la variedad elegida, así que un precio especial de una variedad se ve igual.
+               * variedad (ADR-030), y repetirlo cinco veces no dice nada que no diga una.
                */}
               <fieldset className="field field-wide size-picker">
                 <legend>Tamaño</legend>
@@ -423,69 +674,14 @@ export function PublicOrderPage() {
                   min="1"
                   name="quantityUnits"
                   onChange={(event) => setUnits(Math.max(1, Number(event.target.value) || 1))}
-                  required
                   type="number"
                   value={units}
                 />
               </label>
               <div className="field">
                 Fecha de entrega
-                <p className="field-static">{menu ? deliveryDateLabel(menu.cycle.closeAt) : ''}</p>
+                <p className="field-static">{deliveryDateLabel(menu.cycle.closeAt)}</p>
               </div>
-              <label className="field field-wide">
-                Nombre y apellido
-                <input name="displayName" autoComplete="name" required />
-              </label>
-              <label className="field">
-                Email
-                <input name="email" type="email" autoComplete="email" />
-              </label>
-              <label className="field">
-                Teléfono
-                <input name="phone" autoComplete="tel" />
-              </label>
-              <label className="field">
-                Ciudad
-                <select
-                  onChange={(event) => setSiteSlug(event.target.value)}
-                  required
-                  value={siteSlug}
-                >
-                  <option value="">Elegí tu ciudad</option>
-                  {sites.map((site) => (
-                    <option key={site.slug} value={site.slug}>
-                      {site.displayName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field field-wide">
-                Dirección de entrega
-                <input
-                  name="deliveryAddress"
-                  autoComplete="street-address"
-                  minLength={4}
-                  required
-                />
-              </label>
-              <label className="field field-wide">
-                Medio de pago
-                {paymentMethods.length > 0 ? (
-                  <select name="paymentExpectation" required>
-                    {paymentMethods.map((method) => (
-                      <option key={method.code} value={method.displayName}>
-                        {method.displayName}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    name="paymentExpectation"
-                    placeholder="Ej. transferencia o efectivo"
-                    required
-                  />
-                )}
-              </label>
               {offering?.composable ? (
                 <div className="field field-wide">
                   Elegí tus platos
@@ -499,6 +695,50 @@ export function PublicOrderPage() {
                   />
                 </div>
               ) : null}
+            </div>
+
+            {/* Paso 2: los datos de envío y el pago. */}
+            <div className="form-grid" hidden={step !== 'datos'}>
+              <label className="field field-wide">
+                Nombre y apellido
+                <input name="displayName" autoComplete="name" required={step === 'datos'} />
+              </label>
+              <label className="field">
+                Email
+                <input name="email" type="email" autoComplete="email" />
+              </label>
+              <label className="field">
+                Teléfono (WhatsApp)
+                <input name="phone" autoComplete="tel" inputMode="tel" />
+              </label>
+              <label className="field field-wide">
+                Dirección de entrega
+                <input
+                  name="deliveryAddress"
+                  autoComplete="street-address"
+                  minLength={4}
+                  placeholder="Calle y altura, piso y depto"
+                  required={step === 'datos'}
+                />
+              </label>
+              <label className="field field-wide">
+                Medio de pago
+                {paymentMethods.length > 0 ? (
+                  <select name="paymentExpectation" required={step === 'datos'}>
+                    {paymentMethods.map((method) => (
+                      <option key={method.code} value={method.displayName}>
+                        {method.displayName}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    name="paymentExpectation"
+                    placeholder="Ej. transferencia o efectivo"
+                    required={step === 'datos'}
+                  />
+                )}
+              </label>
               {dietaryInstructionsEnabled ? (
                 <label className="field field-wide">
                   Indicaciones alimentarias
@@ -506,37 +746,46 @@ export function PublicOrderPage() {
                 </label>
               ) : null}
               <label className="field field-wide">
-                Notas
-                <textarea name="notes" rows={2} />
+                Notas para la entrega
+                <textarea name="notes" placeholder="Ej. timbre roto, dejar en portería" rows={2} />
               </label>
             </div>
+
             {message ? (
               <p className="mt-4 rounded-2xl bg-red-50 p-4 text-sm text-red-800" role="alert">
                 {message}
               </p>
             ) : null}
-            {/* El total y el botón, juntos y a mano: el formulario es largo y en el teléfono el
-                precio quedaba arriba de todo, fuera de la pantalla, justo cuando hay que decidir. */}
+            {/* El total y el botón, juntos y a mano: en el teléfono el precio quedaba arriba de
+                todo, fuera de la pantalla, justo cuando hay que decidir. */}
             <div className="form-actions form-actions-sticky mt-6">
               {offering ? (
                 <p className="form-actions-total">
-                  Total{' '}
-                  <strong>
-                    {formatMoney(
-                      /*
-                       * El precio de lo elegido, no el del menú: con más platos que los del tamaño
-                       * son distintos, y mostrar uno mientras se cobra el otro es peor que no
-                       * mostrar nada. Mientras todavía se está eligiendo vale el del tamaño.
-                       */
-                      unitPriceMinor * units,
-                      offering.currency,
-                    )}
-                  </strong>
+                  Total <strong>{formatMoney(totalMinor, offering.currency)}</strong>
                 </p>
               ) : null}
-              <button className="button button-primary button-large" type="submit">
-                Confirmar pedido
-              </button>
+              {step === 'pedido' ? (
+                <button
+                  className="button button-primary button-large"
+                  onClick={() => goTo('datos')}
+                  type="button"
+                >
+                  Seguir
+                </button>
+              ) : (
+                <>
+                  <button
+                    className="button button-secondary"
+                    onClick={() => goTo('pedido')}
+                    type="button"
+                  >
+                    Volver
+                  </button>
+                  <button className="button button-primary button-large" type="submit">
+                    Confirmar pedido
+                  </button>
+                </>
+              )}
             </div>
           </form>
         ) : (
@@ -545,6 +794,8 @@ export function PublicOrderPage() {
           </section>
         )}
       </main>
+      {/* El asistente también acá: quien duda mientras arma el pedido pregunta sin irse. */}
+      <LandingAssistant />
     </div>
   );
 }

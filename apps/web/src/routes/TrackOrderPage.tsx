@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import { formatDayLong } from '../lib/dates.js';
 import { apiRequest } from '../lib/api.js';
@@ -45,6 +45,8 @@ function formText(form: FormData, key: string): string {
  * (email or phone) they ordered with. See CMS_AND_PUBLIC_WEB.md "obtener seguimiento por
  * token/enlace" and IMPLEMENTATION_ROADMAP.md Fase 4 "tracking base". */
 export function TrackOrderPage() {
+  // "?pedido=CABA-00012": el enlace de la confirmación del pedido trae el código ya escrito.
+  const [searchParams] = useSearchParams();
   const [order, setOrder] = useState<TrackedOrder | null>(null);
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -103,7 +105,12 @@ export function TrackOrderPage() {
           <div className="form-grid">
             <label className="field field-wide">
               Número de pedido
-              <input name="publicNumber" placeholder="Ej. NQN-00042" required />
+              <input
+                defaultValue={searchParams.get('pedido') ?? ''}
+                name="publicNumber"
+                placeholder="Ej. NQN-00042"
+                required
+              />
             </label>
             <label className="field field-wide">
               Email o teléfono
