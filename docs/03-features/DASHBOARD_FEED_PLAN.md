@@ -80,15 +80,38 @@ sin confirmar, sin cobrar.
 - **Alertas** de la fase 1, armadas en la pantalla con lo que la API ya da: pedidos repetidos en el
   período y pedidos por correo para revisar. Los borradores sin confirmar siguen en el widget y en
   "Esperando por vos"; lo que sale hoy, en su aviso de arriba.
-- Queda para la fase 2: el punto de "nuevas" en el ícono del tablero, notificación del navegador,
-  respuestas y reacciones, imagen, agenda y mensajes en el feed.
+
+## Cómo quedó la fase 2 (2026-10-16)
+
+- **Modelo** (migración 0063): `feed_post_replies` (respuestas de hasta 1000 caracteres, borrado
+  lógico), `feed_post_reactions` (un 👍 por persona y publicación) y `feed_card_states` (las
+  tarjetas que cada uno marcó como hechas o pospuso, con `hidden_until`).
+- **Respuestas y 👍**: debajo de cada publicación. Responder abre la conversación de esa
+  publicación (sin hilos dentro de hilos); cada uno borra lo suyo y el superadmin, cualquiera.
+- **Agenda y mensajes en el feed**: los recordatorios sin hacer, los cierres de período y los
+  cortes de cocina de hoy y mañana; y cada conversación del chat interno con mensajes sin leer.
+  Alertas: se suman los pedidos en borrador sin confirmar. Filtros Todo · Alertas · Comunicaciones
+  · Agenda · Mensajes.
+- **Hecho y Mañana**: en cada tarjeta que no es una publicación, por persona. "Mañana" la esconde
+  hasta las 6 del día siguiente; "Hecho", mientras diga lo mismo: la clave incluye lo que dice
+  (`duplicados:3`), así que si pasan a ser cuatro vuelve a aparecer.
+- **El punto de nuevas**: en "Dashboard" del menú y en el búho de la barra del teléfono, cuando hay
+  publicaciones de las últimas dos semanas sin ver. Una sola consulta liviana
+  (`GET /api/v1/feed/unread`) cada minuto y medio, sólo con la pestaña a la vista.
+- **Avisos del navegador**: opcionales, se prenden desde "Avisarme en el navegador" en el feed
+  (piden permiso la primera vez y quedan por navegador). Avisan cuando sube la cuenta de nuevas y
+  la pestaña está de fondo. Sin correo ni WhatsApp.
+- Afuera, a propósito: la imagen en una publicación (se suma cuando haga falta: el texto con
+  enlaces cubre lo de hoy) y los mensajes de WhatsApp de clientes, que no llevan "sin leer"
+  todavía.
 
 ## Fases
 
 1. ✅ El feed con **comunicaciones** (publicar, fijar, "lo leí"), alertas y actividad, hecho primero
    para el teléfono (es el home mobile nuevo) y ancho en escritorio. `GET /api/v1/feed` arma las
    tarjetas; las publicaciones tienen su propia API.
-2. Calendario y mensajes en el feed; respuestas y reacciones; hecho y pospuesto por usuario.
+2. ✅ Calendario y mensajes en el feed; respuestas y reacciones; hecho y pospuesto por usuario;
+   punto de nuevas y avisos del navegador.
 3. Consejos del día.
 
 Decisión del usuario: el orden queda a criterio de quien lo construye; se empieza por la fase 1.

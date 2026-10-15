@@ -2,6 +2,13 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import { Link } from 'react-router-dom';
 
 import { apiRequest, storedOperatingSiteId, subscribeToOperatingSite } from '../lib/api.js';
+import { loadFeedCards, type FeedCard, type FeedCardKind } from '../lib/feedCards.js';
+import {
+  browserNoticesEnabled,
+  browserNoticesSupported,
+  refreshFeedUnread,
+  setBrowserNotices,
+} from '../lib/feedUnread.js';
 import { errorMessage } from '../lib/operations.js';
 import { showToast } from '../lib/toast.js';
 
@@ -21,20 +28,24 @@ interface FeedPost {
   operatingSiteId: string | null;
   operatingSiteName: string | null;
   pinnedUntil: string | null;
+  reactedByMe: boolean;
+  reactionCount: number;
   readCount: number;
+  replyCount: number;
   tag: FeedTag;
+}
+
+interface Reply {
+  authorDisplayName: string | null;
+  authorUserId: string | null;
+  body: string;
+  createdAt: string;
+  id: string;
 }
 
 interface Readers {
   pending: { displayName: string; userId: string }[];
   reads: { acknowledgedAt: string | null; displayName: string; readAt: string; userId: string }[];
-}
-
-interface Alert {
-  count: number;
-  href: string;
-  key: string;
-  text: string;
 }
 
 const TAG_LABELS: Record<FeedTag, string> = {
@@ -43,13 +54,30 @@ const TAG_LABELS: Record<FeedTag, string> = {
   novedad: 'Novedad del sistema',
 };
 
-type Filter = 'alertas' | 'comunicaciones' | 'todo';
+type Filter = 'agenda' | 'alertas' | 'comunicaciones' | 'mensajes' | 'todo';
 
 const FILTERS: readonly { label: string; value: Filter }[] = [
   { label: 'Todo', value: 'todo' },
   { label: 'Alertas', value: 'alertas' },
   { label: 'Comunicaciones', value: 'comunicaciones' },
+  { label: 'Agenda', value: 'agenda' },
+  { label: 'Mensajes', value: 'mensajes' },
 ];
+
+const CARD_FILTER: Record<FeedCardKind, Filter> = {
+  agenda: 'agenda',
+  alerta: 'alertas',
+  mensajes: 'mensajes',
+};
+
+const CARD_LABEL: Record<FeedCardKind, string> = {
+  agenda: 'Agenda',
+  alerta: 'Alerta',
+  mensajes: 'Mensajes',
+};
+
+/** "Hecho" esconde la tarjeta por un año: si lo que dice cambia, es otra y vuelve. */
+const DONE_DAYS = 365;
 
 /** Un campo de texto del formulario (un archivo no es texto: vale lo de reemplazo). */
 function field(form: FormData, key: string, fallback: string): string {
@@ -96,8 +124,9 @@ function defaultPinDate(): string {
 }
 
 /**
- * El feed del tablero (DASHBOARD_FEED_PLAN.md, fase 1): las alertas de lo que el sistema ya sabe y
- * las publicaciones del equipo.
+ * El feed del tablero (DASHBOARD_FEED_PLAN.md): lo que el sistema ya sabe —alertas, la agenda de
+ * hoy y mañana, los mensajes sin leer—, que cada uno marca como hecho o pospone, y lo que publica
+ * el equipo, con respuestas y un 👍.
  *
  * Las publicaciones son avisos que quedan, no una charla (para eso está el chat): las fijadas
  * arriba, y las que piden "lo leí" (las fijadas y los cambios) muestran quién falta.
@@ -112,7 +141,11 @@ export function FeedPanel({
   const canPost = permissions.includes('feed.post');
   const canModerate = permissions.includes('feed.moderate');
   const [posts, setPosts] = useState<FeedPost[]>([]);
-  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [cards, setCards] = useState<FeedCard[]>([]);
+  // Las tarjetas que esta persona marcó como hechas o pospuso.
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+  const [replies, setReplies] = useState<{ items: Reply[]; postId: string } | null>(null);
+  const [notices, setNotices] = useState(browserNoticesEnabled);
   const [filter, setFilter] = useState<Filter>('todo');
   const [loaded, setLoaded] = useState(false);
   // Las que no había visto al abrir: se marcan vistas enseguida, pero siguen diciendo "nueva".
@@ -143,56 +176,24 @@ export function FeedPanel({
                   }).catch(() => undefined),
                 ),
               );
+              void refreshFeedUnread();
             }
           })
           .catch(() => undefined),
       );
     }
-    const found: Alert[] = [];
-    if (permissions.includes('orders.read')) {
+    tasks.push(loadFeedCards(permissions).then((loadedCards) => setCards(loadedCards)));
+    if (canPost) {
       tasks.push(
-        apiRequest('/api/v1/orders/duplicates', { notify: false })
+        apiRequest('/api/v1/feed/cards/hidden', { notify: false })
           .then(async (response) => {
             if (!response.ok) return;
-            const groups = ((await response.json()) as { groups: unknown[] }).groups;
-            if (groups.length > 0) {
-              found.push({
-                count: groups.length,
-                href: '/app/pedidos',
-                key: 'duplicados',
-                text:
-                  groups.length === 1
-                    ? 'cliente con pedidos repetidos en el período'
-                    : 'clientes con pedidos repetidos en el período',
-              });
-            }
-          })
-          .catch(() => undefined),
-      );
-    }
-    if (permissions.includes('orders.create')) {
-      tasks.push(
-        apiRequest('/api/v1/inbound-emails', { notify: false })
-          .then(async (response) => {
-            if (!response.ok) return;
-            const items = ((await response.json()) as { items: unknown[] }).items;
-            if (items.length > 0) {
-              found.push({
-                count: items.length,
-                href: '/app/pedidos',
-                key: 'correos',
-                text:
-                  items.length === 1
-                    ? 'pedido por correo para revisar'
-                    : 'pedidos por correo para revisar',
-              });
-            }
+            setHidden(new Set(((await response.json()) as { keys: string[] }).keys));
           })
           .catch(() => undefined),
       );
     }
     await Promise.all(tasks);
-    setAlerts(found.sort((a, b) => a.key.localeCompare(b.key)));
     setLoaded(true);
   }, [canPost, permissions]);
 
@@ -275,6 +276,79 @@ export function FeedPanel({
     if (response.ok) await load();
   }
 
+  /** Esconder una tarjeta: "Hecho" (no vuelve mientras diga lo mismo) o "Mañana". */
+  async function hideCard(card: FeedCard, days: number) {
+    setHidden((current) => new Set([...current, card.key]));
+    const until = new Date(Date.now() + days * 86_400_000);
+    if (days === 1) until.setHours(6, 0, 0, 0);
+    await apiRequest('/api/v1/feed/cards', {
+      body: JSON.stringify({ cardKey: card.key, hiddenUntil: until.toISOString() }),
+      method: 'PUT',
+      notify: false,
+    }).catch(() => undefined);
+  }
+
+  async function toggleReaction(post: FeedPost) {
+    const on = !post.reactedByMe;
+    setPosts((current) =>
+      current.map((item) =>
+        item.id === post.id
+          ? { ...item, reactedByMe: on, reactionCount: item.reactionCount + (on ? 1 : -1) }
+          : item,
+      ),
+    );
+    await apiRequest(`/api/v1/feed/posts/${post.id}/reaction`, {
+      body: JSON.stringify({ on }),
+      method: 'PUT',
+      notify: false,
+    }).catch(() => undefined);
+  }
+
+  async function openReplies(post: FeedPost) {
+    if (replies?.postId === post.id) {
+      setReplies(null);
+      return;
+    }
+    const response = await apiRequest(`/api/v1/feed/posts/${post.id}/replies`);
+    if (response.ok) {
+      setReplies({ items: ((await response.json()) as { items: Reply[] }).items, postId: post.id });
+    }
+  }
+
+  async function sendReply(post: FeedPost, event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const body = field(new FormData(formElement), 'reply', '').trim();
+    if (!body) return;
+    const response = await apiRequest(`/api/v1/feed/posts/${post.id}/replies`, {
+      body: JSON.stringify({ body }),
+      method: 'POST',
+    });
+    if (!response.ok) {
+      showToast(await errorMessage(response));
+      return;
+    }
+    formElement.reset();
+    setReplies(null);
+    await load();
+    await openReplies(post);
+  }
+
+  async function deleteReply(post: FeedPost, reply: Reply) {
+    if (!window.confirm('¿Borrar esta respuesta?')) return;
+    const response = await apiRequest(`/api/v1/feed/replies/${reply.id}`, { method: 'DELETE' });
+    if (!response.ok) return;
+    setReplies(null);
+    await load();
+    await openReplies(post);
+  }
+
+  async function toggleNotices() {
+    const next = await setBrowserNotices(!notices);
+    setNotices(next);
+    if (!next && !notices) showToast('El navegador no dio permiso para avisar.');
+  }
+
   async function showReaders(post: FeedPost) {
     if (readers?.id === post.id) {
       setReaders(null);
@@ -284,10 +358,12 @@ export function FeedPanel({
     if (response.ok) setReaders({ data: (await response.json()) as Readers, id: post.id });
   }
 
-  if (!canPost && alerts.length === 0) return null;
+  const visibleCards = cards.filter(
+    (card) => !hidden.has(card.key) && (filter === 'todo' || CARD_FILTER[card.kind] === filter),
+  );
+  if (!canPost && cards.length === 0) return null;
 
-  const showAlerts = filter !== 'comunicaciones';
-  const showPosts = filter !== 'alertas';
+  const showPosts = filter === 'todo' || filter === 'comunicaciones';
 
   return (
     <section aria-labelledby="feed-titulo" className="feed">
@@ -305,6 +381,17 @@ export function FeedPanel({
             </button>
           ))}
         </div>
+        {canPost && browserNoticesSupported() ? (
+          <button
+            aria-pressed={notices}
+            className="feed-link"
+            onClick={() => void toggleNotices()}
+            title="Un aviso del navegador cuando alguien publica y no estás mirando esta pestaña"
+            type="button"
+          >
+            {notices ? 'Avisos del navegador: sí' : 'Avisarme en el navegador'}
+          </button>
+        ) : null}
         {canPost && !composing ? (
           <button
             className="button button-primary feed-new"
@@ -376,16 +463,28 @@ export function FeedPanel({
       ) : null}
 
       <ul className="feed-list">
-        {showAlerts
-          ? alerts.map((alert) => (
-              <li className="feed-card feed-alert" key={alert.key}>
-                <span className="feed-tag">Alerta</span>
-                <Link to={alert.href}>
-                  <strong>{alert.count}</strong> {alert.text}
-                </Link>
-              </li>
-            ))
-          : null}
+        {visibleCards.map((card) => (
+          <li className={`feed-card feed-alert kind-${card.kind}`} key={card.key}>
+            <span className="feed-tag">{CARD_LABEL[card.kind]}</span>
+            <Link to={card.href}>
+              {card.count !== null ? <strong>{card.count}</strong> : null} {card.text}
+            </Link>
+            {canPost ? (
+              <span className="feed-card-actions">
+                <button
+                  className="feed-link"
+                  onClick={() => void hideCard(card, DONE_DAYS)}
+                  type="button"
+                >
+                  Hecho
+                </button>
+                <button className="feed-link" onClick={() => void hideCard(card, 1)} type="button">
+                  Mañana
+                </button>
+              </span>
+            ) : null}
+          </li>
+        ))}
 
         {showPosts
           ? posts.map((post) => {
@@ -447,6 +546,27 @@ export function FeedPanel({
                       <span className="feed-ack-done">✓ Leído</span>
                     ) : null}
                     <button
+                      aria-label={post.reactedByMe ? 'Sacar mi 👍' : 'Poner 👍'}
+                      aria-pressed={post.reactedByMe}
+                      className="feed-reaction"
+                      onClick={() => void toggleReaction(post)}
+                      type="button"
+                    >
+                      👍 {post.reactionCount > 0 ? post.reactionCount : ''}
+                    </button>
+                    <button
+                      aria-expanded={replies?.postId === post.id}
+                      className="feed-link"
+                      onClick={() => void openReplies(post)}
+                      type="button"
+                    >
+                      {post.replyCount === 0
+                        ? 'Responder'
+                        : post.replyCount === 1
+                          ? '1 respuesta'
+                          : `${String(post.replyCount)} respuestas`}
+                    </button>
+                    <button
                       aria-expanded={readers?.id === post.id}
                       className="feed-link"
                       onClick={() => void showReaders(post)}
@@ -485,6 +605,46 @@ export function FeedPanel({
                     ) : null}
                   </div>
 
+                  {replies?.postId === post.id ? (
+                    <div className="feed-replies">
+                      {replies.items.map((reply) => (
+                        <div className="feed-reply" key={reply.id}>
+                          <p>
+                            <strong>{reply.authorDisplayName ?? 'Alguien que ya no está'}</strong>{' '}
+                            <small>{when(reply.createdAt)}</small>
+                          </p>
+                          <Body text={reply.body} />
+                          {reply.authorUserId === userId || canModerate ? (
+                            <button
+                              className="feed-link"
+                              onClick={() => void deleteReply(post, reply)}
+                              type="button"
+                            >
+                              Borrar
+                            </button>
+                          ) : null}
+                        </div>
+                      ))}
+                      <form
+                        className="feed-reply-form"
+                        onSubmit={(event) => void sendReply(post, event)}
+                      >
+                        <label className="sr-only" htmlFor={`reply-${post.id}`}>
+                          Tu respuesta
+                        </label>
+                        <input
+                          id={`reply-${post.id}`}
+                          maxLength={1000}
+                          name="reply"
+                          placeholder="Respondé corto…"
+                        />
+                        <button className="button button-secondary" type="submit">
+                          Enviar
+                        </button>
+                      </form>
+                    </div>
+                  ) : null}
+
                   {readers?.id === post.id ? (
                     <div className="feed-readers">
                       <p>
@@ -510,15 +670,17 @@ export function FeedPanel({
           : null}
       </ul>
 
-      {loaded &&
-      (showPosts ? posts.length === 0 : true) &&
-      (showAlerts ? alerts.length === 0 : true) ? (
+      {loaded && (showPosts ? posts.length === 0 : true) && visibleCards.length === 0 ? (
         <p className="feed-empty">
           {filter === 'alertas'
             ? 'Sin alertas. Todo en orden.'
-            : canPost
-              ? 'Todavía nadie publicó nada. Contale algo al equipo con "Publicar".'
-              : 'Nada nuevo.'}
+            : filter === 'agenda'
+              ? 'Nada en la agenda para hoy ni mañana.'
+              : filter === 'mensajes'
+                ? 'Sin mensajes por leer.'
+                : canPost
+                  ? 'Todavía nadie publicó nada. Contale algo al equipo con "Publicar".'
+                  : 'Nada nuevo.'}
         </p>
       ) : null}
     </section>

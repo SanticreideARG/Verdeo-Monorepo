@@ -108,6 +108,12 @@ import {
   FeedPostReadRequestSchema,
   FeedPostReadersResponseSchema,
   FeedPostUpdateRequestSchema,
+  FeedCardStateRequestSchema,
+  FeedHiddenCardsResponseSchema,
+  FeedReactionRequestSchema,
+  FeedReplyCreateRequestSchema,
+  FeedReplyListResponseSchema,
+  FeedUnreadResponseSchema,
   type FeedTag,
   GeographicZoneCreateRequestSchema,
   GeographicZoneListResponseSchema,
@@ -1429,6 +1435,12 @@ interface CreateAppOptions {
     readers(postId: string): Promise<unknown>;
     setPinned(postId: string, pinnedUntil: Date | null, context: FeedContext): Promise<void>;
     unreadCount(viewerUserId: string, operatingSiteId?: string | null): Promise<number>;
+    listReplies(postId: string): Promise<unknown[]>;
+    addReply(postId: string, body: string, context: FeedContext): Promise<{ id: string }>;
+    deleteReply(replyId: string, context: FeedContext): Promise<void>;
+    setReaction(postId: string, userId: string, on: boolean): Promise<void>;
+    hiddenCards(userId: string): Promise<string[]>;
+    setCardHidden(userId: string, cardKey: string, hiddenUntil: Date | null): Promise<void>;
     updatePost(
       postId: string,
       input: { body?: string | undefined; tag?: FeedTag | undefined },
@@ -5774,6 +5786,85 @@ export function createApp(options: CreateAppOptions) {
     if (!params.success) return badRequest(context, 'La publicación no es válida.');
     const readers = await requireFeed().readers(params.data.id);
     return context.json(FeedPostReadersResponseSchema.parse(contractValue(readers)));
+  });
+
+  // El punto del menú: cuántas publicaciones nuevas no vio. Liviano, se pide seguido.
+  app.get('/api/v1/feed/unread', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('feed.post')) return forbidden(context);
+    const count = await requireFeed().unreadCount(
+      session.userId,
+      context.get('scope')?.operatingSiteId ?? null,
+    );
+    return context.json(FeedUnreadResponseSchema.parse({ count }));
+  });
+
+  app.get('/api/v1/feed/posts/:id/replies', async (context) => {
+    if (!context.get('session').permissions.includes('feed.post')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    if (!params.success) return badRequest(context, 'La publicación no es válida.');
+    const items = await requireFeed().listReplies(params.data.id);
+    return context.json(FeedReplyListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.post('/api/v1/feed/posts/:id/replies', async (context) => {
+    if (!context.get('session').permissions.includes('feed.post')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = FeedReplyCreateRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Revisá la respuesta.',
+        input.success ? undefined : input.error.issues,
+      );
+    const created = await requireFeed().addReply(
+      params.data.id,
+      input.data.body,
+      feedContext(context),
+    );
+    return context.json(created, 201);
+  });
+
+  app.delete('/api/v1/feed/replies/:id', async (context) => {
+    if (!context.get('session').permissions.includes('feed.post')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    if (!params.success) return badRequest(context, 'La respuesta no es válida.');
+    await requireFeed().deleteReply(params.data.id, feedContext(context));
+    return context.body(null, 204);
+  });
+
+  app.put('/api/v1/feed/posts/:id/reaction', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('feed.post')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = FeedReactionRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success)
+      return badRequest(context, 'La publicación no es válida.');
+    await requireFeed().setReaction(params.data.id, session.userId, input.data.on);
+    return context.body(null, 204);
+  });
+
+  // Hecho y pospuesto de las tarjetas del feed: por persona.
+  app.get('/api/v1/feed/cards/hidden', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('feed.post')) return forbidden(context);
+    const keys = await requireFeed().hiddenCards(session.userId);
+    return context.json(FeedHiddenCardsResponseSchema.parse({ keys }));
+  });
+
+  app.put('/api/v1/feed/cards', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('feed.post')) return forbidden(context);
+    const input = FeedCardStateRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success) return badRequest(context, 'La tarjeta no es válida.');
+    await requireFeed().setCardHidden(
+      session.userId,
+      input.data.cardKey,
+      input.data.hiddenUntil ? new Date(input.data.hiddenUntil) : null,
+    );
+    return context.body(null, 204);
   });
 
   app.get('/api/v1/cancellation-reasons', async (context) => {

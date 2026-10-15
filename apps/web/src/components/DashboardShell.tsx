@@ -12,6 +12,7 @@ import { bottomNavLayout } from '../lib/bottomNav.js';
 import { PresenceControl } from './PresenceControl.js';
 import { SystemStatusButton } from './SystemStatusButton.js';
 import { SETTINGS_ACCESS_PERMISSION } from './SettingsGate.js';
+import { useFeedUnread } from '../lib/feedUnread.js';
 import { RequestProgressBar } from './RequestProgressBar.js';
 import { ToastHost } from './ToastHost.js';
 import { WeatherWidget } from './WeatherWidget.js';
@@ -225,10 +226,14 @@ const shiftNavigation: readonly NavigationItem[] = [
 /**
  * The count that belongs on a nav item, or nothing.
  *
- * Deliberadamente uno solo: los pedidos que nadie confirmó. Un número en cada entrada es un número
- * que nadie lee. El de mensajes sin leer se mudó al ícono de la barra, junto al chat.
+ * Deliberadamente uno solo con número: los pedidos que nadie confirmó. Un número en cada entrada es
+ * un número que nadie lee. El de mensajes sin leer se mudó al ícono de la barra, junto al chat. El
+ * tablero lleva un punto, sin número, cuando hay publicaciones que no viste.
  */
-function navBadge(href: string, pendingOrders: number): ReactNode {
+function navBadge(href: string, pendingOrders: number, feedUnread = 0): ReactNode {
+  if (href === '/app' && feedUnread > 0) {
+    return <b aria-label="Novedades sin ver" className="nav-dot" title="Novedades sin ver" />;
+  }
   const count = href === '/app/pedidos' ? pendingOrders : 0;
   if (count <= 0) return null;
   return (
@@ -406,6 +411,7 @@ export function DashboardShell({
   const narrow = useNarrowViewport();
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingOrders, setPendingOrders] = useState(0);
+  const feedUnread = useFeedUnread(profile.permissions.includes('feed.post'));
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => window.localStorage.getItem('verdeo-sidebar-collapsed') === 'true',
   );
@@ -680,7 +686,7 @@ export function DashboardShell({
     >
       <NavIcon name={item.icon} />
       <span>{item.label}</span>
-      {navBadge(item.href, pendingOrders)}
+      {navBadge(item.href, pendingOrders, feedUnread)}
     </Link>
   );
   return (
@@ -729,7 +735,7 @@ export function DashboardShell({
                       >
                         <NavIcon name={item.icon} />
                         <span>{item.label}</span>
-                        {navBadge(item.href, pendingOrders)}
+                        {navBadge(item.href, pendingOrders, feedUnread)}
                         {active ? <i aria-hidden="true" /> : null}
                       </Link>
                     );
@@ -882,6 +888,7 @@ export function DashboardShell({
                 to="/app"
               >
                 <img alt="" height="44" src="/brand/verdeo-icon-128.webp" width="44" />
+                {feedUnread > 0 ? <b aria-label="Novedades sin ver" className="nav-dot" /> : null}
               </Link>
               {shiftEntries.slice(middle).map(renderShiftLink)}
               {showMore ? (

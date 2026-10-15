@@ -19,7 +19,10 @@ export const FeedPostSchema = z.object({
   operatingSiteId: UuidSchema.nullable(),
   operatingSiteName: z.string().nullable(),
   pinnedUntil: IsoDateTimeSchema.nullable(),
+  reactedByMe: z.boolean().default(false),
+  reactionCount: z.number().int().default(0),
   readCount: z.number().int(),
+  replyCount: z.number().int().default(0),
   tag: FeedTagSchema,
 });
 
@@ -64,6 +67,33 @@ export const FeedPostReadersResponseSchema = z.object({
     }),
   ),
 });
+
+export const FeedReplySchema = z.object({
+  authorDisplayName: z.string().nullable(),
+  authorUserId: UuidSchema.nullable(),
+  body: z.string(),
+  createdAt: IsoDateTimeSchema,
+  id: UuidSchema,
+});
+
+export const FeedReplyListResponseSchema = z.object({ items: z.array(FeedReplySchema) });
+
+export const FeedReplyCreateRequestSchema = z.object({
+  body: z.string().trim().min(1, 'Escribí la respuesta.').max(1000),
+});
+
+export const FeedReactionRequestSchema = z.object({ on: z.boolean() });
+
+/** Las tarjetas que alguien escondió (hecho o pospuesto), por clave. */
+export const FeedHiddenCardsResponseSchema = z.object({ keys: z.array(z.string()) });
+
+export const FeedCardStateRequestSchema = z.object({
+  cardKey: z.string().min(1).max(200),
+  // Null: volver a mostrarla.
+  hiddenUntil: IsoDateTimeSchema.nullable(),
+});
+
+export const FeedUnreadResponseSchema = z.object({ count: z.number().int() });
 
 export type FeedPost = z.infer<typeof FeedPostSchema>;
 export type FeedTag = z.infer<typeof FeedTagSchema>;

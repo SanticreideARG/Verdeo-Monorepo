@@ -442,6 +442,13 @@
       "when": 1792065324619,
       "tag": "0062_loving_prism",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1792073785110,
+      "tag": "0063_open_thundra",
+      "breakpoints": true
     }
   ]
 }

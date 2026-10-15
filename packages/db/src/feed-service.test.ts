@@ -153,4 +153,33 @@ describe('PostgresFeedService', () => {
     expect(caba.map((post) => post.body).sort()).toEqual(['Para todos', 'Sólo CABA']);
     expect(await feed.listPosts({ viewerUserId: BETO })).toHaveLength(3);
   });
+  it('respuestas y un 👍 por persona', async () => {
+    const feed = await service();
+    const post = await feed.createPost({ body: 'Llegó la verdura', tag: 'aviso' }, as(ANA));
+
+    const reply = await feed.addReply(post.id, 'Gracias', as(BETO));
+    await feed.addReply(post.id, 'Genial', as(DUENO, true));
+    await expect(feed.deleteReply(reply.id, as(ANA))).rejects.toThrow('tus respuestas');
+    await feed.deleteReply(reply.id, as(BETO));
+    expect((await feed.listReplies(post.id)).map((item) => item.body)).toEqual(['Genial']);
+
+    await feed.setReaction(post.id, BETO, true);
+    await feed.setReaction(post.id, BETO, true);
+    await feed.setReaction(post.id, ANA, true);
+    await feed.setReaction(post.id, ANA, false);
+    const [seen] = await feed.listPosts({ viewerUserId: BETO });
+    expect(seen).toMatchObject({ reactedByMe: true, reactionCount: 1, replyCount: 1 });
+  });
+
+  it('esconder una tarjeta es de cada uno y vence', async () => {
+    const feed = await service();
+    await feed.setCardHidden(ANA, 'duplicados:3', new Date(Date.now() + 86_400_000));
+    await feed.setCardHidden(ANA, 'correos:1', new Date(Date.now() - 1000));
+
+    expect(await feed.hiddenCards(ANA)).toEqual(['duplicados:3']);
+    expect(await feed.hiddenCards(BETO)).toEqual([]);
+
+    await feed.setCardHidden(ANA, 'duplicados:3', null);
+    expect(await feed.hiddenCards(ANA)).toEqual([]);
+  });
 });

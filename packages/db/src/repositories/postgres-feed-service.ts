@@ -1,9 +1,12 @@
 import { AuditService, type JsonValue } from '@verdeo/audit';
-import { and, desc, eq, gt, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNull, or, sql } from 'drizzle-orm';
 
 import type { Database } from '../index.js';
 import {
   feedPostReads,
+  feedCardStates,
+  feedPostReactions,
+  feedPostReplies,
   feedPosts,
   operatingSites,
   permissions,
@@ -57,6 +60,10 @@ export interface FeedPost {
   myAcknowledgedAt: Date | null;
   myReadAt: Date | null;
   readCount: number;
+  reactionCount: number;
+  /** Si quien mira ya le puso 👍. */
+  reactedByMe: boolean;
+  replyCount: number;
   tag: FeedTag;
 }
 
@@ -96,6 +103,9 @@ export class PostgresFeedService {
         operatingSiteName: operatingSites.displayName,
         pinnedUntil: feedPosts.pinnedUntil,
         readCount: sql<number>`(select count(*)::int from ${feedPostReads} r where r.post_id = ${feedPosts.id})`,
+        reactedByMe: sql<boolean>`exists (select 1 from ${feedPostReactions} x where x.post_id = ${feedPosts.id} and x.user_id = ${input.viewerUserId})`,
+        reactionCount: sql<number>`(select count(*)::int from ${feedPostReactions} x where x.post_id = ${feedPosts.id})`,
+        replyCount: sql<number>`(select count(*)::int from ${feedPostReplies} y where y.post_id = ${feedPosts.id} and y.deleted_at is null)`,
         tag: feedPosts.tag,
       })
       .from(feedPosts)
@@ -129,7 +139,10 @@ export class PostgresFeedService {
         ...row,
         acknowledgedCount: Number(row.acknowledgedCount),
         needsAcknowledgement: isPinned || tag === 'cambio',
+        reactedByMe: Boolean(row.reactedByMe),
+        reactionCount: Number(row.reactionCount),
         readCount: Number(row.readCount),
+        replyCount: Number(row.replyCount),
         tag,
       };
     });
@@ -275,6 +288,105 @@ export class PostgresFeedService {
         .sort((a, b) => a.displayName.localeCompare(b.displayName, 'es')),
       reads,
     };
+  }
+
+  /** Las respuestas de una publicación, de la más vieja a la más nueva. */
+  public async listReplies(postId: string) {
+    await this.livePost(postId);
+    return this.database
+      .select({
+        authorDisplayName: users.displayName,
+        authorUserId: feedPostReplies.authorUserId,
+        body: feedPostReplies.body,
+        createdAt: feedPostReplies.createdAt,
+        id: feedPostReplies.id,
+      })
+      .from(feedPostReplies)
+      .leftJoin(users, eq(users.id, feedPostReplies.authorUserId))
+      .where(and(eq(feedPostReplies.postId, postId), isNull(feedPostReplies.deletedAt)))
+      .orderBy(asc(feedPostReplies.createdAt));
+  }
+
+  public async addReply(postId: string, body: string, context: FeedContext) {
+    const actorUserId = requireActor(context);
+    await this.livePost(postId);
+    const [created] = await this.database
+      .insert(feedPostReplies)
+      .values({ authorUserId: actorUserId, body: body.trim(), postId })
+      .returning({ id: feedPostReplies.id });
+    if (!created) throw new Error('La respuesta no se guardó.');
+    await this.audit('feed.reply_created', postId, context, { after: { replyId: created.id } });
+    return created;
+  }
+
+  /** Borrar una respuesta: quien la escribió, o quien modera. */
+  public async deleteReply(replyId: string, context: FeedContext) {
+    const [reply] = await this.database
+      .select({
+        authorUserId: feedPostReplies.authorUserId,
+        body: feedPostReplies.body,
+        postId: feedPostReplies.postId,
+      })
+      .from(feedPostReplies)
+      .where(and(eq(feedPostReplies.id, replyId), isNull(feedPostReplies.deletedAt)))
+      .limit(1);
+    if (!reply) throw new FeedNotFoundError('No se encontró la respuesta.');
+    if (!context.canModerate && reply.authorUserId !== requireActor(context)) {
+      throw new FeedForbiddenError('Sólo podés borrar tus respuestas.');
+    }
+    await this.database
+      .update(feedPostReplies)
+      .set({ deletedAt: new Date() })
+      .where(eq(feedPostReplies.id, replyId));
+    await this.audit('feed.reply_deleted', reply.postId, context, {
+      before: { body: reply.body, replyId },
+    });
+  }
+
+  /** Poner o sacar el 👍 de quien está en la sesión. */
+  public async setReaction(postId: string, userId: string, on: boolean) {
+    await this.livePost(postId);
+    if (on) {
+      await this.database
+        .insert(feedPostReactions)
+        .values({ postId, userId })
+        .onConflictDoNothing();
+    } else {
+      await this.database
+        .delete(feedPostReactions)
+        .where(and(eq(feedPostReactions.postId, postId), eq(feedPostReactions.userId, userId)));
+    }
+  }
+
+  /** Las tarjetas que esta persona escondió y siguen escondidas. */
+  public async hiddenCards(userId: string): Promise<string[]> {
+    const rows = await this.database
+      .select({ cardKey: feedCardStates.cardKey })
+      .from(feedCardStates)
+      .where(
+        and(
+          eq(feedCardStates.userId, userId),
+          sql`${feedCardStates.hiddenUntil} > ${new Date().toISOString()}::timestamptz`,
+        ),
+      );
+    return rows.map((row) => row.cardKey);
+  }
+
+  /** Esconder una tarjeta hasta una fecha (hecho o pospuesto), o volver a mostrarla con null. */
+  public async setCardHidden(userId: string, cardKey: string, hiddenUntil: Date | null) {
+    if (!hiddenUntil) {
+      await this.database
+        .delete(feedCardStates)
+        .where(and(eq(feedCardStates.userId, userId), eq(feedCardStates.cardKey, cardKey)));
+      return;
+    }
+    await this.database
+      .insert(feedCardStates)
+      .values({ cardKey, hiddenUntil, userId })
+      .onConflictDoUpdate({
+        set: { hiddenUntil, updatedAt: new Date() },
+        target: [feedCardStates.userId, feedCardStates.cardKey],
+      });
   }
 
   /** Cuántas publicaciones nuevas no vio: el punto en el ícono del tablero. */

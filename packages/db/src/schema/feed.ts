@@ -57,3 +57,60 @@ export const feedPostReads = pgTable(
   },
   (table) => [primaryKey({ columns: [table.postId, table.userId] })],
 );
+
+/** Respuestas cortas debajo de una publicación. Sin hilos dentro de hilos. */
+export const feedPostReplies = pgTable(
+  'feed_post_replies',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    postId: uuid('post_id')
+      .notNull()
+      .references(() => feedPosts.id, { onDelete: 'cascade' }),
+    authorUserId: uuid('author_user_id').references(() => users.id, { onDelete: 'set null' }),
+    body: text('body').notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('feed_post_replies_post_idx').on(table.postId, table.createdAt),
+    check('feed_post_replies_body_check', sql`length(${table.body}) between 1 and 1000`),
+  ],
+);
+
+/** Un 👍 por persona y publicación: para no llenarla de "ok". */
+export const feedPostReactions = pgTable(
+  'feed_post_reactions',
+  {
+    postId: uuid('post_id')
+      .notNull()
+      .references(() => feedPosts.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.postId, table.userId] })],
+);
+
+/**
+ * Las tarjetas del feed que alguien marcó como hechas o pospuso (alertas, agenda, mensajes).
+ *
+ * Son por persona: que uno ya vio los repetidos no quiere decir que el otro también. La clave de la
+ * tarjeta incluye lo que dice ("duplicados:3"): si cambia, es otra tarjeta y vuelve a aparecer.
+ */
+export const feedCardStates = pgTable(
+  'feed_card_states',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    cardKey: text('card_key').notNull(),
+    // Hasta cuándo no se muestra. "Hecho" es una fecha lejana; "posponer", mañana.
+    hiddenUntil: timestamp('hidden_until', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.cardKey] }),
+    check('feed_card_states_key_check', sql`length(${table.cardKey}) between 1 and 200`),
+  ],
+);

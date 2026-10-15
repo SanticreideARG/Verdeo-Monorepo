@@ -140,7 +140,9 @@ construimos no es el envío sino la cuenta de a quién ya se le avisó.
 
 - [x] Feed, fase 1 (DASHBOARD_FEED_PLAN.md): publicaciones del equipo (aviso, cambio, novedad del
       sistema), fijadas, "lo leí" con quién falta, alertas de repetidos y correos por revisar.
-- [ ] Feed, fase 2: punto de nuevas, notificación, respuestas y reacciones, agenda y mensajes.
+- [x] Feed, fase 2: punto de nuevas, avisos del navegador, respuestas y 👍, agenda y mensajes,
+      hecho y mañana por persona.
+- [ ] Feed: imagen en una publicación; "sin leer" de WhatsApp de clientes.
 - [ ] Feed, fase 3: consejos del día.
 
 ## P1 - Logistics

@@ -19,6 +19,12 @@ function feedEngine() {
     setPinned: vi.fn(() => Promise.resolve()),
     unreadCount: vi.fn(() => Promise.resolve(2)),
     updatePost: vi.fn(() => Promise.resolve()),
+    listReplies: vi.fn(() => Promise.resolve([])),
+    addReply: vi.fn(() => Promise.resolve({ id: POST })),
+    deleteReply: vi.fn(() => Promise.resolve()),
+    setReaction: vi.fn(() => Promise.resolve()),
+    hiddenCards: vi.fn(() => Promise.resolve(['duplicados:3'])),
+    setCardHidden: vi.fn(() => Promise.resolve()),
   };
 }
 
@@ -124,6 +130,42 @@ describe('tablero: publicaciones', () => {
     );
     expect(response.status).toBe(204);
     expect(feed.markRead).toHaveBeenCalledWith(POST, USER, true);
+  });
+
+  it('responder, 👍 y esconder una tarjeta van a nombre de quien está en la sesión', async () => {
+    const feed = feedEngine();
+    const app = buildApp(feed, ['feed.post']);
+
+    expect(
+      (await app.request(`/api/v1/feed/posts/${POST}/replies`, json({ body: 'Dale' }))).status,
+    ).toBe(201);
+    expect(feed.addReply).toHaveBeenCalledWith(
+      POST,
+      'Dale',
+      expect.objectContaining({ actorUserId: USER }),
+    );
+
+    expect(
+      (await app.request(`/api/v1/feed/posts/${POST}/reaction`, json({ on: true }, 'PUT'))).status,
+    ).toBe(204);
+    expect(feed.setReaction).toHaveBeenCalledWith(POST, USER, true);
+
+    const hide = await app.request(
+      '/api/v1/feed/cards',
+      json({ cardKey: 'duplicados:3', hiddenUntil: '2026-10-17T12:00:00.000Z' }, 'PUT'),
+    );
+    expect(hide.status).toBe(204);
+    expect(feed.setCardHidden).toHaveBeenCalledWith(
+      USER,
+      'duplicados:3',
+      new Date('2026-10-17T12:00:00.000Z'),
+    );
+
+    const hidden = await app.request('/api/v1/feed/cards/hidden', { headers: { cookie } });
+    expect(await hidden.json()).toEqual({ keys: ['duplicados:3'] });
+
+    const unread = await app.request('/api/v1/feed/unread', { headers: { cookie } });
+    expect(await unread.json()).toEqual({ count: 2 });
   });
 
   it('una publicación ajena devuelve 403 en español', async () => {

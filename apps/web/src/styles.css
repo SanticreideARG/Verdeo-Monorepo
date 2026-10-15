@@ -10188,3 +10188,94 @@ label.field:has(> input[type='radio']) {
     min-height: 44px;
   }
 }
+
+/* El punto de "novedades sin ver" del tablero: sin número, sólo que hay algo. */
+.nav-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-left: auto;
+  border-radius: 999px;
+  background: var(--db-gold);
+  box-shadow: 0 0 0 2px var(--db-surface-solid);
+}
+.bottom-nav-brand {
+  position: relative;
+}
+.bottom-nav-brand .nav-dot {
+  position: absolute;
+  top: 0.15rem;
+  right: 0.15rem;
+}
+
+/* Feed, fase 2: hecho/mañana, 👍, respuestas y los colores de agenda y mensajes. */
+.feed-alert.kind-agenda {
+  border-left-color: #3b82f6;
+}
+.feed-alert.kind-mensajes {
+  border-left-color: var(--db-accent);
+}
+.feed-card-actions {
+  display: inline-flex;
+  gap: 0.8rem;
+  margin-left: auto;
+}
+.feed-reaction {
+  min-height: 2rem;
+  border: 1px solid var(--db-border);
+  border-radius: 999px;
+  padding: 0 0.7rem;
+  background: transparent;
+  color: var(--db-text);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.feed-reaction[aria-pressed='true'] {
+  border-color: var(--db-accent);
+  background: color-mix(in srgb, var(--db-accent) 18%, transparent);
+}
+.feed-replies {
+  display: grid;
+  gap: 0.55rem;
+  border-top: 1px solid var(--db-border-soft);
+  padding-top: 0.6rem;
+}
+.feed-reply {
+  border-left: 2px solid var(--db-border);
+  padding-left: 0.7rem;
+}
+.feed-reply p {
+  margin: 0;
+  color: var(--db-text-soft);
+  font-size: 0.82rem;
+}
+.feed-reply .feed-post-body {
+  color: var(--db-text);
+  font-size: 0.92rem;
+}
+.feed-reply-form {
+  display: flex;
+  gap: 0.5rem;
+}
+.feed-reply-form input {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.5rem;
+  border: 1px solid var(--db-border);
+  border-radius: 0.6rem;
+  padding: 0 0.7rem;
+  background: var(--db-surface-solid);
+  color: var(--db-text);
+  font: inherit;
+}
+@media (max-width: 680px) {
+  .feed-alert {
+    flex-wrap: wrap;
+  }
+  .feed-card-actions {
+    margin-left: 0;
+  }
+  .feed-reaction,
+  .feed-card-actions .feed-link {
+    min-height: 44px;
+  }
+}
