@@ -6,6 +6,7 @@ import { CmsImageField } from '../components/CmsImageField.js';
 import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { DashboardShell } from '../components/DashboardShell.js';
+import { SettingsTabs } from '../components/SettingsTabs.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage } from '../lib/operations.js';
@@ -285,6 +286,7 @@ export function CmsPagesAdminPage() {
     <DashboardShell profile={profile} onLogout={() => void logout()}>
       <DeskWorkNotice can="podés leer lo publicado; editarlo con la vista previa al lado pide ancho." />
       <section className="dashboard-panel">
+        <SettingsTabs permissions={profile.permissions} />
         <header>
           <p className="dashboard-kicker">Panel de control</p>
           <h1 className="text-2xl font-semibold text-forest">Contenidos</h1>

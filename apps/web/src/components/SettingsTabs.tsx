@@ -60,8 +60,16 @@ const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         permission: 'messages.templates.manage',
       },
       { href: '/app/ajustes/chat', label: 'Enlaces de chat', permission: 'chat.links.manage' },
-      { href: '/app/ajustes/asistente', label: 'Asistente de la web', permission: 'cms.read' },
       { href: '/app/ia', label: 'IA y plantillas', permission: 'ai.providers.manage' },
+    ],
+  },
+  {
+    // Lo que se ve en el sitio público. Se edita cada tanto, no todos los días: por eso no va en el
+    // menú lateral.
+    label: 'Sitio web',
+    tabs: [
+      { href: '/app/contenidos', label: 'Contenidos', permission: 'cms.read' },
+      { href: '/app/ajustes/asistente', label: 'Asistente de la web', permission: 'cms.read' },
     ],
   },
   {

@@ -165,7 +165,6 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         label: 'Workbench de IA',
         permission: 'ai.prompts.manage',
       },
-      { href: '/app/contenidos', icon: 'content', label: 'Contenidos', permission: 'cms.read' },
     ],
   },
   {
