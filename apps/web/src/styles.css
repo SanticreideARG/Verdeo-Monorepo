@@ -9960,3 +9960,30 @@ body {
     display: none;
   }
 }
+
+/*
+ * Los checkboxes y radios dentro de un campo: a su tamaño, no al de un cuadro de texto.
+ *
+ * La regla general de `.field input` les daba ancho completo y 44 px de alto, y en Ajustes salían
+ * gigantes y solos en su renglón, arriba del texto que los explica. Al lado del texto se leen como
+ * lo que son: un sí o un no.
+ */
+.field input[type='checkbox'],
+.field input[type='radio'],
+.dashboard-shell .field input[type='checkbox'],
+.dashboard-shell .field input[type='radio'] {
+  flex: 0 0 auto;
+  width: 1.15rem;
+  height: 1.15rem;
+  min-height: 0;
+  margin: 0.15rem 0 0;
+  padding: 0;
+  border-radius: 0.25rem;
+  accent-color: var(--color-forest);
+}
+label.field:has(> input[type='checkbox']),
+label.field:has(> input[type='radio']) {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
