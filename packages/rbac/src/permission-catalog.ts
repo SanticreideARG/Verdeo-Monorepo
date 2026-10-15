@@ -111,6 +111,19 @@ export const initialPermissionCatalog: readonly PermissionDefinition[] = [
   { key: 'stats.read', group: 'stats', description: 'Ver estadísticas' },
   { key: 'calendar.use', group: 'general', description: 'Ver y anotar en el calendario' },
   /*
+   * Entrar al Panel de control: la configuración general (zonas, días de reparto, menú, métodos de
+   * pago, integraciones, usuarios, auditoría, respaldos, el sitio web).
+   *
+   * Cada pantalla pide además su propio permiso. Éste existe porque varios de esos los tiene el
+   * operador para trabajar (ver zonas, ver los métodos de pago), y con ellos entraba al panel. El
+   * operador no lo trae: es de quien administra el sistema.
+   */
+  {
+    key: 'settings.access',
+    group: 'general',
+    description: 'Entrar al Panel de control (configuración general)',
+  },
+  /*
    * Descargar y restaurar respaldos.
    *
    * Uno solo para las dos mitades y ningún rol lo trae de fábrica: la descarga se lleva los datos

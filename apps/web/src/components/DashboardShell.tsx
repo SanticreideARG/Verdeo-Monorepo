@@ -11,7 +11,7 @@ import { OperatorAssistant } from './OperatorAssistant.js';
 import { bottomNavLayout } from '../lib/bottomNav.js';
 import { PresenceControl } from './PresenceControl.js';
 import { SystemStatusButton } from './SystemStatusButton.js';
-import { SETTINGS_TAB_PERMISSIONS } from './SettingsTabs.js';
+import { SETTINGS_ACCESS_PERMISSION } from './SettingsGate.js';
 import { RequestProgressBar } from './RequestProgressBar.js';
 import { ToastHost } from './ToastHost.js';
 import { WeatherWidget } from './WeatherWidget.js';
@@ -181,7 +181,8 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
         href: '/app/ajustes/zonas',
         icon: 'settings',
         label: 'Panel de control',
-        permissions: SETTINGS_TAB_PERMISSIONS,
+        // Una sola llave para todo el panel; adentro, cada sección pide además la suya.
+        permission: SETTINGS_ACCESS_PERMISSION,
       },
     ],
   },

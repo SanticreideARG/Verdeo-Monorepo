@@ -46,4 +46,30 @@ describe('Panel de control', () => {
 
     expect(misplaced).toEqual([]);
   });
+
+  /*
+   * Cada sección del panel, detrás de la puerta (`SettingsGate`). Una sección nueva que se agrega
+   * al submenú y no a la puerta la ve el operador escribiendo la dirección, aunque no esté en su
+   * menú: este test la encuentra.
+   */
+  it('pone cada sección del panel detrás de la llave del Panel de control', () => {
+    const tabs = readFileSync(join(routesFolder, '..', 'components', 'SettingsTabs.tsx'), 'utf8');
+    const app = readFileSync(join(routesFolder, 'App.tsx'), 'utf8');
+    // Apariencia es la preferencia de uno mismo: la tiene cualquiera.
+    const hrefs = [...tabs.matchAll(/href: '([^']+)'/g)]
+      .map((match) => match[1] ?? '')
+      .filter((href) => href !== '/app/ajustes/apariencia');
+    expect(hrefs.length).toBeGreaterThanOrEqual(15);
+
+    const ungated = hrefs.filter((href) => {
+      const route = app.split(/\r?\n/).findIndex((line) => line.includes(`path="${href}"`));
+      if (route === -1) return true;
+      const lines = app
+        .split(/\r?\n/)
+        .slice(route, route + 4)
+        .join(' ');
+      return !lines.includes('<SettingsGate>');
+    });
+    expect(ungated).toEqual([]);
+  });
 });

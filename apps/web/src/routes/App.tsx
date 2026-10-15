@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
+import { SettingsGate } from '../components/SettingsGate.js';
+
 import { useOperatingSiteId } from '../lib/useOperatingSite.js';
 
 import { CmsSection, type PageSection } from '../components/CmsSections.js';
@@ -341,38 +343,150 @@ export function App() {
         <Route path="/app/menus" element={<MenusPage />} />
         <Route path="/app/menus/precios" element={<PriceByLocationPage />} />
         <Route path="/app/cocina" element={<KitchenPage />} />
-        <Route path="/app/ia" element={<AIProvidersPage />} />
+        <Route
+          path="/app/ia"
+          element={
+            <SettingsGate>
+              <AIProvidersPage />
+            </SettingsGate>
+          }
+        />
         <Route path="/app/ia/workbench" element={<AIWorkbenchPage />} />
         <Route path="/app/chat" element={<ChatPage />} />
         <Route path="/app/mensajes" element={<MessagingInboxPage />} />
         <Route path="/app/avisos" element={<NoticesPage />} />
-        <Route path="/app/ajustes/plantillas" element={<MessageTemplatesPage />} />
-        <Route path="/app/ajustes/mensajes" element={<MessagingAccountsPage />} />
+        <Route
+          path="/app/ajustes/plantillas"
+          element={
+            <SettingsGate>
+              <MessageTemplatesPage />
+            </SettingsGate>
+          }
+        />
+        <Route
+          path="/app/ajustes/mensajes"
+          element={
+            <SettingsGate>
+              <MessagingAccountsPage />
+            </SettingsGate>
+          }
+        />
         <Route path="/app/reparto/rutas" element={<RoutesPage />} />
         {/* El sitio de reparto: sin sesión, la credencial es el enlace. Reemplaza a `/delivery`,
           que necesitaba una cuenta de repartidor. */}
         <Route path="/reparto/:token" element={<DeliverySheetPage />} />
         <Route path="/app/perfil" element={<ProfilePage />} />
-        <Route path="/app/usuarios" element={<UsersAdminPage />} />
+        <Route
+          path="/app/usuarios"
+          element={
+            <SettingsGate>
+              <UsersAdminPage />
+            </SettingsGate>
+          }
+        />
         <Route path="/app/estadisticas" element={<StatsPage />} />
-        <Route path="/app/contenidos" element={<CmsPagesAdminPage />} />
-        <Route path="/app/ajustes/zonas" element={<GeographySettingsPage />} />
-        <Route path="/app/ajustes/menu" element={<MenuCatalogSettingsPage />} />
+        <Route
+          path="/app/contenidos"
+          element={
+            <SettingsGate>
+              <CmsPagesAdminPage />
+            </SettingsGate>
+          }
+        />
+        <Route
+          path="/app/ajustes/zonas"
+          element={
+            <SettingsGate>
+              <GeographySettingsPage />
+            </SettingsGate>
+          }
+        />
+        <Route
+          path="/app/ajustes/menu"
+          element={
+            <SettingsGate>
+              <MenuCatalogSettingsPage />
+            </SettingsGate>
+          }
+        />
         {/* Etiquetas dejó de ser una pestaña de Ajustes: el formato y la generación viven juntos en su
           propia sección. La ruta vieja redirige. */}
         <Route path="/app/ajustes/etiquetas" element={<Navigate replace to="/app/etiquetas" />} />
         <Route path="/app/etiquetas" element={<LabelsPage />} />
         <Route path="/app/calendario" element={<CalendarPage />} />
-        <Route path="/app/ajustes/correo" element={<EmailSettingsPage />} />
+        <Route
+          path="/app/ajustes/correo"
+          element={
+            <SettingsGate>
+              <EmailSettingsPage />
+            </SettingsGate>
+          }
+        />
         <Route path="/app/ajustes/apariencia" element={<AppearanceSettingsPage />} />
-        <Route path="/app/ajustes/asistente" element={<AssistantSettingsPage />} />
-        <Route path="/app/ajustes/pagos" element={<PaymentMethodsSettingsPage />} />
-        <Route path="/app/auditoria" element={<AuditLogPage />} />
-        <Route path="/app/sistema" element={<SystemPage />} />
-        <Route path="/app/ajustes/direcciones" element={<AddressSettingsPage />} />
-        <Route path="/app/ajustes/reparto" element={<DeliverySettingsPage />} />
-        <Route path="/app/respaldos" element={<BackupsPage />} />
-        <Route path="/app/ajustes/chat" element={<ChatLinksPage />} />
+        <Route
+          path="/app/ajustes/asistente"
+          element={
+            <SettingsGate>
+              <AssistantSettingsPage />
+            </SettingsGate>
+          }
+        />
+        <Route
+          path="/app/ajustes/pagos"
+          element={
+            <SettingsGate>
+              <PaymentMethodsSettingsPage />
+            </SettingsGate>
+          }
+        />
+        <Route
+          path="/app/auditoria"
+          element={
+            <SettingsGate>
+              <AuditLogPage />
+            </SettingsGate>
+          }
+        />
+        <Route
+          path="/app/sistema"
+          element={
+            <SettingsGate>
+              <SystemPage />
+            </SettingsGate>
+          }
+        />
+        <Route
+          path="/app/ajustes/direcciones"
+          element={
+            <SettingsGate>
+              <AddressSettingsPage />
+            </SettingsGate>
+          }
+        />
+        <Route
+          path="/app/ajustes/reparto"
+          element={
+            <SettingsGate>
+              <DeliverySettingsPage />
+            </SettingsGate>
+          }
+        />
+        <Route
+          path="/app/respaldos"
+          element={
+            <SettingsGate>
+              <BackupsPage />
+            </SettingsGate>
+          }
+        />
+        <Route
+          path="/app/ajustes/chat"
+          element={
+            <SettingsGate>
+              <ChatLinksPage />
+            </SettingsGate>
+          }
+        />
         <Route path="/app/ayuda" element={<HelpPage />} />
         <Route
           path="*"

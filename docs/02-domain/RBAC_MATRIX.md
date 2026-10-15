@@ -96,6 +96,12 @@ No usar `if role === ...` como autorización.
 - `audit.read`
 - `audit.export`
 
+### General
+
+- `calendar.use`
+- `backups.manage`
+- `settings.access` — entrar al Panel de control (ver "El Panel de control", abajo).
+
 ## Roles por defecto
 
 ### superadmin
@@ -119,6 +125,50 @@ restringir un cliente y ver sus datos sensibles; revertir un estado o forzar un 
 y publicar el landing; la auditoría; los respaldos; los artículos de ayuda; proveedores,
 presupuestos y prompts de IA; reemplazar un menú ya distribuido; ajustar excedentes; y forzar un
 cobro.
+
+### El Panel de control (auditoría del 2026-10-15)
+
+La configuración general es **sólo de quien administra**. Entrar al panel pide `settings.access`,
+que el operador no trae; además, cada sección sigue pidiendo su propio permiso.
+
+Hacía falta una llave aparte porque varios permisos de sección los tiene el operador para trabajar
+(`sites.read` para elegir zona en un pedido, `payments.read` para registrar un cobro,
+`production.read` para cocina), y con ellos entraba al panel y veía zonas, días de reparto, menú,
+métodos de pago y direcciones. No podía cambiar nada —la API pide para guardar permisos que el
+operador no tiene—, pero la configuración no es de su trabajo.
+
+La puerta está en un solo lugar: `SettingsGate` envuelve cada ruta del panel en `App.tsx` (sin la
+llave, vuelve al inicio) y la entrada del menú lateral pide la misma llave. Un test
+(`settingsLayout.test.ts`) falla si una sección del submenú queda sin puerta. La API no cambia: el
+operador sigue leyendo zonas, días y métodos de pago desde las pantallas donde los usa.
+
+| Sección del panel   | Para entrar                 | Para cambiar (API)             | Operador                                  |
+| ------------------- | --------------------------- | ------------------------------ | ----------------------------------------- |
+| Zonas geográficas   | `sites.read`                | `sites.manage`, `zones.manage` | no                                        |
+| Días de reparto     | `sites.read`                | `sites.manage`                 | no                                        |
+| Menú personalizado  | `production.read`           | `production.generate`          | no                                        |
+| Métodos de pago     | `payments.read`             | `payments.override`            | no                                        |
+| Usuarios            | `users.read`                | `users.*`, `roles.manage`      | no                                        |
+| Correo (Resend)     | `ai.providers.manage`       | `ai.providers.manage`          | no                                        |
+| Cuentas de WhatsApp | `messaging.accounts.manage` | ídem                           | no                                        |
+| Mensajes guardados  | `messages.templates.manage` | ídem                           | no (los usa con `messages.templates.use`) |
+| Enlaces de chat     | `chat.links.manage`         | ídem                           | no                                        |
+| IA y plantillas     | `ai.providers.manage`       | ídem                           | no                                        |
+| Contenidos          | `cms.read`                  | `cms.edit`, `cms.publish`      | no                                        |
+| Asistente de la web | `cms.read`                  | `cms.edit`, `cms.publish`      | no                                        |
+| Auditoría           | `audit.read`                | —                              | no                                        |
+| Estado del sistema  | `audit.read`                | —                              | no                                        |
+| Direcciones         | `sites.read`                | `sites.manage`                 | no                                        |
+| Respaldos           | `backups.manage`            | ídem                           | no                                        |
+| Apariencia          | —                           | la propia                      | **sí** (también desde la barra)           |
+
+Todas esas secciones requieren además `settings.access`. Fuera del panel, el operador conserva
+Pedidos, Clientes, Periodos, Cocina, Etiquetas, Rutas y repartos, Mensajes, Avisos, Estadísticas,
+Calendario y chat. Workbench de IA (`ai.prompts.manage`) es del administrador.
+
+Para dársela a alguien que no es superadmin: una excepción `allow` de `settings.access` desde
+Usuarios. En una base en uso, el permiso aparece y se le concede al superadmin con
+`pnpm db:seed-permissions --produccion`.
 
 ### repartidor
 

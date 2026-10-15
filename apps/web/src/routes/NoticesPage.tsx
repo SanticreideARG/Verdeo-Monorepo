@@ -261,11 +261,19 @@ export function NoticesPage() {
         {templates.length === 0 ? (
           <EmptyState
             action={
-              <Link className="button button-primary" to="/app/ajustes/plantillas">
-                Escribir el primero
-              </Link>
+              // Las plantillas se escriben en el Panel de control: sin la llave, no hay a dónde ir.
+              permissions.includes('settings.access') &&
+              permissions.includes('messages.templates.manage') ? (
+                <Link className="button button-primary" to="/app/ajustes/plantillas">
+                  Escribir el primero
+                </Link>
+              ) : undefined
             }
-            body="Un aviso se escribe una vez como plantilla, con {{ cliente.nombre }} y {{ pedido.numero }} donde van los datos de cada pedido."
+            body={
+              permissions.includes('settings.access')
+                ? 'Un aviso se escribe una vez como plantilla, con {{ cliente.nombre }} y {{ pedido.numero }} donde van los datos de cada pedido.'
+                : 'Los avisos salen de plantillas que escribe quien administra el sistema. Pedile que cargue la primera.'
+            }
             title="Todavía no hay ningún mensaje escrito"
           />
         ) : (

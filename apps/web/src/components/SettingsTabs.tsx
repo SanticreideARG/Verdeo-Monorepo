@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 
 import { useMediaQuery } from '../lib/useNarrowViewport.js';
+import { SETTINGS_ACCESS_PERMISSION } from './SettingsGate.js';
 
 interface SettingsTab {
   href: string;
@@ -89,15 +90,6 @@ const SETTINGS_GROUPS: readonly SettingsGroup[] = [
   },
 ];
 
-const SETTINGS_TABS: readonly SettingsTab[] = SETTINGS_GROUPS.flatMap((group) => group.tabs);
-
-// The single navbar "Ajustes" entry needs the OR of every tab's permission — a viewer who can
-// only reach one of the tabs should still see the entry and land on that tab's own
-// "no tenés permiso" bounce-through for the others, rather than the entry disappearing entirely.
-export const SETTINGS_TAB_PERMISSIONS: readonly string[] = SETTINGS_TABS.map(
-  (tab) => tab.permission,
-).filter((permission): permission is string => permission !== undefined);
-
 export function SettingsTabs({ permissions }: { permissions: string[] }) {
   const location = useLocation();
   /*
@@ -108,10 +100,14 @@ export function SettingsTabs({ permissions }: { permissions: string[] }) {
    * sobre el contenido. Un solo número, escrito en los dos lugares.
    */
   const stacked = useMediaQuery('(max-width: 74.99rem)');
-  // Una pestaña sin permiso la ve cualquiera que haya llegado hasta acá.
+  // Una pestaña sin permiso la ve cualquiera que haya llegado hasta acá. Las demás piden, además
+  // de la suya, la llave del panel: sin ella, Apariencia queda sola y el submenú no se muestra.
+  const canEnter = permissions.includes(SETTINGS_ACCESS_PERMISSION);
   const groups = SETTINGS_GROUPS.map((group) => ({
     ...group,
-    tabs: group.tabs.filter((tab) => !tab.permission || permissions.includes(tab.permission)),
+    tabs: group.tabs.filter(
+      (tab) => !tab.permission || (canEnter && permissions.includes(tab.permission)),
+    ),
     // Un grupo entero sin permiso no deja el título colgado.
   })).filter((group) => group.tabs.length > 0);
 

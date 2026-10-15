@@ -80,6 +80,16 @@ describe('applyRoleDefaults', () => {
     expect(permisos).toEqual([...ROLE_DEFAULT_PERMISSIONS.operador!].sort());
   });
 
+  it('no le da al operador la llave del Panel de control', async () => {
+    const db = await baseConRoles();
+
+    await applyRoleDefaults(db);
+
+    // La configuración general es de quien administra; ver zonas o métodos de pago para trabajar no
+    // alcanza para entrar al panel.
+    expect(await permisosDe(db, 'operador')).not.toContain('settings.access');
+  });
+
   it('no inventa un rol de repartidor', async () => {
     const db = await baseConRoles();
 
