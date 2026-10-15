@@ -117,7 +117,7 @@ que manda es ese archivo.
 
 Quien atiende la semana: clientes (leer, crear, editar), pedidos (leer, crear, editar, confirmar,
 cancelar), mensajes y plantillas, lo que cocina tiene que producir y su informe, distribuir el menú,
-armar y publicar rutas, registrar y conciliar cobros, estadísticas, calendario, chat interno y el
+armar y publicar rutas, registrar y conciliar cobros, encuestas, calendario, chat interno y el
 redactado con IA del catálogo V1.
 
 Queda afuera a propósito: usuarios, roles y excepciones; crear ciudades y zonas; borrar, fusionar o
@@ -163,8 +163,9 @@ operador sigue leyendo zonas, días y métodos de pago desde las pantallas donde
 | Apariencia          | —                           | la propia                      | **sí** (también desde la barra)           |
 
 Todas esas secciones requieren además `settings.access`. Fuera del panel, el operador conserva
-Pedidos, Clientes, Periodos, Cocina, Etiquetas, Rutas y repartos, Mensajes, Avisos, Estadísticas,
-Calendario y chat. Workbench de IA (`ai.prompts.manage`) es del administrador.
+Pedidos, Clientes, Periodos, Cocina, Etiquetas, Rutas y repartos, Mensajes, Avisos, Encuestas,
+Calendario y chat. Las **estadísticas de ventas** (`stats.read`) son sólo del superadmin
+(decisión del 2026-10-15); los cobros (`payments.record`, `payments.settle`) siguen en el operador. Workbench de IA (`ai.prompts.manage`) es del administrador.
 
 Para dársela a alguien que no es superadmin: una excepción `allow` de `settings.access` desde
 Usuarios. En una base en uso, el permiso aparece y se le concede al superadmin con

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 
 import { AnalysisTabs } from '../components/AnalysisTabs.js';
 import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
@@ -138,6 +139,10 @@ export function StatsPage() {
   if (!profile) return <DashboardLoading />;
 
   if (!canRead) {
+    // La entrada "Estadísticas" del menú también lleva a Encuestas: quien sólo ve encuestas (el
+    // operador) llega directo ahí, en vez de a un "no tenés permiso".
+    if (profile.permissions.includes('surveys.read'))
+      return <Navigate replace to="/app/encuestas" />;
     return (
       <DashboardShell profile={profile} onLogout={() => void logout()}>
         <section className="dashboard-panel">

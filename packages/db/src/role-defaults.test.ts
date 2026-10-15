@@ -88,6 +88,8 @@ describe('applyRoleDefaults', () => {
     // La configuración general es de quien administra; ver zonas o métodos de pago para trabajar no
     // alcanza para entrar al panel.
     expect(await permisosDe(db, 'operador')).not.toContain('settings.access');
+    // Las estadísticas de ventas tampoco: son del dueño.
+    expect(await permisosDe(db, 'operador')).not.toContain('stats.read');
   });
 
   it('no inventa un rol de repartidor', async () => {

@@ -27,7 +27,9 @@ type Ejecutor = Database | Parameters<Parameters<Database['transaction']>[0]>[0]
  * o restringir un cliente y ver sus datos sensibles; revertir un estado o forzar un ciclo cerrado;
  * editar y publicar el landing; la auditoría; los respaldos; los artículos de ayuda; la
  * configuración de proveedores de IA, presupuestos y prompts; reemplazar un menú ya distribuido;
- * ajustar excedentes; y forzar un cobro. Todo eso es de quien administra el sistema.
+ * ajustar excedentes; forzar un cobro; las estadísticas de ventas (decisión del 2026-10-15: los
+ * números del negocio son del dueño); y entrar al Panel de control. Todo eso es de quien administra
+ * el sistema.
  */
 const OPERADOR = [
   'sites.read',
@@ -56,7 +58,6 @@ const OPERADOR = [
   'payments.record',
   'payments.settle',
   'surveys.read',
-  'stats.read',
   'calendar.use',
   // Sólo el redactado operativo que cubre el catálogo V1 (reescribir un mensaje, extraer un pedido
   // de una conversación, resumir datos de cocina). Los controles de IA quedan de quien administra.
