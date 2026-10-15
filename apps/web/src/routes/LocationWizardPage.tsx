@@ -152,17 +152,36 @@ export function LocationWizardPage() {
     );
   }
 
+  /**
+   * Usar la ubicación pegada de Google Maps (enlace o coordenadas). La confirma el servidor sin
+   * pasar por las reglas automáticas: la eligió una persona mirando el mapa.
+   */
+  async function usePasted(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!current || !draftLocation.trim()) return;
+    setBusy(true);
+    setMessage('');
+    const result = await locate(current, { location: draftLocation.trim() });
+    setBusy(false);
+    if (result?.status === 'located') {
+      showToast(`Ubicado: ${current.customerName}.`);
+      goNext();
+    } else if (result) {
+      setMessage(
+        'No se pudo leer una ubicación de eso. Probá con las coordenadas: en Google Maps tocá el punto y copiá los números que aparecen (como -34.60361, -58.38158).',
+      );
+    }
+  }
+
   async function retry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!current) return;
     const changedAddress =
       draftAddress.trim() !== current.writtenAddress.trim() ? draftAddress.trim() : '';
+    if (!changedAddress) return;
     setBusy(true);
     setMessage('');
-    const result = await locate(current, {
-      ...(changedAddress ? { address: changedAddress } : {}),
-      ...(draftLocation.trim() ? { location: draftLocation.trim() } : {}),
-    });
+    const result = await locate(current, { address: changedAddress });
     setBusy(false);
     if (changedAddress) {
       setPending((state) =>
@@ -358,9 +377,43 @@ export function LocationWizardPage() {
                           </Link>
                         </p>
 
+                        {canEdit ? (
+                          <form
+                            className="location-paste"
+                            onSubmit={(event) => void usePasted(event)}
+                          >
+                            <label htmlFor="location-paste">
+                              <strong>¿Google Maps la encuentra bien? Pegá acá su ubicación</strong>
+                              <span>
+                                En Google Maps tocá el punto exacto y copiá las coordenadas que
+                                aparecen, o Compartir → Copiar enlace. Se guarda ese punto tal cual.
+                              </span>
+                            </label>
+                            <div>
+                              <input
+                                autoComplete="off"
+                                id="location-paste"
+                                inputMode="url"
+                                onChange={(event) => setDraftLocation(event.target.value)}
+                                placeholder="Enlace de Google Maps, o -34.60361, -58.38158"
+                                value={draftLocation}
+                              />
+                              <button
+                                className="button button-primary"
+                                disabled={busy || !draftLocation.trim()}
+                                type="submit"
+                              >
+                                {busy && draftLocation.trim()
+                                  ? 'Guardando…'
+                                  : 'Usar esta ubicación'}
+                              </button>
+                            </div>
+                          </form>
+                        ) : null}
+
                         {!lastResult && canEdit ? (
                           <button
-                            className="button button-primary"
+                            className="button button-secondary"
                             disabled={busy || auto !== null}
                             onClick={() => {
                               setBusy(true);
@@ -371,7 +424,7 @@ export function LocationWizardPage() {
                             }}
                             type="button"
                           >
-                            {busy ? 'Buscando…' : 'Buscar en el mapa'}
+                            {busy ? 'Buscando…' : 'O buscar la dirección automáticamente'}
                           </button>
                         ) : null}
 
@@ -413,33 +466,22 @@ export function LocationWizardPage() {
                         {canEdit ? (
                           <form className="locate-retry" onSubmit={(event) => void retry(event)}>
                             <label className="field">
-                              Dirección (calle y altura)
+                              ¿Está mal escrita? Corregí la dirección (calle y altura)
                               <input
                                 minLength={4}
                                 onChange={(event) => setDraftAddress(event.target.value)}
                                 value={draftAddress}
                               />
                             </label>
-                            <label className="field">
-                              O pegá la ubicación
-                              <input
-                                inputMode="url"
-                                onChange={(event) => setDraftLocation(event.target.value)}
-                                placeholder="Enlace de Google Maps o -34.58, -58.41"
-                                value={draftLocation}
-                              />
-                            </label>
                             <div className="locate-retry-actions">
                               <button
                                 className="button button-primary"
                                 disabled={
-                                  busy ||
-                                  (draftAddress.trim() === current.writtenAddress.trim() &&
-                                    !draftLocation.trim())
+                                  busy || draftAddress.trim() === current.writtenAddress.trim()
                                 }
                                 type="submit"
                               >
-                                {busy ? 'Buscando…' : 'Buscar con esto'}
+                                {busy ? 'Buscando…' : 'Buscar con esta dirección'}
                               </button>
                               <button
                                 className="button button-secondary"

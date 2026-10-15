@@ -443,3 +443,36 @@ describe('asistente de ubicaciones', () => {
     );
   });
 });
+
+describe('ubicación pegada a mano', () => {
+  // Como el proveedor real: con un enlace con coordenadas, devuelve ese punto con el enlace.
+  const desdeElEnlace: GeocodingProvider = {
+    geocode: (input: GeocodingInput) =>
+      Promise.resolve(
+        input.locationUrl
+          ? [{ ...candidato(-34.61, -58.43, 0.5), locationUrl: input.locationUrl }]
+          : [candidato(-31.42, -64.18, 1)],
+      ),
+    key: 'prueba',
+  };
+
+  it('se confirma aunque las reglas automáticas la hubieran dejado para revisar', async () => {
+    const { client, service } = await base(desdeElEnlace);
+    const pegado = 'https://www.google.com/maps/search/?api=1&query=-34.61,-58.43';
+
+    const result = await service.locateOrderAddress(ORDER, reglas, contexto, {
+      locationUrl: pegado,
+    });
+
+    expect(result.status).toBe('located');
+    const { rows } = await client.query<{ latitude: string; geocoding_status: string }>(
+      `select latitude, geocoding_status from customer_addresses`,
+    );
+    expect(rows[0]).toMatchObject({ geocoding_status: 'CONFIRMED', latitude: '-34.610000' });
+  });
+
+  it('sin ubicación pegada, el mismo resultado lejano sigue quedando para revisar', async () => {
+    const { service } = await base(desdeElEnlace);
+    expect((await service.locateOrderAddress(ORDER, reglas, contexto)).status).toBe('review');
+  });
+});

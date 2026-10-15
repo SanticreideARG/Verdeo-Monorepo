@@ -78,11 +78,59 @@ export function parseCoordinatesFromLocationUrl(
     const parsed = coordinatePair(url.searchParams.get(key));
     if (parsed) return parsed;
   }
-  const pathMatch = url.pathname.match(/@(-?\d{1,2}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)/);
+  // "/maps/place/-34.6,-58.4" y "/maps/search/-34.6,+-58.4": el punto que se busca o se marca.
+  let pathname = url.pathname;
+  try {
+    pathname = decodeURIComponent(url.pathname);
+  } catch {
+    // Un %-escape roto: se mira tal cual.
+  }
+  const placed = coordinatePair(
+    pathname.match(/\/(?:place|search)\/([-+\d.,\s]+)(?:\/|$)/)?.[1]?.replace(/\+/g, '') ?? null,
+  );
+  if (placed) return placed;
+  const pathMatch = pathname.match(/@(-?\d{1,2}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)/);
   if (!pathMatch?.[1] || !pathMatch[2]) return null;
   const latitude = Number(pathMatch[1]);
   const longitude = Number(pathMatch[2]);
   return validCoordinates(latitude, longitude) ? { latitude, longitude } : null;
+}
+
+/**
+ * Coordenadas pegadas como texto, en los formatos que da Google Maps:
+ *
+ * - decimales, como las copia Maps al tocar un punto: "-34.60361, -58.38158" (también sin coma);
+ * - grados, minutos y segundos, como las muestra al lado del punto: 34°36'13.0"S 58°22'53.7"W.
+ *
+ * Devuelve null si no son coordenadas (un enlace, una dirección): de eso se encarga otro camino.
+ */
+export function parsePastedCoordinates(
+  text: string,
+): { latitude: number; longitude: number } | null {
+  const value = text.trim();
+  const decimal = value.match(/^(-?\d{1,2}(?:\.\d+)?)\s*[,;\s]\s*(-?\d{1,3}(?:\.\d+)?)$/);
+  if (decimal?.[1] && decimal[2]) {
+    const latitude = Number(decimal[1]);
+    const longitude = Number(decimal[2]);
+    return validCoordinates(latitude, longitude) ? { latitude, longitude } : null;
+  }
+  const part = String.raw`(\d{1,3})\s*°\s*(\d{1,2})\s*['’′]\s*(\d{1,2}(?:[.,]\d+)?)\s*(?:"|”|″|'')?\s*([NSEWO])`;
+  const dms = value.match(new RegExp(`^${part}[\\s,]+${part}$`, 'i'));
+  if (!dms) return null;
+  const toDecimal = (degrees?: string, minutes?: string, seconds?: string, hemisphere?: string) => {
+    const amount =
+      Number(degrees) + Number(minutes) / 60 + Number((seconds ?? '0').replace(',', '.')) / 3600;
+    return /[SWO]/i.test(hemisphere ?? '') ? -amount : amount;
+  };
+  const first = toDecimal(dms[1], dms[2], dms[3], dms[4]);
+  const second = toDecimal(dms[5], dms[6], dms[7], dms[8]);
+  // Latitud primero (N/S), como la da Maps; si vienen al revés, se acomodan.
+  const latitudeFirst = /[NS]/i.test(dms[4] ?? '');
+  const latitude = latitudeFirst ? first : second;
+  const longitude = latitudeFirst ? second : first;
+  return validCoordinates(latitude, longitude)
+    ? { latitude: Number(latitude.toFixed(6)), longitude: Number(longitude.toFixed(6)) }
+    : null;
 }
 
 export function validateGeocodingCandidates(

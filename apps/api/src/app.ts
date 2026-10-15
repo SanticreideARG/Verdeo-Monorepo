@@ -1,3 +1,4 @@
+import { parsePastedCoordinates } from '@verdeo/geocoding';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { cors } from 'hono/cors';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
@@ -5043,11 +5044,12 @@ export function createApp(options: CreateAppOptions) {
       return { error: 'Escribí la dirección completa: calle y altura.' };
     }
     if (!location) return { address, locationUrl: undefined };
-    const pair = /^(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$/.exec(location);
+    // Coordenadas como las da Google Maps: decimales ("-34.58, -58.41") o en grados (34°34'48"S …).
+    const pair = parsePastedCoordinates(location);
     if (pair) {
       return {
         address,
-        locationUrl: `https://www.google.com/maps/search/?api=1&query=${pair[1] ?? ''},${pair[2] ?? ''}`,
+        locationUrl: `https://www.google.com/maps/search/?api=1&query=${String(pair.latitude)},${String(pair.longitude)}`,
       };
     }
     if (/^https?:\/\//i.test(location) && location.length <= 2_000) {

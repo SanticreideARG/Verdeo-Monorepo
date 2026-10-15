@@ -6,6 +6,7 @@ import {
   GoogleMapsGeocodingProvider,
   LocationLinkGeocodingProvider,
   parseCoordinatesFromLocationUrl,
+  parsePastedCoordinates,
   validateGeocodingCandidates,
 } from './index.js';
 
@@ -161,5 +162,35 @@ describe('ConfigurableGeocodingProvider', () => {
     });
 
     expect(candidate).toMatchObject({ latitude: -34.6, longitude: -58.4 });
+  });
+});
+
+describe('ubicaciones pegadas de Google Maps', () => {
+  it('lee el punto de los enlaces /place/ y /search/', () => {
+    expect(
+      parseCoordinatesFromLocationUrl('https://www.google.com/maps/place/-34.6036,-58.3816'),
+    ).toEqual({ latitude: -34.6036, longitude: -58.3816 });
+    expect(
+      parseCoordinatesFromLocationUrl(
+        'https://www.google.com/maps/search/-34.6036,+-58.3816?entry=tts',
+      ),
+    ).toEqual({ latitude: -34.6036, longitude: -58.3816 });
+  });
+
+  it('lee coordenadas decimales y en grados, minutos y segundos', () => {
+    expect(parsePastedCoordinates('-34.60361, -58.38158')).toEqual({
+      latitude: -34.60361,
+      longitude: -58.38158,
+    });
+    expect(parsePastedCoordinates('-34.60361 -58.38158')).toEqual({
+      latitude: -34.60361,
+      longitude: -58.38158,
+    });
+    expect(parsePastedCoordinates(`34°36'13.0"S 58°22'53.7"W`)).toEqual({
+      latitude: -34.603611,
+      longitude: -58.381583,
+    });
+    expect(parsePastedCoordinates('Av. Corrientes 1234')).toBeNull();
+    expect(parsePastedCoordinates('https://maps.app.goo.gl/abc')).toBeNull();
   });
 });

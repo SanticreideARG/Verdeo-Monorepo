@@ -2825,6 +2825,7 @@ export class PostgresOperationsService {
       rules,
       context,
       `locate:${orderId}:${String(Date.now())}`,
+      newLocationUrl,
     );
   }
 
@@ -2841,6 +2842,11 @@ export class PostgresOperationsService {
     rules: Pick<AutoAcceptRules, 'radiusKm' | 'threshold'>,
     context: OperationsContext,
     idempotencyKey: string,
+    /**
+     * La ubicación que pegó una persona (enlace de Maps o coordenadas). Si el punto salió de ahí,
+     * se confirma sin pasar por las reglas automáticas: lo eligió alguien mirando el mapa.
+     */
+    trustedLocationUrl?: string,
   ): Promise<LocateAddressResult> {
     const request = await this.requestAddressGeocoding(
       customerId,
@@ -2874,6 +2880,28 @@ export class PostgresOperationsService {
         requestId: request.id,
         status: 'no_match',
       };
+    }
+
+    if (trustedLocationUrl) {
+      const pinned = request.candidates.find(
+        (candidate) => candidate.locationUrl === trustedLocationUrl,
+      );
+      if (pinned) {
+        await this.confirmAddressGeocoding(
+          customerId,
+          addressId,
+          request.id,
+          { candidateId: pinned.id },
+          context,
+        );
+        return {
+          addressId,
+          candidates: summary,
+          customerId,
+          requestId: request.id,
+          status: 'located',
+        };
+      }
     }
 
     const stored = await this.storedGeocodingSettings(operatingSiteId);
@@ -3013,6 +3041,7 @@ export class PostgresOperationsService {
       rules,
       context,
       `locate-address:${addressId}:${String(Date.now())}`,
+      newLocationUrl,
     );
   }
 

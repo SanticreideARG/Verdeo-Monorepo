@@ -260,3 +260,21 @@ menú: se entra desde el tablero ("Conciliar ubicaciones", en los módulos de es
   `customers.read` + `customers.view_sensitive`, ubicar con `customers.edit` además—, porque la
   dirección es un dato sensible. Hoy eso es el superadmin; si un operador lo tiene que usar, hay que
   darle `customers.view_sensitive`.
+
+### La ubicación pegada de Google Maps manda (2026-10-16)
+
+Pedido del usuario: Google Maps encuentra bien direcciones que OpenStreetMap ubica mal, así que lo
+que se pega de Maps tiene que poder usarse tal cual.
+
+- **Se confirma sin reglas automáticas.** Cuando una persona pega una ubicación (en el asistente o
+  en "Ubicar dirección" del pedido) y el punto sale de ahí, queda confirmado aunque esté lejos del
+  origen o la ciudad no tenga origen: lo eligió alguien mirando el mapa. Si de lo pegado no sale un
+  punto (un enlace sin coordenadas que no se pudo expandir), se busca el texto como siempre y el
+  resultado sigue pasando por las reglas.
+- **Formatos que se leen**: enlaces largos de Maps (el pin `!3d…!4d…`, `@lat,lng`, `?q=`), los
+  cortos que se comparten desde el teléfono (`maps.app.goo.gl`, se siguen las redirecciones), los
+  de `/maps/place/lat,lng` y `/maps/search/lat,lng`, coordenadas decimales con o sin coma
+  (`-34.60361, -58.38158`) y en grados, minutos y segundos como las muestra Maps
+  (`34°36'13.0"S 58°22'53.7"W`).
+- **En el asistente** es lo primero del domicilio en foco: "¿Google Maps la encuentra bien? Pegá
+  acá su ubicación" → **Usar esta ubicación**. Corregir la dirección quedó aparte, abajo.
