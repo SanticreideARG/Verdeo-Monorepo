@@ -143,6 +143,10 @@ construimos no es el envío sino la cuenta de a quién ya se le avisó.
       uno de los domicilios sin ubicación, con avance.
 - [ ] Darle al asistente su lugar en el menú (hoy se entra desde el tablero).
 
+## P1 - Interfaz
+
+- [ ] **Panel de control en el teléfono** (SETTINGS_MOBILE_NAV_PLAN.md): inicio con tarjetas y buscador, encabezado "‹ Panel de control" con cambio de sección en una hoja; se retira la pastilla plegada.
+
 ## P1 - Tablero
 
 - [x] Feed, fase 1 (DASHBOARD_FEED_PLAN.md): publicaciones del equipo (aviso, cambio, novedad del
