@@ -26,7 +26,7 @@ const SOURCE_LABELS: Record<string, string> = {
   // Ya no se puede elegir al cargar un pedido, pero los que se cargaron antes lo tienen y tienen
   // que seguir diciendo algo legible.
   manual: 'Manual',
-  opportunity_sale: 'Venta de oportunidad',
+  opportunity_sale: 'Del stock',
   phone: 'Teléfono',
   referral: 'Recomendación',
   spreadsheet_import: 'Planilla',

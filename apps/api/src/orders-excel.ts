@@ -29,7 +29,7 @@ const SOURCE_LABELS: Record<string, string> = {
   facebook: 'Facebook',
   instagram: 'Instagram',
   manual: 'Manual',
-  opportunity_sale: 'Venta de oportunidad',
+  opportunity_sale: 'Del stock',
   phone: 'Teléfono',
   referral: 'Recomendación',
   web: 'Sitio web',

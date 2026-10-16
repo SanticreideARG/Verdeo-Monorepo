@@ -22,6 +22,8 @@ export interface KitchenSourceLine {
   familyAbbreviation?: string | null | undefined;
   familyName: string;
   orderPublicNumber: string;
+  /** El origen del pedido: lo vendido del stock (`opportunity_sale`) no suma a lo que se cocina. */
+  orderSource?: string | undefined;
   quantityUnits: number;
   variantName: string;
 }

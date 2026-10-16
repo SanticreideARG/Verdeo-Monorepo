@@ -7,6 +7,8 @@ import { CancelOrderDialog } from '../components/CancelOrderDialog.js';
 import { ColumnPicker } from '../components/ColumnPicker.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { DashboardShell } from '../components/DashboardShell.js';
+import { StockSaleOption } from '../components/StockSaleOption.js';
+import { sourceLabel } from '../lib/orderColumns.js';
 import { rememberOrderList } from '../lib/orderNavigation.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { DataTable } from '../components/DataTable.js';
@@ -185,6 +187,8 @@ export function OrderIntakePage() {
    */
   const [cart, setCart, clearStoredCart] = usePersistedState<CartLine[]>('order-intake-cart', []);
   const [selectedMenuId, setSelectedMenuId] = useState('');
+  // "Sale del stock": el pedido es una venta de oportunidad (STOCK_PLAN.md, fase 2).
+  const [fromStock, setFromStock] = useState(false);
   const [selectedOfferingId, setSelectedOfferingId] = useState('');
   const [selectedDishes, setSelectedDishes] = useState<string[]>([]);
   /* Las unidades, en el estado: sin esto no hay total que mostrar al pie del formulario. */
@@ -837,13 +841,24 @@ export function OrderIntakePage() {
         items: cartItemsPayload(armado.lines),
         menuId: formText(form, 'menuId'),
         paymentExpectation: formText(form, 'paymentExpectation'),
-        source: formText(form, 'source'),
+        /*
+         * Del stock: el origen pasa a ser "venta de oportunidad" —es lo que descuenta de lo
+         * disponible y lo saca de lo que hay que cocinar— y el canal por el que pidió queda en las
+         * notas, para no perderlo.
+         */
+        ...(fromStock
+          ? {
+              notes: `Del stock · pidió por ${sourceLabel(formText(form, 'source'))}`,
+              source: 'opportunity_sale',
+            }
+          : { source: formText(form, 'source') }),
         ...(confirmNow ? { confirm: true } : {}),
       });
       // The draft is dropped on a successful save, not on unmount: that is what makes "I switched
       // screens and came back" restore, while "I already saved this" does not come back as a ghost.
       draft.discard();
       resetCart();
+      setFromStock(false);
       setMessage('');
       showToast(
         confirmNow ? 'Pedido registrado y confirmado.' : 'Pedido registrado como borrador.',
@@ -1550,6 +1565,13 @@ export function OrderIntakePage() {
                   <option value="referral">Recomendación</option>
                 </select>
               </label>
+              {permissions.includes('production.read') ? (
+                <StockSaleOption
+                  checked={fromStock}
+                  cycleId={selectedMenu?.cycle.id ?? null}
+                  onChange={setFromStock}
+                />
+              ) : null}
               <label className="field">
                 Medio de pago
                 {paymentMethods.length > 0 ? (

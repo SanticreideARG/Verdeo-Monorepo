@@ -6944,6 +6944,8 @@ export class PostgresOperationsService {
         orderId: orders.id,
         orderItemId: orderItems.id,
         orderPublicNumber: orders.publicNumber,
+        // Para separar lo vendido del stock (venta de oportunidad): ya se cocinó como stock.
+        orderSource: orders.source,
         quantityUnits: orderItems.quantityUnits,
         variantName: orderItems.variantSnapshot,
       })
@@ -7066,8 +7068,14 @@ export class PostgresOperationsService {
     });
     // El stock para la venta también se cocina: va aparte, para que se vea de dónde sale el número.
     const stock = deliveryRunId ? [] : await this.listProductionStock(cycleId);
+    /*
+     * Lo vendido del stock (venta de oportunidad) no suma a lo que hay que cocinar: ya está en el
+     * stock, o en el excedente de lo que se cocinó. Contarlo como pedido lo cocinaba dos veces.
+     * Sigue teniendo su etiqueta con cliente: eso sale de las etiquetas, no de este resumen.
+     */
+    const toCook = lines.filter((line) => line.orderSource !== 'opportunity_sale');
     return {
-      ...buildKitchenSummary(lines),
+      ...buildKitchenSummary(toCook),
       cycle,
       generatedAt: new Date(),
       stock: stock.map(({ familyName, quantityUnits, variantName }) => ({
@@ -7956,8 +7964,10 @@ export class PostgresOperationsService {
       const available = rows.get(key)?.disponible ?? 0;
       if (quantity > available) {
         throw new OperationsConflictError(
-          `No hay excedente disponible de ${familyName} ${variantName} para una venta de ` +
-            `oportunidad (disponible: ${available}, pedido: ${quantity}).`,
+          available === 0
+            ? `No queda stock de ${familyName} ${variantName} en este período.`
+            : `No alcanza el stock de ${familyName} ${variantName}: quedan ${available} y el ` +
+                `pedido lleva ${quantity}.`,
         );
       }
     }

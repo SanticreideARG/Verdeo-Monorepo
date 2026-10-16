@@ -133,7 +133,8 @@ construimos no es el envío sino la cuenta de a quién ya se le avisó.
 - [x] Stock para la venta, fase 1 (STOCK_PLAN.md): tabla `production_stock`, carga en Cocina, suma
       en producción y en lo disponible, conversión del cliente STOCK
       (`packages/db/scripts/convert-stock-customer.sql`).
-- [ ] Stock, fase 2: "Del stock" en la carga de pedidos.
+- [x] Stock, fase 2: "Sale del stock" en la carga de pedidos, con lo disponible a la vista; lo
+      vendido del stock no suma a lo que se cocina.
 - [ ] Stock, fase 3: etiquetas del stock al producirse ("Incluir el stock").
 
 ## P1 - Ubicaciones

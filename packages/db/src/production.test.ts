@@ -544,7 +544,12 @@ describe('stock para la venta (STOCK_PLAN.md)', () => {
 
     await sale(2);
     expect((await keto(service))?.disponible).toBe(0);
-    await expect(sale(1)).rejects.toThrow(OperationsConflictError);
+    await expect(sale(1)).rejects.toThrow('No queda stock de Keto 250');
+
+    // Lo vendido del stock ya está en el stock: cocina no lo vuelve a sumar como pedido.
+    const summary = await service.kitchenSummary(CYCLE);
+    expect(summary.totalUnits).toBe(4);
+    expect(summary.stock).toEqual([{ familyName: 'Keto', quantityUnits: 2, variantName: '250' }]);
   });
 
   it('guardar reemplaza el stock entero, suma repetidos y con cero lo saca', async () => {

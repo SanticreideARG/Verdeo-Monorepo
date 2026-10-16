@@ -69,8 +69,21 @@ rutas.
   cliente y deja un evento de auditoría. Probado contra una base de prueba en
   `convert-stock-customer.test.ts`.
 
+## Cómo quedó la fase 2 (2026-10-16)
+
+- **Carga de pedidos → "Sale del stock"**: una casilla debajo de "Origen" (la ve quien tiene
+  `production.read`). Marcada, muestra lo disponible del período por variedad y tamaño, y el pedido
+  se guarda como venta de oportunidad (`source = 'opportunity_sale'`), a precio normal. El canal
+  por el que pidió el cliente queda en las notas ("Del stock · pidió por WhatsApp"), para no
+  perderlo. En las listas y el Excel el origen se lee "Del stock".
+- **El servidor no deja vender de más**: "No queda stock de Keto 400 en este período" o "No
+  alcanza el stock…: quedan 2 y el pedido lleva 3".
+- **No se cocina dos veces**: lo vendido del stock ya está en el stock (o en el excedente de lo
+  cocinado), así que el resumen de cocina no lo suma como pedido. Sí tiene su etiqueta con cliente,
+  entra a su reparto y a las rutas, y cuenta en ventas como cualquier pedido.
+
 ## Fases
 
 1. ✅ Modelo, carga en Cocina, suma en producción y en el disponible, y conversión del cliente STOCK.
-2. Vender del stock desde la carga de pedidos.
+2. ✅ Vender del stock desde la carga de pedidos.
 3. Etiquetas del stock al producirse.
