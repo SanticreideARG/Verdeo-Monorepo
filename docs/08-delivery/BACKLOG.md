@@ -202,6 +202,10 @@ construimos no es el envío sino la cuenta de a quién ya se le avisó.
 
 ## P1 - Labels
 
+- [ ] Renderizador único de etiquetas, fondo blanco, logo arriba y layouts (LABELS_RENDERER_PLAN.md, fase 1).
+- [ ] Módulo "Diseñar etiquetas" con vista previa en vivo (fase 2).
+- [ ] Cocina, stock y calibración en el mismo renderizador (fase 3).
+
 - [x] Label templates (`LabelSettingsPage` + `labels-export.ts`; impresión bajo demanda desde
       producción, nunca automática al confirmar un pedido).
 - [ ] Multi-copy.
