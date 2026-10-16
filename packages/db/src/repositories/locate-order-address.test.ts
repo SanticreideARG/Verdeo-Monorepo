@@ -108,12 +108,12 @@ describe('locateOrderAddress', () => {
   });
 
   // La "San Martín 500" de otra provincia con la confianza al máximo.
-  it('no acepta sola un punto seguro pero fuera de la ciudad', async () => {
+  it('no ofrece un punto seguro pero fuera de la ciudad', async () => {
     const { client, service } = await base(proveedor([candidato(-31.42, -64.18, 1)]));
 
     const result = await service.locateOrderAddress(ORDER, reglas, contexto);
 
-    expect(result.status).toBe('review');
+    expect(result.status).toBe('no_match');
     expect(result.reason).toContain('lejos');
     const { rows } = await client.query<{ latitude: string | null }>(
       `select latitude from customer_addresses`,
@@ -362,7 +362,7 @@ describe('ciudad sin punto de origen', () => {
 
     const result = await service.locateOrderAddress(ORDER, reglas, contexto);
 
-    expect(result.status).toBe('review');
+    expect(result.status).toBe('no_match');
     expect(result.reason).toContain('lejos');
   });
 });
@@ -471,8 +471,8 @@ describe('ubicación pegada a mano', () => {
     expect(rows[0]).toMatchObject({ geocoding_status: 'CONFIRMED', latitude: '-34.610000' });
   });
 
-  it('sin ubicación pegada, el mismo resultado lejano sigue quedando para revisar', async () => {
+  it('sin ubicación pegada, el mismo resultado lejano no se ofrece', async () => {
     const { service } = await base(desdeElEnlace);
-    expect((await service.locateOrderAddress(ORDER, reglas, contexto)).status).toBe('review');
+    expect((await service.locateOrderAddress(ORDER, reglas, contexto)).status).toBe('no_match');
   });
 });

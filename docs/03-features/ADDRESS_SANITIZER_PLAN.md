@@ -278,3 +278,19 @@ que se pega de Maps tiene que poder usarse tal cual.
   (`34°36'13.0"S 58°22'53.7"W`).
 - **En el asistente** es lo primero del domicilio en foco: "¿Google Maps la encuentra bien? Pegá
   acá su ubicación" → **Usar esta ubicación**. Corregir la dirección quedó aparte, abajo.
+
+### Sólo lugares de la ciudad (2026-10-16)
+
+Pedido del usuario: la ubicación tiene que ser de la Argentina y de la zona en cuestión, no de
+otras provincias; OpenStreetMap ofrecía opciones muy lejanas.
+
+- **La búsqueda se acota a la ciudad**: OpenStreetMap busca sólo dentro del recuadro de la ciudad
+  (`viewbox` + `bounded=1`, del tamaño del radio configurado, 60 km por defecto) y siempre en la
+  Argentina. Google, si se configura, se limita al país (`components=country:AR`) y se orienta al
+  mismo recuadro. Georef ya buscaba en la provincia del origen.
+- **Sin origen cargado**, el recuadro se arma alrededor del centro de los domicilios ya
+  confirmados de la ciudad.
+- **Lo lejano no se ofrece**: los candidatos fuera del radio no aparecen para elegir ni cuentan
+  para aceptar solo. Si todo lo que encontró queda lejos, vuelve como "no encontrada" con el
+  motivo ("Sólo encontró lugares lejos de la ciudad…") y la sugerencia de pegar la ubicación de
+  Google Maps, que sigue mandando aunque quede lejos (la eligió una persona).

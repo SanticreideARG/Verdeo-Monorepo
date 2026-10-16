@@ -28,6 +28,7 @@ import {
 } from '@verdeo/customers';
 import {
   decideAutoAccept,
+  distanceKm,
   GeocodingProviderError,
   validateGeocodingCandidates,
   type AutoAcceptRules,
@@ -752,20 +753,75 @@ export class PostgresOperationsService {
       .limit(1);
     if (!customer) throw new OperationsNotFoundError('No se encontró el cliente');
 
-    const customerOrders = await this.database
+    const orderRows = await this.database
       .select({
         createdAt: orders.createdAt,
         currency: orders.currency,
+        cycleAlias: salesCycles.alias,
         deliveryDate: orders.deliveryDate,
         id: orders.id,
         publicNumber: orders.publicNumber,
+        source: orders.source,
         status: orders.status,
         totalMinor: orders.totalMinor,
       })
       .from(orders)
+      .leftJoin(salesCycles, eq(salesCycles.id, orders.salesCycleId))
       .where(eq(orders.customerId, customerId))
       .orderBy(desc(orders.createdAt))
       .limit(100);
+    /*
+     * Qué llevó cada pedido, para la ficha: las variedades con su cantidad y, en un Intuitivo, los
+     * platos que eligió. Sin esto, el historial era una lista de números y montos.
+     */
+    const orderIds = orderRows.map((order) => order.id);
+    const itemRows =
+      orderIds.length === 0
+        ? []
+        : await this.database
+            .select({
+              familyName: orderItems.productNameSnapshot,
+              id: orderItems.id,
+              orderId: orderItems.orderId,
+              quantityUnits: orderItems.quantityUnits,
+              variantName: orderItems.variantSnapshot,
+            })
+            .from(orderItems)
+            .where(inArray(orderItems.orderId, orderIds))
+            .orderBy(asc(orderItems.createdAt));
+    const selectionRows =
+      itemRows.length === 0
+        ? []
+        : await this.database
+            .select({
+              dishName: orderItemSelections.dishNameSnapshot,
+              orderItemId: orderItemSelections.orderItemId,
+            })
+            .from(orderItemSelections)
+            .where(
+              inArray(
+                orderItemSelections.orderItemId,
+                itemRows.map((item) => item.id),
+              ),
+            )
+            .orderBy(asc(orderItemSelections.slot));
+    const dishesByItem = new Map<string, string[]>();
+    for (const selection of selectionRows) {
+      const list = dishesByItem.get(selection.orderItemId) ?? [];
+      list.push(selection.dishName);
+      dishesByItem.set(selection.orderItemId, list);
+    }
+    const customerOrders = orderRows.map((order) => ({
+      ...order,
+      items: itemRows
+        .filter((item) => item.orderId === order.id)
+        .map((item) => ({
+          dishes: dishesByItem.get(item.id) ?? [],
+          familyName: item.familyName,
+          quantityUnits: item.quantityUnits,
+          variantName: item.variantName,
+        })),
+    }));
 
     if (!includeSensitive) {
       return {
@@ -2201,7 +2257,9 @@ export class PostgresOperationsService {
         await this.geocodingProvider.geocode({
           idempotencyKey: input.idempotencyKey,
           normalize: geocodingSettings.useAi,
-          ...(geocodingSettings.origin ? { origin: geocodingSettings.origin } : {}),
+          ...(geocodingSettings.origin
+            ? { origin: geocodingSettings.origin, radiusKm: geocodingSettings.radiusKm }
+            : {}),
           ...((geocodingSettings.cityContext ?? initialized.address.city)
             ? { cityHint: geocodingSettings.cityContext ?? initialized.address.city ?? undefined }
             : {}),
@@ -2855,7 +2913,15 @@ export class PostgresOperationsService {
       context,
     );
     // Con las coordenadas, para ver en un mapa dónde cae cada candidato antes de elegirlo.
-    const summary = request.candidates.map((candidate) => ({
+    const summarize = (candidates: typeof request.candidates) =>
+      candidates.map((candidate) => ({
+        confidence: candidate.confidence,
+        formattedAddress: candidate.formattedAddress,
+        id: candidate.id,
+        latitude: Number(candidate.latitude),
+        longitude: Number(candidate.longitude),
+      }));
+    let summary = request.candidates.map((candidate) => ({
       confidence: candidate.confidence,
       formattedAddress: candidate.formattedAddress,
       id: candidate.id,
@@ -2905,16 +2971,6 @@ export class PostgresOperationsService {
     }
 
     const stored = await this.storedGeocodingSettings(operatingSiteId);
-    if (stored && !stored.autoAccept) {
-      return {
-        addressId,
-        candidates: summary,
-        customerId: customerId,
-        reason: 'La ciudad está configurada para revisar todas las ubicaciones a mano.',
-        requestId: request.id,
-        status: 'review',
-      };
-    }
     /*
      * Contra qué se mide la distancia.
      *
@@ -2927,8 +2983,45 @@ export class PostgresOperationsService {
       siteOrigin.latitude !== null && siteOrigin.longitude !== null
         ? { latitude: Number(siteOrigin.latitude), longitude: Number(siteOrigin.longitude) }
         : await this.confirmedAddressesCenter(operatingSiteId);
+    const radiusKm = stored?.radiusKm ?? rules.radiusKm;
+    /*
+     * Sólo se ofrecen los lugares de la ciudad. Un candidato a cientos de kilómetros (la misma
+     * calle en otra provincia) no es una opción: mostrarlo invitaba a elegirlo.
+     */
+    const nearby = origin
+      ? request.candidates.filter(
+          (candidate) =>
+            distanceKm(origin, {
+              latitude: Number(candidate.latitude),
+              longitude: Number(candidate.longitude),
+            }) <= radiusKm,
+        )
+      : request.candidates;
+    if (nearby.length === 0) {
+      return {
+        addressId,
+        candidates: [],
+        customerId,
+        reason:
+          'Sólo encontró lugares lejos de la ciudad (de otras zonas o provincias). Pegá la ubicación de Google Maps o corregí la dirección.',
+        requestId: request.id,
+        status: 'no_match',
+      };
+    }
+    summary = summarize(nearby);
+
+    if (stored && !stored.autoAccept) {
+      return {
+        addressId,
+        candidates: summary,
+        customerId: customerId,
+        reason: 'La ciudad está configurada para revisar todas las ubicaciones a mano.',
+        requestId: request.id,
+        status: 'review',
+      };
+    }
     const decision = decideAutoAccept(
-      request.candidates.map((candidate) => ({
+      nearby.map((candidate) => ({
         confidence: candidate.confidence,
         formattedAddress: candidate.formattedAddress,
         latitude: candidate.latitude,
@@ -2937,7 +3030,7 @@ export class PostgresOperationsService {
       })),
       {
         origin,
-        radiusKm: stored?.radiusKm ?? rules.radiusKm,
+        radiusKm,
         threshold: stored ? stored.confidenceThresholdPercent / 100 : rules.threshold,
       },
     );
@@ -3175,12 +3268,23 @@ export class PostgresOperationsService {
       .where(eq(geographicZones.id, zoneId))
       .limit(1);
     const stored = zone ? await this.storedGeocodingSettings(zone.operatingSiteId) : null;
-    // El origen de la ciudad le dice al buscador en qué provincia buscar.
+    /*
+     * El origen de la ciudad le dice al buscador en qué provincia y en qué recuadro buscar. Sin
+     * origen cargado, el centro de las direcciones ya confirmadas: alcanza para no ofrecer lugares
+     * de otra provincia.
+     */
     const origin =
       zone?.originLatitude != null && zone.originLongitude != null
         ? { latitude: Number(zone.originLatitude), longitude: Number(zone.originLongitude) }
-        : null;
-    return { cityContext: stored?.cityContext ?? null, origin, useAi: stored?.useAi ?? true };
+        : zone
+          ? await this.confirmedAddressesCenter(zone.operatingSiteId)
+          : null;
+    return {
+      cityContext: stored?.cityContext ?? null,
+      origin,
+      radiusKm: stored?.radiusKm ?? 60,
+      useAi: stored?.useAi ?? true,
+    };
   }
 
   public async getGeocodingSettings(operatingSiteId: string) {

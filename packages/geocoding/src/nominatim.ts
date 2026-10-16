@@ -1,5 +1,7 @@
 import { searchableAddress } from './address-query.js';
 import {
+  boundingBox,
+  DEFAULT_CITY_RADIUS_KM,
   GeocodingProviderError,
   LocationLinkGeocodingProvider,
   validateGeocodingCandidates,
@@ -78,6 +80,18 @@ export class NominatimGeocodingProvider implements GeocodingProvider {
     url.searchParams.set('addressdetails', '1');
     url.searchParams.set('countrycodes', 'ar');
     url.searchParams.set('limit', '5');
+    /*
+     * Sólo dentro del recuadro de la ciudad. Sin esto, una "San Martín 500" devolvía la de otra
+     * provincia: con el país solo, OpenStreetMap ofrecía lugares a cientos de kilómetros.
+     */
+    if (input.origin) {
+      const box = boundingBox(input.origin, input.radiusKm ?? DEFAULT_CITY_RADIUS_KM);
+      url.searchParams.set(
+        'viewbox',
+        [box.west, box.north, box.east, box.south].map(String).join(','),
+      );
+      url.searchParams.set('bounded', '1');
+    }
 
     let body: NominatimResult[];
     try {

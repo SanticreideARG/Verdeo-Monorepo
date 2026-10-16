@@ -10525,3 +10525,30 @@ label.field:has(> input[type='radio']) {
 .stock-sale-empty {
   color: var(--db-gold);
 }
+
+/* La composición de cada pedido en la ficha del cliente: a todo el ancho, debajo de sus datos. */
+.crm-order-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.9rem;
+  grid-column: 1 / -1;
+  margin: 0.15rem 0 0;
+  padding: 0;
+  color: var(--db-text);
+  font-size: 0.78rem;
+  list-style: none;
+}
+.crm-order-items b {
+  text-align: left;
+}
+.crm-order-items small {
+  color: var(--db-text-soft);
+}
+.crm-order-meta {
+  color: var(--db-muted);
+}
+.crm-orders strong a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--db-border);
+}

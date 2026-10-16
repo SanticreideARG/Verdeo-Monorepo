@@ -107,3 +107,26 @@ describe('ConfigurableGeocodingProvider con OpenStreetMap de respaldo', () => {
     expect(google).not.toHaveBeenCalled();
   });
 });
+
+describe('búsqueda acotada a la ciudad', () => {
+  it('con el origen de la ciudad, busca sólo dentro de su recuadro', async () => {
+    const fetchImpl = fetcher(respuesta);
+    const provider = new NominatimGeocodingProvider(fetchImpl, 'test', () => Promise.resolve());
+
+    await provider.geocode(
+      entrada({ origin: { latitude: -34.6, longitude: -58.44 }, radiusKm: 30 }),
+    );
+
+    const url = new URL(fetchImpl.mock.calls[0]?.[0] as URL);
+    expect(url.searchParams.get('countrycodes')).toBe('ar');
+    expect(url.searchParams.get('bounded')).toBe('1');
+    const [west, north, east, south] = (url.searchParams.get('viewbox') ?? '')
+      .split(',')
+      .map(Number);
+    // 30 km son unos 0,27° de latitud para cada lado.
+    expect(north).toBeCloseTo(-34.33, 1);
+    expect(south).toBeCloseTo(-34.87, 1);
+    expect(west).toBeLessThan(-58.44);
+    expect(east).toBeGreaterThan(-58.44);
+  });
+});

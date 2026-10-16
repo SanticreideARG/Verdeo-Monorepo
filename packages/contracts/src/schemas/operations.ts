@@ -382,9 +382,23 @@ export const CustomerRestrictionSchema = z.object({
 export const CustomerOrderSummarySchema = z.object({
   createdAt: IsoDateTimeSchema,
   currency: z.string(),
+  // El período del pedido, para leer el historial por semana.
+  cycleAlias: z.string().nullable().default(null),
   deliveryDate: z.iso.date(),
   id: UuidSchema,
+  /** Qué llevó: variedad, tamaño y cantidad; en un Intuitivo, los platos que eligió. */
+  items: z
+    .array(
+      z.object({
+        dishes: z.array(z.string()),
+        familyName: z.string(),
+        quantityUnits: z.number().int(),
+        variantName: z.string(),
+      }),
+    )
+    .default([]),
   publicNumber: z.string(),
+  source: z.string().default('manual'),
   status: OrderStatusSchema,
   totalMinor: z.number().int(),
 });

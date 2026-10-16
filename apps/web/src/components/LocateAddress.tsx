@@ -22,7 +22,7 @@ export function locateStatusText(result: Pick<LocateResult, 'reason' | 'status'>
     case 'review':
       return result.reason ? `Revisala: ${result.reason}` : 'Revisala.';
     case 'no_match':
-      return 'No se encontró la dirección. Revisá cómo está escrita.';
+      return result.reason ?? 'No se encontró la dirección. Revisá cómo está escrita.';
     case 'needs_zone':
       return result.reason ?? 'Falta asignar la zona del domicilio.';
     default:

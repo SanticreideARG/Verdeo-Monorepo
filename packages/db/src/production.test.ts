@@ -589,3 +589,17 @@ describe('stock para la venta (STOCK_PLAN.md)', () => {
     expect((await service.setCycleClosed(CYCLE, true, context)).writtenOffUnits).toBe(3);
   });
 });
+
+describe('la ficha del cliente', () => {
+  it('trae lo que llevó cada pedido, con su período', async () => {
+    const service = await seededService();
+
+    const detail = await service.getCustomer(CUSTOMER, false);
+
+    expect(detail.orders[0]).toMatchObject({
+      items: [{ dishes: [], familyName: 'Keto', quantityUnits: 4, variantName: '250' }],
+      source: 'manual',
+    });
+    expect(detail.orders[0]?.cycleAlias).toEqual(expect.any(String));
+  });
+});

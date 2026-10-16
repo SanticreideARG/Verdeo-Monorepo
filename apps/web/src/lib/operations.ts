@@ -64,9 +64,13 @@ export interface CustomerDetail extends CustomerSummary {
   orders: Array<{
     createdAt: string;
     currency: string;
+    cycleAlias: string | null;
     deliveryDate: string;
     id: string;
+    /** Qué llevó: variedad, tamaño y cantidad; en un Intuitivo, los platos elegidos. */
+    items: { dishes: string[]; familyName: string; quantityUnits: number; variantName: string }[];
     publicNumber: string;
+    source: string;
     status: OrderSummary['status'];
     totalMinor: number;
   }>;

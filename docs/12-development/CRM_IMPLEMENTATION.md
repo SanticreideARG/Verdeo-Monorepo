@@ -285,3 +285,14 @@ Zustand may store filters and local drafts, not the authoritative customer cache
 - restriction catalog versus free-form reasons;
 - conflict policy for unmerge after later edits;
 - final Customer-to-User linking method.
+
+## Pedidos asociados con su composición (2026-10-16)
+
+En la ficha del cliente, cada pedido asociado muestra, debajo de sus datos de siempre (número,
+estado, fecha de entrega y total), lo que llevó: `2× Keto 400`, y en un Intuitivo los platos que
+eligió. Además, el período del pedido y "Del stock" cuando salió del stock. El número abre el
+detalle del pedido.
+
+`getCustomer` trae para cada pedido `items` (variedad, tamaño, cantidad y platos elegidos),
+`cycleAlias` y `source`, con dos consultas más para los cien pedidos de la ficha (ítems y platos),
+no una por pedido.

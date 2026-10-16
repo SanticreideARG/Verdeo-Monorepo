@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { AddressMap } from '../components/AddressMap.js';
 import { AfterSaveDialog } from '../components/AfterSaveDialog.js';
@@ -1248,7 +1248,9 @@ export function CustomersPage() {
                   <div className="crm-orders">
                     {detail.orders.map((order) => (
                       <article key={order.id}>
-                        <strong>{order.publicNumber}</strong>
+                        <strong>
+                          <Link to={`/app/pedidos/${order.id}`}>{order.publicNumber}</Link>
+                        </strong>
                         <span className="status-chip">{orderStatusLabel(order.status)}</span>
                         <span>
                           {new Intl.DateTimeFormat('es-AR').format(
@@ -1256,6 +1258,32 @@ export function CustomersPage() {
                           )}
                         </span>
                         <b>{formatMoney(order.totalMinor, order.currency)}</b>
+                        {/*
+                         * Qué llevó, debajo de los datos de siempre: el historial de un cliente se
+                         * lee por lo que pide, no por el número de pedido.
+                         */}
+                        {order.items.length > 0 ? (
+                          <ul className="crm-order-items">
+                            {order.items.map((item, index) => (
+                              <li key={`${item.familyName}-${item.variantName}-${String(index)}`}>
+                                <b>{item.quantityUnits}×</b> {item.familyName} {item.variantName}
+                                {item.dishes.length > 0 ? (
+                                  <small> ({item.dishes.join(', ')})</small>
+                                ) : null}
+                              </li>
+                            ))}
+                            {order.cycleAlias || order.source === 'opportunity_sale' ? (
+                              <li className="crm-order-meta">
+                                {[
+                                  order.cycleAlias,
+                                  order.source === 'opportunity_sale' ? 'Del stock' : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </li>
+                            ) : null}
+                          </ul>
+                        ) : null}
                       </article>
                     ))}
                     {detail.orders.length === 0 ? (

@@ -18,6 +18,8 @@ export interface GeocodingInput {
   locationUrl?: string | undefined;
   /** El origen de la ciudad: le dice al buscador en qué provincia buscar y qué resultado queda cerca. */
   origin?: { latitude: number; longitude: number } | undefined;
+  /** Hasta dónde llega la ciudad desde el origen: lo que cae más lejos no es de acá. */
+  radiusKm?: number | undefined;
   requestId: string;
   writtenAddress: string;
 }
@@ -35,6 +37,25 @@ export class GeocodingProviderError extends Error {
     super(message);
     this.name = 'GeocodingProviderError';
   }
+}
+
+/** El radio de una ciudad cuando no se configuró otro (el mismo que usan las reglas). */
+export const DEFAULT_CITY_RADIUS_KM = 60;
+
+/** El recuadro de `radiusKm` alrededor de un punto, para acotar la búsqueda a la ciudad. */
+export function boundingBox(
+  origin: { latitude: number; longitude: number },
+  radiusKm: number,
+): { east: number; north: number; south: number; west: number } {
+  const latDelta = radiusKm / 111;
+  const lonDelta = radiusKm / (111 * Math.max(0.2, Math.cos((origin.latitude * Math.PI) / 180)));
+  const round = (value: number) => Number(value.toFixed(5));
+  return {
+    east: round(origin.longitude + lonDelta),
+    north: round(origin.latitude + latDelta),
+    south: round(origin.latitude - latDelta),
+    west: round(origin.longitude - lonDelta),
+  };
 }
 
 function validCoordinates(latitude: number, longitude: number): boolean {
@@ -235,6 +256,14 @@ export class GoogleMapsGeocodingProvider implements GeocodingProvider {
     url.searchParams.set('address', input.writtenAddress);
     url.searchParams.set('key', this.apiKey);
     url.searchParams.set('region', this.regionCode);
+    url.searchParams.set('components', 'country:AR');
+    if (input.origin) {
+      const box = boundingBox(input.origin, input.radiusKm ?? DEFAULT_CITY_RADIUS_KM);
+      url.searchParams.set(
+        'bounds',
+        `${String(box.south)},${String(box.west)}|${String(box.north)},${String(box.east)}`,
+      );
+    }
 
     let body: GoogleGeocodingResponse;
     try {
