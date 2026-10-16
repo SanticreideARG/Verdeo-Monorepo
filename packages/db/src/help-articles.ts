@@ -262,6 +262,14 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Auditoría del sistema',
   },
   {
+    body: 'El Panel de control reúne todo lo que se configura o se audita: zonas, días de reparto, menú personalizado, métodos de pago, usuarios, correo, WhatsApp, mensajes guardados, chat, inteligencia artificial, los contenidos del sitio, la auditoría, el estado del sistema, las direcciones y los respaldos. Es sólo para quien administra el sistema: se entra desde "Panel de control" en el menú.\n\nEn la computadora, el menú de secciones está siempre a la izquierda, y "Panel de control" vuelve a la última que abriste.\n\nEn el teléfono, "Panel de control" abre un inicio con todas las secciones como tarjetas, cada una con una línea que dice qué se hace ahí. Arriba hay un buscador que entiende las palabras con que se pregunta: probá "resend" para el correo, "radio" para las zonas, "contraseña" para los usuarios o "copia" para los respaldos. Adentro de una sección, "‹ Panel de control" vuelve al inicio, "Cambiar de sección" abre una lista con todas, y las secciones del mismo grupo aparecen como fichas que se deslizan para saltar de una a otra.\n\nCada sección pide además su propio permiso: si no ves una, no la tenés habilitada. Tu apariencia (tema, tipografía, tamaño de letra) la cambia cualquiera, también desde el botón "Aa" de la barra.\n\n[Ir al Panel de control](/app/ajustes)',
+    category: 'Administración',
+    key: 'admin-panel-control',
+    ordinal: 0,
+    requiredPermission: 'settings.access',
+    title: 'El Panel de control: dónde está cada ajuste',
+  },
+  {
     body: '"Estadísticas" resume pedidos y ventas por período, ciudad y menú. Los menús se agrupan por nombre sin importar mayúsculas: "Menú Keto" y "MENÚ KETO" cuentan como el mismo.\n\n[Ir a Estadísticas](/app/estadisticas)',
     category: 'Administración',
     key: 'admin-estadisticas',

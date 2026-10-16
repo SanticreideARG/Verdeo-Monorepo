@@ -145,7 +145,7 @@ construimos no es el envío sino la cuenta de a quién ya se le avisó.
 
 ## P1 - Interfaz
 
-- [ ] **Panel de control en el teléfono** (SETTINGS_MOBILE_NAV_PLAN.md): inicio con tarjetas y buscador, encabezado "‹ Panel de control" con cambio de sección en una hoja; se retira la pastilla plegada.
+- [x] **Panel de control en el teléfono** (SETTINGS_MOBILE_NAV_PLAN.md): inicio con tarjetas y buscador, encabezado "‹ Panel de control" con cambio de sección en una hoja; se retiró la pastilla plegada. Además, la barra superior ya no se pasa del ancho entre 681 y 1100 px.
 
 ## P1 - Tablero
 

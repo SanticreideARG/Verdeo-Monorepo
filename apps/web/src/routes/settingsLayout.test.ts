@@ -53,13 +53,15 @@ describe('Panel de control', () => {
    * menú: este test la encuentra.
    */
   it('pone cada sección del panel detrás de la llave del Panel de control', () => {
-    const tabs = readFileSync(join(routesFolder, '..', 'components', 'SettingsTabs.tsx'), 'utf8');
+    const tabs = readFileSync(join(routesFolder, '..', 'lib', 'settingsCatalog.ts'), 'utf8');
     const app = readFileSync(join(routesFolder, 'App.tsx'), 'utf8');
     // Apariencia es la preferencia de uno mismo: la tiene cualquiera.
     const hrefs = [...tabs.matchAll(/href: '([^']+)'/g)]
       .map((match) => match[1] ?? '')
       .filter((href) => href !== '/app/ajustes/apariencia');
-    expect(hrefs.length).toBeGreaterThanOrEqual(15);
+    // Más el inicio del panel, que no es una sección pero entra por la misma puerta.
+    hrefs.push('/app/ajustes');
+    expect(hrefs.length).toBeGreaterThanOrEqual(16);
 
     const ungated = hrefs.filter((href) => {
       const route = app.split(/\r?\n/).findIndex((line) => line.includes(`path="${href}"`));

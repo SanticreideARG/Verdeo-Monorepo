@@ -1,152 +1,165 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
+import {
+  SETTINGS_HOME,
+  visibleSettingsGroups,
+  type SettingsGroup,
+} from '../lib/settingsCatalog.js';
 import { useMediaQuery } from '../lib/useNarrowViewport.js';
+import { SettingsSheet } from './SettingsSheet.js';
 import { SETTINGS_ACCESS_PERMISSION } from './SettingsGate.js';
 
-interface SettingsTab {
-  href: string;
-  label: string;
-  /** Sin permiso: la pestaña la ve cualquiera que pueda entrar (p. ej. su propia apariencia). */
-  permission?: string;
+const LAST_SECTION_KEY = 'verdeo.panel.ultimaSeccion';
+
+/** La última sección del panel que se abrió en escritorio: a donde vuelve "Panel de control". */
+export function lastSettingsSection(): string | null {
+  try {
+    return window.localStorage.getItem(LAST_SECTION_KEY);
+  } catch {
+    return null;
+  }
 }
 
-interface SettingsGroup {
-  label: string;
-  tabs: readonly SettingsTab[];
+function Chevron({ direction }: { direction: 'down' | 'left' }) {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="16"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      width="16"
+    >
+      <path
+        d={direction === 'left' ? 'm15 6-6 6 6 6' : 'm6 9 6 6 6-6'}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2.2"
+      />
+    </svg>
+  );
 }
 
 /**
- * El Panel de control: todo lo que se configura o se audita, agrupado por a qué pregunta contesta.
- *
- * Antes esto era "Ajustes" y convivía en el menú lateral con Usuarios, Auditoría y Respaldos, cuatro
- * entradas distintas para cosas que se tocan en el mismo momento y casi nunca: cuando se da de alta
- * a alguien, cuando se conecta un servicio, cuando hay que mirar qué pasó. Cuatro entradas en el
- * menú de todos los días por algo que se usa una vez por mes es espacio mal gastado en lo que más
- * se mira.
- *
- * Los grupos separan por pregunta y no por tecnología: qué y dónde vendemos, quién trabaja acá, con
- * qué nos conectamos, qué queda registrado, y lo que es preferencia de uno mismo. Usuarios va
- * aparte de Integraciones y de Sistema a propósito — dar de alta a alguien es una decisión del
- * negocio, no una configuración técnica ni un registro.
+ * La navegación entre las secciones del Panel de control (el catálogo está en `settingsCatalog`).
  *
  * Cada sección sigue siendo su propia ruta —una carga real al hacer clic, no un cambio blando de
  * SPA—, que es lo que mantiene intacta la lógica de permisos y de carga de cada página.
+ *
+ * - **Escritorio**: una columna a la izquierda, con los grupos como títulos. Es lo que ya había.
+ * - **Pantalla angosta**: un encabezado que se entiende de un vistazo. Antes era un `<details>`
+ *   plegado con aspecto de título —"PANEL DE CONTROL · Zonas geográficas", sin flecha ni nada que
+ *   dijera que se tocaba—, y adentro una lista de dieciséis renglones que empujaba el contenido. Ahora:
+ *   "‹ Panel de control" vuelve al inicio (el índice con tarjetas y buscador), "Cambiar de sección"
+ *   abre una hoja desde abajo con todo agrupado, y las secciones del mismo grupo van como fichas para
+ *   el salto más común sin abrir nada.
  */
-const SETTINGS_GROUPS: readonly SettingsGroup[] = [
-  {
-    label: 'Operación',
-    tabs: [
-      { href: '/app/ajustes/zonas', label: 'Zonas geográficas', permission: 'sites.read' },
-      { href: '/app/ajustes/reparto', label: 'Días de reparto', permission: 'sites.read' },
-      { href: '/app/ajustes/menu', label: 'Menú personalizado', permission: 'production.read' },
-      { href: '/app/ajustes/pagos', label: 'Métodos de pago', permission: 'payments.read' },
-    ],
-  },
-  {
-    label: 'Equipo',
-    tabs: [{ href: '/app/usuarios', label: 'Usuarios', permission: 'users.read' }],
-  },
-  {
-    label: 'Integraciones',
-    tabs: [
-      { href: '/app/ajustes/correo', label: 'Correo', permission: 'ai.providers.manage' },
-      {
-        href: '/app/ajustes/mensajes',
-        label: 'Cuentas de WhatsApp',
-        permission: 'messaging.accounts.manage',
-      },
-      {
-        href: '/app/ajustes/plantillas',
-        label: 'Mensajes guardados',
-        permission: 'messages.templates.manage',
-      },
-      { href: '/app/ajustes/chat', label: 'Enlaces de chat', permission: 'chat.links.manage' },
-      { href: '/app/ia', label: 'IA y plantillas', permission: 'ai.providers.manage' },
-    ],
-  },
-  {
-    // Lo que se ve en el sitio público. Se edita cada tanto, no todos los días: por eso no va en el
-    // menú lateral.
-    label: 'Sitio web',
-    tabs: [
-      { href: '/app/contenidos', label: 'Contenidos', permission: 'cms.read' },
-      { href: '/app/ajustes/asistente', label: 'Asistente de la web', permission: 'cms.read' },
-    ],
-  },
-  {
-    label: 'Sistema',
-    tabs: [
-      { href: '/app/auditoria', label: 'Auditoría', permission: 'audit.read' },
-      { href: '/app/sistema', label: 'Estado del sistema', permission: 'audit.read' },
-      { href: '/app/ajustes/direcciones', label: 'Direcciones', permission: 'sites.read' },
-      // El permiso no viene con ningún rol: la descarga se lleva los datos de todos los clientes.
-      { href: '/app/respaldos', label: 'Respaldos', permission: 'backups.manage' },
-    ],
-  },
-  {
-    label: 'Personal',
-    // Sin permiso: es la preferencia de uno mismo, no configuración del sistema.
-    tabs: [{ href: '/app/ajustes/apariencia', label: 'Apariencia' }],
-  },
-];
-
 export function SettingsTabs({ permissions }: { permissions: string[] }) {
   const location = useLocation();
   /*
    * Plegado con el MISMO corte que su CSS (74.99rem), y no con el de "angosto" del shell (680px).
    *
    * Eran dos números distintos: entre 681px y el corte del CSS el submenú estaba plegado en el
-   * diseño y abierto en el componente, y un índice de trece renglones se desplegaba entero
-   * sobre el contenido. Un solo número, escrito en los dos lugares.
+   * diseño y abierto en el componente. Un solo número, escrito en los dos lugares.
    */
   const stacked = useMediaQuery('(max-width: 74.99rem)');
-  // Una pestaña sin permiso la ve cualquiera que haya llegado hasta acá. Las demás piden, además
-  // de la suya, la llave del panel: sin ella, Apariencia queda sola y el submenú no se muestra.
-  const canEnter = permissions.includes(SETTINGS_ACCESS_PERMISSION);
-  const groups = SETTINGS_GROUPS.map((group) => ({
-    ...group,
-    tabs: group.tabs.filter(
-      (tab) => !tab.permission || (canEnter && permissions.includes(tab.permission)),
-    ),
-    // Un grupo entero sin permiso no deja el título colgado.
-  })).filter((group) => group.tabs.length > 0);
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
 
-  if (groups.flatMap((group) => group.tabs).length <= 1) return null;
+  const groups = visibleSettingsGroups(
+    permissions,
+    permissions.includes(SETTINGS_ACCESS_PERMISSION),
+  );
+  const sections = groups.flatMap((group) => group.sections);
+  const current = sections.find((section) => section.href === location.pathname);
 
-  const actual = groups
-    .flatMap((group) => group.tabs)
-    .find((tab) => location.pathname === tab.href);
+  // Escritorio: se recuerda la sección para que "Panel de control" vuelva a donde se estaba.
+  useEffect(() => {
+    if (stacked || !current) return;
+    try {
+      window.localStorage.setItem(LAST_SECTION_KEY, current.href);
+    } catch {
+      // Sin almacenamiento: simplemente no se recuerda.
+    }
+  }, [current, stacked]);
 
-  /*
-   * A la izquierda en escritorio, plegada en el teléfono.
-   *
-   * Con trece secciones, la tira horizontal se iba a dos renglones y había que leerla entera para
-   * encontrar una. En columna se barre con la vista y los títulos de grupo hacen de índice. En un
-   * teléfono una columna de trece renglones es media pantalla antes de ver la configuración que se
-   * vino a cambiar, así que ahí se pliega y el resumen dice en cuál estás.
-   */
+  // Al navegar desde la hoja, se cierra sola.
+  useEffect(() => setOpen(false), [location.pathname]);
+
+  const close = useCallback(() => {
+    setOpen(false);
+    trigger.current?.focus();
+  }, []);
+
+  // Con una sola sección visible no hay nada que elegir: el menú sería ruido.
+  if (sections.length <= 1) return null;
+
+  if (!stacked) {
+    return (
+      <div className="settings-nav">
+        <nav aria-label="Secciones del panel de control">
+          {groups.map((group) => (
+            <div className="settings-nav-group" key={group.label}>
+              <p className="settings-nav-label">{group.label}</p>
+              {group.sections.map((section) => (
+                <Link
+                  aria-current={location.pathname === section.href ? 'page' : undefined}
+                  className={location.pathname === section.href ? 'is-active' : ''}
+                  key={section.href}
+                  to={section.href}
+                >
+                  {section.label}
+                </Link>
+              ))}
+            </div>
+          ))}
+        </nav>
+      </div>
+    );
+  }
+
+  // Las hermanas de la sección actual (su mismo grupo), para saltar sin abrir la hoja.
+  const siblings: SettingsGroup | undefined = groups.find((group) =>
+    group.sections.some((section) => section.href === location.pathname),
+  );
+
   return (
-    <details className="settings-nav" open={!stacked}>
-      <summary>
-        <span>Panel de control</span>
-        <small>{actual?.label ?? 'Elegí una sección'}</small>
-      </summary>
-      <nav aria-label="Secciones del panel de control">
-        {groups.map((group) => (
-          <div className="settings-nav-group" key={group.label}>
-            <p className="settings-nav-label">{group.label}</p>
-            {group.tabs.map((tab) => (
-              <Link
-                className={location.pathname === tab.href ? 'is-active' : ''}
-                key={tab.href}
-                to={tab.href}
-              >
-                {tab.label}
-              </Link>
-            ))}
-          </div>
-        ))}
-      </nav>
-    </details>
+    <div className="settings-nav settings-nav-mobile">
+      <div className="settings-nav-bar">
+        <Link className="settings-back" to={SETTINGS_HOME}>
+          <Chevron direction="left" />
+          Panel de control
+        </Link>
+        <button
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          className="settings-switch"
+          onClick={() => setOpen(true)}
+          ref={trigger}
+          type="button"
+        >
+          Cambiar de sección
+          <Chevron direction="down" />
+        </button>
+      </div>
+      {siblings && siblings.sections.length > 1 ? (
+        <nav aria-label={`Más de ${siblings.label}`} className="settings-chips">
+          {siblings.sections.map((section) => (
+            <Link
+              aria-current={location.pathname === section.href ? 'page' : undefined}
+              className={location.pathname === section.href ? 'is-active' : ''}
+              key={section.href}
+              to={section.href}
+            >
+              {section.label}
+            </Link>
+          ))}
+        </nav>
+      ) : null}
+      {open ? (
+        <SettingsSheet currentHref={location.pathname} groups={groups} onClose={close} />
+      ) : null}
+    </div>
   );
 }

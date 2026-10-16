@@ -79,3 +79,27 @@ escritorio. Cada sección sigue siendo su propia ruta.
    control" del menú lateral sigue yendo a la última sección vista.
 2. **¿Los íconos?** Propuesta: los del menú lateral cuando existan y, si no, un ícono simple por
    grupo.
+
+## Estado (2026-10-16): hecho
+
+Las tres fases están hechas.
+
+- **Catálogo único** (`lib/settingsCatalog.ts`): cada sección con su descripción y sus palabras clave;
+  de ahí salen el menú de escritorio, el inicio, la hoja y el buscador. Tests: toda sección tiene
+  descripción y palabras clave, no hay rutas repetidas, y el buscador entiende palabras (sin
+  tildes ni mayúsculas, todas las palabras tienen que aparecer).
+- **Inicio** (`/app/ajustes`, `SettingsHomePage`): en el teléfono, tarjetas agrupadas con buscador;
+  en escritorio redirige a la última sección abierta (o a la primera que se ve). "Panel de control" del
+  menú lateral apunta ahí y queda resaltado en el inicio y en cada sección del panel.
+- **Encabezado de sección** (`SettingsTabs`, para pantallas de hasta 74.99 rem): "‹ Panel de
+  control", el botón "Cambiar de sección" con su hoja (`SettingsSheet`: foco adentro, Escape y tocar
+  afuera la cierran, la página de atrás no se desplaza, el foco vuelve al botón) y las fichas de las
+  hermanas del grupo. Se retiró la pastilla `<details>`. El rótulo "Panel de control" repetido de
+  cada pantalla se oculta en ese ancho.
+- **Aviso de "pantalla grande"**: una línea que se descarta, y no vuelve en la sesión.
+- **Cambió respecto del plan**: no hay un ícono por sección (se prefirió la descripción, que dice más);
+  y "Panel de control" en escritorio va a la última sección abierta, como se proponía.
+- **Encontrado de paso**: a 768 px la barra superior de toda la aplicación se pasaba 28 px del ancho y
+  hacía arrastrar la página de costado. Se compactó entre 681 y 1100 px (menos espacio, sin el "Buen
+  día,") y se sacó el reloj entre 681 y 760 px. Verificado a 320, 375, 681, 700, 761, 768, 820, 1024,
+  1199 y 1200 px.

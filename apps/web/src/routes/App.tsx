@@ -3,6 +3,7 @@ import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { SettingsGate } from '../components/SettingsGate.js';
 import { LocationWizardPage } from './LocationWizardPage.js';
+import { SettingsHomePage } from './SettingsHomePage.js';
 
 import { useOperatingSiteId } from '../lib/useOperatingSite.js';
 
@@ -346,6 +347,16 @@ export function App() {
         <Route path="/app/menus" element={<MenusPage />} />
         <Route path="/app/menus/precios" element={<PriceByLocationPage />} />
         <Route path="/app/cocina" element={<KitchenPage />} />
+        {/* El inicio del Panel de control: en el teléfono, el índice de secciones; en escritorio,
+          vuelve a la última sección abierta. */}
+        <Route
+          path="/app/ajustes"
+          element={
+            <SettingsGate>
+              <SettingsHomePage />
+            </SettingsGate>
+          }
+        />
         <Route
           path="/app/ia"
           element={

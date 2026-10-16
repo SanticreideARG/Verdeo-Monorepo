@@ -12,6 +12,7 @@ import { bottomNavLayout } from '../lib/bottomNav.js';
 import { PresenceControl } from './PresenceControl.js';
 import { SystemStatusButton } from './SystemStatusButton.js';
 import { SETTINGS_ACCESS_PERMISSION } from './SettingsGate.js';
+import { isSettingsPath, SETTINGS_HOME } from '../lib/settingsCatalog.js';
 import { useFeedUnread } from '../lib/feedUnread.js';
 import { RequestProgressBar } from './RequestProgressBar.js';
 import { ToastHost } from './ToastHost.js';
@@ -179,7 +180,7 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
        * vez por mes y adentro tiene su propia navegación.
        */
       {
-        href: '/app/ajustes/zonas',
+        href: SETTINGS_HOME,
         icon: 'settings',
         label: 'Panel de control',
         // Una sola llave para todo el panel; adentro, cada sección pide además la suya.
@@ -725,7 +726,11 @@ export function DashboardShell({
                   key={cluster.label}
                 >
                   {cluster.items.map((item) => {
-                    const active = isNavigationActive(location.pathname, location.hash, item.href);
+                    // "Panel de control" está activo en el inicio y en cada una de sus secciones.
+                    const active =
+                      item.href === SETTINGS_HOME
+                        ? isSettingsPath(location.pathname)
+                        : isNavigationActive(location.pathname, location.hash, item.href);
                     return (
                       <Link
                         className={active ? 'is-active' : ''}
