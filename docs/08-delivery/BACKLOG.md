@@ -379,6 +379,9 @@ semana en la ficha del pedido, y el vacío de "Ver pedidos" con botón para limp
 
 ## Ayuda del panel (la lechuza de los operadores)
 
+- [ ] **Ayuda al día** (HELP_AND_HINTS_PLAN.md): test de cobertura, revisar los 36 artículos, escribir stock, tablero, Panel de control, ubicaciones, reparto e importar; fecha de revisión. Regla: el cambio de una pantalla toca su artículo en el mismo commit.
+- [ ] **Ayudas al pasar el mouse** en escritorio (2 s): mecanismo con `data-hint` y catálogo, interruptor en Apariencia, primeras 15–20 ayudas.
+
 - [x] La lechuza abajo a la derecha en todo el panel; es el único acceso a la ayuda (el menú
       lateral ya no tiene "Ayuda"). El editor de artículos sigue en `/app/ayuda`.
 - [x] Ramas por categoría con `/`, búsqueda sin tildes, enlaces entre artículos y a pantallas.
