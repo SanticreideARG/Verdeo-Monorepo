@@ -8318,7 +8318,9 @@ textarea.sr-only {
 }
 .modal-panel.user-create-modal {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  /* Tres hijos —encabezado, texto y formulario—: sólo el formulario puede achicarse y hacer scroll.
+     Con dos filas, el texto caía en la que se encoge a cero y se montaba sobre el formulario. */
+  grid-template-rows: auto auto minmax(0, 1fr);
   width: min(38rem, 100%);
   max-height: min(88vh, 48rem);
   padding: 0;
