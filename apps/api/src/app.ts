@@ -351,7 +351,7 @@ import {
   type OrderImportRow,
 } from './integrations/order-import.js';
 import { buildKitchenLabelsPrintHtml } from './kitchen-labels-export.js';
-import { buildLabelsPrintHtml } from './labels-export.js';
+import { renderLabelDocument } from '@verdeo/labels';
 import { RequestStats } from './request-stats.js';
 import { buildOrdersExcel } from './orders-excel.js';
 import {
@@ -5033,6 +5033,12 @@ export function createApp(options: CreateAppOptions) {
    */
   const LOCATE_RULES = { radiusKm: 60, threshold: 0.9 } as const;
 
+  /** La fecha de elaboración (`?produccion=AAAA-MM-DD`) para el campo "Fecha de producción". */
+  const productionDateFromQuery = (context: Context<{ Variables: AppVariables }>) => {
+    const parsed = z.iso.date().safeParse(context.req.query('produccion'));
+    return parsed.success ? parsed.data : null;
+  };
+
   /** La dirección corregida o la ubicación pegada (enlace de Maps o coordenadas) para buscar de nuevo. */
   const parseLocateRetry = (
     body: unknown,
@@ -7006,12 +7012,12 @@ export function createApp(options: CreateAppOptions) {
     ]);
     context.header('content-type', 'text/html; charset=utf-8');
     return context.html(
-      buildLabelsPrintHtml(
-        LabelListResponseSchema.shape.items.parse(contractValue(items)),
-        LabelSettingsSchema.parse(contractValue(settings)),
-        'Etiquetas de cocina',
-        options.appOrigin,
-      ),
+      renderLabelDocument({
+        labels: LabelListResponseSchema.shape.items.parse(contractValue(items)),
+        productionDate: productionDateFromQuery(context),
+        settings: LabelSettingsSchema.parse(contractValue(settings)),
+        title: 'Etiquetas de cocina',
+      }),
     );
   });
 
@@ -7033,12 +7039,12 @@ export function createApp(options: CreateAppOptions) {
     ]);
     context.header('content-type', 'text/html; charset=utf-8');
     return context.html(
-      buildLabelsPrintHtml(
-        LabelListResponseSchema.shape.items.parse(contractValue(items)),
-        LabelSettingsSchema.parse(contractValue(settings)),
-        'Etiquetas de pedido',
-        options.appOrigin,
-      ),
+      renderLabelDocument({
+        labels: LabelListResponseSchema.shape.items.parse(contractValue(items)),
+        productionDate: productionDateFromQuery(context),
+        settings: LabelSettingsSchema.parse(contractValue(settings)),
+        title: 'Etiquetas de pedido',
+      }),
     );
   });
 

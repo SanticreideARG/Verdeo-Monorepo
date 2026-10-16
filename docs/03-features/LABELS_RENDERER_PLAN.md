@@ -115,3 +115,16 @@ plato.
    Propuesta: se dejan de usar ya y se borran en un mes si nadie los extraña.
 4. **Los layouts**: ¿te sirven esos cinco, o hay alguno que tengas en mente (por ejemplo, el de la
    hoja de Illustrator que usan hoy)?
+
+## Estado (2026-10-16)
+
+- **Hecho, fases 1 y 2**: el renderizador (`packages/labels`), fondo blanco, logo arriba con alto y
+  espacio ajustables, borde y marcas de recorte, los campos `platos`, `produccion` y `frase`, tres
+  layouts (clásica, nombre protagonista, compacta), y el visor con etiqueta/hoja, zoom y
+  anterior/siguiente. Detalle en `LABELS_AND_QR.md`.
+- **Cambió respecto del plan**: el logo es uno solo (los dos archivos de marca eran el mismo emblema
+  cuadrado en dos resoluciones), así que no hay variante que elegir; y quedan tres layouts de los
+  cinco propuestos (faltan "tamaño a la vista" y "con banda").
+- **Pendiente, fase 3**: las etiquetas de cocina y las del stock en el mismo renderizador, la
+  calibración con la matriz de Illustrator (corrimiento X/Y por impresora) y los dos layouts que
+  faltan. Comparar layouts en una tira de miniaturas, también.

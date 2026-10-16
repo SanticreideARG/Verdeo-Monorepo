@@ -1,5 +1,7 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import { fileURLToPath } from 'node:url';
+
 import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
@@ -22,6 +24,20 @@ export default defineConfig(({ mode }) => {
 
   return {
     define,
+    resolve: {
+      alias: {
+        /*
+         * El motor de etiquetas, desde su código fuente.
+         *
+         * El paquete exporta `dist` para el servidor, pero la web se despliega sola, sin compilar
+         * los paquetes antes: sin este alias, `vite build` buscaría un `dist` que no existe. Es un
+         * módulo de TypeScript sin dependencias, así que Vite lo compila directo.
+         */
+        '@verdeo/labels': fileURLToPath(
+          new URL('../../packages/labels/src/index.ts', import.meta.url),
+        ),
+      },
+    },
     plugins: [
       react(),
       tailwindcss(),

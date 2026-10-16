@@ -122,3 +122,45 @@ Se activa en Etiquetas → "Etiquetas de cocina (una por plato, sin cliente)".
 - Pendiente: calibrar márgenes y separación con la matriz de Illustrator de la hoja que se usa hoy.
 - API: `GET /api/v1/production/:cycleId/kitchen-labels` y `/kitchen-labels/export?elab=AAAA-MM-DD`.
   Migración 0056 (abreviatura en `product_families` y los tres ajustes en `label_settings`).
+
+## El renderizador compartido y el visor (2026-10-16)
+
+Pedido del usuario: fondo blanco con el logo arriba y centrado (con interruptor, alto y espacio de
+abajo ajustables), fecha de producción y una frase propia como campos, borde y líneas de recorte, la
+variedad y los platos bien, y un visor que dibuje en vivo lo que se va a imprimir con anterior y
+siguiente. Plan y fases en `LABELS_RENDERER_PLAN.md`.
+
+**Un solo motor.** La etiqueta se dibuja en un lugar: `packages/labels` (`renderLabelDocument`). La
+impresión (la API arma el HTML y el navegador lo manda a la impresora) y la vista previa de la
+pantalla (el mismo HTML dentro de un marco) llaman a esa función con los mismos datos. Antes eran dos
+implementaciones —un componente de React y un generador de HTML—, y cada ajuste había que escribirlo
+dos veces; la geometría de la hoja estaba además repetida en `orders`, en la API y en la web. Ahora
+está en un solo lugar y la base, la API y la pantalla leen el mismo catálogo de campos.
+
+- **Fondo blanco siempre.** Se retiró la subida de fondos y la migración 0064 reseteó el fondo que
+  hubiera. Las imágenes ya subidas quedan en `label_backgrounds`, sin uso.
+- **Logo arriba, centrado**, en su franja: `logo_height_mm` (alto) y `logo_padding_bottom_mm`
+  (espacio de abajo). Va **embebido en la hoja** (una sola copia en el CSS) y no como una dirección a
+  la aplicación: la hoja se abre en una pestaña aparte y una imagen que no terminó de bajar al abrir
+  el diálogo de impresión salía en blanco. Encendido por defecto.
+- **Borde y marcas de recorte**, independientes. El borde es un recuadro fino alrededor de la
+  etiqueta; las marcas (`show_cut_lines`) son ocho trazos en las esquinas, fuera de la etiqueta, que
+  caben en la separación entre etiquetas. Con las etiquetas pegadas (separación menor a 1 mm) las
+  marcas quedan en las esquinas de adentro.
+- **Campos nuevos**: `platos` (la lista de platos de la vianda, debajo de la variedad; el "plato |
+  acompañamiento" del menú se muestra con un punto medio), `produccion` (la fecha de elaboración, un
+  `<input type="date">` que arranca en hoy y viaja como `?produccion=AAAA-MM-DD` a la impresión; no se
+  guarda) y `frase` (`custom_phrase`, hasta 120 caracteres, la misma en todas).
+- **Layouts**: `clasica`, `protagonista` (nombre grande, campos en una línea) y `compacta`.
+- **Un nombre largo baja de cuerpo por escalones** (más de 22, 30 y 40 caracteres) y no desborda.
+- **Un bug del catálogo**: el campo `plato` se ofrecía en pantalla pero la base no lo conocía, así
+  que se descartaba en silencio al guardar y nunca salía en el papel.
+
+**El visor** (`LabelViewer`): una etiqueta a su tamaño exacto (con aire para las marcas) o la hoja
+entera, con zoom (ajustar, 100 %, 200 %; a 100 % mide en pantalla lo mismo que en el papel), y
+**Anterior / Siguiente** (o las flechas del teclado) para recorrer la serie: en la vista de etiqueta
+va de a una; en la de hoja, de a página, con la etiqueta actual resaltada. Dibuja con los ajustes tal
+como están en pantalla —guardados o no— y, sin pedidos en la tanda, con etiquetas de ejemplo.
+
+Siguen aparte, hasta la fase 3 del plan: las etiquetas de cocina (`kitchen-labels-export.ts`) y las
+del stock.

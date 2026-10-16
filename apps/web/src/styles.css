@@ -3532,19 +3532,27 @@ a {
   fill: var(--db-text-soft);
   font-size: 11px;
 }
+/*
+ * La torta y su leyenda en una fila cuando entran, y la leyenda debajo cuando no. Con columnas fijas
+ * (140px + el resto), en un teléfono el resto quedaba en nada y los nombres se cortaban a una letra.
+ */
 .stats-donut {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 1rem;
   margin-top: 0.75rem;
-  grid-template-columns: 140px minmax(0, 1fr);
 }
 .stats-donut svg {
+  flex: none;
   width: 140px;
   height: 140px;
 }
 .stats-donut-legend {
   display: grid;
+  flex: 1 1 12rem;
+  min-width: 0;
   gap: 0.35rem;
   font-size: 0.78rem;
 }
@@ -6027,6 +6035,16 @@ a.order-card-phone:focus-visible {
   background: var(--db-surface-solid, #fff);
   box-shadow: 0 18px 44px rgb(0 0 0 / 22%);
 }
+/* En el teléfono el botón está a la izquierda: anclado a su borde derecho, el panel se salía de la
+   pantalla. Se ancla a la izquierda y nunca pasa del ancho disponible. */
+@media (max-width: 680px) {
+  .column-picker-panel {
+    right: auto;
+    left: 0;
+    max-width: calc(100vw - 2rem);
+    max-height: min(22rem, 55vh);
+  }
+}
 .column-picker-panel > p {
   margin: 0 0 0.4rem;
   color: var(--db-muted, var(--color-ink-muted));
@@ -6200,23 +6218,6 @@ a.order-card-phone:focus-visible {
 }
 
 /* Vista previa de la etiqueta en Ajustes: la misma jerarquía que la impresa. */
-.label-preview {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-height: 8rem;
-  border: 1px solid var(--db-border, var(--border-hairline));
-  border-radius: 0.5rem;
-  padding: 1rem;
-  background-color: #fff;
-  background-position: center;
-  background-size: cover;
-  color: #111;
-  text-align: center;
-}
-.label-preview p {
-  margin: 0.1rem 0;
-}
 
 /* El tilde de cobrado dentro de la fila de un pedido. */
 .paid-check {
@@ -7610,53 +7611,14 @@ textarea.sr-only {
   gap: 1rem;
   align-content: start;
 }
-.labels-preview-card {
-  display: grid;
-  gap: 0.4rem;
-  padding: 1rem;
-  border: 1px solid var(--db-border, rgba(23, 76, 60, 0.15));
-  border-radius: 16px;
-  background: var(--db-surface, #fff);
-}
-.labels-preview-title {
-  margin: 0;
-  color: var(--db-text, var(--color-forest));
-  font-size: 0.9rem;
-  font-weight: 700;
-}
 /* La hoja en miniatura: proporciones reales, con la grilla que sale impresa. */
 /* El marco mide el ancho disponible; la hoja se dibuja adentro en milímetros y se escala entera.
    El alto del marco lo fija la propia hoja escalada, por eso lo pone el componente. */
-.labels-sheet-frame {
-  width: 100%;
-  margin-top: 0.35rem;
-  overflow: hidden;
-}
-.labels-sheet {
-  display: grid;
-  transform-origin: top left;
-  border: 1px solid var(--db-border, rgba(23, 76, 60, 0.2));
-  border-radius: 4px;
-  background: #fff;
-}
 /* Un lugar de la hoja que esta tanda no va a usar: sale en blanco. */
-.labels-sheet-empty {
-  border: 1px dashed rgba(23, 76, 60, 0.18);
-  border-radius: 2px;
-}
 /*
  * La etiqueta a tamaño real. Va en milímetros —los mismos que el navegador usa al imprimir— y no
  * escalada a la caja: el punto es poder apoyar la etiqueta impresa contra la pantalla.
  */
-.labels-real-scale {
-  display: flex;
-  justify-content: center;
-  overflow: auto;
-  padding: 0.5rem;
-  border-radius: 10px;
-  background: repeating-conic-gradient(rgba(0, 0, 0, 0.04) 0% 25%, transparent 0% 50%) 50% / 16px
-    16px;
-}
 
 /*
  * El renglón que pide una corrección.
@@ -8247,64 +8209,6 @@ textarea.sr-only {
 
 /* La biblioteca de fondos de etiqueta. Antes había uno y subir otro lo pisaba; acá se ven todos y
    se cambia de uno a otro sin perder nada. */
-.labels-backgrounds {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
-  gap: 0.6rem;
-  margin-top: 0.75rem;
-}
-.labels-backgrounds figure {
-  position: relative;
-  margin: 0;
-  display: grid;
-  gap: 0.25rem;
-}
-.labels-backgrounds figure > button:first-child {
-  border: 2px solid transparent;
-  border-radius: 0.5rem;
-  padding: 0;
-  background: none;
-  cursor: pointer;
-  overflow: hidden;
-}
-.labels-backgrounds figure.is-current > button:first-child {
-  border-color: var(--db-accent);
-}
-.labels-backgrounds figure > button:first-child:disabled {
-  cursor: default;
-}
-.labels-backgrounds img {
-  display: block;
-  width: 100%;
-  aspect-ratio: 3 / 2;
-  object-fit: cover;
-}
-.labels-backgrounds figcaption {
-  font-size: 0.7rem;
-  color: var(--db-text-soft);
-  text-align: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.labels-backgrounds figure.is-current figcaption {
-  color: var(--db-accent);
-  font-weight: 700;
-}
-.labels-backgrounds-remove {
-  position: absolute;
-  top: 0.2rem;
-  right: 0.2rem;
-  width: 1.3rem;
-  height: 1.3rem;
-  border: 0;
-  border-radius: 999px;
-  background: rgb(0 0 0 / 55%);
-  color: #fff;
-  font-size: 0.7rem;
-  line-height: 1;
-  cursor: pointer;
-}
 
 /* El alta de usuario, en un modal. El formulario es alto —seis campos y la elección de
    contraseña— así que el cuerpo tiene su propio scroll y el encabezado queda fijo: cerrar no puede
@@ -10553,4 +10457,90 @@ label.field:has(> input[type='radio']) {
   color: inherit;
   text-decoration: underline;
   text-decoration-color: var(--db-border);
+}
+
+/*
+ * El visor de etiquetas: el mismo dibujo que la impresión, dentro de un marco. El marco se dibuja a
+ * tamaño real (en milímetros) y se escala entero, así que el zoom no cambia lo que se ve más que de
+ * tamaño.
+ */
+.label-viewer {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--db-border, rgba(23, 76, 60, 0.15));
+  border-radius: 16px;
+  background: var(--db-surface, #fff);
+}
+.label-viewer-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+}
+.label-viewer-tabs {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--db-border);
+  border-radius: 999px;
+}
+.label-viewer-tabs button {
+  min-height: 2.25rem;
+  border: 0;
+  padding: 0 0.9rem;
+  background: transparent;
+  color: var(--db-text-soft);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.label-viewer-tabs button[aria-pressed='true'] {
+  background: var(--db-accent);
+  color: #fff;
+}
+.label-viewer-stage {
+  position: relative;
+  overflow: auto;
+  border-radius: 10px;
+  background: repeating-conic-gradient(rgba(0, 0, 0, 0.04) 0% 25%, transparent 0% 50%) 50% / 16px
+    16px;
+}
+.label-viewer-stage:focus-visible {
+  outline: 2px solid var(--db-accent);
+  outline-offset: 2px;
+}
+.label-viewer-canvas {
+  margin-inline: auto;
+  overflow: hidden;
+}
+.label-viewer-stage iframe {
+  display: block;
+  border: 0;
+  background: transparent;
+  transform-origin: top left;
+}
+.label-viewer-nav {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: center;
+}
+.label-viewer-nav p {
+  display: grid;
+  margin: 0;
+  min-width: 0;
+  text-align: center;
+}
+.label-viewer-nav small {
+  overflow: hidden;
+  color: var(--db-text-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 680px) {
+  .label-viewer-nav .button {
+    min-height: 44px;
+    padding-inline: 0.8rem;
+  }
 }

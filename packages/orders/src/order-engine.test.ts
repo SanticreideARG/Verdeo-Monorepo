@@ -236,6 +236,32 @@ describe('order engine', () => {
     expect(labels[5]).toMatchObject({ dishIndex: 3, dishTotal: 3, unitIndex: 2 });
   });
 
+  it('con una etiqueta por plato, cada una sigue sabiendo todos los platos de su vianda', () => {
+    const labels = buildLabels(
+      [
+        {
+          composable: false,
+          customerDisplayName: 'Rosa',
+          deliveryDate: '2026-08-28',
+          deliveryZone: 'Centro',
+          dietaryInstructions: [],
+          dishes: ['Pollo al horno', 'Tarta de verdura'],
+          dishSelections: [],
+          familyName: 'Keto',
+          orderPublicNumber: 'N00453',
+          quantityUnits: 1,
+          variantName: '250',
+        },
+      ],
+      { perDish: true },
+    );
+
+    expect(labels.map((label) => label.dishName)).toEqual(['Pollo al horno', 'Tarta de verdura']);
+    for (const label of labels) {
+      expect(label.dishes).toEqual(['Pollo al horno', 'Tarta de verdura']);
+    }
+  });
+
   it('una vianda sin platos cargados sale con su etiqueta de siempre', () => {
     const labels = buildLabels(
       [
@@ -302,6 +328,7 @@ describe('order engine', () => {
       dishIndex: 1,
       dishName: null,
       dishTotal: 1,
+      dishes: [],
       deliveryDate: '2026-08-28',
       deliveryZone: 'Centro',
       dietaryInstructions: [],
@@ -323,6 +350,8 @@ describe('order engine', () => {
       dishIndex: 1,
       dishName: null,
       dishTotal: 1,
+      // Los platos de la vianda viajan siempre: el campo "Platos" de la etiqueta los lista.
+      dishes: ['A', 'A', 'B', 'C', 'D'],
       deliveryDate: '2026-08-28',
       deliveryZone: 'Centro',
       dietaryInstructions: [],

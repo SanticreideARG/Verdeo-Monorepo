@@ -2360,6 +2360,7 @@ describe('API foundation', () => {
         dishIndex: 1,
         dishName: null,
         dishTotal: 1,
+        dishes: ['Pollo al horno'],
         familyName: 'Keto',
         orderPublicNumber: 'N00453',
         unitIndex: 1,
@@ -2385,6 +2386,11 @@ describe('API foundation', () => {
     const sampleLabelSettings = {
       alignment: 'center',
       backgroundImageUrl: null,
+      customPhrase: null,
+      layout: 'clasica',
+      logoHeightMm: 10,
+      logoPaddingBottomMm: 2,
+      showCutLines: true,
       fields: ['tamano', 'numero'],
       fontFamily: 'system',
       fontScale: 100,
@@ -2423,6 +2429,37 @@ describe('API foundation', () => {
       expect(html.status).toBe(200);
       expect(html.headers.get('content-type')).toContain('text/html');
       expect(await html.text()).toContain('Lola');
+    });
+
+    it('imprime la hoja con la fecha de producción y la frase que se pidieron', async () => {
+      const cycleLabels = vi.fn(() => Promise.resolve(sampleLabels));
+      const getLabelSettings = vi.fn(() =>
+        Promise.resolve({
+          ...sampleLabelSettings,
+          customPhrase: 'Calentar 3 minutos',
+          fields: ['produccion', 'frase', 'platos'],
+          showLogo: true,
+        }),
+      );
+      const app = buildApp({ cycleLabels, getLabelSettings }, ['production.read']);
+
+      const conFecha = await (
+        await app.request(`/api/v1/production/${CYCLE}/labels/export?produccion=2026-10-16`, {
+          headers: { cookie },
+        })
+      ).text();
+      const sinFecha = await (
+        await app.request(`/api/v1/production/${CYCLE}/labels/export`, { headers: { cookie } })
+      ).text();
+
+      expect(conFecha).toContain('Elaborado: 16/10');
+      expect(conFecha).toContain('Calentar 3 minutos');
+      expect(conFecha).toContain('Pollo al horno');
+      // Sin fecha elegida el campo no inventa una.
+      expect(sinFecha).not.toContain('Elaborado');
+      // La hoja es blanca, con el logo embebido una sola vez y sin imagen de fondo.
+      expect(conFecha).toContain('class="logo"');
+      expect(conFecha).not.toContain('background-image');
     });
 
     // La hoja de producción: una por plato, sin cliente, con la fecha de elaboración en el pie.

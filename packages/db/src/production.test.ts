@@ -603,3 +603,72 @@ describe('la ficha del cliente', () => {
     expect(detail.orders[0]?.cycleAlias).toEqual(expect.any(String));
   });
 });
+
+describe('ajustes de etiquetas: logo, marcas, frase y campos nuevos', () => {
+  it('arrancan con el logo arriba, las marcas de recorte y el diseño de siempre', async () => {
+    const service = await seededService();
+
+    expect(await service.getLabelSettings()).toMatchObject({
+      backgroundImageUrl: null,
+      customPhrase: null,
+      layout: 'clasica',
+      logoHeightMm: 10,
+      logoPaddingBottomMm: 2,
+      showCutLines: true,
+      showLogo: true,
+    });
+  });
+
+  it('guarda lo nuevo y conserva el campo plato, que antes se descartaba al guardar', async () => {
+    const service = await seededService();
+
+    await service.setLabelSettings(
+      {
+        customPhrase: '  Calentar 3 minutos  ',
+        fields: ['plato', 'tamano', 'platos', 'produccion', 'frase', 'inventado'],
+        labelsPerPage: 8,
+        layout: 'protagonista',
+        logoHeightMm: 14,
+        logoPaddingBottomMm: 4,
+        showCutLines: false,
+      },
+      context,
+    );
+
+    expect(await service.getLabelSettings()).toMatchObject({
+      customPhrase: 'Calentar 3 minutos',
+      // El campo que ya no existe se ignora; los demás, en el orden guardado.
+      fields: ['plato', 'tamano', 'platos', 'produccion', 'frase'],
+      layout: 'protagonista',
+      logoHeightMm: 14,
+      logoPaddingBottomMm: 4,
+      showCutLines: false,
+    });
+  });
+
+  it('un diseño que no existe no pisa el guardado, y una frase vacía la borra', async () => {
+    const service = await seededService();
+    await service.setLabelSettings(
+      { customPhrase: 'Hola', labelsPerPage: 8, layout: 'compacta' },
+      context,
+    );
+
+    await service.setLabelSettings(
+      { customPhrase: '   ', labelsPerPage: 8, layout: 'otro' },
+      context,
+    );
+
+    expect(await service.getLabelSettings()).toMatchObject({
+      customPhrase: null,
+      layout: 'compacta',
+    });
+  });
+
+  it('las etiquetas traen los platos de la vianda', async () => {
+    const service = await seededService();
+
+    const labels = await service.cycleLabels(CYCLE);
+
+    expect(labels[0]?.dishes).toEqual(expect.any(Array));
+  });
+});

@@ -1,5 +1,6 @@
 import type { KitchenLabel, LabelSettings } from '@verdeo/contracts';
-import { elaborationLabel, labelCanvas } from '@verdeo/orders';
+import { labelCanvas } from '@verdeo/labels';
+import { elaborationLabel } from '@verdeo/orders';
 
 function escape(value: string): string {
   return value.replace(

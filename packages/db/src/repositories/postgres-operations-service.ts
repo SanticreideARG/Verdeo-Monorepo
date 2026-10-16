@@ -34,6 +34,7 @@ import {
   type AutoAcceptRules,
   type GeocodingProvider,
 } from '@verdeo/geocoding';
+import { LABEL_FIELDS, LABEL_LAYOUTS } from '@verdeo/labels';
 import {
   assertOrderTransitionPolicy,
   buildKitchenSummary,
@@ -374,26 +375,21 @@ export class OperationsConflictError extends Error {
  * El catálogo vive acá y no en la base: es lo que sabe qué campos existen, así que también es lo
  * que tiene que decidir qué hacer con una elección guardada que ya no corresponde a ninguno.
  */
-const LABEL_FIELDS = [
-  'tamano',
-  'variedad',
-  'unidad',
-  'numero',
-  'zona',
-  'entrega',
-  'restricciones',
-] as const;
 
 const LABEL_DEFAULT_FIELDS = ['tamano', 'numero'] as const;
 
 const LABEL_SETTINGS_FALLBACK = {
   alignment: 'center',
   backgroundImageUrl: null,
+  customPhrase: null,
   fontFamily: 'system',
   fontScale: 100,
   hideSurname: false,
   id: null,
   labelGapMm: 4,
+  layout: 'clasica',
+  logoHeightMm: 10,
+  logoPaddingBottomMm: 2,
   nameOnlyForComposable: false,
   onePerDish: false,
   labelsPerPage: 8,
@@ -401,7 +397,8 @@ const LABEL_SETTINGS_FALLBACK = {
   sheetMarginMm: 12,
   sheetWidthMm: 210,
   showBorders: true,
-  showLogo: false,
+  showCutLines: true,
+  showLogo: true,
   kitchenMode: false,
   showSize: false,
   intuitivoCustomerName: true,
@@ -421,9 +418,7 @@ function parseLabelFields(stored: string | null | undefined): string[] {
   return stored
     .split(',')
     .map((field) => field.trim())
-    .filter((field): field is (typeof LABEL_FIELDS)[number] =>
-      (LABEL_FIELDS as readonly string[]).includes(field),
-    );
+    .filter((field) => (LABEL_FIELDS as readonly string[]).includes(field));
 }
 
 function catalogCode(value: string): string {
@@ -7305,18 +7300,30 @@ export class PostgresOperationsService {
       .orderBy(desc(labelSettings.updatedAt))
       .limit(1);
     if (!config) return { ...LABEL_SETTINGS_FALLBACK, fields: [...LABEL_DEFAULT_FIELDS] };
-    return { ...config, fields: parseLabelFields(config.fields) };
+    return {
+      ...config,
+      fields: parseLabelFields(config.fields),
+      // Un layout que ya no existe cae en el de siempre en vez de romper la impresión.
+      layout: (LABEL_LAYOUTS as readonly string[]).includes(config.layout)
+        ? config.layout
+        : 'clasica',
+    };
   }
 
   public async setLabelSettings(
     input: {
       alignment?: string | undefined;
       backgroundImageUrl?: string | null | undefined;
+      customPhrase?: string | null | undefined;
       fields?: readonly string[] | undefined;
       fontFamily?: string | undefined;
       fontScale?: number | undefined;
       hideSurname?: boolean | undefined;
       labelGapMm?: number | undefined;
+      layout?: string | undefined;
+      logoHeightMm?: number | undefined;
+      logoPaddingBottomMm?: number | undefined;
+      showCutLines?: boolean | undefined;
       nameOnlyForComposable?: boolean | undefined;
       onePerDish?: boolean | undefined;
       showLogo?: boolean | undefined;
@@ -7347,15 +7354,25 @@ export class PostgresOperationsService {
             input.backgroundImageUrl === undefined
               ? (existing?.backgroundImageUrl ?? null)
               : input.backgroundImageUrl,
+          customPhrase:
+            input.customPhrase === undefined
+              ? (existing?.customPhrase ?? null)
+              : input.customPhrase?.trim() || null,
           fields: (input.fields ?? parseLabelFields(existing?.fields)).join(','),
           fontFamily: input.fontFamily ?? existing?.fontFamily ?? 'system',
           fontScale: input.fontScale ?? existing?.fontScale ?? 100,
           hideSurname: input.hideSurname ?? existing?.hideSurname ?? false,
           labelGapMm: input.labelGapMm ?? existing?.labelGapMm ?? 4,
+          layout: (LABEL_LAYOUTS as readonly string[]).includes(input.layout ?? '')
+            ? (input.layout as string)
+            : (existing?.layout ?? 'clasica'),
+          logoHeightMm: input.logoHeightMm ?? existing?.logoHeightMm ?? 10,
+          logoPaddingBottomMm: input.logoPaddingBottomMm ?? existing?.logoPaddingBottomMm ?? 2,
+          showCutLines: input.showCutLines ?? existing?.showCutLines ?? true,
           nameOnlyForComposable:
             input.nameOnlyForComposable ?? existing?.nameOnlyForComposable ?? false,
           onePerDish: input.onePerDish ?? existing?.onePerDish ?? false,
-          showLogo: input.showLogo ?? existing?.showLogo ?? false,
+          showLogo: input.showLogo ?? existing?.showLogo ?? true,
           kitchenMode: input.kitchenMode ?? existing?.kitchenMode ?? false,
           showSize: input.showSize ?? existing?.showSize ?? false,
           intuitivoCustomerName:
@@ -7407,7 +7424,13 @@ export class PostgresOperationsService {
          * cambio quedaba aplicado y la pantalla mostraba "Ocurrió un error inesperado", así que
          * parecía no haber guardado nada.
          */
-        return { ...row, fields: parseLabelFields(row.fields) };
+        return {
+          ...row,
+          fields: parseLabelFields(row.fields),
+          layout: (LABEL_LAYOUTS as readonly string[]).includes(row.layout)
+            ? row.layout
+            : 'clasica',
+        };
       })
       .catch(translateDatabaseConflict);
   }

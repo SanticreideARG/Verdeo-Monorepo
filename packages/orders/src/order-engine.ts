@@ -275,6 +275,9 @@ export function buildLabels(
         deliveryDate: line.deliveryDate,
         deliveryZone: line.deliveryZone,
         dietaryInstructions: line.dietaryInstructions,
+        // Todos los platos de la vianda, aunque la etiqueta sea de uno solo: el campo "Platos" los
+        // lista, y en modo "una por plato" cada etiqueta sigue sabiendo de qué vianda es.
+        dishes: line.dishes,
         familyName: line.familyName,
         orderPublicNumber: line.orderPublicNumber,
         // Numerar las unidades de un mismo renglón: con tres viandas iguales sobre la mesa, "2 de 3"

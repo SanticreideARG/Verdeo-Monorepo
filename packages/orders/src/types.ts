@@ -92,6 +92,8 @@ export interface Label {
   /** El plato, o null cuando la etiqueta es de la vianda entera. */
   dishName: string | null;
   dishTotal: number;
+  /** Los platos de la vianda: los del menú en una variedad fija, los elegidos en una Intuitivo. */
+  dishes: readonly string[];
   familyName: string;
   orderPublicNumber: string;
   /** Qué unidad de las del renglón es ésta: se imprime como "1 de 3" cuando hay más de una. */

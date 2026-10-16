@@ -349,8 +349,15 @@ export interface LabelSettings {
   hideSurname: boolean;
   /** Una etiqueta por plato en vez de una por vianda. */
   onePerDish: boolean;
-  /** El isotipo de Verdeo impreso en la etiqueta. */
+  /** El logo de Verdeo arriba y centrado, con su alto y el espacio de abajo (mm). */
   showLogo: boolean;
+  logoHeightMm: number;
+  logoPaddingBottomMm: number;
+  /** Marcas de recorte en las esquinas de cada etiqueta. */
+  showCutLines: boolean;
+  /** Una frase propia para el campo "Frase". */
+  customPhrase: string | null;
+  layout: 'clasica' | 'compacta' | 'protagonista';
   /** La hoja, en milímetros: de acá sale el lienzo real de cada etiqueta. */
   labelGapMm: number;
   /** El nombre sólo en las Intuitivo, que son las que no se identifican por variedad y tamaño. */
@@ -360,7 +367,17 @@ export interface LabelSettings {
   sheetWidthMm: number;
   /** Qué campos, además del nombre, se imprimen — en el orden en que salen. */
   fields: (
-    'entrega' | 'numero' | 'plato' | 'restricciones' | 'tamano' | 'unidad' | 'variedad' | 'zona'
+    | 'entrega'
+    | 'frase'
+    | 'numero'
+    | 'plato'
+    | 'platos'
+    | 'produccion'
+    | 'restricciones'
+    | 'tamano'
+    | 'unidad'
+    | 'variedad'
+    | 'zona'
   )[];
   fontFamily:
     | 'clasica'

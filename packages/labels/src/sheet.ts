@@ -1,17 +1,15 @@
 /**
- * La geometría de una hoja de etiquetas, del lado del navegador.
+ * La geometría de una hoja de etiquetas.
  *
- * Es la misma cuenta que hace `@verdeo/orders/label-sheet.ts`, que usa el generador de la impresión.
- * Se repite acá porque la aplicación web no depende de los paquetes internos —mantiene sus propios
- * tipos, como el resto de `lib/operations.ts`—, y la alternativa (que la vista previa pidiera las
- * medidas al servidor) haría que mover un control esperara un viaje de red.
- *
- * Si cambia una, tiene que cambiar la otra: la vista previa existe para mostrar lo que va a salir
- * impreso, y dos cuentas distintas la vuelven una mentira prolija.
+ * Vive acá y no en el generador de la impresión porque la pantalla de Ajustes necesita exactamente
+ * la misma cuenta: si la vista previa calculara el lienzo por su lado, mostraría una etiqueta que no
+ * es la que sale impresa, que es peor que no mostrar nada.
  */
 export interface LabelSheet {
+  /** Milímetros entre etiquetas. */
   gapMm: number;
   heightMm: number;
+  /** Margen de la hoja, igual en los cuatro lados. */
   marginMm: number;
   widthMm: number;
 }
@@ -19,17 +17,26 @@ export interface LabelSheet {
 export interface LabelCanvas {
   columns: number;
   heightMm: number;
+  /** Apaisada cuando es más ancha que alta: la etiqueta se arma distinto. */
   orientation: 'horizontal' | 'vertical';
   rows: number;
   widthMm: number;
 }
 
+/** Las hojas que se usan en Argentina, más la medida libre. */
 export const SHEET_PRESETS = [
-  { heightMm: 297, key: 'a4', label: 'A4 · 210 × 297 mm', widthMm: 210 },
-  { heightMm: 356, key: 'oficio', label: 'Oficio · 216 × 356 mm', widthMm: 216 },
-  { heightMm: 279, key: 'carta', label: 'Carta · 216 × 279 mm', widthMm: 216 },
+  { heightMm: 297, key: 'a4', label: 'A4 (210 × 297 mm)', widthMm: 210 },
+  { heightMm: 356, key: 'oficio', label: 'Oficio (216 × 356 mm)', widthMm: 216 },
+  { heightMm: 279, key: 'carta', label: 'Carta (216 × 279 mm)', widthMm: 216 },
 ] as const;
 
+/**
+ * Cómo se reparte la hoja en filas y columnas.
+ *
+ * Las combinaciones están escritas y no calculadas: con 12 etiquetas, 3 × 4 deja una etiqueta de
+ * proporción usable y 4 × 3 una tira finita. La raíz cuadrada sólo se usa para un número que no
+ * esté en la tabla.
+ */
 const GRID_BY_LABELS_PER_PAGE: Record<number, { columns: number; rows: number }> = {
   1: { columns: 1, rows: 1 },
   2: { columns: 1, rows: 2 },
@@ -57,7 +64,12 @@ export function labelGrid(labelsPerPage: number): { columns: number; rows: numbe
   );
 }
 
-/** Lo que queda de la hoja sin márgenes, dividido por la grilla: la superficie real de una etiqueta. */
+/**
+ * El lienzo de una etiqueta: lo que queda de la hoja, sin márgenes, dividido por la grilla.
+ *
+ * Es la superficie real que se imprime, así que es también la que hay que mostrar en la vista
+ * previa para que alguien pueda decidir si su fondo y su tipografía entran.
+ */
 export function labelCanvas(sheet: LabelSheet, labelsPerPage: number): LabelCanvas {
   const { columns, rows } = labelGrid(labelsPerPage);
   const usableWidth = Math.max(0, sheet.widthMm - sheet.marginMm * 2 - sheet.gapMm * (columns - 1));

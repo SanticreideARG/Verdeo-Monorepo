@@ -77,6 +77,9 @@ importers:
       '@verdeo/geocoding':
         specifier: workspace:*
         version: link:../../packages/geocoding
+      '@verdeo/labels':
+        specifier: workspace:*
+        version: link:../../packages/labels
       '@verdeo/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -110,6 +113,9 @@ importers:
       '@tailwindcss/vite':
         specifier: 4.3.3
         version: 4.3.3(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.12))
+      '@verdeo/labels':
+        specifier: workspace:*
+        version: link:../../packages/labels
       '@vitejs/plugin-react':
         specifier: 6.0.5
         version: 6.0.5(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.12))
@@ -189,6 +195,9 @@ importers:
 
   packages/contracts:
     dependencies:
+      '@verdeo/labels':
+        specifier: workspace:*
+        version: link:../labels
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -215,6 +224,9 @@ importers:
       '@verdeo/geocoding':
         specifier: workspace:*
         version: link:../geocoding
+      '@verdeo/labels':
+        specifier: workspace:*
+        version: link:../labels
       '@verdeo/orders':
         specifier: workspace:*
         version: link:../orders
@@ -247,6 +259,8 @@ importers:
       zod:
         specifier: 4.4.3
         version: 4.4.3
+
+  packages/labels: {}
 
   packages/observability:
     dependencies:

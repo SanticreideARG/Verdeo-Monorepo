@@ -1,3 +1,4 @@
+import { LABEL_FIELDS, LABEL_LAYOUTS } from '@verdeo/labels';
 import { z } from 'zod';
 
 import { IsoDateTimeSchema, UuidSchema } from './common.js';
@@ -1072,6 +1073,8 @@ export const LabelSchema = z.object({
   dishIndex: z.number().int(),
   dishName: z.string().nullable(),
   dishTotal: z.number().int(),
+  /** Los platos de la vianda (los del menú, o los que eligió el cliente en una Intuitivo). */
+  dishes: z.array(z.string()).default([]),
   deliveryDate: z.iso.date(),
   deliveryZone: z.string().nullable(),
   dietaryInstructions: z.array(z.string()),
@@ -1115,16 +1118,9 @@ export const LabelFontSchema = z.enum([
  * `cliente` no está en la lista a propósito: va siempre y no se puede apagar. Una etiqueta sin
  * nombre no dice de quién es la vianda, que es lo único que hace falta para repartirla.
  */
-export const LabelFieldSchema = z.enum([
-  'plato',
-  'tamano',
-  'variedad',
-  'unidad',
-  'numero',
-  'zona',
-  'entrega',
-  'restricciones',
-]);
+// El catálogo es el del paquete de etiquetas: la base, la API y la pantalla leen el mismo.
+export const LabelFieldSchema = z.enum(LABEL_FIELDS);
+export const LabelLayoutSchema = z.enum(LABEL_LAYOUTS);
 
 export const LabelAlignmentSchema = z.enum(['center', 'left']);
 
@@ -1148,8 +1144,15 @@ export const LabelSettingsSchema = z.object({
   fields: z.array(LabelFieldSchema),
   /** Una etiqueta por plato en vez de una por vianda. */
   onePerDish: z.boolean(),
-  /** El isotipo de Verdeo impreso en la etiqueta. */
+  /** Una frase propia para el campo "Frase", la misma en todas las etiquetas. */
+  customPhrase: z.string().max(120).nullable(),
+  layout: LabelLayoutSchema,
+  /** El logo de Verdeo arriba y centrado, con su alto y el espacio que deja debajo (mm). */
+  logoHeightMm: z.number().int().min(3).max(40),
+  logoPaddingBottomMm: z.number().int().min(0).max(20),
   showLogo: z.boolean(),
+  /** Marcas de recorte en las esquinas de cada etiqueta, fuera de ella. */
+  showCutLines: z.boolean(),
   fontFamily: LabelFontSchema,
   fontScale: z.number().int().min(60).max(200),
   /*
@@ -1179,7 +1182,12 @@ export const LabelSettingsSchema = z.object({
 export const LabelSettingsUpdateRequestSchema = z.object({
   alignment: LabelAlignmentSchema.optional(),
   backgroundImageUrl: z.string().url().nullable().optional(),
-  fields: z.array(LabelFieldSchema).max(7).optional(),
+  customPhrase: z.string().trim().max(120).nullable().optional(),
+  fields: z.array(LabelFieldSchema).max(LABEL_FIELDS.length).optional(),
+  layout: LabelLayoutSchema.optional(),
+  logoHeightMm: z.number().int().min(3).max(40).optional(),
+  logoPaddingBottomMm: z.number().int().min(0).max(20).optional(),
+  showCutLines: z.boolean().optional(),
   onePerDish: z.boolean().optional(),
   kitchenMode: z.boolean().optional(),
   showSize: z.boolean().optional(),

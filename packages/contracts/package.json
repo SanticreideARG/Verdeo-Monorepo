@@ -17,6 +17,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@verdeo/labels": "workspace:*",
     "zod": "4.4.3"
   }
 }

@@ -164,7 +164,16 @@ export const labelSettings = pgTable(
      */
     onePerDish: boolean('one_per_dish').default(false).notNull(),
     /** El isotipo de Verdeo impreso en la etiqueta: el mismo que usa la aplicación. */
-    showLogo: boolean('show_logo').default(false).notNull(),
+    showLogo: boolean('show_logo').default(true).notNull(),
+    /** Cuánto mide el logo de alto y cuánto aire deja debajo, en milímetros. */
+    logoHeightMm: integer('logo_height_mm').default(10).notNull(),
+    logoPaddingBottomMm: integer('logo_padding_bottom_mm').default(2).notNull(),
+    /** Marcas de recorte en las esquinas de cada etiqueta, fuera de ella. */
+    showCutLines: boolean('show_cut_lines').default(true).notNull(),
+    /** Una frase propia (campo "Frase"): la misma en todas las etiquetas. */
+    customPhrase: text('custom_phrase'),
+    /** Cómo se acomoda el contenido; se valida contra el catálogo del paquete de etiquetas. */
+    layout: text('layout').default('clasica').notNull(),
     /*
      * Etiquetas de cocina: una por plato para pegar en cada recipiente, sin el nombre del cliente,
      * con el diseño fijo de la hoja de producción (plato, acompañamiento y "KETO ELAB # 24-09").
@@ -204,6 +213,15 @@ export const labelSettings = pgTable(
       'label_settings_labels_per_page_check',
       sql`${table.labelsPerPage} >= 4 and ${table.labelsPerPage} <= 12`,
     ),
+    check(
+      'label_settings_logo_height_check',
+      sql`${table.logoHeightMm} >= 3 and ${table.logoHeightMm} <= 40`,
+    ),
+    check(
+      'label_settings_logo_padding_check',
+      sql`${table.logoPaddingBottomMm} >= 0 and ${table.logoPaddingBottomMm} <= 20`,
+    ),
+    check('label_settings_custom_phrase_check', sql`length(${table.customPhrase}) <= 120`),
     // Entre 60% y 200%: por debajo no se lee de lejos y por encima se desborda la etiqueta.
     check(
       'label_settings_font_scale_check',

@@ -1,16 +1,25 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
+import {
+  FONT_STACKS,
+  LAYOUT_OPTIONS,
+  SHEET_PRESETS,
+  type LabelData,
+  type LabelField,
+  type LabelRenderSettings,
+} from '@verdeo/labels';
 
 import { ActionButton } from '../components/ActionButton.js';
 import { KitchenLabelsPanel } from '../components/KitchenLabelsPanel.js';
+import { LabelViewer } from '../components/LabelViewer.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { PeriodPicker } from '../components/PeriodPicker.js';
 import { RunFilter } from '../components/RunFilter.js';
 import { apiRequest } from '../lib/api.js';
-import { labelCanvas, SHEET_PRESETS } from '../lib/labelSheet.js';
-import { maskSurname } from '../lib/maskName.js';
 import { errorMessage, type LabelSettings, type WeeklyMenu } from '../lib/operations.js';
 import { currentPeriod, periodsFromMenus, type Period } from '../lib/periods.js';
+import { todayInOperation } from '../lib/dates.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { showToast } from '../lib/toast.js';
 
@@ -19,24 +28,6 @@ interface OrderHit {
   id: string;
   publicNumber: string;
   status: string;
-}
-
-interface Label {
-  composable: boolean;
-  customerDisplayName: string;
-  deliveryDate: string;
-  deliveryZone: string | null;
-  dietaryInstructions: string[];
-  /** Cuál de los platos de la vianda es éste, cuando se imprime una etiqueta por plato. */
-  dishIndex: number;
-  /** El plato, o null cuando la etiqueta es de la vianda entera. */
-  dishName: string | null;
-  dishTotal: number;
-  familyName: string;
-  orderPublicNumber: string;
-  unitIndex: number;
-  unitTotal: number;
-  variantName: string;
 }
 
 // 24 es la hoja de stickers troquelados de 3 × 8 que usa cocina.
@@ -58,28 +49,12 @@ const FONT_OPTIONS = [
   { key: 'mono', label: 'Monoespaciada' },
 ] as const;
 
-/* Las mismas listas de respaldo que usa la impresión (apps/api/src/labels-export.ts): la vista
-   previa tiene que mostrar la fuente que va a salir en el papel. */
-const FONT_STACKS: Record<LabelSettings['fontFamily'], string> = {
-  clasica: '"Times New Roman", Times, "Liberation Serif", serif',
-  condensed: '"Arial Narrow", "Roboto Condensed", "Liberation Sans Narrow", sans-serif',
-  elegante: 'Garamond, "Palatino Linotype", Palatino, "Book Antiqua", serif',
-  grotesque: '"Trebuchet MS", "Segoe UI", Tahoma, sans-serif',
-  humanist: 'Verdana, Geneva, "DejaVu Sans", sans-serif',
-  manuscrita: '"Segoe Script", "Brush Script MT", "Comic Sans MS", cursive',
-  maquina: '"Courier New", Courier, "Liberation Mono", monospace',
-  mono: 'ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace',
-  rounded: '"SF Pro Rounded", "Nunito", "Segoe UI", system-ui, sans-serif',
-  serif: 'Georgia, "Times New Roman", serif',
-  system: 'system-ui, sans-serif',
-  titular: 'Impact, Haettenschweiler, "Arial Black", sans-serif',
-};
-
 /**
- * Qué puede llevar una etiqueta además del nombre.
+ * Qué puede llevar una etiqueta además del nombre, en el orden en que se imprime.
  *
  * El nombre no está en la lista y no se puede apagar: es lo único que responde de quién es la
- * vianda, que es la pregunta que la etiqueta existe para contestar.
+ * vianda, que es la pregunta que la etiqueta existe para contestar. Las claves son las del catálogo
+ * del paquete de etiquetas, el mismo que valida la base.
  */
 const FIELD_OPTIONS = [
   // Sólo dice algo con 'Una etiqueta por plato' activado; sin eso la etiqueta es de la vianda
@@ -87,185 +62,23 @@ const FIELD_OPTIONS = [
   { key: 'plato', label: 'Plato (con etiqueta por plato)' },
   { key: 'tamano', label: 'Tamaño (250 / 400)' },
   { key: 'variedad', label: 'Variedad' },
+  { key: 'platos', label: 'Platos de la vianda (la lista)' },
   { key: 'unidad', label: 'Unidad (1 de 3)' },
   { key: 'numero', label: 'N° de pedido' },
   { key: 'zona', label: 'Zona de entrega' },
   { key: 'entrega', label: 'Fecha de entrega' },
+  { key: 'produccion', label: 'Fecha de producción' },
   { key: 'restricciones', label: 'Indicaciones alimentarias' },
-] as const;
-
-type LabelField = (typeof FIELD_OPTIONS)[number]['key'];
-
-/** El renglón que se ve grande junto al nombre; el resto va chico, igual que al imprimir. */
-const EMPHASISED = new Set<LabelField>(['plato', 'tamano', 'variedad', 'restricciones']);
-
-/** Con qué se dibuja la vista previa cuando la tanda todavía no tiene etiquetas. */
-const SAMPLE: Label = {
-  composable: false,
-  customerDisplayName: 'Ana Isabella Vega',
-  deliveryDate: '2026-09-13',
-  deliveryZone: 'Centro',
-  dietaryInstructions: ['Sin cebolla'],
-  dishIndex: 2,
-  dishName: 'Pollo al horno con calabaza',
-  dishTotal: 5,
-  familyName: 'Keto',
-  orderPublicNumber: 'NQN-00090',
-  unitIndex: 1,
-  unitTotal: 3,
-  variantName: '250',
-};
-
-function fieldValue(label: Label, field: LabelField): string | null {
-  switch (field) {
-    case 'entrega':
-      return `${label.deliveryDate.slice(8, 10)}/${label.deliveryDate.slice(5, 7)}`;
-    case 'numero':
-      return label.orderPublicNumber;
-    case 'plato':
-      // Con su posición cuando hay más de uno: cinco etiquetas de la misma vianda apiladas no
-      // dicen de otro modo si están las cinco.
-      return label.dishName === null
-        ? null
-        : label.dishTotal > 1
-          ? `${label.dishName} · ${String(label.dishIndex)} de ${String(label.dishTotal)}`
-          : label.dishName;
-    case 'restricciones':
-      return label.dietaryInstructions.length > 0 ? label.dietaryInstructions.join(' · ') : null;
-    case 'tamano':
-      return label.variantName;
-    case 'unidad':
-      return `${String(label.unitIndex)} de ${String(label.unitTotal)}`;
-    case 'variedad':
-      return label.familyName;
-    case 'zona':
-      return label.deliveryZone;
-  }
-}
+  { key: 'frase', label: 'Frase personalizada' },
+] as const satisfies readonly { key: LabelField; label: string }[];
 
 /**
  * "Etiquetas": armar la tanda y ver cómo va a salir, en la misma pantalla.
  *
- * Estaba partida en dos —el formato en Ajustes, la generación en Cocina—, así que para saber si un
- * fondo entraba había que configurarlo en un lado, ir al otro, imprimir y volver. Acá se elige qué
- * imprimir (el ciclo entero o una zona), se ajusta el formato, y la vista previa de la derecha
- * muestra la hoja y una etiqueta **a tamaño real**: el lienzo sale de la misma cuenta que hace la
- * impresión —hoja menos márgenes, dividido por la grilla—, así que lo que se ve es lo que sale.
+ * Se elige qué imprimir (el ciclo entero, una zona o un reparto), se ajusta el formato, y el visor
+ * de la derecha dibuja las etiquetas **con el mismo motor que la impresión**: lo que se ve es lo que
+ * sale, y se actualiza con cada cambio, sin guardar.
  */
-/**
- * Una etiqueta como va a salir impresa.
- *
- * Existe como componente porque se dibuja en dos lugares que tienen que coincidir: la etiqueta a
- * tamaño real, y cada celda de la hoja. Mientras fueron dos bloques distintos, la hoja mostraba
- * rectángulos vacíos con el fondo y nada más — servía para contar cuántas entran, no para ver si
- * lo que se va a imprimir entra en el papel, que es la pregunta de verdad antes de gastar una hoja
- * de etiquetas.
- *
- * Las medidas van en milímetros y los cuerpos de letra en puntos, que es lo que entiende una
- * impresora. La hoja después escala el conjunto entero; acá nada se achica a mano, porque una
- * miniatura con tipografías ajustadas a ojo deja de ser una previsualización fiel.
- */
-function LabelFace({
-  alignment,
-  backgroundImageUrl,
-  fields,
-  fontFamily,
-  fontScale,
-  heightMm,
-  hideSurname,
-  label,
-  nameOnlyForComposable,
-  showBorders,
-  showLogo,
-  uppercaseName,
-  widthMm,
-}: {
-  alignment: 'center' | 'left';
-  backgroundImageUrl: string | null;
-  fields: readonly LabelField[];
-  fontFamily: LabelSettings['fontFamily'];
-  fontScale: number;
-  heightMm: number;
-  hideSurname: boolean;
-  label: Label;
-  nameOnlyForComposable: boolean;
-  showBorders: boolean;
-  showLogo: boolean;
-  uppercaseName: boolean;
-  widthMm: number;
-}) {
-  /*
-   * El nombre tal como va a salir, con la misma regla que aplica la impresión
-   * (apps/api/src/labels-export.ts): sin nombre en las estándar cuando se pidió sólo en las
-   * Intuitivo, y con iniciales cuando se pidió sin apellido.
-   */
-  const name =
-    nameOnlyForComposable && !label.composable
-      ? ''
-      : hideSurname
-        ? maskSurname(label.customerDisplayName)
-        : label.customerDisplayName;
-
-  return (
-    <div
-      className="label-preview"
-      style={{
-        alignItems: alignment === 'left' ? 'flex-start' : 'center',
-        border: showBorders ? '1px dashed #999' : '1px solid transparent',
-        fontFamily: FONT_STACKS[fontFamily],
-        height: `${heightMm.toFixed(2)}mm`,
-        textAlign: alignment,
-        width: `${widthMm.toFixed(2)}mm`,
-        ...(backgroundImageUrl ? { backgroundImage: `url(${backgroundImageUrl})` } : {}),
-      }}
-    >
-      {/* El isotipo arriba de todo, chico: compite por el mismo espacio que el nombre, que es lo
-          que hay que poder leer a un metro. */}
-      {showLogo ? (
-        <img
-          alt=""
-          src="/brand/verdeo-icon-128.webp"
-          style={{ height: `${String(6 * (fontScale / 100))}mm`, marginBottom: '0.6mm' }}
-        />
-      ) : null}
-      {name ? (
-        <p
-          style={{
-            fontSize: `${String(20 * (fontScale / 100))}px`,
-            fontWeight: 700,
-            textTransform: uppercaseName ? 'uppercase' : 'none',
-          }}
-        >
-          {name}
-        </p>
-      ) : null}
-      {fields.map((field) => {
-        const value = fieldValue(label, field);
-        if (value === null) return null;
-        return (
-          <p
-            key={field}
-            style={
-              EMPHASISED.has(field)
-                ? { fontSize: `${String(15 * (fontScale / 100))}px`, fontWeight: 600 }
-                : { color: '#555', fontSize: `${String(10 * (fontScale / 100))}px` }
-            }
-          >
-            {value}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
-
-interface LabelBackground {
-  createdAt: string;
-  displayName: string;
-  id: string;
-  imageUrl: string;
-}
-
 export function LabelsPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const [settings, setSettings] = useState<LabelSettings | null>(null);
@@ -281,6 +94,13 @@ export function LabelsPage() {
   const [intuitivoCustomerName, setIntuitivoCustomerName] = useState(true);
   const [showLogo, setShowLogo] = useState(false);
   const [showBorders, setShowBorders] = useState(true);
+  const [showCutLines, setShowCutLines] = useState(true);
+  const [layout, setLayout] = useState<LabelRenderSettings['layout']>('clasica');
+  const [logoHeightMm, setLogoHeightMm] = useState(10);
+  const [logoPaddingBottomMm, setLogoPaddingBottomMm] = useState(2);
+  const [customPhrase, setCustomPhrase] = useState('');
+  // La fecha de elaboración no se guarda: cambia en cada tanda, y arranca en hoy.
+  const [productionDate, setProductionDate] = useState(() => todayInOperation());
   const [hideSurname, setHideSurname] = useState(false);
   const [nameOnlyForComposable, setNameOnlyForComposable] = useState(false);
   const [sheetWidthMm, setSheetWidthMm] = useState(210);
@@ -293,9 +113,7 @@ export function LabelsPage() {
   const [zone, setZone] = useState('');
   // Un reparto: las etiquetas de esa salida, no las del período entero.
   const [runId, setRunId] = useState('');
-  const [labels, setLabels] = useState<Label[]>([]);
-  /** La biblioteca de fondos guardados. Cuál está en uso lo dice `settings`. */
-  const [backgrounds, setBackgrounds] = useState<LabelBackground[]>([]);
+  const [labels, setLabels] = useState<LabelData[]>([]);
   /*
    * Reimprimir un pedido suelto.
    *
@@ -309,7 +127,55 @@ export function LabelsPage() {
 
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /*
+   * Lo que el visor dibuja: los ajustes tal como están en pantalla, guardados o no. Es el mismo
+   * objeto que el servidor arma al imprimir, así que el visor y la hoja no pueden discrepar.
+   */
+  const renderSettings = useMemo<LabelRenderSettings>(
+    () => ({
+      alignment,
+      customPhrase: customPhrase.trim() || null,
+      fields,
+      fontFamily,
+      fontScale,
+      hideSurname,
+      labelGapMm,
+      labelsPerPage,
+      layout,
+      logoHeightMm,
+      logoPaddingBottomMm,
+      nameOnlyForComposable,
+      sheetHeightMm,
+      sheetMarginMm,
+      sheetWidthMm,
+      showBorders,
+      showCutLines,
+      showLogo,
+      uppercaseName,
+    }),
+    [
+      alignment,
+      customPhrase,
+      fields,
+      fontFamily,
+      fontScale,
+      hideSurname,
+      labelGapMm,
+      labelsPerPage,
+      layout,
+      logoHeightMm,
+      logoPaddingBottomMm,
+      nameOnlyForComposable,
+      sheetHeightMm,
+      sheetMarginMm,
+      sheetWidthMm,
+      showBorders,
+      showCutLines,
+      showLogo,
+      uppercaseName,
+    ],
+  );
 
   const canRead = profile?.permissions.includes('production.read') ?? false;
   const canWrite = profile?.permissions.includes('production.generate') ?? false;
@@ -335,6 +201,11 @@ export function LabelsPage() {
       setIntuitivoCustomerName(body.intuitivoCustomerName);
       setShowLogo(body.showLogo);
       setShowBorders(body.showBorders);
+      setShowCutLines(body.showCutLines);
+      setLayout(body.layout);
+      setLogoHeightMm(body.logoHeightMm);
+      setLogoPaddingBottomMm(body.logoPaddingBottomMm);
+      setCustomPhrase(body.customPhrase ?? '');
       setHideSurname(body.hideSurname);
       setNameOnlyForComposable(body.nameOnlyForComposable);
       setSheetWidthMm(body.sheetWidthMm);
@@ -373,7 +244,7 @@ export function LabelsPage() {
           setLabels([]);
           return;
         }
-        setLabels(((await response.json()) as { items: Label[] }).items);
+        setLabels(((await response.json()) as { items: LabelData[] }).items);
       })
       .finally(() => {
         if (active) setLabelsLoading(false);
@@ -408,7 +279,13 @@ export function LabelsPage() {
   /** La hoja de un pedido solo: las etiquetas de sus unidades, con el mismo formato. */
   async function printOrder(orderId: string) {
     setMessage('');
-    const response = await apiRequest(`/api/v1/orders/${orderId}/labels/export`);
+    const response = await apiRequest(
+      `/api/v1/orders/${orderId}/labels/export${
+        fields.includes('produccion') && productionDate
+          ? `?produccion=${encodeURIComponent(productionDate)}`
+          : ''
+      }`,
+    );
     if (!response.ok) {
       setMessage(await errorMessage(response));
       return;
@@ -419,12 +296,16 @@ export function LabelsPage() {
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
   }
 
-  async function save(backgroundImageUrl?: string | null) {
+  async function save() {
     setMessage('');
     const response = await apiRequest('/api/v1/label-settings', {
       body: JSON.stringify({
-        ...(backgroundImageUrl !== undefined ? { backgroundImageUrl } : {}),
         alignment,
+        customPhrase: customPhrase.trim() || null,
+        layout,
+        logoHeightMm,
+        logoPaddingBottomMm,
+        showCutLines,
         fields,
         fontFamily,
         fontScale,
@@ -453,53 +334,6 @@ export function LabelsPage() {
     showToast('Formato guardado.');
   }
 
-  const loadBackgrounds = useCallback(async () => {
-    const response = await apiRequest('/api/v1/label-backgrounds');
-    if (response.ok) {
-      setBackgrounds(((await response.json()) as { items: LabelBackground[] }).items);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadBackgrounds();
-  }, [loadBackgrounds]);
-
-  /** Sacar un fondo de la biblioteca. Si era el que estaba en uso, la etiqueta queda lisa. */
-  async function removeBackground(id: string) {
-    const response = await apiRequest(`/api/v1/label-backgrounds/${id}`, { method: 'DELETE' });
-    if (!response.ok) {
-      setMessage(await errorMessage(response));
-      return;
-    }
-    await loadBackgrounds();
-    const actuales = await apiRequest('/api/v1/label-settings');
-    if (actuales.ok) setSettings((await actuales.json()) as LabelSettings);
-    showToast('Fondo sacado de la biblioteca.');
-  }
-
-  async function uploadBackground(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    setMessage('');
-    const nombre = file.name.replace(/\.[^.]+$/, '').slice(0, 60);
-    const response = await apiRequest(
-      `/api/v1/label-settings/background?nombre=${encodeURIComponent(nombre)}`,
-      {
-        body: file,
-        headers: { 'content-type': file.type },
-        method: 'POST',
-      },
-    );
-    if (!response.ok) {
-      setMessage(await errorMessage(response));
-      return;
-    }
-    const { url } = (await response.json()) as { url: string };
-    await loadBackgrounds();
-    await save(url);
-  }
-
   /**
    * Abre la hoja lista para imprimir.
    *
@@ -512,6 +346,8 @@ export function LabelsPage() {
     const params = new URLSearchParams();
     if (zone) params.set('zone', zone);
     if (runId) params.set('reparto', runId);
+    // La fecha de producción sale de lo que se ve en el visor, no de la que haya guardada.
+    if (fields.includes('produccion') && productionDate) params.set('produccion', productionDate);
     const query = params.size > 0 ? `?${params.toString()}` : '';
     const response = await apiRequest(`/api/v1/production/${cycleId}/labels/export${query}`);
     if (!response.ok) {
@@ -524,33 +360,6 @@ export function LabelsPage() {
     // Revocar en el mismo turno corre carrera con la pestaña que recién se abre.
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
   }
-
-  /*
-   * Cuánto hay que achicar la hoja para que entre en la columna.
-   *
-   * Se mide el ancho real del marco y se lo compara con el ancho del papel en píxeles de CSS
-   * (96 por pulgada). Con un `ResizeObserver` y no una sola vez: la columna cambia de ancho al
-   * plegar el menú, al rotar el teléfono y al cambiar el tamaño de hoja.
-   *
-   * Va antes de los `return` de carga y de permiso: estuvo después, y en la primera vuelta (sin
-   * perfil) React veía menos hooks que en la segunda y tiraba la pantalla entera en blanco.
-   */
-  const sheetFrameRef = useRef<HTMLDivElement>(null);
-  const [sheetScale, setSheetScale] = useState(0.3);
-
-  useEffect(() => {
-    const frame = sheetFrameRef.current;
-    if (!frame) return;
-    const mmToPx = 96 / 25.4;
-    const update = () => {
-      const available = frame.clientWidth;
-      if (available > 0) setSheetScale(available / (sheetWidthMm * mmToPx));
-    };
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(frame);
-    return () => observer.disconnect();
-  }, [canRead, sheetWidthMm]);
 
   if (failed) return <DashboardFailed label="las etiquetas" />;
   if (!profile) return <DashboardLoading />;
@@ -566,10 +375,6 @@ export function LabelsPage() {
     );
   }
 
-  const canvas = labelCanvas(
-    { gapMm: labelGapMm, heightMm: sheetHeightMm, marginMm: sheetMarginMm, widthMm: sheetWidthMm },
-    labelsPerPage,
-  );
   const zones = [...new Set(labels.map((label) => label.deliveryZone ?? 'Sin zona'))].sort(
     (left, right) => left.localeCompare(right, 'es-AR'),
   );
@@ -577,7 +382,6 @@ export function LabelsPage() {
     ? labels.filter((label) => (label.deliveryZone ?? 'Sin zona') === zone)
     : labels;
   const sheets = Math.ceil(selected.length / labelsPerPage);
-  const sample = selected[0] ?? SAMPLE;
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
@@ -586,8 +390,8 @@ export function LabelsPage() {
           <p className="dashboard-kicker">Producción</p>
           <h1 className="text-2xl font-semibold text-forest">Etiquetas</h1>
           <p className="mt-2 max-w-3xl text-sm text-ink-muted">
-            Una etiqueta por vianda. Elegí qué tanda imprimir y cómo se ve; a la derecha está la
-            hoja completa y una etiqueta a tamaño real, con el mismo lienzo que sale impreso.
+            Una etiqueta por vianda. Elegí qué tanda imprimir y cómo se ve: el visor dibuja las
+            etiquetas con el mismo motor que la impresión, y se actualiza con cada cambio.
           </p>
         </header>
 
@@ -798,6 +602,50 @@ export function LabelsPage() {
                   ))}
                 </fieldset>
 
+                {fields.includes('produccion') ? (
+                  <label className="field">
+                    Fecha de producción
+                    <input
+                      onChange={(event) => setProductionDate(event.target.value)}
+                      type="date"
+                      value={productionDate}
+                    />
+                    <small className="field-hint">
+                      No se guarda: se elige en cada tanda y arranca en hoy.
+                    </small>
+                  </label>
+                ) : null}
+                {fields.includes('frase') ? (
+                  <label className="field">
+                    Frase personalizada
+                    <input
+                      disabled={!canWrite}
+                      maxLength={120}
+                      onChange={(event) => setCustomPhrase(event.target.value)}
+                      placeholder="Por ejemplo: Calentar 3 minutos"
+                      value={customPhrase}
+                    />
+                    <small className="field-hint">
+                      La misma en todas las etiquetas. {String(customPhrase.length)} de 120.
+                    </small>
+                  </label>
+                ) : null}
+
+                <label className="field">
+                  Diseño
+                  <select
+                    disabled={!canWrite}
+                    onChange={(event) => setLayout(event.target.value as typeof layout)}
+                    value={layout}
+                  >
+                    {LAYOUT_OPTIONS.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.label} — {option.description}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
                 <div className="form-grid">
                   <label className="field">
                     Alineación
@@ -863,7 +711,16 @@ export function LabelsPage() {
                     onChange={(event) => setShowBorders(event.target.checked)}
                     type="checkbox"
                   />
-                  Recuadro de corte
+                  Borde alrededor de cada etiqueta
+                </label>
+                <label className="label-switch">
+                  <input
+                    checked={showCutLines}
+                    disabled={!canWrite}
+                    onChange={(event) => setShowCutLines(event.target.checked)}
+                    type="checkbox"
+                  />
+                  Líneas de recorte (marcas en las esquinas)
                 </label>
                 <label className="label-switch">
                   <input
@@ -932,8 +789,34 @@ export function LabelsPage() {
                     onChange={(event) => setShowLogo(event.target.checked)}
                     type="checkbox"
                   />{' '}
-                  Imprimir el logo de Verdeo
+                  Logo de Verdeo arriba, centrado
                 </label>
+                {showLogo ? (
+                  <div className="form-grid">
+                    <label className="field">
+                      Alto del logo (mm)
+                      <input
+                        disabled={!canWrite}
+                        max={40}
+                        min={3}
+                        onChange={(event) => setLogoHeightMm(Number(event.target.value))}
+                        type="number"
+                        value={logoHeightMm}
+                      />
+                    </label>
+                    <label className="field">
+                      Espacio debajo (mm)
+                      <input
+                        disabled={!canWrite}
+                        max={20}
+                        min={0}
+                        onChange={(event) => setLogoPaddingBottomMm(Number(event.target.value))}
+                        type="number"
+                        value={logoPaddingBottomMm}
+                      />
+                    </label>
+                  </div>
+                ) : null}
                 <label className="label-switch">
                   <input
                     checked={nameOnlyForComposable}
@@ -955,86 +838,6 @@ export function LabelsPage() {
                       : 'Todas salen con el nombre completo.'}
                 </p>
 
-                <div>
-                  <p className="text-sm font-semibold text-forest">Fondo de etiqueta</p>
-                  {settings?.backgroundImageUrl ? (
-                    <img
-                      alt="Fondo actual de la etiqueta"
-                      className="mt-2 h-24 w-24 rounded-lg border border-forest/10 object-cover"
-                      src={settings.backgroundImageUrl}
-                    />
-                  ) : (
-                    <p className="mt-2 text-sm text-ink-muted">Sin fondo (etiqueta lisa).</p>
-                  )}
-
-                  {/*
-                   * La biblioteca de fondos.
-                   *
-                   * Antes había uno y subir otro lo pisaba: probar un diseño para la semana que
-                   * viene costaba perder el que estaba andando. Son archivos de diseño —se hacen
-                   * una vez, se usan muchas— y lo normal es tener el de siempre, el de las fiestas
-                   * y el que alguien está probando.
-                   */}
-                  {backgrounds.length > 0 ? (
-                    <div className="labels-backgrounds">
-                      {backgrounds.map((fondo) => {
-                        const enUso = settings?.backgroundImageUrl === fondo.imageUrl;
-                        return (
-                          <figure className={enUso ? 'is-current' : ''} key={fondo.id}>
-                            <button
-                              disabled={!canWrite || enUso}
-                              onClick={() => void save(fondo.imageUrl)}
-                              title={enUso ? 'Es el que está en uso' : 'Usar este fondo'}
-                              type="button"
-                            >
-                              <img alt={fondo.displayName} src={fondo.imageUrl} />
-                            </button>
-                            <figcaption>{enUso ? 'En uso' : fondo.displayName}</figcaption>
-                            {canWrite ? (
-                              <button
-                                className="labels-backgrounds-remove"
-                                onClick={() => void removeBackground(fondo.id)}
-                                title="Sacar de la biblioteca"
-                                type="button"
-                              >
-                                ✕
-                              </button>
-                            ) : null}
-                          </figure>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-
-                  {canWrite ? (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <input
-                        accept="image/jpeg,image/png"
-                        className="sr-only"
-                        onChange={(event) => void uploadBackground(event)}
-                        ref={fileInputRef}
-                        type="file"
-                      />
-                      <button
-                        className="button button-secondary"
-                        onClick={() => fileInputRef.current?.click()}
-                        type="button"
-                      >
-                        Subir fondo (PNG o JPG)
-                      </button>
-                      {settings?.backgroundImageUrl ? (
-                        <ActionButton
-                          className="button button-secondary"
-                          onClick={() => save(null)}
-                          pendingLabel="Quitando…"
-                        >
-                          Imprimir sin fondo
-                        </ActionButton>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-
                 {canWrite ? (
                   <ActionButton
                     className="button button-primary justify-self-start"
@@ -1048,104 +851,15 @@ export function LabelsPage() {
             </div>
 
             {/*
-             * La vista previa, con dos cosas distintas que las dos hacen falta: la hoja entera dice
-             * cuántas entran y cómo quedan repartidas, y la etiqueta a tamaño real dice si el
-             * nombre, los campos y el fondo entran de verdad en el papel.
+             * El visor: el mismo dibujo que la impresión, con los ajustes que se están tocando.
+             * Una etiqueta o la hoja, con Anterior y Siguiente para recorrer la serie.
              */}
             <aside className="labels-preview">
-              <div className="labels-preview-card">
-                <p className="labels-preview-title">La hoja</p>
-                <p className="field-hint">
-                  {sheetWidthMm} × {sheetHeightMm} mm · {canvas.columns} × {canvas.rows} etiquetas
-                </p>
-                {/*
-                 * La hoja de verdad, achicada.
-                 *
-                 * Se dibuja en milímetros —el tamaño real del papel— y después se escala entera
-                 * con un `transform`. Dibujarla directamente en miniatura obligaría a ajustar a
-                 * ojo cada cuerpo de letra, y entonces lo que se ve deja de ser lo que se imprime:
-                 * un nombre que acá entra y en el papel no es exactamente el error que esta
-                 * previsualización tiene que evitar.
-                 */}
-                <div
-                  className="labels-sheet-frame"
-                  ref={sheetFrameRef}
-                  // Una hoja escalada con `transform` no ocupa alto en el layout: lo que mide el
-                  // marco es lo que mide el papel achicado, y sin esto la columna se superpone.
-                  style={{
-                    height: `${String(Math.round(sheetHeightMm * (96 / 25.4) * sheetScale))}px`,
-                  }}
-                >
-                  <div
-                    className="labels-sheet"
-                    style={{
-                      gap: `${String(labelGapMm)}mm`,
-                      gridTemplateColumns: `repeat(${String(canvas.columns)}, 1fr)`,
-                      gridTemplateRows: `repeat(${String(canvas.rows)}, 1fr)`,
-                      height: `${String(sheetHeightMm)}mm`,
-                      padding: `${String(sheetMarginMm)}mm`,
-                      transform: `scale(${sheetScale.toFixed(4)})`,
-                      width: `${String(sheetWidthMm)}mm`,
-                    }}
-                  >
-                    {Array.from({ length: canvas.columns * canvas.rows }, (_, index) => {
-                      const enHoja = selected[index];
-                      // Sin tanda cargada se muestra el ejemplo en todas: una hoja en blanco no
-                      // dice si el formato entra.
-                      const contenido = enHoja ?? (selected.length === 0 ? SAMPLE : null);
-                      if (!contenido) return <div className="labels-sheet-empty" key={index} />;
-                      return (
-                        <LabelFace
-                          alignment={alignment}
-                          backgroundImageUrl={settings?.backgroundImageUrl ?? null}
-                          fields={fields}
-                          fontFamily={fontFamily}
-                          fontScale={fontScale}
-                          heightMm={canvas.heightMm}
-                          hideSurname={hideSurname}
-                          key={index}
-                          label={contenido}
-                          nameOnlyForComposable={nameOnlyForComposable}
-                          showBorders={showBorders}
-                          showLogo={showLogo}
-                          uppercaseName={uppercaseName}
-                          widthMm={canvas.widthMm}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              <div className="labels-preview-card">
-                <p className="labels-preview-title">Una etiqueta, a tamaño real</p>
-                <p className="field-hint">
-                  {canvas.widthMm.toFixed(1)} × {canvas.heightMm.toFixed(1)} mm ·{' '}
-                  {canvas.orientation === 'horizontal' ? 'apaisada' : 'vertical'}
-                </p>
-                <div className="labels-real-scale">
-                  <LabelFace
-                    alignment={alignment}
-                    backgroundImageUrl={settings?.backgroundImageUrl ?? null}
-                    fields={fields}
-                    fontFamily={fontFamily}
-                    fontScale={fontScale}
-                    heightMm={canvas.heightMm}
-                    hideSurname={hideSurname}
-                    label={sample}
-                    nameOnlyForComposable={nameOnlyForComposable}
-                    showBorders={showBorders}
-                    showLogo={showLogo}
-                    uppercaseName={uppercaseName}
-                    widthMm={canvas.widthMm}
-                  />
-                </div>
-                <p className="field-hint">
-                  {selected.length > 0
-                    ? 'Con los datos del primer pedido de la tanda.'
-                    : 'Con datos de ejemplo: esta tanda todavía no tiene etiquetas.'}
-                </p>
-              </div>
+              <LabelViewer
+                labels={selected}
+                productionDate={fields.includes('produccion') ? productionDate : null}
+                settings={renderSettings}
+              />
             </aside>
           </div>
         )}
