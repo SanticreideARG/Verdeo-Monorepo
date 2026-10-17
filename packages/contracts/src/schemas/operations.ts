@@ -1,4 +1,4 @@
-import { LABEL_FIELDS, LABEL_LAYOUTS } from '@verdeo/labels';
+import { LABEL_FIELDS, LABEL_LAYOUTS, NAME_POSITIONS } from '@verdeo/labels';
 import { z } from 'zod';
 
 import { IsoDateTimeSchema, UuidSchema } from './common.js';
@@ -1122,6 +1122,8 @@ export const LabelFontSchema = z.enum([
 export const LabelFieldSchema = z.enum(LABEL_FIELDS);
 export const LabelLayoutSchema = z.enum(LABEL_LAYOUTS);
 
+export const NamePositionSchema = z.enum(NAME_POSITIONS);
+
 export const LabelAlignmentSchema = z.enum(['center', 'left']);
 
 /*
@@ -1177,6 +1179,9 @@ export const LabelSettingsSchema = z.object({
   updatedAt: IsoDateTimeSchema.nullable(),
   updatedByUserId: UuidSchema.nullable(),
   uppercaseName: z.boolean(),
+  showCustomerName: z.boolean(),
+  nameScale: z.number().int().min(50).max(200),
+  namePosition: NamePositionSchema,
 });
 
 export const LabelSettingsUpdateRequestSchema = z.object({
@@ -1204,6 +1209,9 @@ export const LabelSettingsUpdateRequestSchema = z.object({
   sheetWidthMm: z.number().int().min(80).max(420).optional(),
   showBorders: z.boolean().optional(),
   uppercaseName: z.boolean().optional(),
+  showCustomerName: z.boolean().optional(),
+  nameScale: z.number().int().min(50).max(200).optional(),
+  namePosition: NamePositionSchema.optional(),
 });
 
 export const ProductionActualEntrySchema = z.object({

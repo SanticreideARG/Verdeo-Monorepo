@@ -34,7 +34,7 @@ import {
   type AutoAcceptRules,
   type GeocodingProvider,
 } from '@verdeo/geocoding';
-import { LABEL_FIELDS, LABEL_LAYOUTS } from '@verdeo/labels';
+import { LABEL_FIELDS, LABEL_LAYOUTS, NAME_POSITIONS } from '@verdeo/labels';
 import {
   assertOrderTransitionPolicy,
   buildKitchenSummary,
@@ -405,6 +405,9 @@ const LABEL_SETTINGS_FALLBACK = {
   updatedAt: null,
   updatedByUserId: null,
   uppercaseName: false,
+  showCustomerName: true,
+  nameScale: 100,
+  namePosition: 'arriba',
 } as const;
 
 /**
@@ -7307,6 +7310,9 @@ export class PostgresOperationsService {
       layout: (LABEL_LAYOUTS as readonly string[]).includes(config.layout)
         ? config.layout
         : 'clasica',
+      namePosition: (NAME_POSITIONS as readonly string[]).includes(config.namePosition)
+        ? config.namePosition
+        : 'arriba',
     };
   }
 
@@ -7336,6 +7342,9 @@ export class PostgresOperationsService {
       sheetWidthMm?: number | undefined;
       showBorders?: boolean | undefined;
       uppercaseName?: boolean | undefined;
+      showCustomerName?: boolean | undefined;
+      nameScale?: number | undefined;
+      namePosition?: string | undefined;
     },
     context: OperationsContext,
   ) {
@@ -7384,6 +7393,11 @@ export class PostgresOperationsService {
           showBorders: input.showBorders ?? existing?.showBorders ?? true,
           updatedByUserId: context.actorUserId ?? null,
           uppercaseName: input.uppercaseName ?? existing?.uppercaseName ?? false,
+          showCustomerName: input.showCustomerName ?? existing?.showCustomerName ?? true,
+          nameScale: input.nameScale ?? existing?.nameScale ?? 100,
+          namePosition: (NAME_POSITIONS as readonly string[]).includes(input.namePosition ?? '')
+            ? (input.namePosition as string)
+            : (existing?.namePosition ?? 'arriba'),
         };
         let row: typeof labelSettings.$inferSelect | undefined;
         if (existing) {
@@ -7430,6 +7444,9 @@ export class PostgresOperationsService {
           layout: (LABEL_LAYOUTS as readonly string[]).includes(row.layout)
             ? row.layout
             : 'clasica',
+          namePosition: (NAME_POSITIONS as readonly string[]).includes(row.namePosition)
+            ? row.namePosition
+            : 'arriba',
         };
       })
       .catch(translateDatabaseConflict);

@@ -38,12 +38,14 @@ export function ActionButton({
    * escribir estado sobre un componente que ya no está tira un aviso en consola por cada uso.
    */
   const mounted = useRef(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Se vuelve a marcar al montar: en modo estricto React monta, desmonta y vuelve a montar, y sin esto
+    // el botón quedaba marcado como desmontado para siempre y se trababa en su texto de espera.
+    mounted.current = true;
+    return () => {
       mounted.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
 
   return (
     <button

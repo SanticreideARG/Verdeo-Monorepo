@@ -32,6 +32,10 @@ export type LabelField = (typeof LABEL_FIELDS)[number];
 /** Cómo se acomoda el contenido: el de siempre, el nombre grande para repartir, o el compacto. */
 export const LABEL_LAYOUTS = ['clasica', 'protagonista', 'compacta'] as const;
 
+export const NAME_POSITIONS = ['arriba', 'abajo'] as const;
+
+export type NamePosition = (typeof NAME_POSITIONS)[number];
+
 export type LabelLayout = (typeof LABEL_LAYOUTS)[number];
 
 export const LAYOUT_OPTIONS: readonly { description: string; key: LabelLayout; label: string }[] = [
@@ -82,7 +86,13 @@ export interface LabelRenderSettings {
   fontFamily: string;
   fontScale: number;
   hideSurname: boolean;
+  /** Si el nombre del cliente se imprime o no. */
+  showCustomerName: boolean;
   labelGapMm: number;
+  /** Dónde va el nombre del cliente: antes de los campos o después de ellos. */
+  namePosition: NamePosition;
+  /** Tamaño del nombre respecto del propio del formato, en porcentaje (100 = el del formato). */
+  nameScale: number;
   labelsPerPage: number;
   layout: LabelLayout;
   /** Cuánto mide el logo de alto, en milímetros. */

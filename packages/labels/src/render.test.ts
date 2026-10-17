@@ -42,6 +42,9 @@ const settings: LabelRenderSettings = {
   showCutLines: false,
   showLogo: false,
   uppercaseName: false,
+  showCustomerName: true,
+  nameScale: 100,
+  namePosition: 'arriba',
 };
 
 function render(
@@ -53,6 +56,26 @@ function render(
 }
 
 describe('el nombre', () => {
+  it('no imprime el nombre si se apagó', () => {
+    const html = render({ showCustomerName: false });
+
+    expect(html).not.toContain('class="customer');
+    expect(html).not.toContain('Ana Isabella Vega');
+  });
+
+  it('puede ir abajo, después de los campos', () => {
+    const arriba = render({ namePosition: 'arriba' });
+    const abajo = render({ namePosition: 'abajo' });
+
+    expect(arriba.indexOf('class="customer')).toBeLessThan(arriba.indexOf('class="fields"'));
+    expect(abajo.indexOf('class="customer')).toBeGreaterThan(abajo.indexOf('class="fields"'));
+  });
+
+  it('el tamaño del nombre escala sobre el del formato', () => {
+    expect(render({ nameScale: 100 })).toContain('--name-size: 20.0px');
+    expect(render({ nameScale: 150 })).toContain('--name-size: 30.0px');
+  });
+
   it('recorta el apellido cuando se pidió sin apellido', () => {
     const html = render({ hideSurname: true });
 

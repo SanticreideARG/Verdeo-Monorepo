@@ -400,6 +400,9 @@ export interface LabelSettings {
   updatedAt: string | null;
   updatedByUserId: string | null;
   uppercaseName: boolean;
+  showCustomerName: boolean;
+  nameScale: number;
+  namePosition: 'arriba' | 'abajo';
 }
 
 // The admin-editable catalog behind "Método" pickers (order intake, cobro manual).

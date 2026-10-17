@@ -143,8 +143,9 @@ export function maskSurname(displayName: string): string {
  */
 export function labelDisplayName(
   label: Pick<LabelData, 'composable' | 'customerDisplayName'>,
-  settings: Pick<LabelRenderSettings, 'hideSurname' | 'nameOnlyForComposable'>,
+  settings: Pick<LabelRenderSettings, 'hideSurname' | 'nameOnlyForComposable' | 'showCustomerName'>,
 ): string {
+  if (!settings.showCustomerName) return '';
   if (settings.nameOnlyForComposable && !label.composable) return '';
   return settings.hideSurname ? maskSurname(label.customerDisplayName) : label.customerDisplayName;
 }
@@ -277,9 +278,11 @@ export function renderLabelDocument(options: LabelRenderOptions): string {
     const step = name ? nameStep(name) : 0;
     const logo = settings.showLogo ? '<div class="logo" role="img" aria-label="Verdeo"></div>' : '';
     const current = options.highlight === index ? ' current' : '';
-    return `<div class="cell${current}"><div class="label">${logo}<div class="body">${
-      name ? `<p class="customer s${String(step)}">${escape(name)}</p>` : ''
-    }<div class="fields">${body}</div></div></div></div>`;
+    const customer = name ? `<p class="customer s${String(step)}">${escape(name)}</p>` : '';
+    const fieldsBlock = `<div class="fields">${body}</div>`;
+    const inner =
+      settings.namePosition === 'abajo' ? fieldsBlock + customer : customer + fieldsBlock;
+    return `<div class="cell${current}"><div class="label">${logo}<div class="body">${inner}</div></div></div>`;
   };
 
   const perPage = settings.labelsPerPage;
@@ -340,7 +343,7 @@ export function renderLabelDocument(options: LabelRenderOptions): string {
     print-color-adjust: exact;
   }
   .sheet {
-    --name-size: ${px(sizes.name)};
+    --name-size: ${px((sizes.name * Math.min(200, Math.max(50, settings.nameScale))) / 100)};
     --strong-size: ${px(sizes.strong)};
     --minor-size: ${px(sizes.minor)};
     position: relative;

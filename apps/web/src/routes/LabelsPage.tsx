@@ -16,6 +16,7 @@ import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { PeriodPicker } from '../components/PeriodPicker.js';
 import { RunFilter } from '../components/RunFilter.js';
+import { openPrintable } from '../lib/openPrintable.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage, type LabelSettings, type WeeklyMenu } from '../lib/operations.js';
 import { currentPeriod, periodsFromMenus, type Period } from '../lib/periods.js';
@@ -102,6 +103,9 @@ export function LabelsPage() {
   // La fecha de elaboración no se guarda: cambia en cada tanda, y arranca en hoy.
   const [productionDate, setProductionDate] = useState(() => todayInOperation());
   const [hideSurname, setHideSurname] = useState(false);
+  const [showCustomerName, setShowCustomerName] = useState(true);
+  const [nameScale, setNameScale] = useState(100);
+  const [namePosition, setNamePosition] = useState<'arriba' | 'abajo'>('arriba');
   const [nameOnlyForComposable, setNameOnlyForComposable] = useState(false);
   const [sheetWidthMm, setSheetWidthMm] = useState(210);
   const [sheetHeightMm, setSheetHeightMm] = useState(297);
@@ -146,6 +150,9 @@ export function LabelsPage() {
       logoHeightMm,
       logoPaddingBottomMm,
       nameOnlyForComposable,
+      namePosition,
+      nameScale,
+      showCustomerName,
       sheetHeightMm,
       sheetMarginMm,
       sheetWidthMm,
@@ -167,6 +174,9 @@ export function LabelsPage() {
       logoHeightMm,
       logoPaddingBottomMm,
       nameOnlyForComposable,
+      namePosition,
+      nameScale,
+      showCustomerName,
       sheetHeightMm,
       sheetMarginMm,
       sheetWidthMm,
@@ -207,6 +217,9 @@ export function LabelsPage() {
       setLogoPaddingBottomMm(body.logoPaddingBottomMm);
       setCustomPhrase(body.customPhrase ?? '');
       setHideSurname(body.hideSurname);
+      setShowCustomerName(body.showCustomerName);
+      setNameScale(body.nameScale);
+      setNamePosition(body.namePosition);
       setNameOnlyForComposable(body.nameOnlyForComposable);
       setSheetWidthMm(body.sheetWidthMm);
       setSheetHeightMm(body.sheetHeightMm);
@@ -279,21 +292,16 @@ export function LabelsPage() {
   /** La hoja de un pedido solo: las etiquetas de sus unidades, con el mismo formato. */
   async function printOrder(orderId: string) {
     setMessage('');
-    const response = await apiRequest(
-      `/api/v1/orders/${orderId}/labels/export${
-        fields.includes('produccion') && productionDate
-          ? `?produccion=${encodeURIComponent(productionDate)}`
-          : ''
-      }`,
+    const problem = await openPrintable(() =>
+      apiRequest(
+        `/api/v1/orders/${orderId}/labels/export${
+          fields.includes('produccion') && productionDate
+            ? `?produccion=${encodeURIComponent(productionDate)}`
+            : ''
+        }`,
+      ),
     );
-    if (!response.ok) {
-      setMessage(await errorMessage(response));
-      return;
-    }
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank', 'noopener,noreferrer');
-    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+    if (problem) setMessage(problem);
   }
 
   async function save() {
@@ -312,6 +320,9 @@ export function LabelsPage() {
         hideSurname,
         labelGapMm,
         nameOnlyForComposable,
+        namePosition,
+        nameScale,
+        showCustomerName,
         onePerDish,
         kitchenMode,
         showSize,
@@ -349,16 +360,10 @@ export function LabelsPage() {
     // La fecha de producción sale de lo que se ve en el visor, no de la que haya guardada.
     if (fields.includes('produccion') && productionDate) params.set('produccion', productionDate);
     const query = params.size > 0 ? `?${params.toString()}` : '';
-    const response = await apiRequest(`/api/v1/production/${cycleId}/labels/export${query}`);
-    if (!response.ok) {
-      setMessage(await errorMessage(response));
-      return;
-    }
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank', 'noopener,noreferrer');
-    // Revocar en el mismo turno corre carrera con la pestaña que recién se abre.
-    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+    const problem = await openPrintable(() =>
+      apiRequest(`/api/v1/production/${cycleId}/labels/export${query}`),
+    );
+    if (problem) setMessage(problem);
   }
 
   if (failed) return <DashboardFailed label="las etiquetas" />;
@@ -695,6 +700,44 @@ export function LabelsPage() {
                   />
                 </label>
 
+                <label className="label-switch">
+                  <input
+                    checked={showCustomerName}
+                    disabled={!canWrite}
+                    onChange={(event) => setShowCustomerName(event.target.checked)}
+                    type="checkbox"
+                  />
+                  Imprimir el nombre del cliente
+                </label>
+                {showCustomerName ? (
+                  <div className="form-grid">
+                    <label className="field">
+                      Tamaño del nombre — {nameScale}%
+                      <input
+                        disabled={!canWrite}
+                        max={200}
+                        min={50}
+                        onChange={(event) => setNameScale(Number(event.target.value))}
+                        step={10}
+                        type="range"
+                        value={nameScale}
+                      />
+                    </label>
+                    <label className="field">
+                      Posición del nombre
+                      <select
+                        disabled={!canWrite}
+                        onChange={(event) =>
+                          setNamePosition(event.target.value === 'abajo' ? 'abajo' : 'arriba')
+                        }
+                        value={namePosition}
+                      >
+                        <option value="arriba">Arriba, antes de los datos</option>
+                        <option value="abajo">Abajo, después de los datos</option>
+                      </select>
+                    </label>
+                  </div>
+                ) : null}
                 <label className="label-switch">
                   <input
                     checked={uppercaseName}

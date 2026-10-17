@@ -164,3 +164,13 @@ como están en pantalla —guardados o no— y, sin pedidos en la tanda, con eti
 
 Siguen aparte, hasta la fase 3 del plan: las etiquetas de cocina (`kitchen-labels-export.ts`) y las
 del stock.
+
+## El nombre del cliente es configurable (2026-10-16)
+
+`showCustomerName` (se imprime o no), `nameScale` (50–200 % sobre el tamaño del formato) y
+`namePosition` (`arriba` antes de los campos, `abajo` después). Conviven con `hideSurname`,
+`nameOnlyForComposable` y `uppercaseName`. Migración 0065.
+
+Imprimir: la pestaña se abre en el mismo instante del clic y recién después se le carga la hoja
+(`lib/openPrintable.ts`); abrirla después de esperar al servidor la frenaba el bloqueador de ventanas
+y "no pasaba nada". Si el navegador igual la bloquea, se muestra el aviso.

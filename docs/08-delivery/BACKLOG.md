@@ -207,6 +207,7 @@ construimos no es el envío sino la cuenta de a quién ya se le avisó.
 ## P1 - Labels
 
 - [x] Renderizador único de etiquetas, fondo blanco, logo arriba y layouts (LABELS_RENDERER_PLAN.md, fase 1).
+- [x] Etiquetas: el nombre del cliente se configura (mostrar, tamaño, arriba/abajo; migración 0065) e imprimir abre la pestaña en el clic para esquivar el bloqueador de ventanas; `ActionButton` ya no se traba en modo estricto.
 - [x] Visor con vista previa en vivo, zoom y anterior/siguiente (fase 2).
 - [ ] Cocina, stock y calibración en el mismo renderizador (fase 3); layouts "tamaño a la vista" y "con banda".
 

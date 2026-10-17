@@ -201,6 +201,12 @@ export const labelSettings = pgTable(
     alignment: text('alignment').default('center').notNull(),
     /** El nombre en mayúsculas se lee de más lejos, que es como se leen sobre una mesa. */
     uppercaseName: boolean('uppercase_name').default(false).notNull(),
+    /** Si el nombre del cliente se imprime; apagado, la etiqueta sale sin ese renglón. */
+    showCustomerName: boolean('show_customer_name').default(true).notNull(),
+    /** Tamaño del nombre, en porcentaje del que trae el formato. */
+    nameScale: integer('name_scale').default(100).notNull(),
+    /** 'arriba' (antes de los campos) o 'abajo' (después). */
+    namePosition: text('name_position').default('arriba').notNull(),
     /** El recuadro punteado guía la tijera; sobre etiqueta autoadhesiva sobra. */
     showBorders: boolean('show_borders').default(true).notNull(),
     updatedByUserId: uuid('updated_by_user_id').references(() => users.id, {

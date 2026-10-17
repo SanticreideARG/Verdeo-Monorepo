@@ -65,7 +65,15 @@ describe('ajustes de etiquetas', () => {
   it('conserva lo que no viene en el pedido', async () => {
     const operations = await service();
     await operations.setLabelSettings(
-      { fields: ['zona'], fontScale: 150, labelsPerPage: 8, uppercaseName: true },
+      {
+        fields: ['zona'],
+        fontScale: 150,
+        labelsPerPage: 8,
+        nameScale: 140,
+        namePosition: 'abajo',
+        showCustomerName: false,
+        uppercaseName: true,
+      },
       CONTEXT,
     );
 
@@ -79,6 +87,9 @@ describe('ajustes de etiquetas', () => {
     expect(after.fields).toEqual(['zona']);
     expect(after.fontScale).toBe(150);
     expect(after.uppercaseName).toBe(true);
+    expect(after.showCustomerName).toBe(false);
+    expect(after.nameScale).toBe(140);
+    expect(after.namePosition).toBe('abajo');
   });
 
   it('ignora un campo guardado que ya no existe en el catálogo', async () => {
