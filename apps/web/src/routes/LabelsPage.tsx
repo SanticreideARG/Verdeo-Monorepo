@@ -32,7 +32,7 @@ interface OrderHit {
 }
 
 // 24 es la hoja de stickers troquelados de 3 × 8 que usa cocina.
-const LABELS_PER_PAGE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 24];
+const LABELS_PER_PAGE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 18, 21, 24];
 
 /** Familias de sistema: la etiqueta se imprime sin depender de descargar una fuente. */
 const FONT_OPTIONS = [

@@ -51,6 +51,9 @@ const GRID_BY_LABELS_PER_PAGE: Record<number, { columns: number; rows: number }>
   11: { columns: 3, rows: 4 },
   12: { columns: 3, rows: 4 },
   // La hoja estándar de stickers troquelados: 3 columnas por 8 filas en un A4.
+  15: { columns: 3, rows: 5 },
+  18: { columns: 3, rows: 6 },
+  21: { columns: 3, rows: 7 },
   24: { columns: 3, rows: 8 },
 };
 

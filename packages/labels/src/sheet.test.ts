@@ -7,6 +7,7 @@ describe('la hoja', () => {
     expect(labelGrid(8)).toEqual({ columns: 2, rows: 4 });
     // La hoja de stickers troquelados de cocina.
     expect(labelGrid(24)).toEqual({ columns: 3, rows: 8 });
+    expect(labelGrid(18)).toEqual({ columns: 3, rows: 6 });
     expect(labelGrid(13)).toEqual({ columns: 4, rows: 4 });
   });
 
