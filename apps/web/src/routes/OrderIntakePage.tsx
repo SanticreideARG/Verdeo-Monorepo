@@ -841,6 +841,12 @@ export function OrderIntakePage() {
         items: cartItemsPayload(armado.lines),
         menuId: formText(form, 'menuId'),
         paymentExpectation: formText(form, 'paymentExpectation'),
+        ...(formText(form, 'deliveryDayText').trim()
+          ? { deliveryDayText: formText(form, 'deliveryDayText').trim() }
+          : {}),
+        ...(formText(form, 'deliveryTimeSlot').trim()
+          ? { deliveryTimeSlot: formText(form, 'deliveryTimeSlot').trim() }
+          : {}),
         /*
          * Del stock: el origen pasa a ser "venta de oportunidad" —es lo que descuenta de lo
          * disponible y lo saca de lo que hay que cocinar— y el canal por el que pidió queda en las
@@ -1588,6 +1594,14 @@ export function OrderIntakePage() {
                 ) : (
                   <input name="paymentExpectation" placeholder="Transferencia" required />
                 )}
+              </label>
+              <label className="field">
+                Día de reparto
+                <input maxLength={80} name="deliveryDayText" placeholder="Ej. martes" />
+              </label>
+              <label className="field">
+                Franja horaria
+                <input maxLength={80} name="deliveryTimeSlot" placeholder="Ej. 9 a 12 hs" />
               </label>
               {dietaryInstructionsEnabled ? (
                 <label className="field field-wide">

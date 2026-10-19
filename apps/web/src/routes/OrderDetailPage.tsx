@@ -264,6 +264,8 @@ export function OrderDetailPage() {
         ...(commentChanged ? { dietaryInstructions } : {}),
         ...(itemsChanged ? { items: toItemPayload(items, offerings) } : {}),
         notes: notes ? notes : null,
+        deliveryDayText: formText(form, 'deliveryDayText').trim() || null,
+        deliveryTimeSlot: formText(form, 'deliveryTimeSlot').trim() || null,
         paymentExpectation: formText(form, 'paymentExpectation').trim(),
         // El motivo es opcional: pedirlo obligatorio no producía mejores motivos, frenaba la
         // edición del pedido, que es lo que de verdad hay que poder hacer.
@@ -496,6 +498,24 @@ export function OrderDetailPage() {
                   />
                 </label>
               ) : null}
+              <label className="field">
+                Día de reparto
+                <input
+                  defaultValue={order.deliveryDayText ?? ''}
+                  maxLength={80}
+                  name="deliveryDayText"
+                  placeholder="Ej. martes"
+                />
+              </label>
+              <label className="field">
+                Franja horaria
+                <input
+                  defaultValue={order.deliveryTimeSlot ?? ''}
+                  maxLength={80}
+                  name="deliveryTimeSlot"
+                  placeholder="Ej. 9 a 12 hs"
+                />
+              </label>
               <label className="field field-wide">
                 Notas
                 <textarea defaultValue={order.notes ?? ''} name="notes" rows={2} />
@@ -640,6 +660,18 @@ export function OrderDetailPage() {
               <div className="order-facts-wide">
                 <dt>Comentario para la cocina</dt>
                 <dd>{order.dietaryInstructions.join(' · ')}</dd>
+              </div>
+            ) : null}
+            {order.deliveryDayText ? (
+              <div>
+                <dt>Día de reparto</dt>
+                <dd>{order.deliveryDayText}</dd>
+              </div>
+            ) : null}
+            {order.deliveryTimeSlot ? (
+              <div>
+                <dt>Franja horaria</dt>
+                <dd>{order.deliveryTimeSlot}</dd>
               </div>
             ) : null}
             {order.notes ? (

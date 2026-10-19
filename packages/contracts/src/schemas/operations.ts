@@ -706,6 +706,9 @@ export const OrderCreateRequestSchema = z.object({
   items: z.array(OrderItemInputSchema).min(1).max(50),
   menuId: UuidSchema,
   notes: OptionalTextSchema,
+  /** Texto libre que anota el operador: "martes", "9 a 12". No reemplaza la fecha de entrega. */
+  deliveryDayText: z.string().trim().max(80).optional(),
+  deliveryTimeSlot: z.string().trim().max(80).optional(),
   paymentExpectation: z.string().trim().min(1).max(80),
   source: OrderSourceSchema.default('manual'),
 });
@@ -820,6 +823,8 @@ export const OrderUpdateRequestSchema = z
     dietaryInstructions: z.array(RequiredTextSchema).max(20).optional(),
     items: z.array(OrderItemInputSchema).min(1).max(50).optional(),
     notes: z.string().trim().max(500).nullable().optional(),
+    deliveryDayText: z.string().trim().max(80).nullable().optional(),
+    deliveryTimeSlot: z.string().trim().max(80).nullable().optional(),
     paymentExpectation: z.string().trim().min(1).max(80).optional(),
     /*
      * Opcional a propósito.
@@ -873,6 +878,8 @@ export const OrderSchema = z.object({
   ),
   menuId: UuidSchema,
   notes: z.string().nullable(),
+  deliveryDayText: z.string().nullable(),
+  deliveryTimeSlot: z.string().nullable(),
   // Cuándo se tildó como cobrado. Null = todavía no.
   paidAt: IsoDateTimeSchema.nullable(),
   paymentExpectation: z.string(),

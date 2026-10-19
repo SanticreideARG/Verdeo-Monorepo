@@ -302,6 +302,8 @@ export interface OrderInput {
   }[];
   menuId: string;
   notes?: string | undefined;
+  deliveryDayText?: string | undefined;
+  deliveryTimeSlot?: string | undefined;
   paymentExpectation: string;
   source: string;
   /** "<tanda>:<fila>" de una importación: el mismo pedido no se crea dos veces. */
@@ -322,6 +324,8 @@ export interface OrderUpdateInput {
       }[]
     | undefined;
   notes?: string | null | undefined;
+  deliveryDayText?: string | null | undefined;
+  deliveryTimeSlot?: string | null | undefined;
   paymentExpectation?: string | undefined;
   reason?: string | undefined;
 }
@@ -5431,6 +5435,8 @@ export class PostgresOperationsService {
           // La regla del Intuitivo es por ciudad: editar un pedido tiene que usar la de su ciudad.
           operatingSiteId: orders.operatingSiteId,
           notes: orders.notes,
+          deliveryDayText: orders.deliveryDayText,
+          deliveryTimeSlot: orders.deliveryTimeSlot,
           paymentExpectation: orders.paymentExpectation,
           status: orders.status,
           totalMinor: orders.totalMinor,
@@ -5532,6 +5538,10 @@ export class PostgresOperationsService {
         ...(input.deliveryDate !== undefined ? { deliveryDate: input.deliveryDate } : {}),
         deliveryLocationUrlSnapshot: deliveryLocationUrl,
         ...(input.notes !== undefined ? { notes: input.notes } : {}),
+        ...(input.deliveryDayText !== undefined ? { deliveryDayText: input.deliveryDayText } : {}),
+        ...(input.deliveryTimeSlot !== undefined
+          ? { deliveryTimeSlot: input.deliveryTimeSlot }
+          : {}),
         ...(input.paymentExpectation !== undefined
           ? { paymentExpectation: input.paymentExpectation }
           : {}),
@@ -5811,6 +5821,8 @@ export class PostgresOperationsService {
         geographicZoneId,
         importKey: input.importKey,
         notes: input.notes,
+        deliveryDayText: input.deliveryDayText ?? null,
+        deliveryTimeSlot: input.deliveryTimeSlot ?? null,
         operatingSiteId,
         paymentExpectation: input.paymentExpectation,
         publicNumber: await this.nextPublicNumber(transaction, operatingSiteId),
@@ -6566,6 +6578,8 @@ export class PostgresOperationsService {
         // precios, y la que alguien busca cuando pregunta "¿de dónde era este pedido?".
         operatingSiteName: operatingSites.displayName,
         notes: orders.notes,
+        deliveryDayText: orders.deliveryDayText,
+        deliveryTimeSlot: orders.deliveryTimeSlot,
         paidAt: orders.paidAt,
         paymentExpectation: orders.paymentExpectation,
         publicNumber: orders.publicNumber,

@@ -386,6 +386,25 @@ describe('editar un pedido listo', () => {
     expect(order).toMatchObject({ deliveryAddress: 'Calle 2', notes: 'Timbre B' });
   });
 
+  it('guarda el día de reparto y la franja horaria como texto, y los deja borrar', async () => {
+    const service = await listo();
+    const order = await service.updateOrder(
+      ORDER,
+      { deliveryDayText: 'martes', deliveryTimeSlot: '9 a 12 hs' },
+      false,
+      context,
+    );
+    expect(order).toMatchObject({ deliveryDayText: 'martes', deliveryTimeSlot: '9 a 12 hs' });
+
+    const cleared = await service.updateOrder(
+      ORDER,
+      { deliveryDayText: null, deliveryTimeSlot: null },
+      false,
+      context,
+    );
+    expect(cleared).toMatchObject({ deliveryDayText: null, deliveryTimeSlot: null });
+  });
+
   it('rechaza en español cambiar lo que se cocina', async () => {
     const service = await listo();
     await expect(

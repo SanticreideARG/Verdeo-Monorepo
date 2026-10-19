@@ -537,3 +537,7 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
       nombre opcional.
 - [ ] Calibrar márgenes y separación con la matriz de Illustrator de la hoja actual.
 - [ ] Cargar las abreviaturas del período actual (editar el menú publicado).
+
+## Pedidos: día de reparto y franja horaria (2026-10-19)
+
+- [x] Dos campos de texto libre en el pedido, pedidos por los operadores: "Día de reparto" y "Franja horaria". Se cargan en la toma de pedidos, se editan en la ficha (también con el pedido listo) y se ven en la ficha y en la vista rápida. No reemplazan la fecha de entrega ni la ventana del domicilio. Migración 0066.

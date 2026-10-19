@@ -85,6 +85,18 @@ export function OrderDetailDialog({
                 <dt>Fecha</dt>
                 <dd>{formatDayLong(order.deliveryDate)}</dd>
               </div>
+              {order.deliveryDayText ? (
+                <div>
+                  <dt>Día de reparto</dt>
+                  <dd>{order.deliveryDayText}</dd>
+                </div>
+              ) : null}
+              {order.deliveryTimeSlot ? (
+                <div>
+                  <dt>Franja horaria</dt>
+                  <dd>{order.deliveryTimeSlot}</dd>
+                </div>
+              ) : null}
               {order.operatingSiteName ? (
                 <div>
                   <dt>Ciudad</dt>

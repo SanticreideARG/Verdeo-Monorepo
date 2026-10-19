@@ -220,6 +220,10 @@ export interface OrderSummary {
   }[];
   menuId: string;
   notes: string | null;
+  /** Texto libre que anota el operador ("martes"), aparte de la fecha de entrega. */
+  deliveryDayText: string | null;
+  /** Texto libre: "9 a 12 hs". */
+  deliveryTimeSlot: string | null;
   /** La ciudad de la operación: la que decide numeración, menú y precios. */
   operatingSiteName: string | null;
   paidAt: string | null;

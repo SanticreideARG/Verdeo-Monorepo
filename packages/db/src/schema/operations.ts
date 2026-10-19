@@ -665,6 +665,13 @@ export const orders = pgTable(
     deliveryLocationUrlSnapshot: text('delivery_location_url_snapshot'),
     paymentExpectation: text('payment_expectation').notNull(),
     notes: text('notes'),
+    /*
+     * Día de reparto y franja horaria tal como los anota quien carga el pedido ("martes", "9 a 12").
+     * Texto libre a propósito: los piden los operadores para lo que el cliente dijo, no para
+     * reemplazar la fecha de entrega ni la ventana del domicilio.
+     */
+    deliveryDayText: text('delivery_day_text'),
+    deliveryTimeSlot: text('delivery_time_slot'),
     // Why a cancelled order was cancelled. "Cancelado" alone doesn't distinguish a customer who
     // changed their mind from a delivery that failed — and those need different follow-up.
     // Null on any order that isn't cancelled.
