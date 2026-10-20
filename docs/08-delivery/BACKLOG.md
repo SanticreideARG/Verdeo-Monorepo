@@ -541,3 +541,9 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 ## Pedidos: día de reparto y franja horaria (2026-10-19)
 
 - [x] Dos campos de texto libre en el pedido, pedidos por los operadores: "Día de reparto" y "Franja horaria". Se cargan en la toma de pedidos, se editan en la ficha (también con el pedido listo) y se ven en la ficha y en la vista rápida. No reemplazan la fecha de entrega ni la ventana del domicilio. Migración 0066.
+
+## Pedidos en el teléfono (2026-10-19)
+
+- [x] Tarjeta compacta: el menú "⋯" va arriba, al lado del estado, con el paso que sigue primero; se sacó la fila de botones del pie.
+- [x] "Marcar listo" deja de ser botón (en teléfono y escritorio): va al "⋯". Para todos juntos sigue "Marcar listos por zona".
+- [x] Vista "Tarjetas / Columnas" en el teléfono (`DataTable` con `narrowViewKey`): la tabla de escritorio compacta, con scroll de costado, cliente fijo, orden por encabezado y el mismo selector de columnas. Se recuerda por navegador.

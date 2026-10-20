@@ -158,3 +158,57 @@ describe('DataTable', () => {
     });
   });
 });
+
+describe('DataTable en el teléfono: tarjetas o columnas', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    setViewport(true);
+  });
+
+  function renderSwitchable() {
+    return render(
+      <DataTable
+        caption="Pedidos"
+        columns={[
+          ...COLUMNS,
+          {
+            actions: true,
+            cardRender: () => <button type="button">⋯</button>,
+            key: 'acciones',
+            label: 'Acciones',
+            render: () => <button type="button">Confirmar</button>,
+          },
+        ]}
+        empty="Sin datos."
+        narrowViewKey="prueba-vista"
+        rowKey={(row) => row.variedad}
+        rows={ROWS}
+      />,
+    );
+  }
+
+  it('en tarjetas, el menú va arriba al lado del nombre y no hay fila de botones al pie', () => {
+    const { container } = renderSwitchable();
+
+    expect(container.querySelector('.data-cards-head .data-cards-head-actions')).not.toBeNull();
+    expect(container.querySelector('.data-cards-actions')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Confirmar' })).toBeNull();
+  });
+
+  it('pasa a columnas, la misma tabla de escritorio, y lo recuerda', () => {
+    renderSwitchable();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Columnas' }));
+
+    expect(screen.getByRole('table')).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Demanda' })).toBeTruthy();
+    expect(window.localStorage.getItem('prueba-vista')).toBe('table');
+  });
+
+  it('sin clave de vista no ofrece elegir: siempre tarjetas', () => {
+    renderTable();
+
+    expect(screen.queryByRole('button', { name: 'Columnas' })).toBeNull();
+    expect(screen.queryByRole('table')).toBeNull();
+  });
+});

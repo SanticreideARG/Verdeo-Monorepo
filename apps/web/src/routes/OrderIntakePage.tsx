@@ -1094,6 +1094,15 @@ export function OrderIntakePage() {
         ? '1 cambiado'
         : `${String(filtrosPuestos)} cambiados`;
 
+  function runRowAction(order: OrderSummary, key: OrderRowActionKey) {
+    if (key === 'confirm') void transition(order, 'CONFIRMED');
+    else if (key === 'ready') void transition(order, 'READY');
+    else if (key === 'cancel') void transition(order, 'CANCELLED');
+    else if (key === 'revert') setReverting(order);
+    else if (key === 'delete') setDeleting(order);
+    else setViewing(order);
+  }
+
   const intakeColumns: readonly OrderColumn[] = [
     ...buildOrderColumns({ maskSurnames }),
     {
@@ -1102,16 +1111,30 @@ export function OrderIntakePage() {
       key: 'acciones',
       label: 'Acciones',
       locked: true,
+      /*
+       * En la tarjeta, sólo el "⋯" arriba a la derecha, con el paso que sigue primero en la lista.
+       * El botón al pie ocupaba un renglón entero de cada pedido.
+       */
+      cardRender: (order) => {
+        const { menu, primary } = orderRowActions(order, permissions);
+        const name = maskSurnames
+          ? maskSurname(order.customer.displayName)
+          : order.customer.displayName;
+        return (
+          <ActionMenu
+            items={[...(primary ? [primary] : []), ...menu].map((action) => ({
+              key: action.key,
+              label: action.label,
+              onSelect: () => runRowAction(order, action.key),
+              tone: action.tone,
+            }))}
+            label={`Más acciones para ${name}`}
+          />
+        );
+      },
       render: (order) => {
         const { menu, primary } = orderRowActions(order, permissions);
-        const run = (key: OrderRowActionKey) => {
-          if (key === 'confirm') void transition(order, 'CONFIRMED');
-          else if (key === 'ready') void transition(order, 'READY');
-          else if (key === 'cancel') void transition(order, 'CANCELLED');
-          else if (key === 'revert') setReverting(order);
-          else if (key === 'delete') setDeleting(order);
-          else setViewing(order);
-        };
+        const run = (key: OrderRowActionKey) => runRowAction(order, key);
         const name = maskSurnames
           ? maskSurname(order.customer.displayName)
           : order.customer.displayName;
@@ -1791,6 +1814,7 @@ export function OrderIntakePage() {
             ) : null}
           </p>
           <DataTable
+            narrowViewKey="verdeo-intake-view"
             // Tocar la tarjeta abre la ficha del pedido sin salir de la cola: con treinta
             // pedidos cargados, mirar tres seguidos costaba tres viajes de ida y vuelta.
             onRowSelect={setViewing}

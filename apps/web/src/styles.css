@@ -10797,3 +10797,70 @@ label.field:has(> input[type='radio']) {
     padding-inline: 0.8rem;
   }
 }
+
+/* Pedidos en el teléfono: el "⋯" va arriba a la derecha de la tarjeta, al lado del estado. */
+.data-cards-head {
+  align-items: center;
+}
+.data-cards-head-actions {
+  flex: none;
+  margin: -0.35rem -0.4rem -0.35rem 0;
+}
+.data-cards-head-actions .action-menu-trigger {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  border: 0;
+  background: transparent;
+}
+.data-cards-head .data-cards-title {
+  flex: 1 1 auto;
+}
+
+/* Tarjetas o columnas, en el teléfono. */
+.data-view-switch {
+  display: inline-flex;
+  margin-bottom: 0.6rem;
+  border: 1px solid var(--db-border, var(--border-hairline));
+  border-radius: 999px;
+  padding: 0.15rem;
+  background: var(--db-surface, #fff);
+}
+.data-view-switch button {
+  min-height: 2.25rem;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 0.9rem;
+  background: transparent;
+  color: var(--db-text-soft, inherit);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.data-view-switch button[aria-pressed='true'] {
+  background: var(--db-accent, #3a7d44);
+  color: #fff;
+}
+
+/* Las columnas en el teléfono: la misma tabla, más apretada, con scroll de costado y el cliente fijo. */
+.data-table-scroll.is-compact {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.data-table-scroll.is-compact .data-table {
+  font-size: 0.78rem;
+}
+.data-table-scroll.is-compact .data-table th,
+.data-table-scroll.is-compact .data-table td {
+  padding: 0.4rem 0.5rem;
+  white-space: nowrap;
+}
+.data-table-scroll.is-compact .data-table th:first-child,
+.data-table-scroll.is-compact .data-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--db-surface-solid, #fff);
+}

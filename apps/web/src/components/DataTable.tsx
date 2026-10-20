@@ -12,6 +12,11 @@ export interface DataColumn<T> {
    */
   actions?: boolean;
   /**
+   * Lo que esta columna muestra en la tarjeta, si no es lo mismo que en la tabla. Las acciones lo
+   * usan para quedar sólo con el menú "⋯" arriba a la derecha, en vez de una fila de botones al pie.
+   */
+  cardRender?: (row: T) => ReactNode;
+  /**
    * Un dato corto que califica la fila —el estado, la zona— y que en la tarjeta va arriba, al lado
    * del nombre, en vez de abajo como un par etiqueta/valor. Es lo que se mira para decidir si la
    * fila importa, así que tiene que estar en el primer renglón.
@@ -45,6 +50,17 @@ export interface DataColumn<T> {
 
 type SortState = { dir: 'asc' | 'desc'; key: string };
 
+type NarrowView = 'cards' | 'table';
+
+function readNarrowView(storageKey: string | undefined): NarrowView {
+  if (!storageKey) return 'cards';
+  try {
+    return window.localStorage.getItem(storageKey) === 'table' ? 'table' : 'cards';
+  } catch {
+    return 'cards';
+  }
+}
+
 function compare(a: number | string, b: number | string): number {
   if (typeof a === 'number' && typeof b === 'number') return a - b;
   return String(a).localeCompare(String(b), 'es-AR', { numeric: true, sensitivity: 'base' });
@@ -69,6 +85,7 @@ export function DataTable<T>({
   rowKey,
   rows,
   rowTone,
+  narrowViewKey,
 }: {
   /** Para lectores de pantalla: qué contiene la tabla. */
   caption: string;
@@ -97,9 +114,46 @@ export function DataTable<T>({
    * una tabla donde todas las filas son iguales no la necesita.
    */
   rowTone?: (row: T) => 'pendiente' | 'en-curso' | 'listo' | 'inactivo' | undefined;
+  /**
+   * Si se da, en el teléfono se puede elegir entre tarjetas y columnas, y la elección se recuerda
+   * con esta clave. Las columnas son la misma tabla de escritorio, más apretada y con scroll de
+   * costado: sirve para comparar muchos pedidos de un vistazo, que en tarjetas no se puede.
+   */
+  narrowViewKey?: string;
 }) {
   const narrow = useNarrowViewport();
   const [sort, setSort] = useState<SortState | null>(null);
+  const [narrowView, setNarrowView] = useState<NarrowView>(() => readNarrowView(narrowViewKey));
+
+  function chooseView(view: NarrowView) {
+    setNarrowView(view);
+    if (!narrowViewKey) return;
+    try {
+      window.localStorage.setItem(narrowViewKey, view);
+    } catch {
+      // Sin almacenamiento la elección vale hasta recargar.
+    }
+  }
+
+  const viewSwitch =
+    narrow && narrowViewKey ? (
+      <div aria-label="Cómo ver la lista" className="data-view-switch" role="group">
+        <button
+          aria-pressed={narrowView === 'cards'}
+          onClick={() => chooseView('cards')}
+          type="button"
+        >
+          Tarjetas
+        </button>
+        <button
+          aria-pressed={narrowView === 'table'}
+          onClick={() => chooseView('table')}
+          type="button"
+        >
+          Columnas
+        </button>
+      </div>
+    ) : null;
 
   const sortValue = sort ? columns.find((column) => column.key === sort.key)?.sortValue : undefined;
   const descending = sort?.dir === 'desc';
@@ -122,7 +176,7 @@ export function DataTable<T>({
     return <p className="data-table-empty">{empty}</p>;
   }
 
-  if (narrow) {
+  if (narrow && (narrowView === 'cards' || !narrowViewKey)) {
     const primary = columns.find((column) => column.primary) ?? columns[0];
     const chip = columns.find((column) => column.chip);
     const actions = columns.find((column) => column.actions);
@@ -151,6 +205,7 @@ export function DataTable<T>({
     return (
       <>
         {/* En el teléfono no hay encabezados donde hacer clic, así que ordenar es un campo más. */}
+        {viewSwitch}
         {sortables.length > 0 ? (
           <label className="field data-cards-sort">
             Ordenar por
@@ -187,6 +242,11 @@ export function DataTable<T>({
               <div className="data-cards-head">
                 <p className="data-cards-title">{primary?.render(row)}</p>
                 {chip ? <span className="data-cards-chip">{chip.render(row)}</span> : null}
+                {/* El menú de la fila va arriba, al lado del estado: al pie ocupaba un renglón
+                    entero de cada tarjeta para un solo botón. */}
+                {actions?.cardRender ? (
+                  <div className="data-cards-head-actions">{actions.cardRender(row)}</div>
+                ) : null}
               </div>
               {highlights.length > 0 ? (
                 <p className="data-cards-highlights">
@@ -209,7 +269,9 @@ export function DataTable<T>({
                   ))}
                 </dl>
               ) : null}
-              {actions ? <div className="data-cards-actions">{actions.render(row)}</div> : null}
+              {actions && !actions.cardRender ? (
+                <div className="data-cards-actions">{actions.render(row)}</div>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -218,93 +280,96 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="data-table-scroll">
-      <table className="data-table">
-        <caption className="sr-only">{caption}</caption>
-        <thead>
-          <tr>
-            {columns.map((column) =>
-              column.sortValue ? (
-                <th
-                  aria-sort={
-                    sort?.key === column.key
-                      ? sort.dir === 'asc'
-                        ? 'ascending'
-                        : 'descending'
-                      : 'none'
-                  }
-                  key={column.key}
-                  scope="col"
-                >
-                  <button
-                    className="data-table-sort"
-                    onClick={() => toggleSort(column.key)}
-                    type="button"
-                  >
-                    {column.label}
-                    {/* La flecha sólo aparece en la columna que ordena: un indicador en todas es
-                        ruido, y uno en ninguna deja sin saber por qué está en ese orden. */}
-                    <span aria-hidden="true">
-                      {sort?.key === column.key ? (sort.dir === 'asc' ? '↑' : '↓') : ''}
-                    </span>
-                  </button>
-                </th>
-              ) : (
-                <th key={column.key} scope="col">
-                  {column.label}
-                </th>
-              ),
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((row) => (
-            <tr
-              data-tone={rowTone?.(row)}
-              key={rowKey(row)}
-              onDoubleClick={
-                onRowSelect
-                  ? (event) => {
-                      // Doble clic sobre un control (un selector, un tilde, un botón) es del
-                      // control, no una orden de abrir la fila.
-                      if (
-                        (event.target as HTMLElement).closest(
-                          'a, button, input, label, select, textarea',
-                        )
-                      )
-                        return;
-                      onRowSelect(row);
-                    }
-                  : undefined
-              }
-            >
-              {columns.map((column) => (
-                <td className={column.emphasis ? 'is-emphasis' : undefined} key={column.key}>
-                  {column.render(row)}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-        {/*
-         * Los totales, al pie y sólo si alguna columna sabe calcularlos.
-         *
-         * "Cuántos pedidos hay" ya lo decía la pantalla; "cuánta plata suman" había que exportar
-         * la planilla para saberlo. Y es el total de lo filtrado, no del histórico: es la pregunta
-         * que uno se hace justo después de poner un filtro.
-         */}
-        {columns.some((column) => column.total) ? (
-          <tfoot>
+    <>
+      {viewSwitch}
+      <div className={narrow ? 'data-table-scroll is-compact' : 'data-table-scroll'}>
+        <table className="data-table">
+          <caption className="sr-only">{caption}</caption>
+          <thead>
             <tr>
-              {columns.map((column) => (
-                <td className={column.emphasis ? 'is-emphasis' : undefined} key={column.key}>
-                  {column.total?.(sorted)}
-                </td>
-              ))}
+              {columns.map((column) =>
+                column.sortValue ? (
+                  <th
+                    aria-sort={
+                      sort?.key === column.key
+                        ? sort.dir === 'asc'
+                          ? 'ascending'
+                          : 'descending'
+                        : 'none'
+                    }
+                    key={column.key}
+                    scope="col"
+                  >
+                    <button
+                      className="data-table-sort"
+                      onClick={() => toggleSort(column.key)}
+                      type="button"
+                    >
+                      {column.label}
+                      {/* La flecha sólo aparece en la columna que ordena: un indicador en todas es
+                        ruido, y uno en ninguna deja sin saber por qué está en ese orden. */}
+                      <span aria-hidden="true">
+                        {sort?.key === column.key ? (sort.dir === 'asc' ? '↑' : '↓') : ''}
+                      </span>
+                    </button>
+                  </th>
+                ) : (
+                  <th key={column.key} scope="col">
+                    {column.label}
+                  </th>
+                ),
+              )}
             </tr>
-          </tfoot>
-        ) : null}
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {sorted.map((row) => (
+              <tr
+                data-tone={rowTone?.(row)}
+                key={rowKey(row)}
+                onDoubleClick={
+                  onRowSelect
+                    ? (event) => {
+                        // Doble clic sobre un control (un selector, un tilde, un botón) es del
+                        // control, no una orden de abrir la fila.
+                        if (
+                          (event.target as HTMLElement).closest(
+                            'a, button, input, label, select, textarea',
+                          )
+                        )
+                          return;
+                        onRowSelect(row);
+                      }
+                    : undefined
+                }
+              >
+                {columns.map((column) => (
+                  <td className={column.emphasis ? 'is-emphasis' : undefined} key={column.key}>
+                    {column.render(row)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+          {/*
+           * Los totales, al pie y sólo si alguna columna sabe calcularlos.
+           *
+           * "Cuántos pedidos hay" ya lo decía la pantalla; "cuánta plata suman" había que exportar
+           * la planilla para saberlo. Y es el total de lo filtrado, no del histórico: es la pregunta
+           * que uno se hace justo después de poner un filtro.
+           */}
+          {columns.some((column) => column.total) ? (
+            <tfoot>
+              <tr>
+                {columns.map((column) => (
+                  <td className={column.emphasis ? 'is-emphasis' : undefined} key={column.key}>
+                    {column.total?.(sorted)}
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
+          ) : null}
+        </table>
+      </div>
+    </>
   );
 }

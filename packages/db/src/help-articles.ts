@@ -57,7 +57,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Importar pedidos desde los emails de la página',
   },
   {
-    body: 'En "Pedidos" podés filtrar por estado y buscar por número o cliente. Arriba de la tabla se ve cuántos pedidos coinciden, y al pie los totales.\n\nPara ordenar, tocá el encabezado de una columna: Estado agrupa por estado, Pedido por tipo de pedido, y así con cada una.\n\nEl botón "Columnas" elige qué se ve en la tabla. "Exportar a Excel" baja exactamente lo filtrado.\n\n[Ir a Pedidos](/app/pedidos)',
+    body: 'En "Pedidos" podés filtrar por estado y buscar por número o cliente. Arriba de la tabla se ve cuántos pedidos coinciden, y al pie los totales.\n\nPara ordenar, tocá el encabezado de una columna: Estado agrupa por estado, Pedido por tipo de pedido, y así con cada una.\n\nEl botón "Columnas" elige qué se ve en la tabla. "Exportar a Excel" baja exactamente lo filtrado.\n\nEn el teléfono los pedidos se ven como tarjetas: arriba el cliente, el estado y el menú "⋯" con todo lo que se puede hacer (ver detalle, confirmar, marcar listo, cancelar). Arriba de la lista, "Tarjetas / Columnas" cambia a la misma tabla de la computadora, más compacta: se desliza de costado, el cliente queda fijo a la izquierda, se ordena tocando el encabezado y "Columnas" elige qué se ve. El teléfono recuerda cuál elegiste.\n\nMarcar listo no tiene botón propio: los pedidos quedan listos todos juntos con "Marcar listos por zona", y uno suelto se marca desde el "⋯".\n\n[Ir a Pedidos](/app/pedidos)',
     category: 'Pedidos / Ver y exportar',
     key: 'pedidos-ver-pedidos',
     ordinal: 0,

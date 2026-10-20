@@ -11,8 +11,11 @@ export interface OrderRowAction {
  *
  * Las tres o cuatro acciones posibles iban todas como botones, y en una columna angosta se apilaban:
  * cada fila medía 138 px y entraban cinco pedidos por pantalla. A la vista queda sólo **el paso que
- * sigue** —confirmar un borrador, marcar listo uno confirmado—, que es lo que se hace con la lista;
- * el resto va al menú "⋯". Revertir, cancelar y eliminar son excepciones: que cuesten un clic más
+ * sigue** —confirmar un borrador—, que es lo que se hace con la lista; el resto va al menú "⋯".
+ *
+ * Marcar listo pasó al menú (2026-10-19): todos los pedidos quedan listos a la vez, y para eso está
+ * "Marcar listos por zona". Como botón ocupaba media tarjeta en el teléfono para algo que no se hace
+ * pedido por pedido. Revertir, cancelar y eliminar son excepciones: que cuesten un clic más
  * también evita tocarlas sin querer.
  *
  * "Ver detalle" está siempre en el menú porque el doble clic sobre la fila no se ve: es la forma de
@@ -26,11 +29,12 @@ export function orderRowActions(
   let primary: OrderRowAction | null = null;
   if (order.status === 'DRAFT' && can('orders.confirm')) {
     primary = { key: 'confirm', label: 'Confirmar' };
-  } else if (order.status === 'CONFIRMED' && can('orders.edit')) {
-    primary = { key: 'ready', label: 'Marcar listo' };
   }
 
   const menu: OrderRowAction[] = [{ key: 'view', label: 'Ver detalle' }];
+  if (order.status === 'CONFIRMED' && can('orders.edit')) {
+    menu.push({ key: 'ready', label: 'Marcar listo' });
+  }
   if (['READY', 'DELIVERED'].includes(order.status) && can('orders.revert_status')) {
     menu.push({ key: 'revert', label: 'Revertir estado' });
   }
