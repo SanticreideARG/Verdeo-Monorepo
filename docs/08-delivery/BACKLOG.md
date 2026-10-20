@@ -563,5 +563,5 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] El consolidado se calcula solo al elegir período o reparto (se fue "Generar salida").
 - [x] Cabecera en dos renglones: período y reparto; después Descargar planilla (principal), Imprimir, Copiar para WhatsApp, Etiquetas y, separado, Cerrar período. En el teléfono, de a dos.
 - [x] "Stock para el cierre" con − y + por menú (sin Intuitivos), guardado en cada toque. Se fueron "Informar producción real" y la tabla de excedente de la pantalla (el backend sigue).
-- [ ] Estilos de la hoja "Pedido" (encabezado gris, bordes): `xlsx` 0.18 no escribe estilos; haría falta `xlsx-js-style`.
+- [x] Estilos de la hoja "Pedido" (encabezado gris con letra blanca, última columna del encabezado en negro, menús sobre gris claro, bordes finos): la planilla de producción se escribe con `xlsx-js-style` 1.2.0 (el mismo SheetJS con estilos), importado por defecto porque es CommonJS.
 - [ ] Porciones distintas por plato (cuando alguien pide sin un plato): hoy las cinco columnas salen iguales.

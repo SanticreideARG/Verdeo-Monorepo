@@ -1,4 +1,12 @@
-import * as XLSX from 'xlsx';
+/*
+ * `xlsx-js-style` y no `xlsx`: es el mismo SheetJS con la escritura de estilos (relleno, bordes,
+ * negrita), que la versión libre de `xlsx` descarta. La hoja "Pedido" copia el formato del cliente y
+ * sin estilos no se parecía.
+ */
+import xlsxStyle, { type CellObject, type WorkSheet } from 'xlsx-js-style';
+
+// El paquete es CommonJS: en Node, sus funciones llegan por el export por defecto, no por nombre.
+const XLSX = xlsxStyle;
 
 import type { ProductionSnapshotSchema } from '@verdeo/contracts';
 import type { z } from 'zod';
@@ -59,8 +67,8 @@ export function productionSnapshotFilenameBase(snapshot: ProductionSnapshot): st
  * El título en la fila 1 dice de qué semana es la planilla: abierta tres días después, "Producción
  * base" sola no lo dice, y el nombre del archivo se pierde apenas alguien la reenvía.
  *
- * Lo que se puede dar de formato es acotado, y conviene saber por qué: `xlsx` 0.18 descarta los
- * estilos de celda al escribir —la negrita es de la versión paga— y tampoco escribe paneles fijos,
+ * Estas hojas van sin estilos a propósito (la que los lleva es "Pedido"). Con `xlsx` 0.18 no se
+ * podían escribir —la negrita era de la versión paga—, y tampoco se escriben paneles fijos,
  * ni por `!freeze` ni por `!views`. Comprobado, no supuesto. Queda lo que sí llega al archivo:
  * anchos de columna pensados por contenido y el autofiltro sobre la fila de encabezados, que es lo
  * que permite ordenar y filtrar sin tocar nada.
@@ -71,7 +79,7 @@ function sheetWithTitle(
   widths: number[],
   /** Encabezados cuya columna se suma al pie. Los que no son números se ignoran. */
   totalColumns: readonly string[] = [],
-): XLSX.WorkSheet {
+): WorkSheet {
   const sheet = XLSX.utils.aoa_to_sheet([[title], []]);
   XLSX.utils.sheet_add_json(sheet, rows, { origin: 'A2' });
   sheet['!cols'] = widths.map((wch) => ({ wch }));
@@ -163,7 +171,7 @@ export function orderSheetRows(report: ProductionReport): (number | string)[][] 
   return rows;
 }
 
-function orderSheet(report: ProductionReport): XLSX.WorkSheet {
+function orderSheet(report: ProductionReport): WorkSheet {
   const rows = orderSheetRows(report);
   const sheet = XLSX.utils.aoa_to_sheet(rows);
   sheet['!cols'] = [{ wch: 26 }, ...ORDER_SHEET_DAYS.map(() => ({ wch: 11 })), { wch: 10 }];
@@ -180,7 +188,50 @@ function orderSheet(report: ProductionReport): XLSX.WorkSheet {
     t: 'n',
     v: typeof totalValue === 'number' ? totalValue : 0,
   };
+  styleOrderSheet(sheet, rows);
   return sheet;
+}
+
+const THIN = { style: 'thin', color: { rgb: '000000' } } as const;
+const BORDER = { bottom: THIN, left: THIN, right: THIN, top: THIN };
+
+/**
+ * El formato de la planilla del cliente: encabezado gris oscuro con letra blanca, la última columna
+ * del encabezado en negro, el nombre de cada menú sobre gris claro, bordes finos en toda la grilla y
+ * los números alineados a la derecha.
+ */
+function styleOrderSheet(sheet: WorkSheet, rows: readonly (number | string)[][]): void {
+  const lastColumn = ORDER_SHEET_DAYS.length + 1;
+  rows.forEach((row, rowIndex) => {
+    for (let columnIndex = 0; columnIndex <= lastColumn; columnIndex += 1) {
+      const address = XLSX.utils.encode_cell({ c: columnIndex, r: rowIndex });
+      const cell = (sheet[address] ?? { t: 's', v: '' }) as CellObject;
+      sheet[address] = cell;
+      const isHeader = rowIndex === 0;
+      const isTotal = rowIndex === rows.length - 1;
+      const isLabel = columnIndex === 0 && !isHeader && !isTotal && row[0] !== '';
+      cell.s = {
+        alignment: { horizontal: columnIndex === 0 ? 'left' : 'right', vertical: 'center' },
+        border: BORDER,
+        font: {
+          bold: isHeader || isTotal,
+          color: { rgb: isHeader ? 'FFFFFF' : '000000' },
+          name: 'Arial',
+          sz: 11,
+        },
+        ...(isHeader
+          ? {
+              fill: {
+                fgColor: { rgb: columnIndex === lastColumn ? '000000' : '808080' },
+                patternType: 'solid',
+              },
+            }
+          : isLabel
+            ? { fill: { fgColor: { rgb: 'F2F2F2' }, patternType: 'solid' } }
+            : {}),
+      };
+    }
+  });
 }
 
 export function buildProductionExcel(report: ProductionReport): ArrayBuffer {

@@ -119,6 +119,18 @@ describe('buildProductionExcel', () => {
     expect(rows[3]).toEqual(['Keto', '250', 12, 8]);
   });
 
+  it('la hoja "Pedido" lleva los colores del cliente', () => {
+    const sheet = read(buildProductionExcel(report)).Sheets.Pedido as XLSX.WorkSheet;
+    const fill = (address: string) =>
+      ((sheet[address] as XLSX.CellObject).s as { fgColor?: { rgb?: string } } | undefined)?.fgColor
+        ?.rgb;
+
+    // Encabezado gris oscuro, la última columna del encabezado en negro y los menús en gris claro.
+    expect(fill('A1')).toBe('808080');
+    expect(fill('G1')).toBe('000000');
+    expect(fill('A2')).toBe('F2F2F2');
+  });
+
   it('pone la semana en el título de cada hoja', () => {
     const book = read(buildProductionExcel(report));
 
