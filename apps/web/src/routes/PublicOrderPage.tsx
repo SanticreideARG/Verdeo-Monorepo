@@ -302,6 +302,9 @@ export function PublicOrderPage() {
         phone: formText(form, 'phone') || undefined,
       },
       deliveryAddress: formText(form, 'deliveryAddress'),
+      ...(formText(form, 'deliveryAddressLine2').trim()
+        ? { deliveryAddressLine2: formText(form, 'deliveryAddressLine2').trim() }
+        : {}),
       deliveryDate: menu ? deliveryDateFor(menu.cycle.closeAt) : '',
       dietaryInstructions: formText(form, 'dietaryInstructions')
         .split('\n')
@@ -715,10 +718,19 @@ export function PublicOrderPage() {
                 Dirección de entrega
                 <input
                   name="deliveryAddress"
-                  autoComplete="street-address"
+                  autoComplete="address-line1"
                   minLength={4}
-                  placeholder="Calle y altura, piso y depto"
+                  placeholder="Calle y altura"
                   required={step === 'datos'}
+                />
+              </label>
+              <label className="field field-wide">
+                Piso, depto, timbre y barrio (opcional)
+                <input
+                  name="deliveryAddressLine2"
+                  autoComplete="address-line2"
+                  maxLength={300}
+                  placeholder="Ej. 3° B, timbre 2, barrio Centro"
                 />
               </label>
               <label className="field field-wide">

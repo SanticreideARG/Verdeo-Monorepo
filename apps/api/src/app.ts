@@ -2906,6 +2906,9 @@ export function createApp(options: CreateAppOptions) {
       {
         customerId,
         deliveryAddress: input.data.deliveryAddress,
+        ...(input.data.deliveryAddressLine2
+          ? { deliveryAddressLine2: input.data.deliveryAddressLine2 }
+          : {}),
         ...(input.data.deliveryAddressId
           ? { deliveryAddressId: input.data.deliveryAddressId }
           : {}),

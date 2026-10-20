@@ -14,6 +14,7 @@ interface CustomerAddress {
   id: string;
   label: string;
   locationUrl: string | null;
+  unit: string | null;
   writtenAddress: string;
 }
 
@@ -203,11 +204,13 @@ export function CustomerAccountPage() {
     }
     setMessage('');
     const locationUrl = formText(form, 'locationUrl').trim();
+    const unit = formText(form, 'unit').trim();
     const response = await apiRequest('/api/v1/me/addresses', {
       body: JSON.stringify({
         geographicZoneId,
         label,
         ...(locationUrl ? { locationUrl } : {}),
+        ...(unit ? { unit } : {}),
         writtenAddress,
       }),
       method: 'POST',
@@ -418,7 +421,11 @@ export function CustomerAccountPage() {
                 </label>
                 <label className="field field-wide">
                   Dirección
-                  <input name="writtenAddress" required />
+                  <input name="writtenAddress" placeholder="Calle y altura" required />
+                </label>
+                <label className="field field-wide">
+                  Piso, depto, timbre y barrio (opcional)
+                  <input maxLength={300} name="unit" placeholder="Ej. 3° B, timbre 2" />
                 </label>
                 <div className="field field-wide">
                   <label htmlFor="locationUrl">Compartir tu ubicación exacta (opcional)</label>
@@ -453,6 +460,7 @@ export function CustomerAccountPage() {
               <div className="operation-card" key={address.id}>
                 <p className="font-semibold text-forest">{address.label}</p>
                 <p className="text-sm text-ink-muted">{address.writtenAddress}</p>
+                {address.unit ? <p className="text-sm text-ink-muted">{address.unit}</p> : null}
               </div>
             ))}
             {(profile?.addresses ?? []).length === 0 ? (

@@ -532,6 +532,7 @@ export class PostgresDeliveryService {
         customerDisplayName: customers.displayName,
         deliveredAt: deliveryStops.deliveredAt,
         deliveryAddress: orders.deliveryAddressSnapshot,
+        deliveryAddressLine2: orders.deliveryAddressLine2,
         // El enlace de ubicación es lo que el repartidor abre en el teléfono: sin esto, la lista que
         // se le pasa son direcciones escritas que hay que tipear en un mapa.
         deliveryLocationUrl: orders.deliveryLocationUrlSnapshot,
@@ -979,6 +980,7 @@ export class PostgresDeliveryService {
         ), 0)`,
         customerDisplayName: customers.displayName,
         deliveryAddress: orders.deliveryAddressSnapshot,
+        deliveryAddressLine2: orders.deliveryAddressLine2,
         deliveryLatitude: customerAddresses.latitude,
         deliveryLocationUrl: orders.deliveryLocationUrlSnapshot,
         deliveryLongitude: customerAddresses.longitude,

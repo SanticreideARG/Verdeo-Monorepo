@@ -76,7 +76,8 @@ const CustomerAddressFieldsSchema = z.object({
   propertyType: z.string().trim().max(80).optional(),
   sector: z.string().trim().max(120).optional(),
   source: ConfigurableKeySchema.default('manual'),
-  unit: z.string().trim().max(80).optional(),
+  // Línea 2: piso, depto, timbre, barrio, detalles. Se llamaba "unidad"; ahora entra todo eso.
+  unit: z.string().trim().max(300).optional(),
   writtenAddress: z.string().trim().min(4).max(500),
 });
 
@@ -103,7 +104,7 @@ export const CustomerAddressUpdateRequestSchema = z
     propertyType: z.string().trim().max(80).nullable().optional(),
     sector: z.string().trim().max(120).nullable().optional(),
     source: ConfigurableKeySchema.optional(),
-    unit: z.string().trim().max(80).nullable().optional(),
+    unit: z.string().trim().max(300).nullable().optional(),
     writtenAddress: z.string().trim().min(4).max(500).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: 'No hay cambios para aplicar.' })
@@ -454,7 +455,7 @@ export const CustomerSelfAddressWriteSchema = z.object({
   label: RequiredTextSchema,
   locationUrl: z.url().max(2_000).nullable().optional(),
   primary: z.boolean().optional(),
-  unit: z.string().trim().max(80).nullable().optional(),
+  unit: z.string().trim().max(300).nullable().optional(),
   writtenAddress: z.string().trim().min(4).max(500),
 });
 
@@ -700,6 +701,8 @@ export const OrderCreateRequestSchema = z.object({
   customerId: UuidSchema,
   deliveryAddressId: UuidSchema.optional(),
   deliveryAddress: z.string().trim().min(4).max(500),
+  /** Piso, depto, timbre, barrio, detalles. No se busca en el mapa. */
+  deliveryAddressLine2: z.string().trim().max(300).optional(),
   deliveryLocationUrl: z.url().max(2_000).optional(),
   deliveryDate: z.iso.date(),
   dietaryInstructions: z.array(RequiredTextSchema).max(20).default([]),
@@ -817,6 +820,7 @@ export const OrderPaidRequestSchema = z.object({ paid: z.boolean() });
 export const OrderUpdateRequestSchema = z
   .object({
     deliveryAddress: z.string().trim().min(4).max(500).optional(),
+    deliveryAddressLine2: z.string().trim().max(300).nullable().optional(),
     deliveryAddressId: UuidSchema.nullable().optional(),
     deliveryDate: z.iso.date().optional(),
     deliveryLocationUrl: z.url().max(2_000).nullable().optional(),
@@ -850,6 +854,7 @@ export const OrderSchema = z.object({
     whatsapp: z.string().nullable(),
   }),
   deliveryAddress: z.string(),
+  deliveryAddressLine2: z.string().nullable(),
   deliveryAddressId: UuidSchema.nullable(),
   deliveryDate: z.iso.date(),
   // Coordenadas de la dirección de entrega, cuando está geocodificada: con esto la ficha puede
@@ -1433,6 +1438,7 @@ export type SurplusWriteoffRequest = z.infer<typeof SurplusWriteoffRequestSchema
  */
 export const CustomerOrderCreateRequestSchema = z.object({
   deliveryAddress: z.string().trim().min(4).max(500),
+  deliveryAddressLine2: z.string().trim().max(300).optional(),
   deliveryAddressId: UuidSchema.optional(),
   deliveryDate: z.iso.date(),
   dietaryInstructions: z.array(z.string().trim().min(1).max(200)).max(20).default([]),

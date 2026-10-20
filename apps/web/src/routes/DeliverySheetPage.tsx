@@ -12,6 +12,7 @@ interface SheetStop {
   collectedMinor: number;
   customerFirstName: string;
   deliveryAddress: string;
+  deliveryAddressLine2: string | null;
   deliveryLatitude: number | null;
   deliveryLocationUrl: string | null;
   deliveryLongitude: number | null;
@@ -254,6 +255,9 @@ export function DeliverySheetPage() {
 
                   {stop.detail ? <p className="delivery-sheet-detail">{stop.detail}</p> : null}
                   <p className="delivery-sheet-address">{stop.deliveryAddress}</p>
+                  {stop.deliveryAddressLine2 ? (
+                    <p className="delivery-sheet-line2">{stop.deliveryAddressLine2}</p>
+                  ) : null}
                   {stop.deliveryWindow ? (
                     <p className="delivery-sheet-window">🕒 {stop.deliveryWindow}</p>
                   ) : null}

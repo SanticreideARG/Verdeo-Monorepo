@@ -150,6 +150,10 @@ export const customerAddresses = pgTable(
     // Pre-regional free text, kept as migration evidence until every address is reclassified.
     operationalZone: text('operational_zone'),
     propertyType: text('property_type'),
+    /**
+     * Línea 2 del domicilio: piso, departamento, timbre, barrio, detalles de la vivienda. Se llamaba
+     * "Unidad / piso"; desde 2026-10-19 es la segunda línea entera. No se geocodifica.
+     */
     unit: text('unit'),
     accessNotes: text('access_notes'),
     /*
@@ -661,7 +665,13 @@ export const orders = pgTable(
     deliveryAddressId: uuid('delivery_address_id').references(() => customerAddresses.id, {
       onDelete: 'set null',
     }),
+    /** Línea 1: calle, número y ciudad. Es lo único que se busca en el mapa. */
     deliveryAddressSnapshot: text('delivery_address_snapshot').notNull(),
+    /**
+     * Línea 2: piso, departamento, timbre, barrio, detalles de la vivienda. Para quien reparte; no
+     * se manda al buscador de direcciones, que con esto mezclado devolvía cualquier cosa.
+     */
+    deliveryAddressLine2: text('delivery_address_line2'),
     deliveryLocationUrlSnapshot: text('delivery_location_url_snapshot'),
     paymentExpectation: text('payment_expectation').notNull(),
     notes: text('notes'),

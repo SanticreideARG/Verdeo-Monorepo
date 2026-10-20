@@ -259,6 +259,7 @@ export function OrderDetailPage() {
     const response = await apiRequest(`/api/v1/orders/${order.id}`, {
       body: JSON.stringify({
         deliveryAddress: formText(form, 'deliveryAddress').trim(),
+        deliveryAddressLine2: formText(form, 'deliveryAddressLine2').trim() || null,
         deliveryDate: formText(form, 'deliveryDate'),
         deliveryLocationUrl: locationUrl ? locationUrl : null,
         ...(commentChanged ? { dietaryInstructions } : {}),
@@ -416,13 +417,27 @@ export function OrderDetailPage() {
           <form className="operation-card mt-6 max-w-xl" onSubmit={(event) => void saveEdit(event)}>
             <div className="form-grid">
               <label className="field field-wide">
-                Dirección
+                Dirección, línea 1
                 <input
                   defaultValue={order.deliveryAddress}
                   minLength={4}
                   name="deliveryAddress"
+                  placeholder="Calle, número y ciudad"
                   required
                 />
+                <small className="field-hint">
+                  Sólo calle, número y ciudad: es lo que se busca en el mapa.
+                </small>
+              </label>
+              <label className="field field-wide">
+                Dirección, línea 2
+                <input
+                  defaultValue={order.deliveryAddressLine2 ?? ''}
+                  maxLength={300}
+                  name="deliveryAddressLine2"
+                  placeholder="Piso, depto, timbre, barrio, detalles"
+                />
+                <small className="field-hint">No se busca en el mapa: es para quien reparte.</small>
               </label>
               {deliveryChoices.options.length > 1 && !otherDate ? (
                 <div className="field field-wide">
@@ -616,6 +631,9 @@ export function OrderDetailPage() {
               <dt>Dirección de entrega</dt>
               <dd>
                 {order.deliveryAddress}
+                {order.deliveryAddressLine2 ? (
+                  <span className="address-line2">{order.deliveryAddressLine2}</span>
+                ) : null}
                 {order.deliveryLocationUrl ? (
                   <>
                     {' · '}

@@ -294,3 +294,11 @@ otras provincias; OpenStreetMap ofrecía opciones muy lejanas.
   para aceptar solo. Si todo lo que encontró queda lejos, vuelve como "no encontrada" con el
   motivo ("Sólo encontró lugares lejos de la ciudad…") y la sugerencia de pegar la ubicación de
   Google Maps, que sigue mandando aunque quede lejos (la eligió una persona).
+
+## Domicilio en dos líneas (2026-10-19)
+
+Los operadores cargaban la dirección completa en un solo campo (calle, número, piso, depto, barrio,
+detalles), y eso iba entero al buscador. Ahora la dirección tiene dos líneas: la **línea 1** (calle,
+número y ciudad) es lo único que se geocodifica; la **línea 2** (`orders.delivery_address_line2` y
+`customer_addresses.unit`) es para quien reparte y no se manda al buscador. Un test
+(`packages/db/src/address-line2.test.ts`) asegura que la consulta no lleva la línea 2.

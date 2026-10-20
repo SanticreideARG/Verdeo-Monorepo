@@ -279,6 +279,7 @@ export function CustomersPage() {
                       locationUrl: optional(formText(form, 'locationUrl')),
                       primary: true,
                       source: 'manual',
+                      unit: optional(formText(form, 'addressLine2')),
                       writtenAddress,
                     },
                   ],
@@ -773,8 +774,17 @@ export function CustomersPage() {
                     <input name="phone" />
                   </label>
                   <label className="field field-wide">
-                    Dirección
-                    <input name="writtenAddress" placeholder="Calle y número" />
+                    Dirección, línea 1
+                    <input name="writtenAddress" placeholder="Calle, número y ciudad" />
+                    <small className="field-hint">Es lo que se busca en el mapa.</small>
+                  </label>
+                  <label className="field field-wide">
+                    Dirección, línea 2
+                    <input
+                      maxLength={300}
+                      name="addressLine2"
+                      placeholder="Piso, depto, timbre, barrio, detalles"
+                    />
                   </label>
                   <label className="field">
                     Ciudad
@@ -1180,8 +1190,14 @@ export function CustomersPage() {
                           <input name="label" placeholder="Casa, oficina…" required />
                         </label>
                         <label className="field field-wide">
-                          Dirección escrita
-                          <input name="writtenAddress" minLength={4} required />
+                          Dirección, línea 1
+                          <input
+                            minLength={4}
+                            name="writtenAddress"
+                            placeholder="Calle, número y ciudad"
+                            required
+                          />
+                          <small className="field-hint">Es lo que se busca en el mapa.</small>
                         </label>
                         <label className="field field-wide">
                           Enlace de ubicación
@@ -1211,8 +1227,12 @@ export function CustomersPage() {
                           <input name="propertyType" />
                         </label>
                         <label className="field">
-                          Unidad / piso
-                          <input name="unit" />
+                          Dirección, línea 2
+                          <input
+                            maxLength={300}
+                            name="unit"
+                            placeholder="Piso, depto, timbre, barrio, detalles"
+                          />
                         </label>
                         <label className="field">
                           Horario en que recibe

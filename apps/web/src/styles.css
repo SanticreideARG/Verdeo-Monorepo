@@ -10864,3 +10864,16 @@ label.field:has(> input[type='radio']) {
   text-overflow: ellipsis;
   background: var(--db-surface-solid, #fff);
 }
+
+/* La línea 2 del domicilio, debajo de la dirección: piso, timbre, barrio. */
+.delivery-sheet-line2 {
+  margin: 0.1rem 0 0;
+  font-size: 0.9rem;
+  color: var(--db-text-soft, inherit);
+}
+
+.address-line2 {
+  display: block;
+  font-size: 0.88em;
+  color: var(--db-text-soft, inherit);
+}

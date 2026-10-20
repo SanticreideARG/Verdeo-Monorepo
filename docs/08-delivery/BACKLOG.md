@@ -547,3 +547,11 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] Tarjeta compacta: el menú "⋯" va arriba, al lado del estado, con el paso que sigue primero; se sacó la fila de botones del pie.
 - [x] "Marcar listo" deja de ser botón (en teléfono y escritorio): va al "⋯". Para todos juntos sigue "Marcar listos por zona".
 - [x] Vista "Tarjetas / Columnas" en el teléfono (`DataTable` con `narrowViewKey`): la tabla de escritorio compacta, con scroll de costado, cliente fijo, orden por encabezado y el mismo selector de columnas. Se recuerda por navegador.
+
+## Domicilio en dos líneas (2026-10-19)
+
+- [x] Línea 1 (calle, número, ciudad: lo único que se geocodifica) y línea 2 (piso, depto, timbre, barrio, detalles). En el pedido: `orders.delivery_address_line2` (migración 0067). En el domicilio del cliente se reusa `customer_addresses.unit`, que pasa de "Unidad / piso" (80) a la línea 2 entera (300).
+- [x] Toma de pedidos, ficha, vista rápida, columna Domicilio, alta de cliente y de domicilio, formulario del sitio, Mi cuenta, hoja de reparto y Rutas muestran o piden la línea 2. Al elegir un domicilio, la línea 2 viene de él salvo que se escriba otra.
+- [x] Probado: el buscador recibe sólo la línea 1.
+- [ ] Separar las direcciones viejas que tienen todo mezclado en la línea 1 (con el normalizador de IA, que ya distingue la unidad, como sugerencia que confirma una persona).
+- [ ] Importación de pedidos por email: mandar el barrio y el piso del formulario a la línea 2.

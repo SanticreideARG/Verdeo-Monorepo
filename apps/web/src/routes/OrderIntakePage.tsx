@@ -217,6 +217,7 @@ export function OrderIntakePage() {
    * es un campo de texto y no una lista cerrada.
    */
   const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliveryAddressLine2, setDeliveryAddressLine2] = useState('');
   const [addressHint, setAddressHint] = useState('');
 
   const loadedOnce = useRef(false);
@@ -545,7 +546,12 @@ export function OrderIntakePage() {
     const response = await apiRequest(`/api/v1/customers/${customerId}`);
     if (!response.ok) return;
     const detail = (await response.json()) as {
-      addresses?: { active: boolean; primary: boolean; writtenAddress: string }[];
+      addresses?: {
+        active: boolean;
+        primary: boolean;
+        unit: string | null;
+        writtenAddress: string;
+      }[];
     };
     const active = (detail.addresses ?? []).filter((address) => address.active);
     const chosen = active.find((address) => address.primary) ?? active[0];
@@ -554,6 +560,7 @@ export function OrderIntakePage() {
       return;
     }
     setDeliveryAddress(chosen.writtenAddress);
+    setDeliveryAddressLine2(chosen.unit ?? '');
     setAddressHint('Domicilio del cliente. Podés cambiarlo para esta entrega.');
   }
 
@@ -622,6 +629,7 @@ export function OrderIntakePage() {
     }
     setSelectedDishes([]);
     setDeliveryAddress(lastOrder.deliveryAddress);
+    setDeliveryAddressLine2(lastOrder.deliveryAddressLine2 ?? '');
     setAddressHint('La dirección del pedido anterior. Podés cambiarla para esta entrega.');
     setFormField(
       'paymentExpectation',
@@ -833,6 +841,9 @@ export function OrderIntakePage() {
       const createdOrder = await mutate('/api/v1/orders', {
         customerId,
         deliveryAddress: formText(form, 'deliveryAddress'),
+        ...(formText(form, 'deliveryAddressLine2').trim()
+          ? { deliveryAddressLine2: formText(form, 'deliveryAddressLine2').trim() }
+          : {}),
         deliveryDate,
         // Un solo comentario para la cocina por pedido: no hay indicaciones por plato.
         dietaryInstructions: formText(form, 'dietaryInstructions').trim()
@@ -1564,15 +1575,28 @@ export function OrderIntakePage() {
                 </div>
               )}
               <label className="field field-wide">
-                Dirección
+                Dirección, línea 1
                 <input
                   minLength={4}
                   name="deliveryAddress"
                   onChange={(event) => setDeliveryAddress(event.target.value)}
+                  placeholder="Calle, número y ciudad"
                   required
                   value={deliveryAddress}
                 />
-                {addressHint ? <small className="field-hint">{addressHint}</small> : null}
+                <small className="field-hint">
+                  {addressHint || 'Sólo calle, número y ciudad: es lo que se busca en el mapa.'}
+                </small>
+              </label>
+              <label className="field field-wide">
+                Dirección, línea 2
+                <input
+                  maxLength={300}
+                  name="deliveryAddressLine2"
+                  onChange={(event) => setDeliveryAddressLine2(event.target.value)}
+                  placeholder="Piso, depto, timbre, barrio, detalles"
+                  value={deliveryAddressLine2}
+                />
               </label>
               <label className="field">
                 Origen
@@ -1759,6 +1783,7 @@ export function OrderIntakePage() {
                   resetCart();
                   setSelectedCustomer(null);
                   setDeliveryAddress('');
+                  setDeliveryAddressLine2('');
                   setAddressHint('');
                   setCustomerQuery('');
                   setCustomerResults([]);

@@ -32,6 +32,7 @@ interface RouteSummary {
 interface RouteStop {
   customerDisplayName: string;
   deliveryAddress: string;
+  deliveryAddressLine2?: string | null;
   deliveryLatitude: number | null;
   /** Qué entregar acá, ya escrito por el servidor: "Menú Keto 400", "Intuitivo 250". */
   detail: string;
@@ -837,7 +838,12 @@ export function RoutesPage() {
                                 {stop.detail ? (
                                   <p className="routes-stop-detail">{stop.detail}</p>
                                 ) : null}
-                                <p className="routes-stop-address">{stop.deliveryAddress}</p>
+                                <p className="routes-stop-address">
+                                  {stop.deliveryAddress}
+                                  {stop.deliveryAddressLine2 ? (
+                                    <small> · {stop.deliveryAddressLine2}</small>
+                                  ) : null}
+                                </p>
                                 <p className="routes-stop-facts">
                                   {formatMoney(stop.totalMinor, 'ARS')} · {stop.paymentExpectation}{' '}
                                   · {STOP_STATUS_LABELS[stop.status] ?? stop.status}

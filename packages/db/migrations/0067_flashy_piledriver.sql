@@ -1,0 +1,1 @@
+ALTER TABLE "orders" ADD COLUMN "delivery_address_line2" text;

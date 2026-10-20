@@ -196,7 +196,10 @@ export function buildOrderColumns(options: { maskSurnames?: boolean } = {}): Ord
     {
       key: 'domicilio',
       label: 'Domicilio',
-      render: (order) => order.deliveryAddress || '—',
+      render: (order) =>
+        order.deliveryAddress
+          ? [order.deliveryAddress, order.deliveryAddressLine2].filter(Boolean).join(' · ')
+          : '—',
       sortValue: (order) => order.deliveryAddress,
     },
     {

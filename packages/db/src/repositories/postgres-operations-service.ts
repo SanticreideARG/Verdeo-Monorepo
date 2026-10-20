@@ -302,6 +302,7 @@ export interface OrderInput {
   }[];
   menuId: string;
   notes?: string | undefined;
+  deliveryAddressLine2?: string | undefined;
   deliveryDayText?: string | undefined;
   deliveryTimeSlot?: string | undefined;
   paymentExpectation: string;
@@ -324,6 +325,7 @@ export interface OrderUpdateInput {
       }[]
     | undefined;
   notes?: string | null | undefined;
+  deliveryAddressLine2?: string | null | undefined;
   deliveryDayText?: string | null | undefined;
   deliveryTimeSlot?: string | null | undefined;
   paymentExpectation?: string | undefined;
@@ -2751,6 +2753,7 @@ export class PostgresOperationsService {
         originLongitude: operatingSites.originLongitude,
         operatingSiteId: orders.operatingSiteId,
         snapshot: orders.deliveryAddressSnapshot,
+        line2: orders.deliveryAddressLine2,
       })
       .from(orders)
       .innerJoin(operatingSites, eq(operatingSites.id, orders.operatingSiteId))
@@ -2854,6 +2857,7 @@ export class PostgresOperationsService {
             label: 'Pedido',
             locationUrl: order.locationUrl,
             source: 'order_locate',
+            unit: order.line2,
             writtenAddress: order.snapshot,
           })
           .returning({ id: customerAddresses.id });
@@ -5435,6 +5439,7 @@ export class PostgresOperationsService {
           // La regla del Intuitivo es por ciudad: editar un pedido tiene que usar la de su ciudad.
           operatingSiteId: orders.operatingSiteId,
           notes: orders.notes,
+          deliveryAddressLine2: orders.deliveryAddressLine2,
           deliveryDayText: orders.deliveryDayText,
           deliveryTimeSlot: orders.deliveryTimeSlot,
           paymentExpectation: orders.paymentExpectation,
@@ -5538,6 +5543,9 @@ export class PostgresOperationsService {
         ...(input.deliveryDate !== undefined ? { deliveryDate: input.deliveryDate } : {}),
         deliveryLocationUrlSnapshot: deliveryLocationUrl,
         ...(input.notes !== undefined ? { notes: input.notes } : {}),
+        ...(input.deliveryAddressLine2 !== undefined
+          ? { deliveryAddressLine2: input.deliveryAddressLine2 }
+          : {}),
         ...(input.deliveryDayText !== undefined ? { deliveryDayText: input.deliveryDayText } : {}),
         ...(input.deliveryTimeSlot !== undefined
           ? { deliveryTimeSlot: input.deliveryTimeSlot }
@@ -5713,6 +5721,7 @@ export class PostgresOperationsService {
     if (!customer) throw new OperationsNotFoundError('No se encontró el cliente activo');
 
     let deliveryAddress = input.deliveryAddress;
+    let deliveryAddressLine2: string | null = input.deliveryAddressLine2?.trim() || null;
     let deliveryLocationUrl = input.deliveryLocationUrl;
     let geographicZoneId: string | null = null;
     let operatingSiteId: string | null = null;
@@ -5750,6 +5759,7 @@ export class PostgresOperationsService {
           geographicZoneId: customerAddresses.geographicZoneId,
           locationUrl: customerAddresses.locationUrl,
           operatingSiteId: geographicZones.operatingSiteId,
+          unit: customerAddresses.unit,
           writtenAddress: customerAddresses.writtenAddress,
         })
         .from(customerAddresses)
@@ -5769,6 +5779,8 @@ export class PostgresOperationsService {
       // linking it for routing must not silently replace their text with the stored one.
       if (explicitAddressId || !deliveryAddress.trim()) {
         deliveryAddress = address.writtenAddress;
+        // La línea 2 escrita para este pedido gana; si no se escribió, va la del domicilio.
+        deliveryAddressLine2 ??= address.unit;
       }
       deliveryLocationUrl = address.locationUrl ?? deliveryLocationUrl;
       // The operation is derived from the delivery zone; it is never chosen by the operator.
@@ -5821,6 +5833,7 @@ export class PostgresOperationsService {
         geographicZoneId,
         importKey: input.importKey,
         notes: input.notes,
+        deliveryAddressLine2,
         deliveryDayText: input.deliveryDayText ?? null,
         deliveryTimeSlot: input.deliveryTimeSlot ?? null,
         operatingSiteId,
@@ -6578,6 +6591,7 @@ export class PostgresOperationsService {
         // precios, y la que alguien busca cuando pregunta "¿de dónde era este pedido?".
         operatingSiteName: operatingSites.displayName,
         notes: orders.notes,
+        deliveryAddressLine2: orders.deliveryAddressLine2,
         deliveryDayText: orders.deliveryDayText,
         deliveryTimeSlot: orders.deliveryTimeSlot,
         paidAt: orders.paidAt,

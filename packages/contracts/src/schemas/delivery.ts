@@ -34,6 +34,8 @@ export const DeliveryStopSchema = z.object({
   customerDisplayName: z.string(),
   deliveredAt: IsoDateTimeSchema.nullable(),
   deliveryAddress: z.string(),
+  /** Piso, depto, timbre, barrio: va debajo de la dirección. */
+  deliveryAddressLine2: z.string().nullable(),
   // Coordenadas del domicilio: con esto la lista que se le pasa al repartidor lleva un enlace de
   // mapa aunque nadie haya compartido una ubicación por chat.
   /*
@@ -125,6 +127,8 @@ export const DeliverySheetStopSchema = z.object({
   collectedMinor: z.number().int(),
   customerFirstName: z.string(),
   deliveryAddress: z.string(),
+  /** Piso, depto, timbre, barrio: va debajo de la dirección. */
+  deliveryAddressLine2: z.string().nullable(),
   deliveryLatitude: z.number().nullable(),
   deliveryLocationUrl: z.string().nullable(),
   deliveryLongitude: z.number().nullable(),

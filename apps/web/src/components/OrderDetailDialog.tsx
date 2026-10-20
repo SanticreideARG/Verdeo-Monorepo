@@ -113,6 +113,9 @@ export function OrderDetailDialog({
                 <dt>Domicilio</dt>
                 <dd>
                   {order.deliveryAddress || 'Sin domicilio cargado'}
+                  {order.deliveryAddressLine2 ? (
+                    <span className="address-line2">{order.deliveryAddressLine2}</span>
+                  ) : null}
                   {map ? (
                     <>
                       {' '}

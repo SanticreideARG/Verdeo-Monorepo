@@ -199,6 +199,8 @@ export interface OrderSummary {
     whatsapp: string | null;
   };
   deliveryAddress: string;
+  /** Piso, depto, timbre, barrio, detalles. No se geocodifica. */
+  deliveryAddressLine2: string | null;
   deliveryAddressId: string | null;
   deliveryDate: string;
   // Coordenadas de la dirección de entrega, cuando está geocodificada.
