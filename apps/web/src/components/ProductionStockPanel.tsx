@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { apiRequest } from '../lib/api.js';
 import { errorMessage, type MenuOffering, type SurplusItem } from '../lib/operations.js';
-import { showToast } from '../lib/toast.js';
 
 interface StockRow {
   familyName: string;
@@ -69,16 +68,19 @@ export function ProductionStockPanel({
 
   const total = stock.reduce((sum, item) => sum + item.quantityUnits, 0);
 
-  async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
+  /**
+   * Sumar o restar uno, y guardar en el acto.
+   *
+   * Era un formulario con casillas y un "Guardar stock" aparte, más "Informar producción real" y la
+   * tabla de excedente debajo: tres herramientas para contestar "¿cuántos hago de más?". Ahora es
+   * un contador por menú, y cada toque queda guardado.
+   */
+  async function change(row: StockRow, delta: number) {
+    const next = Math.max(0, row.quantityUnits + delta);
+    if (next === row.quantityUnits) return;
     const entries = rows
-      .map((row) => {
-        const raw = form.get(keyOf(row));
-        const quantityUnits = Number(typeof raw === 'string' && raw.trim() ? raw : 0);
-        return { ...row, quantityUnits };
-      })
-      .filter((row) => Number.isInteger(row.quantityUnits) && row.quantityUnits > 0);
+      .map((item) => (keyOf(item) === keyOf(row) ? { ...item, quantityUnits: next } : item))
+      .filter((item) => item.quantityUnits > 0);
     setSaving(true);
     setMessage('');
     const response = await apiRequest(`/api/v1/production/${cycleId}/stock`, {
@@ -91,17 +93,22 @@ export function ProductionStockPanel({
       return;
     }
     setStock(((await response.json()) as { items: StockRow[] }).items);
-    showToast('Stock del período guardado.');
     onSaved();
   }
 
   return (
-    <form className="operation-card mt-6" onSubmit={(event) => void save(event)}>
-      <h3 className="text-xl font-semibold text-forest">Stock del período</h3>
+    <section className="operation-card mt-6">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-xl font-semibold text-forest">Stock para el cierre</h3>
+        <span className="text-sm text-ink-muted">
+          {total === 0
+            ? 'Sin stock pedido.'
+            : `${String(total)} ${total === 1 ? 'menú' : 'menús'} de stock`}
+        </span>
+      </div>
       <p className="mt-1 text-sm text-ink-muted">
-        Lo que se cocina de más para vender después. Suma a lo que hay que producir y a lo
-        disponible, pero no a las ventas: recién cuenta cuando se vende en un pedido. Es sólo de
-        este período.
+        Los menús que se piden para tener a mano y vender después. Se cocinan con el resto y salen
+        en la planilla, pero no cuentan como ventas. Los Intuitivos no van acá.
       </p>
       {message ? (
         <p className="screen-notice mt-3" role="alert">
@@ -111,45 +118,46 @@ export function ProductionStockPanel({
       {rows.length === 0 ? (
         <p className="empty-state mt-4">El menú de este período no tiene variedades fijas.</p>
       ) : (
-        <div
-          className="form-grid mt-4"
-          // Remontar al llegar el stock: las casillas usan defaultValue.
-          key={stock.map((item) => keyOf(item) + String(item.quantityUnits)).join('|')}
-        >
+        <ul className="stock-steppers mt-4" aria-busy={saving}>
           {rows.map((row) => {
             const line = surplus.find((item) => keyOf(item) === keyOf(row));
+            const name = `${row.familyName} ${row.variantName}`;
             return (
-              <label className="field" key={keyOf(row)}>
-                {row.familyName} {row.variantName}
-                <input
-                  defaultValue={row.quantityUnits || ''}
-                  disabled={!canEdit}
-                  inputMode="numeric"
-                  min="0"
-                  name={keyOf(row)}
-                  placeholder="0"
-                  type="number"
-                />
-                {line && (line.vendidoOportunidad > 0 || row.quantityUnits > 0) ? (
-                  <small className="text-ink-muted">
-                    Vendido {line.vendidoOportunidad} · disponible {line.disponible}
-                  </small>
-                ) : null}
-              </label>
+              <li key={keyOf(row)}>
+                <span className="stock-steppers-name">
+                  {name}
+                  {line && line.vendidoOportunidad > 0 ? (
+                    <small>
+                      Vendidos {line.vendidoOportunidad} · quedan {line.disponible}
+                    </small>
+                  ) : null}
+                </span>
+                <span className="stock-steppers-control">
+                  <button
+                    aria-label={`Quitar uno de ${name}`}
+                    className="button button-secondary"
+                    disabled={!canEdit || saving || row.quantityUnits === 0}
+                    onClick={() => void change(row, -1)}
+                    type="button"
+                  >
+                    −
+                  </button>
+                  <strong aria-live="polite">{row.quantityUnits}</strong>
+                  <button
+                    aria-label={`Agregar uno de ${name}`}
+                    className="button button-secondary"
+                    disabled={!canEdit || saving}
+                    onClick={() => void change(row, 1)}
+                    type="button"
+                  >
+                    +
+                  </button>
+                </span>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        {canEdit && rows.length > 0 ? (
-          <button className="button button-primary" disabled={saving} type="submit">
-            {saving ? 'Guardando…' : 'Guardar stock'}
-          </button>
-        ) : null}
-        <span className="text-sm text-ink-muted">
-          {total === 0 ? 'Sin stock cargado.' : `${String(total)} unidades de stock.`}
-        </span>
-      </div>
-    </form>
+    </section>
   );
 }

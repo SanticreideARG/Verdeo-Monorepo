@@ -87,3 +87,10 @@ rutas.
 1. ✅ Modelo, carga en Cocina, suma en producción y en el disponible, y conversión del cliente STOCK.
 2. ✅ Vender del stock desde la carga de pedidos.
 3. Etiquetas del stock al producirse.
+
+## Cocina más simple (2026-10-19)
+
+"Stock del período" pasó a ser **"Stock para el cierre"**: un contador − / + por menú fijo que guarda
+en cada toque (el mismo `PUT /api/v1/production/:cycleId/stock`). "Informar producción real" y la tabla
+de excedente salieron de la pantalla de Cocina; el cálculo de disponible y el backend siguen igual.
+El stock entra en la hoja "Pedido" de la planilla.

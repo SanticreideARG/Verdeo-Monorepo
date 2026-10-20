@@ -53,6 +53,57 @@ function rowsOf(book: XLSX.WorkBook, name: string): unknown[][] {
 }
 
 describe('buildProductionExcel', () => {
+  it('abre con la hoja "Pedido" en el formato del cliente', () => {
+    const book = read(
+      buildProductionExcel({
+        ...report,
+        base: [
+          ...report.base,
+          {
+            exceptions: [],
+            familyName: 'Keto',
+            orderCount: 9,
+            quantityUnits: 11,
+            variantName: '400',
+          },
+          {
+            exceptions: [],
+            familyName: 'Menú Anti-Age',
+            orderCount: 1,
+            quantityUnits: 1,
+            variantName: '250',
+          },
+        ],
+        stock: [{ familyName: 'Keto', quantityUnits: 2, variantName: '250' }],
+      }),
+    );
+
+    expect(book.SheetNames[0]).toBe('Pedido');
+    const rows = rowsOf(book, 'Pedido');
+    expect(rows[0]?.slice(0, 6)).toEqual([
+      'PEDIDO',
+      'LUNES',
+      'MARTES',
+      'MIÉRCOLES',
+      'JUEVES',
+      'VIERNES',
+    ]);
+    // Pedidos más stock, las mismas porciones en cada plato.
+    expect(rows[1]?.slice(0, 6)).toEqual(['KETO 250', 14, 14, 14, 14, 14]);
+    expect(rows[2]?.slice(0, 6)).toEqual(['KETO 400', 11, 11, 11, 11, 11]);
+    // Un renglón en blanco entre menús, y los Intuitivos como un menú más.
+    expect((rows[3] ?? []).every((cell) => cell === '')).toBe(true);
+    expect(rows[4]?.slice(0, 6)).toEqual(['ANTI-AGE 250', 1, 1, 1, 1, 1]);
+    expect(rows[6]?.slice(0, 6)).toEqual(['INTUITIVO 400', 3, 3, 3, 3, 3]);
+    // El total de porciones, abajo a la derecha: (14 + 11 + 1 + 3) × 5.
+    const last = rows.at(-1) as unknown[];
+    expect(last[0]).toBe('TOTAL');
+    expect(last.at(-1)).toBe(145);
+    expect((book.Sheets.Pedido as XLSX.WorkSheet).G9 as XLSX.CellObject).toMatchObject({
+      f: 'SUM(B2:F7)',
+    });
+  });
+
   it('cuenta los Intuitivos en el conciliado, que la hoja base no tiene', () => {
     const book = read(buildProductionExcel(report));
     const rows = rowsOf(book, 'Conciliado');
@@ -73,7 +124,8 @@ describe('buildProductionExcel', () => {
 
     // Abierta tres días después, "Producción base" sola no dice de qué semana es, y el nombre del
     // archivo se pierde apenas alguien la reenvía.
-    for (const name of book.SheetNames) {
+    // Salvo "Pedido", que copia el formato del cliente tal cual: arranca con su encabezado.
+    for (const name of book.SheetNames.filter((sheet) => sheet !== 'Pedido')) {
       expect(rowsOf(book, name)[0]?.[0]).toBe('Producción — Semana 36 · Consolidado al momento');
     }
   });
@@ -100,6 +152,7 @@ describe('buildProductionExcel', () => {
     const book = read(buildProductionExcel(report));
 
     expect(book.SheetNames).toEqual([
+      'Pedido',
       'Conciliado',
       'Producción base',
       'Platos a preparar',
@@ -112,7 +165,7 @@ describe('buildProductionExcel', () => {
   it('omite las hojas que no tienen nada que mostrar', () => {
     const book = read(buildProductionExcel({ ...report, custom: [], dishTally: [] }));
 
-    expect(book.SheetNames).toEqual(['Conciliado', 'Producción base']);
+    expect(book.SheetNames).toEqual(['Pedido', 'Conciliado', 'Producción base']);
   });
 
   it('suma las columnas numéricas al pie de cada hoja', () => {

@@ -1,102 +1,25 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { ProductionStockPanel } from '../components/ProductionStockPanel.js';
 import { RunFilter } from '../components/RunFilter.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
-import { DataTable, type DataColumn } from '../components/DataTable.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import {
   errorMessage,
   menusForAmbientScope,
   type KitchenSummary,
   type ProductionSnapshot,
-  type SurplusItem,
   type SurplusReport,
   type WeeklyMenu,
 } from '../lib/operations.js';
+import { formatMoment } from '../lib/dates.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { showToast } from '../lib/toast.js';
 
-function formText(form: FormData, key: string): string {
-  const value = form.get(key);
-  return typeof value === 'string' ? value : '';
-}
-
-/**
- * Ocho columnas, declaradas una sola vez para las dos formas — tabla en escritorio, tarjetas en
- * teléfono. `disponible` es la que se destaca: las otras siete explican cómo se llegó a ese número,
- * pero el que decide qué hacer con el excedente es ése.
- */
-const SURPLUS_COLUMNS: readonly DataColumn<SurplusItem>[] = [
-  {
-    key: 'variedad',
-    label: 'Variedad',
-    primary: true,
-    render: (item) => `${item.familyName} ${item.variantName}`,
-  },
-  { key: 'demanda', label: 'Demanda', render: (item) => item.demandaConfirmada },
-  { key: 'stock', label: 'Stock', render: (item) => item.stockPlanificado || '—' },
-  { key: 'real', label: 'Real', render: (item) => item.produccionReal ?? '—' },
-  { key: 'efectivo', label: 'Efectivo', render: (item) => item.excedenteEfectivo },
-  { key: 'oportunidad', label: 'Vendido oport.', render: (item) => item.vendidoOportunidad },
-  { key: 'baja', label: 'Baja', render: (item) => item.bajaMerma },
-  { emphasis: true, key: 'disponible', label: 'Disponible', render: (item) => item.disponible },
-];
-
 function stockUnits(kitchen: KitchenSummary): number {
   return (kitchen.stock ?? []).reduce((sum, item) => sum + item.quantityUnits, 0);
-}
-
-/**
- * Lo que se informa como producción real: cada variedad pedida más su stock, y las que sólo tienen
- * stock. El número propuesto es lo que se esperaba cocinar.
- */
-function productionLines(
-  kitchen: KitchenSummary,
-): { familyName: string; quantityUnits: number; variantName: string }[] {
-  const lines = new Map<
-    string,
-    { familyName: string; quantityUnits: number; variantName: string }
-  >();
-  for (const line of [...kitchen.base, ...(kitchen.stock ?? [])]) {
-    const key = `${line.familyName}::${line.variantName}`;
-    const current = lines.get(key);
-    lines.set(key, {
-      familyName: line.familyName,
-      quantityUnits: (current?.quantityUnits ?? 0) + line.quantityUnits,
-      variantName: line.variantName,
-    });
-  }
-  return [...lines.values()];
-}
-
-async function downloadExport(cycleId: string, kind: 'final' | 'partial', format: 'pdf' | 'xlsx') {
-  const response = await apiRequest(
-    `/api/v1/production/${cycleId}/snapshots/export?kind=${kind}&format=${format}`,
-  );
-  if (!response.ok) throw new Error(await errorMessage(response));
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  if (format === 'pdf') {
-    window.open(url, '_blank', 'noopener,noreferrer');
-  } else {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `produccion-${kind}.xlsx`;
-    link.click();
-  }
-  URL.revokeObjectURL(url);
-}
-
-async function copyWhatsAppText(cycleId: string, kind: 'final' | 'partial') {
-  const response = await apiRequest(
-    `/api/v1/production/${cycleId}/snapshots/export?kind=${kind}&format=whatsapp`,
-  );
-  if (!response.ok) throw new Error(await errorMessage(response));
-  const text = await response.text();
-  await navigator.clipboard.writeText(text);
 }
 
 export function KitchenPage() {
@@ -171,6 +94,7 @@ export function KitchenPage() {
     }
     await navigator.clipboard.writeText(await response.text());
     showToast('Producción copiada. Pegala en el chat de cocina.');
+    await loadSnapshots(selectedMenu.cycle.id);
   }
 
   async function downloadProduction(format: 'pdf' | 'xlsx') {
@@ -194,7 +118,16 @@ export function KitchenPage() {
     }
     // Revocar en el mismo turno corre carrera con la pestaña que recién se abre.
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+    await loadSnapshots(selectedMenu.cycle.id);
   }
+
+  /*
+   * Entrar a Cocina ya muestra lo de ahora: el consolidado se calcula solo al elegir el período o el
+   * reparto. "Generar salida" era un paso que había que acordarse de dar para ver algo.
+   */
+  useEffect(() => {
+    if (selectedMenu) void generate();
+  }, [selectedMenu?.cycle.id, runId]);
 
   async function generate() {
     if (!selectedMenu) return;
@@ -210,54 +143,6 @@ export function KitchenPage() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos generar el consolidado.');
     }
-  }
-
-  async function reportProduction(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!kitchen || !selectedMenu) return;
-    const form = new FormData(event.currentTarget);
-    const entries = productionLines(kitchen)
-      .map((line) => {
-        const raw = formText(form, `${line.familyName}::${line.variantName}`);
-        if (!raw.trim()) return null;
-        const quantityUnits = Number(raw);
-        if (!Number.isFinite(quantityUnits) || quantityUnits < 0) return null;
-        return { familyName: line.familyName, quantityUnits, variantName: line.variantName };
-      })
-      .filter(
-        (entry): entry is { familyName: string; quantityUnits: number; variantName: string } =>
-          Boolean(entry),
-      );
-    if (entries.length === 0) {
-      setMessage('Cargá al menos una cantidad producida.');
-      return;
-    }
-    setMessage('');
-    const response = await apiRequest(`/api/v1/production/${selectedMenu.cycle.id}/actuals`, {
-      body: JSON.stringify({ entries }),
-      method: 'POST',
-    });
-    if (!response.ok) {
-      setMessage(await errorMessage(response));
-      return;
-    }
-    showToast('Producción real informada.');
-    await loadSurplus(selectedMenu.cycle.id);
-  }
-
-  async function takeSnapshot(kind: 'final' | 'partial') {
-    if (!selectedMenu) return;
-    setMessage('');
-    const response = await apiRequest(`/api/v1/production/${selectedMenu.cycle.id}/snapshots`, {
-      body: JSON.stringify({ kind }),
-      method: 'POST',
-    });
-    if (!response.ok) {
-      setMessage(await errorMessage(response));
-      return;
-    }
-    setMessage(kind === 'partial' ? 'Snapshot parcial generado.' : 'Snapshot final generado.');
-    await loadSnapshots(selectedMenu.cycle.id);
   }
 
   /**
@@ -312,15 +197,20 @@ export function KitchenPage() {
     );
   }
 
-  const partialSnapshot = snapshots.find((snapshot) => snapshot.kind === 'partial') ?? null;
-  const finalSnapshot = snapshots.find((snapshot) => snapshot.kind === 'final') ?? null;
+  // El último consolidado exportado: cada descarga, impresión o copia lo vuelve a guardar.
+  const lastExport = snapshots.find((snapshot) => snapshot.kind === 'final') ?? null;
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
       <section className="dashboard-panel">
-        <header>
-          <p className="dashboard-kicker">Cocina</p>
-          <h1 className="text-2xl font-semibold text-forest">Cierre de pedidos</h1>
+        <header className="kitchen-head">
+          <div>
+            <p className="dashboard-kicker">Cocina</p>
+            <h1 className="text-2xl font-semibold text-forest">Cierre de pedidos</h1>
+          </div>
+          {selectedMenu?.cycle.status === 'CLOSED' ? (
+            <span className="status-chip">Período cerrado</span>
+          ) : null}
         </header>
 
         {message ? (
@@ -334,79 +224,74 @@ export function KitchenPage() {
         ) : (
           // Cambiar de ciclo atenúa lo que hay en vez de vaciarlo.
           <div className={loading ? 'is-refreshing' : undefined}>
-            <div className="operation-card mt-6 flex flex-col gap-3 sm:flex-row sm:items-end">
-              <label className="field grow">
-                Ciclo
-                <select
-                  onChange={(event) => setSelectedMenuId(event.target.value)}
-                  value={selectedMenuId}
-                >
-                  <option value="">Seleccionar</option>
-                  {menus.map((menu) => (
-                    <option key={menu.id} value={menu.id}>
-                      {menu.cycle.alias}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {/* Un reparto: lo que hay que cocinar para esa salida, no para el período entero. */}
-              <RunFilter onChange={setRunId} value={runId} />
-              <button
-                className="button button-primary"
-                disabled={!selectedMenu}
-                onClick={() => void generate()}
-              >
-                Generar salida
-              </button>
-              {/* Las etiquetas tienen su propia sección: ahí se elige la tanda, se ve cómo van a
-                  salir y recién entonces se imprime. Acá quedaba un botón que mandaba a la
-                  impresora sin mostrar nada. */}
-              <Link className="button button-secondary" to="/app/etiquetas">
-                Etiquetas
-              </Link>
-              {/*
-               * Los tres formatos del consolidado que está en pantalla. Existían sólo para
-               * snapshots ya tomados, así que pasarle la producción a cocina obligaba a congelar
-               * uno antes — un acto con significado propio que no debería hacer falta sólo para
-               * mandar un mensaje.
-               */}
-              {kitchen ? (
-                <>
-                  <button
-                    className="button button-secondary"
-                    onClick={() => void copyProduction()}
-                    type="button"
+            {/*
+             * La cabecera en dos renglones: qué se mira (período y reparto) y qué se hace con eso.
+             * Eran siete botones del mismo peso en una fila que se partía en cualquier lado.
+             */}
+            <div className="operation-card kitchen-toolbar mt-6">
+              <div className="kitchen-toolbar-filters">
+                <label className="field">
+                  Período
+                  <select
+                    onChange={(event) => setSelectedMenuId(event.target.value)}
+                    value={selectedMenuId}
                   >
-                    Copiar para WhatsApp
-                  </button>
-                  <button
-                    className="button button-secondary"
-                    onClick={() => void downloadProduction('xlsx')}
-                    type="button"
-                  >
-                    Descargar planilla
-                  </button>
-                  <button
-                    className="button button-secondary"
-                    onClick={() => void downloadProduction('pdf')}
-                    type="button"
-                  >
-                    Imprimir
-                  </button>
-                </>
-              ) : null}
-              {/* Cerrar es lo último de la semana, así que va al final y separado del resto. */}
-              {canGenerate && selectedMenu && selectedMenu.cycle.status !== 'CLOSED' ? (
+                    <option value="">Seleccionar</option>
+                    {menus.map((menu) => (
+                      <option key={menu.id} value={menu.id}>
+                        {menu.cycle.alias}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {/* Un reparto: lo que hay que cocinar para esa salida, no para el período entero. */}
+                <RunFilter onChange={setRunId} value={runId} />
+              </div>
+              <div className="kitchen-toolbar-actions">
                 <button
-                  className="button button-secondary"
-                  onClick={() => void closeCycle()}
+                  className="button button-primary"
+                  disabled={!kitchen}
+                  onClick={() => void downloadProduction('xlsx')}
                   type="button"
                 >
-                  Cerrar período
+                  Descargar planilla
                 </button>
-              ) : null}
-              {selectedMenu?.cycle.status === 'CLOSED' ? (
-                <span className="status-chip">Período cerrado</span>
+                <button
+                  className="button button-secondary"
+                  disabled={!kitchen}
+                  onClick={() => void downloadProduction('pdf')}
+                  type="button"
+                >
+                  Imprimir
+                </button>
+                <button
+                  className="button button-secondary"
+                  disabled={!kitchen}
+                  onClick={() => void copyProduction()}
+                  type="button"
+                >
+                  Copiar para WhatsApp
+                </button>
+                {/* Las etiquetas tienen su propia sección: ahí se elige la tanda y se ve cómo salen. */}
+                <Link className="button button-secondary" to="/app/etiquetas">
+                  Etiquetas
+                </Link>
+                {/* Cerrar es lo último de la semana: separado del resto, al final. */}
+                {canGenerate && selectedMenu && selectedMenu.cycle.status !== 'CLOSED' ? (
+                  <button
+                    className="button button-secondary kitchen-close"
+                    onClick={() => void closeCycle()}
+                    type="button"
+                  >
+                    Cerrar período
+                  </button>
+                ) : null}
+              </div>
+              {lastExport ? (
+                <p className="kitchen-toolbar-note">
+                  Última exportación: {formatMoment(lastExport.generatedAt)} ·{' '}
+                  {lastExport.payload.totalUnits} unidades
+                </p>
               ) : null}
             </div>
 
@@ -518,137 +403,9 @@ export function KitchenPage() {
                     surplus={surplus?.items ?? []}
                   />
                 ) : null}
-
-                {canReport ? (
-                  <form
-                    className="operation-card mt-6"
-                    onSubmit={(event) => void reportProduction(event)}
-                  >
-                    <h3 className="text-xl font-semibold text-forest">Informar producción real</h3>
-                    <p className="mt-1 text-sm text-ink-muted">
-                      Cargá cuánto salió efectivamente de cada variedad y tamaño.
-                    </p>
-                    <div className="form-grid mt-4">
-                      {productionLines(kitchen).map((item) => (
-                        <label className="field" key={`${item.familyName}-${item.variantName}`}>
-                          {item.familyName} {item.variantName}
-                          <input
-                            defaultValue={item.quantityUnits}
-                            min="0"
-                            name={`${item.familyName}::${item.variantName}`}
-                            type="number"
-                          />
-                        </label>
-                      ))}
-                    </div>
-                    <button className="button button-primary mt-4" type="submit">
-                      Guardar producción real
-                    </button>
-                  </form>
-                ) : null}
-
-                <div className="operation-card mt-6">
-                  <h3 className="text-xl font-semibold text-forest">Snapshots</h3>
-                  {canGenerate ? (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        className="button button-secondary"
-                        onClick={() => void takeSnapshot('partial')}
-                      >
-                        Tomar snapshot parcial (martes 20:00)
-                      </button>
-                      <button
-                        className="button button-secondary"
-                        onClick={() => void takeSnapshot('final')}
-                      >
-                        Tomar snapshot final (miércoles 19:00)
-                      </button>
-                    </div>
-                  ) : null}
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {[
-                      { kind: 'partial' as const, label: 'Parcial', snapshot: partialSnapshot },
-                      { kind: 'final' as const, label: 'Final', snapshot: finalSnapshot },
-                    ].map(({ kind, label, snapshot }) => (
-                      <div className="rounded-xl border border-forest/10 p-3" key={kind}>
-                        <p className="font-semibold">{label}</p>
-                        {snapshot ? (
-                          <>
-                            <p className="text-sm text-ink-muted">
-                              Total {snapshot.payload.totalUnits} unidades
-                            </p>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              <button
-                                className="button button-secondary"
-                                onClick={() =>
-                                  void downloadExport(selectedMenu?.cycle.id ?? '', kind, 'xlsx')
-                                }
-                                type="button"
-                              >
-                                Excel
-                              </button>
-                              <button
-                                className="button button-secondary"
-                                onClick={() =>
-                                  void downloadExport(selectedMenu?.cycle.id ?? '', kind, 'pdf')
-                                }
-                                type="button"
-                              >
-                                PDF
-                              </button>
-                              <button
-                                className="button button-secondary"
-                                onClick={() =>
-                                  void copyWhatsAppText(selectedMenu?.cycle.id ?? '', kind).then(
-                                    () => showToast('Texto copiado al portapapeles.'),
-                                  )
-                                }
-                                type="button"
-                              >
-                                Copiar texto WhatsApp
-                              </button>
-                            </div>
-                          </>
-                        ) : (
-                          <p className="text-sm text-ink-muted">Todavía no se generó.</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {surplus ? (
-                  <div className="operation-card mt-6">
-                    <h3 className="text-xl font-semibold text-forest">Excedente</h3>
-                    <div className="mt-4">
-                      <DataTable
-                        caption="Excedente por variedad"
-                        columns={SURPLUS_COLUMNS}
-                        empty="Sin datos todavía."
-                        rowKey={(item) => `${item.familyName}-${item.variantName}`}
-                        rows={surplus.items}
-                      />
-                    </div>
-
-                    {/*
-                     * Ni coeficiente ni baja manual.
-                     *
-                     * El coeficiente calculaba una producción sugerida sobre la demanda; en la
-                     * práctica cocina produce lo que decide y después informa lo real, así que era
-                     * un número que nadie miraba. Y dar de baja el remanente a mano era un paso
-                     * que había que acordarse de hacer: ahora lo hace el cierre del período.
-                     */}
-                    <p className="mt-4 text-sm text-ink-muted">
-                      <strong>Disponible</strong> es lo producido que todavía no está asignado a
-                      ningún pedido. Al cerrar el período, lo que quede se da de baja solo.
-                    </p>
-                  </div>
-                ) : null}
               </>
             ) : (
-              <p className="empty-state mt-6">
-                Elegí un ciclo para calcular la producción desde pedidos confirmados.
-              </p>
+              <p className="empty-state mt-6">Elegí un período para ver lo que hay que cocinar.</p>
             )}
           </div>
         )}

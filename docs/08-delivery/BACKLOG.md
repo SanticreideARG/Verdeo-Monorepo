@@ -555,3 +555,13 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] Probado: el buscador recibe sólo la línea 1.
 - [ ] Separar las direcciones viejas que tienen todo mezclado en la línea 1 (con el normalizador de IA, que ya distingue la unidad, como sugerencia que confirma una persona).
 - [ ] Importación de pedidos por email: mandar el barrio y el piso del formulario a la línea 2.
+
+## Cocina más simple (2026-10-19)
+
+- [x] Planilla de cocina con el formato del cliente: hoja "Pedido", primera al descargar. Un renglón por menú y tamaño en mayúsculas (sin "Menú"), un renglón en blanco entre menús, los Intuitivos como un menú más, cinco columnas (plato 1 = lunes … plato 5 = viernes) con las porciones, y el total de porciones (fórmula) abajo a la derecha. Suma pedidos y stock.
+- [x] Snapshots: se guarda el consolidado cada vez que se exporta (planilla, imprimir, WhatsApp), si la persona tiene `production.generate`. Se fue la sección "Snapshots" y los botones de parcial y final.
+- [x] El consolidado se calcula solo al elegir período o reparto (se fue "Generar salida").
+- [x] Cabecera en dos renglones: período y reparto; después Descargar planilla (principal), Imprimir, Copiar para WhatsApp, Etiquetas y, separado, Cerrar período. En el teléfono, de a dos.
+- [x] "Stock para el cierre" con − y + por menú (sin Intuitivos), guardado en cada toque. Se fueron "Informar producción real" y la tabla de excedente de la pantalla (el backend sigue).
+- [ ] Estilos de la hoja "Pedido" (encabezado gris, bordes): `xlsx` 0.18 no escribe estilos; haría falta `xlsx-js-style`.
+- [ ] Porciones distintas por plato (cuando alguien pide sin un plato): hoy las cinco columnas salen iguales.

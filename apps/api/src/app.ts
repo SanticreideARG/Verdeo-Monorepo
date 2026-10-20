@@ -6838,6 +6838,20 @@ export function createApp(options: CreateAppOptions) {
       subtitle: 'Consolidado al momento',
     };
     const filename = `produccion-${summary.cycle.alias.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`;
+    /*
+     * Exportar es lo que congela (2026-10-19): ya no hay que acordarse de "tomar el snapshot" del
+     * martes o del miércoles. Cada vez que se descarga, se imprime o se copia lo que hay ahora, eso
+     * queda guardado como el último consolidado del período. Sólo si la persona puede generarlo;
+     * si no, exporta igual.
+     */
+    if (context.get('session').permissions.includes('production.generate')) {
+      await requireOperations().generateProductionSnapshot(
+        params.data.cycleId,
+        'final',
+        context.get('scope')?.operatingSiteId ?? null,
+        operationsContext(context),
+      );
+    }
 
     context.header('cache-control', 'private, no-store');
     if (format === 'xlsx') {

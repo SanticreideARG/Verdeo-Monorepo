@@ -20,6 +20,8 @@ export interface ProductionReport {
   cycle: ProductionSnapshot['payload']['cycle'];
   delta: ProductionSnapshot['payload']['delta'];
   dishTally: ProductionSnapshot['payload']['dishTally'];
+  /** El stock del período: también se cocina, así que entra en la hoja "Pedido". */
+  stock?: readonly { familyName: string; quantityUnits: number; variantName: string }[];
   /** "Parcial (martes 20:00)", "Final" o "Consolidado al momento". */
   subtitle: string;
   totalOrders: number;
@@ -112,6 +114,75 @@ function sheetWithTitle(
   return sheet;
 }
 
+/** Una columna por plato del menú, en su orden: el plato 1 se cocina el lunes, el 5 el viernes. */
+export const ORDER_SHEET_DAYS = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES'] as const;
+
+/**
+ * La hoja "Pedido", con el formato que usa el cliente para cocina.
+ *
+ * Un renglón por menú y tamaño ("KETO 250"), agrupados por menú con un renglón en blanco entre uno y
+ * otro; cinco columnas, una por plato en el orden del menú (columna 1 = lunes … 5 = viernes), con
+ * las porciones de ese plato; y el total de porciones abajo a la derecha. Los Intuitivos van como
+ * un menú más ("INTUITIVO 250"), sin detallar sus platos: eso sigue en su hoja.
+ *
+ * Suma lo pedido y el stock del período, que también se cocina. Cada plato de un menú fijo lleva
+ * las mismas porciones —el sistema no sabe de cambios plato por plato—, así que las cinco columnas
+ * de un renglón salen iguales; si cocina cambia alguna, la corrige en la planilla.
+ */
+export function orderSheetRows(report: ProductionReport): (number | string)[][] {
+  const families = new Map<string, Map<string, number>>();
+  const add = (familyName: string, variantName: string, units: number) => {
+    const variants = families.get(familyName) ?? new Map<string, number>();
+    families.set(familyName, variants);
+    variants.set(variantName, (variants.get(variantName) ?? 0) + units);
+  };
+  for (const line of report.base) add(line.familyName, line.variantName, line.quantityUnits);
+  for (const line of report.stock ?? []) add(line.familyName, line.variantName, line.quantityUnits);
+  for (const item of report.custom) add(item.familyName, item.variantName, item.quantityUnits);
+
+  const width = ORDER_SHEET_DAYS.length;
+  const blank = () => Array.from({ length: width + 2 }, () => '');
+  const rows: (number | string)[][] = [['PEDIDO', ...ORDER_SHEET_DAYS, '']];
+  let total = 0;
+  let first = true;
+  for (const [familyName, variants] of families) {
+    if (!first) rows.push(blank());
+    first = false;
+    for (const [variantName, units] of variants) {
+      rows.push([
+        // "Menú Anti-Age" sale "ANTI-AGE 250", como en la planilla del cliente.
+        `${familyName.replace(/^men[uú]\s+/i, '')} ${variantName}`.toUpperCase(),
+        ...Array.from({ length: width }, () => units),
+        '',
+      ]);
+      total += units * width;
+    }
+  }
+  rows.push(blank());
+  rows.push(['TOTAL', ...Array.from({ length: width }, () => ''), total]);
+  return rows;
+}
+
+function orderSheet(report: ProductionReport): XLSX.WorkSheet {
+  const rows = orderSheetRows(report);
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  sheet['!cols'] = [{ wch: 26 }, ...ORDER_SHEET_DAYS.map(() => ({ wch: 11 })), { wch: 10 }];
+  /*
+   * El total de abajo a la derecha como fórmula, con su valor ya calculado: suma las cinco columnas
+   * de todos los renglones, así que si cocina corrige un número a mano, el total lo sigue.
+   */
+  const lastDataRow = rows.length - 2;
+  const lastDay = XLSX.utils.encode_col(ORDER_SHEET_DAYS.length);
+  const totalCell = `${XLSX.utils.encode_col(ORDER_SHEET_DAYS.length + 1)}${String(rows.length)}`;
+  const totalValue = rows.at(-1)?.at(-1);
+  sheet[totalCell] = {
+    f: `SUM(B2:${lastDay}${String(lastDataRow)})`,
+    t: 'n',
+    v: typeof totalValue === 'number' ? totalValue : 0,
+  };
+  return sheet;
+}
+
 export function buildProductionExcel(report: ProductionReport): ArrayBuffer {
   const { actuals, base, delta } = report;
   const actualByKey = new Map(
@@ -126,6 +197,8 @@ export function buildProductionExcel(report: ProductionReport): ArrayBuffer {
 
   const title = `Producción — ${report.cycle.alias} · ${report.subtitle}`;
   const workbook = XLSX.utils.book_new();
+  // La primera hoja es la del cliente: es la que se abre al descargar.
+  XLSX.utils.book_append_sheet(workbook, orderSheet(report), 'Pedido');
 
   /*
    * Conciliado: cuántos menús de cada uno, incluyendo los Intuitivos.

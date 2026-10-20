@@ -107,7 +107,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
 
   // --- Cocina ----------------------------------------------------------------------------------
   {
-    body: '"Cocina" consolida la demanda confirmada del ciclo por variedad y tamaño, separando las unidades base de las Intuitivo (que llevan su propia composición). Desde ahí podés informar producción real, tomar snapshots parcial y final, y generar las etiquetas.\n\nEl orden de todo esto dentro de la semana está en [[ciclo-3-cocina]].\n\n[Ir a Cocina](/app/cocina)',
+    body: '"Cocina" consolida la demanda confirmada del ciclo por variedad y tamaño, separando las unidades base de las Intuitivo (que llevan su propia composición). Al entrar, elegís el período (y si querés un reparto) y el consolidado se calcula solo, con lo que hay en ese momento.\n\n"Descargar planilla" baja el Excel: la primera hoja, "Pedido", tiene el formato de cocina, con un renglón por menú y tamaño (KETO 250, KETO 400… y los Intuitivos como un menú más), una columna por plato en el orden del menú (plato 1 el lunes … plato 5 el viernes) y el total de porciones abajo a la derecha. Suma lo pedido y el stock. Las demás hojas traen el detalle. "Imprimir" y "Copiar para WhatsApp" mandan lo mismo por otro lado.\n\nCada vez que exportás, eso queda guardado como el último consolidado del período (se ve debajo de los botones, con la hora). Ya no hay que tomar snapshots a mano.\n\n"Stock para el cierre" muestra cuántos menús de cada tipo se piden como stock y se suman o restan con − y +; cada toque se guarda. Los Intuitivos no van ahí.\n\nEl orden de todo esto dentro de la semana está en [[ciclo-3-cocina]].\n\n[Ir a Cocina](/app/cocina)',
     category: 'Cocina',
     key: 'cocina-cierre-pedidos',
     ordinal: 0,
@@ -311,7 +311,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Paso 2 — Tomar pedidos y confirmarlos',
   },
   {
-    body: 'En "Cocina" generás el consolidado del ciclo: cuántas unidades de cada variedad y tamaño hay que producir, más las Intuitivo una por una con su composición y las restricciones alimentarias marcadas aparte.\n\nEl parcial que cargaste al configurar la semana es el corte para mirar la demanda a mitad de camino y empezar a comprar; el cierre es el número contra el que se produce. Podés tomar un snapshot en cada momento: el final muestra además el delta contra el parcial, que es cuánto se movió la demanda sobre el final.\n\nDespués de producir, informá la producción real. Eso es lo que habilita el cálculo de excedente y las ventas de oportunidad.\n\n[Ir a Cocina](/app/cocina) · Sigue: [[ciclo-4-etiquetas]]',
+    body: 'En "Cocina" generás el consolidado del ciclo: cuántas unidades de cada variedad y tamaño hay que producir, más las Intuitivo una por una con su composición y las restricciones alimentarias marcadas aparte.\n\nSe mira las veces que haga falta: el consolidado es siempre el de ahora, y cada vez que descargás la planilla, la imprimís o la copiás, queda guardado como el último. El stock que se cocina de más se carga ahí mismo con − y +, y después se vende desde la carga de pedidos con "Sale del stock".\n\n[Ir a Cocina](/app/cocina) · Sigue: [[ciclo-4-etiquetas]]',
     category: 'Ciclo semanal',
     key: 'ciclo-3-cocina',
     ordinal: 3,
