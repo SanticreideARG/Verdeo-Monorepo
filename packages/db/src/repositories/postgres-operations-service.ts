@@ -367,6 +367,12 @@ interface ResolvedOrderItem {
   variantSnapshot: string;
 }
 
+/**
+ * Los pedidos del cliente STOCK no son ventas: no generan deuda ni cuentan en las estadísticas
+ * (2026-10-21). Es el mismo criterio del script de conversión del stock: un cliente llamado "STOCK".
+ */
+const notStockCustomer = sql`${orders.customerId} not in (select id from customers where upper(trim(display_name)) = 'STOCK')`;
+
 /** Para deshacer una transacción a propósito: una vista previa calcula todo y no guarda nada. */
 class PreviewRollback extends Error {}
 
@@ -6235,6 +6241,7 @@ export class PostgresOperationsService {
           eq(salesCycles.status, 'CLOSED'),
           ne(orders.status, 'CANCELLED'),
           isNull(orders.paidAt),
+          notStockCustomer,
           gt(orders.totalMinor, 0),
           ...(input.operatingSiteId ? [eq(orders.operatingSiteId, input.operatingSiteId)] : []),
           ...(input.customerId ? [eq(orders.customerId, input.customerId)] : []),
@@ -8947,6 +8954,8 @@ export class PostgresOperationsService {
   }) {
     const scope = and(
       ne(orders.status, 'CANCELLED'),
+      // El stock no es venta: no suma a las estadísticas.
+      notStockCustomer,
       filters.from ? gte(orders.deliveryDate, filters.from) : undefined,
       filters.to ? lte(orders.deliveryDate, filters.to) : undefined,
       filters.operatingSiteId ? eq(orders.operatingSiteId, filters.operatingSiteId) : undefined,

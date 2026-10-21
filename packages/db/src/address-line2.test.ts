@@ -345,3 +345,24 @@ describe('por cobrar', () => {
     expect(despues.items[0]?.orders.map((order) => order.id)).toEqual([otro.id]);
   });
 });
+
+describe('el cliente STOCK', () => {
+  it('no genera deuda ni cuenta en las estadísticas', async () => {
+    const { client, service } = await base();
+    await client.exec(`insert into customers (id, display_name)
+      values ('c0000000-0000-4000-8000-000000000099', 'STOCK');`);
+    await service.createOrder(pedido('2026-10-18'), contexto);
+    await service.createOrder(
+      { ...pedido('2026-10-18'), customerId: 'c0000000-0000-4000-8000-000000000099' },
+      contexto,
+    );
+    await client.exec(`update sales_cycles set status = 'CLOSED';`);
+
+    const deuda = await service.listReceivables({});
+    expect(deuda.items.map((item) => item.customer.displayName)).toEqual(['Ana Prueba']);
+
+    // Dos pedidos cargados, uno de STOCK: las estadísticas cuentan uno solo.
+    const stats = await service.getStatsOverview({});
+    expect(stats.byDay.reduce((sum, day) => sum + day.orderCount, 0)).toBe(1);
+  });
+});

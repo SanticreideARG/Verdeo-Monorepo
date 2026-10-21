@@ -586,3 +586,4 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] Corregido: tocar una conversación en el panel de Mensajes no hacía nada. El fondo invisible que cerraba el panel al tocar afuera se montaba por encima del panel y se quedaba con el clic. Ahora el panel se cierra escuchando el toque fuera de él (y con Escape), sin una capa encima.
 - [x] Quien ya tiene conversación directa no se repite en Contactos (panel y pantalla completa).
 - [x] Cada conversación muestra la foto de perfil en círculo, con su estado.
+- [x] El cliente STOCK no genera deuda ("Por cobrar" ni la ficha) ni cuenta en Estadísticas (2026-10-21). Mismo criterio que el script de conversión: un cliente llamado "STOCK".
