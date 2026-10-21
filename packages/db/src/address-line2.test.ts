@@ -280,3 +280,41 @@ describe('script addresses-from-orders.sql (pedidos viejos)', () => {
     expect(linked.rows[0]?.n).toBe(2);
   });
 });
+
+describe('cancelar y borrar pedidos', () => {
+  it('cancela con el motivo elegido de la lista, sin texto aparte', async () => {
+    const { client, service } = await base();
+    await client.exec(`insert into cancellation_reasons (id, code, display_name)
+      values ('0c000000-0000-4000-8000-000000000001', 'sin_stock', 'Sin stock');`);
+    const order = (await service.createOrder(pedido('2026-10-18'), contexto)) as { id: string };
+
+    // El período del ejemplo ya cerró: se cancela con la autorización de período cerrado.
+    await service.transitionOrder(order.id, 'CANCELLED', undefined, false, true, contexto, {
+      reasonId: '0c000000-0000-4000-8000-000000000001',
+    });
+
+    const { rows } = await client.query<{ status: string }>(
+      `select status from orders where id = '${order.id}'`,
+    );
+    expect(rows[0]?.status).toBe('CANCELLED');
+  });
+
+  it('sin ningún motivo, lo dice en castellano', async () => {
+    const { service } = await base();
+    const order = (await service.createOrder(pedido('2026-10-18'), contexto)) as { id: string };
+
+    await expect(
+      service.transitionOrder(order.id, 'CANCELLED', undefined, false, false, contexto, {}),
+    ).rejects.toThrow(/hace falta un motivo/);
+  });
+
+  it('borra un pedido sin pedir motivo', async () => {
+    const { client, service } = await base();
+    const order = (await service.createOrder(pedido('2026-10-18'), contexto)) as { id: string };
+
+    await service.deleteOrder(order.id, '', contexto);
+
+    const { rows } = await client.query<{ n: number }>(`select count(*)::int as n from orders`);
+    expect(rows[0]?.n).toBe(0);
+  });
+});

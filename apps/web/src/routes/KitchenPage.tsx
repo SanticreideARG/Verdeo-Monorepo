@@ -299,6 +299,47 @@ export function KitchenPage() {
 
             {kitchen ? (
               <>
+                {/*
+                 * Intuitivos con platos que no saben de qué menú vienen: en la planilla salen en
+                 * "SIN MENÚ DE ORIGEN". Se corrigen editando el pedido y eligiendo el plato de su menú.
+                 */}
+                {(() => {
+                  const pending = kitchen.custom.filter((item) =>
+                    item.dishSelections.some((_, index) => !item.dishSources?.[index]),
+                  );
+                  if (pending.length === 0) return null;
+                  return (
+                    <div className="screen-notice mt-6" role="status">
+                      <p>
+                        <strong>
+                          {pending.length === 1
+                            ? '1 Intuitivo tiene platos sin menú de origen.'
+                            : `${String(pending.length)} Intuitivos tienen platos sin menú de origen.`}
+                        </strong>{' '}
+                        En la planilla salen en "SIN MENÚ DE ORIGEN". Abrí cada pedido, editá los
+                        platos y elegilos de nuevo desde su menú.
+                      </p>
+                      <ul className="mt-2 flex flex-wrap gap-2">
+                        {pending.map((item) => (
+                          <li key={`${item.orderPublicNumber}-${String(item.sequence)}`}>
+                            {item.orderId ? (
+                              <Link
+                                className="button button-secondary"
+                                to={`/app/pedidos/${item.orderId}`}
+                              >
+                                {item.orderPublicNumber} · {item.customerDisplayName}
+                              </Link>
+                            ) : (
+                              <span>
+                                {item.orderPublicNumber} · {item.customerDisplayName}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })()}
                 <div className="mt-6 grid gap-4 lg:grid-cols-2">
                   <article className="operation-card">
                     <h3 className="text-xl font-semibold text-forest">Producción base</h3>

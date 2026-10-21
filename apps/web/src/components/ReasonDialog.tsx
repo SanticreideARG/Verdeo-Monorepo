@@ -17,6 +17,7 @@ export function ReasonDialog({
   label = 'Motivo',
   onCancel,
   onConfirm,
+  optional = false,
   placeholder,
   title,
 }: {
@@ -25,6 +26,8 @@ export function ReasonDialog({
   label?: string;
   onCancel: () => void;
   onConfirm: (reason: string) => Promise<void> | void;
+  /** El motivo se puede dejar vacío: el botón se habilita igual. */
+  optional?: boolean;
   placeholder?: string;
   title: string;
 }) {
@@ -52,7 +55,7 @@ export function ReasonDialog({
           </button>
           <button
             className="button button-primary"
-            disabled={working || reason.trim().length === 0}
+            disabled={working || (!optional && reason.trim().length === 0)}
             onClick={() => {
               setWorking(true);
               void Promise.resolve(onConfirm(reason.trim())).finally(() => setWorking(false));

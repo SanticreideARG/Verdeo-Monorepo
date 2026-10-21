@@ -78,6 +78,16 @@ export function IntuitivoDishPicker({
     onChange(selected.filter((_, index) => index !== last));
   }
 
+  const unresolved = [
+    ...selected
+      .filter((dish) => !dish.familyName)
+      .reduce(
+        (counts, dish) => counts.set(dish.dishName, (counts.get(dish.dishName) ?? 0) + 1),
+        new Map<string, number>(),
+      )
+      .entries(),
+  ];
+
   const faltan = minDishes - total;
   /*
    * Al llegar al mínimo se dice que se puede seguir.
@@ -106,6 +116,34 @@ export function IntuitivoDishPicker({
         </b>
         {` · ${estado}`}
       </p>
+      {/*
+       * Los platos que no saben de qué menú vienen (pedidos de antes del cambio, con un nombre que
+       * estaba en dos menús). Se sacan con "−" y se vuelven a elegir desde su menú, abajo.
+       */}
+      {unresolved.length > 0 ? (
+        <div className="intuitivo-picker-group is-unresolved">
+          <p className="intuitivo-picker-group-label">Sin menú de origen</p>
+          <p className="intuitivo-picker-hint">
+            No se sabe de qué menú son. Quitalos y elegilos de nuevo desde el menú que corresponde.
+          </p>
+          <div className="intuitivo-picker-dishes">
+            {unresolved.map(([dishName, count]) => (
+              <div className="intuitivo-picker-dish is-selected" key={dishName}>
+                <span>{dishName}</span>
+                <button
+                  aria-label={`Quitar ${dishName} (sin menú)`}
+                  onClick={() => remove({ dishName, familyName: '' })}
+                  type="button"
+                >
+                  −
+                </button>
+                <b>{count}</b>
+                <span aria-hidden="true" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {groups.map((group) => (
         <div className="intuitivo-picker-group" key={group.familyName}>
           <p className="intuitivo-picker-group-label">{group.familyName}</p>

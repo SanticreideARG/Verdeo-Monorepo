@@ -89,12 +89,12 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Cancelar un pedido',
   },
   {
-    body: 'Eliminar no es lo mismo que cancelar, y casi siempre lo que hace falta es cancelar.\n\nUn pedido **cancelado** queda a la vista con su motivo: dejó de contar para la producción y para los totales, pero se puede mirar y explicar. Es lo que corresponde cuando una venta existió y no se concretó.\n\nUn pedido **eliminado** desaparece: se van también sus ítems, su historial, sus pagos y su parada de reparto. No hay papelera y no se puede deshacer. Está pensado para lo que nunca fue una venta, como los pedidos de prueba de antes de abrir.\n\nEl botón pide escribir por qué, y eso no es un trámite: una vez borrado el pedido, ese motivo es lo único que queda para saber qué pasó. Queda guardado junto con el número, el cliente, el estado y el total.\n\nSi el pedido figura como cobrado, el aviso lo dice antes de confirmar: ese registro de plata también se borra.\n\nEl permiso no lo tiene nadie por defecto. Si el botón no te aparece, es eso — y se pide a quien administra.',
+    body: 'Eliminar borra el pedido del sistema: sus ítems, sus cobros y su parada de reparto. Sirve para los pedidos de prueba y los cargados por error. Se hace desde el menú "⋯" del pedido, "Eliminar". El motivo es opcional.\n\nSi fue un pedido real que no se va a entregar, conviene **cancelarlo**: queda a la vista con su motivo, deja de contar para la producción y los totales, y se puede mirar después.\n\nPueden eliminar los operadores y quien administra el sistema.',
     category: 'Pedidos / Editar y cancelar',
     key: 'pedidos-eliminar',
     ordinal: 2,
     requiredPermission: 'orders.delete',
-    title: 'Eliminar un pedido (no es cancelar)',
+    title: 'Eliminar un pedido',
   },
   {
     body: 'El cobro se marca con el tilde de la columna "Cobrado", en "Pedidos". El paso a paso está en [[ciclo-6-cobrar]].',

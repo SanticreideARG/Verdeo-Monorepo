@@ -6483,18 +6483,12 @@ export function createApp(options: CreateAppOptions) {
     if (!context.get('session').permissions.includes('orders.delete')) return forbidden(context);
     const params = IdParamSchema.safeParse(context.req.param());
     if (!params.success) return badRequest(context, 'Revisá el pedido.');
-    const input = OrderDeleteRequestSchema.safeParse(await context.req.json().catch(() => null));
-    if (!input.success) {
-      return badRequest(
-        context,
-        'Contá por qué se borra, aunque sea en pocas palabras.',
-        input.error.issues,
-      );
-    }
+    const input = OrderDeleteRequestSchema.safeParse(await context.req.json().catch(() => ({})));
+    if (!input.success) return badRequest(context, 'Revisá el motivo.', input.error.issues);
 
     const deleted = await requireOperations().deleteOrder(
       params.data.id,
-      input.data.reason,
+      input.data.reason ?? '',
       operationsContext(context),
     );
     return context.json(OrderDeleteResponseSchema.parse(contractValue(deleted)));

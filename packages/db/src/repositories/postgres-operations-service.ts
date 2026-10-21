@@ -7083,7 +7083,7 @@ export class PostgresOperationsService {
         correlationId: context.correlationId,
         entityId: orderId,
         entityType: 'order',
-        metadata: { reason },
+        metadata: { reason: reason.trim() || null },
         requestId: context.requestId,
         source: context.source,
       });
@@ -7142,12 +7142,28 @@ export class PostgresOperationsService {
 
       const fromStatus = current.status as OrderStatus;
       const cycleLocked = current.cycleStatus === 'CLOSED' || new Date() >= current.closeAt;
+      /*
+       * El motivo de una cancelación es el que se eligió de la lista, más el detalle si lo hay.
+       *
+       * La pantalla de cancelar manda el motivo elegido (`reasonId`) y no un texto, y la regla pedía
+       * un texto: cancelar con motivo y detalle cargados fallaba con "require an operational
+       * reason".
+       */
+      let effectiveReason = reason?.trim() || cancellation?.notes?.trim() || undefined;
+      if (!effectiveReason && cancellation?.reasonId) {
+        const [chosen] = await transaction
+          .select({ displayName: cancellationReasons.displayName })
+          .from(cancellationReasons)
+          .where(eq(cancellationReasons.id, cancellation.reasonId))
+          .limit(1);
+        effectiveReason = chosen?.displayName;
+      }
       assertOrderTransitionPolicy({
         allowCycleOverride,
         confirmedReversal,
         cycleLocked,
         from: fromStatus,
-        reason,
+        reason: effectiveReason,
         to: targetStatus,
       });
 

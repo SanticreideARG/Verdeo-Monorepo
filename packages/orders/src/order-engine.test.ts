@@ -43,7 +43,7 @@ describe('order engine', () => {
         from: 'READY',
         to: 'CONFIRMED',
       }),
-    ).toThrowError(/reason/);
+    ).toThrowError(/motivo/);
   });
 
   it('locks commercial transitions after close but allows forward fulfillment', () => {
@@ -55,7 +55,7 @@ describe('order engine', () => {
         from: 'DRAFT',
         to: 'CONFIRMED',
       }),
-    ).toThrowError(/closed/);
+    ).toThrowError(/ya cerró/);
     expect(() =>
       assertOrderTransitionPolicy({
         allowCycleOverride: false,

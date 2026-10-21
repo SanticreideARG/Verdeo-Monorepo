@@ -979,7 +979,7 @@ export function OrderIntakePage() {
   async function remove(order: OrderSummary, reason: string) {
     setMessage('');
     const response = await apiRequest(`/api/v1/orders/${order.id}`, {
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify(reason ? { reason } : {}),
       method: 'DELETE',
       notify: false,
     });
@@ -2081,19 +2081,17 @@ export function OrderIntakePage() {
 
       {deleting ? (
         <ReasonDialog
-          confirmLabel="Eliminar para siempre"
+          confirmLabel="Eliminar"
           detail={
-            `Se borra el pedido y todo lo suyo: ítems, historial, pagos y su parada de reparto. ` +
-            `No se puede deshacer y no es lo mismo que cancelar, que lo deja a la vista. ` +
-            (deleting.paidAt
-              ? `Ojo: este pedido figura como cobrado, y ese registro también se va. `
-              : '') +
-            `En la auditoría queda qué se borró y con qué motivo.`
+            `El pedido de ${deleting.customer.displayName} deja de existir. Si fue un pedido real que ` +
+            `no va, conviene cancelarlo: así queda a la vista.` +
+            (deleting.paidAt ? ' Figura como cobrado: ese cobro también se borra.' : '')
           }
-          label="Por qué se borra"
+          label="Motivo (opcional)"
           onCancel={() => setDeleting(null)}
           onConfirm={(reason) => remove(deleting, reason)}
-          placeholder="Ej. pedido de prueba de antes de abrir"
+          optional
+          placeholder="Ej. pedido de prueba"
           title={`¿Eliminar el pedido ${deleting.publicNumber}?`}
         />
       ) : null}

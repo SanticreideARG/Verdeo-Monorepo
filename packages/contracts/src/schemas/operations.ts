@@ -1065,6 +1065,8 @@ export const KitchenSummaryResponseSchema = z.object({
       dishSelections: z.array(z.string()),
       dishSources: z.array(DishSourceSchema).default([]),
       familyName: z.string(),
+      // Para llevar a la ficha del pedido, por ejemplo a corregir un plato sin menú de origen.
+      orderId: UuidSchema.optional(),
       orderPublicNumber: z.string(),
       quantityUnits: z.number().int(),
       sequence: z.number().int(),
@@ -1768,7 +1770,8 @@ export const ManualNoticeMarkRequestSchema = z.object({
  * algo.
  */
 export const OrderDeleteRequestSchema = z.object({
-  reason: z.string().trim().min(3).max(500),
+  // Opcional (2026-10-20): borrar un pedido de prueba no necesita explicación.
+  reason: z.string().trim().max(500).optional(),
 });
 
 export const OrderDeleteResponseSchema = z.object({

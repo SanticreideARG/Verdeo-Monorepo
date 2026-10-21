@@ -315,6 +315,7 @@ export interface KitchenSummary {
     dishSelections: string[];
     dishSources?: ({ familyName: string; slot: number } | null)[];
     familyName: string;
+    orderId?: string;
     orderPublicNumber: string;
     quantityUnits: number;
     sequence: number;

@@ -41,6 +41,8 @@ const OPERADOR = [
   'orders.edit',
   'orders.confirm',
   'orders.cancel',
+  // Borrar pedidos (2026-10-20): los de prueba y los cargados por error los limpia quien los cargó.
+  'orders.delete',
   'chat.use',
   'chat.presence.read',
   // Compartir la referencia de un cliente es revelar datos personales (ADR-032).

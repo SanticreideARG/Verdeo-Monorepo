@@ -10979,3 +10979,14 @@ label.field:has(> input[type='radio']) {
     margin-left: 0;
   }
 }
+
+/* Platos sin menú de origen en el selector del Intuitivo: aparte y marcados. */
+.intuitivo-picker-group.is-unresolved {
+  border-left: 3px solid var(--db-warning, #c58a00);
+  padding-left: 0.6rem;
+}
+.intuitivo-picker-hint {
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+  color: var(--db-muted, var(--color-ink-muted));
+}
