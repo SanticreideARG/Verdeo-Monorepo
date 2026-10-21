@@ -30,6 +30,7 @@ import {
 } from '../lib/operations.js';
 import { sourceLabel } from '../lib/orderColumns.js';
 import { showToast } from '../lib/toast.js';
+import { MoveSiteDialog } from '../components/MoveSiteDialog.js';
 import { ConfirmationMessageCard } from '../components/ConfirmationMessageCard.js';
 import { LocateOrderControl } from '../components/LocateAddress.js';
 import { historyActor } from '../lib/orderHistory.js';
@@ -69,6 +70,7 @@ export function OrderDetailPage() {
   const [message, setMessage] = useState('');
   const [cancelOpen, setCancelOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [moving, setMoving] = useState(false);
   /*
    * El día de reparto en la edición: uno de los de la ciudad para el menú del pedido, u "otra
    * fecha" para un caso puntual (alguien que no está ese día).
@@ -402,6 +404,16 @@ export function OrderDetailPage() {
               type="button"
             >
               {editing ? 'Cerrar edición' : 'Editar pedido'}
+            </button>
+          ) : null}
+          {/* Cargado en la ciudad que no era: se mueve con número, precio y día de la otra. */}
+          {canEdit && ['DRAFT', 'CONFIRMED', 'READY'].includes(order.status) ? (
+            <button
+              className="button button-secondary"
+              onClick={() => setMoving(true)}
+              type="button"
+            >
+              Mover a otra ciudad
             </button>
           ) : null}
           {/* Las etiquetas salen en lote desde Etiquetas (por zona); acá, ubicar la dirección. */}
@@ -777,6 +789,22 @@ export function OrderDetailPage() {
           </div>
         ) : null}
       </section>
+      {moving && order ? (
+        <MoveSiteDialog
+          onClose={() => setMoving(false)}
+          onMoved={(moved) => {
+            setMoving(false);
+            showToast(`Pedido movido: ahora es el ${moved[0]?.publicNumber ?? ''}.`);
+            void load();
+          }}
+          target={{
+            currency: order.currency,
+            currentSiteName: order.operatingSiteName,
+            kind: 'order',
+            orderId: order.id,
+          }}
+        />
+      ) : null}
     </DashboardShell>
   );
 }

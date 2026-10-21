@@ -89,6 +89,14 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Cancelar un pedido',
   },
   {
+    body: 'Si un pedido o un cliente se cargó en la ciudad que no era, se mueve, sin borrar ni volver a cargar.\n\n**Un pedido**: en su ficha, "Mover a otra ciudad". Elegís la ciudad y la zona, y "Ver qué cambia" muestra el número nuevo (con el prefijo de esa ciudad), el precio y el día de reparto de allá. Recién con "Mover" se guarda. Se pueden mover los pedidos en borrador, confirmados y listos. Si la otra ciudad no ofrece alguna variedad del pedido en ese período, no lo mueve y dice cuál, para cambiarla antes.\n\n**Un cliente**: en su ficha, "Cambiar de ciudad". Elegís la ciudad y la zona; si tiene varios domicilios, la zona de cada uno. El cliente deja la ciudad anterior, sus domicilios se vuelven a ubicar en el mapa, y sus pedidos en borrador, confirmados y listos se mueven con él en el mismo momento.\n\nLos demás datos (nombre, dirección, notas) no cambian solos: si hace falta, se corrigen a mano. En la auditoría queda de dónde a dónde se movió cada cosa.',
+    category: 'Pedidos / Editar y cancelar',
+    key: 'pedidos-mover-ciudad',
+    ordinal: 3,
+    requiredPermission: 'orders.edit',
+    title: 'Mover un pedido o un cliente a otra ciudad',
+  },
+  {
     body: 'Eliminar borra el pedido del sistema: sus ítems, sus cobros y su parada de reparto. Sirve para los pedidos de prueba y los cargados por error. Se hace desde el menú "⋯" del pedido, "Eliminar". El motivo es opcional.\n\nSi fue un pedido real que no se va a entregar, conviene **cancelarlo**: queda a la vista con su motivo, deja de contar para la producción y los totales, y se puede mirar después.\n\nPueden eliminar los operadores y quien administra el sistema.',
     category: 'Pedidos / Editar y cancelar',
     key: 'pedidos-eliminar',

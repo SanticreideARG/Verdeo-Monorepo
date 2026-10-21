@@ -170,6 +170,10 @@ import {
   OrderDeleteRequestSchema,
   OrderDeleteResponseSchema,
   ReceivablesResponseSchema,
+  OrderMoveSiteRequestSchema,
+  OrderMoveSiteResponseSchema,
+  CustomerMoveSiteRequestSchema,
+  CustomerMoveSiteResponseSchema,
   OrderImportConfirmRequestSchema,
   OrderImportEmailPreviewRequestSchema,
   GeocodingMetricsSchema,
@@ -748,6 +752,23 @@ interface OperationsEngine {
   listMessageTemplates(): Promise<unknown>;
   listMenus(onlyPublished?: boolean): Promise<unknown>;
   listOrders(input: ScopedInput<OrderListQuery>): Promise<unknown>;
+  moveOrderToSite(
+    orderId: string,
+    input: { addressId?: string | undefined; targetSiteId: string; zoneId?: string | undefined },
+    context: OperationsContext,
+    preview?: boolean,
+  ): Promise<unknown>;
+  moveCustomerToSite(
+    customerId: string,
+    input: {
+      addressZones?: Readonly<Record<string, string>> | undefined;
+      fromSiteId: string;
+      preferredZoneId: string;
+      targetSiteId: string;
+    },
+    context: OperationsContext,
+    preview?: boolean,
+  ): Promise<unknown>;
   listReceivables(input: {
     customerId?: string | undefined;
     operatingSiteId?: string | null | undefined;
@@ -4471,6 +4492,30 @@ export function createApp(options: CreateAppOptions) {
   });
 
   /*
+   * Mover un cliente a otra ciudad: su ciudad, sus domicilios y sus pedidos abiertos. Pide editar
+   * clientes y pedidos, que es lo que tocan los dos. Con `preview: true` no guarda nada.
+   */
+  app.post('/api/v1/customers/:id/site', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (!permissions.includes('customers.edit') || !permissions.includes('orders.edit'))
+      return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = CustomerMoveSiteRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(context, 'Revisá la ciudad y las zonas.');
+    const { preview, ...move } = input.data;
+    const result = await requireOperations().moveCustomerToSite(
+      params.data.id,
+      move,
+      operationsContext(context),
+      preview ?? false,
+    );
+    return context.json(CustomerMoveSiteResponseSchema.parse(contractValue(result)));
+  });
+
+  /*
    * Eliminar un cliente.
    *
    * Sin pedidos se borra de verdad —es el caso que motivó esto: un duplicado, una prueba, un
@@ -6424,6 +6469,25 @@ export function createApp(options: CreateAppOptions) {
     });
     context.header('cache-control', 'private, no-store');
     return context.json(ReceivablesResponseSchema.parse(contractValue(receivables)));
+  });
+
+  /*
+   * Mover un pedido a otra ciudad (cargado en la que no era). Lo hace quien edita pedidos. Con
+   * `preview: true` devuelve lo que cambiaría —número, total y día— sin guardar nada.
+   */
+  app.post('/api/v1/orders/:id/site', async (context) => {
+    if (!context.get('session').permissions.includes('orders.edit')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = OrderMoveSiteRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success) return badRequest(context, 'Revisá la ciudad elegida.');
+    const { preview, ...move } = input.data;
+    const result = await requireOperations().moveOrderToSite(
+      params.data.id,
+      move,
+      operationsContext(context),
+      preview ?? false,
+    );
+    return context.json(OrderMoveSiteResponseSchema.parse(contractValue(result)));
   });
 
   app.post('/api/v1/orders/:id/paid', async (context) => {

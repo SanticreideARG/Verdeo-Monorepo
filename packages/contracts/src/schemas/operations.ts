@@ -1799,6 +1799,38 @@ export const ReceivablesResponseSchema = z.object({
   ),
 });
 
+/** Mover un pedido a otra ciudad. Con `preview` se calcula y no se guarda. */
+export const OrderMoveSiteRequestSchema = z.object({
+  addressId: UuidSchema.optional(),
+  preview: z.boolean().optional(),
+  targetSiteId: UuidSchema,
+  zoneId: UuidSchema.optional(),
+});
+
+export const OrderMoveSiteResponseSchema = z.object({
+  deliveryDate: z.string(),
+  id: UuidSchema,
+  previousDeliveryDate: z.string(),
+  previousPublicNumber: z.string(),
+  previousTotalMinor: z.number().int(),
+  publicNumber: z.string(),
+  totalMinor: z.number().int(),
+});
+
+/** Mover un cliente a otra ciudad, con la zona de cada domicilio y sus pedidos abiertos. */
+export const CustomerMoveSiteRequestSchema = z.object({
+  addressZones: z.record(UuidSchema, UuidSchema).optional(),
+  fromSiteId: UuidSchema,
+  preferredZoneId: UuidSchema,
+  preview: z.boolean().optional(),
+  targetSiteId: UuidSchema,
+});
+
+export const CustomerMoveSiteResponseSchema = z.object({
+  addresses: z.number().int(),
+  orders: z.array(OrderMoveSiteResponseSchema),
+});
+
 export const OrderDeleteRequestSchema = z.object({
   // Opcional (2026-10-20): borrar un pedido de prueba no necesita explicación.
   reason: z.string().trim().max(500).optional(),

@@ -367,6 +367,9 @@ interface ResolvedOrderItem {
   variantSnapshot: string;
 }
 
+/** Para deshacer una transacción a propósito: una vista previa calcula todo y no guarda nada. */
+class PreviewRollback extends Error {}
+
 export class OperationsNotFoundError extends Error {
   public constructor(message: string) {
     super(message);
@@ -7180,6 +7183,396 @@ export class PostgresOperationsService {
       .select({ id: orders.id, importKey: orders.importKey, publicNumber: orders.publicNumber })
       .from(orders)
       .where(inArray(orders.importKey, [...keys]));
+  }
+
+  /**
+   * Mover un pedido a otra ciudad (cargado por error en la que no era).
+   *
+   * Decisiones del 2026-10-20: lo pueden hacer los operadores; sólo borradores, confirmados y
+   * listos; número nuevo con el prefijo de la ciudad destino; precio y día de reparto se concilian
+   * solos con los de esa ciudad; las variedades sólo si hace falta (la misma variedad del menú de
+   * la ciudad destino); el resto de los datos no se corrige solo.
+   *
+   * Con `preview` se calcula todo y no se guarda nada: es lo que muestra el diálogo antes de
+   * confirmar.
+   */
+  public async moveOrderToSite(
+    orderId: string,
+    input: { addressId?: string | undefined; targetSiteId: string; zoneId?: string | undefined },
+    context: OperationsContext,
+    preview = false,
+  ) {
+    return this.inTransactionOrPreview(preview, (transaction) =>
+      this.moveOrderInTransaction(transaction, orderId, input, context),
+    );
+  }
+
+  /**
+   * Mover un cliente a otra ciudad: deja la ciudad de origen y pasa a la destino, cada domicilio de
+   * la ciudad de origen pasa a una zona de la destino (y vuelve a ubicarse en el mapa), y sus
+   * pedidos en borrador, confirmados y listos de esa ciudad se mueven en el mismo acto.
+   */
+  public async moveCustomerToSite(
+    customerId: string,
+    input: {
+      addressZones?: Readonly<Record<string, string>> | undefined;
+      fromSiteId: string;
+      preferredZoneId: string;
+      targetSiteId: string;
+    },
+    context: OperationsContext,
+    preview = false,
+  ) {
+    return this.inTransactionOrPreview(preview, async (transaction) => {
+      if (input.fromSiteId === input.targetSiteId)
+        throw new OperationsConflictError('El cliente ya está en esa ciudad');
+      const preferred = await this.zoneOfSite(
+        transaction,
+        input.preferredZoneId,
+        input.targetSiteId,
+      );
+
+      await transaction
+        .delete(customerOperatingSites)
+        .where(
+          and(
+            eq(customerOperatingSites.customerId, customerId),
+            eq(customerOperatingSites.operatingSiteId, input.fromSiteId),
+          ),
+        );
+      await transaction
+        .insert(customerOperatingSites)
+        .values({
+          customerId,
+          operatingSiteId: input.targetSiteId,
+          preferredZoneId: preferred,
+        })
+        .onConflictDoUpdate({
+          set: { preferredZoneId: preferred, status: 'active', updatedAt: new Date() },
+          target: [customerOperatingSites.customerId, customerOperatingSites.operatingSiteId],
+        });
+
+      // Los domicilios de la ciudad de origen pasan a una zona de la destino y se vuelven a ubicar.
+      const addresses = await transaction
+        .select({ id: customerAddresses.id })
+        .from(customerAddresses)
+        .innerJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
+        .where(
+          and(
+            eq(customerAddresses.customerId, customerId),
+            eq(geographicZones.operatingSiteId, input.fromSiteId),
+          ),
+        );
+      for (const address of addresses) {
+        const zoneId = await this.zoneOfSite(
+          transaction,
+          input.addressZones?.[address.id] ?? preferred,
+          input.targetSiteId,
+        );
+        await transaction
+          .update(customerAddresses)
+          .set({
+            geocodingStatus: 'NEEDS_LOCATION',
+            geographicZoneId: zoneId,
+            latitude: null,
+            longitude: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(customerAddresses.id, address.id));
+      }
+
+      const open = await transaction
+        .select({ id: orders.id })
+        .from(orders)
+        .where(
+          and(
+            eq(orders.customerId, customerId),
+            eq(orders.operatingSiteId, input.fromSiteId),
+            inArray(orders.status, ['DRAFT', 'CONFIRMED', 'READY']),
+          ),
+        );
+      const moved = [];
+      for (const order of open) {
+        moved.push(
+          await this.moveOrderInTransaction(
+            transaction,
+            order.id,
+            { targetSiteId: input.targetSiteId, zoneId: preferred },
+            context,
+          ),
+        );
+      }
+
+      await this.auditCustomerMutation(transaction, customerId, 'customer.moved_site', context, {
+        metadata: {
+          addresses: addresses.length,
+          fromSiteId: input.fromSiteId,
+          orders: moved.length,
+          targetSiteId: input.targetSiteId,
+        },
+      });
+      return { addresses: addresses.length, orders: moved };
+    });
+  }
+
+  /** Corre en una transacción; con `preview`, la deshace al final y devuelve lo calculado. */
+  private async inTransactionOrPreview<T>(
+    preview: boolean,
+    work: (transaction: DatabaseTransaction) => Promise<T>,
+  ): Promise<T> {
+    let result: T | undefined;
+    try {
+      await this.database.transaction(async (transaction) => {
+        result = await work(transaction);
+        if (preview) throw new PreviewRollback();
+      });
+    } catch (error) {
+      if (!(error instanceof PreviewRollback)) translateDatabaseConflict(error);
+    }
+    return result as T;
+  }
+
+  /** La zona, si es de esa ciudad y está activa. */
+  private async zoneOfSite(
+    transaction: DatabaseTransaction,
+    zoneId: string,
+    operatingSiteId: string,
+  ): Promise<string> {
+    const [zone] = await transaction
+      .select({ id: geographicZones.id })
+      .from(geographicZones)
+      .where(
+        and(
+          eq(geographicZones.id, zoneId),
+          eq(geographicZones.operatingSiteId, operatingSiteId),
+          eq(geographicZones.active, true),
+        ),
+      )
+      .limit(1);
+    if (!zone) throw new OperationsConflictError('La zona elegida no es de la ciudad destino');
+    return zone.id;
+  }
+
+  private async moveOrderInTransaction(
+    transaction: DatabaseTransaction,
+    orderId: string,
+    input: { addressId?: string | undefined; targetSiteId: string; zoneId?: string | undefined },
+    context: OperationsContext,
+  ) {
+    const [order] = await transaction
+      .select({
+        closeAt: salesCycles.closeAt,
+        customerId: orders.customerId,
+        cycleId: orders.salesCycleId,
+        deliveryAddress: orders.deliveryAddressSnapshot,
+        deliveryAddressId: orders.deliveryAddressId,
+        deliveryDate: orders.deliveryDate,
+        operatingSiteId: orders.operatingSiteId,
+        publicNumber: orders.publicNumber,
+        status: orders.status,
+        totalMinor: orders.totalMinor,
+      })
+      .from(orders)
+      .innerJoin(salesCycles, eq(salesCycles.id, orders.salesCycleId))
+      .where(eq(orders.id, orderId))
+      .limit(1);
+    if (!order) throw new OperationsNotFoundError('No se encontró el pedido');
+    if (order.operatingSiteId === input.targetSiteId)
+      throw new OperationsConflictError('El pedido ya es de esa ciudad');
+    if (!['DRAFT', 'CONFIRMED', 'READY'].includes(order.status))
+      throw new OperationsConflictError('Sólo se mueven pedidos en borrador, confirmados o listos');
+
+    // El menú del mismo período en la ciudad destino.
+    const [menu] = await transaction
+      .select({ id: weeklyMenus.id })
+      .from(weeklyMenus)
+      .where(
+        and(
+          eq(weeklyMenus.salesCycleId, order.cycleId),
+          eq(weeklyMenus.operatingSiteId, input.targetSiteId),
+          eq(weeklyMenus.status, 'PUBLISHED'),
+        ),
+      )
+      .limit(1);
+    if (!menu)
+      throw new OperationsConflictError(
+        'La ciudad destino no tiene un menú publicado para el período de este pedido',
+      );
+
+    // Cada renglón, con la misma variedad en el menú de la ciudad destino.
+    const items = await transaction
+      .select({
+        id: orderItems.id,
+        name: orderItems.productNameSnapshot,
+        quantityUnits: orderItems.quantityUnits,
+        variant: orderItems.variantSnapshot,
+        variantId: orderItems.productVariantId,
+      })
+      .from(orderItems)
+      .where(eq(orderItems.orderId, orderId));
+    const targetOfferings = await transaction
+      .select({ id: weeklyMenuOfferings.id, variantId: weeklyMenuOfferings.productVariantId })
+      .from(weeklyMenuOfferings)
+      .where(
+        and(eq(weeklyMenuOfferings.weeklyMenuId, menu.id), eq(weeklyMenuOfferings.active, true)),
+      );
+    const selections = items.length
+      ? await transaction
+          .select({
+            dishName: orderItemSelections.dishNameSnapshot,
+            family: orderItemSelections.sourceFamilySnapshot,
+            orderItemId: orderItemSelections.orderItemId,
+          })
+          .from(orderItemSelections)
+          .where(
+            inArray(
+              orderItemSelections.orderItemId,
+              items.map((item) => item.id),
+            ),
+          )
+          .orderBy(asc(orderItemSelections.slot))
+      : [];
+    const missing: string[] = [];
+    const mapped = items.flatMap((item) => {
+      const target = targetOfferings.find((offering) => offering.variantId === item.variantId);
+      if (!target) {
+        missing.push(`${item.name} ${item.variant}`);
+        return [];
+      }
+      const own = selections.filter((selection) => selection.orderItemId === item.id);
+      const withFamily = own.every((selection) => selection.family);
+      return [
+        {
+          offeringId: target.id,
+          quantityUnits: item.quantityUnits,
+          ...(own.length === 0
+            ? {}
+            : withFamily
+              ? {
+                  selectedDishes: own.map((selection) => ({
+                    dishName: selection.dishName,
+                    familyName: selection.family ?? '',
+                  })),
+                }
+              : { selectedDishNames: own.map((selection) => selection.dishName) }),
+        },
+      ];
+    });
+    if (missing.length > 0)
+      throw new OperationsConflictError(
+        `La ciudad destino no ofrece ${missing.join(', ')} en ese período. Cambialo en el pedido antes de moverlo.`,
+      );
+
+    // El domicilio: el elegido, el mismo si ya es de la ciudad destino, o la zona elegida.
+    let addressId: string | null = null;
+    let zoneId: string | null = null;
+    if (input.addressId) {
+      const [address] = await transaction
+        .select({ id: customerAddresses.id, zoneId: customerAddresses.geographicZoneId })
+        .from(customerAddresses)
+        .innerJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
+        .where(
+          and(
+            eq(customerAddresses.id, input.addressId),
+            eq(customerAddresses.customerId, order.customerId),
+            eq(geographicZones.operatingSiteId, input.targetSiteId),
+          ),
+        )
+        .limit(1);
+      if (!address)
+        throw new OperationsConflictError('El domicilio elegido no es de la ciudad destino');
+      addressId = address.id;
+      zoneId = address.zoneId;
+    } else if (order.deliveryAddressId) {
+      const [address] = await transaction
+        .select({ zoneId: customerAddresses.geographicZoneId })
+        .from(customerAddresses)
+        .innerJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
+        .where(
+          and(
+            eq(customerAddresses.id, order.deliveryAddressId),
+            eq(geographicZones.operatingSiteId, input.targetSiteId),
+          ),
+        )
+        .limit(1);
+      if (address) {
+        addressId = order.deliveryAddressId;
+        zoneId = address.zoneId;
+      }
+    }
+    if (!zoneId && input.zoneId) {
+      zoneId = await this.zoneOfSite(transaction, input.zoneId, input.targetSiteId);
+    }
+
+    // Precio y día de reparto, los de la ciudad destino.
+    const resolvedItems = await this.resolveOrderItems(
+      transaction,
+      menu.id,
+      mapped,
+      input.targetSiteId,
+    );
+    const deliverySettings = await this.getDeliverySettings(input.targetSiteId, transaction);
+    const deliveryDate = resolveDeliveryDate(
+      deliveryOptions(order.closeAt, deliverySettings.weekdays),
+      order.deliveryDate,
+      deliverySettings.defaultWeekday,
+    );
+    const totalMinor = calculateOrderTotal(resolvedItems.map((item) => item.totalMinor));
+    const publicNumber = await this.nextPublicNumber(transaction, input.targetSiteId);
+
+    // El cliente también pasa a estar en la ciudad destino: si no, no aparece en su lista.
+    await transaction
+      .insert(customerOperatingSites)
+      .values({ customerId: order.customerId, operatingSiteId: input.targetSiteId })
+      .onConflictDoNothing();
+
+    // Sale del reparto y de las rutas de la ciudad de origen.
+    await transaction.delete(deliveryStops).where(eq(deliveryStops.orderId, orderId));
+    await leaveRun(transaction, orderId);
+    await transaction.delete(orderItems).where(eq(orderItems.orderId, orderId));
+    await this.persistOrderItems(transaction, orderId, resolvedItems);
+    await transaction
+      .update(orders)
+      .set({
+        currency: resolvedItems[0]?.currency ?? 'ARS',
+        deliveryAddressId: addressId,
+        deliveryDate,
+        geographicZoneId: zoneId,
+        operatingSiteId: input.targetSiteId,
+        publicNumber,
+        totalMinor,
+        updatedAt: new Date(),
+        weeklyMenuId: menu.id,
+      })
+      .where(eq(orders.id, orderId));
+    await assignOrderToRun(transaction, orderId);
+
+    const audit = new AuditService(new PostgresAuditSink(transaction));
+    await audit.record({
+      action: 'order.moved_site',
+      actor: auditActor(context),
+      after: { deliveryDate, operatingSiteId: input.targetSiteId, publicNumber, totalMinor },
+      before: {
+        deliveryDate: order.deliveryDate,
+        operatingSiteId: order.operatingSiteId,
+        publicNumber: order.publicNumber,
+        totalMinor: order.totalMinor,
+      },
+      correlationId: context.correlationId,
+      entityId: orderId,
+      entityType: 'order',
+      requestId: context.requestId,
+      source: context.source,
+    });
+    return {
+      deliveryDate,
+      id: orderId,
+      previousDeliveryDate: order.deliveryDate,
+      previousPublicNumber: order.publicNumber,
+      previousTotalMinor: order.totalMinor,
+      publicNumber,
+      totalMinor,
+    };
   }
 
   public async deleteOrder(orderId: string, reason: string, context: OperationsContext) {

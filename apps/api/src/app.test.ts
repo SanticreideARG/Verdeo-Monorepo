@@ -53,6 +53,8 @@ const singleSiteGeography = {
 };
 const customerOperationsStubs = {
   addCustomerAddress: vi.fn(),
+  moveCustomerToSite: vi.fn(),
+  moveOrderToSite: vi.fn(),
   listReceivables: vi.fn(),
   addCustomerIdentity: vi.fn(),
   addCustomerPreference: vi.fn(),

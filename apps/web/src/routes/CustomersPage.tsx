@@ -17,6 +17,7 @@ import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { cachedProfile, rememberProfile } from '../lib/useDashboardProfile.js';
 import { formatArgentinePhone } from '../lib/phone.js';
 import { showToast } from '../lib/toast.js';
+import { MoveSiteDialog } from '../components/MoveSiteDialog.js';
 import { useFormDraft } from '../lib/useFormDraft.js';
 import {
   CUSTOMER_STATUSES,
@@ -104,6 +105,7 @@ export function CustomersPage() {
   const [debt, setDebt] = useState<{ count: number; currency: string; totalMinor: number } | null>(
     null,
   );
+  const [movingSite, setMovingSite] = useState(false);
   const loadCustomer = useCallback(async (customerId: string) => {
     setDetailLoading(true);
     try {
@@ -650,6 +652,9 @@ export function CustomersPage() {
     profile.permissions.includes('customers.edit') &&
     profile.permissions.includes('customers.view_sensitive');
   const canDelete = profile.permissions.includes('customers.delete');
+  // Cambiar de ciudad toca el cliente y sus pedidos abiertos.
+  const canMoveSite =
+    profile.permissions.includes('customers.edit') && profile.permissions.includes('orders.edit');
   // Same pair the API demands: choosing a survivor means reading both records' contacts.
   const canMerge =
     profile.permissions.includes('customers.merge') &&
@@ -938,6 +943,15 @@ export function CustomersPage() {
                         <button className="button button-primary" type="submit">
                           Guardar cambios
                         </button>
+                        {canMoveSite ? (
+                          <button
+                            className="button button-secondary"
+                            onClick={() => setMovingSite(true)}
+                            type="button"
+                          >
+                            Cambiar de ciudad
+                          </button>
+                        ) : null}
                         {canDelete ? (
                           <button
                             className="button button-danger"
@@ -1565,6 +1579,33 @@ export function CustomersPage() {
           />
         ) : null}
       </div>
+      {movingSite && detail ? (
+        <MoveSiteDialog
+          onClose={() => setMovingSite(false)}
+          onMoved={(moved) => {
+            setMovingSite(false);
+            showToast(
+              moved.length === 0
+                ? `${detail.displayName} cambió de ciudad.`
+                : `${detail.displayName} cambió de ciudad con ${String(moved.length)} ${moved.length === 1 ? 'pedido' : 'pedidos'}.`,
+            );
+            void loadCustomer(detail.id);
+          }}
+          target={{
+            addresses: (detail.addresses ?? [])
+              .filter((address) => address.active)
+              .map((address) => ({
+                geographicZoneId: address.geographicZoneId,
+                id: address.id,
+                label: address.label,
+                writtenAddress: address.writtenAddress,
+              })),
+            currency: 'ARS',
+            customerId: detail.id,
+            kind: 'customer',
+          }}
+        />
+      ) : null}
     </DashboardShell>
   );
 }
