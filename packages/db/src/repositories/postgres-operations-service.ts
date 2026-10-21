@@ -299,6 +299,7 @@ export interface OrderInput {
     offeringId: string;
     quantityUnits: number;
     selectedDishNames?: readonly string[] | undefined;
+    selectedDishes?: readonly { dishName: string; familyName: string }[] | undefined;
   }[];
   menuId: string;
   notes?: string | undefined;
@@ -322,6 +323,7 @@ export interface OrderUpdateInput {
         offeringId: string;
         quantityUnits: number;
         selectedDishNames?: readonly string[] | undefined;
+        selectedDishes?: readonly { dishName: string; familyName: string }[] | undefined;
       }[]
     | undefined;
   notes?: string | null | undefined;
@@ -352,6 +354,8 @@ export interface OrderListInput {
 interface ResolvedOrderItem {
   currency: string;
   dishSelections: readonly string[];
+  /** El plato exacto de cada elegido, en el mismo orden. Null: el nombre estaba en dos menús. */
+  dishSources: readonly ({ familyName: string; menuItemId: string; slot: number } | null)[];
   offeringId: string;
   productNameSnapshot: string;
   productVariantId: string;
@@ -5897,6 +5901,7 @@ export class PostgresOperationsService {
       offeringId: string;
       quantityUnits: number;
       selectedDishNames?: readonly string[] | undefined;
+      selectedDishes?: readonly { dishName: string; familyName: string }[] | undefined;
     }[],
     /** De dónde sale la regla del Intuitivo: cuántos platos admite y cómo se cobra el exceso. */
     operatingSiteId: string | null,
@@ -5961,16 +5966,54 @@ export class PostgresOperationsService {
       // The composable universe is every dish published this week for the same size, matched by
       // size id rather than by the variant's display name.
       const sizeUniverse = await transaction
-        .select({ dishName: weeklyMenuItems.dishName })
+        .select({
+          dishName: weeklyMenuItems.dishName,
+          familyKind: productFamilies.kind,
+          familyName: productFamilies.displayName,
+          id: weeklyMenuItems.id,
+          slot: weeklyMenuItems.slot,
+        })
         .from(weeklyMenuItems)
         .innerJoin(weeklyMenuOfferings, eq(weeklyMenuOfferings.id, weeklyMenuItems.offeringId))
         .innerJoin(productVariants, eq(productVariants.id, weeklyMenuOfferings.productVariantId))
+        .innerJoin(productFamilies, eq(productFamilies.id, productVariants.productFamilyId))
         .where(
           and(
             eq(weeklyMenuOfferings.weeklyMenuId, menuId),
             eq(productVariants.productSizeId, offering.productSizeId),
           ),
-        );
+        )
+        .orderBy(asc(weeklyMenuItems.slot));
+      /*
+       * Cada plato elegido es "el plato N del menú X" (DISH_IDENTITY_AND_DEBTORS_PLAN.md).
+       *
+       * Con el menú, se busca ese plato en ese menú y tiene que estar. Con sólo el nombre (el
+       * importador, la IA), se ubica si está en un único menú; si está en dos, queda sin origen en
+       * vez de adivinar.
+       */
+      // El origen es siempre un menú fijo: los platos cargados en el propio Intuitivo no cuentan.
+      const fixedUniverse = sizeUniverse.filter((entry) => entry.familyKind !== 'COMPOSABLE');
+      const selectedNames =
+        item.selectedDishes?.map((dish) => dish.dishName) ?? item.selectedDishNames;
+      const sources = item.selectedDishes
+        ? item.selectedDishes.map((dish) => {
+            const found = fixedUniverse.find(
+              (entry) => entry.familyName === dish.familyName && entry.dishName === dish.dishName,
+            );
+            if (!found)
+              throw new OperationsConflictError(
+                `"${dish.dishName}" no está en el menú ${dish.familyName} de esta semana`,
+              );
+            return { familyName: found.familyName, menuItemId: found.id, slot: found.slot };
+          })
+        : (item.selectedDishNames ?? []).map((dishName) => {
+            const matches = fixedUniverse.filter((entry) => entry.dishName === dishName);
+            const families = new Set(matches.map((entry) => entry.familyName));
+            const first = matches[0];
+            return families.size === 1 && first
+              ? { familyName: first.familyName, menuItemId: first.id, slot: first.slot }
+              : null;
+          });
       const composition = resolveOrderComposition({
         allowedDishes: new Set(sizeUniverse.map(({ dishName }) => dishName)),
         baseDishes: baseDishes.map(({ dishName }) => dishName),
@@ -5978,7 +6021,7 @@ export class PostgresOperationsService {
         familyName: offering.familyName,
         maxDishes,
         mealsPerUnit: offering.mealsPerUnit,
-        ...(item.selectedDishNames ? { selectedDishes: item.selectedDishNames } : {}),
+        ...(selectedNames ? { selectedDishes: selectedNames } : {}),
       });
 
       /*
@@ -5988,7 +6031,7 @@ export class PostgresOperationsService {
        * composición igual a la base se guarda vacía, y contarla como cero platos habría
        * cobrado de menos justamente al pedido más común.
        */
-      const platosElegidos = item.selectedDishNames?.length ?? offering.mealsPerUnit;
+      const platosElegidos = selectedNames?.length ?? offering.mealsPerUnit;
       const unitPriceConPlatos = intuitivoUnitPriceMinor({
         baseDishes: offering.mealsPerUnit,
         basePriceMinor: unitPriceMinor,
@@ -5999,6 +6042,8 @@ export class PostgresOperationsService {
       resolvedItems.push({
         currency: currency ?? 'ARS',
         dishSelections: composition.dishSelections,
+        // Una composición igual a la base se guarda vacía: sin platos, no hay orígenes.
+        dishSources: composition.dishSelections.length > 0 ? sources : [],
         offeringId: offering.id,
         productNameSnapshot: composition.productNameSnapshot,
         productVariantId: offering.productVariantId,
@@ -6038,11 +6083,17 @@ export class PostgresOperationsService {
       if (!createdItem) throw new Error('Order item creation did not return a row');
       if (item.dishSelections.length > 0) {
         await transaction.insert(orderItemSelections).values(
-          item.dishSelections.map((dishNameSnapshot, index) => ({
-            dishNameSnapshot,
-            orderItemId: createdItem.id,
-            slot: index + 1,
-          })),
+          item.dishSelections.map((dishNameSnapshot, index) => {
+            const source = item.dishSources[index] ?? null;
+            return {
+              dishNameSnapshot,
+              orderItemId: createdItem.id,
+              slot: index + 1,
+              sourceFamilySnapshot: source?.familyName ?? null,
+              sourceMenuItemId: source?.menuItemId ?? null,
+              sourceSlot: source?.slot ?? null,
+            };
+          }),
         );
       }
     }
@@ -6634,6 +6685,8 @@ export class PostgresOperationsService {
               dishName: orderItemSelections.dishNameSnapshot,
               orderItemId: orderItemSelections.orderItemId,
               slot: orderItemSelections.slot,
+              sourceFamily: orderItemSelections.sourceFamilySnapshot,
+              sourceSlot: orderItemSelections.sourceSlot,
             })
             .from(orderItemSelections)
             .where(
@@ -6652,10 +6705,19 @@ export class PostgresOperationsService {
       .where(inArray(orderDietaryInstructions.orderId, presentIds));
 
     const dishesByItem = new Map<string, string[]>();
+    const sourcesByItem = new Map<string, ({ familyName: string; slot: number } | null)[]>();
     for (const selection of selections) {
       const bucket = dishesByItem.get(selection.orderItemId);
       if (bucket) bucket.push(selection.dishName);
       else dishesByItem.set(selection.orderItemId, [selection.dishName]);
+      const source =
+        selection.sourceFamily !== null && selection.sourceSlot !== null
+          ? { familyName: selection.sourceFamily, slot: selection.sourceSlot }
+          : null;
+      sourcesByItem.set(selection.orderItemId, [
+        ...(sourcesByItem.get(selection.orderItemId) ?? []),
+        source,
+      ]);
     }
     const itemsByOrder = new Map<string, typeof itemRows>();
     for (const item of itemRows) {
@@ -6711,6 +6773,7 @@ export class PostgresOperationsService {
           // orderId is the grouping key, not part of the item DTO.
           items: (itemsByOrder.get(row.id) ?? []).map((item) => ({
             dishSelections: dishesByItem.get(item.id) ?? [],
+            dishSources: sourcesByItem.get(item.id) ?? [],
             id: item.id,
             offeringId: item.offeringId,
             productName: item.productName,
@@ -7109,6 +7172,8 @@ export class PostgresOperationsService {
               dishName: orderItemSelections.dishNameSnapshot,
               orderItemId: orderItemSelections.orderItemId,
               slot: orderItemSelections.slot,
+              sourceFamily: orderItemSelections.sourceFamilySnapshot,
+              sourceSlot: orderItemSelections.sourceSlot,
             })
             .from(orderItemSelections)
             .where(
@@ -7156,9 +7221,13 @@ export class PostgresOperationsService {
             .orderBy(asc(weeklyMenuItems.slot));
 
     return lines.map((line) => {
-      const dishSelections = selections
-        .filter((selection) => selection.orderItemId === line.orderItemId)
-        .map((selection) => selection.dishName);
+      const own = selections.filter((selection) => selection.orderItemId === line.orderItemId);
+      const dishSelections = own.map((selection) => selection.dishName);
+      const dishSources = own.map((selection) =>
+        selection.sourceFamily !== null && selection.sourceSlot !== null
+          ? { familyName: selection.sourceFamily, slot: selection.sourceSlot }
+          : null,
+      );
       return {
         ...line,
         dietaryInstructions: instructions
@@ -7173,6 +7242,7 @@ export class PostgresOperationsService {
                 .filter((plato) => plato.offeringId === line.offeringId)
                 .map((plato) => plato.dishName),
         dishSelections,
+        dishSources,
       };
     });
   }

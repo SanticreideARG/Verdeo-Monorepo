@@ -1,6 +1,13 @@
 import { useState } from 'react';
 
-import { formatMoney, type MenuOffering, type OrderSummary } from '../lib/operations.js';
+import {
+  dishesPayload,
+  formatMoney,
+  pickedDishes,
+  type MenuOffering,
+  type OrderSummary,
+  type PickedDish,
+} from '../lib/operations.js';
 import { estimatedItemsTotalMinor, type IntuitivoLimits } from '../lib/orderCart.js';
 import { IntuitivoDishPicker } from './IntuitivoDishPicker.js';
 
@@ -9,20 +16,22 @@ export interface EditableItem {
   key: string;
   offeringId: string;
   quantityUnits: number;
-  selectedDishNames: string[];
+  selectedDishes: PickedDish[];
 }
 
-/** Lo que el PATCH espera; `selectedDishNames` sólo viaja si la variedad es componible. */
+/** Lo que el PATCH espera; los platos sólo viajan si la variedad es componible. */
 export function toItemPayload(
   items: readonly EditableItem[],
   offerings: readonly MenuOffering[],
-): { offeringId: string; quantityUnits: number; selectedDishNames?: string[] }[] {
+): ({ offeringId: string; quantityUnits: number } & (
+  { selectedDishes?: PickedDish[] } | { selectedDishNames?: string[] }
+))[] {
   return items.map((item) => {
     const offering = offerings.find((candidate) => candidate.id === item.offeringId);
     return {
       offeringId: item.offeringId,
       quantityUnits: item.quantityUnits,
-      ...(offering?.composable ? { selectedDishNames: item.selectedDishNames } : {}),
+      ...(offering?.composable ? dishesPayload(item.selectedDishes) : {}),
     };
   });
 }
@@ -35,7 +44,7 @@ export function itemsFromOrder(order: OrderSummary): EditableItem[] {
     // vacío, para que se vea que hay que volver a elegirlo en vez de desaparecer del pedido.
     offeringId: item.offeringId ?? '',
     quantityUnits: item.quantityUnits,
-    selectedDishNames: [...item.dishSelections],
+    selectedDishes: pickedDishes(item),
   }));
 }
 
@@ -78,7 +87,7 @@ export function OrderItemsEditor({
         key: `nuevo-${offeringId}-${String(Date.now())}`,
         offeringId,
         quantityUnits: 1,
-        selectedDishNames: [],
+        selectedDishes: [],
       },
     ]);
     setAdding('');
@@ -99,7 +108,7 @@ export function OrderItemsEditor({
                 onChange={(event) =>
                   // Cambiar de variedad limpia los platos: los de un Intuitivo no significan nada
                   // pegados a una variedad fija, y arrastrarlos escondería una elección vieja.
-                  update(item.key, { offeringId: event.target.value, selectedDishNames: [] })
+                  update(item.key, { offeringId: event.target.value, selectedDishes: [] })
                 }
                 value={item.offeringId}
               >
@@ -138,15 +147,15 @@ export function OrderItemsEditor({
             {offering?.composable ? (
               <div className="items-editor-dishes">
                 <p className="text-sm text-ink-muted">
-                  Platos del Intuitivo — {item.selectedDishNames.length} de{' '}
+                  Platos del Intuitivo — {item.selectedDishes.length} de{' '}
                   {offering?.mealsPerUnit ?? 5}
                 </p>
                 <IntuitivoDishPicker
                   maxDishes={maxDishes}
                   minDishes={offering?.mealsPerUnit ?? 5}
                   offerings={offerings}
-                  onChange={(next) => update(item.key, { selectedDishNames: next })}
-                  selected={item.selectedDishNames}
+                  onChange={(next) => update(item.key, { selectedDishes: next })}
+                  selected={item.selectedDishes}
                 />
               </div>
             ) : null}

@@ -193,10 +193,10 @@ describe('order engine', () => {
 
     // De mayor a menor: lo que más se repite es lo primero que hay que comprar.
     expect(summary.dishTally.slice(0, 4)).toEqual([
-      { dishName: 'Guiso', portions: 3 },
-      { dishName: 'Pollo al verdeo', portions: 3 },
-      { dishName: 'Tarta', portions: 3 },
-      { dishName: 'Wok', portions: 3 },
+      { dishName: 'Guiso', familyName: null, portions: 3 },
+      { dishName: 'Pollo al verdeo', familyName: null, portions: 3 },
+      { dishName: 'Tarta', familyName: null, portions: 3 },
+      { dishName: 'Wok', familyName: null, portions: 3 },
     ]);
     expect(summary.dishTally.find((entry) => entry.dishName === 'Ensalada')?.portions).toBe(1);
     expect(summary.dishTally.find((entry) => entry.dishName === 'Milanesa')?.portions).toBe(2);

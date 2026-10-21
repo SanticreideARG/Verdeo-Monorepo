@@ -54,6 +54,7 @@ import { currentPeriod, periodsFromMenus, type Period } from '../lib/periods.js'
 import { showToast } from '../lib/toast.js';
 import { useNarrowViewport } from '../lib/useNarrowViewport.js';
 import {
+  dishLabel,
   errorMessage,
   formatMoney,
   menusForAmbientScope,
@@ -61,6 +62,7 @@ import {
   orderStatusLabel,
   type CustomerSummary,
   type OrderSummary,
+  type PickedDish,
   type WeeklyMenu,
 } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
@@ -190,7 +192,7 @@ export function OrderIntakePage() {
   // "Sale del stock": el pedido es una venta de oportunidad (STOCK_PLAN.md, fase 2).
   const [fromStock, setFromStock] = useState(false);
   const [selectedOfferingId, setSelectedOfferingId] = useState('');
-  const [selectedDishes, setSelectedDishes] = useState<string[]>([]);
+  const [selectedDishes, setSelectedDishes] = useState<PickedDish[]>([]);
   /* Las unidades, en el estado: sin esto no hay total que mostrar al pie del formulario. */
   const [units, setUnits] = useState(1);
   // Número del pedido recién guardado: mientras haya uno, el diálogo pregunta qué sigue.
@@ -693,15 +695,23 @@ export function OrderIntakePage() {
       setSelectedOfferingId(offering.id);
       if (body.candidate.quantityUnits) setUnits(Math.max(1, body.candidate.quantityUnits));
       if (offering.composable) {
-        const available = new Map(
-          selectedMenu.offerings
-            .flatMap((item) => item.dishes)
-            .map((dish) => [menuNameKey(dish), dish] as const),
-        );
+        /*
+         * La IA devuelve nombres. Cada uno se ubica en el menú que lo tiene; si dos menús tienen un
+         * plato con ese nombre, queda sin menú y la persona lo elige en el selector.
+         */
+        const fixed = selectedMenu.offerings.filter((item) => !item.composable);
         setSelectedDishes(
-          body.candidate.dishes
-            .map((dish) => available.get(menuNameKey(dish)))
-            .filter((dish): dish is string => Boolean(dish)),
+          body.candidate.dishes.flatMap((dish) => {
+            const key = menuNameKey(dish);
+            const owners = fixed.filter((item) =>
+              item.dishes.some((candidate) => menuNameKey(candidate) === key),
+            );
+            const families = new Set(owners.map((item) => item.familyName));
+            const owner = owners[0];
+            const dishName = owner?.dishes.find((candidate) => menuNameKey(candidate) === key);
+            if (!owner || !dishName) return [];
+            return [{ dishName, familyName: families.size === 1 ? owner.familyName : '' }];
+          }),
         );
       }
     }
@@ -1724,8 +1734,8 @@ export function OrderIntakePage() {
                         {line.label}
                         {line.quantityUnits > 1 ? ` ×${String(line.quantityUnits)}` : ''}
                       </strong>
-                      {line.selectedDishNames.length > 0 ? (
-                        <small>{line.selectedDishNames.join(' · ')}</small>
+                      {line.selectedDishes.length > 0 ? (
+                        <small>{line.selectedDishes.map(dishLabel).join(' · ')}</small>
                       ) : null}
                     </div>
                     <span>

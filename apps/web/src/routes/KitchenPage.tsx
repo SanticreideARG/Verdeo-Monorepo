@@ -13,6 +13,8 @@ import {
   type ProductionSnapshot,
   type SurplusReport,
   type WeeklyMenu,
+  dishLabel,
+  pickedDishes,
 } from '../lib/operations.js';
 import { formatMoment } from '../lib/dates.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
@@ -350,8 +352,8 @@ export function KitchenPage() {
                           {/* Uno por línea: en cocina esto se lee de reojo mientras se arma, y una
                               tira de cinco platos separados por puntos obliga a leerla entera. */}
                           <ul className="dish-selections mt-1">
-                            {item.dishSelections.map((dish, index) => (
-                              <li key={`${dish}-${String(index)}`}>{dish}</li>
+                            {pickedDishes(item).map((dish, index) => (
+                              <li key={`${dishLabel(dish)}-${String(index)}`}>{dishLabel(dish)}</li>
                             ))}
                           </ul>
                           {item.dietaryInstructions.length ? (
@@ -376,8 +378,14 @@ export function KitchenPage() {
                       </h3>
                       <div className="dish-tally mt-4">
                         {kitchen.dishTally.map((entry) => (
-                          <div key={entry.dishName}>
-                            <span>{entry.dishName}</span>
+                          <div key={`${entry.familyName ?? ''}-${entry.dishName}`}>
+                            {/* El mismo nombre en dos menús son dos platos: van aparte, con su menú. */}
+                            <span>
+                              {dishLabel({
+                                dishName: entry.dishName,
+                                familyName: entry.familyName ?? '',
+                              })}
+                            </span>
                             <strong>{entry.portions}</strong>
                           </div>
                         ))}

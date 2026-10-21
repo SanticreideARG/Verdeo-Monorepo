@@ -783,6 +783,18 @@ export const orderItemSelections = pgTable(
       .references(() => orderItems.id, { onDelete: 'cascade' }),
     slot: integer('slot').notNull(),
     dishNameSnapshot: text('dish_name_snapshot').notNull(),
+    /*
+     * De qué menú sale el plato (DISH_IDENTITY_AND_DEBTORS_PLAN.md). Un plato con el mismo nombre en
+     * dos menús son dos platos: el "Lomo con cebolla" de Keto no es el de Anti-Age. Se guarda el
+     * renglón del menú de la semana (para llegar a su día) y además la familia y la posición como
+     * texto, para que el pedido siga diciendo de dónde venía aunque se rehaga el menú. Null en los
+     * pedidos viejos cuyo nombre estaba en más de un menú: no se adivina.
+     */
+    sourceMenuItemId: uuid('source_menu_item_id').references(() => weeklyMenuItems.id, {
+      onDelete: 'set null',
+    }),
+    sourceFamilySnapshot: text('source_family_snapshot'),
+    sourceSlot: integer('source_slot'),
   },
   (table) => [
     uniqueIndex('order_item_selections_item_slot_unique').on(table.orderItemId, table.slot),

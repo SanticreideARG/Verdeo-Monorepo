@@ -19,6 +19,14 @@ const report: ProductionReport = {
       customerDisplayName: 'Lola',
       dietaryInstructions: [],
       dishSelections: ['Guiso', 'Tarta', 'Wok', 'Milanesa', 'Ensalada'],
+      // Cuatro platos de Keto y uno de Anti-Age, cada uno con su posición en su menú.
+      dishSources: [
+        { familyName: 'Keto', slot: 1 },
+        { familyName: 'Menú Anti-Age', slot: 2 },
+        { familyName: 'Keto', slot: 3 },
+        { familyName: 'Keto', slot: 4 },
+        { familyName: 'Keto', slot: 5 },
+      ],
       familyName: 'Intuitivo',
       orderPublicNumber: 'NQN-00030',
       quantityUnits: 2,
@@ -29,6 +37,8 @@ const report: ProductionReport = {
       customerDisplayName: 'Rosa',
       dietaryInstructions: [],
       dishSelections: ['Guiso', 'Tarta', 'Wok', 'Milanesa', 'Ensalada'],
+      // Un pedido viejo: sus nombres estaban en dos menús y quedaron sin origen.
+      dishSources: [],
       familyName: 'Intuitivo',
       orderPublicNumber: 'NQN-00031',
       quantityUnits: 1,
@@ -38,7 +48,7 @@ const report: ProductionReport = {
   ],
   cycle: { alias: 'Semana 36', id: '00000000-0000-4000-8000-000000000001' },
   delta: null,
-  dishTally: [{ dishName: 'Guiso', portions: 3 }],
+  dishTally: [{ dishName: 'Guiso', familyName: 'Keto', portions: 3 }],
   subtitle: 'Consolidado al momento',
   totalOrders: 10,
   totalUnits: 15,
@@ -90,17 +100,22 @@ describe('buildProductionExcel', () => {
     ]);
     // Pedidos más stock, las mismas porciones en cada plato.
     expect(rows[1]?.slice(0, 6)).toEqual(['KETO 250', 14, 14, 14, 14, 14]);
-    expect(rows[2]?.slice(0, 6)).toEqual(['KETO 400', 11, 11, 11, 11, 11]);
-    // Un renglón en blanco entre menús, y los Intuitivos como un menú más.
+    // El Intuitivo 400 (dos unidades) se desarma: sus platos de Keto suman en KETO 400, cada uno en
+    // su día, y el de Anti-Age en ANTI-AGE 400 el martes. No hay renglón "INTUITIVO".
+    expect(rows[2]?.slice(0, 6)).toEqual(['KETO 400', 13, 11, 13, 13, 13]);
     expect((rows[3] ?? []).every((cell) => cell === '')).toBe(true);
     expect(rows[4]?.slice(0, 6)).toEqual(['ANTI-AGE 250', 1, 1, 1, 1, 1]);
-    expect(rows[6]?.slice(0, 6)).toEqual(['INTUITIVO 400', 3, 3, 3, 3, 3]);
-    // El total de porciones, abajo a la derecha: (14 + 11 + 1 + 3) × 5.
+    expect(rows[5]?.slice(0, 6)).toEqual(['ANTI-AGE 400', 0, 2, 0, 0, 0]);
+    expect(rows.some((row) => String(row[0]).startsWith('INTUITIVO'))).toBe(false);
+    // El pedido viejo sin origen va aparte, con sus porciones en la última columna.
+    expect(rows[7]?.[0]).toBe('SIN MENÚ DE ORIGEN 400');
+    expect(rows[7]?.[6]).toBe(5);
+    // El total de porciones, abajo a la derecha: 70 + 63 + 5 + 2 + 5.
     const last = rows.at(-1) as unknown[];
     expect(last[0]).toBe('TOTAL');
     expect(last.at(-1)).toBe(145);
-    expect((book.Sheets.Pedido as XLSX.WorkSheet).G9 as XLSX.CellObject).toMatchObject({
-      f: 'SUM(B2:F7)',
+    expect((book.Sheets.Pedido as XLSX.WorkSheet).G10 as XLSX.CellObject).toMatchObject({
+      f: 'SUM(B2:G8)',
     });
   });
 
@@ -217,7 +232,7 @@ describe('buildProductionExcel', () => {
     const book = read(buildProductionExcel(report));
     const rows = rowsOf(book, 'Platos a preparar');
 
-    expect(rows.at(-1)).toEqual(['Total', 3]);
+    expect(rows.at(-1)).toEqual(['Total', undefined, 3]);
   });
 
   it('no suma columnas que no son cantidades', () => {

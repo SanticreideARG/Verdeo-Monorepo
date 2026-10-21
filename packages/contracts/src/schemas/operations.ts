@@ -677,6 +677,20 @@ export const AddressGeocodingParamSchema = z.object({
 });
 export const CycleIdParamSchema = z.object({ cycleId: UuidSchema });
 
+/**
+ * Un plato elegido en un Intuitivo, con su menú (DISH_IDENTITY_AND_DEBTORS_PLAN.md): el "Lomo con
+ * cebolla" de Keto y el de Anti-Age son dos platos distintos aunque se llamen igual.
+ */
+export const SelectedDishSchema = z.object({
+  dishName: z.string().trim().min(1).max(300),
+  familyName: z.string().trim().min(1).max(120),
+});
+
+/** De qué menú y en qué posición está un plato elegido. Null: no se sabe (pedidos viejos). */
+export const DishSourceSchema = z
+  .object({ familyName: z.string(), slot: z.number().int() })
+  .nullable();
+
 export const OrderItemInputSchema = z.object({
   offeringId: UuidSchema,
   quantityUnits: z.number().int().min(1).max(1_000),
@@ -688,6 +702,12 @@ export const OrderItemInputSchema = z.object({
    * de la ciudad: acá sólo se fija un techo duro, para que un cero de más no llegue a la base.
    */
   selectedDishNames: z.array(RequiredTextSchema).min(1).max(50).optional(),
+  /**
+   * Lo mismo con el menú de cada plato. Si viene, manda sobre `selectedDishNames`, que queda para
+   * quien sólo tiene nombres (el importador, la IA): esos se ubican si el nombre está en un solo
+   * menú, y si no, quedan sin origen.
+   */
+  selectedDishes: z.array(SelectedDishSchema).min(1).max(50).optional(),
 });
 
 export const OrderCreateRequestSchema = z.object({
@@ -870,6 +890,8 @@ export const OrderSchema = z.object({
   items: z.array(
     z.object({
       dishSelections: z.array(z.string()),
+      // El menú de cada plato elegido, en el mismo orden que `dishSelections`.
+      dishSources: z.array(DishSourceSchema).default([]),
       id: UuidSchema,
       // Null cuando la oferta del menú se borró: el ítem conserva sus snapshots de nombre y precio,
       // pero deja de saber contra qué variedad del menú se cargó.
@@ -1039,6 +1061,7 @@ export const KitchenSummaryResponseSchema = z.object({
       customerDisplayName: z.string(),
       dietaryInstructions: z.array(z.string()),
       dishSelections: z.array(z.string()),
+      dishSources: z.array(DishSourceSchema).default([]),
       familyName: z.string(),
       orderPublicNumber: z.string(),
       quantityUnits: z.number().int(),
@@ -1048,7 +1071,13 @@ export const KitchenSummaryResponseSchema = z.object({
   ),
   cycle: z.object({ alias: z.string(), id: UuidSchema }),
   // Los platos de todos los Intuitivos, sumados: es la pregunta que cocina se hace antes de comprar.
-  dishTally: z.array(z.object({ dishName: z.string(), portions: z.number().int() })),
+  dishTally: z.array(
+    z.object({
+      dishName: z.string(),
+      familyName: z.string().nullable().default(null),
+      portions: z.number().int(),
+    }),
+  ),
   generatedAt: IsoDateTimeSchema,
   /**
    * El stock para la venta del período (STOCK_PLAN.md): también se cocina, pero va aparte de lo
@@ -1449,6 +1478,7 @@ export const CustomerOrderCreateRequestSchema = z.object({
         quantityUnits: z.number().int().positive().max(99),
         // Mismo techo duro que el pedido interno: la cantidad que vale la decide el servidor.
         selectedDishNames: z.array(z.string().trim().min(1).max(300)).min(1).max(50).optional(),
+        selectedDishes: z.array(SelectedDishSchema).min(1).max(50).optional(),
       }),
     )
     .min(1)

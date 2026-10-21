@@ -477,6 +477,13 @@
       "when": 1792455664257,
       "tag": "0067_flashy_piledriver",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1792542402385,
+      "tag": "0068_right_wolfsbane",
+      "breakpoints": true
     }
   ]
 }

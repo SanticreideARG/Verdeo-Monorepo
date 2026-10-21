@@ -15,11 +15,14 @@ import { showToast } from '../lib/toast.js';
 import { useFormDraft } from '../lib/useFormDraft.js';
 import { useOrderFormSettings } from '../lib/useOrderFormSettings.js';
 import {
+  dishesPayload,
+  dishLabel,
   errorMessage,
   formatMoney,
   offeringsForPicking,
   type MenuOffering,
   type OrderSummary,
+  type PickedDish,
   type WeeklyMenu,
 } from '../lib/operations.js';
 
@@ -122,7 +125,7 @@ export function PublicOrderPage() {
   const [offeringId, setOfferingId] = useState('');
   const [sites, setSites] = useState<{ displayName: string; slug: string }[]>([]);
   const [siteSlug, setSiteSlug] = useState(() => searchParams.get('ciudad') ?? '');
-  const [selectedDishes, setSelectedDishes] = useState<string[]>([]);
+  const [selectedDishes, setSelectedDishes] = useState<PickedDish[]>([]);
   const [units, setUnits] = useState(1);
   /*
    * Los métodos de pago configurados en Ajustes.
@@ -316,7 +319,7 @@ export function PublicOrderPage() {
           quantityUnits: units,
           // Los platos sólo viajan con un Intuitivo: sobre una vianda estándar la convertirían en
           // una composición propia.
-          ...(offering?.composable ? { selectedDishNames: selectedDishes } : {}),
+          ...(offering?.composable ? dishesPayload(selectedDishes) : {}),
         },
       ],
       menuId: menu?.id,
@@ -520,7 +523,7 @@ export function PublicOrderPage() {
                 selectedDishes.length > 0 ? (
                   <ol className="mt-5 grid gap-2 text-sm text-white/80">
                     {selectedDishes.map((dish, index) => (
-                      <li key={`${dish}-${String(index)}`}>{dish}</li>
+                      <li key={`${dishLabel(dish)}-${String(index)}`}>{dishLabel(dish)}</li>
                     ))}
                   </ol>
                 ) : (

@@ -114,6 +114,42 @@ export interface AddressGeocodingRequest {
   updatedAt: string;
 }
 
+/**
+ * Un plato elegido en un Intuitivo, con su menú (DISH_IDENTITY_AND_DEBTORS_PLAN.md). Dos platos con
+ * el mismo nombre en dos menús son dos platos: el "Lomo con cebolla" de Keto no es el de Anti-Age.
+ * `familyName` vacío: un plato viejo que no sabe de qué menú vino.
+ */
+export interface PickedDish {
+  dishName: string;
+  familyName: string;
+}
+
+/** Los platos elegidos como los espera el servidor: con su menú si todos lo tienen. */
+export function dishesPayload(
+  dishes: readonly PickedDish[],
+): { selectedDishes: PickedDish[] } | { selectedDishNames: string[] } {
+  return dishes.every((dish) => dish.familyName)
+    ? { selectedDishes: dishes.map(({ dishName, familyName }) => ({ dishName, familyName })) }
+    : { selectedDishNames: dishes.map((dish) => dish.dishName) };
+}
+
+/** "Guiso (Keto)": el plato con su menú, sin el "Menú" del nombre de la familia. */
+export function dishLabel(dish: PickedDish): string {
+  const family = dish.familyName.replace(/^men[uú]\s+/i, '');
+  return family ? `${dish.dishName} (${family})` : dish.dishName;
+}
+
+/** Los platos de un renglón ya guardado, con el menú que trae cada uno. */
+export function pickedDishes(item: {
+  dishSelections: readonly string[];
+  dishSources?: readonly ({ familyName: string; slot: number } | null)[] | undefined;
+}): PickedDish[] {
+  return item.dishSelections.map((dishName, index) => ({
+    dishName,
+    familyName: item.dishSources?.[index]?.familyName ?? '',
+  }));
+}
+
 export interface MenuOffering {
   composable: boolean;
   currency: string;
@@ -212,6 +248,8 @@ export interface OrderSummary {
   id: string;
   items: {
     dishSelections: string[];
+    /** El menú de cada plato elegido, en el mismo orden. */
+    dishSources?: ({ familyName: string; slot: number } | null)[];
     id: string;
     offeringId: string | null;
     productName: string;
@@ -275,6 +313,7 @@ export interface KitchenSummary {
     customerDisplayName: string;
     dietaryInstructions: string[];
     dishSelections: string[];
+    dishSources?: ({ familyName: string; slot: number } | null)[];
     familyName: string;
     orderPublicNumber: string;
     quantityUnits: number;
@@ -283,7 +322,7 @@ export interface KitchenSummary {
   }[];
   cycle: { alias: string; id: string };
   /** Los platos de todos los Intuitivos, sumados y de mayor a menor. */
-  dishTally: { dishName: string; portions: number }[];
+  dishTally: { dishName: string; familyName?: string | null; portions: number }[];
   generatedAt: string;
   /** El stock para la venta del período: se cocina, pero no es de ningún pedido. */
   stock: { familyName: string; quantityUnits: number; variantName: string }[];

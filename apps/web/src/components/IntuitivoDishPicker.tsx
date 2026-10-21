@@ -1,4 +1,4 @@
-import type { MenuOffering } from '../lib/operations.js';
+import type { MenuOffering, PickedDish } from '../lib/operations.js';
 
 // Every fixed offering already carries its own five dishes (loaded with the menu, no extra
 // endpoint needed) — dishes don't vary by size, only by variety, so a variety appearing once per
@@ -41,19 +41,26 @@ export function IntuitivoDishPicker({
   maxDishes: number;
   minDishes: number;
   offerings: readonly MenuOffering[];
-  onChange: (next: string[]) => void;
+  onChange: (next: PickedDish[]) => void;
   /**
    * El precio de la unidad con los platos elegidos, ya escrito ("$ 98.000,00"). Con platos de más
    * se muestra en el contador: "el precio se recalcula" no decía cuánto, y alguien podía creer que
    * catorce platos salían al precio de cinco.
    */
   priceLabel?: string | undefined;
-  selected: readonly string[];
+  selected: readonly PickedDish[];
 }) {
   const groups = dishGroups(offerings);
   const total = selected.length;
 
-  function add(dish: string) {
+  /*
+   * Cada plato es "este plato de este menú": el mismo nombre en dos menús son dos platos, y la
+   * cuenta de uno no toca la del otro.
+   */
+  const same = (left: PickedDish, right: PickedDish) =>
+    left.dishName === right.dishName && left.familyName === right.familyName;
+
+  function add(dish: PickedDish) {
     if (total >= maxDishes) return;
     onChange([...selected, dish]);
   }
@@ -65,8 +72,8 @@ export function IntuitivoDishPicker({
    * que se lee contra la caja. Sacar del medio correría todo lo que viene después, y el plato que
    * alguien acaba de agregar no es el que tenía en la cabeza al apretar "−".
    */
-  function remove(dish: string) {
-    const last = selected.lastIndexOf(dish);
+  function remove(dish: PickedDish) {
+    const last = selected.findLastIndex((current) => same(current, dish));
     if (last < 0) return;
     onChange(selected.filter((_, index) => index !== last));
   }
@@ -103,16 +110,17 @@ export function IntuitivoDishPicker({
         <div className="intuitivo-picker-group" key={group.familyName}>
           <p className="intuitivo-picker-group-label">{group.familyName}</p>
           <div className="intuitivo-picker-dishes">
-            {group.dishes.map((dish) => {
-              const count = selected.filter((current) => current === dish).length;
+            {group.dishes.map((dishName) => {
+              const dish = { dishName, familyName: group.familyName };
+              const count = selected.filter((current) => same(current, dish)).length;
               return (
                 <div
                   className={`intuitivo-picker-dish ${count > 0 ? 'is-selected' : ''}`}
-                  key={dish}
+                  key={dishName}
                 >
-                  <span>{dish}</span>
+                  <span>{dishName}</span>
                   <button
-                    aria-label={`Quitar ${dish}`}
+                    aria-label={`Quitar ${dishName} (${group.familyName})`}
                     disabled={count === 0}
                     onClick={() => remove(dish)}
                     type="button"
@@ -122,7 +130,7 @@ export function IntuitivoDishPicker({
                   {/* La cuenta sólo cuando hay: un "0" en cada plato es ruido en una lista de veinte. */}
                   <b aria-hidden={count === 0}>{count > 0 ? count : ''}</b>
                   <button
-                    aria-label={`Agregar ${dish}`}
+                    aria-label={`Agregar ${dishName} (${group.familyName})`}
                     disabled={total >= maxDishes}
                     onClick={() => add(dish)}
                     type="button"

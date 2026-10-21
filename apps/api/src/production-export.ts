@@ -56,6 +56,26 @@ function lineLabel(familyName: string, variantName: string): string {
   return `${familyName} ${variantName}`;
 }
 
+/** "Menú Anti-Age" → "Anti-Age": en una lista de platos, el "Menú" repetido es ruido. */
+function shortFamily(familyName: string): string {
+  return familyName.replace(/^men[uú]\s+/i, '');
+}
+
+/**
+ * Los platos de un Intuitivo con su menú: "Guiso (Keto)". Dos platos con el mismo nombre en dos
+ * menús son dos platos distintos, así que sin el menú no se sabe cuál cocinar.
+ */
+function dishesWithOrigin(item: ProductionReport['custom'][number]): string[] {
+  return item.dishSelections.map((dish, index) => {
+    const source = item.dishSources?.[index] ?? null;
+    return source ? `${dish} (${shortFamily(source.familyName)})` : dish;
+  });
+}
+
+function tallyLabel(entry: ProductionReport['dishTally'][number]): string {
+  return entry.familyName ? `${entry.dishName} (${shortFamily(entry.familyName)})` : entry.dishName;
+}
+
 export function productionSnapshotFilenameBase(snapshot: ProductionSnapshot): string {
   const alias = snapshot.payload.cycle.alias.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
   return `produccion-${alias}-${snapshot.kind}`;
@@ -138,17 +158,52 @@ export const ORDER_SHEET_DAYS = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIE
  * de un renglón salen iguales; si cocina cambia alguna, la corrige en la planilla.
  */
 export function orderSheetRows(report: ProductionReport): (number | string)[][] {
-  const families = new Map<string, Map<string, number>>();
-  const add = (familyName: string, variantName: string, units: number) => {
-    const variants = families.get(familyName) ?? new Map<string, number>();
-    families.set(familyName, variants);
-    variants.set(variantName, (variants.get(variantName) ?? 0) + units);
-  };
-  for (const line of report.base) add(line.familyName, line.variantName, line.quantityUnits);
-  for (const line of report.stock ?? []) add(line.familyName, line.variantName, line.quantityUnits);
-  for (const item of report.custom) add(item.familyName, item.variantName, item.quantityUnits);
-
   const width = ORDER_SHEET_DAYS.length;
+  // Menú → tamaño → porciones por día (plato 1 … plato 5).
+  const families = new Map<string, Map<string, number[]>>();
+  const portions = (familyName: string, variantName: string) => {
+    const variants = families.get(familyName) ?? new Map<string, number[]>();
+    families.set(familyName, variants);
+    const days = variants.get(variantName) ?? Array.from({ length: width }, () => 0);
+    variants.set(variantName, days);
+    return days;
+  };
+  const addAll = (familyName: string, variantName: string, units: number) => {
+    const days = portions(familyName, variantName);
+    for (let day = 0; day < width; day += 1) days[day] = (days[day] ?? 0) + units;
+  };
+  for (const line of report.base) addAll(line.familyName, line.variantName, line.quantityUnits);
+  for (const line of report.stock ?? []) {
+    addAll(line.familyName, line.variantName, line.quantityUnits);
+  }
+
+  /*
+   * El Intuitivo se desarma (DISH_IDENTITY_AND_DEBTORS_PLAN.md): cada plato elegido suma en el
+   * renglón de su menú con el tamaño del Intuitivo, en la columna de su posición. Un Intuitivo 400
+   * con el plato 3 de Keto suma una porción en KETO 400, miércoles. Los platos sin origen (pedidos
+   * viejos con un nombre que estaba en dos menús) van a un renglón aparte, con el total de porciones
+   * en la última columna, para resolverlos a mano.
+   */
+  const unknown = new Map<string, number>();
+  for (const item of report.custom) {
+    if (item.dishSelections.length === 0) {
+      unknown.set(
+        item.variantName,
+        (unknown.get(item.variantName) ?? 0) + item.quantityUnits * width,
+      );
+      continue;
+    }
+    item.dishSelections.forEach((_, index) => {
+      const source = item.dishSources?.[index] ?? null;
+      if (source && source.slot >= 1 && source.slot <= width) {
+        const days = portions(source.familyName, item.variantName);
+        days[source.slot - 1] = (days[source.slot - 1] ?? 0) + item.quantityUnits;
+      } else {
+        unknown.set(item.variantName, (unknown.get(item.variantName) ?? 0) + item.quantityUnits);
+      }
+    });
+  }
+
   const blank = () => Array.from({ length: width + 2 }, () => '');
   const rows: (number | string)[][] = [['PEDIDO', ...ORDER_SHEET_DAYS, '']];
   let total = 0;
@@ -156,14 +211,25 @@ export function orderSheetRows(report: ProductionReport): (number | string)[][] 
   for (const [familyName, variants] of families) {
     if (!first) rows.push(blank());
     first = false;
-    for (const [variantName, units] of variants) {
+    for (const [variantName, days] of variants) {
       rows.push([
         // "Menú Anti-Age" sale "ANTI-AGE 250", como en la planilla del cliente.
         `${familyName.replace(/^men[uú]\s+/i, '')} ${variantName}`.toUpperCase(),
-        ...Array.from({ length: width }, () => units),
+        ...days,
         '',
       ]);
-      total += units * width;
+      total += days.reduce((sum, value) => sum + value, 0);
+    }
+  }
+  if (unknown.size > 0) {
+    rows.push(blank());
+    for (const [variantName, count] of unknown) {
+      rows.push([
+        `SIN MENÚ DE ORIGEN ${variantName}`.toUpperCase(),
+        ...Array.from({ length: width }, () => ''),
+        count,
+      ]);
+      total += count;
     }
   }
   rows.push(blank());
@@ -180,7 +246,8 @@ function orderSheet(report: ProductionReport): WorkSheet {
    * de todos los renglones, así que si cocina corrige un número a mano, el total lo sigue.
    */
   const lastDataRow = rows.length - 2;
-  const lastDay = XLSX.utils.encode_col(ORDER_SHEET_DAYS.length);
+  // Hasta la última columna: ahí van las porciones sin menú de origen (vacía en el resto).
+  const lastDay = XLSX.utils.encode_col(ORDER_SHEET_DAYS.length + 1);
   const totalCell = `${XLSX.utils.encode_col(ORDER_SHEET_DAYS.length + 1)}${String(rows.length)}`;
   const totalValue = rows.at(-1)?.at(-1);
   sheet[totalCell] = {
@@ -340,8 +407,12 @@ export function buildProductionExcel(report: ProductionReport): ArrayBuffer {
       workbook,
       sheetWithTitle(
         title,
-        report.dishTally.map((entry) => ({ Plato: entry.dishName, Porciones: entry.portions })),
-        [40, 12],
+        report.dishTally.map((entry) => ({
+          Plato: entry.dishName,
+          Menú: entry.familyName ? shortFamily(entry.familyName) : 'Sin menú de origen',
+          Porciones: entry.portions,
+        })),
+        [40, 18, 12],
         ['Porciones'],
       ),
       'Platos a preparar',
@@ -360,7 +431,7 @@ export function buildProductionExcel(report: ProductionReport): ArrayBuffer {
           Unidades: item.quantityUnits,
           Cliente: item.customerDisplayName,
           Pedido: item.orderPublicNumber,
-          Composición: item.dishSelections.join(' · '),
+          Composición: dishesWithOrigin(item).join(' · '),
           Indicaciones: item.dietaryInstructions.join(' · '),
         })),
         [6, 16, 10, 10, 28, 14, 60, 30],
@@ -410,7 +481,7 @@ export function buildProductionWhatsAppText(report: ProductionReport): string {
     lines.push('', '*Intuitivos*');
     for (const item of custom) {
       lines.push(
-        `• #${item.sequence} ${item.familyName} ${item.variantName} × ${item.quantityUnits} — ${item.customerDisplayName} (${item.orderPublicNumber}): ${item.dishSelections.join(', ')}`,
+        `• #${item.sequence} ${item.familyName} ${item.variantName} × ${item.quantityUnits} — ${item.customerDisplayName} (${item.orderPublicNumber}): ${dishesWithOrigin(item).join(', ')}`,
       );
     }
   }
@@ -420,7 +491,7 @@ export function buildProductionWhatsAppText(report: ProductionReport): string {
   if (dishTally.length > 0) {
     lines.push('', '*Platos a preparar*');
     for (const entry of dishTally) {
-      lines.push(`• ${entry.dishName}: ${entry.portions}`);
+      lines.push(`• ${tallyLabel(entry)}: ${entry.portions}`);
     }
   }
 
@@ -479,7 +550,7 @@ export function buildProductionPrintHtml(report: ProductionReport): string {
         <td>${escape(item.familyName)} ${escape(item.variantName)}</td>
         <td>${item.quantityUnits}</td>
         <td>${escape(item.customerDisplayName)} (${escape(item.orderPublicNumber)})</td>
-        <td>${escape(item.dishSelections.join(', '))}</td>
+        <td>${escape(dishesWithOrigin(item).join(', '))}</td>
       </tr>`,
     )
     .join('');
@@ -521,7 +592,7 @@ export function buildProductionPrintHtml(report: ProductionReport): string {
       ? `<h2>Platos a preparar</h2><table>
     <thead><tr><th>Plato</th><th>Porciones</th></tr></thead>
     <tbody>${dishTally
-      .map((entry) => `<tr><td>${escape(entry.dishName)}</td><td>${entry.portions}</td></tr>`)
+      .map((entry) => `<tr><td>${escape(tallyLabel(entry))}</td><td>${entry.portions}</td></tr>`)
       .join('')}</tbody>
   </table>`
       : ''

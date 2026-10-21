@@ -41,7 +41,9 @@ const LIMITES = {
   },
 };
 
-const CINCO = ['Guiso', 'Tarta', 'Wok', 'Milanesa', 'Ensalada'];
+/** Un plato con su menú: el mismo nombre en dos menús son dos platos. */
+const plato = (dishName: string, familyName = 'Keto') => ({ dishName, familyName });
+const CINCO = ['Guiso', 'Tarta', 'Wok', 'Milanesa', 'Ensalada'].map((name) => plato(name));
 
 describe('pendingCartLine', () => {
   it('arma el renglón de una vianda estándar', () => {
@@ -53,7 +55,7 @@ describe('pendingCartLine', () => {
         label: 'Menú Keto 400',
         offeringId: 'offering-keto',
         quantityUnits: 2,
-        selectedDishNames: [],
+        selectedDishes: [],
         unitPriceMinor: 25_000,
       },
     });
@@ -68,7 +70,7 @@ describe('pendingCartLine', () => {
    * elegir haría salir el pedido sin esa vianda, y quien la eligió cree que la cargó.
    */
   it('se planta cuando el Intuitivo no tiene todos sus platos', () => {
-    const pending = pendingCartLine(intuitivo, 1, ['Guiso', 'Tarta'], LIMITES);
+    const pending = pendingCartLine(intuitivo, 1, [plato('Guiso'), plato('Tarta')], LIMITES);
 
     expect(pending !== null && 'reason' in pending && pending.reason).toContain('5 platos');
   });
@@ -80,7 +82,7 @@ describe('pendingCartLine', () => {
   it('acepta más platos que el estándar y los cobra', () => {
     // Sin escalón: lo que se mira acá es la proporción, y el redondeo está cubierto aparte en el
     // paquete `orders`, que es la fuente de esta cuenta.
-    const pending = pendingCartLine(intuitivo, 1, [...CINCO, 'Extra'], {
+    const pending = pendingCartLine(intuitivo, 1, [...CINCO, plato('Extra')], {
       ...LIMITES,
       pricing: { ...LIMITES.pricing, roundingMinor: 0 },
     });
@@ -90,7 +92,7 @@ describe('pendingCartLine', () => {
   });
 
   it('se planta cuando se pasa del máximo de la ciudad', () => {
-    const pending = pendingCartLine(intuitivo, 1, [...CINCO, 'Extra'], {
+    const pending = pendingCartLine(intuitivo, 1, [...CINCO, plato('Extra')], {
       ...LIMITES,
       maxDishes: 5,
     });
@@ -102,7 +104,7 @@ describe('pendingCartLine', () => {
   it('no le pone platos a una vianda que no se compone', () => {
     const pending = pendingCartLine(keto, 1, CINCO, LIMITES);
 
-    expect(pending).toMatchObject({ line: { selectedDishNames: [] } });
+    expect(pending).toMatchObject({ line: { selectedDishes: [] } });
   });
 });
 
@@ -112,7 +114,7 @@ describe('linesToSubmit', () => {
     label: 'Menú Keto 400',
     offeringId: 'offering-keto',
     quantityUnits: 1,
-    selectedDishNames: [],
+    selectedDishes: [],
     unitPriceMinor: 25_000,
   };
 
@@ -142,7 +144,10 @@ describe('linesToSubmit', () => {
   });
 
   it('el motivo de lo pendiente gana sobre lo que ya estaba agregado', () => {
-    const resultado = linesToSubmit([linea], pendingCartLine(intuitivo, 1, ['Guiso'], LIMITES));
+    const resultado = linesToSubmit(
+      [linea],
+      pendingCartLine(intuitivo, 1, [plato('Guiso')], LIMITES),
+    );
 
     expect('reason' in resultado && resultado.reason).toContain('platos');
   });
@@ -162,7 +167,7 @@ describe('cartTotalMinor', () => {
       label: 'Menú Keto 400',
       offeringId: 'offering-keto',
       quantityUnits: 2,
-      selectedDishNames: [],
+      selectedDishes: [],
       unitPriceMinor: 25_000,
     };
 
@@ -171,11 +176,23 @@ describe('cartTotalMinor', () => {
 
   // Un renglón incompleto no suma: mostrarlo en el total diría que ya está en el pedido.
   it('no cuenta lo que está a medio elegir', () => {
-    expect(cartTotalMinor([], pendingCartLine(intuitivo, 1, ['Guiso'], LIMITES))).toBe(0);
+    expect(cartTotalMinor([], pendingCartLine(intuitivo, 1, [plato('Guiso')], LIMITES))).toBe(0);
   });
 });
 
 describe('cartItemsPayload', () => {
+  it('sin el menú de algún plato, manda sólo los nombres y el servidor los ubica', () => {
+    const line = (
+      pendingCartLine(intuitivo, 1, [...CINCO.slice(0, 4), plato('Guiso', '')], LIMITES) as {
+        line: CartLine;
+      }
+    ).line;
+
+    expect(cartItemsPayload([line])[0]).toMatchObject({
+      selectedDishNames: ['Guiso', 'Tarta', 'Wok', 'Milanesa', 'Guiso'],
+    });
+  });
+
   it('manda los platos sólo cuando los hay', () => {
     const lines = [
       { ...pendingCartLine(keto, 1, [], LIMITES) } as { line: CartLine },
@@ -184,7 +201,7 @@ describe('cartItemsPayload', () => {
 
     expect(cartItemsPayload(lines)).toEqual([
       { offeringId: 'offering-keto', quantityUnits: 1 },
-      { offeringId: 'offering-intuitivo', quantityUnits: 1, selectedDishNames: CINCO },
+      { offeringId: 'offering-intuitivo', quantityUnits: 1, selectedDishes: CINCO },
     ]);
   });
 });
@@ -200,12 +217,12 @@ describe('estimatedItemsTotalMinor', () => {
     { composable: true, id: 'i', mealsPerUnit: 5, unitPriceMinor: 8_500_000 },
     { composable: false, id: 'k', mealsPerUnit: 5, unitPriceMinor: 1_000_000 },
   ];
-  const platos = (n: number) => Array.from({ length: n }, (_, i) => `Plato ${String(i)}`);
+  const platos = (n: number) => Array.from({ length: n }, (_, i) => plato(`Plato ${String(i)}`));
 
   it('cobra el precio del tamaño mientras se eligen los platos', () => {
     expect(
       estimatedItemsTotalMinor(
-        [{ offeringId: 'i', quantityUnits: 2, selectedDishNames: platos(3) }],
+        [{ offeringId: 'i', quantityUnits: 2, selectedDishes: platos(3) }],
         ofertas,
         regla,
       ),
@@ -216,8 +233,8 @@ describe('estimatedItemsTotalMinor', () => {
     expect(
       estimatedItemsTotalMinor(
         [
-          { offeringId: 'i', quantityUnits: 1, selectedDishNames: platos(10) },
-          { offeringId: 'k', quantityUnits: 1, selectedDishNames: [] },
+          { offeringId: 'i', quantityUnits: 1, selectedDishes: platos(10) },
+          { offeringId: 'k', quantityUnits: 1, selectedDishes: [] },
         ],
         ofertas,
         regla,

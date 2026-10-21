@@ -4,7 +4,13 @@ import { Link } from 'react-router-dom';
 import { formatDayLong, formatMoment } from '../lib/dates.js';
 import { formatArgentinePhone, whatsappHref } from '../lib/phone.js';
 import { paymentMethodLabel, type PaymentChoice } from '../lib/paymentMethods.js';
-import { formatMoney, orderStatusLabel, type OrderSummary } from '../lib/operations.js';
+import {
+  dishLabel,
+  formatMoney,
+  orderStatusLabel,
+  pickedDishes,
+  type OrderSummary,
+} from '../lib/operations.js';
 
 function mapHref(order: OrderSummary): string | null {
   if (order.deliveryLocationUrl) return order.deliveryLocationUrl;
@@ -166,7 +172,7 @@ export function OrderDetailDialog({
                   {/* Los platos de un Intuitivo: sin esto, dos Intuitivo del mismo tamaño se ven
                       idénticos y no hay forma de saber qué lleva cada uno. */}
                   {item.dishSelections.length > 0 ? (
-                    <small>{item.dishSelections.join(' · ')}</small>
+                    <small>{pickedDishes(item).map(dishLabel).join(' · ')}</small>
                   ) : null}
                 </li>
               ))}

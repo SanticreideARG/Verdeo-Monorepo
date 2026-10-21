@@ -25,6 +25,8 @@ import {
   type OrderStatusHistoryEntry,
   type OrderSummary,
   type WeeklyMenu,
+  dishLabel,
+  pickedDishes,
 } from '../lib/operations.js';
 import { sourceLabel } from '../lib/orderColumns.js';
 import { showToast } from '../lib/toast.js';
@@ -236,7 +238,7 @@ export function OrderDetailPage() {
       const platosFuera = (item: (typeof items)[number]) => {
         const offering = offerings.find((candidate) => candidate.id === item.offeringId);
         if (!offering?.composable) return null;
-        const cantidad = item.selectedDishNames.length;
+        const cantidad = item.selectedDishes.length;
         return cantidad < offering.mealsPerUnit || cantidad > maxDishes
           ? { desde: offering.mealsPerUnit, hasta: maxDishes }
           : null;
@@ -725,8 +727,8 @@ export function OrderDetailPage() {
                   que hace falta es contarlos y ubicar uno. */}
               {item.dishSelections.length > 0 ? (
                 <ul className="dish-selections mt-1">
-                  {item.dishSelections.map((dish, index) => (
-                    <li key={`${dish}-${String(index)}`}>{dish}</li>
+                  {pickedDishes(item).map((dish, index) => (
+                    <li key={`${dishLabel(dish)}-${String(index)}`}>{dishLabel(dish)}</li>
                   ))}
                 </ul>
               ) : null}

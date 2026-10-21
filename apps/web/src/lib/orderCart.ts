@@ -1,3 +1,5 @@
+import { dishesPayload, type PickedDish } from './operations.js';
+
 /**
  * Los renglones de un pedido, antes de mandarlo.
  *
@@ -31,7 +33,7 @@ export interface CartLine {
   label: string;
   offeringId: string;
   quantityUnits: number;
-  selectedDishNames: string[];
+  selectedDishes: PickedDish[];
   unitPriceMinor: number;
 }
 
@@ -58,7 +60,7 @@ export interface IntuitivoLimits {
 export function pendingCartLine(
   offering: CartOffering | null,
   quantityUnits: number,
-  dishes: readonly string[],
+  dishes: readonly PickedDish[],
   limits: IntuitivoLimits,
 ): PendingLine {
   if (!offering) return null;
@@ -77,7 +79,7 @@ export function pendingCartLine(
       offeringId: offering.id,
       quantityUnits,
       // Una vianda estándar no lleva platos elegidos aunque queden seleccionados de antes.
-      selectedDishNames: offering.composable ? [...dishes] : [],
+      selectedDishes: offering.composable ? [...dishes] : [],
       // El mismo número que va a cobrar el servidor, no el del menú: con platos de más, difieren.
       unitPriceMinor: offering.composable
         ? intuitivoUnitPriceMinor({
@@ -118,11 +120,13 @@ export function cartTotalMinor(cart: readonly CartLine[], pending: PendingLine):
 /** Lo que entiende `POST /api/v1/orders`: el id, la cantidad y los platos cuando los hay. */
 export function cartItemsPayload(
   lines: readonly CartLine[],
-): { offeringId: string; quantityUnits: number; selectedDishNames?: string[] }[] {
+): ({ offeringId: string; quantityUnits: number } & (
+  { selectedDishes?: PickedDish[] } | { selectedDishNames?: string[] }
+))[] {
   return lines.map((line) => ({
     offeringId: line.offeringId,
     quantityUnits: line.quantityUnits,
-    ...(line.selectedDishNames.length > 0 ? { selectedDishNames: line.selectedDishNames } : {}),
+    ...(line.selectedDishes.length > 0 ? dishesPayload(line.selectedDishes) : {}),
   }));
 }
 
@@ -175,7 +179,7 @@ export function estimatedItemsTotalMinor(
   items: readonly {
     offeringId: string;
     quantityUnits: number;
-    selectedDishNames: readonly string[];
+    selectedDishes: readonly PickedDish[];
   }[],
   offerings: readonly {
     composable: boolean;
@@ -192,7 +196,7 @@ export function estimatedItemsTotalMinor(
       ? intuitivoUnitPriceMinor({
           baseDishes: offering.mealsPerUnit,
           basePriceMinor: offering.unitPriceMinor,
-          dishes: Math.max(item.selectedDishNames.length, offering.mealsPerUnit),
+          dishes: Math.max(item.selectedDishes.length, offering.mealsPerUnit),
           rule: pricing,
         })
       : offering.unitPriceMinor;

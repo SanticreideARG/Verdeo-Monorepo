@@ -1,5 +1,11 @@
 export type OrderStatus = 'DRAFT' | 'CONFIRMED' | 'READY' | 'DELIVERED' | 'CANCELLED';
 
+/**
+ * De qué menú sale un plato elegido en un Intuitivo: la familia ("Keto") y su posición en ese menú
+ * (1 = lunes … 5 = viernes). Null cuando no se sabe: pedidos viejos cuyo nombre estaba en dos menús.
+ */
+export type DishSource = { familyName: string; slot: number } | null;
+
 export interface KitchenSourceLine {
   // True when the family's kind is COMPOSABLE. Kitchen groups by behaviour, not by variety name.
   composable: boolean;
@@ -18,6 +24,8 @@ export interface KitchenSourceLine {
    */
   dishes: readonly string[];
   dishSelections: readonly string[];
+  /** El origen de cada plato de `dishSelections`, en el mismo orden. */
+  dishSources?: readonly DishSource[] | undefined;
   /** La abreviatura cargada de la variedad, para el pie de la etiqueta de cocina. */
   familyAbbreviation?: string | null | undefined;
   familyName: string;
@@ -50,6 +58,8 @@ export interface KitchenBaseRequirement {
 /** Cuántas porciones de cada plato hacen falta, sumando todos los Intuitivos. */
 export interface KitchenDishTally {
   dishName: string;
+  /** El menú del plato: dos platos con el mismo nombre en dos menús se cuentan aparte. */
+  familyName: string | null;
   portions: number;
 }
 
