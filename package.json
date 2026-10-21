@@ -18,6 +18,7 @@
     "db:retire-repartidor": "pnpm --filter @verdeo/db db:retire-repartidor",
     "db:wipe-operations": "pnpm --filter @verdeo/db db:wipe-operations",
     "db:seed-permissions": "pnpm --filter @verdeo/db db:seed-permissions",
+    "db:seed-help": "pnpm --filter @verdeo/db db:seed-help",
     "db:studio": "pnpm --filter @verdeo/db db:studio",
     "db:verify-scope": "pnpm --filter @verdeo/db db:verify-scope",
     "dev": "pnpm --parallel --filter @verdeo/api --filter @verdeo/web dev",

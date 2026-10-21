@@ -140,3 +140,16 @@ pasan a "Por cobrar". La sección muestra:
   columna. Las hojas Intuitivos y Platos a preparar, el texto de WhatsApp y la impresión llevan el menú
   de cada plato.
 - **Falta**: etiquetas con el origen (fase 3) y "Por cobrar" (fase 4).
+
+## Estado (2026-10-21): "Por cobrar" hecho
+
+- `GET /api/v1/receivables` (`payments.read`, con sesión y la ciudad elegida arriba; `?customerId=` para
+  la ficha): los pedidos de períodos cerrados, no cancelados, sin cobrar y con monto, agrupados por
+  cliente, con su contacto, cada pedido (período, entrega, qué llevó, medio de pago, monto) y la
+  entrega más vieja. Es una consulta sobre los pedidos, no una tabla aparte.
+- Pantalla `/app/por-cobrar` (menú Pedidos → Por cobrar): total general y clientes, ordenar por monto o
+  por antigüedad, cada cliente se despliega con sus pedidos, "Cobrado" por pedido y "Cobrar todo"
+  (con `orders.edit`, el mismo tilde de Pedidos), y "Avisar por WhatsApp" con el detalle y el total.
+- Ficha del cliente: "Debe $ X en N pedidos de períodos cerrados", con enlace.
+- **Cambió respecto del plan**: el permiso es `payments.read` (el de ver cobros, que ya tienen los
+  operadores) en lugar de uno nuevo. **Falta**: la alerta en el tablero.

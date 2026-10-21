@@ -97,6 +97,14 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Eliminar un pedido',
   },
   {
+    body: '"Por cobrar" (menú Pedidos) junta a los clientes que tienen pedidos sin cobrar de períodos ya cerrados. No hace falta pasarlos a mano: al cerrar el período, todo pedido que no esté cancelado ni tildado como cobrado aparece ahí.\n\nArriba está el total y cuántos clientes deben. Se ordena por lo que más se debe o por la deuda más vieja. Tocá un cliente para ver sus pedidos (período, entrega, qué llevó, medio de pago y monto). "Cobrado" lo registra igual que el tilde de Pedidos y lo saca de la lista; "Cobrar todo" hace lo mismo con todos sus pedidos. "Avisar por WhatsApp" abre el chat con el detalle de lo que debe y el total, para mandarlo desde tu teléfono.\n\nEn la ficha del cliente se ve una línea "Debe $ … en … pedidos" cuando tiene algo pendiente.\n\n[Ir a Por cobrar](/app/por-cobrar)',
+    category: 'Pedidos / Cobros',
+    key: 'pedidos-por-cobrar',
+    ordinal: 1,
+    requiredPermission: 'payments.read',
+    title: 'Por cobrar: quién debe y cuánto',
+  },
+  {
     body: 'El cobro se marca con el tilde de la columna "Cobrado", en "Pedidos". El paso a paso está en [[ciclo-6-cobrar]].',
     category: 'Pedidos / Cobros',
     key: 'pedidos-cobros',

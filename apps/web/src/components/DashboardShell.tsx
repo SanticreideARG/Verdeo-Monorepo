@@ -93,6 +93,13 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
     items: [
       // Una sola entrada: tomar, confirmar, buscar y cobrar pasaron a ser la misma pantalla.
       { href: '/app/pedidos', icon: 'orders', label: 'Pedidos', permission: 'orders.read' },
+      // Lo impago de los períodos cerrados, por cliente.
+      {
+        href: '/app/por-cobrar',
+        icon: 'payments',
+        label: 'Por cobrar',
+        permission: 'payments.read',
+      },
     ],
   },
   {

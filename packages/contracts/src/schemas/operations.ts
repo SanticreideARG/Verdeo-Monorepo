@@ -1769,6 +1769,36 @@ export const ManualNoticeMarkRequestSchema = z.object({
  * explicar qué pasó es el evento de auditoría, y un evento sin motivo sólo dice que alguien borró
  * algo.
  */
+/** "Por cobrar": pedidos de períodos cerrados, sin cancelar y sin cobrar, por cliente. */
+export const ReceivablesResponseSchema = z.object({
+  items: z.array(
+    z.object({
+      customer: z.object({
+        displayName: z.string(),
+        id: UuidSchema,
+        phone: z.string().nullable(),
+        whatsapp: z.string().nullable(),
+      }),
+      oldestDeliveryDate: z.string().nullable(),
+      orders: z.array(
+        z.object({
+          currency: z.string(),
+          cycleAlias: z.string(),
+          cycleCloseAt: IsoDateTimeSchema,
+          deliveryDate: z.string(),
+          id: UuidSchema,
+          items: z.string(),
+          paymentExpectation: z.string(),
+          publicNumber: z.string(),
+          status: z.string(),
+          totalMinor: z.number().int(),
+        }),
+      ),
+      totalMinor: z.number().int(),
+    }),
+  ),
+});
+
 export const OrderDeleteRequestSchema = z.object({
   // Opcional (2026-10-20): borrar un pedido de prueba no necesita explicación.
   reason: z.string().trim().max(500).optional(),

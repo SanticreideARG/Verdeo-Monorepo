@@ -53,6 +53,7 @@ const singleSiteGeography = {
 };
 const customerOperationsStubs = {
   addCustomerAddress: vi.fn(),
+  listReceivables: vi.fn(),
   addCustomerIdentity: vi.fn(),
   addCustomerPreference: vi.fn(),
   addCustomerRestriction: vi.fn(),
@@ -3670,6 +3671,39 @@ describe('API foundation', () => {
     }
 
     const cookie = 'verdeo_session=a-valid-opaque-session-token-longer-than-32-chars';
+
+    it('lista lo que hay por cobrar con sesión y payments.read, y lo niega sin eso', async () => {
+      const listReceivables = vi.fn(() => Promise.resolve({ items: [] }));
+      const app = createApp({
+        appOrigin: 'http://localhost:5173',
+        cookieSameSite: 'Lax',
+        credentials: emptyCredentials,
+        geography: singleSiteGeography,
+        logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
+        operations: { ...customerOperationsStubs, listReceivables } as never,
+        sessions: {
+          ...emptySessions,
+          authenticate: () =>
+            Promise.resolve({
+              expiresAt: new Date('2026-08-18T12:00:00.000Z'),
+              permissions: ['payments.read'],
+              sessionId: '4c35a5ce-5c11-47b3-b31a-41a7d2983354',
+              userId: '55276601-ec66-4f63-9f2f-edf73904ede0',
+            }),
+        },
+        secureCookies: false,
+        users: emptyUsers,
+        version: 'test',
+      });
+
+      const response = await app.request('/api/v1/receivables', { headers: { cookie } });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ items: [] });
+
+      // Sin sesión: 401, no un error del servidor.
+      const anonymous = await app.request('/api/v1/receivables');
+      expect(anonymous.status).toBe(401);
+    });
 
     it('reads the dashboard with payments.read and denies without it', async () => {
       const dashboard = vi.fn(() =>

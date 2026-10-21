@@ -318,3 +318,30 @@ describe('cancelar y borrar pedidos', () => {
     expect(rows[0]?.n).toBe(0);
   });
 });
+
+describe('por cobrar', () => {
+  it('lista lo impago de períodos cerrados, por cliente, y lo saca al cobrarlo', async () => {
+    const { client, service } = await base();
+    const abierto = (await service.createOrder(pedido('2026-10-18'), contexto)) as { id: string };
+    const otro = (await service.createOrder(pedido('2026-10-18'), contexto)) as { id: string };
+    const cancelado = (await service.createOrder(pedido('2026-10-18'), contexto)) as { id: string };
+
+    // Mientras el período está abierto, nada se debe todavía.
+    expect((await service.listReceivables({})).items).toEqual([]);
+
+    await client.exec(`update sales_cycles set status = 'CLOSED';
+      update orders set status = 'CANCELLED' where id = '${cancelado.id}';`);
+    const deuda = await service.listReceivables({});
+    expect(deuda.items).toHaveLength(1);
+    expect(deuda.items[0]?.customer.displayName).toBe('Ana Prueba');
+    expect(deuda.items[0]?.orders.map((order) => order.id).sort()).toEqual(
+      [abierto.id, otro.id].sort(),
+    );
+    expect(deuda.items[0]?.totalMinor).toBe(14_000_000);
+
+    // Lo mismo que el tilde de "Cobrado".
+    await client.exec(`update orders set paid_at = now() where id = '${abierto.id}'`);
+    const despues = await service.listReceivables({});
+    expect(despues.items[0]?.orders.map((order) => order.id)).toEqual([otro.id]);
+  });
+});

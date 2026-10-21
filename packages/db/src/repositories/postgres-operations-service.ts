@@ -6199,6 +6199,147 @@ export class PostgresOperationsService {
     }
   }
 
+  /**
+   * "Por cobrar" (DISH_IDENTITY_AND_DEBTORS_PLAN.md, fase 4): los pedidos de períodos cerrados que
+   * no están cancelados ni cobrados, agrupados por cliente.
+   *
+   * Es una vista y no una copia: cobrar el pedido (en Pedidos o acá) lo saca solo, y no hay dos
+   * registros que puedan contradecirse. "Pasa al cerrar el período" se cumple sin mover nada.
+   */
+  public async listReceivables(input: {
+    customerId?: string | undefined;
+    operatingSiteId?: string | null | undefined;
+  }) {
+    const rows = await this.database
+      .select({
+        currency: orders.currency,
+        customerDisplayName: customers.displayName,
+        customerId: customers.id,
+        cycleAlias: salesCycles.alias,
+        cycleCloseAt: salesCycles.closeAt,
+        deliveryDate: orders.deliveryDate,
+        id: orders.id,
+        paymentExpectation: orders.paymentExpectation,
+        publicNumber: orders.publicNumber,
+        status: orders.status,
+        totalMinor: orders.totalMinor,
+      })
+      .from(orders)
+      .innerJoin(salesCycles, eq(salesCycles.id, orders.salesCycleId))
+      .innerJoin(customers, eq(customers.id, orders.customerId))
+      .where(
+        and(
+          eq(salesCycles.status, 'CLOSED'),
+          ne(orders.status, 'CANCELLED'),
+          isNull(orders.paidAt),
+          gt(orders.totalMinor, 0),
+          ...(input.operatingSiteId ? [eq(orders.operatingSiteId, input.operatingSiteId)] : []),
+          ...(input.customerId ? [eq(orders.customerId, input.customerId)] : []),
+        ),
+      )
+      .orderBy(asc(orders.deliveryDate), asc(orders.publicNumber));
+
+    const items = rows.length
+      ? await this.database
+          .select({
+            orderId: orderItems.orderId,
+            productName: orderItems.productNameSnapshot,
+            quantityUnits: orderItems.quantityUnits,
+            variantName: orderItems.variantSnapshot,
+          })
+          .from(orderItems)
+          .where(
+            inArray(
+              orderItems.orderId,
+              rows.map((row) => row.id),
+            ),
+          )
+      : [];
+
+    // El contacto viaja con la deuda: lo siguiente que se hace es escribirle.
+    const contactRows = rows.length
+      ? await this.database
+          .select({
+            customerId: customerIdentities.customerId,
+            type: customerIdentities.type,
+            value: customerIdentities.valueDisplay,
+          })
+          .from(customerIdentities)
+          .where(
+            and(
+              inArray(customerIdentities.customerId, [
+                ...new Set(rows.map((row) => row.customerId)),
+              ]),
+              eq(customerIdentities.active, true),
+            ),
+          )
+      : [];
+    const contactFor = (customerId: string, type: string) =>
+      contactRows.find((row) => row.customerId === customerId && row.type === type)?.value ?? null;
+
+    type ReceivableOrder = {
+      currency: string;
+      cycleAlias: string;
+      cycleCloseAt: Date;
+      deliveryDate: string;
+      id: string;
+      items: string;
+      paymentExpectation: string;
+      publicNumber: string;
+      status: string;
+      totalMinor: number;
+    };
+    const byCustomer = new Map<
+      string,
+      {
+        customer: {
+          displayName: string;
+          id: string;
+          phone: string | null;
+          whatsapp: string | null;
+        };
+        orders: ReceivableOrder[];
+        totalMinor: number;
+      }
+    >();
+    for (const row of rows) {
+      const entry = byCustomer.get(row.customerId) ?? {
+        customer: {
+          displayName: row.customerDisplayName,
+          id: row.customerId,
+          phone: contactFor(row.customerId, 'phone'),
+          whatsapp: contactFor(row.customerId, 'whatsapp'),
+        },
+        orders: [] as ReceivableOrder[],
+        totalMinor: 0,
+      };
+      entry.orders.push({
+        currency: row.currency,
+        cycleAlias: row.cycleAlias,
+        cycleCloseAt: row.cycleCloseAt,
+        deliveryDate: row.deliveryDate,
+        id: row.id,
+        items: items
+          .filter((item) => item.orderId === row.id)
+          .map((item) => `${item.productName} ${item.variantName} × ${String(item.quantityUnits)}`)
+          .join(', '),
+        paymentExpectation: row.paymentExpectation,
+        publicNumber: row.publicNumber,
+        status: row.status,
+        totalMinor: row.totalMinor,
+      });
+      entry.totalMinor += row.totalMinor;
+      byCustomer.set(row.customerId, entry);
+    }
+    return {
+      items: [...byCustomer.values()].map((entry) => ({
+        ...entry,
+        // La deuda más vieja: desde cuándo se le debe.
+        oldestDeliveryDate: entry.orders[0]?.deliveryDate ?? null,
+      })),
+    };
+  }
+
   public async listOrders(input: OrderListInput) {
     const cursor = input.cursor
       ? await this.database

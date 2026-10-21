@@ -22,6 +22,7 @@ import { DashboardPage } from './DashboardPage.js';
 import { ChatLinksPage } from './ChatLinksPage.js';
 import { MessageTemplatesPage } from './MessageTemplatesPage.js';
 import { NoticesPage } from './NoticesPage.js';
+import { ReceivablesPage } from './ReceivablesPage.js';
 import { ChatPage } from './ChatPage.js';
 import { CustomersPage } from './CustomersPage.js';
 import { DeliverySheetPage } from './DeliverySheetPage.js';
@@ -342,6 +343,7 @@ export function App() {
         <Route path="/app/pedidos/nuevo" element={<Navigate replace to="/app/pedidos" />} />
         <Route path="/app/pedidos/:id" element={<OrderDetailPage />} />
         <Route path="/app/pedidos" element={<OrderIntakePage />} />
+        <Route path="/app/por-cobrar" element={<ReceivablesPage />} />
         <Route path="/app/menus/nuevo" element={<MenuBuilderPage />} />
         <Route path="/app/menus/:id/editar" element={<MenuBuilderPage />} />
         <Route path="/app/menus" element={<MenusPage />} />

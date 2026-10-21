@@ -10990,3 +10990,104 @@ label.field:has(> input[type='radio']) {
   font-size: 0.8rem;
   color: var(--db-muted, var(--color-ink-muted));
 }
+
+/* Por cobrar. */
+.receivables-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.receivables-total {
+  display: grid;
+  margin: 0;
+  text-align: right;
+}
+.receivables-total strong {
+  font-size: 1.4rem;
+}
+.receivables-total span,
+.receivables-name small,
+.receivables-detail small {
+  color: var(--db-muted, var(--color-ink-muted));
+  font-size: 0.8rem;
+}
+.receivables-sort {
+  max-width: 16rem;
+}
+.receivables-list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.receivables-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.receivables-name {
+  display: grid;
+  min-width: 0;
+}
+.receivables-amount {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.receivables-detail {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--db-border-soft, var(--border-hairline));
+}
+.receivables-detail > ul {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.receivables-detail > ul > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.receivables-detail > ul > li > span:first-child {
+  display: grid;
+  min-width: 0;
+}
+.receivables-order-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.receivables-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+.crm-debt {
+  margin: 0 0 0.75rem;
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  background: var(--db-warning-soft, rgb(197 138 0 / 12%));
+  font-size: 0.88rem;
+}
+@media (max-width: 42.49rem) {
+  .receivables-total {
+    text-align: left;
+  }
+}

@@ -101,12 +101,35 @@ export function CustomersPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [geocoding, setGeocoding] = useState<Record<string, AddressGeocodingRequest>>({});
 
+  const [debt, setDebt] = useState<{ count: number; currency: string; totalMinor: number } | null>(
+    null,
+  );
   const loadCustomer = useCallback(async (customerId: string) => {
     setDetailLoading(true);
     try {
       const response = await apiRequest(`/api/v1/customers/${customerId}`);
       const loaded = await responseJson<CustomerDetail>(response);
       setDetail(loaded);
+      // Lo que debe de períodos cerrados: una línea arriba de sus pedidos.
+      setDebt(null);
+      void apiRequest(`/api/v1/receivables?customerId=${customerId}`, { background: true })
+        .then(async (debtResponse) => {
+          if (!debtResponse.ok) return;
+          const body = (await debtResponse.json()) as {
+            items: { orders: { currency: string }[]; totalMinor: number }[];
+          };
+          const entry = body.items[0];
+          setDebt(
+            entry
+              ? {
+                  count: entry.orders.length,
+                  currency: entry.orders[0]?.currency ?? 'ARS',
+                  totalMinor: entry.totalMinor,
+                }
+              : null,
+          );
+        })
+        .catch(() => undefined);
     } finally {
       setDetailLoading(false);
     }
@@ -1265,6 +1288,13 @@ export function CustomersPage() {
                     </div>
                     <span>{detail.orders.length}</span>
                   </div>
+                  {debt ? (
+                    <p className="crm-debt">
+                      Debe <strong>{formatMoney(debt.totalMinor, debt.currency)}</strong> en{' '}
+                      {debt.count === 1 ? '1 pedido' : `${String(debt.count)} pedidos`} de períodos
+                      cerrados. <Link to="/app/por-cobrar">Ver en Por cobrar</Link>
+                    </p>
+                  ) : null}
                   <div className="crm-orders">
                     {detail.orders.map((order) => (
                       <article key={order.id}>

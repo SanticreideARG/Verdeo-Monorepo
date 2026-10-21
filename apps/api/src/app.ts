@@ -169,6 +169,7 @@ import {
   OrderRevisionListResponseSchema,
   OrderDeleteRequestSchema,
   OrderDeleteResponseSchema,
+  ReceivablesResponseSchema,
   OrderImportConfirmRequestSchema,
   OrderImportEmailPreviewRequestSchema,
   GeocodingMetricsSchema,
@@ -747,6 +748,10 @@ interface OperationsEngine {
   listMessageTemplates(): Promise<unknown>;
   listMenus(onlyPublished?: boolean): Promise<unknown>;
   listOrders(input: ScopedInput<OrderListQuery>): Promise<unknown>;
+  listReceivables(input: {
+    customerId?: string | undefined;
+    operatingSiteId?: string | null | undefined;
+  }): Promise<unknown>;
   orderHistory(orderId: string): Promise<unknown>;
   orderLabels(orderId: string): Promise<unknown>;
   orderRevisionHistory(orderId: string): Promise<unknown>;
@@ -2762,6 +2767,8 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/menus/*', requireAuthentication);
   app.use('/api/v1/orders', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/orders/*', requireAuthentication, resolveScopeSelection);
+  // Por cobrar: con sesión y con la ciudad elegida arriba.
+  app.use('/api/v1/receivables', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/production/*', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/surplus/*', requireAuthentication);
   app.use('/api/v1/menu-catalog/*', requireAuthentication);
@@ -6402,6 +6409,23 @@ export function createApp(options: CreateAppOptions) {
    * operación necesita saber de un pedido es si está cobrado, no llevarle una contabilidad de tres
    * estados. Queda auditado con quién lo tildó — es una afirmación sobre plata.
    */
+  /*
+   * "Por cobrar": lo impago de los períodos cerrados, por cliente. Lo ve quien ve los cobros.
+   * Con `customerId`, sólo lo de ese cliente (para su ficha).
+   */
+  app.get('/api/v1/receivables', async (context) => {
+    if (!context.get('session').permissions.includes('payments.read')) return forbidden(context);
+    const customerId = context.req.query('customerId');
+    const parsed = customerId ? IdParamSchema.safeParse({ id: customerId }) : null;
+    if (parsed && !parsed.success) return badRequest(context, 'Revisá el cliente.');
+    const receivables = await requireOperations().listReceivables({
+      ...(parsed?.success ? { customerId: parsed.data.id } : {}),
+      operatingSiteId: context.get('scope')?.operatingSiteId ?? null,
+    });
+    context.header('cache-control', 'private, no-store');
+    return context.json(ReceivablesResponseSchema.parse(contractValue(receivables)));
+  });
+
   app.post('/api/v1/orders/:id/paid', async (context) => {
     const session = context.get('session');
     if (!session.permissions.includes('orders.edit')) return forbidden(context);
