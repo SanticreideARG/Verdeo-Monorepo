@@ -11,6 +11,7 @@ import {
   CHAT_POLL_HIDDEN_MS,
   chatMapsUrl as mapsUrl,
   chatTimeLabel as timeLabel,
+  contactsWithoutConversation,
   conversationName,
   type ChatContact,
   type ChatConversation,
@@ -340,7 +341,19 @@ export function ChatPage() {
                     onClick={() => setSelectedId(conversation.id)}
                     type="button"
                   >
-                    <span>{conversationName(conversation)}</span>
+                    <span className="chat-contact">
+                      <ChatAvatar
+                        avatarUrl={conversation.participants[0]?.avatarUrl ?? null}
+                        displayName={conversationName(conversation)}
+                        {...(canSeePresence && conversation.participants[0]
+                          ? {
+                              presence:
+                                presence.get(conversation.participants[0].id)?.status ?? 'offline',
+                            }
+                          : {})}
+                      />
+                      {conversationName(conversation)}
+                    </span>
                     {conversation.unreadCount > 0 ? <i>{conversation.unreadCount}</i> : null}
                   </button>
                 </li>
@@ -350,9 +363,10 @@ export function ChatPage() {
               ) : null}
             </ul>
 
+            {/* Sólo quienes todavía no tienen conversación: el resto ya está arriba. */}
             <h2 className="mt-6 text-sm font-bold text-forest">Contactos</h2>
             <ul className="mt-3 space-y-1">
-              {contacts.map((contact) => (
+              {contactsWithoutConversation(contacts, conversations).map((contact) => (
                 <li key={contact.id}>
                   <button
                     className="chat-thread"

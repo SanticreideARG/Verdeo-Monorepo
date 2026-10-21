@@ -580,3 +580,9 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] Mover clientes y pedidos entre ciudades (hecho el 2026-10-21: `POST /api/v1/orders/:id/site` y `POST /api/v1/customers/:id/site`, con `preview` para ver qué cambia sin guardar; botones "Mover a otra ciudad" en la ficha del pedido y "Cambiar de ciudad" en la del cliente; si la ciudad destino no ofrece una variedad del pedido, no lo mueve y dice cuál. Decisiones del 2026-10-20: lo pueden hacer los operadores; mover un cliente mueve al instante sus pedidos en borrador, confirmados y listos; número de pedido nuevo con el prefijo de la ciudad; precio y día de reparto se concilian solos; variedades sólo si hace falta; los datos no se corrigen solos; el cliente reemplaza su ciudad).
 - [ ] "Por cobrar": alerta en el tablero ("12 clientes con pagos pendientes, $ 480.000").
 - [x] Atajo `pnpm db:seed-help` en la raíz (existía sólo dentro de `packages/db`).
+
+## Chat interno (2026-10-21)
+
+- [x] Corregido: tocar una conversación en el panel de Mensajes no hacía nada. El fondo invisible que cerraba el panel al tocar afuera se montaba por encima del panel y se quedaba con el clic. Ahora el panel se cierra escuchando el toque fuera de él (y con Escape), sin una capa encima.
+- [x] Quien ya tiene conversación directa no se repite en Contactos (panel y pantalla completa).
+- [x] Cada conversación muestra la foto de perfil en círculo, con su estado.

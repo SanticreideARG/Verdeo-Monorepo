@@ -66,6 +66,22 @@ export function conversationName(conversation: ChatConversation): string {
   return conversation.participants.map((person) => person.displayName).join(', ') || 'Conversación';
 }
 
+/**
+ * Los contactos que todavía no tienen conversación directa: el que ya la tiene aparece arriba, en
+ * Conversaciones, y repetirlo abajo era ver a la misma persona dos veces.
+ */
+export function contactsWithoutConversation(
+  contacts: readonly ChatContact[],
+  conversations: readonly ChatConversation[],
+): ChatContact[] {
+  const withConversation = new Set(
+    conversations
+      .filter((conversation) => conversation.participants.length === 1)
+      .map((conversation) => conversation.participants[0]?.id),
+  );
+  return contacts.filter((contact) => !withConversation.has(contact.id));
+}
+
 export function chatTimeLabel(value: string): string {
   return new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit' }).format(
     new Date(value),

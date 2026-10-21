@@ -17,6 +17,7 @@ import {
   PRESENCE_LABELS,
   chatMapsUrl,
   chatTimeLabel,
+  contactsWithoutConversation,
   conversationName,
   fetchContacts,
   fetchConversations,
@@ -203,6 +204,30 @@ export function ChatDock({
     if (entry?.minimized) void loadTranscript(conversationId);
   }
 
+  /*
+   * Cerrar el panel al tocar afuera.
+   *
+   * Era un botón transparente a pantalla completa, montado con un portal en el shell. Quedaba por
+   * encima del panel (que vive en la barra), así que un clic sobre una conversación le llegaba al
+   * fondo: el panel se cerraba y la conversación no se abría. Ahora se escucha el toque en el
+   * documento y se cierra sólo si fue fuera del botón y del panel.
+   */
+  useEffect(() => {
+    if (!panelOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!triggerRef.current?.contains(event.target as Node)) setPanelOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPanelOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [panelOpen]);
+
   const unread = unreadTotal(conversations);
   const needle = search.trim().toLocaleLowerCase('es-AR');
   const visibleConversations = needle
@@ -211,8 +236,10 @@ export function ChatDock({
       )
     : conversations;
   const visibleContacts = needle
-    ? contacts.filter((contact) => contact.displayName.toLocaleLowerCase('es-AR').includes(needle))
-    : contacts;
+    ? contactsWithoutConversation(contacts, conversations).filter((contact) =>
+        contact.displayName.toLocaleLowerCase('es-AR').includes(needle),
+      )
+    : contactsWithoutConversation(contacts, conversations);
 
   return (
     <>
@@ -243,14 +270,6 @@ export function ChatDock({
 
         {panelOpen ? (
           <>
-            {mount(
-              <button
-                aria-label="Cerrar mensajes"
-                className="chat-dock-backdrop"
-                onClick={() => setPanelOpen(false)}
-                type="button"
-              />,
-            )}
             <section aria-label="Mensajes" className="chat-dock-panel">
               <header>
                 <h2>Mensajes</h2>
@@ -276,7 +295,21 @@ export function ChatDock({
                         onClick={() => openConversation(conversation.id)}
                         type="button"
                       >
-                        <span>{conversationName(conversation)}</span>
+                        {/* La foto de la persona, en círculo, como en cualquier mensajería. */}
+                        <span className="chat-contact">
+                          <ChatAvatar
+                            avatarUrl={conversation.participants[0]?.avatarUrl ?? null}
+                            displayName={conversationName(conversation)}
+                            {...(canSeePresence && conversation.participants[0]
+                              ? {
+                                  presence:
+                                    presence.get(conversation.participants[0].id)?.status ??
+                                    'offline',
+                                }
+                              : {})}
+                          />
+                          {conversationName(conversation)}
+                        </span>
                         {conversation.unreadCount > 0 ? (
                           <b>{conversation.unreadCount}</b>
                         ) : conversation.lastMessageAt ? (
@@ -287,7 +320,7 @@ export function ChatDock({
                   </>
                 ) : null}
 
-                <h3>Contactos</h3>
+                {visibleContacts.length > 0 ? <h3>Contactos</h3> : null}
                 {visibleContacts.map((contact) => (
                   <button
                     className="chat-dock-row"
