@@ -720,6 +720,8 @@ export const OrderCreateRequestSchema = z.object({
   confirm: z.boolean().optional(),
   customerId: UuidSchema,
   deliveryAddressId: UuidSchema.optional(),
+  /** La zona del domicilio nuevo, cuando la dirección escrita todavía no está en la ficha del cliente. */
+  geographicZoneId: UuidSchema.optional(),
   deliveryAddress: z.string().trim().min(4).max(500),
   /** Piso, depto, timbre, barrio, detalles. No se busca en el mapa. */
   deliveryAddressLine2: z.string().trim().max(300).optional(),

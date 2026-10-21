@@ -290,6 +290,8 @@ export interface OrderInput {
   // Active scope. Used only when no stored address supplies the zone; the zone always wins.
   operatingSiteId?: string | null | undefined;
   deliveryAddressId?: string | undefined;
+  /** La zona del domicilio nuevo, si la dirección escrita todavía no está en la ficha del cliente. */
+  geographicZoneId?: string | undefined;
   deliveryAddress: string;
   deliveryDate: string;
   deliveryLocationUrl?: string | undefined;
@@ -4115,6 +4117,85 @@ export class PostgresOperationsService {
     };
   }
   /** La única zona activa de una ciudad, o null si hay más de una (o ninguna). */
+  /**
+   * El domicilio del cliente para una dirección escrita en un pedido: el que ya tiene con ese mismo
+   * texto, o uno nuevo. Devuelve `undefined` si no hay zona con qué crearlo.
+   */
+  private async addressForTypedDelivery(
+    transaction: DatabaseTransaction,
+    input: {
+      customerId: string;
+      line2: string | null;
+      locationUrl: string | null;
+      operatingSiteId: string | null;
+      writtenAddress: string;
+      zoneId: string | null;
+    },
+  ): Promise<string | undefined> {
+    const [same] = await transaction
+      .select({ id: customerAddresses.id })
+      .from(customerAddresses)
+      .where(
+        and(
+          eq(customerAddresses.customerId, input.customerId),
+          eq(customerAddresses.active, true),
+          sql`lower(regexp_replace(trim(${customerAddresses.writtenAddress}), '\\s+', ' ', 'g')) = lower(${input.writtenAddress})`,
+        ),
+      )
+      .limit(1);
+    if (same) return same.id;
+
+    let zoneId: string | null = null;
+    if (input.zoneId) {
+      // La zona tiene que ser de la ciudad del pedido: no se puede colar una de otra.
+      const [zone] = await transaction
+        .select({ id: geographicZones.id, operatingSiteId: geographicZones.operatingSiteId })
+        .from(geographicZones)
+        .where(and(eq(geographicZones.id, input.zoneId), eq(geographicZones.active, true)))
+        .limit(1);
+      if (!zone || (input.operatingSiteId && zone.operatingSiteId !== input.operatingSiteId))
+        throw new OperationsConflictError('La zona elegida no es de la ciudad del pedido');
+      zoneId = zone.id;
+    } else if (input.operatingSiteId) {
+      const zones = await transaction
+        .select({ id: geographicZones.id })
+        .from(geographicZones)
+        .where(
+          and(
+            eq(geographicZones.operatingSiteId, input.operatingSiteId),
+            eq(geographicZones.active, true),
+          ),
+        )
+        .limit(2);
+      zoneId = zones.length === 1 ? (zones[0]?.id ?? null) : null;
+    }
+    if (!zoneId) return undefined;
+
+    const [anyActive] = await transaction
+      .select({ id: customerAddresses.id })
+      .from(customerAddresses)
+      .where(
+        and(eq(customerAddresses.customerId, input.customerId), eq(customerAddresses.active, true)),
+      )
+      .limit(1);
+    const [created] = await transaction
+      .insert(customerAddresses)
+      .values({
+        customerId: input.customerId,
+        geocodingStatus: 'NEEDS_LOCATION',
+        geographicZoneId: zoneId,
+        label: anyActive ? 'Pedido' : 'Casa',
+        locationUrl: input.locationUrl,
+        // El primero del cliente es su principal; los siguientes, no.
+        primary: !anyActive,
+        source: 'order',
+        unit: input.line2,
+        writtenAddress: input.writtenAddress,
+      })
+      .returning({ id: customerAddresses.id });
+    return created?.id;
+  }
+
   private async soleActiveZone(operatingSiteId: string): Promise<string | null> {
     const zones = await this.database
       .select({ id: geographicZones.id })
@@ -5741,6 +5822,25 @@ export class PostgresOperationsService {
      */
     const explicitAddressId = input.deliveryAddressId;
     let resolvedAddressId = explicitAddressId;
+    /*
+     * La dirección escrita en el pedido queda en la ficha del cliente (2026-10-20).
+     *
+     * Antes vivía sólo en el pedido: el cliente quedaba sin domicilio, y el pedido se ataba a su
+     * domicilio principal aunque se hubiera escrito otro, así que la ruta lo llevaba a la dirección
+     * equivocada. Ahora, si el cliente ya tiene esa dirección, se usa; si no, se crea el domicilio con
+     * la zona elegida o, si la ciudad tiene una sola, con ésa. Sin zona posible queda como antes y el
+     * asistente de ubicaciones la pide.
+     */
+    if (!resolvedAddressId && deliveryAddress.trim()) {
+      resolvedAddressId = await this.addressForTypedDelivery(transaction, {
+        customerId: input.customerId,
+        line2: input.deliveryAddressLine2?.trim() || null,
+        locationUrl: input.deliveryLocationUrl ?? null,
+        operatingSiteId: input.operatingSiteId ?? null,
+        writtenAddress: deliveryAddress.trim().replace(/\s+/g, ' '),
+        zoneId: input.geographicZoneId ?? null,
+      });
+    }
     if (!resolvedAddressId) {
       const [primary] = await transaction
         .select({ id: customerAddresses.id })

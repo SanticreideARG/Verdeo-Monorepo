@@ -167,3 +167,116 @@ describe('el domicilio en dos líneas', () => {
     }
   });
 });
+
+describe('la dirección del pedido queda en la ficha del cliente', () => {
+  const ZONA = `insert into geographic_zones (id, operating_site_id, slug, display_name)
+    values ('${ZONE}', '${SITE}', 'centro', 'Centro');`;
+
+  async function domicilios(client: PGlite) {
+    const { rows } = await client.query<{ primary: boolean; unit: string | null; written: string }>(
+      `select "primary", unit, written_address as written from customer_addresses
+       where customer_id = '${CUSTOMER}' order by created_at`,
+    );
+    return rows;
+  }
+
+  it('crea el domicilio con la única zona de la ciudad y ata el pedido a él', async () => {
+    const { client, service } = await base();
+    await client.exec(ZONA);
+
+    const order = (await service.createOrder(
+      { ...pedido('2026-10-18'), deliveryAddress: 'Mitre 100', deliveryAddressLine2: '4° A' },
+      contexto,
+    )) as { deliveryAddressId: string | null };
+
+    expect(await domicilios(client)).toEqual([
+      { primary: true, unit: '4° A', written: 'Mitre 100' },
+    ]);
+    expect(order.deliveryAddressId).not.toBeNull();
+  });
+
+  it('si el cliente ya tiene esa dirección la reusa, y una distinta es un domicilio más', async () => {
+    const { client, service } = await base();
+    await client.exec(ZONA);
+
+    await service.createOrder({ ...pedido('2026-10-18'), deliveryAddress: 'Mitre 100' }, contexto);
+    await service.createOrder(
+      { ...pedido('2026-10-18'), deliveryAddress: ' mitre  100 ' },
+      contexto,
+    );
+    const otra = (await service.createOrder(
+      { ...pedido('2026-10-18'), deliveryAddress: 'Roca 50' },
+      contexto,
+    )) as { deliveryAddress: string };
+
+    expect(await domicilios(client)).toEqual([
+      { primary: true, unit: null, written: 'Mitre 100' },
+      { primary: false, unit: null, written: 'Roca 50' },
+    ]);
+    // El pedido va a la dirección que se escribió, no a la principal.
+    expect(otra.deliveryAddress).toBe('Roca 50');
+  });
+
+  it('sin zonas en la ciudad, el pedido se guarda igual y sin domicilio', async () => {
+    const { client, service } = await base();
+
+    await service.createOrder({ ...pedido('2026-10-18'), deliveryAddress: 'Mitre 100' }, contexto);
+
+    expect(await domicilios(client)).toEqual([]);
+  });
+
+  it('no acepta una zona de otra ciudad', async () => {
+    const { client, service } = await base();
+    await client.exec(`
+      insert into operating_sites (id, slug, display_name, order_prefix)
+      values ('a0000000-0000-4000-8000-000000000010', 'otra', 'Otra', 'OTR');
+      insert into geographic_zones (id, operating_site_id, slug, display_name)
+      values ('${ZONE}', 'a0000000-0000-4000-8000-000000000010', 'lejos', 'Lejos');
+    `);
+
+    await expect(
+      service.createOrder(
+        { ...pedido('2026-10-18'), deliveryAddress: 'Mitre 100', geographicZoneId: ZONE },
+        contexto,
+      ),
+    ).rejects.toThrow(/no es de la ciudad del pedido/);
+  });
+});
+
+describe('script addresses-from-orders.sql (pedidos viejos)', () => {
+  it('crea el domicilio en la ficha, lo hace principal y ata los pedidos', async () => {
+    const { client } = await base();
+    await client.exec(`
+      insert into geographic_zones (id, operating_site_id, slug, display_name)
+      values ('${ZONE}', '${SITE}', 'centro', 'Centro');
+      insert into orders (id, public_number, customer_id, sales_cycle_id, weekly_menu_id,
+        operating_site_id, status, source, delivery_date, delivery_address_snapshot,
+        delivery_address_line2, payment_expectation, total_minor, currency)
+      values
+        ('0a000000-0000-4000-8000-000000000001', 'CABA-1', '${CUSTOMER}', '${CYCLE}', '${MENU}',
+         '${SITE}', 'CONFIRMED', 'manual', '2026-10-18', 'Mitre 100', '4° A', 'Efectivo', 0, 'ARS'),
+        ('0a000000-0000-4000-8000-000000000002', 'CABA-2', '${CUSTOMER}', '${CYCLE}', '${MENU}',
+         '${SITE}', 'DRAFT', 'manual', '2026-10-18', ' mitre 100 ', null, 'Efectivo', 0, 'ARS');
+    `);
+
+    const script = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '..', 'scripts', 'addresses-from-orders.sql'),
+      'utf8',
+    );
+    await client.exec(script);
+
+    const addresses = await client.query<{
+      primary: boolean;
+      unit: string | null;
+      written: string;
+    }>(
+      `select "primary", unit, written_address as written from customer_addresses
+       where customer_id = '${CUSTOMER}'`,
+    );
+    expect(addresses.rows).toEqual([{ primary: true, unit: '4° A', written: 'Mitre 100' }]);
+    const linked = await client.query<{ n: number }>(
+      `select count(*)::int as n from orders where delivery_address_id is not null`,
+    );
+    expect(linked.rows[0]?.n).toBe(2);
+  });
+});

@@ -220,6 +220,33 @@ export function OrderIntakePage() {
    */
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [deliveryAddressLine2, setDeliveryAddressLine2] = useState('');
+  /*
+   * Las zonas de la ciudad: una dirección nueva queda en la ficha del cliente, y para eso necesita
+   * zona. Con una sola se usa ésa; con varias, se elige acá.
+   */
+  const [zones, setZones] = useState<{ displayName: string; id: string }[]>([]);
+  const [addressZoneId, setAddressZoneId] = useState('');
+  useEffect(() => {
+    const siteId = storedOperatingSiteId();
+    if (!siteId) return;
+    let active = true;
+    void apiRequest('/api/v1/zones')
+      .then(async (response) => {
+        if (!response.ok) return;
+        const body = (await response.json()) as {
+          items: { active?: boolean; displayName: string; id: string; operatingSiteId: string }[];
+        };
+        if (active) {
+          setZones(
+            body.items.filter((zone) => zone.operatingSiteId === siteId && zone.active !== false),
+          );
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
   const [addressHint, setAddressHint] = useState('');
 
   const loadedOnce = useRef(false);
@@ -854,6 +881,7 @@ export function OrderIntakePage() {
         ...(formText(form, 'deliveryAddressLine2').trim()
           ? { deliveryAddressLine2: formText(form, 'deliveryAddressLine2').trim() }
           : {}),
+        ...(addressZoneId ? { geographicZoneId: addressZoneId } : {}),
         deliveryDate,
         // Un solo comentario para la cocina por pedido: no hay indicaciones por plato.
         dietaryInstructions: formText(form, 'dietaryInstructions').trim()
@@ -1608,6 +1636,25 @@ export function OrderIntakePage() {
                   value={deliveryAddressLine2}
                 />
               </label>
+              {zones.length > 1 ? (
+                <label className="field">
+                  Zona del domicilio
+                  <select
+                    onChange={(event) => setAddressZoneId(event.target.value)}
+                    value={addressZoneId}
+                  >
+                    <option value="">Elegir zona</option>
+                    {zones.map((zone) => (
+                      <option key={zone.id} value={zone.id}>
+                        {zone.displayName}
+                      </option>
+                    ))}
+                  </select>
+                  <small className="field-hint">
+                    Si la dirección es nueva, queda en la ficha del cliente en esta zona.
+                  </small>
+                </label>
+              ) : null}
               <label className="field">
                 Origen
                 {/*
@@ -1794,6 +1841,7 @@ export function OrderIntakePage() {
                   setSelectedCustomer(null);
                   setDeliveryAddress('');
                   setDeliveryAddressLine2('');
+                  setAddressZoneId('');
                   setAddressHint('');
                   setCustomerQuery('');
                   setCustomerResults([]);

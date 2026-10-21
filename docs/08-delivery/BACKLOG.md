@@ -572,3 +572,9 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] Fase 2: hoja "Pedido" con el Intuitivo desarmado en los renglones de sus menús, y "Platos a preparar" por plato y menú.
 - [ ] Fase 3: etiquetas con el origen (el formulario del sitio ya elige con menú; el importador y la IA mandan nombres y se ubican si no hay ambigüedad).
 - [ ] Fase 4: sección "Por cobrar" (vista sobre pedidos de períodos cerrados sin cobrar), detalle por cliente, cobrar desde ahí, aviso por WhatsApp, línea en la ficha del cliente y alerta del tablero.
+
+## La dirección del pedido queda en la ficha del cliente (2026-10-20)
+
+- [x] Corregido: la dirección escrita al cargar un pedido quedaba sólo en el pedido, y el cliente sin domicilio en su ficha (visto en Córdoba, que no tenía zonas). Ahora, al guardar el pedido, si el cliente ya tiene esa dirección se usa y, si no, se crea su domicilio con la zona elegida en el formulario (selector "Zona del domicilio", sólo si la ciudad tiene más de una) o con la única de la ciudad. El primero del cliente es su principal. El pedido va a la dirección escrita y no a la principal. Sin zona posible, se guarda como antes. La zona tiene que ser de la ciudad del pedido.
+- [x] Para los pedidos viejos: `packages/db/scripts/addresses-from-orders.sql` (editor de Neon, vista previa y bloque BEGIN … COMMIT). Toma las ciudades con exactamente una zona activa.
+- [ ] Mover clientes y pedidos entre ciudades (decisiones del 2026-10-20: lo pueden hacer los operadores; mover un cliente mueve al instante sus pedidos en borrador, confirmados y listos; número de pedido nuevo con el prefijo de la ciudad; precio y día de reparto se concilian solos; variedades sólo si hace falta; los datos no se corrigen solos; el cliente reemplaza su ciudad).
