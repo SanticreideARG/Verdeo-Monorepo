@@ -835,7 +835,11 @@ export const OrderReadyBatchResponseSchema = z.object({
  * como el período actual. Se hace a mano; reabrir existe porque si se cerró de más tiene que haber
  * vuelta atrás.
  */
-export const CycleClosedRequestSchema = z.object({ closed: z.boolean() });
+export const CycleClosedRequestSchema = z.object({
+  closed: z.boolean(),
+  /** Pasar lo que quedó sin vender al período siguiente, en lugar de darlo de baja. */
+  carryToNext: z.boolean().optional(),
+});
 
 export const CycleClosedResponseSchema = z.object({
   alias: z.string(),
@@ -843,6 +847,9 @@ export const CycleClosedResponseSchema = z.object({
   status: z.string(),
   /** Unidades dadas de baja al cerrar: el remanente que no se colocó. */
   writtenOffUnits: z.number().int(),
+  /** Unidades que pasaron como sobrante al período siguiente. */
+  carriedUnits: z.number().int().default(0),
+  nextCycleAlias: z.string().nullable().default(null),
 });
 
 /** Un tilde, nada más: quién y cuándo los pone el servidor. */
@@ -1314,6 +1321,18 @@ export const ProductionStockListResponseSchema = z.object({
   items: z.array(ProductionStockSchema),
 });
 
+/** El sobrante de períodos anteriores a la venta en éste. */
+export const CarryOverListResponseSchema = z.object({
+  items: z.array(
+    z.object({
+      familyName: z.string(),
+      fromCycleAlias: z.string().nullable(),
+      quantityUnits: z.number().int(),
+      variantName: z.string(),
+    }),
+  ),
+});
+
 export const ProductionSnapshotKindSchema = z.enum(['partial', 'final']);
 
 export const ProductionSnapshotRequestSchema = z.object({
@@ -1359,6 +1378,8 @@ export const SurplusItemSchema = z.object({
   produccionReal: z.number().int().nullable(),
   // El stock para la venta del período, que ya está sumado en `produccionPlanificada`.
   stockPlanificado: z.number().int().default(0),
+  // El sobrante de un período anterior, ya sumado en lo que se puede vender.
+  sobrante: z.number().int().default(0),
   variantName: z.string(),
   vendidoOportunidad: z.number().int(),
 });

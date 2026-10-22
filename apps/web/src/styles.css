@@ -11110,3 +11110,12 @@ label.field:has(> input[type='radio']) {
 .crm-new-toggle small {
   color: var(--db-muted, var(--color-ink-muted));
 }
+
+/* Lo que quedó sin vender, en el diálogo de cerrar el período. */
+.close-remnant {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+}

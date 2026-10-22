@@ -70,7 +70,7 @@ from order_items i, stock_kept k
 where i.order_id in (select id from stock_orders)
 group by k.id, i.product_name_snapshot, i.variant_snapshot
 having sum(i.quantity_units) > 0
-on conflict (sales_cycle_id, family_name, variant_name) do update
+on conflict (sales_cycle_id, origin, family_name, variant_name) do update
   set quantity_units = production_stock.quantity_units + excluded.quantity_units,
       updated_at = now();
 

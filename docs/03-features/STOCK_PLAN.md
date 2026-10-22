@@ -94,3 +94,8 @@ rutas.
 en cada toque (el mismo `PUT /api/v1/production/:cycleId/stock`). "Informar producción real" y la tabla
 de excedente salieron de la pantalla de Cocina; el cálculo de disponible y el backend siguen igual.
 El stock entra en la hoja "Pedido" de la planilla.
+
+## Sobrante de un período anterior (2026-10-22)
+
+Lo que no se vendió en un período puede pasar al siguiente como **sobrante**: ya está cocinado, se
+vende con "Sale del stock" y no suma a lo que hay que cocinar. Ver FIXES_2026_10_22_PLAN.md, A.

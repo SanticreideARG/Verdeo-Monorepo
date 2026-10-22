@@ -35,6 +35,8 @@ export function KitchenPage() {
   const [surplus, setSurplus] = useState<SurplusReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [closing, setClosing] = useState(false);
+  const [carryToNext, setCarryToNext] = useState(true);
 
   const permissions = profile?.permissions ?? [];
   const canReport = permissions.includes('production.report');
@@ -157,29 +159,33 @@ export function KitchenPage() {
    * Al cerrar, el remanente que no se colocó se da de baja solo: terminada la semana, el excedente
    * no se arrastra a la siguiente.
    */
-  async function closeCycle() {
+  /*
+   * Cerrar el período. Lo que quedó sin vender se puede pasar al período siguiente como sobrante a
+   * la venta (FIXES_2026_10_22_PLAN.md, A) o darse de baja, como antes.
+   */
+  async function closeCycle(carryToNext: boolean) {
     if (!selectedMenu) return;
-    if (
-      !window.confirm(
-        `¿Cerrar ${selectedMenu.cycle.alias}? Sus pedidos dejan de poder editarse y el remanente sin vender se da de baja.`,
-      )
-    ) {
-      return;
-    }
+    setClosing(false);
     setMessage('');
     const response = await apiRequest(`/api/v1/production/${selectedMenu.cycle.id}/closed`, {
-      body: JSON.stringify({ closed: true }),
+      body: JSON.stringify({ carryToNext, closed: true }),
       method: 'POST',
     });
     if (!response.ok) {
       setMessage(await errorMessage(response));
       return;
     }
-    const closed = (await response.json()) as { writtenOffUnits: number };
+    const closed = (await response.json()) as {
+      carriedUnits: number;
+      nextCycleAlias: string | null;
+      writtenOffUnits: number;
+    };
     setMessage(
-      closed.writtenOffUnits > 0
-        ? `Período cerrado. Se dieron de baja ${String(closed.writtenOffUnits)} unidades sin vender.`
-        : 'Período cerrado. No quedaba remanente sin vender.',
+      closed.carriedUnits > 0
+        ? `Período cerrado. ${String(closed.carriedUnits)} unidades sin vender pasaron como sobrante a ${closed.nextCycleAlias ?? 'el período siguiente'}.`
+        : closed.writtenOffUnits > 0
+          ? `Período cerrado. Se dieron de baja ${String(closed.writtenOffUnits)} unidades sin vender.`
+          : 'Período cerrado. No quedaba remanente sin vender.',
     );
     await loadMenus();
     await loadSurplus(selectedMenu.cycle.id);
@@ -282,7 +288,7 @@ export function KitchenPage() {
                 {canGenerate && selectedMenu && selectedMenu.cycle.status !== 'CLOSED' ? (
                   <button
                     className="button button-secondary kitchen-close"
-                    onClick={() => void closeCycle()}
+                    onClick={() => setClosing(true)}
                     type="button"
                   >
                     Cerrar período
@@ -459,6 +465,70 @@ export function KitchenPage() {
           </div>
         )}
       </section>
+      {closing && selectedMenu ? (
+        <div
+          aria-label={`Cerrar ${selectedMenu.cycle.alias}`}
+          aria-modal="true"
+          className="modal-backdrop"
+          role="dialog"
+        >
+          <div className="modal-panel grid gap-3">
+            <h2 className="text-lg font-semibold text-forest">
+              ¿Cerrar {selectedMenu.cycle.alias}?
+            </h2>
+            <p className="text-sm text-ink-muted">Sus pedidos dejan de poder editarse.</p>
+            {(() => {
+              const remnant = (surplus?.items ?? []).filter((item) => item.disponible > 0);
+              if (remnant.length === 0) return <p className="text-sm">No queda nada sin vender.</p>;
+              return (
+                <>
+                  <p className="text-sm">Quedó sin vender:</p>
+                  <ul className="close-remnant">
+                    {remnant.map((item) => (
+                      <li key={`${item.familyName}-${item.variantName}`}>
+                        {item.familyName} {item.variantName} · <strong>{item.disponible}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                  <label className="label-switch">
+                    <input
+                      checked={carryToNext}
+                      onChange={(event) => setCarryToNext(event.target.checked)}
+                      type="checkbox"
+                    />
+                    Pasarlo al período siguiente para venderlo
+                  </label>
+                  <small className="text-ink-muted">
+                    {carryToNext
+                      ? 'Entra como sobrante a la venta: no se vuelve a cocinar. Se corrige en Cocina del período siguiente.'
+                      : 'Se da de baja.'}
+                  </small>
+                </>
+              );
+            })()}
+            <div className="form-actions justify-end">
+              <button
+                className="button button-secondary"
+                onClick={() => setClosing(false)}
+                type="button"
+              >
+                Volver
+              </button>
+              <button
+                className="button button-primary"
+                onClick={() =>
+                  void closeCycle(
+                    carryToNext && (surplus?.items ?? []).some((item) => item.disponible > 0),
+                  )
+                }
+                type="button"
+              >
+                Cerrar período
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </DashboardShell>
   );
 }

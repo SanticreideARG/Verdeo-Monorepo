@@ -253,15 +253,26 @@ export const productionStock = pgTable(
     variantName: text('variant_name').notNull(),
     quantityUnits: integer('quantity_units').notNull(),
     notes: text('notes'),
+    /*
+     * De dónde sale (FIXES_2026_10_22_PLAN.md, A): `planned` es lo que se cocina de más para este
+     * período; `carry_over` es el sobrante ya cocinado de un período anterior. El sobrante se vende
+     * pero no se cocina: no suma a la planilla de cocina.
+     */
+    origin: text('origin').default('planned').notNull(),
+    fromSalesCycleId: uuid('from_sales_cycle_id').references(() => salesCycles.id, {
+      onDelete: 'set null',
+    }),
     actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex('production_stock_cycle_variant_unique').on(
+    uniqueIndex('production_stock_cycle_origin_variant_unique').on(
       table.salesCycleId,
+      table.origin,
       table.familyName,
       table.variantName,
     ),
+    check('production_stock_origin_check', sql`${table.origin} in ('planned', 'carry_over')`),
     check('production_stock_quantity_positive_check', sql`${table.quantityUnits} > 0`),
   ],
 );

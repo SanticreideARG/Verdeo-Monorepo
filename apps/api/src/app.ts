@@ -170,6 +170,7 @@ import {
   OrderDeleteRequestSchema,
   OrderDeleteResponseSchema,
   ReceivablesResponseSchema,
+  CarryOverListResponseSchema,
   OrderMoveSiteRequestSchema,
   OrderMoveSiteResponseSchema,
   CustomerMoveSiteRequestSchema,
@@ -608,7 +609,18 @@ interface OperationsEngine {
     paid: boolean,
     context: OperationsContext & { actorUserId: string },
   ): Promise<unknown>;
-  setCycleClosed(cycleId: string, closed: boolean, context: OperationsContext): Promise<unknown>;
+  setCycleClosed(
+    cycleId: string,
+    closed: boolean,
+    context: OperationsContext,
+    carryToNext?: boolean,
+  ): Promise<unknown>;
+  listCarryOver(cycleId: string): Promise<unknown>;
+  setCarryOver(
+    cycleId: string,
+    entries: readonly { familyName: string; quantityUnits: number; variantName: string }[],
+    context: OperationsContext,
+  ): Promise<unknown>;
   createPublicOrder(input: PublicOrderCreateRequest, context: OperationsContext): Promise<unknown>;
   trackPublicOrder(publicNumber: string, contact: string): Promise<unknown>;
   /** Ubica la dirección de un pedido: la ordena, la busca y, si es seguro, la confirma. */
@@ -6786,6 +6798,36 @@ export function createApp(options: CreateAppOptions) {
     return context.json(ProductionStockListResponseSchema.parse({ items: contractValue(items) }));
   });
 
+  /*
+   * El sobrante de períodos anteriores a la venta en éste (FIXES_2026_10_22_PLAN.md, A). Lo ve quien
+   * ve producción y lo corrige quien carga el stock.
+   */
+  app.get('/api/v1/production/:cycleId/carry-over', async (context) => {
+    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El ciclo indicado no es válido.');
+    const items = await requireOperations().listCarryOver(params.data.cycleId);
+    return context.json(CarryOverListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.put('/api/v1/production/:cycleId/carry-over', async (context) => {
+    if (!context.get('session').permissions.includes('production.report'))
+      return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    const input = ProductionStockRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(context, 'Revisá las cantidades del sobrante.');
+    await requireOperations().setCarryOver(
+      params.data.cycleId,
+      input.data.entries,
+      operationsContext(context),
+    );
+    const items = await requireOperations().listCarryOver(params.data.cycleId);
+    return context.json(CarryOverListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
   app.get('/api/v1/production/:cycleId/snapshots', async (context) => {
     if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
     const params = CycleIdParamSchema.safeParse(context.req.param());
@@ -6892,6 +6934,7 @@ export function createApp(options: CreateAppOptions) {
       params.data.cycleId,
       input.data.closed,
       operationsContext(context),
+      input.data.carryToNext ?? false,
     );
     return context.json(CycleClosedResponseSchema.parse(contractValue(cycle)));
   });

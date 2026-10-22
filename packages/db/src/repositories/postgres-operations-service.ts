@@ -535,6 +535,8 @@ interface SurplusRow {
   produccionReal: number | null;
   /** El stock para la venta cargado para el período (STOCK_PLAN.md). */
   stockPlanificado: number;
+  /** El sobrante ya cocinado de un período anterior: se vende, no se cocina. */
+  sobrante: number;
   variantName: string;
   vendidoOportunidad: number;
 }
@@ -5055,11 +5057,21 @@ export class PostgresOperationsService {
    * Reabrir existe por la misma razón: si se cerró de más, tiene que haber vuelta atrás. Las dos
    * direcciones se auditan.
    */
-  public async setCycleClosed(cycleId: string, closed: boolean, context: OperationsContext) {
+  public async setCycleClosed(
+    cycleId: string,
+    closed: boolean,
+    context: OperationsContext,
+    /** Pasar lo que quedó sin vender al período siguiente, en lugar de darlo de baja. */
+    carryToNext = false,
+  ) {
     return this.database
       .transaction(async (transaction) => {
         const [current] = await transaction
-          .select({ alias: salesCycles.alias, status: salesCycles.status })
+          .select({
+            alias: salesCycles.alias,
+            openAt: salesCycles.openAt,
+            status: salesCycles.status,
+          })
           .from(salesCycles)
           .where(eq(salesCycles.id, cycleId))
           .limit(1);
@@ -5083,21 +5095,74 @@ export class PostgresOperationsService {
          * se duplica.
          */
         let writtenOff = 0;
+        let carried = 0;
+        let nextAlias: string | null = null;
         if (closed) {
           const rows = await this.surplusRows(transaction, cycleId);
           const pending = [...rows.values()].filter((row) => row.disponible > 0);
+          /*
+           * Pasar el sobrante al período siguiente (FIXES_2026_10_22_PLAN.md, A): sale de éste como
+           * una baja con ese motivo —así su número cierra en cero— y entra al siguiente como sobrante
+           * a la venta, sumado al que ya tuviera.
+           */
+          let next: { alias: string; id: string } | undefined;
+          if (carryToNext && pending.length > 0) {
+            [next] = await transaction
+              .select({ alias: salesCycles.alias, id: salesCycles.id })
+              .from(salesCycles)
+              .where(gt(salesCycles.openAt, current.openAt))
+              .orderBy(asc(salesCycles.openAt))
+              .limit(1);
+            if (!next)
+              throw new OperationsConflictError(
+                'No hay un período siguiente para pasarle el sobrante. Crealo antes de cerrar.',
+              );
+            nextAlias = next.alias;
+          }
           if (pending.length > 0) {
             await transaction.insert(surplusWriteoffs).values(
               pending.map((row) => ({
                 actorUserId: context.actorUserId ?? null,
                 familyName: row.familyName,
                 quantityUnits: row.disponible,
-                reason: 'Cierre de período: remanente sin vender.',
+                reason: next
+                  ? `Cierre de período: pasó al período ${next.alias}.`
+                  : 'Cierre de período: remanente sin vender.',
                 salesCycleId: cycleId,
                 variantName: row.variantName,
               })),
             );
-            writtenOff = pending.reduce((sum, row) => sum + row.disponible, 0);
+            const total = pending.reduce((sum, row) => sum + row.disponible, 0);
+            if (next) {
+              for (const row of pending) {
+                await transaction
+                  .insert(productionStock)
+                  .values({
+                    actorUserId: context.actorUserId ?? null,
+                    familyName: row.familyName,
+                    fromSalesCycleId: cycleId,
+                    origin: 'carry_over',
+                    quantityUnits: row.disponible,
+                    salesCycleId: next.id,
+                    variantName: row.variantName,
+                  })
+                  .onConflictDoUpdate({
+                    set: {
+                      quantityUnits: sql`${productionStock.quantityUnits} + ${row.disponible}`,
+                      updatedAt: new Date(),
+                    },
+                    target: [
+                      productionStock.salesCycleId,
+                      productionStock.origin,
+                      productionStock.familyName,
+                      productionStock.variantName,
+                    ],
+                  });
+              }
+              carried = total;
+            } else {
+              writtenOff = total;
+            }
           }
         }
 
@@ -5105,7 +5170,12 @@ export class PostgresOperationsService {
         await audit.record({
           action: closed ? 'sales_cycle.closed' : 'sales_cycle.reopened',
           actor: auditActor(context),
-          after: { status, writtenOffUnits: writtenOff },
+          after: {
+            carriedUnits: carried,
+            nextCycle: nextAlias,
+            status,
+            writtenOffUnits: writtenOff,
+          },
           before: { status: current.status },
           correlationId: context.correlationId,
           entityId: cycleId,
@@ -5115,7 +5185,14 @@ export class PostgresOperationsService {
           source: context.source,
         });
 
-        return { alias: current.alias, id: cycleId, status, writtenOffUnits: writtenOff };
+        return {
+          alias: current.alias,
+          carriedUnits: carried,
+          id: cycleId,
+          nextCycleAlias: nextAlias,
+          status,
+          writtenOffUnits: writtenOff,
+        };
       })
       .catch(translateDatabaseConflict);
   }
@@ -8740,6 +8817,7 @@ export class PostgresOperationsService {
     const stock = await database
       .select({
         familyName: productionStock.familyName,
+        origin: productionStock.origin,
         quantityUnits: productionStock.quantityUnits,
         variantName: productionStock.variantName,
       })
@@ -8759,6 +8837,7 @@ export class PostgresOperationsService {
           familyName,
           produccionPlanificada: 0,
           produccionReal: null,
+          sobrante: 0,
           stockPlanificado: 0,
           variantName,
           vendidoOportunidad: 0,
@@ -8783,7 +8862,8 @@ export class PostgresOperationsService {
     }
     for (const item of stock) {
       const row = ensure(item.familyName, item.variantName);
-      row.stockPlanificado += item.quantityUnits;
+      if (item.origin === 'carry_over') row.sobrante += item.quantityUnits;
+      else row.stockPlanificado += item.quantityUnits;
     }
 
     for (const row of rows.values()) {
@@ -8795,9 +8875,11 @@ export class PostgresOperationsService {
        * antes de informarla, el stock planificado: así se puede vender el stock mientras se cocina.
        */
       row.excedenteEfectivo =
-        row.produccionReal === null
+        (row.produccionReal === null
           ? row.stockPlanificado
-          : Math.max(0, row.produccionReal - row.demandaConfirmada);
+          : Math.max(0, row.produccionReal - row.demandaConfirmada)) +
+        // El sobrante de un período anterior ya está cocinado: se puede vender desde el primer día.
+        row.sobrante;
       row.disponible = Math.max(0, row.excedenteEfectivo - row.vendidoOportunidad - row.bajaMerma);
     }
     return rows;
@@ -8814,8 +8896,84 @@ export class PostgresOperationsService {
         variantName: productionStock.variantName,
       })
       .from(productionStock)
-      .where(eq(productionStock.salesCycleId, cycleId))
+      .where(and(eq(productionStock.salesCycleId, cycleId), eq(productionStock.origin, 'planned')))
       .orderBy(asc(productionStock.familyName), asc(productionStock.variantName));
+  }
+
+  /** El sobrante de períodos anteriores a la venta en éste, con de qué período viene. */
+  public async listCarryOver(cycleId: string) {
+    return this.database
+      .select({
+        familyName: productionStock.familyName,
+        fromCycleAlias: salesCycles.alias,
+        quantityUnits: productionStock.quantityUnits,
+        variantName: productionStock.variantName,
+      })
+      .from(productionStock)
+      .leftJoin(salesCycles, eq(salesCycles.id, productionStock.fromSalesCycleId))
+      .where(
+        and(eq(productionStock.salesCycleId, cycleId), eq(productionStock.origin, 'carry_over')),
+      )
+      .orderBy(asc(productionStock.familyName), asc(productionStock.variantName));
+  }
+
+  /**
+   * Corregir el sobrante del período a mano: lo que se manda reemplaza lo que había (con cero se
+   * saca). Conserva de qué período venía cada variedad.
+   */
+  public async setCarryOver(
+    cycleId: string,
+    entries: readonly { familyName: string; quantityUnits: number; variantName: string }[],
+    context: OperationsContext,
+  ) {
+    return this.database.transaction(async (transaction) => {
+      const before = await transaction
+        .select({
+          familyName: productionStock.familyName,
+          fromSalesCycleId: productionStock.fromSalesCycleId,
+          quantityUnits: productionStock.quantityUnits,
+          variantName: productionStock.variantName,
+        })
+        .from(productionStock)
+        .where(
+          and(eq(productionStock.salesCycleId, cycleId), eq(productionStock.origin, 'carry_over')),
+        );
+      await transaction
+        .delete(productionStock)
+        .where(
+          and(eq(productionStock.salesCycleId, cycleId), eq(productionStock.origin, 'carry_over')),
+        );
+      const rows = entries.filter(
+        (entry) => entry.quantityUnits > 0 && entry.familyName.trim() && entry.variantName.trim(),
+      );
+      if (rows.length > 0) {
+        await transaction.insert(productionStock).values(
+          rows.map((row) => ({
+            actorUserId: context.actorUserId ?? null,
+            familyName: row.familyName.trim(),
+            fromSalesCycleId:
+              before.find(
+                (old) => old.familyName === row.familyName && old.variantName === row.variantName,
+              )?.fromSalesCycleId ?? null,
+            origin: 'carry_over',
+            quantityUnits: row.quantityUnits,
+            salesCycleId: cycleId,
+            variantName: row.variantName.trim(),
+          })),
+        );
+      }
+      await new AuditService(new PostgresAuditSink(transaction)).record({
+        action: 'production.carry_over_updated',
+        actor: auditActor(context),
+        after: rows,
+        before,
+        correlationId: context.correlationId,
+        entityId: cycleId,
+        entityType: 'sales_cycle',
+        requestId: context.requestId,
+        source: context.source,
+      });
+    });
   }
 
   /**
@@ -8841,8 +8999,15 @@ export class PostgresOperationsService {
           variantName: productionStock.variantName,
         })
         .from(productionStock)
-        .where(eq(productionStock.salesCycleId, cycleId));
-      await transaction.delete(productionStock).where(eq(productionStock.salesCycleId, cycleId));
+        .where(
+          and(eq(productionStock.salesCycleId, cycleId), eq(productionStock.origin, 'planned')),
+        );
+      // Sólo el stock propio del período: el sobrante de otro período se corrige aparte.
+      await transaction
+        .delete(productionStock)
+        .where(
+          and(eq(productionStock.salesCycleId, cycleId), eq(productionStock.origin, 'planned')),
+        );
       const merged = new Map<
         string,
         { familyName: string; quantityUnits: number; variantName: string }

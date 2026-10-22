@@ -36,13 +36,48 @@ export function ProductionStockPanel({
   surplus: readonly SurplusItem[];
 }) {
   const [stock, setStock] = useState<StockRow[]>([]);
+  // El sobrante de períodos anteriores: se vende, no se cocina.
+  const [carryOver, setCarryOver] = useState<(StockRow & { fromCycleAlias: string | null })[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
   const load = useCallback(async () => {
     const response = await apiRequest(`/api/v1/production/${cycleId}/stock`);
     if (response.ok) setStock(((await response.json()) as { items: StockRow[] }).items);
+    const carried = await apiRequest(`/api/v1/production/${cycleId}/carry-over`);
+    if (carried.ok) {
+      setCarryOver(
+        ((await carried.json()) as { items: (StockRow & { fromCycleAlias: string | null })[] })
+          .items,
+      );
+    }
   }, [cycleId]);
+
+  /** Corregir el sobrante: uno más o uno menos, guardado en el acto. */
+  async function changeCarryOver(row: StockRow, delta: number) {
+    const next = Math.max(0, row.quantityUnits + delta);
+    const entries = carryRows
+      .map((item) => (keyOf(item) === keyOf(row) ? { ...item, quantityUnits: next } : item))
+      .filter((item) => item.quantityUnits > 0)
+      .map(({ familyName, quantityUnits, variantName }) => ({
+        familyName,
+        quantityUnits,
+        variantName,
+      }));
+    setSaving(true);
+    setMessage('');
+    const response = await apiRequest(`/api/v1/production/${cycleId}/carry-over`, {
+      body: JSON.stringify({ entries }),
+      method: 'PUT',
+    });
+    setSaving(false);
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    await load();
+    onSaved();
+  }
 
   useEffect(() => {
     void load();
@@ -67,6 +102,24 @@ export function ProductionStockPanel({
   }
 
   const total = stock.reduce((sum, item) => sum + item.quantityUnits, 0);
+
+  /*
+   * El sobrante, con todas las variedades del menú: si el período anterior ya se cerró sin pasarlo,
+   * se carga acá a mano (lo que quedó de verdad en la heladera).
+   */
+  const carryRows: (StockRow & { fromCycleAlias: string | null })[] = rows.map((row) => {
+    const existing = carryOver.find((item) => keyOf(item) === keyOf(row));
+    return {
+      familyName: row.familyName,
+      fromCycleAlias: existing?.fromCycleAlias ?? null,
+      quantityUnits: existing?.quantityUnits ?? 0,
+      variantName: row.variantName,
+    };
+  });
+  for (const item of carryOver) {
+    if (!carryRows.some((row) => keyOf(row) === keyOf(item))) carryRows.push(item);
+  }
+  const carryTotal = carryOver.reduce((sum, item) => sum + item.quantityUnits, 0);
 
   /**
    * Sumar o restar uno, y guardar en el acto.
@@ -158,6 +211,55 @@ export function ProductionStockPanel({
           })}
         </ul>
       )}
+      {carryRows.length > 0 ? (
+        <>
+          <div className="mt-5 flex flex-wrap items-baseline justify-between gap-2">
+            <h4 className="font-semibold text-forest">Sobrante de períodos anteriores</h4>
+            <span className="text-sm text-ink-muted">
+              {carryTotal === 0
+                ? 'Sin sobrante.'
+                : `${String(carryTotal)} ${carryTotal === 1 ? 'menú' : 'menús'} para vender`}
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-ink-muted">
+            Ya está cocinado: se vende con "Sale del stock" y no suma a lo que hay que cocinar.
+          </p>
+          <ul className="stock-steppers mt-3" aria-busy={saving}>
+            {carryRows.map((row) => {
+              const name = `${row.familyName} ${row.variantName}`;
+              return (
+                <li key={keyOf(row)}>
+                  <span className="stock-steppers-name">
+                    {name}
+                    {row.fromCycleAlias ? <small>De {row.fromCycleAlias}</small> : null}
+                  </span>
+                  <span className="stock-steppers-control">
+                    <button
+                      aria-label={`Quitar uno del sobrante de ${name}`}
+                      className="button button-secondary"
+                      disabled={!canEdit || saving || row.quantityUnits === 0}
+                      onClick={() => void changeCarryOver(row, -1)}
+                      type="button"
+                    >
+                      −
+                    </button>
+                    <strong aria-live="polite">{row.quantityUnits}</strong>
+                    <button
+                      aria-label={`Agregar uno al sobrante de ${name}`}
+                      className="button button-secondary"
+                      disabled={!canEdit || saving}
+                      onClick={() => void changeCarryOver(row, 1)}
+                      type="button"
+                    >
+                      +
+                    </button>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      ) : null}
     </section>
   );
 }

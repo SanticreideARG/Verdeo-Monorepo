@@ -94,3 +94,12 @@ Las respuestas quedan en la sección Decisiones.
 - **C hecho**: `customers.is_new_override` (migración 0069; null = automático). Es nuevo si se
   marcó a mano o, si no, con a lo sumo un pedido no cancelado. La ficha muestra la etiqueta NUEVO y el
   interruptor "Cliente nuevo" (dice si es automático o a mano); Pedidos tiene la columna "¿Es nuevo?".
+- **A hecho**: `production_stock` suma `origin` (`planned` | `carry_over`) y `from_sales_cycle_id`
+  (migración 0070; el índice único pasa a incluir `origin`). El sobrante suma a lo disponible para
+  vender (`sobrante` en el informe de excedente) y no a la planilla de cocina. Al cerrar, el diálogo
+  muestra lo que quedó sin vender y "Pasarlo al período siguiente para venderlo" (por defecto sí):
+  sale de A como baja con ese motivo y entra al período siguiente (el de apertura más cercana) como
+  sobrante; sin período siguiente, avisa en vez de perderlo. En Cocina, "Sobrante de períodos
+  anteriores" con − / + por variedad, también para cargarlo a mano si A ya se cerró. API:
+  `GET/PUT /api/v1/production/:cycleId/carry-over` y `carryToNext` en el cierre.
+  `convert-stock-customer.sql` actualizado al índice nuevo.

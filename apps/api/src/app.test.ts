@@ -53,6 +53,8 @@ const singleSiteGeography = {
 };
 const customerOperationsStubs = {
   addCustomerAddress: vi.fn(),
+  listCarryOver: vi.fn(),
+  setCarryOver: vi.fn(),
   moveCustomerToSite: vi.fn(),
   moveOrderToSite: vi.fn(),
   listReceivables: vi.fn(),
