@@ -6320,6 +6320,8 @@ export class PostgresOperationsService {
    */
   public async listReceivables(input: {
     customerId?: string | undefined;
+    /** Sólo lo de ese período, esté cerrado o no (para su informe). */
+    cycleId?: string | undefined;
     operatingSiteId?: string | null | undefined;
   }) {
     const rows = await this.database
@@ -6341,7 +6343,7 @@ export class PostgresOperationsService {
       .innerJoin(customers, eq(customers.id, orders.customerId))
       .where(
         and(
-          eq(salesCycles.status, 'CLOSED'),
+          input.cycleId ? eq(orders.salesCycleId, input.cycleId) : eq(salesCycles.status, 'CLOSED'),
           ne(orders.status, 'CANCELLED'),
           isNull(orders.paidAt),
           notStockCustomer,
@@ -6450,6 +6452,118 @@ export class PostgresOperationsService {
         // La deuda más vieja: desde cuándo se le debe.
         oldestDeliveryDate: entry.orders[0]?.deliveryDate ?? null,
       })),
+    };
+  }
+
+  /**
+   * El informe de un período (FIXES_2026_10_22_PLAN.md): lo vendido, la plata por medio de pago con
+   * lo cobrado y lo pendiente, quién debe, los cancelados y el stock. Sin el cliente STOCK, que no es
+   * una venta. Se arma al momento: refleja los cobros registrados hasta ahora.
+   */
+  public async cycleReport(cycleId: string, operatingSiteId?: string | null) {
+    const [cycle] = await this.database
+      .select({ alias: salesCycles.alias, id: salesCycles.id, status: salesCycles.status })
+      .from(salesCycles)
+      .where(eq(salesCycles.id, cycleId))
+      .limit(1);
+    if (!cycle) throw new OperationsNotFoundError('No se encontró el período de venta');
+    const scope = and(
+      eq(orders.salesCycleId, cycleId),
+      notStockCustomer,
+      operatingSiteId ? eq(orders.operatingSiteId, operatingSiteId) : undefined,
+    );
+
+    const byMethod = await this.database
+      .select({
+        count: sql<number>`count(*)::int`,
+        isCash: sql<boolean>`coalesce((select pm.is_cash from payment_methods pm where lower(pm.display_name) = lower(${orders.paymentExpectation}) or lower(pm.code) = lower(${orders.paymentExpectation}) limit 1), lower(${orders.paymentExpectation}) like '%efectivo%')`,
+        method: orders.paymentExpectation,
+        paidMinor: sql<number>`coalesce(sum(${orders.totalMinor}) filter (where ${orders.paidAt} is not null), 0)::int`,
+        totalMinor: sql<number>`coalesce(sum(${orders.totalMinor}), 0)::int`,
+      })
+      .from(orders)
+      .where(and(scope, ne(orders.status, 'CANCELLED')))
+      .groupBy(orders.paymentExpectation)
+      .orderBy(desc(sql`sum(${orders.totalMinor})`));
+    const [cancelled] = await this.database
+      .select({
+        count: sql<number>`count(*)::int`,
+        totalMinor: sql<number>`coalesce(sum(${orders.totalMinor}), 0)::int`,
+      })
+      .from(orders)
+      .where(and(scope, eq(orders.status, 'CANCELLED')));
+
+    const methods = byMethod.map((row) => ({
+      count: Number(row.count),
+      isCash: Boolean(row.isCash),
+      method: row.method,
+      paidMinor: Number(row.paidMinor),
+      pendingMinor: Number(row.totalMinor) - Number(row.paidMinor),
+      totalMinor: Number(row.totalMinor),
+    }));
+    const sum = (pick: (row: (typeof methods)[number]) => number) =>
+      methods.reduce((total, row) => total + pick(row), 0);
+
+    const surplus = await this.surplusRows(this.database, cycleId);
+    const writeoffs = await this.database
+      .select({
+        carried: sql<boolean>`${surplusWriteoffs.reason} like 'Cierre de período: pasó%'`,
+        familyName: surplusWriteoffs.familyName,
+        quantityUnits: surplusWriteoffs.quantityUnits,
+        variantName: surplusWriteoffs.variantName,
+      })
+      .from(surplusWriteoffs)
+      .where(eq(surplusWriteoffs.salesCycleId, cycleId));
+    const stock = [...surplus.values()]
+      .filter(
+        (row) =>
+          row.stockPlanificado > 0 ||
+          row.sobrante > 0 ||
+          row.vendidoOportunidad > 0 ||
+          row.bajaMerma > 0,
+      )
+      .map((row) => {
+        const own = writeoffs.filter(
+          (item) => item.familyName === row.familyName && item.variantName === row.variantName,
+        );
+        const carriedOut = own
+          .filter((item) => item.carried)
+          .reduce((total, item) => total + item.quantityUnits, 0);
+        return {
+          carriedIn: row.sobrante,
+          carriedOut,
+          familyName: row.familyName,
+          planned: row.stockPlanificado,
+          sold: row.vendidoOportunidad,
+          variantName: row.variantName,
+          writtenOff: row.bajaMerma - carriedOut,
+        };
+      })
+      .sort(
+        (a, b) =>
+          a.familyName.localeCompare(b.familyName, 'es-AR') ||
+          a.variantName.localeCompare(b.variantName, 'es-AR'),
+      );
+
+    const receivables = await this.listReceivables({ cycleId, operatingSiteId });
+    return {
+      cancelled: {
+        count: Number(cancelled?.count ?? 0),
+        totalMinor: Number(cancelled?.totalMinor ?? 0),
+      },
+      cycle,
+      generatedAt: new Date(),
+      methods,
+      receivables: receivables.items,
+      stock,
+      totals: {
+        cashMinor: sum((row) => (row.isCash ? row.totalMinor : 0)),
+        orderCount: sum((row) => row.count),
+        paidMinor: sum((row) => row.paidMinor),
+        pendingMinor: sum((row) => row.pendingMinor),
+        totalMinor: sum((row) => row.totalMinor),
+        transferMinor: sum((row) => (row.isCash ? 0 : row.totalMinor)),
+      },
     };
   }
 

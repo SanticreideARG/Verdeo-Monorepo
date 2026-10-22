@@ -374,6 +374,7 @@ import {
   productionSnapshotFilenameBase,
   reportFromSnapshot,
 } from './production-export.js';
+import { buildCycleReportExcel, type CycleReport } from './cycle-report.js';
 import { requirePermission } from './middleware/authorization.js';
 
 interface AppVariables {
@@ -781,8 +782,10 @@ interface OperationsEngine {
     context: OperationsContext,
     preview?: boolean,
   ): Promise<unknown>;
+  cycleReport(cycleId: string, operatingSiteId?: string | null): Promise<unknown>;
   listReceivables(input: {
     customerId?: string | undefined;
+    cycleId?: string | undefined;
     operatingSiteId?: string | null | undefined;
   }): Promise<unknown>;
   orderHistory(orderId: string): Promise<unknown>;
@@ -6937,6 +6940,32 @@ export function createApp(options: CreateAppOptions) {
       input.data.carryToNext ?? false,
     );
     return context.json(CycleClosedResponseSchema.parse(contractValue(cycle)));
+  });
+
+  /*
+   * El informe del período en Excel: lo vendido, la plata por medio de pago (cobrado y pendiente),
+   * quién debe y el stock. Lo ve quien ve producción y cobros.
+   */
+  app.get('/api/v1/production/:cycleId/report', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (!permissions.includes('production.read') || !permissions.includes('payments.read'))
+      return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El ciclo indicado no es válido.');
+    const report = contractValue(
+      await requireOperations().cycleReport(
+        params.data.cycleId,
+        context.get('scope')?.operatingSiteId ?? null,
+      ),
+    ) as CycleReport;
+    const filename = `informe-${report.cycle.alias.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`;
+    context.header('cache-control', 'private, no-store');
+    context.header('content-disposition', `attachment; filename="${filename}.xlsx"`);
+    context.header(
+      'content-type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    return context.body(buildCycleReportExcel(report), 200);
   });
 
   app.get('/api/v1/production/:cycleId/export', async (context) => {

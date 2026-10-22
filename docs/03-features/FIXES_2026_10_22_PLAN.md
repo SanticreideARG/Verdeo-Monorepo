@@ -103,3 +103,11 @@ Las respuestas quedan en la sección Decisiones.
   anteriores" con − / + por variedad, también para cargarlo a mano si A ya se cerró. API:
   `GET/PUT /api/v1/production/:cycleId/carry-over` y `carryToNext` en el cierre.
   `convert-stock-customer.sql` actualizado al índice nuevo.
+
+## Agregados del mismo día
+
+- **Ruta diaria**: el total en efectivo y transferencia, y las transferencias cobradas y sin cobrar, en
+  Rutas y en la hoja de quien reparte (`sheetTotals`; efectivo según `payment_methods.is_cash`).
+- **Informe del período**: Excel con Resumen, Por medio de pago, Por cobrar y Stock
+  (`cycleReport` en el servicio, `apps/api/src/cycle-report.ts`). Se arma al momento, así que
+  refleja los cobros registrados hasta ese momento.

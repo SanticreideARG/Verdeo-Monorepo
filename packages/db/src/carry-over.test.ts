@@ -191,3 +191,53 @@ describe('sobrante del período anterior', () => {
     );
   });
 });
+
+describe('informe del período', () => {
+  it('resume lo vendido, la plata por medio de pago, quién debe y el stock', async () => {
+    const { client, service } = await base();
+    await client.exec(seedB);
+    const pagado = (await service.createOrder(
+      { ...pedido('2026-10-18'), initialStatus: 'CONFIRMED' },
+      contexto,
+    )) as { id: string };
+    await service.createOrder(
+      { ...pedido('2026-10-18'), initialStatus: 'CONFIRMED', paymentExpectation: 'Transferencia' },
+      contexto,
+    );
+    const cancelado = (await service.createOrder(pedido('2026-10-18'), contexto)) as {
+      id: string;
+    };
+    await client.exec(`update orders set paid_at = now() where id = '${pagado.id}';
+      update orders set status = 'CANCELLED' where id = '${cancelado.id}';`);
+    await service.setProductionStock(
+      CYCLE,
+      [{ familyName: 'Keto', quantityUnits: 4, variantName: '250' }],
+      contexto,
+    );
+    await service.setCycleClosed(CYCLE, true, contexto, true);
+
+    const report = await service.cycleReport(CYCLE);
+
+    expect(report.totals).toMatchObject({
+      orderCount: 2,
+      paidMinor: 7_000_000,
+      pendingMinor: 7_000_000,
+      totalMinor: 14_000_000,
+    });
+    expect(report.cancelled).toEqual({ count: 1, totalMinor: 7_000_000 });
+    expect(report.receivables).toHaveLength(1);
+    expect(report.receivables[0]?.orders[0]?.paymentExpectation).toBe('Transferencia');
+    // El stock: 4 de la semana, que pasaron al período siguiente.
+    expect(report.stock).toEqual([
+      {
+        carriedIn: 0,
+        carriedOut: 4,
+        familyName: 'Keto',
+        planned: 4,
+        sold: 0,
+        variantName: '250',
+        writtenOff: 0,
+      },
+    ]);
+  });
+});

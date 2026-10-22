@@ -41,6 +41,8 @@ export function KitchenPage() {
   const permissions = profile?.permissions ?? [];
   const canReport = permissions.includes('production.report');
   const canGenerate = permissions.includes('production.generate');
+  // El informe del período muestra plata: lo ve quien ve los cobros.
+  const canSeeMoney = permissions.includes('payments.read');
 
   const loadMenus = useCallback(async () => {
     if (!profile?.permissions.includes('production.read')) {
@@ -99,6 +101,23 @@ export function KitchenPage() {
     await navigator.clipboard.writeText(await response.text());
     showToast('Producción copiada. Pegala en el chat de cocina.');
     await loadSnapshots(selectedMenu.cycle.id);
+  }
+
+  /** El informe del período: lo vendido, la plata por medio de pago, quién debe y el stock. */
+  async function downloadReport() {
+    if (!selectedMenu) return;
+    setMessage('');
+    const response = await apiRequest(`/api/v1/production/${selectedMenu.cycle.id}/report`);
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `informe-${selectedMenu.cycle.alias}.xlsx`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
   }
 
   async function downloadProduction(format: 'pdf' | 'xlsx') {
@@ -284,6 +303,16 @@ export function KitchenPage() {
                 <Link className="button button-secondary" to="/app/etiquetas">
                   Etiquetas
                 </Link>
+                {canSeeMoney ? (
+                  <button
+                    className="button button-secondary"
+                    disabled={!selectedMenu}
+                    onClick={() => void downloadReport()}
+                    type="button"
+                  >
+                    Informe del período
+                  </button>
+                ) : null}
                 {/* Cerrar es lo último de la semana: separado del resto, al final. */}
                 {canGenerate && selectedMenu && selectedMenu.cycle.status !== 'CLOSED' ? (
                   <button
