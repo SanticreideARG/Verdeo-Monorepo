@@ -91,3 +91,6 @@ Las respuestas quedan en la sección Decisiones.
 - **B hecho**: al crear un pedido, el selector de días de reparto tiene "Otra fecha" y, con un solo
   día, hay un calendario en lugar de texto fijo. La fecha elegida a mano viaja con
   `deliveryDateIsCustom` y el servidor la respeta.
+- **C hecho**: `customers.is_new_override` (migración 0069; null = automático). Es nuevo si se
+  marcó a mano o, si no, con a lo sumo un pedido no cancelado. La ficha muestra la etiqueta NUEVO y el
+  interruptor "Cliente nuevo" (dice si es automático o a mano); Pedidos tiene la columna "¿Es nuevo?".

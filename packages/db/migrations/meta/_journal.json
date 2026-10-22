@@ -484,6 +484,13 @@
       "when": 1792542402385,
       "tag": "0068_right_wolfsbane",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1792632379074,
+      "tag": "0069_luxuriant_wilson_fisk",
+      "breakpoints": true
     }
   ]
 }

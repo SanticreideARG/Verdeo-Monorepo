@@ -106,6 +106,20 @@ export function CustomersPage() {
     null,
   );
   const [movingSite, setMovingSite] = useState(false);
+
+  /** Marcar o desmarcar "NUEVO" a mano. */
+  async function setNewOverride(isNew: boolean) {
+    if (!detail) return;
+    const response = await apiRequest(`/api/v1/customers/${detail.id}`, {
+      body: JSON.stringify({ isNewOverride: isNew }),
+      method: 'PATCH',
+    });
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    await loadCustomer(detail.id);
+  }
   const loadCustomer = useCallback(async (customerId: string) => {
     setDetailLoading(true);
     try {
@@ -652,6 +666,7 @@ export function CustomersPage() {
     profile.permissions.includes('customers.edit') &&
     profile.permissions.includes('customers.view_sensitive');
   const canDelete = profile.permissions.includes('customers.delete');
+  const canEditCustomer = profile.permissions.includes('customers.edit');
   // Cambiar de ciudad toca el cliente y sus pedidos abiertos.
   const canMoveSite =
     profile.permissions.includes('customers.edit') && profile.permissions.includes('orders.edit');
@@ -871,7 +886,27 @@ export function CustomersPage() {
                   </div>
                   <div>
                     <span className="status-chip">{customerStatusLabel(detail.status)}</span>
+                    {detail.isNew ? <span className="new-badge">NUEVO</span> : null}
                     <h2>{detail.displayName}</h2>
+                    {/*
+                     * "NUEVO" se calcula solo (primera compra) y se puede forzar a mano: es para
+                     * saber a quién mandarle las recomendaciones para descongelar.
+                     */}
+                    {canEditCustomer ? (
+                      <label className="label-switch crm-new-toggle">
+                        <input
+                          checked={detail.isNew ?? false}
+                          onChange={(event) => void setNewOverride(event.target.checked)}
+                          type="checkbox"
+                        />
+                        Cliente nuevo
+                        <small>
+                          {detail.isNewOverride === null || detail.isNewOverride === undefined
+                            ? ' (automático)'
+                            : ' (a mano)'}
+                        </small>
+                      </label>
+                    ) : null}
                     <p>
                       Cliente desde{' '}
                       {new Intl.DateTimeFormat('es-AR').format(new Date(detail.createdAt))}

@@ -11091,3 +11091,22 @@ label.field:has(> input[type='radio']) {
     text-align: left;
   }
 }
+
+/* "NUEVO": cliente en su primera compra. */
+.new-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.08rem 0.5rem;
+  background: var(--db-accent, #3a7d44);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.crm-new-toggle {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+}
+.crm-new-toggle small {
+  color: var(--db-muted, var(--color-ink-muted));
+}

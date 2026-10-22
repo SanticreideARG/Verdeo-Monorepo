@@ -255,6 +255,13 @@ export function buildOrderColumns(options: { maskSurnames?: boolean } = {}): Ord
       sortValue: (order) => order.dietaryInstructions.join(' · '),
     },
     {
+      key: 'nuevo',
+      label: '¿Es nuevo?',
+      // Para saber a quién mandarle las recomendaciones para descongelar de la primera compra.
+      render: (order) => (order.customer.isNew ? <span className="new-badge">NUEVO</span> : '—'),
+      sortValue: (order) => (order.customer.isNew ? 0 : 1),
+    },
+    {
       key: 'creado',
       label: 'Creado',
       render: (order) => formatDay(order.createdAt),

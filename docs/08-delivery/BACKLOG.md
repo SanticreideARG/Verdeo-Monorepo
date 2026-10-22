@@ -592,5 +592,5 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 
 - [x] D: hoja "Conciliado" con el formato del cliente (menús en el orden del menú, 400 antes que 250, stock sumado, Intuitivos por nombre y tamaño, TOTAL).
 - [x] B: elegir la fecha de entrega al crear un pedido en la computadora ("Otra fecha" o calendario).
-- [ ] C: "NUEVO" en el cliente (calculado, con interruptor en la ficha) y columna "¿Es nuevo?" en Pedidos.
+- [x] C: "NUEVO" en el cliente (calculado: a lo sumo un pedido no cancelado; `customers.is_new_override` para forzarlo a mano, migración 0069), interruptor "Cliente nuevo" en la ficha y columna "¿Es nuevo?" en Pedidos.
 - [ ] A: sobrante del período anterior a la venta en el período nuevo.

@@ -219,6 +219,8 @@ export interface AddressGeocodingConfirmInput {
 
 export interface CustomerUpdateInput {
   displayName?: string | undefined;
+  /** "NUEVO" a mano; null vuelve al cálculo automático. */
+  isNewOverride?: boolean | null | undefined;
   firstName?: string | null | undefined;
   internalNotes?: string | null | undefined;
   lastName?: string | null | undefined;
@@ -367,6 +369,14 @@ interface ResolvedOrderItem {
   totalMinor: number;
   unitPriceMinor: number;
   variantSnapshot: string;
+}
+
+/**
+ * Si el cliente es "NUEVO": lo que se marcó a mano, o, si no, que tenga a lo sumo un pedido no
+ * cancelado (el que se está tomando). Es para mandarle las recomendaciones de la primera compra.
+ */
+export function isNewCustomer(override: boolean | null, activeOrders: number): boolean {
+  return override ?? activeOrders <= 1;
 }
 
 /**
@@ -765,6 +775,7 @@ export class PostgresOperationsService {
         firstName: customers.firstName,
         id: customers.id,
         internalNotes: customers.internalNotes,
+        isNewOverride: customers.isNewOverride,
         lastName: customers.lastName,
         status: customers.status,
         updatedAt: customers.updatedAt,
@@ -773,6 +784,14 @@ export class PostgresOperationsService {
       .where(eq(customers.id, customerId))
       .limit(1);
     if (!customer) throw new OperationsNotFoundError('No se encontró el cliente');
+    const [activeOrders] = await this.database
+      .select({ count: sql<number>`count(*)::int` })
+      .from(orders)
+      .where(and(eq(orders.customerId, customerId), ne(orders.status, 'CANCELLED')));
+    const newness = {
+      isNew: isNewCustomer(customer.isNewOverride, activeOrders?.count ?? 0),
+      isNewOverride: customer.isNewOverride,
+    };
 
     const orderRows = await this.database
       .select({
@@ -854,6 +873,7 @@ export class PostgresOperationsService {
         orders: customerOrders,
         status: customer.status,
         updatedAt: customer.updatedAt,
+        ...newness,
       };
     }
 
@@ -925,6 +945,7 @@ export class PostgresOperationsService {
 
     return {
       ...customer,
+      ...newness,
       addresses: addresses.map((address) => ({
         ...address,
         latitude: address.latitude === null ? null : Number(address.latitude),
@@ -1845,6 +1866,7 @@ export class PostgresOperationsService {
           ? { firstName: input.firstName ? normalizeCustomerText(input.firstName) : null }
           : {}),
         ...(input.internalNotes !== undefined ? { internalNotes: input.internalNotes } : {}),
+        ...(input.isNewOverride !== undefined ? { isNewOverride: input.isNewOverride } : {}),
         ...(input.lastName !== undefined
           ? { lastName: input.lastName ? normalizeCustomerText(input.lastName) : null }
           : {}),
@@ -7009,6 +7031,21 @@ export class PostgresOperationsService {
     const contactFor = (customerId: string, type: string) =>
       contactRows.find((row) => row.customerId === customerId && row.type === type)?.value ?? null;
 
+    // "NUEVO": lo marcado a mano o, si no, a lo sumo un pedido no cancelado.
+    const customerIds = [...new Set(rows.map((row) => row.customerId))];
+    const newnessRows = await database
+      .select({
+        activeOrders: sql<number>`(select count(*)::int from orders o where o.customer_id = ${customers.id} and o.status <> 'CANCELLED')`,
+        id: customers.id,
+        override: customers.isNewOverride,
+      })
+      .from(customers)
+      .where(inArray(customers.id, customerIds));
+    const isNewFor = (customerId: string) => {
+      const row = newnessRows.find((entry) => entry.id === customerId);
+      return row ? isNewCustomer(row.override, row.activeOrders) : false;
+    };
+
     const byId = new Map(
       rows.map((row) => [
         row.id,
@@ -7021,6 +7058,7 @@ export class PostgresOperationsService {
             displayName: row.customerDisplayName,
             email: contactFor(row.customerId, 'email'),
             id: row.customerId,
+            isNew: isNewFor(row.customerId),
             phone: contactFor(row.customerId, 'phone'),
             whatsapp: contactFor(row.customerId, 'whatsapp'),
           },

@@ -89,6 +89,14 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Cancelar un pedido',
   },
   {
+    body: 'Un cliente "NUEVO" es el que hace su primera compra: es a quien hay que mandarle las recomendaciones para descongelar. Se marca solo (tiene a lo sumo un pedido que no está cancelado) y en su ficha, el interruptor "Cliente nuevo" permite forzarlo a mano; al lado dice si está en automático o a mano.\n\nEn "Pedidos", la columna "¿Es nuevo?" (se activa desde "Columnas") muestra la etiqueta NUEVO y permite ordenar para ver primero a los nuevos.',
+    category: 'Clientes',
+    key: 'clientes-nuevo',
+    ordinal: 5,
+    requiredPermission: 'customers.read',
+    title: 'Clientes nuevos (primera compra)',
+  },
+  {
     body: 'Si un pedido o un cliente se cargó en la ciudad que no era, se mueve, sin borrar ni volver a cargar.\n\n**Un pedido**: en su ficha, "Mover a otra ciudad". Elegís la ciudad y la zona, y "Ver qué cambia" muestra el número nuevo (con el prefijo de esa ciudad), el precio y el día de reparto de allá. Recién con "Mover" se guarda. Se pueden mover los pedidos en borrador, confirmados y listos. Si la otra ciudad no ofrece alguna variedad del pedido en ese período, no lo mueve y dice cuál, para cambiarla antes.\n\n**Un cliente**: en su ficha, "Cambiar de ciudad". Elegís la ciudad y la zona; si tiene varios domicilios, la zona de cada uno. El cliente deja la ciudad anterior, sus domicilios se vuelven a ubicar en el mapa, y sus pedidos en borrador, confirmados y listos se mueven con él en el mismo momento.\n\nLos demás datos (nombre, dirección, notas) no cambian solos: si hace falta, se corrigen a mano. En la auditoría queda de dónde a dónde se movió cada cosa.',
     category: 'Pedidos / Editar y cancelar',
     key: 'pedidos-mover-ciudad',

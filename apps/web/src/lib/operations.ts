@@ -58,6 +58,9 @@ export interface CustomerAddress {
 
 export interface CustomerDetail extends CustomerSummary {
   addresses?: CustomerAddress[];
+  isNew?: boolean;
+  /** Lo marcado a mano; null es el cálculo automático. */
+  isNewOverride?: boolean | null;
   firstName: string | null;
   identities?: CustomerIdentity[];
   internalNotes?: string | null;
@@ -232,6 +235,8 @@ export interface OrderSummary {
     displayName: string;
     email: string | null;
     id: string;
+    /** "NUEVO": primera compra, o marcado a mano en su ficha. */
+    isNew?: boolean;
     phone: string | null;
     whatsapp: string | null;
   };

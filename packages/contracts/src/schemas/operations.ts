@@ -208,6 +208,8 @@ export const CustomerUpdateRequestSchema = z
     displayName: RequiredTextSchema.optional(),
     firstName: z.string().trim().max(100).nullable().optional(),
     internalNotes: z.string().trim().max(5_000).nullable().optional(),
+    // "NUEVO" a mano; null vuelve al cálculo automático.
+    isNewOverride: z.boolean().nullable().optional(),
     lastName: z.string().trim().max(100).nullable().optional(),
     status: ConfigurableKeySchema.optional(),
   })
@@ -407,6 +409,8 @@ export const CustomerOrderSummarySchema = z.object({
 
 export const CustomerDetailSchema = CustomerSummarySchema.extend({
   addresses: z.array(CustomerAddressSchema).optional(),
+  isNew: z.boolean().default(false),
+  isNewOverride: z.boolean().nullable().default(null),
   firstName: z.string().nullable(),
   identities: z.array(CustomerIdentitySchema).optional(),
   internalNotes: z.string().nullable().optional(),
@@ -877,6 +881,8 @@ export const OrderSchema = z.object({
     displayName: z.string(),
     email: z.string().nullable(),
     id: UuidSchema,
+    /** "NUEVO": primera compra (o marcado a mano en su ficha). */
+    isNew: z.boolean().default(false),
     phone: z.string().nullable(),
     whatsapp: z.string().nullable(),
   }),

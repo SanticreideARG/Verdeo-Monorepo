@@ -366,3 +366,24 @@ describe('el cliente STOCK', () => {
     expect(stats.byDay.reduce((sum, day) => sum + day.orderCount, 0)).toBe(1);
   });
 });
+
+describe('NUEVO', () => {
+  it('es nuevo en su primera compra, deja de serlo después y se puede forzar a mano', async () => {
+    const { service } = await base();
+    const first = (await service.createOrder(pedido('2026-10-18'), contexto)) as {
+      customer: { isNew: boolean };
+    };
+    expect(first.customer.isNew).toBe(true);
+    expect((await service.getCustomer(CUSTOMER, false)).isNew).toBe(true);
+
+    await service.createOrder(pedido('2026-10-18'), contexto);
+    expect((await service.getCustomer(CUSTOMER, false)).isNew).toBe(false);
+
+    await service.updateCustomer(CUSTOMER, { isNewOverride: true }, true, contexto);
+    const forced = await service.getCustomer(CUSTOMER, true);
+    expect(forced).toMatchObject({ isNew: true, isNewOverride: true });
+
+    await service.updateCustomer(CUSTOMER, { isNewOverride: null }, true, contexto);
+    expect((await service.getCustomer(CUSTOMER, false)).isNew).toBe(false);
+  });
+});
