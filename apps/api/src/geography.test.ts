@@ -99,6 +99,15 @@ function geographyStubs() {
     updateZone: vi
       .fn<(id: string, input: unknown, context: unknown) => Promise<unknown>>()
       .mockResolvedValue(sampleZone),
+    deleteZone: vi
+      .fn<
+        (
+          id: string,
+          moveTo: string | undefined,
+          context: unknown,
+        ) => Promise<{ movedAddresses: number; movedOrders: number }>
+      >()
+      .mockResolvedValue({ movedAddresses: 2, movedOrders: 1 }),
   };
 }
 

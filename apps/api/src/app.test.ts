@@ -50,6 +50,7 @@ const singleSiteGeography = {
   ),
   updateSite: vi.fn(),
   updateZone: vi.fn(),
+  deleteZone: vi.fn(),
 };
 const customerOperationsStubs = {
   addCustomerAddress: vi.fn(),

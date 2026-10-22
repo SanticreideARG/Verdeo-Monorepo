@@ -596,3 +596,8 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] A: sobrante del período anterior a la venta en el período nuevo (`production_stock.origin` = `carry_over`, migración 0070). Se pasa al cerrar o se carga a mano en Cocina; se vende y no se cocina.
 - [x] Ruta diaria: total en efectivo y transferencia, y transferencias cobradas y no cobradas (en Rutas y en la hoja de quien reparte). El efectivo sale del catálogo de medios de pago (`is_cash`); cobrada = tilde de Cobrado o pago registrado.
 - [x] Informe del período (Cocina → "Informe del período", Excel): Resumen (pedidos, total vendido, cobrado, pendiente, efectivo y transferencia, cancelados, clientes que deben), Por medio de pago (con cobrado y pendiente), Por cobrar (cada pedido impago con cliente y contacto) y Stock (de la semana, sobrante recibido, vendido, pasó al siguiente, baja). Sin el cliente STOCK. `GET /api/v1/production/:cycleId/report` (`production.read` + `payments.read`).
+
+## Zonas (2026-10-22)
+
+- [x] Eliminar una zona desactivada: sus domicilios, pedidos, zona preferida de clientes y barrios pasan a una zona activa de la misma operación (`DELETE /api/v1/zones/:id` con `moveToZoneId`, `zones.manage`). Para unificar zonas.
+- [x] Corregido: la lista de operaciones decía "0 zonas" en todas (la subconsulta comparaba contra la columna de la zona y no de la operación).

@@ -190,9 +190,13 @@ export class PostgresGeographyService {
     const rows = await this.database
       .select({
         ...siteColumns,
+        /*
+         * Con los nombres de tabla escritos: dentro de la subconsulta, una columna sin tabla ("id")
+         * se resolvía contra la zona y no contra la operación, así que todas decían "0 zonas".
+         */
         zoneCount: sql<number>`(
-          select count(*)::int from ${geographicZones}
-          where ${geographicZones.operatingSiteId} = ${operatingSites.id}
+          select count(*)::int from geographic_zones gz
+          where gz.operating_site_id = "operating_sites"."id"
         )`,
       })
       .from(operatingSites)
@@ -480,6 +484,101 @@ export class PostgresGeographyService {
       });
 
       return updated;
+    });
+  }
+
+  /**
+   * Eliminar una zona desactivada (2026-10-22: al unificar varias zonas en una). Lo que tenía atado
+   * —domicilios, pedidos, la zona preferida de los clientes y los barrios— pasa a `moveToZoneId`,
+   * una zona activa de la misma operación. Sin nada atado, se borra sin más.
+   */
+  public async deleteZone(id: string, moveToZoneId: string | undefined, context: GeographyContext) {
+    return this.database.transaction(async (transaction) => {
+      const [zone] = await transaction
+        .select(zoneColumns)
+        .from(geographicZones)
+        .where(eq(geographicZones.id, id))
+        .for('update')
+        .limit(1);
+      if (!zone) throw new GeographicZoneNotFoundError();
+      if (zone.active) throw new GeographyConflictError('Desactivá la zona antes de eliminarla.');
+
+      const count = async (query: ReturnType<typeof sql>) =>
+        Number(
+          ((await transaction.execute(query)) as unknown as { rows: { n: number | string }[] })
+            .rows[0]?.n ?? 0,
+        );
+      const addresses = await count(
+        sql`select count(*)::int as n from customer_addresses where geographic_zone_id = ${id}`,
+      );
+      const orderCount = await count(
+        sql`select count(*)::int as n from orders where geographic_zone_id = ${id}`,
+      );
+      const preferred = await count(
+        sql`select count(*)::int as n from customer_operating_sites where preferred_zone_id = ${id}`,
+      );
+
+      let target: { id: string } | undefined;
+      if (addresses + orderCount + preferred > 0) {
+        if (!moveToZoneId)
+          throw new GeographyConflictError(
+            `La zona tiene ${String(addresses)} domicilios y ${String(orderCount)} pedidos: elegí a qué zona pasarlos.`,
+          );
+        [target] = await transaction
+          .select({ id: geographicZones.id })
+          .from(geographicZones)
+          .where(
+            and(
+              eq(geographicZones.id, moveToZoneId),
+              eq(geographicZones.operatingSiteId, zone.operatingSiteId),
+              eq(geographicZones.active, true),
+            ),
+          )
+          .limit(1);
+        if (!target || target.id === id)
+          throw new GeographyConflictError(
+            'Elegí una zona activa de la misma operación para pasarle lo que tenía.',
+          );
+        const to = target.id;
+        await transaction.execute(
+          sql`update customer_addresses set geographic_zone_id = ${to}, updated_at = now() where geographic_zone_id = ${id}`,
+        );
+        await transaction.execute(
+          sql`update orders set geographic_zone_id = ${to}, updated_at = now() where geographic_zone_id = ${id}`,
+        );
+        await transaction.execute(
+          sql`update customer_operating_sites set preferred_zone_id = ${to}, updated_at = now() where preferred_zone_id = ${id}`,
+        );
+        // Los barrios: si la otra zona ya tiene uno con el mismo nombre, se juntan; si no, se pasan.
+        await transaction.execute(
+          sql`update customer_addresses a set neighborhood_id = t.id
+            from neighborhoods s join neighborhoods t on t.name_key = s.name_key and t.geographic_zone_id = ${to}
+            where s.geographic_zone_id = ${id} and a.neighborhood_id = s.id`,
+        );
+        await transaction.execute(
+          sql`delete from neighborhoods s where s.geographic_zone_id = ${id}
+            and exists (select 1 from neighborhoods t where t.geographic_zone_id = ${to} and t.name_key = s.name_key)`,
+        );
+        await transaction.execute(
+          sql`update neighborhoods set geographic_zone_id = ${to} where geographic_zone_id = ${id}`,
+        );
+      }
+
+      await transaction.delete(geographicZones).where(eq(geographicZones.id, id));
+      await new AuditService(new PostgresAuditSink(transaction)).record({
+        action: 'geographic_zone.deleted',
+        actor: context.actorUserId
+          ? { type: 'user', userId: context.actorUserId }
+          : { type: 'system' },
+        before: zoneAuditFields(zone),
+        correlationId: context.correlationId,
+        entityId: id,
+        entityType: 'geographic_zone',
+        metadata: { addresses, movedTo: target?.id ?? null, orders: orderCount, preferred },
+        requestId: context.requestId,
+        source: context.source,
+      });
+      return { movedAddresses: addresses, movedOrders: orderCount };
     });
   }
 }

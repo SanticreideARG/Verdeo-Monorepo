@@ -483,6 +483,11 @@ interface GeographyEngine {
     input: GeographicZoneUpdateRequest,
     context: GeographyContext,
   ): Promise<unknown>;
+  deleteZone(
+    id: string,
+    moveToZoneId: string | undefined,
+    context: GeographyContext,
+  ): Promise<{ movedAddresses: number; movedOrders: number }>;
 }
 
 interface GeographyContext {
@@ -3534,6 +3539,27 @@ export function createApp(options: CreateAppOptions) {
       geographyContext(context),
     );
     return context.json(GeographicZoneSchema.parse(contractValue(zone)));
+  });
+
+  /*
+   * Eliminar una zona desactivada. Lo que tenga atado (domicilios, pedidos, zona preferida, barrios)
+   * pasa a `moveToZoneId`, una zona activa de la misma operación.
+   */
+  app.delete('/api/v1/zones/:id', requirePermission('zones.manage'), async (context) => {
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'Identificador inválido.', params.error.issues);
+    const body = (await context.req.json().catch(() => ({}))) as { moveToZoneId?: unknown };
+    const moveTo =
+      typeof body.moveToZoneId === 'string'
+        ? IdParamSchema.safeParse({ id: body.moveToZoneId })
+        : null;
+    if (moveTo && !moveTo.success) return badRequest(context, 'Revisá la zona destino.');
+    const result = await requireGeography().deleteZone(
+      params.data.id,
+      moveTo?.success ? moveTo.data.id : undefined,
+      geographyContext(context),
+    );
+    return context.json(result);
   });
 
   // ---- Internal staff messaging (ADR-032). Separate from the customer channel above. ----

@@ -71,6 +71,8 @@ export function GeographySettingsPage() {
   const [failed, setFailed] = useState(false);
   const [sites, setSites] = useState<OperatingSite[]>([]);
   const [zones, setZones] = useState<GeographicZone[]>([]);
+  const [deletingZone, setDeletingZone] = useState<GeographicZone | null>(null);
+  const [moveToZoneId, setMoveToZoneId] = useState('');
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -265,6 +267,31 @@ export function GeographySettingsPage() {
     setZones((current) => [...current, created]);
     setZoneDraft(emptyZoneDraft);
     showToast(`Zona "${created.displayName}" creada.`);
+    await loadSites();
+  }
+
+  /** Eliminar una zona desactivada, pasando lo que tenga a otra zona activa. */
+  async function deleteZone(zone: GeographicZone, moveToZoneId: string) {
+    setBusy(true);
+    setMessage(null);
+    const response = await apiRequest(`/api/v1/zones/${zone.id}`, {
+      body: JSON.stringify(moveToZoneId ? { moveToZoneId } : {}),
+      method: 'DELETE',
+    });
+    setBusy(false);
+    setDeletingZone(null);
+    if (!response.ok) {
+      setMessage(await readError(response, 'No pudimos eliminar la zona.'));
+      return;
+    }
+    const moved = (await response.json()) as { movedAddresses: number; movedOrders: number };
+    setZones((current) => current.filter((item) => item.id !== zone.id));
+    if (selectedZoneId === zone.id) setSelectedZoneId(null);
+    showToast(
+      moved.movedAddresses + moved.movedOrders > 0
+        ? `Zona "${zone.displayName}" eliminada. Pasaron ${String(moved.movedAddresses)} domicilios y ${String(moved.movedOrders)} pedidos a la otra zona.`
+        : `Zona "${zone.displayName}" eliminada.`,
+    );
     await loadSites();
   }
 
@@ -505,6 +532,20 @@ export function GeographySettingsPage() {
                           {zone.active ? 'Desactivar' : 'Activar'}
                         </button>
                       ) : null}
+                      {/* Sólo una zona desactivada se elimina: la activa todavía se usa. */}
+                      {canManageZones && !zone.active ? (
+                        <button
+                          className="button button-danger"
+                          disabled={busy}
+                          onClick={() => {
+                            setMoveToZoneId(zones.find((other) => other.active)?.id ?? '');
+                            setDeletingZone(zone);
+                          }}
+                          type="button"
+                        >
+                          Eliminar
+                        </button>
+                      ) : null}
                     </li>
                   ))}
                   {zones.length === 0 ? (
@@ -633,6 +674,57 @@ export function GeographySettingsPage() {
           </div>
         </div>
       </section>
+      {deletingZone ? (
+        <div
+          aria-label={`Eliminar la zona ${deletingZone.displayName}`}
+          aria-modal="true"
+          className="modal-backdrop"
+          role="dialog"
+        >
+          <div className="modal-panel grid gap-3">
+            <h2 className="text-lg font-semibold text-forest">
+              ¿Eliminar la zona {deletingZone.displayName}?
+            </h2>
+            <p className="text-sm text-ink-muted">
+              Sus domicilios, sus pedidos y los clientes que la tenían como preferida pasan a la
+              zona que elijas. Los barrios se juntan con los de esa zona.
+            </p>
+            <label className="field">
+              Pasar todo a
+              <select
+                onChange={(event) => setMoveToZoneId(event.target.value)}
+                value={moveToZoneId}
+              >
+                <option value="">Ninguna (sólo si la zona no tiene nada)</option>
+                {zones
+                  .filter((other) => other.active && other.id !== deletingZone.id)
+                  .map((other) => (
+                    <option key={other.id} value={other.id}>
+                      {other.displayName}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <div className="form-actions justify-end">
+              <button
+                className="button button-secondary"
+                onClick={() => setDeletingZone(null)}
+                type="button"
+              >
+                Volver
+              </button>
+              <button
+                className="button button-danger"
+                disabled={busy}
+                onClick={() => void deleteZone(deletingZone, moveToZoneId)}
+                type="button"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </DashboardShell>
   );
 }

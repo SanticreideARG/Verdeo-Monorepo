@@ -28,6 +28,7 @@ function buildApp(extra: { aiTasks?: unknown; createOrder?: unknown }, permissio
       ),
       updateSite: vi.fn(),
       updateZone: vi.fn(),
+      deleteZone: vi.fn(),
     },
     logger: createLogger({ level: 'silent', service: 'verdeo-api-test' }),
     operations: { createOrder: extra.createOrder ?? vi.fn() } as never,

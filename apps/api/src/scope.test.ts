@@ -65,6 +65,14 @@ function scopedApp(
       .mockResolvedValue(scope),
     updateSite: vi.fn<(id: string, input: unknown, context: unknown) => Promise<unknown>>(),
     updateZone: vi.fn<(id: string, input: unknown, context: unknown) => Promise<unknown>>(),
+    deleteZone:
+      vi.fn<
+        (
+          id: string,
+          moveTo: string | undefined,
+          context: unknown,
+        ) => Promise<{ movedAddresses: number; movedOrders: number }>
+      >(),
   };
 
   const app = createApp({

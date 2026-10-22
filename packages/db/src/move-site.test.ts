@@ -7,6 +7,7 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Database } from './index.js';
+import { PostgresGeographyService } from './repositories/postgres-geography-service.js';
 import { PostgresOperationsService } from './repositories/postgres-operations-service.js';
 import * as schema from './schema/index.js';
 
@@ -204,5 +205,64 @@ describe('mover un cliente a otra ciudad', () => {
         contexto,
       ),
     ).rejects.toThrow(/no es de la ciudad destino/);
+  });
+});
+
+describe('zonas', () => {
+  const ZONE_OLD = 'b0000000-0000-4000-8000-000000000003';
+
+  it('cuenta las zonas de cada operación', async () => {
+    const { client } = await base();
+    const geography = new PostgresGeographyService(
+      drizzle(client, { schema }) as unknown as Database,
+    );
+
+    const sites = await geography.listSites();
+    expect(sites.find((site) => site.id === NQN)?.zoneCount).toBe(1);
+    expect(sites.find((site) => site.id === CBA)?.zoneCount).toBe(1);
+  });
+
+  it('elimina una zona desactivada pasando sus domicilios y pedidos a otra', async () => {
+    const { client, order } = await base();
+    await client.exec(`
+      insert into geographic_zones (id, operating_site_id, slug, display_name, active)
+      values ('${ZONE_OLD}', '${NQN}', 'vieja', 'Vieja', false);
+      update customer_addresses set geographic_zone_id = '${ZONE_OLD}' where id = '${ADDRESS}';
+      update orders set geographic_zone_id = '${ZONE_OLD}' where id = '${order.id}';
+    `);
+    const geography = new PostgresGeographyService(
+      drizzle(client, { schema }) as unknown as Database,
+    );
+
+    // Con cosas atadas, pide a dónde pasarlas.
+    await expect(geography.deleteZone(ZONE_OLD, undefined, contexto)).rejects.toThrow(
+      /elegí a qué zona pasarlos/,
+    );
+    // Y no acepta una zona de otra operación.
+    await expect(geography.deleteZone(ZONE_OLD, ZONE_CBA, contexto)).rejects.toThrow(
+      /misma operación/,
+    );
+
+    expect(await geography.deleteZone(ZONE_OLD, ZONE_NQN, contexto)).toEqual({
+      movedAddresses: 1,
+      movedOrders: 1,
+    });
+    const { rows } = await client.query<{ address: string; order: string; zones: number }>(
+      `select (select geographic_zone_id from customer_addresses where id = '${ADDRESS}') as address,
+              (select geographic_zone_id from orders where id = '${order.id}') as order,
+              (select count(*)::int from geographic_zones where id = '${ZONE_OLD}') as zones`,
+    );
+    expect(rows[0]).toEqual({ address: ZONE_NQN, order: ZONE_NQN, zones: 0 });
+  });
+
+  it('no elimina una zona activa', async () => {
+    const { client } = await base();
+    const geography = new PostgresGeographyService(
+      drizzle(client, { schema }) as unknown as Database,
+    );
+
+    await expect(geography.deleteZone(ZONE_NQN, undefined, contexto)).rejects.toThrow(
+      /Desactivá la zona/,
+    );
   });
 });

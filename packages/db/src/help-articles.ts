@@ -219,7 +219,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
 
   // --- Ajustes ---------------------------------------------------------------------------------
   {
-    body: 'En [Ajustes → Zonas geográficas](/app/ajustes/zonas) están las ciudades y sus zonas. Cada ciudad tiene su prefijo de pedido (por ejemplo MZA-00001) y su WhatsApp de contacto.\n\nUna ciudad nueva necesita al menos una zona antes de poder cargar domicilios, y el menú de la semana distribuido con sus precios antes de poder vender.',
+    body: 'En [Ajustes → Zonas geográficas](/app/ajustes/zonas) están las ciudades y sus zonas. Cada ciudad tiene su prefijo de pedido (por ejemplo MZA-00001) y su WhatsApp de contacto.\n\nUna ciudad nueva necesita al menos una zona antes de poder cargar domicilios, y el menú de la semana distribuido con sus precios antes de poder vender.\n\nUna zona que ya no se usa se desactiva y, una vez desactivada, se puede eliminar. Al eliminarla, elegís a qué zona activa de la misma ciudad pasan sus domicilios, sus pedidos y los clientes que la tenían como preferida; los barrios se juntan con los de esa zona. Sirve, por ejemplo, para unificar varias zonas en una sola.',
     category: 'Ajustes',
     key: 'ajustes-ciudades-zonas',
     ordinal: 0,
