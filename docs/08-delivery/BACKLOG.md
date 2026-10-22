@@ -594,5 +594,5 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] B: elegir la fecha de entrega al crear un pedido en la computadora ("Otra fecha" o calendario).
 - [x] C: "NUEVO" en el cliente (calculado: a lo sumo un pedido no cancelado; `customers.is_new_override` para forzarlo a mano, migración 0069), interruptor "Cliente nuevo" en la ficha y columna "¿Es nuevo?" en Pedidos.
 - [x] A: sobrante del período anterior a la venta en el período nuevo (`production_stock.origin` = `carry_over`, migración 0070). Se pasa al cerrar o se carga a mano en Cocina; se vende y no se cocina.
-- [ ] Ruta diaria: total en efectivo y transferencia, y transferencias cobradas y no cobradas.
+- [x] Ruta diaria: total en efectivo y transferencia, y transferencias cobradas y no cobradas (en Rutas y en la hoja de quien reparte). El efectivo sale del catálogo de medios de pago (`is_cash`); cobrada = tilde de Cobrado o pago registrado.
 - [ ] Informe al cerrar el período: pendientes de cobro, totales y detalle.

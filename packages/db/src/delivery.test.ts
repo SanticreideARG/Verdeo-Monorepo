@@ -402,6 +402,28 @@ describe('el enlace de la ruta', () => {
     expect(JSON.stringify(sheet)).not.toContain('Díaz');
   });
 
+  it('parte el total en efectivo y transferencia, y las transferencias en cobradas y no', async () => {
+    const { client, service } = await seededService();
+    const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
+    await service.publishRoute(route!.id, CONTEXT);
+    const { token } = await service.issueRouteLink(route!.id, 24, CONTEXT);
+
+    expect(await service.routeSheetByToken(token)).toMatchObject({
+      cashMinor: 25000,
+      totalMinor: 55000,
+      transferMinor: 30000,
+      transferPaidMinor: 0,
+      transferUnpaidMinor: 30000,
+    });
+
+    // Tildada como cobrada en Pedidos, la transferencia pasa a cobradas.
+    await client.exec(`update orders set paid_at = now() where id = '${ORDER_B}'`);
+    expect(await service.routeProgress(route!.id)).toMatchObject({
+      transferPaidMinor: 30000,
+      transferUnpaidMinor: 0,
+    });
+  });
+
   it('generar uno nuevo da de baja el anterior', async () => {
     const { service } = await seededService();
     const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);

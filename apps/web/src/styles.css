@@ -11119,3 +11119,32 @@ label.field:has(> input[type='radio']) {
   padding-left: 1.1rem;
   font-size: 0.9rem;
 }
+
+/* El total de la ruta: efectivo, transferencia, cobradas y sin cobrar. */
+.route-money {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.4rem;
+  margin: 0.6rem 0;
+  font-variant-numeric: tabular-nums;
+}
+.route-money > div {
+  display: grid;
+}
+.route-money dt {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--db-muted, var(--color-ink-muted));
+}
+.route-money dd {
+  display: grid;
+  margin: 0;
+  font-weight: 700;
+}
+.route-money small {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--db-muted, var(--color-ink-muted));
+}

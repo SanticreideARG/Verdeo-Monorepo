@@ -147,7 +147,22 @@ export const DeliverySheetStopSchema = z.object({
   totalMinor: z.number().int(),
 });
 
+/**
+ * El total de la ruta en efectivo y transferencia, y las transferencias cobradas y no cobradas: en la
+ * hoja de quien reparte y en Rutas.
+ */
+function RouteMoneyBreakdownSheet() {
+  return {
+    cashMinor: z.number().int().default(0),
+    totalMinor: z.number().int().default(0),
+    transferMinor: z.number().int().default(0),
+    transferPaidMinor: z.number().int().default(0),
+    transferUnpaidMinor: z.number().int().default(0),
+  };
+}
+
 export const DeliveryRouteSheetSchema = z.object({
+  ...RouteMoneyBreakdownSheet(),
   collectedMinor: z.number().int(),
   deliveredCount: z.number().int(),
   deliveryDate: z.string(),
@@ -164,6 +179,7 @@ export const DeliveryRouteSheetSchema = z.object({
 });
 
 export const DeliveryRouteProgressSchema = z.object({
+  ...RouteMoneyBreakdownSheet(),
   collectedMinor: z.number().int(),
   deliveredCount: z.number().int(),
   pendingCollectionMinor: z.number().int(),

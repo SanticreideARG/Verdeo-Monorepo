@@ -1,3 +1,4 @@
+import { RouteMoneyBreakdown, type RouteMoney } from '../components/RouteMoneyBreakdown.js';
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -30,7 +31,7 @@ interface SheetStop {
   totalMinor: number;
 }
 
-interface Sheet {
+interface Sheet extends RouteMoney {
   collectedMinor: number;
   deliveredCount: number;
   failureReasons: { displayName: string; id: string }[];
@@ -214,6 +215,7 @@ export function DeliverySheetPage() {
           ) : null}
         </div>
       </header>
+      <RouteMoneyBreakdown money={sheet} />
 
       {failed ? (
         <p className="delivery-sheet-error" role="alert">

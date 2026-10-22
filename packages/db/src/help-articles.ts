@@ -351,7 +351,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Paso 4 — Imprimir las etiquetas',
   },
   {
-    body: 'En "Rutas" proponés una ruta por zona y fecha, con la ciudad elegida arriba. El sistema levanta los pedidos confirmados o listos de ese día con dirección geocodificada y los ordena solo. Podés reordenar las paradas a mano; nada llega al repartidor hasta que publicás la ruta.\n\nEl detalle, en tres partes: [[reparto-proponer]], [[reparto-descartar]] y [[reparto-mensaje]].\n\n[Ir a Rutas](/app/reparto/rutas) · Sigue: [[ciclo-6-cobrar]]',
+    body: 'En "Rutas" proponés una ruta por zona y fecha, con la ciudad elegida arriba. El sistema levanta los pedidos confirmados o listos de ese día con dirección geocodificada y los ordena solo. Podés reordenar las paradas a mano; nada llega al repartidor hasta que publicás la ruta.\n\nArriba de cada ruta publicada, y en la hoja de quien reparte, está el total de plata partido en efectivo y transferencia, y las transferencias en cobradas y sin cobrar: lo que vuelve en mano y lo que hay que ir a buscar al banco. Una transferencia cuenta como cobrada cuando el pedido tiene el tilde de "Cobrado".\n\nEl detalle, en tres partes: [[reparto-proponer]], [[reparto-descartar]] y [[reparto-mensaje]].\n\n[Ir a Rutas](/app/reparto/rutas) · Sigue: [[ciclo-6-cobrar]]',
     category: 'Ciclo semanal',
     key: 'ciclo-5-rutas',
     ordinal: 5,

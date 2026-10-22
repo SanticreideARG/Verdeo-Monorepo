@@ -1,3 +1,4 @@
+import { RouteMoneyBreakdown, type RouteMoney } from '../components/RouteMoneyBreakdown.js';
 import { Fragment, useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { useSearchParams } from 'react-router-dom';
@@ -134,12 +135,15 @@ export function RoutesPage() {
   const [linkBusy, setLinkBusy] = useState(false);
   /* Las rutas de semanas pasadas están, pero no estorbando: se piden. */
   const [mostrarViejas, setMostrarViejas] = useState(false);
-  const [progress, setProgress] = useState<{
-    collectedMinor: number;
-    deliveredCount: number;
-    pendingCollectionMinor: number;
-    stopCount: number;
-  } | null>(null);
+  const [progress, setProgress] = useState<
+    | (RouteMoney & {
+        collectedMinor: number;
+        deliveredCount: number;
+        pendingCollectionMinor: number;
+        stopCount: number;
+      })
+    | null
+  >(null);
   const [loading, setLoading] = useState(true);
 
   /*
@@ -186,7 +190,7 @@ export function RoutesPage() {
     const avance = await apiRequest(`/api/v1/delivery/routes/${routeId}/progress`);
     if (avance.ok) {
       setProgress(
-        (await avance.json()) as {
+        (await avance.json()) as RouteMoney & {
           collectedMinor: number;
           deliveredCount: number;
           pendingCollectionMinor: number;
@@ -721,6 +725,7 @@ export function RoutesPage() {
                         ) : null}
                       </p>
                     ) : null}
+                    {progress ? <RouteMoneyBreakdown money={progress} /> : null}
 
                     {issuedLink ? (
                       <div className="route-link">

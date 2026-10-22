@@ -992,6 +992,13 @@ export class PostgresDeliveryService {
         orderId: deliveryStops.orderId,
         paymentExpectation: orders.paymentExpectation,
         prepaid: sql<boolean>`coalesce(${payments.status} = 'PAID', false)`,
+        /*
+         * Si el medio de pago del pedido es efectivo, según el catálogo de medios (por nombre o
+         * código); un medio que no está en el catálogo se reconoce por la palabra "efectivo".
+         */
+        isCash: sql<boolean>`coalesce((select pm.is_cash from payment_methods pm where lower(pm.display_name) = lower(${orders.paymentExpectation}) or lower(pm.code) = lower(${orders.paymentExpectation}) limit 1), lower(${orders.paymentExpectation}) like '%efectivo%')`,
+        // Cobrado: el tilde de Pedidos o el pago registrado.
+        paid: sql<boolean>`(${orders.paidAt} is not null or coalesce(${payments.status} = 'PAID', false))`,
         publicNumber: orders.publicNumber,
         sequence: deliveryStops.sequence,
         status: deliveryStops.status,
@@ -1037,12 +1044,30 @@ export class PostgresDeliveryService {
   private sheetTotals(
     stops: readonly {
       collectedMinor: number;
+      isCash: boolean;
+      paid: boolean;
       prepaid: boolean;
       status: string;
       totalMinor: number;
     }[],
   ) {
+    /*
+     * El total de la ruta, partido en efectivo y transferencia, y las transferencias en cobradas y
+     * no cobradas (2026-10-22): es lo que se mira para saber qué plata vuelve en mano y qué hay que
+     * ir a buscar al banco.
+     */
+    const sum = (list: readonly { totalMinor: number }[]) =>
+      list.reduce((total, stop) => total + stop.totalMinor, 0);
+    const transfers = stops.filter((stop) => !stop.isCash);
+    const breakdown = {
+      cashMinor: sum(stops.filter((stop) => stop.isCash)),
+      totalMinor: sum(stops),
+      transferMinor: sum(transfers),
+      transferPaidMinor: sum(transfers.filter((stop) => stop.paid)),
+      transferUnpaidMinor: sum(transfers.filter((stop) => !stop.paid)),
+    };
     return {
+      ...breakdown,
       collectedMinor: stops.reduce((total, stop) => total + stop.collectedMinor, 0),
       deliveredCount: stops.filter((stop) => stop.status === 'delivered').length,
       pendingCollectionMinor: stops
