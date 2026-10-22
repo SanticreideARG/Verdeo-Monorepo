@@ -28,6 +28,8 @@ export interface ProductionReport {
   cycle: ProductionSnapshot['payload']['cycle'];
   delta: ProductionSnapshot['payload']['delta'];
   dishTally: ProductionSnapshot['payload']['dishTally'];
+  /** Las variedades en el orden del menú; sin esto, alfabético. */
+  familyOrder?: readonly string[];
   /** El stock del período: también se cocina, así que entra en la hoja "Pedido". */
   stock?: readonly { familyName: string; quantityUnits: number; variantName: string }[];
   /** "Parcial (martes 20:00)", "Final" o "Consolidado al momento". */
@@ -157,6 +159,95 @@ export const ORDER_SHEET_DAYS = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIE
  * las mismas porciones —el sistema no sabe de cambios plato por plato—, así que las cinco columnas
  * de un renglón salen iguales; si cocina cambia alguna, la corrige en la planilla.
  */
+/** Las variedades en el orden del menú (las que no están, al final y por nombre). */
+function byMenuOrder(report: ProductionReport) {
+  const order = report.familyOrder ?? [];
+  const rank = (name: string) => {
+    const index = order.indexOf(name);
+    return index < 0 ? order.length : index;
+  };
+  return (left: string, right: string) =>
+    rank(left) - rank(right) || left.localeCompare(right, 'es-AR');
+}
+
+/** Los tamaños de mayor a menor: 400 antes que 250, como en la planilla del cliente. */
+function bySizeDesc(left: string, right: string): number {
+  const a = Number.parseFloat(left);
+  const b = Number.parseFloat(right);
+  if (Number.isFinite(a) && Number.isFinite(b) && a !== b) return b - a;
+  return left.localeCompare(right, 'es-AR');
+}
+
+/** "Menú Anti-Age" sale "ANTI-AGE 250", como en las planillas del cliente. */
+function sheetLabel(familyName: string, variantName: string): string {
+  return `${familyName.replace(/^men[uú]\s+/i, '')} ${variantName}`.toUpperCase();
+}
+
+/**
+ * La hoja "Conciliado", con el formato de la planilla del cliente: cuántos menús de cada uno.
+ *
+ * Una sola columna de cantidades. Primero los menús estándar, en el orden del menú y de mayor a
+ * menor tamaño, con un renglón vacío entre variedades; el stock del período suma (se cocina). Después
+ * los Intuitivos, uno por pedido, con el nombre de quien lo pidió y el tamaño. Al pie, el total.
+ */
+export function conciliadoRows(report: ProductionReport): (number | string)[][] {
+  const families = new Map<string, Map<string, number>>();
+  const add = (familyName: string, variantName: string, units: number) => {
+    const variants = families.get(familyName) ?? new Map<string, number>();
+    families.set(familyName, variants);
+    variants.set(variantName, (variants.get(variantName) ?? 0) + units);
+  };
+  for (const line of report.base) add(line.familyName, line.variantName, line.quantityUnits);
+  for (const line of report.stock ?? []) add(line.familyName, line.variantName, line.quantityUnits);
+
+  const rows: (number | string)[][] = [];
+  let total = 0;
+  for (const familyName of [...families.keys()].sort(byMenuOrder(report))) {
+    const variants = families.get(familyName) ?? new Map<string, number>();
+    for (const variantName of [...variants.keys()].sort(bySizeDesc)) {
+      const units = variants.get(variantName) ?? 0;
+      rows.push([sheetLabel(familyName, variantName), units]);
+      total += units;
+    }
+    rows.push(['', '']);
+  }
+  for (const item of report.custom) {
+    rows.push([`${item.customerDisplayName} ${item.variantName}`, item.quantityUnits]);
+    total += item.quantityUnits;
+  }
+  if (report.custom.length > 0) rows.push(['', '']);
+  rows.push(['TOTAL', total]);
+  return rows;
+}
+
+function conciliadoSheet(report: ProductionReport): WorkSheet {
+  const rows = conciliadoRows(report);
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  sheet['!cols'] = [{ wch: 38 }, { wch: 9 }];
+  // El total como fórmula, con su valor: si cocina corrige un número, el total lo sigue.
+  const last = rows.length;
+  const value = rows.at(-1)?.[1];
+  sheet[`B${String(last)}`] = {
+    f: `SUM(B1:B${String(last - 1)})`,
+    t: 'n',
+    v: typeof value === 'number' ? value : 0,
+  };
+  rows.forEach((row, rowIndex) => {
+    for (let column = 0; column < 2; column += 1) {
+      const address = XLSX.utils.encode_cell({ c: column, r: rowIndex });
+      const cell = (sheet[address] ?? { t: 's', v: '' }) as CellObject;
+      sheet[address] = cell;
+      cell.s = {
+        alignment: { horizontal: column === 0 ? 'left' : 'right', vertical: 'center' },
+        border: BORDER,
+        font: { bold: true, name: 'Arial', sz: 16 },
+      };
+    }
+  });
+  sheet['!rows'] = rows.map(() => ({ hpt: 30 }));
+  return sheet;
+}
+
 export function orderSheetRows(report: ProductionReport): (number | string)[][] {
   const width = ORDER_SHEET_DAYS.length;
   // Menú → tamaño → porciones por día (plato 1 … plato 5).
@@ -208,10 +299,12 @@ export function orderSheetRows(report: ProductionReport): (number | string)[][] 
   const rows: (number | string)[][] = [['PEDIDO', ...ORDER_SHEET_DAYS, '']];
   let total = 0;
   let first = true;
-  for (const [familyName, variants] of families) {
+  for (const familyName of [...families.keys()].sort(byMenuOrder(report))) {
+    const variants = families.get(familyName) ?? new Map<string, number[]>();
     if (!first) rows.push(blank());
     first = false;
-    for (const [variantName, days] of variants) {
+    for (const variantName of [...variants.keys()].sort(bySizeDesc)) {
+      const days = variants.get(variantName) ?? [];
       rows.push([
         // "Menú Anti-Age" sale "ANTI-AGE 250", como en la planilla del cliente.
         `${familyName.replace(/^men[uú]\s+/i, '')} ${variantName}`.toUpperCase(),
@@ -318,59 +411,8 @@ export function buildProductionExcel(report: ProductionReport): ArrayBuffer {
   // La primera hoja es la del cliente: es la que se abre al descargar.
   XLSX.utils.book_append_sheet(workbook, orderSheet(report), 'Pedido');
 
-  /*
-   * Conciliado: cuántos menús de cada uno, incluyendo los Intuitivos.
-   *
-   * La hoja base no los tiene: un Intuitivo lleva su propia composición, así que el consolidado lo
-   * saca aparte, uno por pedido. Eso dejaba sin contestar la pregunta más simple —"¿cuántos menús
-   * de cada tipo salen esta semana?"—, que había que sumar a mano.
-   */
-  const totals = new Map<
-    string,
-    { familyName: string; orders: Set<string>; units: number; variantName: string }
-  >();
-  const totalFor = (familyName: string, variantName: string) => {
-    const key = lineLabel(familyName, variantName);
-    const row = totals.get(key) ?? { familyName, orders: new Set<string>(), units: 0, variantName };
-    totals.set(key, row);
-    return row;
-  };
-  for (const line of base) {
-    const row = totalFor(line.familyName, line.variantName);
-    row.units += line.quantityUnits;
-  }
-  // Los pedidos de la base ya vienen contados; los del Intuitivo se cuentan acá, uno por renglón.
-  const baseOrderCounts = new Map(
-    base.map((line) => [lineLabel(line.familyName, line.variantName), line.orderCount]),
-  );
-  for (const item of report.custom) {
-    const row = totalFor(item.familyName, item.variantName);
-    row.units += item.quantityUnits;
-    row.orders.add(item.orderPublicNumber);
-  }
-
-  XLSX.utils.book_append_sheet(
-    workbook,
-    sheetWithTitle(
-      title,
-      [...totals.values()]
-        .sort(
-          (left, right) =>
-            left.familyName.localeCompare(right.familyName, 'es-AR') ||
-            left.variantName.localeCompare(right.variantName, 'es-AR'),
-        )
-        .map((row) => ({
-          Menú: row.familyName,
-          Tamaño: row.variantName,
-          Unidades: row.units,
-          Pedidos:
-            baseOrderCounts.get(lineLabel(row.familyName, row.variantName)) ?? row.orders.size,
-        })),
-      [24, 10, 12, 10],
-      ['Unidades', 'Pedidos'],
-    ),
-    'Conciliado',
-  );
+  // La segunda, el conciliado con el formato del cliente.
+  XLSX.utils.book_append_sheet(workbook, conciliadoSheet(report), 'Conciliado');
 
   XLSX.utils.book_append_sheet(
     workbook,

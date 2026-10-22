@@ -98,14 +98,14 @@ describe('buildProductionExcel', () => {
       'JUEVES',
       'VIERNES',
     ]);
+    // De mayor a menor tamaño. El Intuitivo 400 (dos unidades) se desarma: sus platos de Keto
+    // suman en KETO 400, cada uno en su día, y el de Anti-Age en ANTI-AGE 400 el martes.
+    expect(rows[1]?.slice(0, 6)).toEqual(['KETO 400', 13, 11, 13, 13, 13]);
     // Pedidos más stock, las mismas porciones en cada plato.
-    expect(rows[1]?.slice(0, 6)).toEqual(['KETO 250', 14, 14, 14, 14, 14]);
-    // El Intuitivo 400 (dos unidades) se desarma: sus platos de Keto suman en KETO 400, cada uno en
-    // su día, y el de Anti-Age en ANTI-AGE 400 el martes. No hay renglón "INTUITIVO".
-    expect(rows[2]?.slice(0, 6)).toEqual(['KETO 400', 13, 11, 13, 13, 13]);
+    expect(rows[2]?.slice(0, 6)).toEqual(['KETO 250', 14, 14, 14, 14, 14]);
     expect((rows[3] ?? []).every((cell) => cell === '')).toBe(true);
-    expect(rows[4]?.slice(0, 6)).toEqual(['ANTI-AGE 250', 1, 1, 1, 1, 1]);
-    expect(rows[5]?.slice(0, 6)).toEqual(['ANTI-AGE 400', 0, 2, 0, 0, 0]);
+    expect(rows[4]?.slice(0, 6)).toEqual(['ANTI-AGE 400', 0, 2, 0, 0, 0]);
+    expect(rows[5]?.slice(0, 6)).toEqual(['ANTI-AGE 250', 1, 1, 1, 1, 1]);
     expect(rows.some((row) => String(row[0]).startsWith('INTUITIVO'))).toBe(false);
     // El pedido viejo sin origen va aparte, con sus porciones en la última columna.
     expect(rows[7]?.[0]).toBe('SIN MENÚ DE ORIGEN 400');
@@ -119,19 +119,49 @@ describe('buildProductionExcel', () => {
     });
   });
 
-  it('cuenta los Intuitivos en el conciliado, que la hoja base no tiene', () => {
-    const book = read(buildProductionExcel(report));
-    const rows = rowsOf(book, 'Conciliado');
+  it('arma el conciliado como la planilla del cliente', () => {
+    const book = read(
+      buildProductionExcel({
+        ...report,
+        base: [
+          ...report.base,
+          {
+            exceptions: [],
+            familyName: 'Keto',
+            orderCount: 5,
+            quantityUnits: 5,
+            variantName: '400',
+          },
+          {
+            exceptions: [],
+            familyName: 'Real',
+            orderCount: 3,
+            quantityUnits: 3,
+            variantName: '250',
+          },
+        ],
+        // El orden del menú: Real antes que Keto, aunque no sea alfabético.
+        familyOrder: ['Real', 'Keto'],
+        stock: [{ familyName: 'Keto', quantityUnits: 2, variantName: '400' }],
+      }),
+    );
 
-    /*
-     * Un Intuitivo lleva su propia composición, así que el consolidado lo saca aparte, uno por
-     * pedido, y la hoja base no lo incluye. Sin esta hoja, "¿cuántos menús de cada tipo salen esta
-     * semana?" había que sumarlo a mano.
-     */
-    expect(rows[1]).toEqual(['Menú', 'Tamaño', 'Unidades', 'Pedidos']);
-    // Dos pedidos de Intuitivo 400, de dos y una unidad.
-    expect(rows[2]).toEqual(['Intuitivo', '400', 3, 2]);
-    expect(rows[3]).toEqual(['Keto', '250', 12, 8]);
+    expect(book.SheetNames[1]).toBe('Conciliado');
+    expect(rowsOf(book, 'Conciliado')).toEqual([
+      ['REAL 250', 3],
+      ['', ''],
+      // 400 antes que 250, y el stock suma: 5 pedidos + 2 de stock.
+      ['KETO 400', 7],
+      ['KETO 250', 12],
+      ['', ''],
+      // Los Intuitivos, uno por pedido, con el nombre de quien lo pidió y el tamaño.
+      ['Lola 400', 2],
+      ['Rosa 400', 1],
+      ['', ''],
+      ['TOTAL', 25],
+    ]);
+    const total = (book.Sheets.Conciliado as XLSX.WorkSheet).B9 as XLSX.CellObject;
+    expect(total.f).toBe('SUM(B1:B8)');
   });
 
   it('la hoja "Pedido" lleva los colores del cliente', () => {
@@ -152,7 +182,10 @@ describe('buildProductionExcel', () => {
     // Abierta tres días después, "Producción base" sola no dice de qué semana es, y el nombre del
     // archivo se pierde apenas alguien la reenvía.
     // Salvo "Pedido", que copia el formato del cliente tal cual: arranca con su encabezado.
-    for (const name of book.SheetNames.filter((sheet) => sheet !== 'Pedido')) {
+    // Tampoco "Conciliado", que copia la planilla del cliente.
+    for (const name of book.SheetNames.filter(
+      (sheet) => !['Pedido', 'Conciliado'].includes(sheet),
+    )) {
       expect(rowsOf(book, name)[0]?.[0]).toBe('Producción — Semana 36 · Consolidado al momento');
     }
   });
@@ -186,7 +219,7 @@ describe('buildProductionExcel', () => {
       'Intuitivos',
     ]);
     // Los anchos sí llegan al archivo; la negrita y los paneles fijos no los escribe esta versión.
-    expect(book.Sheets.Conciliado?.['!cols']).toHaveLength(4);
+    expect(book.Sheets['Producción base']?.['!cols']).toHaveLength(7);
   });
 
   it('omite las hojas que no tienen nada que mostrar', () => {
@@ -197,14 +230,13 @@ describe('buildProductionExcel', () => {
 
   it('suma las columnas numéricas al pie de cada hoja', () => {
     const book = read(buildProductionExcel(report));
-    const rows = rowsOf(book, 'Conciliado');
+    const rows = rowsOf(book, 'Producción base');
 
     // Un renglón en blanco separa la tabla del total, así que el total es la última fila.
     const total = rows.at(-1);
     expect(total?.[0]).toBe('Total');
-    // Keto 12 + los dos Intuitivos (2 y 1) = 15 unidades, en 8 + 2 pedidos.
-    expect(total?.[2]).toBe(15);
-    expect(total?.[3]).toBe(10);
+    expect(total?.[2]).toBe(12);
+    expect(total?.[3]).toBe(8);
   });
 
   /*
@@ -214,7 +246,7 @@ describe('buildProductionExcel', () => {
    */
   it('escribe el total como fórmula que respeta el autofiltro', () => {
     const book = read(buildProductionExcel(report));
-    const sheet = book.Sheets.Conciliado as XLSX.WorkSheet;
+    const sheet = book.Sheets['Producción base'] as XLSX.WorkSheet;
 
     const celda = Object.entries(sheet).find(
       ([reference, cell]) =>

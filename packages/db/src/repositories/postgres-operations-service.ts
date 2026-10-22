@@ -294,6 +294,8 @@ export interface OrderInput {
   geographicZoneId?: string | undefined;
   deliveryAddress: string;
   deliveryDate: string;
+  /** Elegida a mano: se respeta aunque no sea día de reparto. */
+  deliveryDateIsCustom?: boolean | undefined;
   deliveryLocationUrl?: string | undefined;
   dietaryInstructions: readonly string[];
   initialStatus?: 'DRAFT' | 'CONFIRMED' | undefined;
@@ -5916,11 +5918,13 @@ export class PostgresOperationsService {
      * lo calculaba a su manera, y un cálculo en UTC corría un día los pedidos de un cierre de noche.
      */
     const deliverySettings = await this.getDeliverySettings(operatingSiteId, transaction);
-    const deliveryDate = resolveDeliveryDate(
-      deliveryOptions(menu.closeAt, deliverySettings.weekdays),
-      input.deliveryDate,
-      deliverySettings.defaultWeekday,
-    );
+    const deliveryDate = input.deliveryDateIsCustom
+      ? input.deliveryDate
+      : resolveDeliveryDate(
+          deliveryOptions(menu.closeAt, deliverySettings.weekdays),
+          input.deliveryDate,
+          deliverySettings.defaultWeekday,
+        );
 
     const resolvedItems = await this.resolveOrderItems(
       transaction,
@@ -7931,9 +7935,26 @@ export class PostgresOperationsService {
      * Sigue teniendo su etiqueta con cliente: eso sale de las etiquetas, no de este resumen.
      */
     const toCook = lines.filter((line) => line.orderSource !== 'opportunity_sale');
+    /*
+     * El orden de las variedades tal como están cargadas en el menú del período (Keto, Anti-Age,
+     * Vegetariano, Real…): la planilla de cocina va en ese orden y no alfabético.
+     */
+    const familyRows = await this.database
+      .select({
+        first: sql<string>`min(${weeklyMenuOfferings.createdAt})`,
+        name: productFamilies.displayName,
+      })
+      .from(weeklyMenuOfferings)
+      .innerJoin(weeklyMenus, eq(weeklyMenus.id, weeklyMenuOfferings.weeklyMenuId))
+      .innerJoin(productVariants, eq(productVariants.id, weeklyMenuOfferings.productVariantId))
+      .innerJoin(productFamilies, eq(productFamilies.id, productVariants.productFamilyId))
+      .where(and(eq(weeklyMenus.salesCycleId, cycleId), eq(productFamilies.kind, 'FIXED')))
+      .groupBy(productFamilies.displayName)
+      .orderBy(sql`min(${weeklyMenuOfferings.createdAt})`);
     return {
       ...buildKitchenSummary(toCook),
       cycle,
+      familyOrder: familyRows.map((row) => row.name),
       generatedAt: new Date(),
       stock: stock.map(({ familyName, quantityUnits, variantName }) => ({
         familyName,

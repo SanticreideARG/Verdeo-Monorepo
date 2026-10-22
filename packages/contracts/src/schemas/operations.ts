@@ -727,6 +727,11 @@ export const OrderCreateRequestSchema = z.object({
   deliveryAddressLine2: z.string().trim().max(300).optional(),
   deliveryLocationUrl: z.url().max(2_000).optional(),
   deliveryDate: z.iso.date(),
+  /**
+   * La fecha la eligió una persona a mano ("Otra fecha"): se respeta tal cual, igual que al editar.
+   * Sin esto, una fecha que no es día de reparto se corrige a la de siempre de la ciudad.
+   */
+  deliveryDateIsCustom: z.boolean().optional(),
   dietaryInstructions: z.array(RequiredTextSchema).max(20).default([]),
   items: z.array(OrderItemInputSchema).min(1).max(50),
   menuId: UuidSchema,
@@ -1074,6 +1079,8 @@ export const KitchenSummaryResponseSchema = z.object({
     }),
   ),
   cycle: z.object({ alias: z.string(), id: UuidSchema }),
+  /** Las variedades en el orden del menú: la planilla de cocina va en ese orden. */
+  familyOrder: z.array(z.string()).default([]),
   // Los platos de todos los Intuitivos, sumados: es la pregunta que cocina se hace antes de comprar.
   dishTally: z.array(
     z.object({

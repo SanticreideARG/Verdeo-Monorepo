@@ -587,3 +587,10 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] Quien ya tiene conversación directa no se repite en Contactos (panel y pantalla completa).
 - [x] Cada conversación muestra la foto de perfil en círculo, con su estado.
 - [x] El cliente STOCK no genera deuda ("Por cobrar" ni la ficha) ni cuenta en Estadísticas (2026-10-21). Mismo criterio que el script de conversión: un cliente llamado "STOCK".
+
+## Arreglos del 2026-10-22 (FIXES_2026_10_22_PLAN.md)
+
+- [x] D: hoja "Conciliado" con el formato del cliente (menús en el orden del menú, 400 antes que 250, stock sumado, Intuitivos por nombre y tamaño, TOTAL).
+- [x] B: elegir la fecha de entrega al crear un pedido en la computadora ("Otra fecha" o calendario).
+- [ ] C: "NUEVO" en el cliente (calculado, con interruptor en la ficha) y columna "¿Es nuevo?" en Pedidos.
+- [ ] A: sobrante del período anterior a la venta en el período nuevo.

@@ -145,3 +145,21 @@ describe('días de reparto', () => {
     });
   });
 });
+
+describe('fecha elegida a mano al crear', () => {
+  it('se respeta aunque no sea día de reparto, como al editar', async () => {
+    const { service } = await base();
+    await service.updateDeliverySettings(SITE, { defaultWeekday: 0, weekdays: [6, 0] }, contexto);
+
+    const corregida = (await service.createOrder(pedido('2026-10-21'), contexto)) as {
+      deliveryDate: string;
+    };
+    const aMano = (await service.createOrder(
+      { ...pedido('2026-10-21'), deliveryDateIsCustom: true },
+      contexto,
+    )) as { deliveryDate: string };
+
+    expect(corregida.deliveryDate).toBe('2026-10-18');
+    expect(aMano.deliveryDate).toBe('2026-10-21');
+  });
+});

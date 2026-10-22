@@ -37,7 +37,7 @@ import { ReasonDialog } from '../components/ReasonDialog.js';
 import { ErrorNotice } from '../components/ErrorNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
 import { DeliveryDayPicker, useDeliveryOptions } from '../components/DeliveryDayPicker.js';
-import { deliveryDateFor, deliveryDateLabel } from '../lib/dates.js';
+import { deliveryDateFor } from '../lib/dates.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { describeResponse, type AppError } from '../lib/errors.js';
 import { maskSurname, readMaskSurnames, writeMaskSurnames } from '../lib/maskName.js';
@@ -459,6 +459,9 @@ export function OrderIntakePage() {
    */
   const deliveryChoices = useDeliveryOptions(selectedMenu?.id ?? null);
   const [chosenDeliveryDate, setChosenDeliveryDate] = useState('');
+  // "Otra fecha": una que no es día de reparto, elegida a mano (como al editar el pedido).
+  const [otherDate, setOtherDate] = useState(false);
+  const [customDeliveryDate, setCustomDeliveryDate] = useState('');
   const deliveryDate =
     deliveryChoices.options.find((option) => option.date === chosenDeliveryDate)?.date ??
     (deliveryChoices.defaultDate ||
@@ -882,7 +885,9 @@ export function OrderIntakePage() {
           ? { deliveryAddressLine2: formText(form, 'deliveryAddressLine2').trim() }
           : {}),
         ...(addressZoneId ? { geographicZoneId: addressZoneId } : {}),
-        deliveryDate,
+        ...(otherDate && customDeliveryDate
+          ? { deliveryDate: customDeliveryDate, deliveryDateIsCustom: true }
+          : { deliveryDate }),
         // Un solo comentario para la cocina por pedido: no hay indicaciones por plato.
         dietaryInstructions: formText(form, 'dietaryInstructions').trim()
           ? [formText(form, 'dietaryInstructions').trim().replace(/\s+/g, ' ')]
@@ -912,6 +917,7 @@ export function OrderIntakePage() {
       // The draft is dropped on a successful save, not on unmount: that is what makes "I switched
       // screens and came back" restore, while "I already saved this" does not come back as a ghost.
       draft.discard();
+      setOtherDate(false);
       resetCart();
       setFromStock(false);
       setMessage('');
@@ -1590,7 +1596,7 @@ export function OrderIntakePage() {
                   value={units}
                 />
               </label>
-              {deliveryChoices.options.length > 1 ? (
+              {deliveryChoices.options.length > 1 && !otherDate ? (
                 <div className="field field-wide">
                   <DeliveryDayPicker
                     onChange={setChosenDeliveryDate}
@@ -1600,17 +1606,50 @@ export function OrderIntakePage() {
                   {selectedMenu ? (
                     <small className="field-hint">{selectedMenu.cycle.alias}</small>
                   ) : null}
+                  <button
+                    className="locate-retry-open"
+                    onClick={() => {
+                      setCustomDeliveryDate(deliveryDate);
+                      setOtherDate(true);
+                    }}
+                    type="button"
+                  >
+                    Otra fecha
+                  </button>
                 </div>
               ) : (
-                <div className="field">
+                /*
+                 * Un calendario, como al editar el pedido. Antes, con un solo día de reparto la fecha
+                 * era texto fijo en la computadora y no había forma de cambiarla al crear.
+                 */
+                <label className="field">
                   Entrega
-                  <p className="field-static">
-                    {selectedMenu ? deliveryDateLabel(selectedMenu.cycle.closeAt) : '—'}
-                  </p>
+                  <input
+                    onChange={(event) => {
+                      setCustomDeliveryDate(event.target.value);
+                      setOtherDate(true);
+                    }}
+                    type="date"
+                    value={otherDate ? customDeliveryDate : deliveryDate}
+                  />
                   {selectedMenu ? (
-                    <small className="field-hint">{selectedMenu.cycle.alias}</small>
+                    <small className="field-hint">
+                      {selectedMenu.cycle.alias}
+                      {deliveryChoices.options.length > 1 ? (
+                        <>
+                          {' · '}
+                          <button
+                            className="locate-retry-open"
+                            onClick={() => setOtherDate(false)}
+                            type="button"
+                          >
+                            Volver a los días de reparto
+                          </button>
+                        </>
+                      ) : null}
+                    </small>
                   ) : null}
-                </div>
+                </label>
               )}
               <label className="field field-wide">
                 Dirección, línea 1
@@ -1842,6 +1881,7 @@ export function OrderIntakePage() {
                   setDeliveryAddress('');
                   setDeliveryAddressLine2('');
                   setAddressZoneId('');
+                  setOtherDate(false);
                   setAddressHint('');
                   setCustomerQuery('');
                   setCustomerResults([]);
