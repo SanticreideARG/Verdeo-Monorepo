@@ -498,6 +498,13 @@
       "when": 1792634314961,
       "tag": "0070_red_cannonball",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1792669430796,
+      "tag": "0071_sad_tempest",
+      "breakpoints": true
     }
   ]
 }

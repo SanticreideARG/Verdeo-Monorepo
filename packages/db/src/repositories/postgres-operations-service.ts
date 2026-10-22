@@ -87,6 +87,7 @@ import {
   siteDeliverySettings,
   siteGeocodingSettings,
   orderDietaryInstructions,
+  labelPrints,
   orderItemSelections,
   orderItems,
   orderRevisions,
@@ -9012,6 +9013,49 @@ export class PostgresOperationsService {
       .from(productionStock)
       .where(and(eq(productionStock.salesCycleId, cycleId), eq(productionStock.origin, 'planned')))
       .orderBy(asc(productionStock.familyName), asc(productionStock.variantName));
+  }
+
+  /** Las etiquetas ya impresas del período (Etiquetas 2.0): para avisar antes de repetirlas. */
+  public async listPrintedLabels(cycleId: string) {
+    return this.database
+      .select({
+        key: labelPrints.labelKey,
+        kind: labelPrints.kind,
+        lastPrintedAt: labelPrints.lastPrintedAt,
+        printCount: labelPrints.printCount,
+      })
+      .from(labelPrints)
+      .where(eq(labelPrints.salesCycleId, cycleId));
+  }
+
+  /** Anotar una tanda impresa: la que ya estaba suma una impresión más. */
+  public async recordPrintedLabels(
+    cycleId: string,
+    labels: readonly { key: string; kind: 'menu' | 'plato' }[],
+    context: OperationsContext,
+  ) {
+    const unique = [...new Map(labels.map((label) => [label.key, label])).values()];
+    for (let start = 0; start < unique.length; start += 200) {
+      await this.database
+        .insert(labelPrints)
+        .values(
+          unique.slice(start, start + 200).map((label) => ({
+            actorUserId: context.actorUserId ?? null,
+            kind: label.kind,
+            labelKey: label.key,
+            salesCycleId: cycleId,
+          })),
+        )
+        .onConflictDoUpdate({
+          set: {
+            actorUserId: context.actorUserId ?? null,
+            lastPrintedAt: new Date(),
+            printCount: sql`${labelPrints.printCount} + 1`,
+          },
+          target: [labelPrints.salesCycleId, labelPrints.labelKey],
+        });
+    }
+    return { recorded: unique.length };
   }
 
   /** El sobrante de períodos anteriores a la venta en éste, con de qué período viene. */

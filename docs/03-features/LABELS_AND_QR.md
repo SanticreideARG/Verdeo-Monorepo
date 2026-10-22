@@ -1,5 +1,9 @@
 # Labels & QR
 
+> Las etiquetas de producción (plato y menú, papel Husares H34124) están en
+> [LABELS_2_PLAN.md](LABELS_2_PLAN.md). Lo que sigue describe el generador anterior, archivado en
+> `/app/etiquetas/clasico`.
+
 ## Etiqueta
 
 Una etiqueta por unidad de cinco comidas.

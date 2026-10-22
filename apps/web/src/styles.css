@@ -9630,6 +9630,83 @@ textarea.sr-only {
   transform-origin: top left;
 }
 
+/* --- Etiquetas 2.0 -------------------------------------------------------------------------- */
+@media (min-width: 1100px) {
+  .studio-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(22rem, 30rem);
+  }
+}
+.studio-groups {
+  display: grid;
+  gap: 0.15rem;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+.studio-groups label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+.studio-groups label:hover {
+  background: var(--db-surface-muted, rgb(0 0 0 / 4%));
+}
+.studio-group-title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.studio-group-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--db-ink-muted, #666);
+}
+.studio-printed {
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: #fdf0d9;
+  color: #8a5a00;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.studio-loose-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 6rem auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+@media (max-width: 640px) {
+  .studio-loose-form {
+    grid-template-columns: 1fr 6rem;
+  }
+}
+.studio-loose-list {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+}
+.studio-loose-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.studio-preview {
+  white-space: normal;
+}
+/* Las hojas se dibujan a tamaño real (794 px de ancho) y se achican al ancho de la caja. */
+.studio-sheet {
+  overflow: hidden;
+  border-radius: 0.5rem;
+  background: #e8e8e8;
+}
+.studio-sheet iframe {
+  width: 794px;
+  border: 0;
+  transform-origin: top left;
+}
+
 /* --- Mensaje de confirmación del pedido --------------------------------------------------------- */
 .confirmation-card {
   display: grid;

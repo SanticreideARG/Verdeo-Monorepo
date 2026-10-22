@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import {
   FONT_STACKS,
@@ -391,13 +392,18 @@ export function LabelsPage() {
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
       <section className="dashboard-panel">
-        <header>
-          <p className="dashboard-kicker">Producción</p>
-          <h1 className="text-2xl font-semibold text-forest">Etiquetas</h1>
-          <p className="mt-2 max-w-3xl text-sm text-ink-muted">
-            Una etiqueta por vianda. Elegí qué tanda imprimir y cómo se ve: el visor dibuja las
-            etiquetas con el mismo motor que la impresión, y se actualiza con cada cambio.
-          </p>
+        <header className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="dashboard-kicker">Producción · versión anterior</p>
+            <h1 className="text-2xl font-semibold text-forest">Etiquetas (clásico)</h1>
+            <p className="mt-2 max-w-3xl text-sm text-ink-muted">
+              El generador anterior, archivado: sigue andando con sus ajustes de hoja y formato. Las
+              etiquetas de producción se imprimen desde Etiquetas.
+            </p>
+          </div>
+          <Link className="button button-secondary" to="/app/etiquetas">
+            Ir a Etiquetas
+          </Link>
         </header>
 
         {message ? (

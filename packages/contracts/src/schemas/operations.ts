@@ -1321,6 +1321,25 @@ export const ProductionStockListResponseSchema = z.object({
   items: z.array(ProductionStockSchema),
 });
 
+/** Etiquetas 2.0: las ya impresas del período, y una tanda que se imprimió. */
+export const PrintedLabelsResponseSchema = z.object({
+  items: z.array(
+    z.object({
+      key: z.string(),
+      kind: z.string(),
+      lastPrintedAt: IsoDateTimeSchema,
+      printCount: z.number().int(),
+    }),
+  ),
+});
+
+export const PrintedLabelsRequestSchema = z.object({
+  labels: z
+    .array(z.object({ key: z.string().min(1).max(300), kind: z.enum(['menu', 'plato']) }))
+    .min(1)
+    .max(2_000),
+});
+
 /** El sobrante de períodos anteriores a la venta en éste. */
 export const CarryOverListResponseSchema = z.object({
   items: z.array(

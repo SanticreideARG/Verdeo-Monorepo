@@ -241,3 +241,32 @@ describe('informe del período', () => {
     ]);
   });
 });
+
+describe('etiquetas impresas', () => {
+  it('recuerda lo impreso y cuenta las veces', async () => {
+    const { service } = await base();
+    await service.recordPrintedLabels(
+      CYCLE,
+      [
+        { key: 'menu:A-1:Keto:250:0', kind: 'menu' },
+        { key: 'plato:KETO:Lomo:0', kind: 'plato' },
+      ],
+      contexto,
+    );
+    await service.recordPrintedLabels(
+      CYCLE,
+      [{ key: 'menu:A-1:Keto:250:0', kind: 'menu' }],
+      contexto,
+    );
+
+    const printed = await service.listPrintedLabels(CYCLE);
+    expect(
+      printed
+        .map(({ key, printCount }) => ({ key, printCount }))
+        .sort((a, b) => a.key.localeCompare(b.key)),
+    ).toEqual([
+      { key: 'menu:A-1:Keto:250:0', printCount: 2 },
+      { key: 'plato:KETO:Lomo:0', printCount: 1 },
+    ]);
+  });
+});

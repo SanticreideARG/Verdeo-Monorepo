@@ -38,6 +38,7 @@ import { KitchenPage } from './KitchenPage.js';
 import { PrivacyPolicyPage } from './PrivacyPolicyPage.js';
 import { TermsPage } from './TermsPage.js';
 import { LabelsPage } from './LabelsPage.js';
+import { LabelsStudioPage } from './LabelsStudioPage.js';
 import { BrandLoading } from '../components/BrandLoading.js';
 import { CalendarPage } from './CalendarPage.js';
 import { EmailSettingsPage } from './EmailSettingsPage.js';
@@ -428,7 +429,9 @@ export function App() {
         {/* Etiquetas dejó de ser una pestaña de Ajustes: el formato y la generación viven juntos en su
           propia sección. La ruta vieja redirige. */}
         <Route path="/app/ajustes/etiquetas" element={<Navigate replace to="/app/etiquetas" />} />
-        <Route path="/app/etiquetas" element={<LabelsPage />} />
+        <Route path="/app/etiquetas" element={<LabelsStudioPage />} />
+        {/* Etiquetas 2.0: el generador anterior queda archivado, andando, por si hace falta. */}
+        <Route path="/app/etiquetas/clasico" element={<LabelsPage />} />
         <Route path="/app/calendario" element={<CalendarPage />} />
         <Route
           path="/app/ajustes/correo"

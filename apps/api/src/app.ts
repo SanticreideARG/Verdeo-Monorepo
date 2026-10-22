@@ -171,6 +171,8 @@ import {
   OrderDeleteResponseSchema,
   ReceivablesResponseSchema,
   CarryOverListResponseSchema,
+  PrintedLabelsRequestSchema,
+  PrintedLabelsResponseSchema,
   OrderMoveSiteRequestSchema,
   OrderMoveSiteResponseSchema,
   CustomerMoveSiteRequestSchema,
@@ -622,6 +624,12 @@ interface OperationsEngine {
     carryToNext?: boolean,
   ): Promise<unknown>;
   listCarryOver(cycleId: string): Promise<unknown>;
+  listPrintedLabels(cycleId: string): Promise<unknown>;
+  recordPrintedLabels(
+    cycleId: string,
+    labels: readonly { key: string; kind: 'menu' | 'plato' }[],
+    context: OperationsContext,
+  ): Promise<unknown>;
   setCarryOver(
     cycleId: string,
     entries: readonly { familyName: string; quantityUnits: number; variantName: string }[],
@@ -6831,6 +6839,31 @@ export function createApp(options: CreateAppOptions) {
    * El sobrante de períodos anteriores a la venta en éste (FIXES_2026_10_22_PLAN.md, A). Lo ve quien
    * ve producción y lo corrige quien carga el stock.
    */
+  /*
+   * Etiquetas 2.0: las ya impresas del período, para avisar antes de imprimir dos veces la misma, y
+   * anotar una tanda impresa. Las ve y las anota quien ve producción (imprimir etiquetas es de cocina).
+   */
+  app.get('/api/v1/production/:cycleId/printed-labels', async (context) => {
+    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El ciclo indicado no es válido.');
+    const items = await requireOperations().listPrintedLabels(params.data.cycleId);
+    return context.json(PrintedLabelsResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  app.post('/api/v1/production/:cycleId/printed-labels', async (context) => {
+    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    const input = PrintedLabelsRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success) return badRequest(context, 'Revisá las etiquetas.');
+    const result = await requireOperations().recordPrintedLabels(
+      params.data.cycleId,
+      input.data.labels,
+      operationsContext(context),
+    );
+    return context.json(result);
+  });
+
   app.get('/api/v1/production/:cycleId/carry-over', async (context) => {
     if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
     const params = CycleIdParamSchema.safeParse(context.req.param());

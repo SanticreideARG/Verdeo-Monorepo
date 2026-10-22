@@ -1,0 +1,117 @@
+/**
+ * Etiquetas 2.0 (LABELS_2_PLAN.md): de los datos del período a las etiquetas de la tanda.
+ *
+ * Vive acá y no en la pantalla para poder probarlo: las claves tienen que ser estables (son las que
+ * recuerdan qué se imprimió) y los grupos tienen que sumar exactamente lo pedido.
+ */
+import {
+  elaborationDay,
+  familyShortName,
+  sizeNumber,
+  splitDishName,
+  type LabelData,
+  type ProductionLabel,
+} from '@verdeo/labels';
+
+/** Una etiqueta de cocina tal como la da el servidor: una por plato. */
+export interface KitchenLabelRow {
+  abbreviation: string;
+  composable: boolean;
+  customerName: string | null;
+  dish: string;
+  side: string | null;
+  sizeName: string | null;
+}
+
+/** Un grupo de la tanda: se tilda entero. */
+export interface LabelGroup {
+  id: string;
+  kind: 'menu' | 'plato';
+  labels: ProductionLabel[];
+  title: string;
+}
+
+/** Las etiquetas de plato del período, agrupadas por variedad (el pie de la etiqueta). */
+export function plateGroups(
+  rows: readonly KitchenLabelRow[],
+  productionDate: string,
+): LabelGroup[] {
+  const day = elaborationDay(productionDate);
+  const groups = new Map<string, LabelGroup>();
+  const seen = new Map<string, number>();
+  for (const row of rows) {
+    // El servidor separa por " / "; el menú también usa "|" entre el plato y su acompañamiento.
+    const split = row.side ? { dish: row.dish, side: row.side } : splitDishName(row.dish);
+    const footer = `${row.abbreviation} ELAB # ${day}`;
+    const groupId = `plato:${row.abbreviation}`;
+    const group = groups.get(groupId) ?? {
+      id: groupId,
+      kind: 'plato' as const,
+      labels: [],
+      title: `Platos ${row.abbreviation}`,
+    };
+    groups.set(groupId, group);
+    // La clave: variedad, plato y número de repetición, que no cambia con la fecha de elaboración.
+    const base = `plato:${row.abbreviation}:${row.sizeName ?? ''}:${split.dish}|${split.side ?? ''}`;
+    const n = seen.get(base) ?? 0;
+    seen.set(base, n + 1);
+    group.labels.push({
+      dish: split.dish,
+      footer,
+      key: `${base}:${String(n)}`,
+      kind: 'plato',
+      side: split.side,
+    });
+  }
+  return [...groups.values()];
+}
+
+/**
+ * Las etiquetas de menú: una por vianda. Las variedades fijas, agrupadas por variedad y tamaño; los
+ * Intuitivos, uno por cliente (llevan su nombre).
+ */
+export function menuGroups(rows: readonly LabelData[]): LabelGroup[] {
+  const groups = new Map<string, LabelGroup>();
+  const seen = new Set<string>();
+  for (const row of rows) {
+    // Con "una etiqueta por plato" activado en la versión anterior, cada vianda llega repetida.
+    const key = `menu:${row.orderPublicNumber}:${row.familyName}:${row.variantName}:${String(row.unitIndex)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const size = sizeNumber(row.variantName);
+    const groupId = row.composable
+      ? `menu:intuitivo:${row.orderPublicNumber}`
+      : `menu:${row.familyName}:${row.variantName}`;
+    const title = row.composable
+      ? `${row.customerDisplayName} · Intuitivo ${size}`
+      : `${familyShortName(row.familyName)} ${size}`;
+    const group = groups.get(groupId) ?? { id: groupId, kind: 'menu' as const, labels: [], title };
+    groups.set(groupId, group);
+    group.labels.push({
+      key,
+      kind: 'menu',
+      line: row.composable ? row.customerDisplayName : familyShortName(row.familyName),
+      size,
+    });
+  }
+  // Primero las variedades fijas (de mayor a menor tamaño), después los Intuitivos.
+  return [...groups.values()].sort((left, right) => {
+    const a = left.id.startsWith('menu:intuitivo') ? 1 : 0;
+    const b = right.id.startsWith('menu:intuitivo') ? 1 : 0;
+    return a - b || left.title.localeCompare(right.title, 'es-AR', { numeric: true });
+  });
+}
+
+/** Una etiqueta suelta, para reponer: se repite `quantity` veces, con claves propias. */
+export function looseLabels(
+  template: ProductionLabel,
+  quantity: number,
+  already: readonly ProductionLabel[],
+): ProductionLabel[] {
+  const base = `suelta:${template.key.replace(/:\d+$/, '')}`;
+  const used = already.filter((label) => label.key.startsWith(`${base}:`)).length;
+  return Array.from({ length: quantity }, (_, index) => ({
+    ...template,
+    key: `${base}:${String(used + index)}`,
+  }));
+}

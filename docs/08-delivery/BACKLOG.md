@@ -601,3 +601,10 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 
 - [x] Eliminar una zona desactivada: sus domicilios, pedidos, zona preferida de clientes y barrios pasan a una zona activa de la misma operación (`DELETE /api/v1/zones/:id` con `moveToZoneId`, `zones.manage`). Para unificar zonas.
 - [x] Corregido: la lista de operaciones decía "0 zonas" en todas (la subconsulta comparaba contra la columna de la zona y no de la operación).
+
+## Etiquetas 2.0 (LABELS_2_PLAN.md, 2026-10-22)
+
+- [x] Motor nuevo en `@verdeo/labels` (`production.ts`): papel Husares H34124 fijo, etiqueta de plato (horizontal) y de menú (vertical) copiadas del PDF de producción, con sus logos.
+- [x] La tanda: grupos de platos (por variedad) y de menús (por variedad y tamaño; Intuitivos por cliente), sueltas con cantidad, mezcla de las dos series y "Empezar en la posición".
+- [x] Lo impreso queda anotado (`label_prints`, migración 0071); si la tanda repite etiquetas, se avisa y se elige imprimir sólo las nuevas o todas.
+- [x] El generador anterior queda archivado en `/app/etiquetas/clasico`.

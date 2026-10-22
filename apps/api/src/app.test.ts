@@ -54,6 +54,8 @@ const singleSiteGeography = {
 };
 const customerOperationsStubs = {
   addCustomerAddress: vi.fn(),
+  listPrintedLabels: vi.fn(),
+  recordPrintedLabels: vi.fn(),
   cycleReport: vi.fn(),
   listCarryOver: vi.fn(),
   setCarryOver: vi.fn(),

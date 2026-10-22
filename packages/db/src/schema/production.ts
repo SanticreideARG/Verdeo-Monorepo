@@ -276,3 +276,28 @@ export const productionStock = pgTable(
     check('production_stock_quantity_positive_check', sql`${table.quantityUnits} > 0`),
   ],
 );
+
+/**
+ * Las etiquetas ya impresas de un período (Etiquetas 2.0, LABELS_2_PLAN.md): para avisar antes de
+ * imprimir dos veces la misma. `label_key` es la clave estable de la etiqueta (la de menú, por pedido
+ * y unidad; la de plato, por variedad, plato y número).
+ */
+export const labelPrints = pgTable(
+  'label_prints',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    salesCycleId: uuid('sales_cycle_id')
+      .notNull()
+      .references(() => salesCycles.id, { onDelete: 'cascade' }),
+    labelKey: text('label_key').notNull(),
+    kind: text('kind').notNull(),
+    printCount: integer('print_count').default(1).notNull(),
+    firstPrintedAt: timestamp('first_printed_at', { withTimezone: true }).defaultNow().notNull(),
+    lastPrintedAt: timestamp('last_printed_at', { withTimezone: true }).defaultNow().notNull(),
+    actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (table) => [
+    uniqueIndex('label_prints_cycle_key_unique').on(table.salesCycleId, table.labelKey),
+    check('label_prints_kind_check', sql`${table.kind} in ('plato', 'menu')`),
+  ],
+);
