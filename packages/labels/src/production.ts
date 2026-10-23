@@ -103,10 +103,10 @@ function escape(value: string): string {
 }
 
 /*
- * El tamaño del plato, como en producción: el más grande que entra. Sin acompañamiento, 11,7 pt si
- * entra en dos renglones, si no 10,75 y si no 9,8. Con acompañamiento, 11,7 si entra en uno y 9,8
- * en dos. Cuántos renglones ocupa depende de la tipografía, así que se mide en la hoja ya cargada
- * (FIT_SCRIPT); la clase inicial es la estimación para cuando no corre.
+ * El tamaño del plato, como en producción: entre 12 y 10 pt según la cantidad de texto, el más
+ * grande con el que entra en dos renglones (de a medio punto). Cuántos renglones ocupa depende de la
+ * tipografía, así que se mide en la hoja ya cargada (FIT_SCRIPT); la clase inicial es la estimación
+ * para cuando no corre.
  */
 function plateHtml(label: Extract<ProductionLabel, { kind: 'plato' }>): string {
   const step = label.side ? 'small' : 'large';
@@ -126,11 +126,19 @@ const FIT_SCRIPT = `<script>
   }
   function fit() {
     document.querySelectorAll('.plato .dish').forEach(function (el) {
-      var steps = el.hasAttribute('data-side') ? [[11.7, 1], [9.8, 2]] : [[11.7, 2], [10.75, 2], [9.8, 2]];
-      for (var i = 0; i < steps.length; i++) {
-        el.style.fontSize = steps[i][0] + 'pt';
-        if (lines(el) <= steps[i][1]) break;
+      var box = el.parentElement;
+      var side = box.querySelector('.side');
+      function fits() {
+        var used = 0;
+        for (var c = box.firstElementChild; c; c = c.nextElementSibling) used += c.getBoundingClientRect().height;
+        return lines(el) <= 2 && used <= box.getBoundingClientRect().height + 0.5;
       }
+      for (var size = 12; size >= 10; size -= 0.5) {
+        el.style.fontSize = size + 'pt';
+        if (fits()) return;
+      }
+      // Último recurso, para un nombre muy largo: también se achica el acompañamiento.
+      for (var s = 11.5; side && s >= 10 && !fits(); s -= 0.5) side.style.fontSize = s + 'pt';
     });
     document.documentElement.setAttribute('data-fitted', '');
   }
@@ -190,8 +198,9 @@ function css(preview: boolean): string {
   .plato p { margin: 0; }
   .plato .text {
     position: absolute;
-    top: 11.5mm;
-    bottom: 6.8mm;
+    top: 11.8mm;
+    /* Con el pie a 11 pt, deja un respiro entre el texto y el pie. */
+    bottom: 7.2mm;
     left: 2mm;
     right: 2mm;
     display: flex;
@@ -200,7 +209,7 @@ function css(preview: boolean): string {
     justify-content: center;
   }
   .plato .dish {
-    font-family: 'Source Serif 4', 'Source Serif Pro', Georgia, serif;
+    font-family: 'Source Serif Variable', 'Source Serif 4', 'Source Serif Pro', Georgia, serif;
     font-weight: 400;
     /* El original es Source Serif Pro: el diseño de texto, no el de tamaños chicos, que es más ancho. */
     font-optical-sizing: none;
@@ -208,13 +217,17 @@ function css(preview: boolean): string {
     max-width: 56mm;
     overflow-wrap: anywhere;
   }
-  .plato .dish.large { font-size: 11.7pt; }
-  .plato .dish.small { font-size: 9.8pt; }
+  .plato .dish.large { font-size: 12pt; }
+  .plato .dish.small { font-size: 10pt; }
   .plato .side {
     max-width: 56mm;
-    font-family: 'Crimson Pro', 'Minion Pro', Georgia, serif;
+    /*
+     * Minion y Myriad son de Adobe: no se pueden incrustar. Se piden por nombre —si están
+     * instaladas en la compu que imprime, se usan— y si no, sus equivalentes libres.
+     */
+    font-family: 'Minion Variable Concept', 'Minion Pro', 'Crimson Pro', Georgia, serif;
     font-style: italic;
-    font-size: 11.7pt;
+    font-size: 12pt;
     line-height: 1.2;
   }
   .plato .foot {
@@ -222,8 +235,8 @@ function css(preview: boolean): string {
     left: 0;
     right: 0;
     bottom: 2.1mm;
-    font-family: 'Source Sans 3', 'Myriad Pro', Arial, sans-serif;
-    font-size: 10.6pt;
+    font-family: 'Myriad Pro', 'Source Sans 3', Arial, sans-serif;
+    font-size: 11pt;
     line-height: 1;
     letter-spacing: 0.01em;
   }

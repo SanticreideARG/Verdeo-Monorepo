@@ -86,3 +86,16 @@ impresas, antes de imprimir se avisa cuántas y desde cuándo, y se elige imprim
   10,75, si no 9,8. Con acompañamiento, 11,7 en un renglón o 9,8 en dos. Se mide en la hoja ya
   cargada (un script corto); la impresión espera a que termine.
 - Los grupos van en la jerarquía de productos ([PRODUCT_ORDER.md](../02-domain/PRODUCT_ORDER.md)).
+
+## Tipografías de producción (2026-10-22, indicadas por el usuario)
+
+- Plato: **Source Serif Variable**, entre 12 y 10 pt según la cantidad de texto (el más grande con
+  el que entra en dos renglones, de a medio punto).
+- Acompañamiento: **Minion Variable Concept**, siempre 12 pt y en cursiva, con la primera letra en
+  mayúscula.
+- Variedad y fecha (el pie): **Myriad Pro**, 11 pt.
+
+Minion y Myriad son de Adobe y no se pueden incrustar en la aplicación: la hoja las pide por nombre
+y, si están instaladas en la compu que imprime (por ejemplo, con Illustrator o Adobe Fonts), las
+usa. Si no, caen en sus equivalentes libres (Crimson Pro y Source Sans 3, de Google Fonts). Source
+Serif Variable igual: instalada se usa ésa; si no, Source Serif 4.
