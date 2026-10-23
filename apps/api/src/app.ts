@@ -362,12 +362,15 @@ import { buildKitchenLabelsPrintHtml } from './kitchen-labels-export.js';
 import { renderLabelDocument } from '@verdeo/labels';
 import { RequestStats } from './request-stats.js';
 import { buildOrdersExcel } from './orders-excel.js';
+import { buildPeriodReportExcel } from './orders-period-report.js';
 import {
   buildOrdersCsv,
   deliveryDateFor,
   maskSurname,
   matchPaymentMethod,
   type OrderExportRow,
+  buildPeriodReport,
+  type PeriodReportOrder,
 } from '@verdeo/orders';
 import {
   buildProductionExcel,
@@ -734,6 +737,12 @@ interface OperationsEngine {
     input: ScopedInput<Omit<CustomerListQuery, 'cursor' | 'limit'>>,
     context: OperationsContext,
   ): Promise<CustomerExportRow[]>;
+  periodOrdersReport(input: {
+    cycleId: string;
+    operatingSiteId: string | null;
+    runId?: string | undefined;
+    zone?: string | undefined;
+  }): Promise<{ cycleAlias: string | null; orders: PeriodReportOrder[] }>;
   exportOrders(
     input: ScopedInput<Omit<OrderListQuery, 'cursor' | 'limit'>>,
     context: OperationsContext,
@@ -6369,6 +6378,31 @@ export function createApp(options: CreateAppOptions) {
       ? await operations.findDuplicateOrders(context.get('scope')?.operatingSiteId ?? null)
       : [];
     return context.json(DuplicateOrdersResponseSchema.parse({ groups }));
+  });
+
+  /*
+   * El informe de pedidos del período en columnas largas (ORDERS_PERIOD_REPORT_PLAN.md): un Excel
+   * con las hojas "Pedidos" y "Reparto". Antes de `/orders/:id`, que si no se lo tragaría.
+   */
+  app.get('/api/v1/orders/period-report', async (context) => {
+    if (!context.get('session').permissions.includes('orders.read')) return forbidden(context);
+    const cycle = CycleIdParamSchema.safeParse({ cycleId: context.req.query('cycleId') });
+    if (!cycle.success) return badRequest(context, 'Elegí un período.');
+    const zone = context.req.query('zone')?.trim() || undefined;
+    const runId = context.req.query('reparto')?.trim() || undefined;
+    const report = await requireOperations().periodOrdersReport(
+      scoped(context, { cycleId: cycle.data.cycleId, runId, zone }),
+    );
+    const alias = (report.cycleAlias ?? 'periodo').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    context.header('cache-control', 'private, no-store');
+    context.header('content-disposition', `attachment; filename="pedidos-${alias}.xlsx"`);
+    context.header(
+      'content-type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    return context.body(
+      buildPeriodReportExcel(buildPeriodReport(report.orders), { cycleAlias: report.cycleAlias }),
+    );
   });
 
   app.get('/api/v1/orders/export', async (context) => {

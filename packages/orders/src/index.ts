@@ -10,3 +10,4 @@ export * from './stats-merge.js';
 export * from './types.js';
 export * from './kitchen-labels.js';
 export * from './product-order.js';
+export * from './period-report.js';

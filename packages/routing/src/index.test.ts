@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { haversineDistanceKm, NearestNeighborRouteOptimizer } from './index.js';
+import {
+  estimateRouteMinutes,
+  haversineDistanceKm,
+  NearestNeighborRouteOptimizer,
+} from './index.js';
 
 describe('haversineDistanceKm', () => {
   it('is zero for the same point', () => {
@@ -53,5 +57,23 @@ describe('NearestNeighborRouteOptimizer', () => {
   it('handles a single stop', () => {
     const stop = { id: 'only', latitude: 1, longitude: 1 };
     expect(optimizer.sequence(null, [stop])).toEqual([stop]);
+  });
+});
+
+describe('estimateRouteMinutes', () => {
+  it('suma el viaje desde el origen y unos minutos por cada parada anterior', () => {
+    const origin = { latitude: -32.89, longitude: -68.84 };
+    // ~1,1 km al norte cada una.
+    const a = { latitude: -32.88, longitude: -68.84 };
+    const b = { latitude: -32.87, longitude: -68.84 };
+    const [first, sinCoordenadas, second] = estimateRouteMinutes(origin, [a, null, b]);
+    expect(first).toBe(4);
+    expect(sinCoordenadas).toBeNull();
+    // 4 + ~4 de viaje + 5 por a + 5 por la parada sin coordenadas.
+    expect(second).toBe(17);
+  });
+
+  it('sin origen, la primera parada es el minuto cero', () => {
+    expect(estimateRouteMinutes(null, [{ latitude: 0, longitude: 0 }])).toEqual([0]);
   });
 });

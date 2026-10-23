@@ -55,8 +55,11 @@ import {
   type IntuitivoPricingRule,
   type KitchenSourceLine,
   type OrderExportRow,
+  type PeriodReportOrder,
   type OrderStatus,
 } from '@verdeo/orders';
+
+import { estimateRouteMinutes } from '@verdeo/routing';
 
 import type { Database } from '../index.js';
 import { users } from '../schema/auth.js';
@@ -6634,6 +6637,177 @@ export class PostgresOperationsService {
    * El alias del ciclo viaja con las filas porque la planilla lo pone de título y consultarlo
    * aparte, desde el handler, sería una segunda ida a la base para un texto.
    */
+  /**
+   * Los pedidos del período para el informe en columnas largas (ORDERS_PERIOD_REPORT_PLAN.md).
+   *
+   * Los que se cocinan (confirmados, listos y entregados), sin el cliente "STOCK". Con lo que la
+   * planilla necesita y la lista de pedidos no trae: cuántas comidas tiene cada vianda, el reparto y
+   * la parada en la ruta del día con su tiempo estimado (desde el origen de la operación).
+   */
+  public async periodOrdersReport(input: {
+    cycleId: string;
+    operatingSiteId?: string | null | undefined;
+    runId?: string | undefined;
+    zone?: string | undefined;
+  }): Promise<{ cycleAlias: string | null; orders: PeriodReportOrder[] }> {
+    const [cycle] = await this.database
+      .select({ alias: salesCycles.alias })
+      .from(salesCycles)
+      .where(eq(salesCycles.id, input.cycleId))
+      .limit(1);
+    if (!cycle) throw new OperationsNotFoundError('No se encontró el período');
+
+    const idRows = await this.database
+      .select({ id: orders.id, runId: orders.deliveryRunId, siteId: orders.operatingSiteId })
+      .from(orders)
+      .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+      .where(
+        and(
+          eq(orders.salesCycleId, input.cycleId),
+          inArray(orders.status, ['CONFIRMED', 'READY', 'DELIVERED']),
+          notStockCustomer,
+          input.operatingSiteId ? eq(orders.operatingSiteId, input.operatingSiteId) : undefined,
+          input.runId ? eq(orders.deliveryRunId, input.runId) : undefined,
+          input.zone ? eq(customerAddresses.operationalZone, input.zone) : undefined,
+        ),
+      );
+    const loaded = await this.loadOrders(
+      this.database,
+      idRows.map(({ id }) => id),
+    );
+    if (loaded.length === 0) return { cycleAlias: cycle.alias, orders: [] };
+    const orderIds = loaded.map(({ id }) => id);
+
+    // Cuántas comidas trae cada vianda y si es un Intuitivo: de la variante de cada ítem.
+    const itemKinds = await this.database
+      .select({
+        composable: sql<boolean>`${productFamilies.kind} = 'COMPOSABLE'`,
+        id: orderItems.id,
+        mealsPerUnit: productVariants.mealsPerUnit,
+      })
+      .from(orderItems)
+      .leftJoin(productVariants, eq(productVariants.id, orderItems.productVariantId))
+      .leftJoin(productFamilies, eq(productFamilies.id, productVariants.productFamilyId))
+      .where(inArray(orderItems.orderId, orderIds));
+    const kindOf = new Map(itemKinds.map((row) => [row.id, row]));
+
+    const runIds = [...new Set(idRows.map((row) => row.runId).filter((id) => id !== null))];
+    const runs =
+      runIds.length === 0
+        ? []
+        : await this.database
+            .select({
+              id: deliveryRuns.id,
+              label: deliveryRuns.label,
+              window: deliveryRuns.timeWindow,
+            })
+            .from(deliveryRuns)
+            .where(inArray(deliveryRuns.id, runIds));
+    const runOf = new Map(
+      runs.map((run) => [run.id, run.window ? `${run.label} · ${run.window}` : run.label]),
+    );
+    const runIdOf = new Map(idRows.map((row) => [row.id, row.runId]));
+
+    /*
+     * La parada de cada pedido: de la ruta publicada si la hay, si no de la última propuesta. El
+     * tiempo estimado se calcula sobre la ruta entera, en orden, desde el origen de la operación.
+     */
+    const stops = await this.database
+      .select({
+        label: deliveryRoutes.label,
+        orderId: deliveryStops.orderId,
+        originLatitude: operatingSites.originLatitude,
+        originLongitude: operatingSites.originLongitude,
+        routeId: deliveryRoutes.id,
+        sequence: deliveryStops.sequence,
+        status: deliveryRoutes.status,
+        updatedAt: deliveryRoutes.updatedAt,
+      })
+      .from(deliveryStops)
+      .innerJoin(deliveryRoutes, eq(deliveryRoutes.id, deliveryStops.routeId))
+      .innerJoin(operatingSites, eq(operatingSites.id, deliveryRoutes.operatingSiteId))
+      .where(inArray(deliveryStops.orderId, orderIds));
+    const rank = (stop: (typeof stops)[number]) => (stop.status === 'draft' ? 1 : 0);
+    const chosen = new Map<string, (typeof stops)[number]>();
+    for (const stop of stops) {
+      const current = chosen.get(stop.orderId);
+      if (
+        !current ||
+        rank(stop) < rank(current) ||
+        (rank(stop) === rank(current) && stop.updatedAt > current.updatedAt)
+      )
+        chosen.set(stop.orderId, stop);
+    }
+    const point = new Map(
+      loaded.map((order) => [
+        order.id,
+        order.deliveryLatitude !== null && order.deliveryLongitude !== null
+          ? { latitude: order.deliveryLatitude, longitude: order.deliveryLongitude }
+          : null,
+      ]),
+    );
+    const minutesOf = new Map<string, number | null>();
+    const routeIds = [...new Set([...chosen.values()].map((stop) => stop.routeId))];
+    for (const routeId of routeIds) {
+      const routeStops = [...chosen.values()]
+        .filter((stop) => stop.routeId === routeId)
+        .sort((left, right) => left.sequence - right.sequence);
+      const first = routeStops[0];
+      const origin =
+        first && first.originLatitude !== null && first.originLongitude !== null
+          ? { latitude: Number(first.originLatitude), longitude: Number(first.originLongitude) }
+          : null;
+      const minutes = estimateRouteMinutes(
+        origin,
+        routeStops.map((stop) => point.get(stop.orderId) ?? null),
+      );
+      routeStops.forEach((stop, index) => minutesOf.set(stop.orderId, minutes[index] ?? null));
+    }
+
+    return {
+      cycleAlias: cycle.alias,
+      orders: loaded.map((order) => {
+        const stop = chosen.get(order.id);
+        const runId = runIdOf.get(order.id) ?? null;
+        return {
+          addressLine1: order.deliveryAddress,
+          addressLine2: order.deliveryAddressLine2,
+          customerName: order.customer.displayName,
+          deliveryDate: order.deliveryDate,
+          dietaryInstructions: order.dietaryInstructions,
+          isNew: order.customer.isNew,
+          items: order.items.map((item) => {
+            const kind = kindOf.get(item.id);
+            return {
+              composable: kind?.composable ?? item.dishSelections.length > 0,
+              dishSelections: item.dishSelections,
+              familyName: item.productName,
+              mealsPerUnit: kind?.mealsPerUnit ?? 5,
+              quantityUnits: item.quantityUnits,
+              variantName: item.variantName,
+            };
+          }),
+          notes: order.notes,
+          paid: order.paidAt !== null,
+          paymentExpectation: order.paymentExpectation,
+          phone: order.customer.whatsapp ?? order.customer.phone,
+          publicNumber: order.publicNumber,
+          route: stop
+            ? {
+                minutes: minutesOf.get(order.id) ?? null,
+                routeLabel: stop.label ?? stop.routeId,
+                sequence: stop.sequence,
+              }
+            : null,
+          run: runId ? (runOf.get(runId) ?? null) : null,
+          timeSlot: order.deliveryTimeSlot,
+          totalMinor: order.totalMinor,
+          zone: order.deliveryZone,
+        };
+      }),
+    };
+  }
+
   public async exportOrders(
     input: Omit<OrderListInput, 'cursor' | 'limit'>,
     context: OperationsContext,

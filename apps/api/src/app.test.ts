@@ -70,6 +70,7 @@ const customerOperationsStubs = {
   deleteCustomer: vi.fn(),
   exportCustomers: vi.fn(),
   exportOrders: vi.fn(),
+  periodOrdersReport: vi.fn(),
   listMergeCandidates: vi.fn(),
   mergeCustomers: vi.fn(),
   generateProductionSnapshot: vi.fn(),

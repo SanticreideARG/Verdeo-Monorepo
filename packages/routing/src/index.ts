@@ -75,3 +75,39 @@ export class NearestNeighborRouteOptimizer implements RouteOptimizer {
     return ordered;
   }
 }
+
+/**
+ * Cuánto se tarda, estimado, en llegar a cada parada desde que sale el reparto (en minutos).
+ *
+ * Es la columna "tiempo estimado de ruta" del informe de pedidos (ORDERS_PERIOD_REPORT_PLAN.md).
+ * No hay un servicio de tránsito detrás: la distancia en línea recta, estirada por un factor de
+ * calles, a una velocidad de ciudad, más unos minutos por cada parada anterior. Alcanza para saber
+ * si alguien está a 20 minutos o a una hora y media, que es lo que se le dice al cliente.
+ *
+ * Una parada sin coordenadas no tiene estimación (null) y no corta la cuenta: la siguiente se mide
+ * desde la última que sí tenía.
+ */
+export const ROUTE_ESTIMATE = { roadFactor: 1.35, speedKmh: 25, stopMinutes: 5 } as const;
+
+export function estimateRouteMinutes(
+  origin: RoutingPoint | null,
+  stops: readonly (RoutingPoint | null)[],
+): (number | null)[] {
+  let previous = origin;
+  let minutes = 0;
+  let stopsBefore = 0;
+  return stops.map((stop) => {
+    if (!stop) {
+      stopsBefore += 1;
+      return null;
+    }
+    if (previous) {
+      const km = haversineDistanceKm(previous, stop) * ROUTE_ESTIMATE.roadFactor;
+      minutes += (km / ROUTE_ESTIMATE.speedKmh) * 60;
+    }
+    minutes += stopsBefore * ROUTE_ESTIMATE.stopMinutes;
+    stopsBefore = 1;
+    previous = stop;
+    return Math.round(minutes);
+  });
+}

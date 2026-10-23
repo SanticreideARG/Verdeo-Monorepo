@@ -1104,6 +1104,32 @@ export function OrderIntakePage() {
     URL.revokeObjectURL(url);
   }
 
+  /**
+   * El informe del período en columnas largas (ORDERS_PERIOD_REPORT_PLAN.md): la planilla que se
+   * armaba a mano, con un renglón por vianda, por día y en el orden de la ruta. Es del período
+   * entero, no de lo filtrado en la tabla.
+   */
+  async function exportPeriodReport() {
+    setMessage('');
+    if (!periodId) {
+      setMessage('Elegí un período para sacar el informe.');
+      return;
+    }
+    const response = await apiRequest(
+      `/api/v1/orders/period-report?cycleId=${encodeURIComponent(periodId)}`,
+    );
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'verdeo-informe-pedidos.xlsx';
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   if (failed) return <DashboardFailed label="los pedidos" />;
   if (!profile) return <DashboardLoading />;
   if (loading) return <DashboardLoading />;
@@ -1328,6 +1354,14 @@ export function OrderIntakePage() {
                   pendingLabel="Preparando…"
                 >
                   Exportar Excel
+                </ActionButton>
+                <ActionButton
+                  className="button button-secondary"
+                  disabled={!periodId}
+                  onClick={exportPeriodReport}
+                  pendingLabel="Preparando…"
+                >
+                  Informe del período
                 </ActionButton>
               </div>
             </details>

@@ -621,4 +621,4 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 
 ## Informe de pedidos del período (ORDERS_PERIOD_REPORT_PLAN.md)
 
-- [ ] Plan escrito; faltan las respuestas del usuario antes de implementar.
+- [x] Informe "Pedidos" + "Reparto" en Excel: un renglón por vianda, por día y en el orden de la ruta, con tiempo estimado de ruta, colores por norma (nuevo, cobrado, franja), totales por día y resumen en la jerarquía de productos. Botón "Informe del período" en Pedidos.

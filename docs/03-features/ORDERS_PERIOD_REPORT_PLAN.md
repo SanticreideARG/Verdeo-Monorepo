@@ -1,7 +1,7 @@
 # Informe de pedidos del período, en columnas largas — plan
 
 Pedido del usuario (2026-10-23): un informe de los pedidos del período "en columnas largas", lo más
-parecido posible al que hoy se arma a mano en Excel, pero mejorado. Estado: **plan, a confirmar**.
+parecido posible al que hoy se arma a mano en Excel, pero mejorado. Estado: **hecho** (2026-10-23), con las respuestas del usuario.
 
 ## Cómo es el informe actual
 
@@ -86,3 +86,26 @@ hasta saber qué es (ver preguntas).
    tests).
 2. La hoja en `orders-excel.ts` con `xlsx-js-style` (colores, barras, fórmulas, impresión).
 3. Botón en Pedidos ("Informe del período") y en el cierre del período; ayuda y documentación.
+
+## Respuestas (2026-10-23) y cómo quedó
+
+1. La columna B es el **tiempo estimado de ruta**: "Tiempo de ruta", calculado
+   (`estimateRouteMinutes` en `@verdeo/routing`) desde el origen de la operación, en el orden de la
+   ruta del día (la publicada o, si no hay, la última propuesta): distancia en línea recta × 1,35 a
+   25 km/h, más 5 minutos por parada anterior. Sin ruta o sin coordenadas, vacío.
+2. Los colores, como norma: naranja = cliente NUEVO (en el nombre), verde/rojo = cobrado/no cobrado
+   (en la venta), amarillo = franja pedida por el cliente (en el horario).
+3. Se mantienen las cinco columnas de días: la variedad en tantas como comidas tenga la vianda; en
+   un Intuitivo, sus platos.
+4. Va también la hoja "Reparto".
+5. Se mantiene la barra de carga: "Carga · <reparto y su horario>". La hora de carga no está en el
+   sistema; se completa a mano.
+
+- Datos: `buildPeriodReport` (`packages/orders/src/period-report.ts`, con tests) y
+  `periodOrdersReport` en el servicio.
+- Planilla: `apps/api/src/orders-period-report.ts` (`xlsx-js-style`), `GET /api/v1/orders/period-report`
+  (`orders.read`; período obligatorio, zona y reparto opcionales).
+- Pantalla: botón "Informe del período" en Pedidos (dentro de "Columnas").
+- Diferencias con el plan: el resumen va con valores y el TOTAL con fórmula (no CONTAR.SI.CONJUNTO:
+  en la hoja de pedidos el Intuitivo no tiene una columna de variedad que contar); sin filtros en el
+  encabezado (las barras de día los romperían) ni paneles fijos (la librería no los escribe).
