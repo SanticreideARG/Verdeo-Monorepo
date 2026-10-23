@@ -46,8 +46,7 @@ const isLoose = (label: ProductionLabel) => label.key.startsWith('suelta:');
 
 /**
  * Imprimir desde un marco oculto de la misma página: no abre ventanas, así que el bloqueador de
- * ventanas emergentes no la frena. Espera a las tipografías: sin ellas, la hoja sale con las de
- * reemplazo y los nombres cortan distinto.
+ * ventanas emergentes no la frena.
  */
 function printInFrame(html: string) {
   const frame = document.createElement('iframe');
@@ -57,12 +56,25 @@ function printInFrame(html: string) {
   frame.onload = () => {
     const view = frame.contentWindow;
     if (!view) return;
-    void view.document.fonts.ready.then(() => {
+    /*
+     * La hoja ajusta el tamaño de cada plato cuando cargan las tipografías y lo marca con
+     * `data-fitted`: se imprime recién entonces (o a los 4 s, por las dudas).
+     */
+    const started = Date.now();
+    const ready = () => {
+      if (
+        !view.document.documentElement.hasAttribute('data-fitted') &&
+        Date.now() - started < 4_000
+      ) {
+        window.setTimeout(ready, 100);
+        return;
+      }
       view.focus();
       view.print();
       // El diálogo de impresión frena la página hasta cerrarse; después, el marco sobra.
       window.setTimeout(() => frame.remove(), 1_000);
-    });
+    };
+    ready();
   };
   document.body.append(frame);
 }

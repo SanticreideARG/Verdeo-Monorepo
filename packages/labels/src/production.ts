@@ -45,8 +45,23 @@ export type ProductionLabel =
 /** "Pechuga rellena | Puré de calabaza" → el plato y su acompañamiento. */
 export function splitDishName(name: string): { dish: string; side: string | null } {
   const [dish = '', ...rest] = name.split(/\s*\|\s*|\s+\/\s+/);
-  const side = rest.join(' · ').trim();
-  return { dish: dish.trim(), side: side || null };
+  const side = cleanDishText(rest.join(' · '));
+  return { dish: cleanDishText(dish), side: side || null };
+}
+
+/**
+ * El nombre de un plato como va en la etiqueta: sin las marcas del menú. El "*" del principio y el
+ * "(k)" o "(v)" del final dicen de qué menú es, y en la etiqueta eso ya lo dice el pie. Empieza con
+ * mayúscula ("fritatta de berenjenas" → "Fritatta de berenjenas"), como en producción.
+ */
+export function cleanDishText(text: string): string {
+  const clean = text
+    .trim()
+    .replace(/^[*\s]+/, '')
+    .replace(/\s*\(\s*\p{Letter}\s*\)\s*$/u, '')
+    .trim();
+  const [first = '', ...rest] = [...clean];
+  return first.toLocaleUpperCase('es-AR') + rest.join('');
 }
 
 /** "Menú Nuevo Keto" → "KETO": la última palabra, sin "Menú", como en las etiquetas de producción. */
@@ -56,7 +71,8 @@ export function familyShortName(familyName: string): string {
     .trim()
     .split(/\s+/)
     .filter(Boolean);
-  return (words.at(-1) ?? familyName).toLocaleUpperCase('es-AR');
+  // "Anti-Age" es una sola palabra: "ANTIAGE".
+  return (words.at(-1) ?? familyName).replace(/-/g, '').toLocaleUpperCase('es-AR');
 }
 
 /** "2026-10-15" → "15-10": la fecha de elaboración como va en el pie. */
@@ -86,19 +102,41 @@ function escape(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-/**
- * Como en el original: con acompañamiento, el plato va a 9,8 pt (son tres renglones de texto en la
- * etiqueta); sin acompañamiento, a 11,7 pt.
+/*
+ * El tamaño del plato, como en producción: el más grande que entra. Sin acompañamiento, 11,7 pt si
+ * entra en dos renglones, si no 10,75 y si no 9,8. Con acompañamiento, 11,7 si entra en uno y 9,8
+ * en dos. Cuántos renglones ocupa depende de la tipografía, así que se mide en la hoja ya cargada
+ * (FIT_SCRIPT); la clase inicial es la estimación para cuando no corre.
  */
-function dishStep(label: { dish: string; side: string | null }): 'large' | 'small' {
-  return label.side ? 'small' : 'large';
+function plateHtml(label: Extract<ProductionLabel, { kind: 'plato' }>): string {
+  const step = label.side ? 'small' : 'large';
+  // El pie lleva un espacio ancho después del "#", como en producción.
+  const foot = escape(label.footer).replace('# ', '#&ensp;');
+  return `<div class="plato"><img class="icon" src="${PRODUCTION_ICON}" alt=""><div class="text"><p class="dish ${step}"${
+    label.side ? ' data-side' : ''
+  }>${escape(label.dish.toLocaleUpperCase('es-AR'))}</p>${
+    label.side ? `<p class="side">${escape(label.side)}</p>` : ''
+  }</div><p class="foot">${foot}</p></div>`;
 }
 
-function plateHtml(label: Extract<ProductionLabel, { kind: 'plato' }>): string {
-  return `<div class="plato"><img class="icon" src="${PRODUCTION_ICON}" alt=""><p class="dish ${dishStep(label)}">${escape(label.dish.toLocaleUpperCase('es-AR'))}</p>${
-    label.side ? `<p class="side">${escape(label.side)}</p>` : ''
-  }<p class="foot">${escape(label.footer)}</p></div>`;
-}
+const FIT_SCRIPT = `<script>
+(function () {
+  function lines(el) {
+    return Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight));
+  }
+  function fit() {
+    document.querySelectorAll('.plato .dish').forEach(function (el) {
+      var steps = el.hasAttribute('data-side') ? [[11.7, 1], [9.8, 2]] : [[11.7, 2], [10.75, 2], [9.8, 2]];
+      for (var i = 0; i < steps.length; i++) {
+        el.style.fontSize = steps[i][0] + 'pt';
+        if (lines(el) <= steps[i][1]) break;
+      }
+    });
+    document.documentElement.setAttribute('data-fitted', '');
+  }
+  (document.fonts ? document.fonts.ready : Promise.resolve()).then(fit);
+})();
+</script>`;
 
 function menuHtml(label: Extract<ProductionLabel, { kind: 'menu' }>): string {
   const isName = [...label.line].length > 12;
@@ -136,39 +174,57 @@ function css(preview: boolean): string {
   .cell.empty { ${preview ? 'background: repeating-linear-gradient(45deg, #fafafa 0 2mm, #f0f0f0 2mm 4mm);' : ''} }
   .cell.printed { ${preview ? 'outline: 0.5mm solid #d98e04;' : ''} }
 
-  /* Plato: el ícono arriba, el plato en mayúsculas, el acompañamiento en cursiva, el pie. */
-  .plato {
+  /*
+   * Plato, medido sobre el PDF de producción: el ícono fijo arriba (a 1 mm del borde), el pie fijo
+   * abajo (su renglón a 2,9 mm del borde) y el texto centrado entre los dos.
+   */
+  .plato { position: relative; height: 100%; text-align: center; }
+  .plato .icon {
+    position: absolute;
+    top: 1mm;
+    left: 50%;
+    width: 10.5mm;
+    height: 10.5mm;
+    transform: translateX(-50%);
+  }
+  .plato p { margin: 0; }
+  .plato .text {
+    position: absolute;
+    top: 11.5mm;
+    bottom: 6.8mm;
+    left: 2mm;
+    right: 2mm;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 100%;
-    padding: 1mm 2.5mm;
-    text-align: center;
   }
-  .plato .icon { width: 10.5mm; height: 10.5mm; margin-bottom: 0.9mm; }
-  .plato p { margin: 0; }
   .plato .dish {
     font-family: 'Source Serif 4', 'Source Serif Pro', Georgia, serif;
-    font-weight: 500;
-    line-height: 1.05;
-    /* El original corta los nombres a unos 46 mm: dos renglones parejos, no uno largo y uno corto. */
-    max-width: 46mm;
+    font-weight: 400;
+    /* El original es Source Serif Pro: el diseño de texto, no el de tamaños chicos, que es más ancho. */
+    font-optical-sizing: none;
+    line-height: 1.2;
+    max-width: 56mm;
     overflow-wrap: anywhere;
   }
   .plato .dish.large { font-size: 11.7pt; }
   .plato .dish.small { font-size: 9.8pt; }
   .plato .side {
+    max-width: 56mm;
     font-family: 'Crimson Pro', 'Minion Pro', Georgia, serif;
     font-style: italic;
     font-size: 11.7pt;
-    line-height: 1.1;
+    line-height: 1.2;
   }
   .plato .foot {
-    margin-top: 0.6mm;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 2.1mm;
     font-family: 'Source Sans 3', 'Myriad Pro', Arial, sans-serif;
     font-size: 10.6pt;
-    line-height: 1.1;
+    line-height: 1;
     letter-spacing: 0.01em;
   }
 
@@ -192,6 +248,7 @@ function css(preview: boolean): string {
     transform: rotate(-90deg);
     transform-origin: top left;
     font-family: 'Source Serif 4', 'Source Serif Pro', Georgia, serif;
+    font-optical-sizing: none;
   }
   .menu .figures {
     display: grid;
@@ -244,5 +301,5 @@ export function renderProductionSheets(options: {
   }
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escape(
     options.title ?? 'Etiquetas',
-  )}</title><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="${FONTS}"><style>${css(preview)}</style></head><body>${sheets.join('')}</body></html>`;
+  )}</title><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="${FONTS}"><style>${css(preview)}</style></head><body>${sheets.join('')}${FIT_SCRIPT}</body></html>`;
 }

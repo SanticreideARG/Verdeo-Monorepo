@@ -608,3 +608,8 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] La tanda: grupos de platos (por variedad) y de menús (por variedad y tamaño; Intuitivos por cliente), sueltas con cantidad, mezcla de las dos series y "Empezar en la posición".
 - [x] Lo impreso queda anotado (`label_prints`, migración 0071); si la tanda repite etiquetas, se avisa y se elige imprimir sólo las nuevas o todas.
 - [x] El generador anterior queda archivado en `/app/etiquetas/clasico`.
+- [x] Correcciones tras la primera prueba: sin el "*" del principio ni el "(k)"/"(v)" del final, acompañamiento con mayúscula, "ANTIAGE" (no "AGE"), letra regular, ícono y pie fijos y texto centrado como en producción, y el plato a 11,7 / 10,75 / 9,8 pt según entre.
+
+## Jerarquía de orden de los productos (PRODUCT_ORDER.md, 2026-10-22)
+
+- [x] Norma central: Keto 400, Keto 250, Antiage, Real, Vegetariano, Intuitivos (tamaño mayor primero). Una sola implementación en `@verdeo/orders` (`product-order.ts`), aplicada a menús, cocina, stock, sobrante, planillas, Excel de pedidos y etiquetas.

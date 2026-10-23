@@ -36,6 +36,10 @@ export default defineConfig(({ mode }) => {
         '@verdeo/labels': fileURLToPath(
           new URL('../../packages/labels/src/index.ts', import.meta.url),
         ),
+        // Lo mismo para las reglas de pedidos (la jerarquía de productos, PRODUCT_ORDER.md).
+        '@verdeo/orders': fileURLToPath(
+          new URL('../../packages/orders/src/index.ts', import.meta.url),
+        ),
       },
     },
     plugins: [

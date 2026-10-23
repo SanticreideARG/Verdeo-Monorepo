@@ -1,3 +1,4 @@
+import { compareProducts } from './product-order.js';
 import type { KitchenSourceLine } from './types.js';
 
 /** Una etiqueta de cocina: un plato, para pegar en su recipiente. */
@@ -39,9 +40,10 @@ export function splitDish(name: string): { dish: string; side: string | null } {
 export function defaultAbbreviation(familyName: string): string {
   const words = familyName
     .replace(/^men[uú]\s+/i, '')
-    .split(/[\s&,/-]+/)
+    .split(/[\s&,/]+/)
     .filter(Boolean);
-  return (words[words.length - 1] ?? familyName).toLocaleUpperCase('es-AR');
+  // "Anti-Age" es una sola palabra: la abreviatura es "ANTIAGE", como en las etiquetas de producción.
+  return (words[words.length - 1] ?? familyName).replace(/-/g, '').toLocaleUpperCase('es-AR');
 }
 
 /**
@@ -90,10 +92,12 @@ export function buildKitchenLabels(
   }
 
   const labels: KitchenLabel[] = [];
-  const ordered = [...groups.values()].sort(
-    (left, right) =>
-      left.familyName.localeCompare(right.familyName, 'es-AR') ||
-      (left.sizeName ?? '').localeCompare(right.sizeName ?? '', 'es-AR', { numeric: true }),
+  // La jerarquía de productos (PRODUCT_ORDER.md): Keto 400, Keto 250, Antiage, Real…
+  const ordered = [...groups.values()].sort((left, right) =>
+    compareProducts(
+      { familyName: left.familyName, variantName: left.sizeName },
+      { familyName: right.familyName, variantName: right.sizeName },
+    ),
   );
   for (const group of ordered) {
     for (let unit = 0; unit < group.units; unit += 1) {

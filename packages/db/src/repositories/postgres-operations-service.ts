@@ -41,6 +41,7 @@ import {
   buildKitchenLabels,
   buildLabels,
   calculateLineTotal,
+  compareProducts,
   intuitivoUnitPriceMinor,
   calculateOrderTotal,
   deliveryOptions,
@@ -573,10 +574,7 @@ function computeProductionDelta(
       const after = currentMap.get(key) ?? 0;
       return { deltaUnits: after - before, familyName, quantityUnits: after, variantName };
     })
-    .sort(
-      (a, b) =>
-        a.familyName.localeCompare(b.familyName) || a.variantName.localeCompare(b.variantName),
-    );
+    .sort(compareProducts);
 }
 
 // Drizzle wraps a failed query in its own DrizzleQueryError, with the actual driver error (the one
@@ -4438,7 +4436,9 @@ export class PostgresOperationsService {
           eq(weeklyMenuOfferings.active, true),
         ),
       )
-      .orderBy(asc(productFamilies.displayName), asc(productSizes.sortOrder));
+      .orderBy(asc(productFamilies.displayName), asc(productSizes.sortOrder))
+      // La jerarquía de productos (PRODUCT_ORDER.md): Keto 400, Keto 250, Antiage, Real…
+      .then((rows) => rows.sort(compareProducts));
     const itemRows =
       offeringRows.length === 0
         ? []
@@ -6540,11 +6540,7 @@ export class PostgresOperationsService {
           writtenOff: row.bajaMerma - carriedOut,
         };
       })
-      .sort(
-        (a, b) =>
-          a.familyName.localeCompare(b.familyName, 'es-AR') ||
-          a.variantName.localeCompare(b.variantName, 'es-AR'),
-      );
+      .sort(compareProducts);
 
     const receivables = await this.listReceivables({ cycleId, operatingSiteId });
     return {
@@ -8186,11 +8182,13 @@ export class PostgresOperationsService {
       cycle,
       familyOrder: familyRows.map((row) => row.name),
       generatedAt: new Date(),
-      stock: stock.map(({ familyName, quantityUnits, variantName }) => ({
-        familyName,
-        quantityUnits,
-        variantName,
-      })),
+      stock: stock
+        .map(({ familyName, quantityUnits, variantName }) => ({
+          familyName,
+          quantityUnits,
+          variantName,
+        }))
+        .sort(compareProducts),
     };
   }
 
@@ -9220,10 +9218,7 @@ export class PostgresOperationsService {
       coefficientPercent,
       cycle,
       generatedAt: new Date(),
-      items: [...rows.values()].sort(
-        (a, b) =>
-          a.familyName.localeCompare(b.familyName) || a.variantName.localeCompare(b.variantName),
-      ),
+      items: [...rows.values()].sort(compareProducts),
     };
   }
 
@@ -9315,10 +9310,7 @@ export class PostgresOperationsService {
         });
 
         const refreshed = await this.surplusRows(transaction, cycleId);
-        return [...refreshed.values()].sort(
-          (a, b) =>
-            a.familyName.localeCompare(b.familyName) || a.variantName.localeCompare(b.variantName),
-        );
+        return [...refreshed.values()].sort(compareProducts);
       })
       .catch(translateDatabaseConflict);
   }

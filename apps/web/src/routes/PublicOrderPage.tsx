@@ -1,3 +1,4 @@
+import { compareSizes } from '@verdeo/orders';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
@@ -217,10 +218,7 @@ export function PublicOrderPage() {
   }, [menu]);
 
   const sizes = useMemo(
-    () =>
-      [...new Set((menu?.offerings ?? []).map((item) => item.variantName))].sort((left, right) =>
-        left.localeCompare(right, 'es-AR', { numeric: true }),
-      ),
+    () => [...new Set((menu?.offerings ?? []).map((item) => item.variantName))].sort(compareSizes),
     [menu],
   );
 

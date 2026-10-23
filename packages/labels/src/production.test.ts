@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  cleanDishText,
   LABELS_PER_SHEET,
   PRODUCTION_PAPER,
   elaborationDay,
@@ -45,6 +46,20 @@ describe('el papel', () => {
 });
 
 describe('los textos', () => {
+  it('saca el * del principio y el (k) o (v) del final, y empieza con mayúscula', () => {
+    expect(cleanDishText('* Pastel de calabaza y bondiola braseada (K)')).toBe(
+      'Pastel de calabaza y bondiola braseada',
+    );
+    expect(cleanDishText('fritatta de berenjenas asadas (k)')).toBe(
+      'Fritatta de berenjenas asadas',
+    );
+    expect(splitDishName('*Lomo relleno | zapallitos revueltos (v)')).toEqual({
+      dish: 'Lomo relleno',
+      side: 'Zapallitos revueltos',
+    });
+    expect(familyShortName('Menú Anti-Age')).toBe('ANTIAGE');
+  });
+
   it('separa el plato de su acompañamiento', () => {
     expect(splitDishName('Pechuga rellena | Puré de calabaza')).toEqual({
       dish: 'Pechuga rellena',

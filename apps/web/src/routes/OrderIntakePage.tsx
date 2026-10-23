@@ -1,3 +1,4 @@
+import { compareSizes } from '@verdeo/orders';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
@@ -535,7 +536,7 @@ export function OrderIntakePage() {
   ];
   const intakeSizes = [
     ...new Set((selectedMenu?.offerings ?? []).map((offering) => offering.variantName)),
-  ].sort((left, right) => left.localeCompare(right, 'es-AR', { numeric: true }));
+  ].sort(compareSizes);
 
   function findIntakeOffering(familyName: string, variantName: string) {
     return selectedMenu?.offerings.find(

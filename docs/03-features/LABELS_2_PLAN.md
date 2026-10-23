@@ -73,3 +73,16 @@ impresas, antes de imprimir se avisa cuántas y desde cuándo, y se elige imprim
 - API: `GET`/`POST /api/v1/production/:cycleId/printed-labels` (`production.read`).
 - La hoja de impresión se arma en el navegador con el mismo motor que la vista previa y se imprime
   desde un marco oculto de la misma página (sin ventanas emergentes), cuando cargaron las tipografías.
+
+## Correcciones (2026-10-22, tras la primera prueba)
+
+- Los textos van limpios: sin el "*" del principio ni el "(k)"/"(v)" del final (`cleanDishText`), y el
+  acompañamiento empieza con mayúscula.
+- "ANTIAGE", no "AGE": la abreviatura sugerida ya no corta en el guion.
+- Plato medido de nuevo sobre los PDF de producción: letra regular (no semibold), sin el diseño
+  óptico de tamaños chicos (más ancho que Source Serif Pro), hasta 56 mm de ancho; ícono fijo a 1 mm
+  del borde de arriba, pie fijo (su renglón a 2,9 mm del de abajo) y el texto centrado entre los dos.
+- Tamaño del plato: el más grande que entra. Sin acompañamiento, 11,7 pt en dos renglones, si no
+  10,75, si no 9,8. Con acompañamiento, 11,7 en un renglón o 9,8 en dos. Se mide en la hoja ya
+  cargada (un script corto); la impresión espera a que termine.
+- Los grupos van en la jerarquía de productos ([PRODUCT_ORDER.md](../02-domain/PRODUCT_ORDER.md)).

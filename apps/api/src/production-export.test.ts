@@ -140,7 +140,7 @@ describe('buildProductionExcel', () => {
             variantName: '250',
           },
         ],
-        // El orden del menú: Real antes que Keto, aunque no sea alfabético.
+        // El orden en que se cargó el menú ya no manda.
         familyOrder: ['Real', 'Keto'],
         stock: [{ familyName: 'Keto', quantityUnits: 2, variantName: '400' }],
       }),
@@ -148,11 +148,12 @@ describe('buildProductionExcel', () => {
 
     expect(book.SheetNames[1]).toBe('Conciliado');
     expect(rowsOf(book, 'Conciliado')).toEqual([
-      ['REAL 250', 3],
-      ['', ''],
-      // 400 antes que 250, y el stock suma: 5 pedidos + 2 de stock.
+      // La jerarquía de productos (PRODUCT_ORDER.md): Keto antes que Real, aunque el menú diga otra
+      // cosa. 400 antes que 250, y el stock suma: 5 pedidos + 2 de stock.
       ['KETO 400', 7],
       ['KETO 250', 12],
+      ['', ''],
+      ['REAL 250', 3],
       ['', ''],
       // Los Intuitivos, uno por pedido, con el nombre de quien lo pidió y el tamaño.
       ['Lola 400', 2],

@@ -5,6 +5,7 @@
  * recuerdan qué se imprimió) y los grupos tienen que sumar exactamente lo pedido.
  */
 import {
+  cleanDishText,
   elaborationDay,
   familyShortName,
   sizeNumber,
@@ -12,6 +13,7 @@ import {
   type LabelData,
   type ProductionLabel,
 } from '@verdeo/labels';
+import { compareProducts } from '@verdeo/orders';
 
 /** Una etiqueta de cocina tal como la da el servidor: una por plato. */
 export interface KitchenLabelRow {
@@ -25,6 +27,8 @@ export interface KitchenLabelRow {
 
 /** Un grupo de la tanda: se tilda entero. */
 export interface LabelGroup {
+  /** Para ordenar los menús en la jerarquía de productos (PRODUCT_ORDER.md). */
+  product?: { composable: boolean; familyName: string; variantName: string };
   id: string;
   kind: 'menu' | 'plato';
   labels: ProductionLabel[];
@@ -41,7 +45,9 @@ export function plateGroups(
   const seen = new Map<string, number>();
   for (const row of rows) {
     // El servidor separa por " / "; el menú también usa "|" entre el plato y su acompañamiento.
-    const split = row.side ? { dish: row.dish, side: row.side } : splitDishName(row.dish);
+    const split = row.side
+      ? { dish: cleanDishText(row.dish), side: cleanDishText(row.side) || null }
+      : splitDishName(row.dish);
     const footer = `${row.abbreviation} ELAB # ${day}`;
     const groupId = `plato:${row.abbreviation}`;
     const group = groups.get(groupId) ?? {
@@ -85,7 +91,17 @@ export function menuGroups(rows: readonly LabelData[]): LabelGroup[] {
     const title = row.composable
       ? `${row.customerDisplayName} · Intuitivo ${size}`
       : `${familyShortName(row.familyName)} ${size}`;
-    const group = groups.get(groupId) ?? { id: groupId, kind: 'menu' as const, labels: [], title };
+    const group = groups.get(groupId) ?? {
+      id: groupId,
+      kind: 'menu' as const,
+      labels: [],
+      product: {
+        composable: row.composable,
+        familyName: row.familyName,
+        variantName: row.variantName,
+      },
+      title,
+    };
     groups.set(groupId, group);
     group.labels.push({
       key,
@@ -94,12 +110,13 @@ export function menuGroups(rows: readonly LabelData[]): LabelGroup[] {
       size,
     });
   }
-  // Primero las variedades fijas (de mayor a menor tamaño), después los Intuitivos.
-  return [...groups.values()].sort((left, right) => {
-    const a = left.id.startsWith('menu:intuitivo') ? 1 : 0;
-    const b = right.id.startsWith('menu:intuitivo') ? 1 : 0;
-    return a - b || left.title.localeCompare(right.title, 'es-AR', { numeric: true });
-  });
+  // La jerarquía de productos: Keto 400, Keto 250, Antiage, Real, Vegetariano, Intuitivos (éstos,
+  // entre sí, por cliente).
+  return [...groups.values()].sort(
+    (left, right) =>
+      (left.product && right.product ? compareProducts(left.product, right.product) : 0) ||
+      left.title.localeCompare(right.title, 'es-AR', { numeric: true }),
+  );
 }
 
 /** Una etiqueta suelta, para reponer: se repite `quantity` veces, con claves propias. */

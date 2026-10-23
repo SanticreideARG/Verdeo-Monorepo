@@ -1,6 +1,11 @@
 import * as XLSX from 'xlsx';
 
-import { orderItemsSummary, orderUnits, type OrderExportRow } from '@verdeo/orders';
+import {
+  compareProducts,
+  orderItemsSummary,
+  orderUnits,
+  type OrderExportRow,
+} from '@verdeo/orders';
 
 /**
  * La planilla del formulario de pedidos consolidado.
@@ -123,10 +128,12 @@ export function buildOrdersExcel(
       tally.set(key, current);
     }
   }
-  const tallyRows = [...tally.values()].sort(
-    (left, right) =>
-      left.product.localeCompare(right.product, 'es-AR') ||
-      left.size.localeCompare(right.size, 'es-AR', { numeric: true }),
+  // La jerarquía de productos (PRODUCT_ORDER.md).
+  const tallyRows = [...tally.values()].sort((left, right) =>
+    compareProducts(
+      { familyName: left.product, variantName: left.size },
+      { familyName: right.product, variantName: right.size },
+    ),
   );
   XLSX.utils.book_append_sheet(
     book,

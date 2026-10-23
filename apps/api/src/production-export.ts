@@ -9,6 +9,7 @@ import xlsxStyle, { type CellObject, type WorkSheet } from 'xlsx-js-style';
 const XLSX = xlsxStyle;
 
 import type { ProductionSnapshotSchema } from '@verdeo/contracts';
+import { compareFamilies, compareSizes } from '@verdeo/orders';
 import type { z } from 'zod';
 
 type ProductionSnapshot = z.infer<typeof ProductionSnapshotSchema>;
@@ -158,25 +159,10 @@ export const ORDER_SHEET_DAYS = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIE
  * Suma lo pedido y el stock del período, que también se cocina. Cada plato de un menú fijo lleva
  * las mismas porciones —el sistema no sabe de cambios plato por plato—, así que las cinco columnas
  * de un renglón salen iguales; si cocina cambia alguna, la corrige en la planilla.
+ *
+ * Las variedades y los tamaños van en la jerarquía de productos (PRODUCT_ORDER.md): Keto 400,
+ * Keto 250, Antiage, Real, Vegetariano, Intuitivos. Antes iban en el orden en que se cargó el menú.
  */
-/** Las variedades en el orden del menú (las que no están, al final y por nombre). */
-function byMenuOrder(report: ProductionReport) {
-  const order = report.familyOrder ?? [];
-  const rank = (name: string) => {
-    const index = order.indexOf(name);
-    return index < 0 ? order.length : index;
-  };
-  return (left: string, right: string) =>
-    rank(left) - rank(right) || left.localeCompare(right, 'es-AR');
-}
-
-/** Los tamaños de mayor a menor: 400 antes que 250, como en la planilla del cliente. */
-function bySizeDesc(left: string, right: string): number {
-  const a = Number.parseFloat(left);
-  const b = Number.parseFloat(right);
-  if (Number.isFinite(a) && Number.isFinite(b) && a !== b) return b - a;
-  return left.localeCompare(right, 'es-AR');
-}
 
 /** "Menú Anti-Age" sale "ANTI-AGE 250", como en las planillas del cliente. */
 function sheetLabel(familyName: string, variantName: string): string {
@@ -202,9 +188,11 @@ export function conciliadoRows(report: ProductionReport): (number | string)[][] 
 
   const rows: (number | string)[][] = [];
   let total = 0;
-  for (const familyName of [...families.keys()].sort(byMenuOrder(report))) {
+  for (const familyName of [...families.keys()].sort((left, right) =>
+    compareFamilies(left, right),
+  )) {
     const variants = families.get(familyName) ?? new Map<string, number>();
-    for (const variantName of [...variants.keys()].sort(bySizeDesc)) {
+    for (const variantName of [...variants.keys()].sort(compareSizes)) {
       const units = variants.get(variantName) ?? 0;
       rows.push([sheetLabel(familyName, variantName), units]);
       total += units;
@@ -299,11 +287,13 @@ export function orderSheetRows(report: ProductionReport): (number | string)[][] 
   const rows: (number | string)[][] = [['PEDIDO', ...ORDER_SHEET_DAYS, '']];
   let total = 0;
   let first = true;
-  for (const familyName of [...families.keys()].sort(byMenuOrder(report))) {
+  for (const familyName of [...families.keys()].sort((left, right) =>
+    compareFamilies(left, right),
+  )) {
     const variants = families.get(familyName) ?? new Map<string, number[]>();
     if (!first) rows.push(blank());
     first = false;
-    for (const variantName of [...variants.keys()].sort(bySizeDesc)) {
+    for (const variantName of [...variants.keys()].sort(compareSizes)) {
       const days = variants.get(variantName) ?? [];
       rows.push([
         // "Menú Anti-Age" sale "ANTI-AGE 250", como en la planilla del cliente.
