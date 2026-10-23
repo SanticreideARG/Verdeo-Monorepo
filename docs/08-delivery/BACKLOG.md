@@ -613,3 +613,12 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 ## Jerarquía de orden de los productos (PRODUCT_ORDER.md, 2026-10-22)
 
 - [x] Norma central: Keto 400, Keto 250, Antiage, Real, Vegetariano, Intuitivos (tamaño mayor primero). Una sola implementación en `@verdeo/orders` (`product-order.ts`), aplicada a menús, cocina, stock, sobrante, planillas, Excel de pedidos y etiquetas.
+
+## Etiquetas 2.0 — 2026-10-23
+
+- [x] Las verticales se corrían al imprimir (texto girado fuera de su etiqueta): rehechas con `writing-mode`.
+- [x] − / + en cada grupo de la tanda.
+
+## Informe de pedidos del período (ORDERS_PERIOD_REPORT_PLAN.md)
+
+- [ ] Plan escrito; faltan las respuestas del usuario antes de implementar.

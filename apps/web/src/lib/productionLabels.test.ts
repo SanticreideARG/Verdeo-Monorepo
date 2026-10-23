@@ -1,7 +1,13 @@
 import type { LabelData } from '@verdeo/labels';
 import { describe, expect, it } from 'vitest';
 
-import { looseLabels, menuGroups, plateGroups, type KitchenLabelRow } from './productionLabels.js';
+import {
+  adjustGroup,
+  looseLabels,
+  menuGroups,
+  plateGroups,
+  type KitchenLabelRow,
+} from './productionLabels.js';
 
 const plate = (
   dish: string,
@@ -106,5 +112,23 @@ describe('looseLabels', () => {
       'suelta:plato:KETO::Lomo|:1',
     ]);
     expect(more[0]?.key).toBe('suelta:plato:KETO::Lomo|:2');
+  });
+});
+
+describe('adjustGroup', () => {
+  const group = plateGroups([plate('Lomo'), plate('Curry')], '2026-10-15')[0];
+
+  it('saca del final y agrega repitiendo, como sueltas', () => {
+    if (!group) throw new Error('sin grupo');
+    expect(adjustGroup(group, -1).map((label) => label.key)).toEqual(['plato:KETO::Lomo|:0']);
+    expect(adjustGroup(group, -5)).toEqual([]);
+    const more = adjustGroup(group, 3);
+    expect(more).toHaveLength(5);
+    expect(more.slice(2).map((label) => label.kind === 'plato' && label.dish)).toEqual([
+      'Lomo',
+      'Curry',
+      'Lomo',
+    ]);
+    expect(more[2]?.key).toBe('suelta:plato:KETO:0');
   });
 });

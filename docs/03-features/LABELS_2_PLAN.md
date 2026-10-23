@@ -99,3 +99,12 @@ Minion y Myriad son de Adobe y no se pueden incrustar en la aplicación: la hoja
 y, si están instaladas en la compu que imprime (por ejemplo, con Illustrator o Adobe Fonts), las
 usa. Si no, caen en sus equivalentes libres (Crimson Pro y Source Sans 3, de Google Fonts). Source
 Serif Variable igual: instalada se usa ésa; si no, Source Serif 4.
+
+## Correcciones (2026-10-23)
+
+- Etiqueta de menú: el texto girado se arma con `writing-mode` (vertical y dado vuelta) y no girando
+  una caja acostada, que antes de girar colgaba debajo de la etiqueta: al imprimir, el navegador la
+  cortaba entre páginas y la corría de lugar. Las etiquetas y las hojas ya no se parten entre páginas.
+- La impresión usa un marco fuera de la vista del tamaño de la hoja (antes, 0 × 0).
+- − / + en cada grupo: le saca etiquetas del final o le agrega repitiendo las del grupo. Las de más
+  son sueltas (no se anotan como impresas).

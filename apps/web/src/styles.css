@@ -9642,7 +9642,18 @@ textarea.sr-only {
   max-height: 22rem;
   overflow-y: auto;
 }
+.studio-groups li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.4rem;
+}
+.studio-groups li:hover {
+  background: var(--db-surface-muted, rgb(0 0 0 / 4%));
+}
 .studio-groups label {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -9651,17 +9662,41 @@ textarea.sr-only {
   cursor: pointer;
   font-size: 0.875rem;
 }
-.studio-groups label:hover {
-  background: var(--db-surface-muted, rgb(0 0 0 / 4%));
-}
 .studio-group-title {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 .studio-group-count {
+  min-width: 1.75rem;
+  text-align: center;
   font-variant-numeric: tabular-nums;
   color: var(--db-ink-muted, #666);
+}
+.studio-group-count.is-adjusted {
+  color: inherit;
+  font-weight: 600;
+}
+/* El − / + de cada grupo. */
+.studio-stepper {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0.35rem;
+  font-size: 0.875rem;
+}
+.studio-stepper button {
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 1px solid var(--db-border-soft, rgb(0 0 0 / 15%));
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+.studio-stepper button:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 .studio-printed {
   padding: 0.05rem 0.45rem;

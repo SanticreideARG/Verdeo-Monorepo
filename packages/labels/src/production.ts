@@ -167,6 +167,7 @@ function css(preview: boolean): string {
     height: ${String(p.pageHeightMm)}mm;
     background: #fff;
     overflow: hidden;
+    break-inside: avoid;
     page-break-after: always;
     break-after: page;
     ${preview ? 'margin: 0 auto 8mm; box-shadow: 0 1px 6px rgb(0 0 0 / 25%);' : ''}
@@ -177,6 +178,7 @@ function css(preview: boolean): string {
     width: ${String(p.labelWidthMm)}mm;
     height: ${String(p.labelHeightMm)}mm;
     overflow: hidden;
+    break-inside: avoid;
     ${preview ? 'outline: 0.2mm dashed #c9c9c9;' : ''}
   }
   .cell.empty { ${preview ? 'background: repeating-linear-gradient(45deg, #fafafa 0 2mm, #f0f0f0 2mm 4mm);' : ''} }
@@ -251,15 +253,21 @@ function css(preview: boolean): string {
     height: 26.7mm;
     transform: translateY(-50%) rotate(-90deg);
   }
+  /*
+   * El texto girado se escribe en vertical (writing-mode) y se da vuelta, y no girando una caja
+   * acostada: así su caja queda siempre adentro de la etiqueta. La caja girada quedaba, antes de
+   * girar, colgando debajo de la etiqueta, y al imprimir el navegador la cortaba entre páginas y la
+   * corría de lugar (2026-10-23).
+   */
   .menu .turn {
     position: absolute;
     left: 34mm;
-    top: ${String(p.labelHeightMm)}mm;
-    width: ${String(p.labelHeightMm)}mm;
-    height: 29mm;
-    padding: 0 3.4mm;
-    transform: rotate(-90deg);
-    transform-origin: top left;
+    top: 0;
+    width: 29mm;
+    height: ${String(p.labelHeightMm)}mm;
+    padding: 3.4mm 0;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
     font-family: 'Source Serif 4', 'Source Serif Pro', Georgia, serif;
     font-optical-sizing: none;
   }

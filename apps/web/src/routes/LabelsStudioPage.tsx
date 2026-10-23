@@ -19,6 +19,7 @@ import { todayInOperation } from '../lib/dates.js';
 import { errorMessage, type WeeklyMenu } from '../lib/operations.js';
 import { currentPeriod, periodsFromMenus, type Period } from '../lib/periods.js';
 import {
+  adjustGroup,
   looseLabels,
   menuGroups,
   plateGroups,
@@ -51,7 +52,9 @@ const isLoose = (label: ProductionLabel) => label.key.startsWith('suelta:');
 function printInFrame(html: string) {
   const frame = document.createElement('iframe');
   frame.setAttribute('aria-hidden', 'true');
-  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+  // Fuera de la vista pero del tamaño de la hoja: con un marco de 0 × 0 algunos navegadores
+  // paginan mal la impresión.
+  frame.style.cssText = 'position:fixed;left:-300mm;top:0;width:210mm;height:297mm;border:0;';
   frame.srcdoc = html;
   frame.onload = () => {
     const view = frame.contentWindow;
@@ -101,6 +104,8 @@ export function LabelsStudioPage() {
   const [printed, setPrinted] = useState<Map<string, PrintedLabel>>(new Map());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loose, setLoose] = useState<LooseEntry[]>([]);
+  // El − / + de cada grupo: cuántas etiquetas de más (o de menos) lleva.
+  const [adjust, setAdjust] = useState<Map<string, number>>(new Map());
   const [looseChoice, setLooseChoice] = useState('');
   const [looseQuantity, setLooseQuantity] = useState(1);
   const [startAt, setStartAt] = useState(1);
@@ -151,6 +156,7 @@ export function LabelsStudioPage() {
           ]),
         );
         setLoose([]);
+        setAdjust(new Map());
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -189,9 +195,9 @@ export function LabelsStudioPage() {
   const batch = useMemo(() => {
     const fromGroups = [...platoGroups, ...menuGroupList]
       .filter((group) => selected.has(group.id))
-      .flatMap((group) => group.labels);
+      .flatMap((group) => adjustGroup(group, adjust.get(group.id) ?? 0));
     return [...fromGroups, ...loose.flatMap((entry) => entry.labels)];
-  }, [platoGroups, menuGroupList, selected, loose]);
+  }, [platoGroups, menuGroupList, selected, loose, adjust]);
 
   const printedKeys = useMemo(() => new Set(printed.keys()), [printed]);
   const sheetCount = productionSheetCount(batch.length, startAt);
@@ -208,6 +214,18 @@ export function LabelsStudioPage() {
       else next.add(id);
       return next;
     });
+  }
+
+  /** Una etiqueta más o una menos en un grupo; tocarlo lo suma a la tanda. */
+  function step(group: LabelGroup, by: 1 | -1) {
+    setAdjust((current) => {
+      const next = new Map(current);
+      const value = Math.max(-group.labels.length, (current.get(group.id) ?? 0) + by);
+      if (value === 0) next.delete(group.id);
+      else next.set(group.id, value);
+      return next;
+    });
+    setSelected((current) => new Set(current).add(group.id));
   }
 
   function setAll(groups: readonly LabelGroup[], on: boolean) {
@@ -296,7 +314,8 @@ export function LabelsStudioPage() {
   }
 
   const groupCard = (title: string, groups: readonly LabelGroup[]) => {
-    const total = groups.reduce((sum, group) => sum + group.labels.length, 0);
+    const count = (group: LabelGroup) => group.labels.length + (adjust.get(group.id) ?? 0);
+    const total = groups.reduce((sum, group) => sum + count(group), 0);
     const chosen = groups.filter((group) => selected.has(group.id));
     return (
       <div className="operation-card grid gap-3">
@@ -332,13 +351,39 @@ export function LabelsStudioPage() {
                       type="checkbox"
                     />
                     <span className="studio-group-title">{group.title}</span>
-                    <span className="studio-group-count">{String(group.labels.length)}</span>
-                    {done > 0 ? (
-                      <span className="studio-printed" title="Ya impresas en este período">
-                        {done === group.labels.length ? 'impreso' : `${String(done)} impresas`}
-                      </span>
-                    ) : null}
                   </label>
+                  {done > 0 ? (
+                    <span className="studio-printed" title="Ya impresas en este período">
+                      {done === group.labels.length ? 'impreso' : `${String(done)} impresas`}
+                    </span>
+                  ) : null}
+                  <span className="studio-stepper">
+                    <button
+                      aria-label={`Una etiqueta menos de ${group.title}`}
+                      disabled={count(group) === 0}
+                      onClick={() => step(group, -1)}
+                      type="button"
+                    >
+                      −
+                    </button>
+                    <span
+                      className={`studio-group-count${adjust.has(group.id) ? ' is-adjusted' : ''}`}
+                      title={
+                        adjust.has(group.id)
+                          ? `Del período: ${String(group.labels.length)}`
+                          : undefined
+                      }
+                    >
+                      {String(count(group))}
+                    </span>
+                    <button
+                      aria-label={`Una etiqueta más de ${group.title}`}
+                      onClick={() => step(group, 1)}
+                      type="button"
+                    >
+                      +
+                    </button>
+                  </span>
                 </li>
               );
             })}

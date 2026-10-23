@@ -132,3 +132,16 @@ export function looseLabels(
     key: `${base}:${String(used + index)}`,
   }));
 }
+
+/**
+ * Un grupo con etiquetas de más o de menos (el − / + de cada grupo). Las de menos se sacan del
+ * final; las de más repiten las del grupo en orden y son sueltas: no se anotan como impresas.
+ */
+export function adjustGroup(group: LabelGroup, delta: number): ProductionLabel[] {
+  if (delta <= 0) return group.labels.slice(0, Math.max(0, group.labels.length + delta));
+  const extra = Array.from({ length: delta }, (_, index) => {
+    const template = group.labels[index % group.labels.length];
+    return template ? { ...template, key: `suelta:${group.id}:${String(index)}` } : null;
+  }).filter((label): label is ProductionLabel => label !== null);
+  return [...group.labels, ...extra];
+}
