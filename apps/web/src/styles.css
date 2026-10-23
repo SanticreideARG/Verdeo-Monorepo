@@ -8070,9 +8070,22 @@ textarea.sr-only {
 /* Con ancho, los filtros no se pliegan: están todos a la vista y el desplegable es sólo un grupo
    más de la misma fila. */
 @media (min-width: 60rem) {
+  /*
+   * Una fila que se parte, no dos columnas de grilla: con una columna `auto`, un grupo de la
+   * derecha con muchos botones aplastaba al de la izquierda y sus botones (que no se achican)
+   * quedaban encimados (2026-10-23). Ahora, si no entran, el segundo grupo baja de renglón.
+   */
   .screen-filters {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: end;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+  .screen-filters-main {
+    flex: 1 1 32rem;
+    min-width: 0;
+  }
+  .screen-filters-more {
+    flex: 0 1 auto;
   }
   .screen-filters-more > summary {
     display: none;

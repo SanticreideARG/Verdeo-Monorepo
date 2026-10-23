@@ -31,7 +31,12 @@ const COLOR = {
 const DAYS = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES'] as const;
 const MONEY = '"$" #,##0';
 
-type Style = NonNullable<CellObject['s']>;
+/** El estilo de una celda; la librería lo tipa como `any`. */
+interface Style {
+  alignment?: { vertical?: 'center'; wrapText?: boolean };
+  fill?: { fgColor: { rgb: string }; patternType: 'solid' };
+  font?: { bold?: boolean; color?: { rgb: string }; sz?: number };
+}
 
 const fill = (rgb: string): Style => ({ fill: { fgColor: { rgb }, patternType: 'solid' } });
 const BASE: Style = { alignment: { vertical: 'center', wrapText: true } };

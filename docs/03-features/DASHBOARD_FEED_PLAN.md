@@ -136,3 +136,11 @@ pantalla, y los filtros se deslizan con el dedo.
 3. ✅ Consejos del día.
 
 Decisión del usuario: el orden queda a criterio de quien lo construye; se empieza por la fase 1.
+
+## Novedades del sistema preparadas (2026-10-23)
+
+- Las novedades se escriben en `packages/db/src/release-notes.ts` (una por entrega, al final de la
+  lista) y se publican con `pnpm db:seed-release-notes` (`--produccion` en producción), después de
+  la migración que las acompaña: para todas las ciudades, etiqueta "Novedad del sistema", sin autor.
+  Una novedad ya publicada (mismo texto, sin borrar) se saltea.
+- El feed firma "Verdeo" una novedad sin autor (antes habría dicho "Alguien que ya no está").

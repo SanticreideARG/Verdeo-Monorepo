@@ -503,7 +503,10 @@ export function FeedPanel({
                     {pinned ? <span className="feed-pin">Fijada</span> : null}
                     {fresh.has(post.id) ? <span className="feed-fresh">Nueva</span> : null}
                     <span>
-                      {post.authorDisplayName ?? 'Alguien que ya no está'} · {when(post.createdAt)}
+                      {post.authorDisplayName ??
+                        // Las novedades del sistema se publican sin autor (seed-release-notes).
+                        (post.tag === 'novedad' ? 'Verdeo' : 'Alguien que ya no está')}{' '}
+                      · {when(post.createdAt)}
                       {post.editedAt ? ' · editada' : ''}
                       {post.operatingSiteName ? ` · ${post.operatingSiteName}` : ''}
                     </span>

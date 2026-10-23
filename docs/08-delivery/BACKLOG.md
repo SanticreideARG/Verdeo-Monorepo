@@ -622,3 +622,8 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 ## Informe de pedidos del período (ORDERS_PERIOD_REPORT_PLAN.md)
 
 - [x] Informe "Pedidos" + "Reparto" en Excel: un renglón por vianda, por día y en el orden de la ruta, con tiempo estimado de ruta, colores por norma (nuevo, cobrado, franja), totales por día y resumen en la jerarquía de productos. Botón "Informe del período" en Pedidos.
+
+## Novedades en el feed y revisión de UI (2026-10-23)
+
+- [x] Novedades del sistema preparadas para el feed (`packages/db/src/release-notes.ts`) y `pnpm db:seed-release-notes` para publicarlas (no repite las ya publicadas). El feed firma "Verdeo" las novedades sin autor.
+- [x] Revisión de UI en local (40 pantallas, escritorio y teléfono): sin errores de consola ni desbordes de página. Corregido: la barra de filtros de Pedidos encimaba botones en escritorio (la grilla aplastaba la columna izquierda; ahora es una fila que se parte). Corregido: el resumen de variedades de cada reparto (Rutas) iba por cantidad; ahora en la jerarquía de productos.

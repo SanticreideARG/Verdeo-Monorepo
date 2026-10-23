@@ -30,6 +30,8 @@ Dónde se usa:
 - Excedente (sobrante) y su conciliación.
 - Planilla de pedidos (Excel): el resumen por producto.
 - Etiquetas de cocina y Etiquetas 2.0 (grupos de platos y de menús).
+- Rutas y repartos: el resumen de variedades de cada reparto.
+- Informe de pedidos del período: los productos de cada pedido y el resumen.
 
 Quedan fuera los listados que ordenan por otra cosa a propósito: las estadísticas (por monto o por
 cantidad), los pedidos (por número o fecha) y las etiquetas por pedido de la versión anterior.

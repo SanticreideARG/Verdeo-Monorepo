@@ -25,6 +25,7 @@
     "db:migrate": "tsx src/migrate.ts",
     "db:seed": "tsx src/seed.ts",
     "db:seed-help": "tsx src/seed-help.ts",
+    "db:seed-release-notes": "tsx src/seed-release-notes.ts",
     "db:seed-permissions": "tsx src/seed-permissions.ts",
     "db:retire-repartidor": "tsx src/retire-repartidor.ts",
     "db:wipe-operations": "tsx src/wipe-operations-cli.ts",

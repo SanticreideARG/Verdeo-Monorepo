@@ -3526,8 +3526,10 @@ export class PostgresOperationsService {
         ? []
         : await this.database
             .select({
+              familyName: orderItems.productNameSnapshot,
               label: sql<string>`trim(${orderItems.productNameSnapshot} || ' ' || ${orderItems.variantSnapshot})`,
               runId: orders.deliveryRunId,
+              variantName: orderItems.variantSnapshot,
               units: sql<number>`sum(${orderItems.quantityUnits})::int`,
             })
             .from(orderItems)
@@ -3570,8 +3572,9 @@ export class PostgresOperationsService {
           unlocated: stat?.unlocated ?? 0,
           varieties: items
             .filter((row) => row.runId === run.id)
-            .map((row) => ({ label: row.label, units: row.units }))
-            .sort((a, b) => b.units - a.units),
+            // La jerarquía de productos (PRODUCT_ORDER.md), no por cantidad.
+            .sort(compareProducts)
+            .map((row) => ({ label: row.label, units: row.units })),
         };
       }),
       unassigned: sinReparto?.total ?? 0,

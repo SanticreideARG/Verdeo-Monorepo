@@ -71,7 +71,8 @@ describe('buildPeriodReportExcel', () => {
     const sheet = book.Sheets.Pedidos;
     if (!sheet) throw new Error('sin hoja');
     const rgb = (address: string) =>
-      (sheet[address] as CellObject | undefined)?.s?.fgColor?.rgb as string | undefined;
+      ((sheet[address] as CellObject | undefined)?.s as { fgColor?: { rgb?: string } } | undefined)
+        ?.fgColor?.rgb;
     expect(rgb('E5')).toBe('C55A11');
     expect(rgb('L5')).toBe('92D050');
     expect(rgb('L7')).toBe('FF0000');
