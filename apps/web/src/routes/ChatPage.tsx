@@ -85,6 +85,16 @@ export function ChatPage() {
     setPresence(new Map(body.items.map((entry) => [entry.userId, entry])));
   }, [canSeePresence]);
 
+  /** Archivar una conversación que se quedó sin otros participantes. */
+  async function archive(conversationId: string) {
+    const response = await apiRequest(`/api/v1/chat/conversations/${conversationId}/archive`, {
+      method: 'POST',
+    });
+    if (!response.ok) return;
+    setSelectedId(null);
+    await loadConversations();
+  }
+
   const loadConversations = useCallback(async () => {
     const response = await apiRequest('/api/v1/chat/conversations');
     if (!response.ok) return;
@@ -398,6 +408,18 @@ export function ChatPage() {
             {selected ? (
               <>
                 <h2 className="chat-panel-title">{conversationName(selected)}</h2>
+                {selected.participants.length === 0 ? (
+                  <p className="chat-panel-note">
+                    En esta conversación no queda nadie más.{' '}
+                    <button
+                      className="link-button"
+                      onClick={() => void archive(selected.id)}
+                      type="button"
+                    >
+                      Archivarla
+                    </button>
+                  </p>
+                ) : null}
                 <div className="chat-transcript" ref={transcriptRef}>
                   {messages.map((entry, index) => (
                     <article

@@ -93,7 +93,7 @@ export function OrderDetailDialog({
               </div>
               {order.deliveryDayText ? (
                 <div>
-                  <dt>Día de reparto</dt>
+                  <dt>Zona</dt>
                   <dd>{order.deliveryDayText}</dd>
                 </div>
               ) : null}

@@ -526,12 +526,12 @@ export function OrderDetailPage() {
                 </label>
               ) : null}
               <label className="field">
-                Día de reparto
+                Zona
                 <input
                   defaultValue={order.deliveryDayText ?? ''}
                   maxLength={80}
                   name="deliveryDayText"
-                  placeholder="Ej. martes"
+                  placeholder="Ej. Centro"
                 />
               </label>
               <label className="field">
@@ -694,7 +694,7 @@ export function OrderDetailPage() {
             ) : null}
             {order.deliveryDayText ? (
               <div>
-                <dt>Día de reparto</dt>
+                <dt>Zona</dt>
                 <dd>{order.deliveryDayText}</dd>
               </div>
             ) : null}

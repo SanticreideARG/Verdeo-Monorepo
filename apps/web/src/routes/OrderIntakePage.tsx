@@ -1776,8 +1776,9 @@ export function OrderIntakePage() {
                 )}
               </label>
               <label className="field">
-                Día de reparto
-                <input maxLength={80} name="deliveryDayText" placeholder="Ej. martes" />
+                {/* Se llamaba "Día de reparto"; se usa para anotar la zona que guía el armado. */}
+                Zona
+                <input maxLength={80} name="deliveryDayText" placeholder="Ej. Centro" />
               </label>
               <label className="field">
                 Franja horaria

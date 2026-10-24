@@ -437,6 +437,7 @@ interface ChatEngine {
   listPresence(userId: string): Promise<unknown>;
   listPresenceStatuses(): Promise<unknown>;
   markRead(conversationId: string, userId: string): Promise<void>;
+  archiveConversation(conversationId: string, userId: string): Promise<void>;
   openDirectConversation(otherUserId: string, context: ChatContext): Promise<unknown>;
   removeUserLink(linkId: string, context: ChatContext): Promise<void>;
   sendLocation(
@@ -3750,6 +3751,21 @@ export function createApp(options: CreateAppOptions) {
       if (!params.success)
         return badRequest(context, 'Conversación inválida.', params.error.issues);
       await requireChat().markRead(params.data.conversationId, context.get('session').userId);
+      return context.body(null, 204);
+    },
+  );
+
+  app.post(
+    '/api/v1/chat/conversations/:conversationId/archive',
+    requirePermission('chat.use'),
+    async (context) => {
+      const params = ChatConversationParamSchema.safeParse(context.req.param());
+      if (!params.success)
+        return badRequest(context, 'Conversación inválida.', params.error.issues);
+      await requireChat().archiveConversation(
+        params.data.conversationId,
+        context.get('session').userId,
+      );
       return context.body(null, 204);
     },
   );

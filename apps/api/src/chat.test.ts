@@ -56,6 +56,9 @@ function chatStubs() {
     markRead: vi
       .fn<(conversationId: string, userId: string) => Promise<void>>()
       .mockResolvedValue(),
+    archiveConversation: vi
+      .fn<(conversationId: string, userId: string) => Promise<void>>()
+      .mockResolvedValue(),
     openDirectConversation: vi
       .fn<(otherUserId: string, context: unknown) => Promise<unknown>>()
       .mockResolvedValue({ id: CONVERSATION }),

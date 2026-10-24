@@ -316,3 +316,10 @@ admit `group`, and the transport sits behind the polling client rather than in i
   Today the answer is no, and nothing in the model provides for it.
 - Notifications beyond in-app unread counts. Out of scope for V1; the question is whether the model
   needs to anticipate them now.
+
+## Conversaciones sin otros participantes (2026-10-24)
+
+- No se puede abrir una conversación con uno mismo (quedaba listada como "Conversación").
+- Una conversación que se quedó sin otros participantes (alguien que se dio de baja) se llama "Sin
+  otros participantes" y se puede archivar: `POST /api/v1/chat/conversations/:id/archive` marca
+  `left_at` para quien la archiva. Los mensajes no se borran.

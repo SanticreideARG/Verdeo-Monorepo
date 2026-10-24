@@ -15,6 +15,7 @@ function feedEngine() {
     deletePost: vi.fn(() => Promise.resolve()),
     listPosts: vi.fn(() => Promise.resolve([])),
     markRead: vi.fn(() => Promise.resolve()),
+    archiveConversation: vi.fn(() => Promise.resolve()),
     readers: vi.fn(() => Promise.resolve({ pending: [], reads: [] })),
     setPinned: vi.fn(() => Promise.resolve()),
     unreadCount: vi.fn(() => Promise.resolve(2)),

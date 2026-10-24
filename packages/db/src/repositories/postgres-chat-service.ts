@@ -374,6 +374,9 @@ export class PostgresChatService {
         this.participants(transaction),
         this.policy(transaction),
       ]);
+      // Una conversación con uno mismo quedaba como "Conversación", sin nadie del otro lado.
+      if (otherUserId === context.actorUserId)
+        throw new ChatForbiddenError('No se puede abrir una conversación con uno mismo.');
       const subject = people.get(context.actorUserId);
       const other = people.get(otherUserId);
       if (!subject || !other) throw new ChatNotFoundError('El usuario no está activo.');
@@ -768,6 +771,23 @@ export class PostgresChatService {
     await this.database
       .update(staffConversationParticipants)
       .set({ lastReadAt: new Date() })
+      .where(
+        and(
+          eq(staffConversationParticipants.conversationId, conversationId),
+          eq(staffConversationParticipants.userId, userId),
+        ),
+      );
+  }
+
+  /**
+   * Archivar una conversación: deja de figurar en la lista de quien la archiva. Para las que se
+   * quedaron sin otros participantes (alguien que se dio de baja). Los mensajes no se borran.
+   */
+  public async archiveConversation(conversationId: string, userId: string) {
+    await this.assertParticipant(this.database, conversationId, userId);
+    await this.database
+      .update(staffConversationParticipants)
+      .set({ leftAt: new Date() })
       .where(
         and(
           eq(staffConversationParticipants.conversationId, conversationId),

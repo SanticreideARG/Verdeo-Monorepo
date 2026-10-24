@@ -2999,6 +2999,12 @@ a {
   border-radius: 1.1rem;
   padding: 1rem;
 }
+/* Una conversación que se quedó sin otros participantes: se puede archivar. */
+.chat-panel-note {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--db-muted, var(--color-ink-muted));
+}
 .chat-panel-title {
   font-size: 1.05rem;
   font-weight: 700;

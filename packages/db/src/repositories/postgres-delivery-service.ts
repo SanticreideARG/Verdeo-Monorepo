@@ -545,7 +545,14 @@ export class PostgresDeliveryService {
          */
         deliveryLatitude: customerAddresses.latitude,
         deliveryLongitude: customerAddresses.longitude,
-        deliveryWindow: customerAddresses.deliveryWindow,
+        /*
+         * La franja horaria: la que se cargó en el pedido y, si no tiene, la del domicilio. Es lo
+         * que permite armar las franjas de la ruta (quién tiene que recibir antes o después de
+         * cierta hora).
+         */
+        deliveryWindow: sql<
+          string | null
+        >`coalesce(nullif(trim(${orders.deliveryTimeSlot}), ''), ${customerAddresses.deliveryWindow})`,
         id: deliveryStops.id,
         // El barrio agrupa las paradas en la hoja: el repartidor ve dónde empieza cada tanda.
         neighborhood: neighborhoods.displayName,
@@ -985,7 +992,14 @@ export class PostgresDeliveryService {
         deliveryLocationUrl: orders.deliveryLocationUrlSnapshot,
         deliveryLongitude: customerAddresses.longitude,
         deliveryNote: deliveryStops.deliveryNote,
-        deliveryWindow: customerAddresses.deliveryWindow,
+        /*
+         * La franja horaria: la que se cargó en el pedido y, si no tiene, la del domicilio. Es lo
+         * que permite armar las franjas de la ruta (quién tiene que recibir antes o después de
+         * cierta hora).
+         */
+        deliveryWindow: sql<
+          string | null
+        >`coalesce(nullif(trim(${orders.deliveryTimeSlot}), ''), ${customerAddresses.deliveryWindow})`,
         id: deliveryStops.id,
         // El barrio agrupa las paradas en la hoja: el repartidor ve dónde empieza cada tanda.
         neighborhood: neighborhoods.displayName,

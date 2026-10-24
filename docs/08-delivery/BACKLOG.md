@@ -644,3 +644,9 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] Sin etiqueta vertical "Intuitivo"; cada plato de un Intuitivo con el menú del que viene en el pie, y un grupo por pedido.
 - [x] La tanda arranca sin nada tildado.
 - [x] "×" en la vista previa para sacar una etiqueta de la tanda.
+
+## Repartos y chat (2026-10-24)
+
+- [x] En Nuevo pedido, "Día de reparto" pasa a llamarse "Zona" (se usa para anotar la zona que guía el armado; el dato es el mismo).
+- [x] La franja horaria del pedido aparece en cada parada de la ruta y en la hoja del repartidor (si el pedido no tiene, la del domicilio).
+- [x] Chat: sin conversaciones con uno mismo; las que se quedan sin otros participantes se pueden archivar.

@@ -63,7 +63,10 @@ export const CHAT_POLL_HIDDEN_MS = 30_000;
 
 export function conversationName(conversation: ChatConversation): string {
   if (conversation.title) return conversation.title;
-  return conversation.participants.map((person) => person.displayName).join(', ') || 'Conversación';
+  return (
+    conversation.participants.map((person) => person.displayName).join(', ') ||
+    'Sin otros participantes'
+  );
 }
 
 /**
