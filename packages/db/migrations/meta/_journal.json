@@ -505,6 +505,13 @@
       "when": 1792669430796,
       "tag": "0071_sad_tempest",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1792815252510,
+      "tag": "0072_crazy_forgotten_one",
+      "breakpoints": true
     }
   ]
 }

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   and,
   asc,
@@ -30,6 +32,8 @@ import {
   decideAutoAccept,
   distanceKm,
   GeocodingProviderError,
+  parseCoordinatesFromLocationUrl,
+  parsePastedCoordinates,
   validateGeocodingCandidates,
   type AutoAcceptRules,
   type GeocodingProvider,
@@ -3356,26 +3360,109 @@ export class PostgresOperationsService {
     const [stored] = await executor
       .select({
         defaultWeekday: siteDeliverySettings.defaultWeekday,
+        routeEndAddress: siteDeliverySettings.routeEndAddress,
+        routeEndLatitude: siteDeliverySettings.routeEndLatitude,
+        routeEndLongitude: siteDeliverySettings.routeEndLongitude,
+        routeStartAddress: siteDeliverySettings.routeStartAddress,
+        routeStartLatitude: siteDeliverySettings.routeStartLatitude,
+        routeStartLongitude: siteDeliverySettings.routeStartLongitude,
         weekdays: siteDeliverySettings.weekdays,
       })
       .from(siteDeliverySettings)
       .where(eq(siteDeliverySettings.operatingSiteId, operatingSiteId))
       .limit(1);
     const weekdays = [...new Set(stored?.weekdays ?? [])].sort((a, b) => a - b);
+    const point = (address: string | null, latitude: string | null, longitude: string | null) =>
+      address && latitude !== null && longitude !== null
+        ? { address, latitude: Number(latitude), longitude: Number(longitude) }
+        : null;
     return {
       defaultWeekday:
         stored?.defaultWeekday != null && weekdays.includes(stored.defaultWeekday)
           ? stored.defaultWeekday
           : (weekdays[0] ?? null),
+      routeEnd: point(
+        stored?.routeEndAddress ?? null,
+        stored?.routeEndLatitude ?? null,
+        stored?.routeEndLongitude ?? null,
+      ),
+      routeStart: point(
+        stored?.routeStartAddress ?? null,
+        stored?.routeStartLatitude ?? null,
+        stored?.routeStartLongitude ?? null,
+      ),
       weekdays,
     };
   }
 
+  /**
+   * Ubicar una dirección escrita (la salida o la llegada de una ruta): coordenadas pegadas, un link
+   * de Google Maps o una dirección que se busca con el geocodificador de siempre, cerca del origen
+   * de la ciudad. Toma el primer resultado; si no hay, lo dice para que se pruebe de otra forma.
+   */
+  public async locatePlace(
+    text: string,
+    operatingSiteId: string,
+  ): Promise<{ address: string; latitude: number; longitude: number }> {
+    const value = text.trim();
+    const pasted = parsePastedCoordinates(value);
+    if (pasted) return { address: value, ...pasted };
+    if (/^https?:\/\//i.test(value)) {
+      const fromLink = parseCoordinatesFromLocationUrl(value);
+      if (fromLink) return { address: value, ...fromLink };
+    }
+    const [site] = await this.database
+      .select({
+        latitude: operatingSites.originLatitude,
+        longitude: operatingSites.originLongitude,
+      })
+      .from(operatingSites)
+      .where(eq(operatingSites.id, operatingSiteId))
+      .limit(1);
+    const candidates = await this.geocodingProvider
+      .geocode({
+        idempotencyKey: randomUUID(),
+        ...(/^https?:\/\//i.test(value) ? { locationUrl: value } : {}),
+        ...(site?.latitude != null && site.longitude != null
+          ? { origin: { latitude: Number(site.latitude), longitude: Number(site.longitude) } }
+          : {}),
+        requestId: randomUUID(),
+        writtenAddress: value,
+      })
+      .catch(() => []);
+    const [best] = candidates;
+    if (!best)
+      throw new OperationsConflictError(
+        `No pude ubicar "${value}". Probá con calle, número y ciudad, o pegá el link de Google Maps.`,
+      );
+    return { address: value, latitude: best.latitude, longitude: best.longitude };
+  }
+
   public async updateDeliverySettings(
     operatingSiteId: string,
-    input: { defaultWeekday: number | null; weekdays: readonly number[] },
+    input: {
+      defaultWeekday: number | null;
+      routeEndAddress?: string | undefined;
+      routeStartAddress?: string | undefined;
+      weekdays: readonly number[];
+    },
     context: OperationsContext,
   ) {
+    /*
+     * La salida y la llegada por defecto: sólo se tocan si vienen. Vacío borra el punto; una
+     * dirección se ubica antes de guardar, así un error de ubicación no deja la mitad guardada.
+     */
+    const points: Partial<typeof siteDeliverySettings.$inferInsert> = {};
+    for (const [which, text] of [
+      ['Start', input.routeStartAddress],
+      ['End', input.routeEndAddress],
+    ] as const) {
+      if (text === undefined) continue;
+      const place = text.trim() ? await this.locatePlace(text, operatingSiteId) : null;
+      points[`route${which}Address`] = place?.address ?? null;
+      points[`route${which}Latitude`] = place ? place.latitude.toFixed(6) : null;
+      points[`route${which}Longitude`] = place ? place.longitude.toFixed(6) : null;
+    }
     const before = await this.getDeliverySettings(operatingSiteId);
     const weekdays = [...new Set(input.weekdays)].filter((day) => day >= 0 && day <= 6).sort();
     const defaultWeekday =
@@ -3384,9 +3471,9 @@ export class PostgresOperationsService {
         : (weekdays[0] ?? null);
     await this.database
       .insert(siteDeliverySettings)
-      .values({ defaultWeekday, operatingSiteId, weekdays })
+      .values({ defaultWeekday, operatingSiteId, weekdays, ...points })
       .onConflictDoUpdate({
-        set: { defaultWeekday, updatedAt: new Date(), weekdays },
+        set: { defaultWeekday, updatedAt: new Date(), weekdays, ...points },
         target: siteDeliverySettings.operatingSiteId,
       });
     const audit = new AuditService(new PostgresAuditSink(this.database));

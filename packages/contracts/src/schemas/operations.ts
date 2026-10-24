@@ -1897,9 +1897,43 @@ export const OrderDeleteResponseSchema = z.object({
 
 /** Cómo se ubican las direcciones en una ciudad. */
 /** Los días de la semana en que reparte una ciudad (0 = domingo … 6 = sábado) y el de siempre. */
+/** Un punto del recorrido (salida o llegada): la dirección como se escribió y su ubicación. */
+export const RoutePointSchema = z.object({
+  address: z.string(),
+  latitude: z.number(),
+  longitude: z.number(),
+});
+
 export const DeliverySettingsSchema = z.object({
   defaultWeekday: z.number().int().min(0).max(6).nullable(),
   weekdays: z.array(z.number().int().min(0).max(6)).max(7),
+  /** De dónde sale y adónde vuelve la ruta, por defecto. */
+  routeEnd: RoutePointSchema.nullable().optional(),
+  routeStart: RoutePointSchema.nullable().optional(),
+});
+
+/**
+ * Guardar los días y, si vienen, la salida y la llegada por defecto escritas como dirección (o
+ * link de Google Maps, o coordenadas): el servidor las ubica. Vacío borra el punto.
+ */
+export const DeliverySettingsUpdateSchema = z.object({
+  defaultWeekday: z.number().int().min(0).max(6).nullable(),
+  routeEndAddress: z.string().trim().max(500).optional(),
+  routeStartAddress: z.string().trim().max(500).optional(),
+  weekdays: z.array(z.number().int().min(0).max(6)).max(7),
+});
+
+/** Cambiar la salida, la llegada o la hora de salida de una ruta. Vacío vuelve al de la ciudad. */
+export type DeliverySettingsUpdate = z.infer<typeof DeliverySettingsUpdateSchema>;
+
+export const RouteEndpointsUpdateSchema = z.object({
+  departureTime: z
+    .string()
+    .trim()
+    .regex(/^(\d{1,2}:\d{2})?$/)
+    .optional(),
+  endAddress: z.string().trim().max(500).optional(),
+  startAddress: z.string().trim().max(500).optional(),
 });
 export type DeliverySettings = z.infer<typeof DeliverySettingsSchema>;
 

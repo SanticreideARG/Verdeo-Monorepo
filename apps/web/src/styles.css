@@ -11279,3 +11279,43 @@ label.field:has(> input[type='radio']) {
   font-weight: 500;
   color: var(--db-muted, var(--color-ink-muted));
 }
+
+/* --- Salida, llegada y tiempos de la ruta (2026-10-24) ---------------------------------------- */
+.route-timing {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--db-border-soft, rgb(0 0 0 / 10%));
+  border-radius: 0.75rem;
+}
+.route-timing-points {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.6rem 1rem;
+  margin: 0;
+}
+.route-timing-points dt {
+  font-size: 0.75rem;
+  color: var(--db-muted, var(--color-ink-muted));
+}
+.route-timing-points dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.route-timing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.route-timing-form {
+  display: grid;
+  gap: 0.6rem;
+}
+.routes-stop-eta {
+  margin: 0;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--db-muted, var(--color-ink-muted));
+}

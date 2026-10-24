@@ -1,3 +1,5 @@
+import { RouteTimingPanel, type RoutePoint } from '../components/RouteTimingPanel.js';
+import { clockPlus, routeTiming } from '../lib/routeTiming.js';
 import { RouteMoneyBreakdown, type RouteMoney } from '../components/RouteMoneyBreakdown.js';
 import { Fragment, useCallback, useEffect, useState, type FormEvent } from 'react';
 
@@ -39,7 +41,7 @@ interface RouteStop {
   detail: string;
   deliveryLocationUrl: string | null;
   deliveryLongitude: number | null;
-  /** Cuándo recibe, tal como está cargado en su ficha. Texto libre. */
+  /** La franja horaria del pedido (o, si no tiene, la de la ficha). Texto libre. */
   deliveryWindow: string | null;
   id: string;
   /** El barrio del domicilio: agrupa las paradas. */
@@ -53,6 +55,9 @@ interface RouteStop {
 }
 
 interface RouteDetail extends RouteSummary {
+  departureTime?: string | null;
+  end?: RoutePoint | null;
+  start?: RoutePoint | null;
   stops: RouteStop[];
 }
 
@@ -471,6 +476,13 @@ export function RoutesPage() {
     );
   }
 
+  // Los tiempos estimados de cada parada de la ruta elegida (ver RouteTimingPanel).
+  const stopTiming = routeTiming(
+    selectedRoute?.start ?? null,
+    selectedRoute?.end ?? null,
+    selectedRoute?.stops ?? [],
+  );
+
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
       <section className="dashboard-panel">
@@ -812,6 +824,15 @@ export function RoutesPage() {
                         ) : null}
                       </div>
                     </div>
+                    <RouteTimingPanel
+                      canManage={canManage}
+                      departureTime={selectedRoute.departureTime ?? null}
+                      end={selectedRoute.end ?? null}
+                      onUpdated={(route) => setSelectedRoute(route as RouteDetail)}
+                      routeId={selectedRoute.id}
+                      start={selectedRoute.start ?? null}
+                      stops={selectedRoute.stops}
+                    />
                     <div className="routes-viewer mt-4">
                       <ol className="routes-stops grid content-start gap-2">
                         {selectedRoute.stops.map((stop, index) => (
@@ -834,6 +855,22 @@ export function RoutesPage() {
                               <span className="routes-stop-seq">{stop.sequence}</span>
                               <div className="routes-stop-body">
                                 <p className="routes-stop-name">{stop.customerDisplayName}</p>
+                                {stopTiming.byStop.get(stop.id) ? (
+                                  <p className="routes-stop-eta">
+                                    +{stopTiming.byStop.get(stop.id)?.leg} min
+                                    {clockPlus(
+                                      selectedRoute.departureTime,
+                                      stopTiming.byStop.get(stop.id)?.fromStart ?? 0,
+                                    )
+                                      ? ` · llega ≈ ${String(
+                                          clockPlus(
+                                            selectedRoute.departureTime,
+                                            stopTiming.byStop.get(stop.id)?.fromStart ?? 0,
+                                          ),
+                                        )}`
+                                      : ''}
+                                  </p>
+                                ) : null}
                                 {stop.deliveryWindow ? (
                                   <p className="routes-stop-window">🕒 {stop.deliveryWindow}</p>
                                 ) : null}

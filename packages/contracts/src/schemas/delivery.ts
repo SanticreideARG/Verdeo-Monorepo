@@ -68,9 +68,21 @@ export const DeliveryStopSchema = z.object({
   totalMinor: z.number().int(),
 });
 
+const RouteEndpointSchema = z.object({
+  address: z.string(),
+  latitude: z.number(),
+  longitude: z.number(),
+  /** Si es el de la ciudad (por defecto) o se cambió para esta ruta. */
+  own: z.boolean(),
+});
+
 export const DeliveryRouteDetailSchema = z.object({
   createdByUserId: UuidSchema.nullable(),
   deliveryDate: z.iso.date(),
+  /** La hora de salida ("10:00"), de la que salen las horas estimadas de llegada. */
+  departureTime: z.string().nullable().optional(),
+  end: RouteEndpointSchema.nullable().optional(),
+  start: RouteEndpointSchema.nullable().optional(),
   id: UuidSchema,
   label: z.string().nullable(),
   operatingSiteId: UuidSchema,

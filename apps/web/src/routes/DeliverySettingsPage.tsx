@@ -9,8 +9,17 @@ import { errorMessage } from '../lib/operations.js';
 import { showToast } from '../lib/toast.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
+interface RoutePlace {
+  address: string;
+  latitude: number;
+  longitude: number;
+}
+
 interface Settings {
   defaultWeekday: number | null;
+  /** De dónde sale y adónde vuelve la ruta, por defecto (2026-10-24). */
+  routeEnd?: RoutePlace | null;
+  routeStart?: RoutePlace | null;
   weekdays: number[];
 }
 
@@ -56,15 +65,28 @@ export function DeliverySettingsPage() {
       settings.defaultWeekday !== null && weekdays.includes(settings.defaultWeekday)
         ? settings.defaultWeekday
         : (weekdays[0] ?? null);
-    setSettings({ defaultWeekday, weekdays });
+    setSettings({ ...settings, defaultWeekday, weekdays });
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!settings) return;
+    const form = new FormData(event.currentTarget);
+    const text = (name: string) => {
+      const value = form.get(name);
+      return typeof value === 'string' ? value.trim() : '';
+    };
+    // La salida y la llegada sólo se mandan si cambiaron: el servidor ubica cada dirección.
+    const start = text('routeStartAddress');
+    const end = text('routeEndAddress');
     setSaving(true);
     const response = await apiRequest('/api/v1/delivery/settings', {
-      body: JSON.stringify(settings),
+      body: JSON.stringify({
+        defaultWeekday: settings.defaultWeekday,
+        weekdays: settings.weekdays,
+        ...(start !== (settings.routeStart?.address ?? '') ? { routeStartAddress: start } : {}),
+        ...(end !== (settings.routeEnd?.address ?? '') ? { routeEndAddress: end } : {}),
+      }),
       method: 'PUT',
       notify: false,
     });
@@ -75,7 +97,7 @@ export function DeliverySettingsPage() {
     }
     setSettings((await response.json()) as Settings);
     setMessage('');
-    showToast('Días de reparto guardados.');
+    showToast('Reparto guardado.');
   }
 
   if (failed) return <DashboardFailed label="los días de reparto" />;
@@ -150,6 +172,35 @@ export function DeliverySettingsPage() {
                 </div>
               </fieldset>
             ) : null}
+
+            <fieldset className="delivery-days">
+              <legend>Salida y llegada de las rutas</legend>
+              <p className="text-sm text-ink-muted">
+                De dónde sale el reparto y adónde vuelve. Con esto se arma el orden de las paradas y
+                se estiman los tiempos; cada ruta lo puede cambiar. Una dirección con calle, número
+                y ciudad, un link de Google Maps o coordenadas.
+              </p>
+              <label className="field">
+                Sale de
+                <input
+                  defaultValue={settings.routeStart?.address ?? ''}
+                  disabled={!canManage}
+                  key={`start-${settings.routeStart?.address ?? ''}`}
+                  name="routeStartAddress"
+                  placeholder="Ej. San Martín 1234, Mendoza"
+                />
+              </label>
+              <label className="field">
+                Vuelve a
+                <input
+                  defaultValue={settings.routeEnd?.address ?? ''}
+                  disabled={!canManage}
+                  key={`end-${settings.routeEnd?.address ?? ''}`}
+                  name="routeEndAddress"
+                  placeholder="Vacío: termina en la última parada"
+                />
+              </label>
+            </fieldset>
 
             {canManage ? (
               <div>

@@ -23,6 +23,7 @@ import {
   orderStatusHistory,
   orders,
   paymentMethods,
+  siteDeliverySettings,
   productFamilies,
   productVariants,
   payments,
@@ -242,7 +243,7 @@ export class PostgresDeliveryService {
         label: label ?? null,
         operatingSiteId,
         orders: geocoded,
-        origin: siteOrigin(site),
+        origin: (await this.defaultStart(transaction, operatingSiteId)) ?? siteOrigin(site),
       });
 
       return this.loadRouteDetail(transaction, route.id);
@@ -398,7 +399,7 @@ export class PostgresDeliveryService {
         );
       }
 
-      const origin = siteOrigin(run);
+      const origin = (await this.defaultStart(transaction, run.operatingSiteId)) ?? siteOrigin(run);
       const grupos: { label: string; orders: typeof ruteables; zoneId: string | null }[] =
         input.mode === 'by_zone'
           ? [...new Set(ruteables.map((pedido) => pedido.zoneId))].map((zoneId) => {
@@ -511,6 +512,68 @@ export class PostgresDeliveryService {
     return rows.map((row) => ({ ...row, stopCount: countByRoute.get(row.id) ?? 0 }));
   }
 
+  /** La salida por defecto de la ciudad (Reparto), si se configuró: de ahí arranca el armado. */
+  private async defaultStart(
+    executor: Pick<Database, 'select'>,
+    operatingSiteId: string,
+  ): Promise<{ latitude: number; longitude: number } | null> {
+    const [settings] = await executor
+      .select({
+        latitude: siteDeliverySettings.routeStartLatitude,
+        longitude: siteDeliverySettings.routeStartLongitude,
+      })
+      .from(siteDeliverySettings)
+      .where(eq(siteDeliverySettings.operatingSiteId, operatingSiteId))
+      .limit(1);
+    return settings?.latitude != null && settings.longitude != null
+      ? { latitude: Number(settings.latitude), longitude: Number(settings.longitude) }
+      : null;
+  }
+
+  /**
+   * Cambiar la salida, la llegada o la hora de salida de una ruta (null vuelve a lo de la ciudad).
+   * Sólo cambia los datos: no reordena las paradas, que pueden estar ordenadas a mano.
+   */
+  public async setRouteEndpoints(
+    routeId: string,
+    input: {
+      departureTime?: string | null | undefined;
+      end?: { address: string; latitude: number; longitude: number } | null | undefined;
+      start?: { address: string; latitude: number; longitude: number } | null | undefined;
+    },
+  ) {
+    const set: Partial<typeof deliveryRoutes.$inferInsert> = { updatedAt: new Date() };
+    if (input.start !== undefined) {
+      set.startAddress = input.start?.address ?? null;
+      set.startLatitude = input.start ? input.start.latitude.toFixed(6) : null;
+      set.startLongitude = input.start ? input.start.longitude.toFixed(6) : null;
+    }
+    if (input.end !== undefined) {
+      set.endAddress = input.end?.address ?? null;
+      set.endLatitude = input.end ? input.end.latitude.toFixed(6) : null;
+      set.endLongitude = input.end ? input.end.longitude.toFixed(6) : null;
+    }
+    if (input.departureTime !== undefined) set.departureTime = input.departureTime || null;
+    const [updated] = await this.database
+      .update(deliveryRoutes)
+      .set(set)
+      .where(eq(deliveryRoutes.id, routeId))
+      .returning({ id: deliveryRoutes.id });
+    if (!updated) throw new DeliveryNotFoundError('No se encontró la ruta');
+    return this.getRouteDetail(routeId);
+  }
+
+  /** De qué ciudad es una ruta (para ubicar sus direcciones cerca de ella). */
+  public async routeSite(routeId: string): Promise<string> {
+    const [route] = await this.database
+      .select({ operatingSiteId: deliveryRoutes.operatingSiteId })
+      .from(deliveryRoutes)
+      .where(eq(deliveryRoutes.id, routeId))
+      .limit(1);
+    if (!route) throw new DeliveryNotFoundError('No se encontró la ruta');
+    return route.operatingSiteId;
+  }
+
   public async getRouteDetail(routeId: string) {
     const detail = await this.loadRouteDetail(this.database, routeId);
     if (!detail) throw new DeliveryNotFoundError('No se encontró la ruta');
@@ -580,8 +643,53 @@ export class PostgresDeliveryService {
       })),
     );
 
+    /*
+     * La salida y la llegada: las de la ruta si se cambiaron; si no, las de la ciudad (Reparto) y,
+     * para la salida, el origen de la ciudad.
+     */
+    const [defaults] = await database
+      .select({
+        endAddress: siteDeliverySettings.routeEndAddress,
+        endLatitude: siteDeliverySettings.routeEndLatitude,
+        endLongitude: siteDeliverySettings.routeEndLongitude,
+        originLatitude: operatingSites.originLatitude,
+        originLongitude: operatingSites.originLongitude,
+        siteName: operatingSites.displayName,
+        startAddress: siteDeliverySettings.routeStartAddress,
+        startLatitude: siteDeliverySettings.routeStartLatitude,
+        startLongitude: siteDeliverySettings.routeStartLongitude,
+      })
+      .from(operatingSites)
+      .leftJoin(siteDeliverySettings, eq(siteDeliverySettings.operatingSiteId, operatingSites.id))
+      .where(eq(operatingSites.id, route.operatingSiteId))
+      .limit(1);
+    const point = (
+      address: string | null | undefined,
+      latitude: string | null | undefined,
+      longitude: string | null | undefined,
+      own: boolean,
+    ) =>
+      address && latitude != null && longitude != null
+        ? { address, latitude: Number(latitude), longitude: Number(longitude), own }
+        : null;
+    const start =
+      point(route.startAddress, route.startLatitude, route.startLongitude, true) ??
+      point(defaults?.startAddress, defaults?.startLatitude, defaults?.startLongitude, false) ??
+      point(
+        defaults ? `Origen de ${defaults.siteName}` : null,
+        defaults?.originLatitude,
+        defaults?.originLongitude,
+        false,
+      );
+    const end =
+      point(route.endAddress, route.endLatitude, route.endLongitude, true) ??
+      point(defaults?.endAddress, defaults?.endLatitude, defaults?.endLongitude, false);
+
     return {
       ...route,
+      departureTime: route.departureTime,
+      end,
+      start,
       stops: stops.map((stop) => ({
         ...stop,
         detail: detalles.get(stop.orderId) ?? '',

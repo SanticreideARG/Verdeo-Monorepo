@@ -193,6 +193,8 @@ import {
   DeliveryRunUpdateRequestSchema,
   DeliveryRunUpdateResponseSchema,
   DeliverySettingsSchema,
+  DeliverySettingsUpdateSchema,
+  RouteEndpointsUpdateSchema,
   DispatchSummarySchema,
   GeocodingSettingsSchema,
   OrderExtractRequestSchema,
@@ -339,6 +341,7 @@ import {
   SystemStatusResponseSchema,
   SystemTableMapResponseSchema,
   type DeliverySettings,
+  type DeliverySettingsUpdate,
   type GeocodingSettings,
 } from '@verdeo/contracts';
 import { createRequestId, type Logger } from '@verdeo/observability';
@@ -674,9 +677,13 @@ interface OperationsEngine {
   getDeliverySettings?(operatingSiteId: string): Promise<DeliverySettings>;
   updateDeliverySettings?(
     operatingSiteId: string,
-    input: DeliverySettings,
+    input: DeliverySettingsUpdate,
     context: OperationsContext,
   ): Promise<DeliverySettings>;
+  locatePlace?(
+    text: string,
+    operatingSiteId: string,
+  ): Promise<{ address: string; latitude: number; longitude: number }>;
   deliveryOptionsForMenu?(
     menuId: string,
     operatingSiteId: string,
@@ -1245,6 +1252,15 @@ interface DeliveryEngine {
     context: DeliveryContext,
   ): Promise<unknown>;
   reorderStops(routeId: string, orderedStopIds: readonly string[]): Promise<unknown>;
+  routeSite?(routeId: string): Promise<string>;
+  setRouteEndpoints?(
+    routeId: string,
+    input: {
+      departureTime?: string | null | undefined;
+      end?: { address: string; latitude: number; longitude: number } | null | undefined;
+      start?: { address: string; latitude: number; longitude: number } | null | undefined;
+    },
+  ): Promise<unknown>;
   triggerMessage(
     stopId: string,
     action: 'ON_MY_WAY' | 'AT_ADDRESS' | 'DELIVERED_THANKS',
@@ -5331,7 +5347,9 @@ export function createApp(options: CreateAppOptions) {
     if (!operatingSiteId) {
       return badRequest(context, 'Elegí una ciudad para guardar sus días de reparto.');
     }
-    const input = DeliverySettingsSchema.safeParse(await context.req.json().catch(() => null));
+    const input = DeliverySettingsUpdateSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
     if (!input.success)
       return badRequest(context, 'Revisá los días de reparto.', input.error.issues);
     const operations = requireOperations();
@@ -5685,6 +5703,31 @@ export function createApp(options: CreateAppOptions) {
     const params = IdParamSchema.safeParse({ id: context.req.param('id') });
     if (!params.success) return badRequest(context, 'Ruta inválida.', params.error.issues);
     const route = await requireDelivery().publishRoute(params.data.id, deliveryContext(context));
+    return context.json(DeliveryRouteDetailSchema.parse(contractValue(route)));
+  });
+
+  /*
+   * La salida, la llegada y la hora de salida de una ruta (2026-10-24). Las direcciones se ubican
+   * cerca de la ciudad de la ruta; vacío vuelve a lo de la ciudad.
+   */
+  app.patch('/api/v1/delivery/routes/:id/endpoints', async (context) => {
+    if (!context.get('session').permissions.includes('routes.manage')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = RouteEndpointsUpdateSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success)
+      return badRequest(context, 'Revisá la salida, la llegada y la hora (HH:MM).');
+    const delivery = requireDelivery();
+    const operations = requireOperations();
+    if (!delivery.setRouteEndpoints || !delivery.routeSite || !operations.locatePlace)
+      throw new Error('Route endpoints are not configured');
+    const siteId = await delivery.routeSite(params.data.id);
+    const locate = async (text: string | undefined) =>
+      text === undefined ? undefined : text ? await operations.locatePlace?.(text, siteId) : null;
+    const route = await delivery.setRouteEndpoints(params.data.id, {
+      departureTime: input.data.departureTime,
+      end: await locate(input.data.endAddress),
+      start: await locate(input.data.startAddress),
+    });
     return context.json(DeliveryRouteDetailSchema.parse(contractValue(route)));
   });
 

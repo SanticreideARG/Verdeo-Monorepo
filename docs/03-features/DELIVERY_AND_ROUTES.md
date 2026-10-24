@@ -240,3 +240,22 @@ Rutas, el mensaje de WhatsApp y el CSV de la ruta, y la hoja del repartidor.
   `GET /api/v1/orders/dispatch[?date]`, `dispatchSummary`): cuántos pedidos no cancelados salen hoy,
   cuántos todavía no están en una hoja de ruta, cuántos siguen en borrador y cuántos no tienen
   ubicación, con un botón a Rutas. Si hoy no hay reparto, dice cuál es el próximo día con pedidos.
+
+## Salida, llegada y tiempos de la ruta (2026-10-24)
+
+- **Salida y llegada por defecto** por ciudad, en Ajustes → Reparto (`site_delivery_settings`:
+  `route_start_*`, `route_end_*`, migración 0072): una dirección, un link de Google Maps o
+  coordenadas; el servidor la ubica (`locatePlace`, con el geocodificador de siempre). La salida es
+  desde donde arma el orden el optimizador (si no hay, el origen de la ciudad).
+- **Cada ruta las puede cambiar**, y tiene **hora de salida** (`delivery_routes.start_*`, `end_*`,
+  `departure_time`; `PATCH /api/v1/delivery/routes/:id/endpoints`). Cambiarlas no reordena las
+  paradas.
+- **Tiempos estimados** (`apps/web/src/lib/routeTiming.ts`, con `estimateRouteMinutes` de
+  `@verdeo/routing`): minutos por tramo, hora estimada de llegada a cada parada con la hora de salida,
+  y el recorrido total con la vuelta. Por distancia y sin tránsito.
+- **Google Maps**: el recorrido entero (salida, paradas en orden, llegada) en un link; el link admite
+  nueve paradas intermedias, así que una ruta larga se parte en tramos que empiezan donde termina el
+  anterior.
+- En cada parada, la **franja horaria del pedido** (o la del domicilio).
+- Paso 2, si hace falta: tiempos reales tramo por tramo con el servicio de rutas de Google (clave
+  con facturación).

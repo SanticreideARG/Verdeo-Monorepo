@@ -58,4 +58,13 @@ El generador anterior sigue en "Versión anterior".`,
 
 Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en columnas largas, como la planilla de siempre, con la hoja de Reparto. Un renglón por vianda, por día y en el orden de la ruta, con tiempo estimado de ruta, colores (naranja = nuevo, verde/rojo = cobrado o no, amarillo = franja pedida) y totales.`,
   },
+  {
+    key: '2026-10-24-rutas-etiquetas',
+    body: `Rutas, etiquetas y pedidos:
+• Rutas: cada ruta muestra de dónde sale y adónde vuelve (se configura en Ajustes → Reparto y se puede cambiar en la ruta), la franja horaria de cada pedido y los minutos entre paradas. Con la hora de salida, dice a qué hora se llega a cada una. "Abrir el recorrido en Google Maps" abre la ruta entera para ver los tiempos reales.
+• Etiquetas: el Intuitivo ya no tiene etiqueta propia; cada plato lleva el menú del que viene, y los platos de cada Intuitivo se agregan por pedido. La tanda arranca vacía y en la vista previa se puede sacar una etiqueta con la "×".
+• El número de pedido ya no sale en planillas, etiquetas ni hojas de reparto.
+• Marcar un pedido como cobrado (o volverlo a pendiente) pide confirmación.
+• En Nuevo pedido, "Día de reparto" ahora se llama "Zona".`,
+  },
 ];

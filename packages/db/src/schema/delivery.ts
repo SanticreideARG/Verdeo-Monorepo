@@ -4,6 +4,7 @@ import {
   date,
   index,
   integer,
+  numeric,
   pgTable,
   text,
   timestamp,
@@ -45,6 +46,17 @@ export const deliveryRoutes = pgTable(
       onDelete: 'set null',
     }),
     publishedAt: timestamp('published_at', { withTimezone: true }),
+    /*
+     * La salida y la llegada de esta ruta, si se cambiaron (si no, las de la ciudad), y la hora de
+     * salida ("10:00"), de la que salen las horas estimadas de llegada a cada parada.
+     */
+    startAddress: text('start_address'),
+    startLatitude: numeric('start_latitude', { precision: 9, scale: 6 }),
+    startLongitude: numeric('start_longitude', { precision: 9, scale: 6 }),
+    endAddress: text('end_address'),
+    endLatitude: numeric('end_latitude', { precision: 9, scale: 6 }),
+    endLongitude: numeric('end_longitude', { precision: 9, scale: 6 }),
+    departureTime: text('departure_time'),
     ...timestamps,
   },
   (table) => [

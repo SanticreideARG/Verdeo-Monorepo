@@ -40,6 +40,10 @@ export default defineConfig(({ mode }) => {
         '@verdeo/orders': fileURLToPath(
           new URL('../../packages/orders/src/index.ts', import.meta.url),
         ),
+        // Y el cálculo de tiempos de una ruta.
+        '@verdeo/routing': fileURLToPath(
+          new URL('../../packages/routing/src/index.ts', import.meta.url),
+        ),
       },
     },
     plugins: [

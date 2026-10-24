@@ -928,6 +928,16 @@ export const siteDeliverySettings = pgTable(
       .default(sql`'{}'::integer[]`)
       .notNull(),
     defaultWeekday: integer('default_weekday'),
+    /*
+     * De dónde sale y adónde vuelve la ruta, por defecto (2026-10-24): la dirección como se escribió
+     * y su ubicación. Cada ruta lo puede cambiar. Sin salida, se usa el origen de la ciudad.
+     */
+    routeStartAddress: text('route_start_address'),
+    routeStartLatitude: numeric('route_start_latitude', { precision: 9, scale: 6 }),
+    routeStartLongitude: numeric('route_start_longitude', { precision: 9, scale: 6 }),
+    routeEndAddress: text('route_end_address'),
+    routeEndLatitude: numeric('route_end_latitude', { precision: 9, scale: 6 }),
+    routeEndLongitude: numeric('route_end_longitude', { precision: 9, scale: 6 }),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

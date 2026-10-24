@@ -650,3 +650,5 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] En Nuevo pedido, "Día de reparto" pasa a llamarse "Zona" (se usa para anotar la zona que guía el armado; el dato es el mismo).
 - [x] La franja horaria del pedido aparece en cada parada de la ruta y en la hoja del repartidor (si el pedido no tiene, la del domicilio).
 - [x] Chat: sin conversaciones con uno mismo; las que se quedan sin otros participantes se pueden archivar.
+- [x] Salida y llegada de las rutas: por defecto por ciudad (Ajustes → Reparto) y cambiables en cada ruta, con hora de salida; tiempos estimados por parada y total; el recorrido en Google Maps (en tramos de nueve paradas). Migración 0072.
+- [ ] Paso 2 (si hace falta): tiempos reales con el servicio de rutas de Google.

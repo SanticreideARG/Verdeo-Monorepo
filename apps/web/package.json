@@ -15,6 +15,7 @@
     "@tailwindcss/vite": "4.3.3",
     "@verdeo/labels": "workspace:*",
     "@verdeo/orders": "workspace:*",
+    "@verdeo/routing": "workspace:*",
     "@vitejs/plugin-react": "6.0.5",
     "leaflet": "^1.9.4",
     "qrcode": "^1.5.4",

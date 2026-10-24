@@ -149,3 +149,41 @@ describe('splitByProximity', () => {
     expect(splitByProximity(uno, 3, null)).toHaveLength(1);
   });
 });
+
+describe('salida y llegada de las rutas', () => {
+  it('la de la ciudad por defecto y la propia de una ruta, con su hora de salida', async () => {
+    const { client, service } = await base();
+    await client.exec(`
+      insert into site_delivery_settings
+        (operating_site_id, route_start_address, route_start_latitude, route_start_longitude,
+         route_end_address, route_end_latitude, route_end_longitude)
+      values ('${SITE}', 'Depósito', -34.6, -58.4, 'Casa', -34.61, -58.41);
+    `);
+    const result = await service.createRoutesFromRun(RUN, { mode: 'single' }, contexto);
+    const routeId = result.routes[0]?.id ?? '';
+    const detail = (await service.getRouteDetail(routeId)) as {
+      end: { address: string; own: boolean } | null;
+      start: { address: string; own: boolean } | null;
+    };
+    expect(detail.start).toMatchObject({ address: 'Depósito', own: false });
+    expect(detail.end).toMatchObject({ address: 'Casa', own: false });
+
+    const changed = (await service.setRouteEndpoints(routeId, {
+      departureTime: '10:30',
+      start: { address: 'Otra salida', latitude: -34.5, longitude: -58.5 },
+    })) as {
+      departureTime: string | null;
+      end: { own: boolean } | null;
+      start: { address: string; own: boolean } | null;
+    };
+    expect(changed.start).toMatchObject({ address: 'Otra salida', own: true });
+    expect(changed.end).toMatchObject({ own: false });
+    expect(changed.departureTime).toBe('10:30');
+
+    // Vacío vuelve a la de la ciudad.
+    const back = (await service.setRouteEndpoints(routeId, { start: null })) as {
+      start: { address: string } | null;
+    };
+    expect(back.start?.address).toBe('Depósito');
+  });
+});
