@@ -512,6 +512,13 @@
       "when": 1792815252510,
       "tag": "0072_crazy_forgotten_one",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1792817877707,
+      "tag": "0073_dear_ghost_rider",
+      "breakpoints": true
     }
   ]
 }

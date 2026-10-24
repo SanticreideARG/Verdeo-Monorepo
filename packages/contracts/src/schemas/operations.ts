@@ -698,6 +698,8 @@ export const DishSourceSchema = z
 export const OrderItemInputSchema = z.object({
   offeringId: UuidSchema,
   quantityUnits: z.number().int().min(1).max(1_000),
+  /** Del stock de un período anterior: el lote del que sale (STOCK_LOTS_PLAN.md). */
+  stockLotId: UuidSchema.optional(),
   /*
    * Los platos elegidos de un Intuitivo.
    *
@@ -837,19 +839,51 @@ export const OrderReadyBatchResponseSchema = z.object({
  */
 export const CycleClosedRequestSchema = z.object({
   closed: z.boolean(),
-  /** Pasar lo que quedó sin vender al período siguiente, en lugar de darlo de baja. */
-  carryToNext: z.boolean().optional(),
 });
 
 export const CycleClosedResponseSchema = z.object({
   alias: z.string(),
   id: UuidSchema,
   status: z.string(),
-  /** Unidades dadas de baja al cerrar: el remanente que no se colocó. */
+  /** Lo que sobró y pasó solo al stock de períodos anteriores (STOCK_LOTS_PLAN.md). */
+  stockLots: z
+    .array(
+      z.object({
+        familyName: z.string(),
+        operatingSiteName: z.string(),
+        quantityUnits: z.number().int(),
+        variantName: z.string(),
+      }),
+    )
+    .default([]),
+});
+
+/** Un lote de stock de un período anterior, con lo vendido, lo dado de baja y lo que queda. */
+export const StockLotSchema = z.object({
+  available: z.number().int(),
+  createdAt: IsoDateTimeSchema,
+  cycleAlias: z.string(),
+  expired: z.boolean(),
+  expiresAt: IsoDateTimeSchema,
+  familyName: z.string(),
+  id: UuidSchema,
+  notes: z.string().nullable(),
+  operatingSiteId: UuidSchema,
+  operatingSiteName: z.string(),
+  quantityUnits: z.number().int(),
+  salesCycleId: UuidSchema,
+  soldUnits: z.number().int(),
+  variantName: z.string(),
   writtenOffUnits: z.number().int(),
-  /** Unidades que pasaron como sobrante al período siguiente. */
-  carriedUnits: z.number().int().default(0),
-  nextCycleAlias: z.string().nullable().default(null),
+});
+
+export const StockLotListResponseSchema = z.object({ items: z.array(StockLotSchema) });
+
+/** Corregir un lote: la cantidad, dar de baja lo que queda o pasarlo a otra ciudad. */
+export const StockLotUpdateRequestSchema = z.object({
+  operatingSiteId: UuidSchema.optional(),
+  quantityUnits: z.number().int().min(0).max(10_000).optional(),
+  writeOffRemaining: z.boolean().optional(),
 });
 
 /** Un tilde, nada más: quién y cuándo los pone el servidor. */
@@ -913,6 +947,8 @@ export const OrderSchema = z.object({
       // El menú de cada plato elegido, en el mismo orden que `dishSelections`.
       dishSources: z.array(DishSourceSchema).default([]),
       id: UuidSchema,
+      // Del stock de un período anterior: de cuál.
+      stockLot: z.object({ cycleAlias: z.string(), id: UuidSchema }).nullable().optional(),
       // Null cuando la oferta del menú se borró: el ítem conserva sus snapshots de nombre y precio,
       // pero deja de saber contra qué variedad del menú se cargó.
       offeringId: UuidSchema.nullable(),
@@ -1341,17 +1377,6 @@ export const PrintedLabelsRequestSchema = z.object({
 });
 
 /** El sobrante de períodos anteriores a la venta en éste. */
-export const CarryOverListResponseSchema = z.object({
-  items: z.array(
-    z.object({
-      familyName: z.string(),
-      fromCycleAlias: z.string().nullable(),
-      quantityUnits: z.number().int(),
-      variantName: z.string(),
-    }),
-  ),
-});
-
 export const ProductionSnapshotKindSchema = z.enum(['partial', 'final']);
 
 export const ProductionSnapshotRequestSchema = z.object({

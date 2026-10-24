@@ -8,7 +8,9 @@ import { CancelOrderDialog } from '../components/CancelOrderDialog.js';
 import { ColumnPicker } from '../components/ColumnPicker.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { DashboardShell } from '../components/DashboardShell.js';
+import { StockLotsPicker } from '../components/StockLotsPicker.js';
 import { StockSaleOption } from '../components/StockSaleOption.js';
+import { stockItemsPayload, type StockLot, type StockPicks } from '../lib/stockLots.js';
 import { sourceLabel } from '../lib/orderColumns.js';
 import { rememberOrderList } from '../lib/orderNavigation.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
@@ -265,6 +267,10 @@ export function OrderIntakePage() {
   // Cambiar el cobro pide confirmación, en los dos sentidos (2026-10-23): un tilde suelto no se
   // nota y deja a alguien como que pagó, o como que debe.
   const [paying, setPaying] = useState<OrderSummary | null>(null);
+  // Lo elegido del stock de períodos anteriores (STOCK_LOTS_PLAN.md) y los lotes que se pueden
+  // vender con el menú elegido.
+  const [stockPicks, setStockPicks] = useState<StockPicks>(new Map());
+  const [stockLots, setStockLots] = useState<(StockLot & { offeringId: string })[]>([]);
   /** El pedido que se está mirando en la ficha. Es el de la lista: no se vuelve a pedir nada. */
   const [viewing, setViewing] = useState<OrderSummary | null>(null);
   // La zona cuyo lote se está marcando: deshabilita todos los botones mientras corre, para que dos
@@ -859,10 +865,13 @@ export function OrderIntakePage() {
       cart,
       pendingCartLine(selectedOffering, units, selectedDishes, intuitivoLimits),
     );
-    if ('reason' in armado) {
+    // Un pedido puede ser sólo de viandas del stock de períodos anteriores.
+    const fromLots = stockItemsPayload(stockPicks, stockLots);
+    if ('reason' in armado && !(fromLots.length > 0 && armado.reason.startsWith('Agregá'))) {
       setMessage(armado.reason);
       return;
     }
+    const lines = 'reason' in armado ? [] : armado.lines;
 
     let customerId = selectedCustomer?.id ?? '';
     try {
@@ -896,7 +905,7 @@ export function OrderIntakePage() {
         dietaryInstructions: formText(form, 'dietaryInstructions').trim()
           ? [formText(form, 'dietaryInstructions').trim().replace(/\s+/g, ' ')]
           : [],
-        items: cartItemsPayload(armado.lines),
+        items: [...cartItemsPayload(lines), ...fromLots],
         menuId: formText(form, 'menuId'),
         paymentExpectation: formText(form, 'paymentExpectation'),
         ...(formText(form, 'deliveryDayText').trim()
@@ -924,6 +933,7 @@ export function OrderIntakePage() {
       setOtherDate(false);
       resetCart();
       setFromStock(false);
+      setStockPicks(new Map());
       setMessage('');
       showToast(
         confirmNow ? 'Pedido registrado y confirmado.' : 'Pedido registrado como borrador.',
@@ -1585,7 +1595,8 @@ export function OrderIntakePage() {
                 <select
                   name="offeringFamily"
                   onChange={(event) => chooseIntakeFamily(event.target.value)}
-                  required
+                  // Un pedido sólo con viandas del stock de períodos anteriores no lleva variedad.
+                  required={stockPicks.size === 0}
                   value={selectedOffering?.familyName ?? ''}
                 >
                   <option value="">Seleccionar</option>
@@ -1603,7 +1614,7 @@ export function OrderIntakePage() {
                   disabled={!selectedOffering}
                   name="offeringSize"
                   onChange={(event) => chooseIntakeSize(event.target.value)}
-                  required
+                  required={stockPicks.size === 0}
                   value={selectedOffering?.variantName ?? ''}
                 >
                   <option value="">Seleccionar</option>
@@ -1758,6 +1769,12 @@ export function OrderIntakePage() {
                   onChange={setFromStock}
                 />
               ) : null}
+              <StockLotsPicker
+                menu={selectedMenu}
+                onChange={setStockPicks}
+                onLots={setStockLots}
+                picks={stockPicks}
+              />
               <label className="field">
                 Medio de pago
                 {paymentMethods.length > 0 ? (

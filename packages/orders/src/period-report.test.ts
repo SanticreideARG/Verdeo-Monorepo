@@ -95,6 +95,14 @@ describe('buildPeriodReport', () => {
   });
 });
 
+describe('stock de períodos anteriores', () => {
+  it('la vianda del stock dice de qué período es', () => {
+    const report = buildPeriodReport([order({ items: [item({ stockLabel: 'Octubre 2' })] })]);
+    expect(report.days[0]?.rows[0]?.meals[0]).toBe('KETO · Octubre 2');
+    expect(report.summary).toEqual([{ label: 'KETO 400 · Octubre 2', units: 1 }]);
+  });
+});
+
 describe('routeMinutesLabel', () => {
   it('minutos y horas', () => {
     expect(routeMinutesLabel(25)).toBe('≈ 25 min');

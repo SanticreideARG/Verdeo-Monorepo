@@ -224,7 +224,7 @@ describe('excedente', () => {
     expect(keto?.disponible).toBe(2);
   });
 
-  it('al cerrar el período da de baja el remanente sin vender', async () => {
+  it('al cerrar el período, el remanente sin vender pasa al stock de períodos anteriores', async () => {
     const service = await seededService();
     await service.reportProduction(
       CYCLE,
@@ -234,8 +234,8 @@ describe('excedente', () => {
 
     const closed = await service.setCycleClosed(CYCLE, true, context);
 
-    // Dos unidades producidas de más que nadie pidió: terminada la semana no se arrastran.
-    expect(closed.writtenOffUnits).toBe(2);
+    // Dos unidades producidas de más que nadie pidió: salen del período y quedan como lote.
+    expect(closed.stockLots.reduce((sum, lot) => sum + lot.quantityUnits, 0)).toBe(2);
     expect(closed.status).toBe('CLOSED');
     const keto = (await service.surplusReport(CYCLE)).items.find(
       (item) => item.familyName === 'Keto' && item.variantName === '250',
@@ -258,7 +258,7 @@ describe('excedente', () => {
     await service.setCycleClosed(CYCLE, false, context);
     const again = await service.setCycleClosed(CYCLE, true, context);
 
-    expect(again.writtenOffUnits).toBe(0);
+    expect(again.stockLots.reduce((sum, lot) => sum + lot.quantityUnits, 0)).toBe(0);
     const keto = (await service.surplusReport(CYCLE)).items.find(
       (item) => item.familyName === 'Keto' && item.variantName === '250',
     );
@@ -274,7 +274,12 @@ describe('excedente', () => {
     );
 
     // Producido exactamente lo pedido: no hay excedente que dar de baja.
-    expect((await service.setCycleClosed(CYCLE, true, context)).writtenOffUnits).toBe(0);
+    expect(
+      (await service.setCycleClosed(CYCLE, true, context)).stockLots.reduce(
+        (sum, lot) => sum + lot.quantityUnits,
+        0,
+      ),
+    ).toBe(0);
   });
 
   it('produccion planificada applies the configured coefficient over demand', async () => {
@@ -597,7 +602,7 @@ describe('stock para la venta (STOCK_PLAN.md)', () => {
     expect(await service.listProductionStock(CYCLE)).toEqual([]);
   });
 
-  it('al cerrar el período da de baja el stock que no se vendió', async () => {
+  it('al cerrar el período, el stock que no se vendió pasa a un lote', async () => {
     const service = await seededService();
     await service.setProductionStock(
       CYCLE,
@@ -605,7 +610,12 @@ describe('stock para la venta (STOCK_PLAN.md)', () => {
       context,
     );
 
-    expect((await service.setCycleClosed(CYCLE, true, context)).writtenOffUnits).toBe(3);
+    expect(
+      (await service.setCycleClosed(CYCLE, true, context)).stockLots.reduce(
+        (sum, lot) => sum + lot.quantityUnits,
+        0,
+      ),
+    ).toBe(3);
   });
 });
 

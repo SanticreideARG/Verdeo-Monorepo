@@ -631,7 +631,7 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 ## Planilla de pedidos y stock por lotes (2026-10-23)
 
 - [x] Informe del período, con la planilla real: Intuitivo en negrita cursiva con el menú de cada plato en su día, nuevos rosado (mail) / oscuro (WhatsApp), venta coloreada sólo en transferencias, columna "Pago".
-- [ ] Stock por lotes (STOCK_LOTS_PLAN.md): propuesta escrita; faltan las respuestas.
+- [x] Stock por lotes (STOCK_LOTS_PLAN.md): lo que sobra al cerrar pasa solo a lotes por período y ciudad (vencen al mes), se vende desde Nuevo pedido con el nombre del período, no se cocina ni se etiqueta, y se corrige en Cocina. Migración 0073.
 
 ## El número de pedido es un control interno (2026-10-23)
 

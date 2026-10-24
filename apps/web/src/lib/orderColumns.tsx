@@ -137,7 +137,10 @@ export function buildOrderColumns(options: { maskSurnames?: boolean } = {}): Ord
       label: 'Pedido',
       render: (order) =>
         order.items
-          .map((item) => `${item.productName} ${item.variantName} × ${String(item.quantityUnits)}`)
+          .map(
+            (item) =>
+              `${item.productName} ${item.variantName} × ${String(item.quantityUnits)}${item.stockLot ? ` (stock de ${item.stockLot.cycleAlias})` : ''}`,
+          )
           .join(', '),
       sortValue: orderKind,
       // Unidades y no pedidos: es lo que cocina tiene que producir, y no coinciden.

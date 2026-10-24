@@ -17,13 +17,15 @@ export interface EditableItem {
   offeringId: string;
   quantityUnits: number;
   selectedDishes: PickedDish[];
+  /** Del stock de un período anterior: el lote, que se conserva al editar. */
+  stockLotId?: string | null;
 }
 
 /** Lo que el PATCH espera; los platos sólo viajan si la variedad es componible. */
 export function toItemPayload(
   items: readonly EditableItem[],
   offerings: readonly MenuOffering[],
-): ({ offeringId: string; quantityUnits: number } & (
+): ({ offeringId: string; quantityUnits: number; stockLotId?: string } & (
   { selectedDishes?: PickedDish[] } | { selectedDishNames?: string[] }
 ))[] {
   return items.map((item) => {
@@ -31,6 +33,7 @@ export function toItemPayload(
     return {
       offeringId: item.offeringId,
       quantityUnits: item.quantityUnits,
+      ...(item.stockLotId ? { stockLotId: item.stockLotId } : {}),
       ...(offering?.composable ? dishesPayload(item.selectedDishes) : {}),
     };
   });
@@ -45,6 +48,7 @@ export function itemsFromOrder(order: OrderSummary): EditableItem[] {
     offeringId: item.offeringId ?? '',
     quantityUnits: item.quantityUnits,
     selectedDishes: pickedDishes(item),
+    stockLotId: item.stockLot?.id ?? null,
   }));
 }
 

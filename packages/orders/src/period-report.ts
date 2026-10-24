@@ -18,6 +18,8 @@ export interface PeriodReportItem {
   /** Cuántas comidas trae la vianda: llena esa cantidad de las cinco columnas de días. */
   mealsPerUnit: number;
   quantityUnits: number;
+  /** Del stock de un período anterior: de cuál ("Octubre 2"). Va al lado de la variedad. */
+  stockLabel?: string | null;
   variantName: string;
 }
 
@@ -165,11 +167,13 @@ export function buildPeriodReport(orders: readonly PeriodReportOrder[]): PeriodR
       for (const item of items) {
         const short = defaultAbbreviation(item.familyName);
         const size = sizeOf(item.variantName);
+        // Del stock de un período anterior, como se escribía a mano: "KETO · Octubre 2".
+        const ofStock = item.stockLabel ? ` · ${item.stockLabel}` : '';
         const meals = Array.from({ length: DAYS }, (_, day) =>
-          day < Math.min(DAYS, item.mealsPerUnit) ? short : '',
+          day < Math.min(DAYS, item.mealsPerUnit) ? short + ofStock : '',
         );
-        const variety = item.composable ? order.customerName : short;
-        const label = `${variety} ${size}`;
+        const variety = item.composable ? order.customerName : short + ofStock;
+        const label = item.composable ? `${variety} ${size}` : `${short} ${size}${ofStock}`;
         const entry = summary.get(label) ?? {
           composable: item.composable,
           familyName: item.familyName,

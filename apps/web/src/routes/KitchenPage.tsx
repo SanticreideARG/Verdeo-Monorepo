@@ -36,7 +36,6 @@ export function KitchenPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [closing, setClosing] = useState(false);
-  const [carryToNext, setCarryToNext] = useState(true);
 
   const permissions = profile?.permissions ?? [];
   const canReport = permissions.includes('production.report');
@@ -179,15 +178,15 @@ export function KitchenPage() {
    * no se arrastra a la siguiente.
    */
   /*
-   * Cerrar el período. Lo que quedó sin vender se puede pasar al período siguiente como sobrante a
-   * la venta (FIXES_2026_10_22_PLAN.md, A) o darse de baja, como antes.
+   * Cerrar el período. Lo que quedó sin vender pasa solo al stock de períodos anteriores
+   * (STOCK_LOTS_PLAN.md): no hay que elegir nada, sólo se avisa.
    */
-  async function closeCycle(carryToNext: boolean) {
+  async function closeCycle() {
     if (!selectedMenu) return;
     setClosing(false);
     setMessage('');
     const response = await apiRequest(`/api/v1/production/${selectedMenu.cycle.id}/closed`, {
-      body: JSON.stringify({ carryToNext, closed: true }),
+      body: JSON.stringify({ closed: true }),
       method: 'POST',
     });
     if (!response.ok) {
@@ -195,16 +194,22 @@ export function KitchenPage() {
       return;
     }
     const closed = (await response.json()) as {
-      carriedUnits: number;
-      nextCycleAlias: string | null;
-      writtenOffUnits: number;
+      stockLots: {
+        familyName: string;
+        operatingSiteName: string;
+        quantityUnits: number;
+        variantName: string;
+      }[];
     };
     setMessage(
-      closed.carriedUnits > 0
-        ? `Período cerrado. ${String(closed.carriedUnits)} unidades sin vender pasaron como sobrante a ${closed.nextCycleAlias ?? 'el período siguiente'}.`
-        : closed.writtenOffUnits > 0
-          ? `Período cerrado. Se dieron de baja ${String(closed.writtenOffUnits)} unidades sin vender.`
-          : 'Período cerrado. No quedaba remanente sin vender.',
+      closed.stockLots.length > 0
+        ? `Período cerrado. Pasó al stock de períodos anteriores: ${closed.stockLots
+            .map(
+              (lot) =>
+                `${String(lot.quantityUnits)} ${lot.familyName} ${lot.variantName} (${lot.operatingSiteName})`,
+            )
+            .join(', ')}. Se corrige en Cocina → Stock.`
+        : 'Período cerrado. No quedaba nada sin vender.',
     );
     await loadMenus();
     await loadSurplus(selectedMenu.cycle.id);
@@ -514,18 +519,9 @@ export function KitchenPage() {
                       </li>
                     ))}
                   </ul>
-                  <label className="label-switch">
-                    <input
-                      checked={carryToNext}
-                      onChange={(event) => setCarryToNext(event.target.checked)}
-                      type="checkbox"
-                    />
-                    Pasarlo al período siguiente para venderlo
-                  </label>
                   <small className="text-ink-muted">
-                    {carryToNext
-                      ? 'Entra como sobrante a la venta: no se vuelve a cocinar. Se corrige en Cocina del período siguiente.'
-                      : 'Se da de baja.'}
+                    Pasa solo al stock de períodos anteriores, con este período y su ciudad: se
+                    vende desde Nuevo pedido hasta un mes después y se corrige en Cocina → Stock.
                   </small>
                 </>
               );
@@ -540,11 +536,7 @@ export function KitchenPage() {
               </button>
               <button
                 className="button button-primary"
-                onClick={() =>
-                  void closeCycle(
-                    carryToNext && (surplus?.items ?? []).some((item) => item.disponible > 0),
-                  )
-                }
+                onClick={() => void closeCycle()}
                 type="button"
               >
                 Cerrar período

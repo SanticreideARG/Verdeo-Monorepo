@@ -2,8 +2,7 @@
 
 Pedido (2026-10-23): vender viandas que quedaron de períodos anteriores (no sólo del anterior: dos o
 tres atrás), saber de qué período es cada una ("keto oct 2", "keto oct 3"), que el sistema registre
-solo lo que sobró y lo pase adelante, y poder cargarlo en un pedido. Estado: **propuesta, a
-confirmar**.
+solo lo que sobró y lo pase adelante, y poder cargarlo en un pedido. Estado: **hecho** (2026-10-24), con las respuestas del usuario.
 
 ## Lo que hay hoy y por qué no alcanza
 
@@ -88,3 +87,25 @@ período siguiente" del cierre se reemplaza por la conversión automática.
 2. Cierre: lo que sobra pasa solo a lotes; aviso en el feed.
 3. Nuevo pedido: "Del stock" con los lotes; el ítem atado al lote y con sus platos.
 4. Cocina → Stock (lotes por ciudad, baja), planilla de pedidos con el período, ayuda.
+
+## Respuestas (2026-10-24) y cómo quedó
+
+1. **Por ciudad.** `stock_lots.operating_site_id`. Al cerrar, la ciudad de cada lote es la que más
+   vendió esa variedad y tamaño en el período; si no se vendió, la del menú; se puede pasar a otra
+   ciudad (`PATCH /api/v1/stock-lots/:id`).
+2. **El nombre del período, el cargado.** "Keto 400 · Octubre 2".
+3. **Automático al cerrar**, sólo se avisa (en la pantalla del cierre); se corrige después en Cocina.
+   Lo que sobra sale del período como baja con el motivo "pasó al stock de períodos anteriores".
+4. **Un mes máximo**: `expires_at` = cierre del período + 30 días. Vencido, no se ofrece ni se acepta;
+   en Cocina figura como vencido para darlo de baja.
+5. **Precio normal** de la semana (el de la opción del menú elegido de la misma variedad y tamaño).
+6. **En Nuevo pedido**, debajo de "Sale del stock": "Stock de períodos anteriores" con los lotes de la
+   ciudad del menú elegido que ese menú puede vender. Un pedido puede ser sólo del stock.
+
+- Modelo (migración 0073): `stock_lots` y `order_items.stock_lot_id`. Lo disponible se calcula
+  (cargado − dado de baja − vendido en pedidos no cancelados): cancelar un pedido devuelve la vianda.
+  El sobrante viejo (`production_stock` con `origin = carry_over`) pasa a lotes en la migración.
+- Lo vendido de un lote no se cocina, no lleva etiqueta y no cuenta en el excedente del período.
+- El pedido conserva su origen; el ítem dice de qué período es (pedido, lista, planilla de pedidos).
+- Se sacaron "Pasar el sobrante al período siguiente" del cierre y la carga manual del sobrante
+  (`/production/:cycleId/carry-over`).

@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { apiRequest } from '../lib/api.js';
+import { ConfirmDialog } from './ConfirmDialog.js';
+import { formatDay } from '../lib/dates.js';
 import { errorMessage, type MenuOffering, type SurplusItem } from '../lib/operations.js';
+import type { StockLot } from '../lib/stockLots.js';
 
 interface StockRow {
   familyName: string;
@@ -36,39 +39,26 @@ export function ProductionStockPanel({
   surplus: readonly SurplusItem[];
 }) {
   const [stock, setStock] = useState<StockRow[]>([]);
-  // El sobrante de períodos anteriores: se vende, no se cocina.
-  const [carryOver, setCarryOver] = useState<(StockRow & { fromCycleAlias: string | null })[]>([]);
+  // El stock de períodos anteriores (STOCK_LOTS_PLAN.md): lotes ya cocinados, por ciudad.
+  const [lots, setLots] = useState<StockLot[]>([]);
+  const [writingOff, setWritingOff] = useState<StockLot | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
   const load = useCallback(async () => {
     const response = await apiRequest(`/api/v1/production/${cycleId}/stock`);
     if (response.ok) setStock(((await response.json()) as { items: StockRow[] }).items);
-    const carried = await apiRequest(`/api/v1/production/${cycleId}/carry-over`);
-    if (carried.ok) {
-      setCarryOver(
-        ((await carried.json()) as { items: (StockRow & { fromCycleAlias: string | null })[] })
-          .items,
-      );
-    }
+    const stockLots = await apiRequest('/api/v1/stock-lots', { notify: false });
+    if (stockLots.ok) setLots(((await stockLots.json()) as { items: StockLot[] }).items);
   }, [cycleId]);
 
-  /** Corregir el sobrante: uno más o uno menos, guardado en el acto. */
-  async function changeCarryOver(row: StockRow, delta: number) {
-    const next = Math.max(0, row.quantityUnits + delta);
-    const entries = carryRows
-      .map((item) => (keyOf(item) === keyOf(row) ? { ...item, quantityUnits: next } : item))
-      .filter((item) => item.quantityUnits > 0)
-      .map(({ familyName, quantityUnits, variantName }) => ({
-        familyName,
-        quantityUnits,
-        variantName,
-      }));
+  /** Corregir un lote: una vianda más o menos, o dar de baja lo que queda. Se guarda en el acto. */
+  async function patchLot(lot: StockLot, body: Record<string, unknown>) {
     setSaving(true);
     setMessage('');
-    const response = await apiRequest(`/api/v1/production/${cycleId}/carry-over`, {
-      body: JSON.stringify({ entries }),
-      method: 'PUT',
+    const response = await apiRequest(`/api/v1/stock-lots/${lot.id}`, {
+      body: JSON.stringify(body),
+      method: 'PATCH',
     });
     setSaving(false);
     if (!response.ok) {
@@ -103,23 +93,11 @@ export function ProductionStockPanel({
 
   const total = stock.reduce((sum, item) => sum + item.quantityUnits, 0);
 
-  /*
-   * El sobrante, con todas las variedades del menú: si el período anterior ya se cerró sin pasarlo,
-   * se carga acá a mano (lo que quedó de verdad en la heladera).
-   */
-  const carryRows: (StockRow & { fromCycleAlias: string | null })[] = rows.map((row) => {
-    const existing = carryOver.find((item) => keyOf(item) === keyOf(row));
-    return {
-      familyName: row.familyName,
-      fromCycleAlias: existing?.fromCycleAlias ?? null,
-      quantityUnits: existing?.quantityUnits ?? 0,
-      variantName: row.variantName,
-    };
-  });
-  for (const item of carryOver) {
-    if (!carryRows.some((row) => keyOf(row) === keyOf(item))) carryRows.push(item);
-  }
-  const carryTotal = carryOver.reduce((sum, item) => sum + item.quantityUnits, 0);
+  // Los lotes con algo para vender o dar de baja (los agotados ya no dicen nada).
+  const liveLots = lots.filter((lot) => lot.available > 0);
+  const lotsTotal = liveLots
+    .filter((lot) => !lot.expired)
+    .reduce((sum, lot) => sum + lot.available, 0);
 
   /**
    * Sumar o restar uno, y guardar en el acto.
@@ -211,54 +189,81 @@ export function ProductionStockPanel({
           })}
         </ul>
       )}
-      {carryRows.length > 0 ? (
-        <>
-          <div className="mt-5 flex flex-wrap items-baseline justify-between gap-2">
-            <h4 className="font-semibold text-forest">Sobrante de períodos anteriores</h4>
-            <span className="text-sm text-ink-muted">
-              {carryTotal === 0
-                ? 'Sin sobrante.'
-                : `${String(carryTotal)} ${carryTotal === 1 ? 'menú' : 'menús'} para vender`}
-            </span>
-          </div>
-          <p className="mt-1 text-sm text-ink-muted">
-            Ya está cocinado: se vende con "Sale del stock" y no suma a lo que hay que cocinar.
-          </p>
-          <ul className="stock-steppers mt-3" aria-busy={saving}>
-            {carryRows.map((row) => {
-              const name = `${row.familyName} ${row.variantName}`;
-              return (
-                <li key={keyOf(row)}>
-                  <span className="stock-steppers-name">
-                    {name}
-                    {row.fromCycleAlias ? <small>De {row.fromCycleAlias}</small> : null}
-                  </span>
-                  <span className="stock-steppers-control">
+      <div className="mt-5 flex flex-wrap items-baseline justify-between gap-2">
+        <h4 className="font-semibold text-forest">Stock de períodos anteriores</h4>
+        <span className="text-sm text-ink-muted">
+          {lotsTotal === 0
+            ? 'Sin stock de períodos anteriores.'
+            : `${String(lotsTotal)} ${lotsTotal === 1 ? 'vianda' : 'viandas'} para vender`}
+        </span>
+      </div>
+      <p className="mt-1 text-sm text-ink-muted">
+        Lo que sobró al cerrar cada período pasa solo acá, con su período y su ciudad. Ya está
+        cocinado: se vende desde Nuevo pedido, a precio normal, hasta un mes después de su período,
+        y no suma a lo que hay que cocinar. Si contaste distinto, corregilo con − y +.
+      </p>
+      {liveLots.length > 0 ? (
+        <ul className="stock-steppers mt-3" aria-busy={saving}>
+          {liveLots.map((lot) => {
+            const name = `${lot.familyName} ${lot.variantName}`;
+            return (
+              <li key={lot.id}>
+                <span className="stock-steppers-name">
+                  {name} · <strong>{lot.cycleAlias}</strong>
+                  <small>
+                    {lot.operatingSiteName} · quedan {lot.available}
+                    {lot.soldUnits > 0 ? ` · vendidas ${String(lot.soldUnits)}` : ''}
+                    {lot.expired ? ' · vencido' : ` · hasta el ${formatDay(lot.expiresAt)}`}
+                  </small>
+                </span>
+                <span className="stock-steppers-control">
+                  <button
+                    aria-label={`Una menos en el stock de ${name} de ${lot.cycleAlias}`}
+                    className="button button-secondary"
+                    disabled={!canEdit || saving}
+                    onClick={() => void patchLot(lot, { quantityUnits: lot.quantityUnits - 1 })}
+                    type="button"
+                  >
+                    −
+                  </button>
+                  <strong aria-live="polite">{lot.available}</strong>
+                  <button
+                    aria-label={`Una más en el stock de ${name} de ${lot.cycleAlias}`}
+                    className="button button-secondary"
+                    disabled={!canEdit || saving}
+                    onClick={() => void patchLot(lot, { quantityUnits: lot.quantityUnits + 1 })}
+                    type="button"
+                  >
+                    +
+                  </button>
+                  {canEdit ? (
                     <button
-                      aria-label={`Quitar uno del sobrante de ${name}`}
-                      className="button button-secondary"
-                      disabled={!canEdit || saving || row.quantityUnits === 0}
-                      onClick={() => void changeCarryOver(row, -1)}
+                      className="link-button"
+                      disabled={saving}
+                      onClick={() => setWritingOff(lot)}
                       type="button"
                     >
-                      −
+                      Dar de baja
                     </button>
-                    <strong aria-live="polite">{row.quantityUnits}</strong>
-                    <button
-                      aria-label={`Agregar uno al sobrante de ${name}`}
-                      className="button button-secondary"
-                      disabled={!canEdit || saving}
-                      onClick={() => void changeCarryOver(row, 1)}
-                      type="button"
-                    >
-                      +
-                    </button>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </>
+                  ) : null}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {writingOff ? (
+        <ConfirmDialog
+          confirmLabel="Dar de baja"
+          detail={`Las ${String(writingOff.available)} viandas de ${writingOff.familyName} ${writingOff.variantName} de ${writingOff.cycleAlias} que quedan dejan de estar a la venta.`}
+          onCancel={() => setWritingOff(null)}
+          onConfirm={async () => {
+            await patchLot(writingOff, { writeOffRemaining: true });
+            setWritingOff(null);
+          }}
+          title="¿Dar de baja este stock?"
+          tone="destructivo"
+        />
       ) : null}
     </section>
   );

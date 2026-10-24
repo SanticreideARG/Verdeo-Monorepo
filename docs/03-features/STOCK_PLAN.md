@@ -99,3 +99,8 @@ El stock entra en la hoja "Pedido" de la planilla.
 
 Lo que no se vendió en un período puede pasar al siguiente como **sobrante**: ya está cocinado, se
 vende con "Sale del stock" y no suma a lo que hay que cocinar. Ver FIXES_2026_10_22_PLAN.md, A.
+
+## Stock por lotes (2026-10-24)
+
+El sobrante deja de pasar de período en período: al cerrar, lo que sobró queda como lote de su
+período y su ciudad, que se vende hasta un mes después. Ver STOCK_LOTS_PLAN.md.

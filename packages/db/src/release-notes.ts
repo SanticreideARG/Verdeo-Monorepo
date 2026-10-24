@@ -67,4 +67,12 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Marcar un pedido como cobrado (o volverlo a pendiente) pide confirmación.
 • En Nuevo pedido, "Día de reparto" ahora se llama "Zona".`,
   },
+  {
+    key: '2026-10-24-stock-lotes',
+    body: `Stock de períodos anteriores:
+• Lo que sobra al cerrar un período ya no se pierde ni hay que pasarlo a mano: queda solo como stock, con el nombre de su período ("Keto 400 · Octubre 2") y su ciudad.
+• En Nuevo pedido, debajo de "Sale del stock", aparece lo que queda de cada período para el menú elegido. Se elige cuántas con − y +, a precio normal; el pedido puede ser sólo de stock.
+• La vianda dice de qué período es en el pedido y en la planilla, no se vuelve a cocinar ni a etiquetar.
+• Se vende hasta un mes después de su período. En Cocina → Stock se corrige o se da de baja.`,
+  },
 ];

@@ -747,6 +747,47 @@ export const orders = pgTable(
   ],
 );
 
+/**
+ * Un lote de stock (STOCK_LOTS_PLAN.md): viandas ya cocinadas de un período, de una variedad y un
+ * tamaño, en una ciudad. "4 Keto 400 de Octubre 2 en Buenos Aires".
+ *
+ * Vive hasta que se vende, se da de baja o vence (un mes), no hasta que termina un período: no hay
+ * que pasarlo de semana en semana. Lo disponible se calcula: `quantity_units` menos lo dado de
+ * baja menos las viandas vendidas (los ítems de pedido no cancelados que apuntan al lote). Así,
+ * cancelar o borrar el pedido devuelve la vianda al lote sin tocar nada.
+ */
+export const stockLots = pgTable(
+  'stock_lots',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    operatingSiteId: uuid('operating_site_id')
+      .notNull()
+      .references(() => operatingSites.id, { onDelete: 'restrict' }),
+    // El período en que se cocinó: su nombre es lo que se ve al lado ("Keto 400 · Octubre 2").
+    salesCycleId: uuid('sales_cycle_id')
+      .notNull()
+      .references(() => salesCycles.id, { onDelete: 'cascade' }),
+    familyName: text('family_name').notNull(),
+    variantName: text('variant_name').notNull(),
+    quantityUnits: integer('quantity_units').notNull(),
+    writtenOffUnits: integer('written_off_units').default(0).notNull(),
+    notes: text('notes'),
+    // Se vende hasta un mes después del cierre de su período.
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('stock_lots_site_idx').on(table.operatingSiteId, table.expiresAt),
+    check('stock_lots_quantity_check', sql`${table.quantityUnits} >= 0`),
+    check(
+      'stock_lots_written_off_check',
+      sql`${table.writtenOffUnits} >= 0 and ${table.writtenOffUnits} <= ${table.quantityUnits}`,
+    ),
+  ],
+);
+
 export const orderItems = pgTable(
   'order_items',
   {
@@ -767,10 +808,16 @@ export const orderItems = pgTable(
     discountMinor: integer('discount_minor').default(0).notNull(),
     surchargeMinor: integer('surcharge_minor').default(0).notNull(),
     totalMinor: integer('total_minor').notNull(),
+    /*
+     * La vianda sale de un lote de stock de un período anterior (STOCK_LOTS_PLAN.md): ya está
+     * cocinada, no suma a lo que hay que cocinar y descuenta del lote. Null: se cocina esta semana.
+     */
+    stockLotId: uuid('stock_lot_id').references(() => stockLots.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index('order_items_order_idx').on(table.orderId),
+    index('order_items_stock_lot_idx').on(table.stockLotId),
     check('order_items_quantity_check', sql`${table.quantityUnits} > 0`),
     check(
       'order_items_money_check',

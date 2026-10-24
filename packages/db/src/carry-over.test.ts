@@ -101,94 +101,98 @@ const seedB = `
   values ('${OFFERING_B}', '${MENU_B}', '${VARIANT}');
 `;
 
-describe('sobrante del período anterior', () => {
-  it('al cerrar A pasa a B: se vende en B, no se cocina, y A cierra en cero', async () => {
+describe('stock de períodos anteriores (lotes)', () => {
+  async function cerrarConSobrante() {
     const { client, service } = await base();
     await client.exec(seedB);
+    // El menú de A es de CABA: de ahí es lo que sobra si no se vendió nada.
+    await client.exec(`update weekly_menus set operating_site_id = '${SITE}'`);
     // A cocinó 4 Keto 250 de más y no los vendió.
     await service.setProductionStock(
       CYCLE,
       [{ familyName: 'Keto', quantityUnits: 4, variantName: '250' }],
       contexto,
     );
+    const closed = await service.setCycleClosed(CYCLE, true, contexto);
+    const [lot] = await service.listStockLots({ onlyAvailable: true, operatingSiteId: SITE });
+    return { client, closed, lot, service };
+  }
 
-    const closed = await service.setCycleClosed(CYCLE, true, contexto, true);
-    expect(closed).toMatchObject({
-      carriedUnits: 4,
-      nextCycleAlias: 'Octubre 4',
-      writtenOffUnits: 0,
-    });
-
-    // En A no queda nada disponible.
+  it('al cerrar A, lo que sobró queda solo como lote de A en su ciudad', async () => {
+    const { closed, lot, service } = await cerrarConSobrante();
+    expect(closed.stockLots).toEqual([
+      { familyName: 'Keto', operatingSiteName: 'CABA', quantityUnits: 4, variantName: '250' },
+    ]);
+    // En A no queda nada disponible: salió como baja con ese motivo.
     const reportA = await service.surplusReport(CYCLE);
     expect(reportA.items.find((item) => item.familyName === 'Keto')?.disponible).toBe(0);
+    expect(lot).toMatchObject({ available: 4, cycleAlias: 'Octubre 3', soldUnits: 0 });
+  });
 
-    // En B es sobrante: se ve, se puede vender, y no suma a lo que hay que cocinar.
-    expect(await service.listCarryOver(CYCLE_B)).toEqual([
-      { familyName: 'Keto', fromCycleAlias: 'Octubre 3', quantityUnits: 4, variantName: '250' },
-    ]);
-    expect((await service.kitchenSummary(CYCLE_B)).stock).toEqual([]);
-    const reportB = await service.surplusReport(CYCLE_B);
-    expect(reportB.items.find((item) => item.familyName === 'Keto')).toMatchObject({
-      disponible: 4,
-      sobrante: 4,
-    });
-    await service.createOrder(
+  it('se vende en B desde el lote: no se cocina, conserva el origen y no deja vender de más', async () => {
+    const { lot, service } = await cerrarConSobrante();
+    const order = await service.createOrder(
       {
         ...pedido('2126-10-26'),
-        // Confirmado: un borrador todavía no descuenta del stock.
         initialStatus: 'CONFIRMED' as const,
-        items: [{ offeringId: OFFERING_B, quantityUnits: 3 }],
+        items: [{ offeringId: OFFERING_B, quantityUnits: 3, stockLotId: lot?.id }],
         menuId: MENU_B,
-        source: 'opportunity_sale',
+        source: 'whatsapp',
       },
       contexto,
     );
+    // El pedido conserva por dónde entró y la vianda dice de qué período es.
+    expect(order).toMatchObject({ source: 'whatsapp' });
+    expect(order.items[0]?.stockLot).toMatchObject({ cycleAlias: 'Octubre 3' });
+    // Ya está cocinada: no suma a lo que hay que cocinar en B.
+    expect((await service.kitchenSummary(CYCLE_B)).base).toEqual([]);
     await expect(
       service.createOrder(
         {
           ...pedido('2126-10-26'),
-          items: [{ offeringId: OFFERING_B, quantityUnits: 2 }],
+          items: [{ offeringId: OFFERING_B, quantityUnits: 2, stockLotId: lot?.id }],
           menuId: MENU_B,
-          source: 'opportunity_sale',
         },
         contexto,
       ),
-    ).rejects.toThrow(/quedan 1/);
+    ).rejects.toThrow(/queda 1/);
+    const [after] = await service.listStockLots({ operatingSiteId: SITE });
+    expect(after).toMatchObject({ available: 1, soldUnits: 3 });
   });
 
-  it('el stock propio de B y el sobrante se cargan por separado', async () => {
-    const { client, service } = await base();
-    await client.exec(seedB);
-    await service.setCarryOver(
-      CYCLE_B,
-      [{ familyName: 'Keto', quantityUnits: 1, variantName: '250' }],
-      contexto,
-    );
-    await service.setProductionStock(
-      CYCLE_B,
-      [{ familyName: 'Keto', quantityUnits: 2, variantName: '250' }],
-      contexto,
-    );
-
-    // Guardar el stock propio no borra el sobrante, y la cocina sólo ve el propio.
-    expect(await service.listCarryOver(CYCLE_B)).toHaveLength(1);
-    expect((await service.kitchenSummary(CYCLE_B)).stock).toEqual([
-      { familyName: 'Keto', quantityUnits: 2, variantName: '250' },
-    ]);
+  it('un lote vencido (más de un mes) no se vende', async () => {
+    const { client, lot, service } = await cerrarConSobrante();
+    await client.exec(`update stock_lots set expires_at = '2020-01-01T00:00:00Z'`);
+    expect(await service.listStockLots({ onlyAvailable: true, operatingSiteId: SITE })).toEqual([]);
+    await expect(
+      service.createOrder(
+        {
+          ...pedido('2126-10-26'),
+          items: [{ offeringId: OFFERING_B, quantityUnits: 1, stockLotId: lot?.id }],
+          menuId: MENU_B,
+        },
+        contexto,
+      ),
+    ).rejects.toThrow(/venció/);
   });
 
-  it('sin período siguiente, avisa en vez de perder el sobrante', async () => {
-    const { service } = await base();
-    await service.setProductionStock(
-      CYCLE,
-      [{ familyName: 'Keto', quantityUnits: 4, variantName: '250' }],
+  it('se corrige: no menos de lo vendido, y se da de baja lo que queda', async () => {
+    const { lot, service } = await cerrarConSobrante();
+    await service.createOrder(
+      {
+        ...pedido('2126-10-26'),
+        initialStatus: 'CONFIRMED' as const,
+        items: [{ offeringId: OFFERING_B, quantityUnits: 2, stockLotId: lot?.id }],
+        menuId: MENU_B,
+      },
       contexto,
     );
-
-    await expect(service.setCycleClosed(CYCLE, true, contexto, true)).rejects.toThrow(
-      /No hay un período siguiente/,
-    );
+    await expect(
+      service.updateStockLot(lot?.id ?? '', { quantityUnits: 1 }, contexto),
+    ).rejects.toThrow(/ya se vendieron 2/);
+    await service.updateStockLot(lot?.id ?? '', { writeOffRemaining: true }, contexto);
+    const [after] = await service.listStockLots({ operatingSiteId: SITE });
+    expect(after).toMatchObject({ available: 0, soldUnits: 2, writtenOffUnits: 2 });
   });
 });
 
@@ -214,7 +218,7 @@ describe('informe del período', () => {
       [{ familyName: 'Keto', quantityUnits: 4, variantName: '250' }],
       contexto,
     );
-    await service.setCycleClosed(CYCLE, true, contexto, true);
+    await service.setCycleClosed(CYCLE, true, contexto);
 
     const report = await service.cycleReport(CYCLE);
 

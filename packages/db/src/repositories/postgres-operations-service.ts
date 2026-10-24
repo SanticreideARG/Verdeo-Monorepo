@@ -93,6 +93,7 @@ import {
   operatingSiteOrderCounters,
   operatingSites,
   siteDeliverySettings,
+  stockLots,
   siteGeocodingSettings,
   orderDietaryInstructions,
   labelPrints,
@@ -315,6 +316,8 @@ export interface OrderInput {
     quantityUnits: number;
     selectedDishNames?: readonly string[] | undefined;
     selectedDishes?: readonly { dishName: string; familyName: string }[] | undefined;
+    /** Del stock de un período anterior: el lote del que sale (STOCK_LOTS_PLAN.md). */
+    stockLotId?: string | undefined;
   }[];
   menuId: string;
   notes?: string | undefined;
@@ -339,6 +342,8 @@ export interface OrderUpdateInput {
         quantityUnits: number;
         selectedDishNames?: readonly string[] | undefined;
         selectedDishes?: readonly { dishName: string; familyName: string }[] | undefined;
+        /** Del stock de un período anterior: el lote del que sale (STOCK_LOTS_PLAN.md). */
+        stockLotId?: string | undefined;
       }[]
     | undefined;
   notes?: string | null | undefined;
@@ -375,10 +380,32 @@ interface ResolvedOrderItem {
   productNameSnapshot: string;
   productVariantId: string;
   quantityUnits: number;
+  /** El lote de stock de un período anterior del que sale la vianda (STOCK_LOTS_PLAN.md). */
+  stockLotId: string | null;
   totalMinor: number;
   unitPriceMinor: number;
   variantSnapshot: string;
 }
+
+/** "Menú Nuevo Keto" y "NUEVO KETO" son la misma variedad: sin acentos, sin "Menú", sin signos. */
+function sameFamily(left: string, right: string): boolean {
+  const key = (value: string) =>
+    value
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLocaleLowerCase('es-AR')
+      .replace(/^menu\s+/, '')
+      .replace(/[^a-z0-9]/g, '');
+  return key(left) === key(right);
+}
+
+/** "400" y "400 g" son el mismo tamaño. */
+function sameSize(left: string, right: string): boolean {
+  const digits = (value: string) => /\d+/.exec(value)?.[0] ?? value.trim();
+  return digits(left) === digits(right);
+}
+
+const LOT_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * Si el cliente es "NUEVO": lo que se marcó a mano, o, si no, que tenga a lo sumo un pedido no
@@ -5151,18 +5178,13 @@ export class PostgresOperationsService {
    * Reabrir existe por la misma razón: si se cerró de más, tiene que haber vuelta atrás. Las dos
    * direcciones se auditan.
    */
-  public async setCycleClosed(
-    cycleId: string,
-    closed: boolean,
-    context: OperationsContext,
-    /** Pasar lo que quedó sin vender al período siguiente, en lugar de darlo de baja. */
-    carryToNext = false,
-  ) {
+  public async setCycleClosed(cycleId: string, closed: boolean, context: OperationsContext) {
     return this.database
       .transaction(async (transaction) => {
         const [current] = await transaction
           .select({
             alias: salesCycles.alias,
+            closeAt: salesCycles.closeAt,
             openAt: salesCycles.openAt,
             status: salesCycles.status,
           })
@@ -5188,88 +5210,63 @@ export class PostgresOperationsService {
          * cerrar, `disponible` ya descuenta lo dado de baja, así que la segunda vez no da nada y no
          * se duplica.
          */
-        let writtenOff = 0;
-        let carried = 0;
-        let nextAlias: string | null = null;
+        /*
+         * Al cerrar, lo que quedó sin vender pasa solo al stock de períodos anteriores
+         * (STOCK_LOTS_PLAN.md): un lote por variedad y tamaño, de este período, en su ciudad, que
+         * se vende hasta un mes después del cierre. Sale de este período como una baja con ese
+         * motivo —así su número cierra en cero y reabrir y volver a cerrar no lo duplica— y se
+         * corrige después en Cocina → Stock. Sólo se avisa: no hay que confirmar nada.
+         */
+        const lotsCreated: {
+          familyName: string;
+          operatingSiteName: string;
+          quantityUnits: number;
+          variantName: string;
+        }[] = [];
         if (closed) {
           const rows = await this.surplusRows(transaction, cycleId);
           const pending = [...rows.values()].filter((row) => row.disponible > 0);
-          /*
-           * Pasar el sobrante al período siguiente (FIXES_2026_10_22_PLAN.md, A): sale de éste como
-           * una baja con ese motivo —así su número cierra en cero— y entra al siguiente como sobrante
-           * a la venta, sumado al que ya tuviera.
-           */
-          let next: { alias: string; id: string } | undefined;
-          if (carryToNext && pending.length > 0) {
-            [next] = await transaction
-              .select({ alias: salesCycles.alias, id: salesCycles.id })
-              .from(salesCycles)
-              .where(gt(salesCycles.openAt, current.openAt))
-              .orderBy(asc(salesCycles.openAt))
-              .limit(1);
-            if (!next)
-              throw new OperationsConflictError(
-                'No hay un período siguiente para pasarle el sobrante. Crealo antes de cerrar.',
-              );
-            nextAlias = next.alias;
-          }
           if (pending.length > 0) {
             await transaction.insert(surplusWriteoffs).values(
               pending.map((row) => ({
                 actorUserId: context.actorUserId ?? null,
                 familyName: row.familyName,
                 quantityUnits: row.disponible,
-                reason: next
-                  ? `Cierre de período: pasó al período ${next.alias}.`
-                  : 'Cierre de período: remanente sin vender.',
+                reason: 'Cierre de período: pasó al stock de períodos anteriores.',
                 salesCycleId: cycleId,
                 variantName: row.variantName,
               })),
             );
-            const total = pending.reduce((sum, row) => sum + row.disponible, 0);
-            if (next) {
-              for (const row of pending) {
-                await transaction
-                  .insert(productionStock)
-                  .values({
-                    actorUserId: context.actorUserId ?? null,
-                    familyName: row.familyName,
-                    fromSalesCycleId: cycleId,
-                    origin: 'carry_over',
-                    quantityUnits: row.disponible,
-                    salesCycleId: next.id,
-                    variantName: row.variantName,
-                  })
-                  .onConflictDoUpdate({
-                    set: {
-                      quantityUnits: sql`${productionStock.quantityUnits} + ${row.disponible}`,
-                      updatedAt: new Date(),
-                    },
-                    target: [
-                      productionStock.salesCycleId,
-                      productionStock.origin,
-                      productionStock.familyName,
-                      productionStock.variantName,
-                    ],
-                  });
-              }
-              carried = total;
-            } else {
-              writtenOff = total;
+            const siteOf = await this.leftoverSite(transaction, cycleId);
+            const expiresAt = new Date((current.closeAt ?? new Date()).getTime() + LOT_LIFETIME_MS);
+            for (const row of pending) {
+              const site = siteOf(row.familyName, row.variantName);
+              if (!site) continue;
+              await transaction.insert(stockLots).values({
+                actorUserId: context.actorUserId ?? null,
+                expiresAt,
+                familyName: row.familyName,
+                operatingSiteId: site.id,
+                quantityUnits: row.disponible,
+                salesCycleId: cycleId,
+                variantName: row.variantName,
+              });
+              lotsCreated.push({
+                familyName: row.familyName,
+                operatingSiteName: site.name,
+                quantityUnits: row.disponible,
+                variantName: row.variantName,
+              });
             }
           }
         }
+        const carried = lotsCreated.reduce((sum, lot) => sum + lot.quantityUnits, 0);
 
         const audit = new AuditService(new PostgresAuditSink(transaction));
         await audit.record({
           action: closed ? 'sales_cycle.closed' : 'sales_cycle.reopened',
           actor: auditActor(context),
-          after: {
-            carriedUnits: carried,
-            nextCycle: nextAlias,
-            status,
-            writtenOffUnits: writtenOff,
-          },
+          after: { status, stockLotUnits: carried },
           before: { status: current.status },
           correlationId: context.correlationId,
           entityId: cycleId,
@@ -5281,11 +5278,10 @@ export class PostgresOperationsService {
 
         return {
           alias: current.alias,
-          carriedUnits: carried,
           id: cycleId,
-          nextCycleAlias: nextAlias,
           status,
-          writtenOffUnits: writtenOff,
+          // Lo que pasó al stock de períodos anteriores, para avisarlo al cerrar.
+          stockLots: lotsCreated.sort(compareProducts),
         };
       })
       .catch(translateDatabaseConflict);
@@ -5782,6 +5778,7 @@ export class PostgresOperationsService {
             current.menuId,
             input.items,
             current.operatingSiteId,
+            { excludeOrderId: orderId },
           )
         : null;
       const firstResolvedItem = resolvedItems?.[0];
@@ -6208,10 +6205,14 @@ export class PostgresOperationsService {
       quantityUnits: number;
       selectedDishNames?: readonly string[] | undefined;
       selectedDishes?: readonly { dishName: string; familyName: string }[] | undefined;
+      stockLotId?: string | undefined;
     }[],
     /** De dónde sale la regla del Intuitivo: cuántos platos admite y cómo se cobra el exceso. */
     operatingSiteId: string | null,
+    /** Al editar un pedido: sus propias viandas del lote no cuentan como vendidas. */
+    options: { excludeOrderId?: string } = {},
   ): Promise<ResolvedOrderItem[]> {
+    const usedFromLot = new Map<string, number>();
     if (items.length === 0)
       throw new OperationsConflictError('El pedido necesita al menos un plato');
     const resolvedItems: ResolvedOrderItem[] = [];
@@ -6345,6 +6346,41 @@ export class PostgresOperationsService {
         rule,
       });
 
+      /*
+       * Del stock de un período anterior (STOCK_LOTS_PLAN.md): la vianda ya está cocinada. Tiene
+       * que ser de la misma variedad y tamaño que la opción elegida (de ahí sale el precio, el
+       * normal de esta semana), de la ciudad del pedido, no vencida, y que alcance lo que queda.
+       */
+      let stockLotId: string | null = null;
+      if (item.stockLotId) {
+        if (offering.familyName === composableFamilyName)
+          throw new OperationsConflictError('Un Intuitivo no sale del stock.');
+        const lot = await this.lotAvailability(
+          transaction,
+          item.stockLotId,
+          options.excludeOrderId,
+        );
+        if (!lot) throw new OperationsNotFoundError('No se encontró ese stock.');
+        if (operatingSiteId && lot.operatingSiteId !== operatingSiteId)
+          throw new OperationsConflictError('Ese stock es de otra ciudad.');
+        if (lot.expiresAt.getTime() < Date.now())
+          throw new OperationsConflictError(
+            `El stock de ${lot.cycleAlias} venció: pasó más de un mes.`,
+          );
+        if (
+          !sameFamily(lot.familyName, offering.familyName) ||
+          !sameSize(lot.variantName, offering.variantName)
+        )
+          throw new OperationsConflictError('El stock elegido no es de esa variedad y tamaño.');
+        const wanted = (usedFromLot.get(lot.id) ?? 0) + item.quantityUnits;
+        if (wanted > lot.available)
+          throw new OperationsConflictError(
+            `Del stock de ${lot.familyName} ${lot.variantName} de ${lot.cycleAlias} ${lot.available === 1 ? 'queda 1' : `quedan ${String(lot.available)}`}.`,
+          );
+        usedFromLot.set(lot.id, wanted);
+        stockLotId = lot.id;
+      }
+
       resolvedItems.push({
         currency: currency ?? 'ARS',
         dishSelections: composition.dishSelections,
@@ -6354,6 +6390,7 @@ export class PostgresOperationsService {
         productNameSnapshot: composition.productNameSnapshot,
         productVariantId: offering.productVariantId,
         quantityUnits: item.quantityUnits,
+        stockLotId,
         totalMinor: calculateLineTotal(item.quantityUnits, unitPriceConPlatos),
         unitPriceMinor: unitPriceConPlatos,
         variantSnapshot: offering.variantName,
@@ -6381,6 +6418,7 @@ export class PostgresOperationsService {
           productNameSnapshot: item.productNameSnapshot,
           productVariantId: item.productVariantId,
           quantityUnits: item.quantityUnits,
+          stockLotId: item.stockLotId,
           totalMinor: item.totalMinor,
           unitPriceMinor: item.unitPriceMinor,
           variantSnapshot: item.variantSnapshot,
@@ -6872,6 +6910,7 @@ export class PostgresOperationsService {
               composable: kind?.composable ?? item.dishSelections.length > 0,
               dishSelections: item.dishSelections,
               dishSources: item.dishSources,
+              stockLabel: item.stockLot?.cycleAlias ?? null,
               familyName: item.productName,
               mealsPerUnit: kind?.mealsPerUnit ?? 5,
               quantityUnits: item.quantityUnits,
@@ -7405,8 +7444,12 @@ export class PostgresOperationsService {
         totalMinor: orderItems.totalMinor,
         unitPriceMinor: orderItems.unitPriceMinor,
         variantName: orderItems.variantSnapshot,
+        stockLotId: orderItems.stockLotId,
+        stockLotCycleAlias: salesCycles.alias,
       })
       .from(orderItems)
+      .leftJoin(stockLots, eq(stockLots.id, orderItems.stockLotId))
+      .leftJoin(salesCycles, eq(salesCycles.id, stockLots.salesCycleId))
       .where(inArray(orderItems.orderId, presentIds));
     const selections =
       itemRows.length === 0
@@ -7525,6 +7568,10 @@ export class PostgresOperationsService {
             offeringId: item.offeringId,
             productName: item.productName,
             quantityUnits: item.quantityUnits,
+            // Del stock de un período anterior: de cuál ("Octubre 2").
+            stockLot: item.stockLotId
+              ? { cycleAlias: item.stockLotCycleAlias ?? '', id: item.stockLotId }
+              : null,
             totalMinor: item.totalMinor,
             unitPriceMinor: item.unitPriceMinor,
             variantName: item.variantName,
@@ -8314,6 +8361,8 @@ export class PostgresOperationsService {
               ...(filter.zone ? [eq(customerAddresses.operationalZone, filter.zone)] : []),
               ...(filter.deliveryRunId ? [eq(orders.deliveryRunId, filter.deliveryRunId)] : []),
               inArray(orders.status, ['CONFIRMED', 'READY', 'DELIVERED']),
+              // Lo que sale de un lote de stock ya está cocinado: ni se cocina ni lleva etiqueta.
+              isNull(orderItems.stockLotId),
             ),
       )
       .orderBy(asc(orders.publicNumber));
@@ -9182,6 +9231,8 @@ export class PostgresOperationsService {
         and(
           eq(orders.salesCycleId, cycleId),
           inArray(orders.status, ['CONFIRMED', 'READY', 'DELIVERED']),
+          // Lo vendido de un lote de un período anterior descuenta del lote, no de este período.
+          isNull(orderItems.stockLotId),
         ),
       );
     const actuals = await this.listProductionActualsRows(database, cycleId);
@@ -9322,80 +9373,232 @@ export class PostgresOperationsService {
     return { recorded: unique.length };
   }
 
-  /** El sobrante de períodos anteriores a la venta en éste, con de qué período viene. */
-  public async listCarryOver(cycleId: string) {
-    return this.database
+  /**
+   * Un lote con lo que le queda: lo cargado menos lo dado de baja menos lo vendido (ítems de pedidos
+   * no cancelados). `excludeOrderId`: al editar un pedido, sus propias viandas no cuentan.
+   */
+  private async lotAvailability(
+    executor: Pick<Database, 'select'>,
+    lotId: string,
+    excludeOrderId?: string,
+  ) {
+    const [lot] = await executor
       .select({
-        familyName: productionStock.familyName,
-        fromCycleAlias: salesCycles.alias,
-        quantityUnits: productionStock.quantityUnits,
-        variantName: productionStock.variantName,
+        cycleAlias: salesCycles.alias,
+        expiresAt: stockLots.expiresAt,
+        familyName: stockLots.familyName,
+        id: stockLots.id,
+        operatingSiteId: stockLots.operatingSiteId,
+        quantityUnits: stockLots.quantityUnits,
+        variantName: stockLots.variantName,
+        writtenOffUnits: stockLots.writtenOffUnits,
       })
-      .from(productionStock)
-      .leftJoin(salesCycles, eq(salesCycles.id, productionStock.fromSalesCycleId))
+      .from(stockLots)
+      .innerJoin(salesCycles, eq(salesCycles.id, stockLots.salesCycleId))
+      .where(eq(stockLots.id, lotId))
+      .limit(1);
+    if (!lot) return null;
+    const [sold] = await executor
+      .select({ total: sql<number>`coalesce(sum(${orderItems.quantityUnits}), 0)::int` })
+      .from(orderItems)
+      .innerJoin(orders, eq(orders.id, orderItems.orderId))
       .where(
-        and(eq(productionStock.salesCycleId, cycleId), eq(productionStock.origin, 'carry_over')),
-      )
-      .orderBy(asc(productionStock.familyName), asc(productionStock.variantName));
+        and(
+          eq(orderItems.stockLotId, lotId),
+          ne(orders.status, 'CANCELLED'),
+          excludeOrderId ? ne(orders.id, excludeOrderId) : undefined,
+        ),
+      );
+    const soldUnits = sold?.total ?? 0;
+    return {
+      ...lot,
+      available: Math.max(0, lot.quantityUnits - lot.writtenOffUnits - soldUnits),
+      soldUnits,
+    };
   }
 
   /**
-   * Corregir el sobrante del período a mano: lo que se manda reemplaza lo que había (con cero se
-   * saca). Conserva de qué período venía cada variedad.
+   * De qué ciudad es lo que sobró de un período, por variedad y tamaño: la ciudad que más vendió
+   * de eso; si no se vendió, la del menú del período; si no, la primera. Se corrige en Cocina.
    */
-  public async setCarryOver(
+  private async leftoverSite(
+    executor: Pick<Database, 'select'>,
     cycleId: string,
-    entries: readonly { familyName: string; quantityUnits: number; variantName: string }[],
+  ): Promise<(familyName: string, variantName: string) => { id: string; name: string } | null> {
+    const sites = await executor
+      .select({ id: operatingSites.id, name: operatingSites.displayName })
+      .from(operatingSites)
+      .orderBy(asc(operatingSites.createdAt));
+    const nameOf = new Map(sites.map((site) => [site.id, site.name]));
+    const sales = await executor
+      .select({
+        familyName: orderItems.productNameSnapshot,
+        siteId: orders.operatingSiteId,
+        units: sql<number>`sum(${orderItems.quantityUnits})::int`,
+        variantName: orderItems.variantSnapshot,
+      })
+      .from(orderItems)
+      .innerJoin(orders, eq(orders.id, orderItems.orderId))
+      .where(
+        and(
+          eq(orders.salesCycleId, cycleId),
+          inArray(orders.status, ['CONFIRMED', 'READY', 'DELIVERED']),
+        ),
+      )
+      .groupBy(orders.operatingSiteId, orderItems.productNameSnapshot, orderItems.variantSnapshot);
+    const [menu] = await executor
+      .select({ siteId: weeklyMenus.operatingSiteId })
+      .from(weeklyMenus)
+      .where(
+        and(eq(weeklyMenus.salesCycleId, cycleId), sql`${weeklyMenus.operatingSiteId} is not null`),
+      )
+      .limit(1);
+    const fallback = menu?.siteId ?? sites[0]?.id ?? null;
+    return (familyName, variantName) => {
+      const best = sales
+        .filter((row) => row.familyName === familyName && row.variantName === variantName)
+        .sort((left, right) => right.units - left.units)[0];
+      const id = best?.siteId ?? fallback;
+      return id ? { id, name: nameOf.get(id) ?? '' } : null;
+    };
+  }
+
+  /**
+   * El stock de períodos anteriores (STOCK_LOTS_PLAN.md): los lotes de una ciudad (o de todas), con
+   * lo vendido, lo dado de baja y lo que queda. `onlyAvailable`: sólo los que se pueden vender.
+   */
+  public async listStockLots(input: {
+    onlyAvailable?: boolean | undefined;
+    operatingSiteId?: string | null | undefined;
+  }) {
+    const lots = await this.database
+      .select({
+        createdAt: stockLots.createdAt,
+        cycleAlias: salesCycles.alias,
+        cycleOpenAt: salesCycles.openAt,
+        expiresAt: stockLots.expiresAt,
+        familyName: stockLots.familyName,
+        id: stockLots.id,
+        notes: stockLots.notes,
+        operatingSiteId: stockLots.operatingSiteId,
+        operatingSiteName: operatingSites.displayName,
+        quantityUnits: stockLots.quantityUnits,
+        salesCycleId: stockLots.salesCycleId,
+        variantName: stockLots.variantName,
+        writtenOffUnits: stockLots.writtenOffUnits,
+      })
+      .from(stockLots)
+      .innerJoin(salesCycles, eq(salesCycles.id, stockLots.salesCycleId))
+      .innerJoin(operatingSites, eq(operatingSites.id, stockLots.operatingSiteId))
+      .where(
+        input.operatingSiteId ? eq(stockLots.operatingSiteId, input.operatingSiteId) : undefined,
+      );
+    const sold =
+      lots.length === 0
+        ? []
+        : await this.database
+            .select({
+              lotId: orderItems.stockLotId,
+              total: sql<number>`sum(${orderItems.quantityUnits})::int`,
+            })
+            .from(orderItems)
+            .innerJoin(orders, eq(orders.id, orderItems.orderId))
+            .where(
+              and(
+                inArray(
+                  orderItems.stockLotId,
+                  lots.map((lot) => lot.id),
+                ),
+                ne(orders.status, 'CANCELLED'),
+              ),
+            )
+            .groupBy(orderItems.stockLotId);
+    const soldOf = new Map(sold.map((row) => [row.lotId, row.total]));
+    const now = Date.now();
+    // Más nuevo primero dentro de cada producto (por la apertura de su período).
+    const openAtOf = new Map(lots.map((lot) => [lot.id, lot.cycleOpenAt.getTime()]));
+    return lots
+      .map((lot) => {
+        const soldUnits = soldOf.get(lot.id) ?? 0;
+        return {
+          available: Math.max(0, lot.quantityUnits - lot.writtenOffUnits - soldUnits),
+          createdAt: lot.createdAt,
+          cycleAlias: lot.cycleAlias,
+          expired: lot.expiresAt.getTime() < now,
+          expiresAt: lot.expiresAt,
+          familyName: lot.familyName,
+          id: lot.id,
+          notes: lot.notes,
+          operatingSiteId: lot.operatingSiteId,
+          operatingSiteName: lot.operatingSiteName,
+          quantityUnits: lot.quantityUnits,
+          salesCycleId: lot.salesCycleId,
+          soldUnits,
+          variantName: lot.variantName,
+          writtenOffUnits: lot.writtenOffUnits,
+        };
+      })
+      .filter((lot) => !input.onlyAvailable || (lot.available > 0 && !lot.expired))
+      .sort(
+        (left, right) =>
+          compareProducts(left, right) ||
+          (openAtOf.get(right.id) ?? 0) - (openAtOf.get(left.id) ?? 0),
+      );
+  }
+
+  /**
+   * Corregir un lote: cuántas viandas tiene (no menos de lo vendido y dado de baja), dar de baja lo
+   * que queda, o pasarlo a otra ciudad. Queda en la auditoría.
+   */
+  public async updateStockLot(
+    lotId: string,
+    input: {
+      operatingSiteId?: string | undefined;
+      quantityUnits?: number | undefined;
+      writeOffRemaining?: boolean | undefined;
+    },
     context: OperationsContext,
   ) {
-    return this.database.transaction(async (transaction) => {
-      const before = await transaction
-        .select({
-          familyName: productionStock.familyName,
-          fromSalesCycleId: productionStock.fromSalesCycleId,
-          quantityUnits: productionStock.quantityUnits,
-          variantName: productionStock.variantName,
-        })
-        .from(productionStock)
-        .where(
-          and(eq(productionStock.salesCycleId, cycleId), eq(productionStock.origin, 'carry_over')),
-        );
-      await transaction
-        .delete(productionStock)
-        .where(
-          and(eq(productionStock.salesCycleId, cycleId), eq(productionStock.origin, 'carry_over')),
-        );
-      const rows = entries.filter(
-        (entry) => entry.quantityUnits > 0 && entry.familyName.trim() && entry.variantName.trim(),
-      );
-      if (rows.length > 0) {
-        await transaction.insert(productionStock).values(
-          rows.map((row) => ({
-            actorUserId: context.actorUserId ?? null,
-            familyName: row.familyName.trim(),
-            fromSalesCycleId:
-              before.find(
-                (old) => old.familyName === row.familyName && old.variantName === row.variantName,
-              )?.fromSalesCycleId ?? null,
-            origin: 'carry_over',
-            quantityUnits: row.quantityUnits,
-            salesCycleId: cycleId,
-            variantName: row.variantName.trim(),
-          })),
-        );
-      }
-      await new AuditService(new PostgresAuditSink(transaction)).record({
-        action: 'production.carry_over_updated',
-        actor: auditActor(context),
-        after: rows,
-        before,
-        correlationId: context.correlationId,
-        entityId: cycleId,
-        entityType: 'sales_cycle',
-        requestId: context.requestId,
-        source: context.source,
-      });
-    });
+    return this.database
+      .transaction(async (transaction) => {
+        const lot = await this.lotAvailability(transaction, lotId);
+        if (!lot) throw new OperationsNotFoundError('No se encontró ese stock.');
+        const set: Partial<typeof stockLots.$inferInsert> = { updatedAt: new Date() };
+        if (input.quantityUnits !== undefined) {
+          const floor = lot.soldUnits + lot.writtenOffUnits;
+          if (input.quantityUnits < floor)
+            throw new OperationsConflictError(
+              `No puede tener menos de ${String(floor)}: ya se vendieron ${String(lot.soldUnits)} y se dieron de baja ${String(lot.writtenOffUnits)}.`,
+            );
+          set.quantityUnits = input.quantityUnits;
+        }
+        if (input.writeOffRemaining)
+          set.writtenOffUnits = (set.quantityUnits ?? lot.quantityUnits) - lot.soldUnits;
+        if (input.operatingSiteId) set.operatingSiteId = input.operatingSiteId;
+        await transaction.update(stockLots).set(set).where(eq(stockLots.id, lotId));
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        await audit.record({
+          action: 'stock_lot.updated',
+          actor: auditActor(context),
+          after: {
+            operatingSiteId: input.operatingSiteId ?? null,
+            quantityUnits: input.quantityUnits ?? null,
+            writeOffRemaining: input.writeOffRemaining ?? false,
+          },
+          before: {
+            operatingSiteId: lot.operatingSiteId,
+            quantityUnits: lot.quantityUnits,
+            writtenOffUnits: lot.writtenOffUnits,
+          },
+          correlationId: context.correlationId,
+          entityId: lotId,
+          entityType: 'stock_lot',
+          metadata: { cycle: lot.cycleAlias, family: lot.familyName, variant: lot.variantName },
+          requestId: context.requestId,
+          source: context.source,
+        });
+      })
+      .catch(translateDatabaseConflict);
   }
 
   /**

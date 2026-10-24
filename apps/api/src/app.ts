@@ -170,7 +170,8 @@ import {
   OrderDeleteRequestSchema,
   OrderDeleteResponseSchema,
   ReceivablesResponseSchema,
-  CarryOverListResponseSchema,
+  StockLotListResponseSchema,
+  StockLotUpdateRequestSchema,
   PrintedLabelsRequestSchema,
   PrintedLabelsResponseSchema,
   OrderMoveSiteRequestSchema,
@@ -624,22 +625,24 @@ interface OperationsEngine {
     paid: boolean,
     context: OperationsContext & { actorUserId: string },
   ): Promise<unknown>;
-  setCycleClosed(
-    cycleId: string,
-    closed: boolean,
+  setCycleClosed(cycleId: string, closed: boolean, context: OperationsContext): Promise<unknown>;
+  listStockLots(input: {
+    onlyAvailable?: boolean | undefined;
+    operatingSiteId?: string | null | undefined;
+  }): Promise<unknown>;
+  updateStockLot(
+    lotId: string,
+    input: {
+      operatingSiteId?: string | undefined;
+      quantityUnits?: number | undefined;
+      writeOffRemaining?: boolean | undefined;
+    },
     context: OperationsContext,
-    carryToNext?: boolean,
   ): Promise<unknown>;
-  listCarryOver(cycleId: string): Promise<unknown>;
   listPrintedLabels(cycleId: string): Promise<unknown>;
   recordPrintedLabels(
     cycleId: string,
     labels: readonly { key: string; kind: 'menu' | 'plato' }[],
-    context: OperationsContext,
-  ): Promise<unknown>;
-  setCarryOver(
-    cycleId: string,
-    entries: readonly { familyName: string; quantityUnits: number; variantName: string }[],
     context: OperationsContext,
   ): Promise<unknown>;
   createPublicOrder(input: PublicOrderCreateRequest, context: OperationsContext): Promise<unknown>;
@@ -2817,6 +2820,8 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/delivery/unlocated', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/delivery/locate-missing', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/delivery/settings', requireAuthentication, resolveScopeSelection);
+  app.use('/api/v1/stock-lots', requireAuthentication, resolveScopeSelection);
+  app.use('/api/v1/stock-lots/*', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/delivery/options', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/delivery/runs', requireAuthentication, resolveScopeSelection);
   app.use('/api/v1/delivery/runs/*', requireAuthentication, resolveScopeSelection);
@@ -6957,30 +6962,36 @@ export function createApp(options: CreateAppOptions) {
     return context.json(result);
   });
 
-  app.get('/api/v1/production/:cycleId/carry-over', async (context) => {
-    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
-    const params = CycleIdParamSchema.safeParse(context.req.param());
-    if (!params.success) return badRequest(context, 'El ciclo indicado no es válido.');
-    const items = await requireOperations().listCarryOver(params.data.cycleId);
-    return context.json(CarryOverListResponseSchema.parse({ items: contractValue(items) }));
+  /*
+   * El stock de períodos anteriores (STOCK_LOTS_PLAN.md). Lo ven quien carga pedidos (para vender
+   * del stock) y quien ve producción; `ciudad` elige la ciudad (si no, la de arriba) y
+   * `disponibles=1` deja sólo lo que se puede vender.
+   */
+  app.get('/api/v1/stock-lots', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (!permissions.includes('orders.create') && !permissions.includes('production.read'))
+      return forbidden(context);
+    const city = context.req.query('ciudad');
+    const siteId = city && z.uuid().safeParse(city).success ? city : null;
+    const items = await requireOperations().listStockLots({
+      onlyAvailable: context.req.query('disponibles') === '1',
+      operatingSiteId: siteId ?? context.get('scope')?.operatingSiteId ?? null,
+    });
+    return context.json(StockLotListResponseSchema.parse({ items: contractValue(items) }));
   });
 
-  app.put('/api/v1/production/:cycleId/carry-over', async (context) => {
+  app.patch('/api/v1/stock-lots/:id', async (context) => {
     if (!context.get('session').permissions.includes('production.report'))
       return forbidden(context);
-    const params = CycleIdParamSchema.safeParse(context.req.param());
-    const input = ProductionStockRequestSchema.safeParse(
-      await context.req.json().catch(() => null),
-    );
-    if (!params.success || !input.success)
-      return badRequest(context, 'Revisá las cantidades del sobrante.');
-    await requireOperations().setCarryOver(
-      params.data.cycleId,
-      input.data.entries,
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = StockLotUpdateRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success) return badRequest(context, 'Revisá el stock.');
+    await requireOperations().updateStockLot(
+      params.data.id,
+      input.data,
       operationsContext(context),
     );
-    const items = await requireOperations().listCarryOver(params.data.cycleId);
-    return context.json(CarryOverListResponseSchema.parse({ items: contractValue(items) }));
+    return context.body(null, 204);
   });
 
   app.get('/api/v1/production/:cycleId/snapshots', async (context) => {
@@ -7089,7 +7100,6 @@ export function createApp(options: CreateAppOptions) {
       params.data.cycleId,
       input.data.closed,
       operationsContext(context),
-      input.data.carryToNext ?? false,
     );
     return context.json(CycleClosedResponseSchema.parse(contractValue(cycle)));
   });

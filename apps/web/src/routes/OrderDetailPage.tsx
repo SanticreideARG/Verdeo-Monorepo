@@ -730,6 +730,7 @@ export function OrderDetailPage() {
               <div className="flex items-center justify-between gap-3">
                 <strong>
                   {item.productName} {item.variantName} × {item.quantityUnits}
+                  {item.stockLot ? ` · stock de ${item.stockLot.cycleAlias}` : ''}
                 </strong>
                 <span>{formatMoney(item.totalMinor, order.currency)}</span>
               </div>

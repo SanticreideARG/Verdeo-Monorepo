@@ -166,6 +166,7 @@ export function OrderDetailDialog({
                 <li key={item.id}>
                   <span>
                     {item.productName} {item.variantName}
+                    {item.stockLot ? ` · stock de ${item.stockLot.cycleAlias}` : ''}
                     {item.quantityUnits > 1 ? ` ×${String(item.quantityUnits)}` : ''}
                   </span>
                   <b>{formatMoney(item.totalMinor, order.currency)}</b>
