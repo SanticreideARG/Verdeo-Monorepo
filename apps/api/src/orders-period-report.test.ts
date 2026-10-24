@@ -30,6 +30,7 @@ const order = (overrides: Partial<PeriodReportOrder> = {}): PeriodReportOrder =>
   publicNumber: 'MZA-00001',
   route: { minutes: 40, routeLabel: 'A', sequence: 1 },
   run: 'Mañana · de 10 a 13h',
+  source: 'email',
   timeSlot: '10 a 12',
   totalMinor: 160_000_00,
   zone: 'Capital',
@@ -73,9 +74,21 @@ describe('buildPeriodReportExcel', () => {
     const rgb = (address: string) =>
       ((sheet[address] as CellObject | undefined)?.s as { fgColor?: { rgb?: string } } | undefined)
         ?.fgColor?.rgb;
-    expect(rgb('E5')).toBe('C55A11');
+    // Nuevo que entró por mail: rosado.
+    expect(rgb('E5')).toBe('F8CBAD');
     expect(rgb('L5')).toBe('92D050');
     expect(rgb('L7')).toBe('FF0000');
+  });
+
+  it('el nuevo por WhatsApp va más oscuro y el efectivo sin color', () => {
+    const book = read([order({ paymentExpectation: 'Efectivo', paid: false, source: 'whatsapp' })]);
+    const sheet = book.Sheets.Pedidos;
+    if (!sheet) throw new Error('sin hoja');
+    const rgb = (address: string) =>
+      ((sheet[address] as CellObject | undefined)?.s as { fgColor?: { rgb?: string } } | undefined)
+        ?.fgColor?.rgb;
+    expect(rgb('E5')).toBe('E26B0A');
+    expect(rgb('L5')).toBeUndefined();
   });
 });
 

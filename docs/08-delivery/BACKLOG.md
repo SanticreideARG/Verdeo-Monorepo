@@ -627,3 +627,8 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 
 - [x] Novedades del sistema preparadas para el feed (`packages/db/src/release-notes.ts`) y `pnpm db:seed-release-notes` para publicarlas (no repite las ya publicadas). El feed firma "Verdeo" las novedades sin autor.
 - [x] Revisión de UI en local (40 pantallas, escritorio y teléfono): sin errores de consola ni desbordes de página. Corregido: la barra de filtros de Pedidos encimaba botones en escritorio (la grilla aplastaba la columna izquierda; ahora es una fila que se parte). Corregido: el resumen de variedades de cada reparto (Rutas) iba por cantidad; ahora en la jerarquía de productos.
+
+## Planilla de pedidos y stock por lotes (2026-10-23)
+
+- [x] Informe del período, con la planilla real: Intuitivo en negrita cursiva con el menú de cada plato en su día, nuevos rosado (mail) / oscuro (WhatsApp), venta coloreada sólo en transferencias, columna "Pago".
+- [ ] Stock por lotes (STOCK_LOTS_PLAN.md): propuesta escrita; faltan las respuestas.

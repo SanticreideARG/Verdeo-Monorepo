@@ -109,3 +109,17 @@ hasta saber qué es (ver preguntas).
 - Diferencias con el plan: el resumen va con valores y el TOTAL con fórmula (no CONTAR.SI.CONJUNTO:
   en la hoja de pedidos el Intuitivo no tiene una columna de variedad que contar); sin filtros en el
   encabezado (las barras de día los romperían) ni paneles fijos (la librería no los escribe).
+
+## Ajustes con la planilla real (2026-10-23)
+
+- **Intuitivo**: en negrita cursiva y con el **menú de cada plato en la columna de su día**
+  ("VEGETARIANO" lunes, miércoles, jueves y viernes; "KETO" el martes), un renglón por menú; dos
+  platos del mismo menú el mismo día abren otro renglón (`composableRows`). Sale del menú y el día de
+  origen que ya guarda cada plato elegido.
+- **Nuevos**: rosado (`F8CBAD`) si el pedido entró por mail, más oscuro (`E26B0A`) si entró por
+  WhatsApp, anaranjado claro si entró por otro lado.
+- **Venta**: verde/rojo sólo en las transferencias; el efectivo va sin color.
+- La columna de medio de pago se llama **"Pago"** (transferencia o efectivo), en lugar de escribirlo
+  en la dirección.
+- El período de una vianda del stock ("KETO · Oct 2") queda para el plan de lotes
+  ([STOCK_LOTS_PLAN.md](STOCK_LOTS_PLAN.md)).

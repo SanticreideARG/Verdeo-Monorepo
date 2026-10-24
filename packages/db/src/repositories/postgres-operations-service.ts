@@ -6784,6 +6784,7 @@ export class PostgresOperationsService {
             return {
               composable: kind?.composable ?? item.dishSelections.length > 0,
               dishSelections: item.dishSelections,
+              dishSources: item.dishSources,
               familyName: item.productName,
               mealsPerUnit: kind?.mealsPerUnit ?? 5,
               quantityUnits: item.quantityUnits,
@@ -6795,6 +6796,7 @@ export class PostgresOperationsService {
           paymentExpectation: order.paymentExpectation,
           phone: order.customer.whatsapp ?? order.customer.phone,
           publicNumber: order.publicNumber,
+          source: order.source,
           route: stop
             ? {
                 minutes: minutesOf.get(order.id) ?? null,

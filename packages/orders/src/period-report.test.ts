@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildPeriodReport,
+  composableRows,
+  isTransfer,
   routeMinutesLabel,
   type PeriodReportItem,
   type PeriodReportOrder,
@@ -32,6 +34,7 @@ const order = (overrides: Partial<PeriodReportOrder> = {}): PeriodReportOrder =>
   publicNumber: 'MZA-00001',
   route: null,
   run: null,
+  source: 'whatsapp',
   timeSlot: null,
   totalMinor: 80_000_00,
   zone: 'Capital',
@@ -69,6 +72,7 @@ describe('buildPeriodReport', () => {
     ]);
     const rows = report.days[0]?.rows ?? [];
 
+    // Sin menú de origen conocido, el plato va con su nombre en el primer día libre.
     expect(rows.find((row) => row.composable)?.meals).toEqual(['Lomo', 'Curry', '', '', '']);
     expect(rows.find((row) => row.composable)?.variety).toBe('Clara');
     expect(report.summary.map((line) => line.label)).toEqual(['ANTIAGE 250', 'Clara 400']);
@@ -97,5 +101,47 @@ describe('routeMinutesLabel', () => {
     expect(routeMinutesLabel(70)).toBe('≈ 1 h 10');
     expect(routeMinutesLabel(120)).toBe('≈ 2 h');
     expect(routeMinutesLabel(null)).toBe('');
+  });
+});
+
+describe('composableRows', () => {
+  it('el menú de cada plato en la columna de su día, un renglón por menú', () => {
+    const veg = (slot: number) => ({ familyName: 'Menú Vegetariano', slot });
+    const rows = composableRows(
+      item({
+        composable: true,
+        dishSelections: ['a', 'b', 'c', 'd', 'e'],
+        dishSources: [veg(1), { familyName: 'Menú Nuevo Keto', slot: 2 }, veg(3), veg(4), veg(5)],
+        familyName: 'Intuitivo',
+      }),
+    );
+    // Keto primero, por la jerarquía; vegetariano en su renglón.
+    expect(rows).toEqual([
+      ['', 'KETO', '', '', ''],
+      ['VEGETARIANO', '', 'VEGETARIANO', 'VEGETARIANO', 'VEGETARIANO'],
+    ]);
+  });
+
+  it('dos platos del mismo menú el mismo día abren otro renglón', () => {
+    const real = (slot: number) => ({ familyName: 'Menú Real', slot });
+    const rows = composableRows(
+      item({
+        composable: true,
+        dishSelections: ['a', 'b', 'c'],
+        dishSources: [real(1), real(2), real(2)],
+        familyName: 'Intuitivo',
+      }),
+    );
+    expect(rows).toEqual([
+      ['REAL', 'REAL', '', '', ''],
+      ['', 'REAL', '', '', ''],
+    ]);
+  });
+});
+
+describe('isTransfer', () => {
+  it('reconoce la transferencia', () => {
+    expect(isTransfer('Transferencia')).toBe(true);
+    expect(isTransfer('Efectivo')).toBe(false);
   });
 });

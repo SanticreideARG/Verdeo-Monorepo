@@ -8,19 +8,28 @@ import xlsxStyle, { type CellObject, type WorkSheet } from 'xlsx-js-style';
 // El paquete es CommonJS: en Node, sus funciones llegan por el export por defecto, no por nombre.
 const XLSX = xlsxStyle;
 
-import { routeMinutesLabel, type PeriodReport, type PeriodReportRow } from '@verdeo/orders';
+import {
+  isTransfer,
+  routeMinutesLabel,
+  type PeriodReport,
+  type PeriodReportRow,
+} from '@verdeo/orders';
 
 /*
  * La norma de colores de la planilla original, que ahora pone el sistema:
  * - encabezado gris, barras del día negras;
- * - nombre en naranja: cliente NUEVO;
- * - venta en verde si está cobrada, en rojo si no;
- * - horario en amarillo: el cliente pidió una franja.
+ * - nombre de un cliente NUEVO: rosado si el pedido entró por mail, más oscuro si entró por
+ *   WhatsApp (y anaranjado claro si entró por otro lado);
+ * - venta de una transferencia en verde si está cobrada, en rojo si no (el efectivo, sin color);
+ * - horario en amarillo: el cliente pidió una franja;
+ * - un Intuitivo, en negrita cursiva.
  */
 const COLOR = {
   bar: '000000',
   header: '808080',
-  isNew: 'C55A11',
+  newEmail: 'F8CBAD',
+  newOther: 'F4B183',
+  newWhatsapp: 'E26B0A',
   paid: '92D050',
   repeated: '808080',
   timeSlot: 'FFFF00',
@@ -35,7 +44,7 @@ const MONEY = '"$" #,##0';
 interface Style {
   alignment?: { vertical?: 'center'; wrapText?: boolean };
   fill?: { fgColor: { rgb: string }; patternType: 'solid' };
-  font?: { bold?: boolean; color?: { rgb: string }; sz?: number };
+  font?: { bold?: boolean; color?: { rgb: string }; italic?: boolean; sz?: number };
 }
 
 const fill = (rgb: string): Style => ({ fill: { fgColor: { rgb }, patternType: 'solid' } });
@@ -53,6 +62,13 @@ function text(value: string, style: Style = BASE): CellObject {
 
 function money(minor: number, style: Style = BASE): CellObject {
   return { s: style, t: 'n', v: minor / 100, z: MONEY };
+}
+
+/** El color de un cliente nuevo según por dónde entró el pedido. */
+function newColor(source: string): string {
+  if (source === 'email') return COLOR.newEmail;
+  if (source === 'whatsapp') return COLOR.newWhatsapp;
+  return COLOR.newOther;
 }
 
 /** "2026-10-26" → "LUNES 26 de octubre", como la barra del día de la planilla. */
@@ -119,7 +135,7 @@ function leading(): Layout['columns'] {
       value: (row) =>
         text(
           row.order.customerName,
-          row.order.isNew ? { ...muted(row), ...fill(COLOR.isNew) } : muted(row),
+          row.order.isNew ? { ...muted(row), ...fill(newColor(row.order.source)) } : muted(row),
         ),
       width: 24,
     },
@@ -141,15 +157,17 @@ function trailing(): Layout['columns'] {
       header: 'Venta',
       value: (row) =>
         row.first
-          ? money(row.order.totalMinor, {
-              ...BASE,
-              ...fill(row.order.paid ? COLOR.paid : COLOR.unpaid),
-            })
+          ? money(
+              row.order.totalMinor,
+              isTransfer(row.order.paymentExpectation)
+                ? { ...BASE, ...fill(row.order.paid ? COLOR.paid : COLOR.unpaid) }
+                : BASE,
+            )
           : text(''),
       width: 12,
     },
     {
-      header: 'Medio de pago',
+      header: 'Pago',
       value: (row) => text(row.first ? row.order.paymentExpectation : ''),
       width: 14,
     },
@@ -212,7 +230,15 @@ function buildSheet(title: string, report: PeriodReport, layout: Layout): WorkSh
     row += 1;
     const firstRow = row;
     for (const line of day.rows) {
-      layout.columns.forEach((column, index) => put(row, index, column.value(line)));
+      layout.columns.forEach((column, index) => {
+        const cell = column.value(line);
+        // Un Intuitivo va en negrita cursiva, como en la planilla.
+        if (line.composable) {
+          const style = (cell.s ?? {}) as Style;
+          cell.s = { ...style, font: { ...style.font, bold: true, italic: true } };
+        }
+        put(row, index, cell);
+      });
       row += 1;
     }
     // Total del día: viandas y venta, con fórmula y el valor ya calculado.

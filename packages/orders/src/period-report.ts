@@ -12,6 +12,8 @@ export interface PeriodReportItem {
   composable: boolean;
   /** Los platos elegidos de un Intuitivo; en una variedad fija, vacío. */
   dishSelections: readonly string[];
+  /** De qué menú y de qué día (1 = lunes) es cada plato elegido; null si no se sabe. */
+  dishSources?: readonly ({ familyName: string; slot: number } | null)[];
   familyName: string;
   /** Cuántas comidas trae la vianda: llena esa cantidad de las cinco columnas de días. */
   mealsPerUnit: number;
@@ -32,6 +34,8 @@ export interface PeriodReportOrder {
   paymentExpectation: string;
   phone: string | null;
   publicNumber: string;
+  /** Por dónde entró el pedido ("email", "whatsapp"…): pinta de qué color va un cliente nuevo. */
+  source: string;
   /** La parada en la ruta del día, si ya hay una; `minutes` es el tiempo estimado de ruta. */
   route: { minutes: number | null; routeLabel: string; sequence: number } | null;
   /** El reparto ("Mañana · de 10 a 13h"): va en la barra de carga del día. */
@@ -41,7 +45,9 @@ export interface PeriodReportOrder {
   zone: string | null;
 }
 
-/** Un renglón: una vianda. */
+/**
+ * Un renglón: una vianda o, en un Intuitivo, los platos de un mismo menú (ver `composableRows`).
+ */
 export interface PeriodReportRow {
   composable: boolean;
   familyName: string;
@@ -76,6 +82,49 @@ const DAYS = 5;
 /** "400 g" → "400". */
 function sizeOf(variantName: string): string {
   return /\d+/.exec(variantName)?.[0] ?? variantName;
+}
+
+/**
+ * Los renglones de un Intuitivo, como en la planilla: cada plato va en la columna de su día con el
+ * nombre de su menú ("VEGETARIANO" el lunes, "KETO" el martes), un renglón por menú; si dos platos
+ * del mismo menú caen el mismo día, el segundo abre otro renglón. Un plato sin menú conocido va con
+ * su nombre, en el primer día libre.
+ */
+export function composableRows(item: PeriodReportItem): string[][] {
+  const byFamily = new Map<string, { day: number | null; text: string }[]>();
+  item.dishSelections.forEach((dish, index) => {
+    const source = item.dishSources?.[index] ?? null;
+    const key = source ? source.familyName : '';
+    const day = source && source.slot >= 1 && source.slot <= DAYS ? source.slot - 1 : null;
+    byFamily.set(key, [
+      ...(byFamily.get(key) ?? []),
+      { day, text: source ? defaultAbbreviation(source.familyName) : dish },
+    ]);
+  });
+  const families = [...byFamily.keys()].sort((left, right) =>
+    left === ''
+      ? 1
+      : right === ''
+        ? -1
+        : compareProducts({ familyName: left }, { familyName: right }),
+  );
+  const rows: string[][] = [];
+  for (const family of families) {
+    const own: string[][] = [];
+    for (const dish of byFamily.get(family) ?? []) {
+      let row = own.find((candidate) =>
+        dish.day === null ? candidate.includes('') : candidate[dish.day] === '',
+      );
+      if (!row) {
+        row = Array.from({ length: DAYS }, () => '');
+        own.push(row);
+      }
+      const day = dish.day ?? row.indexOf('');
+      row[day] = dish.text;
+    }
+    rows.push(...own);
+  }
+  return rows.length > 0 ? rows : [Array.from({ length: DAYS }, () => '')];
 }
 
 function compareOrders(left: PeriodReportOrder, right: PeriodReportOrder): number {
@@ -117,11 +166,7 @@ export function buildPeriodReport(orders: readonly PeriodReportOrder[]): PeriodR
         const short = defaultAbbreviation(item.familyName);
         const size = sizeOf(item.variantName);
         const meals = Array.from({ length: DAYS }, (_, day) =>
-          item.composable
-            ? (item.dishSelections[day] ?? '')
-            : day < Math.min(DAYS, item.mealsPerUnit)
-              ? short
-              : '',
+          day < Math.min(DAYS, item.mealsPerUnit) ? short : '',
         );
         const variety = item.composable ? order.customerName : short;
         const label = `${variety} ${size}`;
@@ -134,12 +179,19 @@ export function buildPeriodReport(orders: readonly PeriodReportOrder[]): PeriodR
         };
         entry.units += item.quantityUnits;
         summary.set(label, entry);
-        for (let unit = 0; unit < item.quantityUnits; unit += 1) {
+        /*
+         * Un Intuitivo no es una vianda por renglón: sus platos van por menú (`composableRows`).
+         * Los platos elegidos son los de todas sus unidades juntas.
+         */
+        const lines = item.composable
+          ? composableRows(item)
+          : Array.from({ length: item.quantityUnits }, () => meals);
+        for (const line of lines) {
           rows.push({
             composable: item.composable,
             familyName: item.familyName,
             first: rows.every((row) => row.order !== order),
-            meals,
+            meals: line,
             order,
             size,
             variety,
@@ -152,7 +204,10 @@ export function buildPeriodReport(orders: readonly PeriodReportOrder[]): PeriodR
       rows,
       runs: [...new Set(dayOrders.map((order) => order.run).filter((run) => run !== null))],
       saleMinor: dayOrders.reduce((sum, order) => sum + order.totalMinor, 0),
-      units: rows.length,
+      units: dayOrders.reduce(
+        (sum, order) => sum + order.items.reduce((total, item) => total + item.quantityUnits, 0),
+        0,
+      ),
     });
   }
 
@@ -170,6 +225,11 @@ export function buildPeriodReport(orders: readonly PeriodReportOrder[]): PeriodR
     totalSaleMinor: orders.reduce((sum, order) => sum + order.totalMinor, 0),
     totalUnits: days.reduce((sum, day) => sum + day.units, 0),
   };
+}
+
+/** Si el pedido se paga por transferencia: sólo entonces la venta se pinta de verde o rojo. */
+export function isTransfer(paymentExpectation: string): boolean {
+  return /transfer/i.test(paymentExpectation);
 }
 
 /** "≈ 25 min", "≈ 1 h 10": el tiempo estimado de ruta como va en la planilla. */
