@@ -89,7 +89,6 @@ describe('buildCycleReportExcel', () => {
     expect(rows[3]).toEqual([
       'Ana Pérez',
       '2994000000',
-      'NQN-00012',
       '2026-10-18',
       'Keto 400 × 1',
       'Transferencia',

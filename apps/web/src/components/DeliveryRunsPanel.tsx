@@ -48,7 +48,7 @@ function dayTitle(date: string): string {
 /** El aviso de cambio de fecha para un cliente. Se copia o se abre en WhatsApp: nunca sale solo. */
 function rescheduleMessage(moved: Moved, date: string): string {
   const firstName = moved.customerName.split(' ')[0] ?? moved.customerName;
-  return `Hola ${firstName}! Te escribimos de Verdeo: tu pedido ${moved.publicNumber} pasa al ${dayTitle(date).toLocaleLowerCase('es-AR')}. ¿Te viene bien? ¡Gracias!`;
+  return `Hola ${firstName}! Te escribimos de Verdeo: tu pedido pasa al ${dayTitle(date).toLocaleLowerCase('es-AR')}. ¿Te viene bien? ¡Gracias!`;
 }
 
 /**
@@ -360,9 +360,7 @@ export function DeliveryRunsPanel({
           <ul>
             {notices.moved.map((moved) => (
               <li key={moved.orderId}>
-                <span>
-                  {moved.customerName} · {moved.publicNumber}
-                </span>
+                <span>{moved.customerName}</span>
                 <span className="delivery-runs-notice-actions">
                   <button
                     className="button button-secondary"

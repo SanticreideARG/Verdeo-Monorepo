@@ -37,14 +37,16 @@ export function ChatReferenceCard({ reference }: { reference: ChatReference }) {
       } else {
         const order = (await response.json()) as {
           currency: string;
+          customer?: { displayName: string };
+          id: string;
           publicNumber: string;
           status: string;
           totalMinor: number;
         };
         setSummary({
-          href: `/app/pedidos?search=${encodeURIComponent(order.publicNumber)}`,
+          href: `/app/pedidos/${order.id}`,
           subtitle: `${orderStatusLabel(order.status)} · ${formatMoney(order.totalMinor, order.currency)}`,
-          title: order.publicNumber,
+          title: order.customer ? `Pedido de ${order.customer.displayName}` : 'Pedido',
         });
       }
       setState('ok');

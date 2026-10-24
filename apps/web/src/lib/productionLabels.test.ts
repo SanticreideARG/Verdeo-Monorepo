@@ -69,8 +69,29 @@ describe('plateGroups', () => {
   });
 });
 
+describe('plateGroups del Intuitivo', () => {
+  it('un grupo por pedido, con el menú de cada plato en el pie', () => {
+    const groups = plateGroups(
+      [
+        plate('Lomo'),
+        { ...plate('Curry', 'REAL'), composable: true, orderCustomer: 'Clara', orderKey: 'k1' },
+        { ...plate('Wok', 'KETO'), composable: true, orderCustomer: 'Clara', orderKey: 'k1' },
+      ],
+      '2026-10-15',
+    );
+    expect(groups.map((group) => [group.title, group.labels.length])).toEqual([
+      ['Platos KETO', 1],
+      ['Platos de Clara', 2],
+    ]);
+    expect(groups[1]?.labels.map((label) => label.kind === 'plato' && label.footer)).toEqual([
+      'REAL ELAB # 15-10',
+      'KETO ELAB # 15-10',
+    ]);
+  });
+});
+
 describe('menuGroups', () => {
-  it('una por vianda: fijas por variedad y tamaño, Intuitivos por cliente', () => {
+  it('una por vianda, por variedad y tamaño; el Intuitivo no lleva etiqueta de menú', () => {
     const groups = menuGroups([
       unit({ unitIndex: 0, unitTotal: 2 }),
       unit({ unitIndex: 1, unitTotal: 2 }),
@@ -82,11 +103,7 @@ describe('menuGroups', () => {
       }),
     ]);
 
-    expect(groups.map((group) => [group.title, group.labels.length])).toEqual([
-      ['KETO 400', 2],
-      ['Juan Manuel Brandan · Intuitivo 400', 1],
-    ]);
-    expect(groups[1]?.labels[0]).toMatchObject({ line: 'Juan Manuel Brandan', size: '400' });
+    expect(groups.map((group) => [group.title, group.labels.length])).toEqual([['KETO 400', 2]]);
   });
 
   it('no repite la vianda cuando llega una vez por plato', () => {

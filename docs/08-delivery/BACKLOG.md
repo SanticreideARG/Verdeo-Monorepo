@@ -632,3 +632,15 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 
 - [x] Informe del período, con la planilla real: Intuitivo en negrita cursiva con el menú de cada plato en su día, nuevos rosado (mail) / oscuro (WhatsApp), venta coloreada sólo en transferencias, columna "Pago".
 - [ ] Stock por lotes (STOCK_LOTS_PLAN.md): propuesta escrita; faltan las respuestas.
+
+## El número de pedido es un control interno (2026-10-23)
+
+- [x] El identificador público ("CBA-00004") deja de salir en las salidas: planillas de cocina (pantalla, Excel, WhatsApp, impresión), etiquetas (también la versión anterior), hoja del repartidor, rutas (pantalla y CSV), Excel y CSV de pedidos, informe del período, informe de cierre, avisos y mensajes que se copian a clientes. En las pantallas internas se reemplaza por el nombre del cliente o la fecha. Sigue en la base, en la búsqueda y en la auditoría (el log).
+- [ ] A confirmar: lo que ve el cliente (la confirmación de la web, el seguimiento, que funciona con el número, y la variable {{ pedido.numero }} de los mensajes).
+- [x] Confirmación al cambiar el cobro (pendiente → cobrado y al revés), en Pedidos y en Por cobrar, con el cliente y el monto.
+
+## Etiquetas 2.0 — 2026-10-24
+
+- [x] Sin etiqueta vertical "Intuitivo"; cada plato de un Intuitivo con el menú del que viene en el pie, y un grupo por pedido.
+- [x] La tanda arranca sin nada tildado.
+- [x] "×" en la vista previa para sacar una etiqueta de la tanda.

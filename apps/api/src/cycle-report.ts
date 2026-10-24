@@ -162,7 +162,6 @@ export function buildCycleReportExcel(report: CycleReport): ArrayBuffer {
     entry.orders.map((order): Cell[] => [
       entry.customer.displayName,
       entry.customer.whatsapp ?? entry.customer.phone ?? '',
-      order.publicNumber,
       order.deliveryDate,
       order.items,
       order.paymentExpectation,
@@ -173,20 +172,12 @@ export function buildCycleReportExcel(report: CycleReport): ArrayBuffer {
     workbook,
     sheet(
       title,
-      ['Cliente', 'Teléfono', 'Pedido', 'Entrega', 'Qué llevó', 'Medio', 'Monto'],
+      ['Cliente', 'Teléfono', 'Entrega', 'Qué llevó', 'Medio', 'Monto'],
       [
         ...debtRows,
-        [
-          'TOTAL',
-          '',
-          '',
-          '',
-          '',
-          '',
-          money(report.receivables.reduce((t, e) => t + e.totalMinor, 0)),
-        ],
+        ['TOTAL', '', '', '', '', money(report.receivables.reduce((t, e) => t + e.totalMinor, 0))],
       ],
-      [28, 18, 14, 12, 44, 16, 14],
+      [28, 18, 12, 44, 16, 14],
     ),
     'Por cobrar',
   );

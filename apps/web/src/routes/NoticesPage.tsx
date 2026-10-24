@@ -307,10 +307,7 @@ export function NoticesPage() {
                     <div className="notices-row-head">
                       <div>
                         <strong>{row.customerDisplayName}</strong>
-                        <span>
-                          {row.orderPublicNumber}
-                          {row.deliveryZone ? ` · ${row.deliveryZone}` : ''}
-                        </span>
+                        <span>{row.deliveryZone ?? ''}</span>
                       </div>
                       <span className="notices-row-state">
                         {row.status === 'pending'

@@ -98,7 +98,6 @@ function csvCell(value: Date | number | string | null): string {
 
 export function buildOrdersCsv(rows: readonly OrderExportRow[]): string {
   const headers = [
-    'numero_pedido',
     'cliente',
     'whatsapp',
     'pedido',
@@ -116,7 +115,6 @@ export function buildOrdersCsv(rows: readonly OrderExportRow[]): string {
   ];
   const lines = rows.map((row) =>
     [
-      row.publicNumber,
       row.customerDisplayName,
       row.customerWhatsapp ?? '',
       orderItemsSummary(row.items),

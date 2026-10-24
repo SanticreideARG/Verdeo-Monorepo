@@ -63,8 +63,8 @@ describe('buildPeriodReportExcel', () => {
     expect(cell('F9')?.f).toBe('COUNT(F5:F8)');
     expect(cell('F9')?.v).toBe(4);
     // El resumen a la derecha.
-    expect(cell('R3')?.v).toBe('KETO 400');
-    expect(cell('S3')?.v).toBe(4);
+    expect(cell('Q3')?.v).toBe('KETO 400');
+    expect(cell('R3')?.v).toBe(4);
   });
 
   it('pinta la norma de colores: nuevo, cobrado y no cobrado', () => {

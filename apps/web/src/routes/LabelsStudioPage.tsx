@@ -106,6 +106,23 @@ export function LabelsStudioPage() {
   const [loose, setLoose] = useState<LooseEntry[]>([]);
   // El − / + de cada grupo: cuántas etiquetas de más (o de menos) lleva.
   const [adjust, setAdjust] = useState<Map<string, number>>(new Map());
+  // Las que se sacaron de la tanda con la "×" de la vista previa.
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
+
+  /*
+   * La vista previa avisa por mensaje cuál se tocó para sacar (la "×" que aparece al pasar por
+   * encima de una etiqueta): está en un marco aparte y no puede tocar el estado de la página.
+   */
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      const data = event.data as { key?: unknown; type?: unknown } | null;
+      if (data?.type !== 'verdeo-label-remove' || typeof data.key !== 'string') return;
+      const key = data.key;
+      setRemoved((current) => new Set(current).add(key));
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
   const [looseChoice, setLooseChoice] = useState('');
   const [looseQuantity, setLooseQuantity] = useState(1);
   const [startAt, setStartAt] = useState(1);
@@ -148,15 +165,11 @@ export function LabelsStudioPage() {
           const items = ((await prints.json()) as { items: PrintedLabel[] }).items;
           setPrinted(new Map(items.map((item) => [item.key, item])));
         }
-        // Arranca con todo tildado: lo común es imprimir el período entero.
-        setSelected(
-          new Set([
-            ...plateGroups(plateRows, productionDate).map((group) => group.id),
-            ...menuGroups(unitRows).map((group) => group.id),
-          ]),
-        );
+        // Arranca sin nada tildado: la tanda se arma eligiendo (2026-10-23).
+        setSelected(new Set());
         setLoose([]);
         setAdjust(new Map());
+        setRemoved(new Set());
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -196,14 +209,23 @@ export function LabelsStudioPage() {
     const fromGroups = [...platoGroups, ...menuGroupList]
       .filter((group) => selected.has(group.id))
       .flatMap((group) => adjustGroup(group, adjust.get(group.id) ?? 0));
-    return [...fromGroups, ...loose.flatMap((entry) => entry.labels)];
-  }, [platoGroups, menuGroupList, selected, loose, adjust]);
+    return [...fromGroups, ...loose.flatMap((entry) => entry.labels)].filter(
+      (label) => !removed.has(label.key),
+    );
+  }, [platoGroups, menuGroupList, selected, loose, adjust, removed]);
 
   const printedKeys = useMemo(() => new Set(printed.keys()), [printed]);
   const sheetCount = productionSheetCount(batch.length, startAt);
   const freeAtEnd = sheetCount * LABELS_PER_SHEET - (startAt - 1) - batch.length;
   const previewHtml = useMemo(
-    () => renderProductionSheets({ labels: batch, preview: true, printedKeys, startAt }),
+    () =>
+      renderProductionSheets({
+        labels: batch,
+        preview: true,
+        printedKeys,
+        removable: true,
+        startAt,
+      }),
     [batch, printedKeys, startAt],
   );
 
@@ -541,6 +563,19 @@ export function LabelsStudioPage() {
                 <strong>{String(batch.length)}</strong> etiquetas ·{' '}
                 <strong>{String(sheetCount)}</strong> {sheetCount === 1 ? 'hoja' : 'hojas'}
               </p>
+              {removed.size > 0 ? (
+                <p className="field-hint">
+                  {String(removed.size)} {removed.size === 1 ? 'quitada' : 'quitadas'} desde la
+                  vista previa ·{' '}
+                  <button
+                    className="link-button"
+                    onClick={() => setRemoved(new Set())}
+                    type="button"
+                  >
+                    Volver a ponerlas
+                  </button>
+                </p>
+              ) : null}
               <button
                 className="button button-primary"
                 disabled={batch.length === 0}

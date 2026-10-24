@@ -388,3 +388,11 @@ portada también está en `/pedido`.
 
 En el detalle de un pedido, en escritorio, "Anterior" y "Siguiente" recorren la lista de la que se
 vino, con sus filtros y su orden (`lib/orderNavigation.ts`, guardado en la pestaña).
+
+## El número de pedido es un control interno (2026-10-23)
+
+Pedido del usuario: el identificador público (`orders.public_number`, "CBA-00004") es sólo para el
+sistema y el log. No sale en planillas, etiquetas, hojas de reparto, exportaciones, informes ni
+mensajes; en pantalla, el pedido se nombra por el cliente y la fecha. Se sigue generando, se puede
+buscar por él y queda en la auditoría. Pendiente de confirmar: la confirmación de la web y el
+seguimiento público, que hoy funcionan con ese número.

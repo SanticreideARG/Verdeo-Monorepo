@@ -23,6 +23,9 @@ export interface KitchenLabelRow {
   dish: string;
   side: string | null;
   sizeName: string | null;
+  /** Sólo en un Intuitivo: de quién es y de qué pedido (clave interna, no se muestra). */
+  orderCustomer?: string | null;
+  orderKey?: string | null;
 }
 
 /** Un grupo de la tanda: se tilda entero. */
@@ -35,7 +38,11 @@ export interface LabelGroup {
   title: string;
 }
 
-/** Las etiquetas de plato del período, agrupadas por variedad (el pie de la etiqueta). */
+/**
+ * Las etiquetas de plato del período: las de las variedades, agrupadas por variedad (el pie); las de
+ * un Intuitivo, un grupo por pedido con el nombre del cliente. Cada plato del Intuitivo lleva en el
+ * pie el menú del que viene ("KETO", "REAL"), nunca "INTUITIVO".
+ */
 export function plateGroups(
   rows: readonly KitchenLabelRow[],
   productionDate: string,
@@ -49,16 +56,19 @@ export function plateGroups(
       ? { dish: cleanDishText(row.dish), side: cleanDishText(row.side) || null }
       : splitDishName(row.dish);
     const footer = `${row.abbreviation} ELAB # ${day}`;
-    const groupId = `plato:${row.abbreviation}`;
+    const ofOrder = row.composable && row.orderKey ? row.orderKey : null;
+    const groupId = ofOrder ? `plato:pedido:${ofOrder}` : `plato:${row.abbreviation}`;
     const group = groups.get(groupId) ?? {
       id: groupId,
       kind: 'plato' as const,
       labels: [],
-      title: `Platos ${row.abbreviation}`,
+      title: ofOrder
+        ? `Platos de ${row.orderCustomer ?? 'un Intuitivo'}`
+        : `Platos ${row.abbreviation}`,
     };
     groups.set(groupId, group);
     // La clave: variedad, plato y número de repetición, que no cambia con la fecha de elaboración.
-    const base = `plato:${row.abbreviation}:${row.sizeName ?? ''}:${split.dish}|${split.side ?? ''}`;
+    const base = `plato:${ofOrder ? `${ofOrder}:` : ''}${row.abbreviation}:${row.sizeName ?? ''}:${split.dish}|${split.side ?? ''}`;
     const n = seen.get(base) ?? 0;
     seen.set(base, n + 1);
     group.labels.push({
@@ -69,7 +79,13 @@ export function plateGroups(
       side: split.side,
     });
   }
-  return [...groups.values()];
+  // Primero las variedades (en el orden en que llegan, que es la jerarquía); después los Intuitivos,
+  // por cliente.
+  const all = [...groups.values()];
+  const ofOrders = all
+    .filter((group) => group.id.startsWith('plato:pedido:'))
+    .sort((left, right) => left.title.localeCompare(right.title, 'es-AR'));
+  return [...all.filter((group) => !group.id.startsWith('plato:pedido:')), ...ofOrders];
 }
 
 /**
@@ -80,6 +96,8 @@ export function menuGroups(rows: readonly LabelData[]): LabelGroup[] {
   const groups = new Map<string, LabelGroup>();
   const seen = new Set<string>();
   for (const row of rows) {
+    // El Intuitivo no lleva etiqueta de menú: sus platos van con el menú del que vienen.
+    if (row.composable) continue;
     // Con "una etiqueta por plato" activado en la versión anterior, cada vianda llega repetida.
     const key = `menu:${row.orderPublicNumber}:${row.familyName}:${row.variantName}:${String(row.unitIndex)}`;
     if (seen.has(key)) continue;

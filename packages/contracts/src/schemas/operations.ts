@@ -2141,6 +2141,8 @@ export const KitchenLabelSchema = z.object({
   dish: z.string(),
   side: z.string().nullable(),
   sizeName: z.string().nullable(),
+  orderCustomer: z.string().nullable().optional(),
+  orderKey: z.string().nullable().optional(),
 });
 
 export const KitchenLabelListResponseSchema = z.object({ items: z.array(KitchenLabelSchema) });

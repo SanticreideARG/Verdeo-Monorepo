@@ -59,8 +59,9 @@ describe('MoveSiteDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ver qué cambia' }));
 
     const status = await screen.findByRole('status');
-    expect(status.textContent).toContain('NQN-00012');
-    expect(status.textContent).toContain('CBA-…');
+    // El número de pedido es un control interno: no se muestra.
+    expect(status.textContent).not.toContain('NQN-00012');
+    expect(status.textContent).toContain('entrega');
     expect(calls[0]).toEqual({
       body: { preview: true, targetSiteId: 'cba', zoneId: 'z-cba' },
       path: '/api/v1/orders/o/site',

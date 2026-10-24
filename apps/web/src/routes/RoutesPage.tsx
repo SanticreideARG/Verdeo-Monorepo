@@ -360,7 +360,6 @@ export function RoutesPage() {
         'Ubicación',
         'Medio de pago',
         'Total',
-        'N° de pedido',
       ],
       ...route.stops.map((stop) => [
         String(stop.sequence),
@@ -372,7 +371,6 @@ export function RoutesPage() {
         stopMapLink(stop),
         stop.paymentExpectation,
         String(stop.totalMinor / 100),
-        stop.publicNumber,
       ]),
     ];
     // BOM para que Excel abra los acentos bien; sin esto "Neuquén" sale roto.
@@ -836,7 +834,6 @@ export function RoutesPage() {
                               <span className="routes-stop-seq">{stop.sequence}</span>
                               <div className="routes-stop-body">
                                 <p className="routes-stop-name">{stop.customerDisplayName}</p>
-                                <p className="routes-stop-number">{stop.publicNumber}</p>
                                 {stop.deliveryWindow ? (
                                   <p className="routes-stop-window">🕒 {stop.deliveryWindow}</p>
                                 ) : null}

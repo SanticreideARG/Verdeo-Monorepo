@@ -55,7 +55,8 @@ const FIELD_RENDERERS: Record<
     lines: (_label, context) => (context.phrase ? [context.phrase] : []),
     weight: 'frase',
   },
-  numero: { lines: (label) => [label.orderPublicNumber], weight: 'menor' },
+  // El número de pedido es un control interno: no sale en ninguna etiqueta (2026-10-23).
+  numero: { lines: () => [], weight: 'menor' },
   /*
    * El plato que acompaña esta etiqueta, con su posición cuando hay más de uno —"Pollo al horno · 2
    * de 5"—: cinco etiquetas de la misma vianda apiladas sobre la mesa no dicen de otro modo si

@@ -262,6 +262,9 @@ export function OrderIntakePage() {
    */
   const [reverting, setReverting] = useState<OrderSummary | null>(null);
   const [deleting, setDeleting] = useState<OrderSummary | null>(null);
+  // Cambiar el cobro pide confirmación, en los dos sentidos (2026-10-23): un tilde suelto no se
+  // nota y deja a alguien como que pagó, o como que debe.
+  const [paying, setPaying] = useState<OrderSummary | null>(null);
   /** El pedido que se está mirando en la ficha. Es el de la lista: no se vuelve a pedir nada. */
   const [viewing, setViewing] = useState<OrderSummary | null>(null);
   // La zona cuyo lote se está marcando: deshabilita todos los botones mientras corre, para que dos
@@ -961,7 +964,7 @@ export function OrderIntakePage() {
         status,
       });
       showToast(
-        `Pedido de ${order.customer.displayName} (${order.publicNumber}) ${orderStatusLabel(status).toLowerCase()}.`,
+        `Pedido de ${order.customer.displayName} ${orderStatusLabel(status).toLowerCase()}.`,
       );
       await loadData();
     } catch (error) {
@@ -995,7 +998,7 @@ export function OrderIntakePage() {
       return;
     }
     setDeleting(null);
-    showToast(`Pedido ${order.publicNumber} eliminado.`);
+    showToast(`Pedido de ${order.customer.displayName} eliminado.`);
     await loadData();
   }
   async function revert(order: OrderSummary, reason: string) {
@@ -1008,7 +1011,7 @@ export function OrderIntakePage() {
       });
       setReverting(null);
       showToast(
-        `Pedido ${order.publicNumber} vuelto a ${orderStatusLabel(previous).toLowerCase()}.`,
+        `Pedido de ${order.customer.displayName} vuelto a ${orderStatusLabel(previous).toLowerCase()}.`,
       );
       await loadData();
     } catch (error) {
@@ -1462,8 +1465,7 @@ export function OrderIntakePage() {
                       {lastOrder ? (
                         <div className="repeat-order">
                           <p>
-                            <strong>Última vez</strong> ({lastOrder.publicNumber}):{' '}
-                            {orderItemsSummary(lastOrder.items)} ·{' '}
+                            <strong>Última vez</strong>: {orderItemsSummary(lastOrder.items)} ·{' '}
                             {paymentMethodLabel(lastOrder.paymentExpectation, paymentMethods)}
                           </p>
                           <button
@@ -2014,7 +2016,7 @@ export function OrderIntakePage() {
                               <input
                                 aria-label={`Marcar ${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName} como cobrado`}
                                 checked={Boolean(order.paidAt)}
-                                onChange={() => void togglePaid(order)}
+                                onChange={() => setPaying(order)}
                                 type="checkbox"
                               />
                               <span>{order.paidAt ? 'Cobrado' : 'Pendiente'}</span>
@@ -2127,6 +2129,24 @@ export function OrderIntakePage() {
         </div>
       </section>
 
+      {paying ? (
+        <ConfirmDialog
+          confirmLabel={paying.paidAt ? 'Volver a pendiente' : 'Marcar como cobrado'}
+          detail={
+            paying.paidAt
+              ? `El pedido de ${paying.customer.displayName} (${formatMoney(paying.totalMinor, paying.currency)}) figura como cobrado. Va a volver a pendiente de pago.`
+              : `El pedido de ${paying.customer.displayName} (${formatMoney(paying.totalMinor, paying.currency)}) pasa de pendiente a cobrado. Confirmalo sólo si el pago ya entró.`
+          }
+          onCancel={() => setPaying(null)}
+          onConfirm={async () => {
+            await togglePaid(paying);
+            setPaying(null);
+          }}
+          title={paying.paidAt ? '¿Volver a pendiente?' : '¿Ya pagó?'}
+          tone={paying.paidAt ? 'destructivo' : 'normal'}
+        />
+      ) : null}
+
       {confirmingBatch ? (
         <ConfirmDialog
           confirmLabel={`Marcar listos ${String(confirmingBatch.orders.length)}`}
@@ -2150,7 +2170,7 @@ export function OrderIntakePage() {
           onCancel={() => setReverting(null)}
           onConfirm={(reason) => revert(reverting, reason)}
           placeholder="Ej. se marcó listo por error"
-          title={`¿Revertir el pedido ${reverting.publicNumber}?`}
+          title={`¿Revertir el pedido de ${reverting.customer.displayName}?`}
         />
       ) : null}
 
@@ -2167,7 +2187,7 @@ export function OrderIntakePage() {
           onConfirm={(reason) => remove(deleting, reason)}
           optional
           placeholder="Ej. pedido de prueba"
-          title={`¿Eliminar el pedido ${deleting.publicNumber}?`}
+          title={`¿Eliminar el pedido de ${deleting.customer.displayName}?`}
         />
       ) : null}
       {cancelling ? (
@@ -2180,7 +2200,7 @@ export function OrderIntakePage() {
 
       {savedNumber ? (
         <AfterSaveDialog
-          detail={`Quedó ${savedConfirmed ? 'confirmado' : 'como borrador'} con el número ${savedNumber}.`}
+          detail={`Quedó ${savedConfirmed ? 'confirmado' : 'como borrador'}.`}
           keepLabel="Conservar los datos"
           newLabel="Cargar otro pedido"
           onKeep={() => setSavedNumber(null)}

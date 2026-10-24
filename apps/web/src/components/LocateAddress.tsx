@@ -333,7 +333,7 @@ export function UnlocatedOrdersPanel({
           return (
             <li key={order.id}>
               <span>
-                <strong>{order.publicNumber}</strong> · {order.customerName} — {order.address}
+                <strong>{order.customerName}</strong> — {order.address}
               </span>
               {outcome ? (
                 <small>

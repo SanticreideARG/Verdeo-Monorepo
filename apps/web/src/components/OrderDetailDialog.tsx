@@ -64,7 +64,7 @@ export function OrderDetailDialog({
 
   return (
     <div
-      aria-label={`Pedido ${order.publicNumber}`}
+      aria-label={`Pedido de ${order.customer.displayName}`}
       aria-modal="true"
       className="modal-backdrop"
       role="dialog"
@@ -72,7 +72,7 @@ export function OrderDetailDialog({
       <div className="modal-panel order-detail">
         <header className="order-detail-head">
           <div>
-            <p className="eyebrow">{order.publicNumber}</p>
+            <p className="eyebrow">Pedido</p>
             <h2>{order.customer.displayName}</h2>
           </div>
           <span className="order-detail-status" data-status={order.status}>

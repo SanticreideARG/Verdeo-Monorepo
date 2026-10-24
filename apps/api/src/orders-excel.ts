@@ -81,7 +81,6 @@ export function buildOrdersExcel(
     sheetWithTitle(
       title,
       rows.map((row) => ({
-        'N°': row.publicNumber,
         Cliente: row.customerDisplayName,
         WhatsApp: row.customerWhatsapp ?? '',
         // Salto de línea dentro de la celda: un Intuitivo con cinco platos en una sola línea no se

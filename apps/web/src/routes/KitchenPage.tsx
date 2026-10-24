@@ -362,12 +362,10 @@ export function KitchenPage() {
                                 className="button button-secondary"
                                 to={`/app/pedidos/${item.orderId}`}
                               >
-                                {item.orderPublicNumber} · {item.customerDisplayName}
+                                {item.customerDisplayName}
                               </Link>
                             ) : (
-                              <span>
-                                {item.orderPublicNumber} · {item.customerDisplayName}
-                              </span>
+                              <span>{item.customerDisplayName}</span>
                             )}
                           </li>
                         ))}
@@ -402,8 +400,7 @@ export function KitchenPage() {
                               className="mt-2 text-sm font-semibold text-red-800"
                               key={`${exception.orderPublicNumber}-${exception.dietaryInstructions.join('-')}`}
                             >
-                              {exception.quantityUnits} ({exception.customerDisplayName} ·{' '}
-                              {exception.orderPublicNumber}):{' '}
+                              {exception.quantityUnits} ({exception.customerDisplayName}):{' '}
                               {exception.dietaryInstructions.join(' · ')}
                             </p>
                           ))}
@@ -422,9 +419,7 @@ export function KitchenPage() {
                           <strong>
                             #{item.sequence} · {item.variantName} × {item.quantityUnits}
                           </strong>
-                          <p className="mt-1 text-sm">
-                            {item.customerDisplayName} ({item.orderPublicNumber})
-                          </p>
+                          <p className="mt-1 text-sm">{item.customerDisplayName}</p>
                           {/* Uno por línea: en cocina esto se lee de reojo mientras se arma, y una
                               tira de cinco platos separados por puntos obliga a leerla entera. */}
                           <ul className="dish-selections mt-1">

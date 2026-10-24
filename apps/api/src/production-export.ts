@@ -422,7 +422,7 @@ export function buildProductionExcel(report: ProductionReport): ArrayBuffer {
           Excepciones: line.exceptions
             .map(
               (exception) =>
-                `${exception.quantityUnits} (${exception.customerDisplayName} · ${exception.orderPublicNumber}): ${exception.dietaryInstructions.join(' · ')}`,
+                `${exception.quantityUnits} (${exception.customerDisplayName}): ${exception.dietaryInstructions.join(' · ')}`,
             )
             .join(' | '),
         };
@@ -462,11 +462,10 @@ export function buildProductionExcel(report: ProductionReport): ArrayBuffer {
           Tamaño: item.variantName,
           Unidades: item.quantityUnits,
           Cliente: item.customerDisplayName,
-          Pedido: item.orderPublicNumber,
           Composición: dishesWithOrigin(item).join(' · '),
           Indicaciones: item.dietaryInstructions.join(' · '),
         })),
-        [6, 16, 10, 10, 28, 14, 60, 30],
+        [6, 16, 10, 10, 28, 60, 30],
         // El `#` no se suma: es el número de renglón, y sumarlo da un número sin significado.
         ['Unidades'],
       ),
@@ -504,7 +503,7 @@ export function buildProductionWhatsAppText(report: ProductionReport): string {
     lines.push(text);
     for (const exception of line.exceptions) {
       lines.push(
-        `   ⚠ ${exception.quantityUnits} ${exception.customerDisplayName} (${exception.orderPublicNumber}): ${exception.dietaryInstructions.join(', ')}`,
+        `   ⚠ ${exception.quantityUnits} ${exception.customerDisplayName}: ${exception.dietaryInstructions.join(', ')}`,
       );
     }
   }
@@ -513,7 +512,7 @@ export function buildProductionWhatsAppText(report: ProductionReport): string {
     lines.push('', '*Intuitivos*');
     for (const item of custom) {
       lines.push(
-        `• #${item.sequence} ${item.familyName} ${item.variantName} × ${item.quantityUnits} — ${item.customerDisplayName} (${item.orderPublicNumber}): ${dishesWithOrigin(item).join(', ')}`,
+        `• #${item.sequence} ${item.familyName} ${item.variantName} × ${item.quantityUnits} — ${item.customerDisplayName}: ${dishesWithOrigin(item).join(', ')}`,
       );
     }
   }
@@ -560,7 +559,7 @@ export function buildProductionPrintHtml(report: ProductionReport): string {
       const exceptions = line.exceptions
         .map(
           (exception) =>
-            `<div class="exception">${exception.quantityUnits} — ${escape(exception.customerDisplayName)} (${escape(exception.orderPublicNumber)}): ${escape(exception.dietaryInstructions.join(', '))}</div>`,
+            `<div class="exception">${exception.quantityUnits} — ${escape(exception.customerDisplayName)}: ${escape(exception.dietaryInstructions.join(', '))}</div>`,
         )
         .join('');
       return `<tr>
@@ -581,7 +580,7 @@ export function buildProductionPrintHtml(report: ProductionReport): string {
         <td>#${item.sequence}</td>
         <td>${escape(item.familyName)} ${escape(item.variantName)}</td>
         <td>${item.quantityUnits}</td>
-        <td>${escape(item.customerDisplayName)} (${escape(item.orderPublicNumber)})</td>
+        <td>${escape(item.customerDisplayName)}</td>
         <td>${escape(dishesWithOrigin(item).join(', '))}</td>
       </tr>`,
     )

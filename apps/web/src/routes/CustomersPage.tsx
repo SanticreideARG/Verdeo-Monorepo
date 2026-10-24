@@ -1348,7 +1348,7 @@ export function CustomersPage() {
                     {detail.orders.map((order) => (
                       <article key={order.id}>
                         <strong>
-                          <Link to={`/app/pedidos/${order.id}`}>{order.publicNumber}</Link>
+                          <Link to={`/app/pedidos/${order.id}`}>Ver pedido</Link>
                         </strong>
                         <span className="status-chip">{orderStatusLabel(order.status)}</span>
                         <span>

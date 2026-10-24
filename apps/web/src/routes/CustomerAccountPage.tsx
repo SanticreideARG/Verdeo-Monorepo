@@ -477,7 +477,7 @@ export function CustomerAccountPage() {
             {orders.map((order) => (
               <div className="operation-card" key={order.id}>
                 <div className="flex items-center justify-between gap-3">
-                  <strong className="text-forest">{order.publicNumber}</strong>
+                  <strong className="text-forest">Pedido</strong>
                   <span className="status-chip">{orderStatusLabel(order.status)}</span>
                 </div>
                 <p className="mt-1 text-sm text-ink-muted">

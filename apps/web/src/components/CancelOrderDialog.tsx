@@ -89,7 +89,7 @@ export function CancelOrderDialog({
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Cancelar pedido">
       <div className="modal-panel">
-        <h2 className="text-xl font-semibold text-forest">Cancelar {orderNumber}</h2>
+        <h2 className="text-xl font-semibold text-forest">Cancelar el pedido de {orderNumber}</h2>
         <p className="mt-1 text-sm text-ink-muted">
           El motivo queda registrado en el pedido y en su historial.
         </p>

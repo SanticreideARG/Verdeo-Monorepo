@@ -14,6 +14,12 @@ export interface KitchenLabel {
   side: string | null;
   /** El tamaño, sólo si se pidió mostrarlo. */
   sizeName: string | null;
+  /**
+   * Sólo en un Intuitivo: de qué pedido es (clave interna, no se imprime) y de quién, para armar
+   * en Etiquetas 2.0 un grupo por pedido.
+   */
+  orderCustomer?: string | null;
+  orderKey?: string | null;
 }
 
 /**
@@ -113,19 +119,36 @@ export function buildKitchenLabels(
     }
   }
 
-  // Intuitivo: pedido por pedido, con sus platos.
+  /*
+   * Intuitivo: pedido por pedido, con sus platos. Cada plato lleva en el pie el menú del que viene
+   * ("KETO", "REAL"), no "INTUITIVO": la categoría Intuitivo no existe en la cocina, sólo en la
+   * venta (2026-10-23). El menú sale del origen que guarda cada plato elegido; si no lo tiene (un
+   * nombre que estaba en dos menús), se busca el plato entre los menús de la tanda.
+   */
+  const abbreviationByFamily = new Map(
+    lines.filter((line) => !line.composable).map((line) => [line.familyName, abbreviationOf(line)]),
+  );
+  const familyOfDish = (name: string): string | null =>
+    lines.find((line) => !line.composable && line.dishes.includes(name))?.familyName ?? null;
+  const sourceAbbreviation = (familyName: string) =>
+    abbreviationByFamily.get(familyName) ?? defaultAbbreviation(familyName);
   const composables = lines
     .filter((line) => line.composable)
     .sort((left, right) => left.orderPublicNumber.localeCompare(right.orderPublicNumber));
   for (const line of composables) {
-    const dishes = line.dishSelections.length > 0 ? line.dishSelections : line.dishes;
+    const chosen = line.dishSelections.length > 0;
+    const dishes = chosen ? line.dishSelections : line.dishes;
     for (let unit = 0; unit < line.quantityUnits; unit += 1) {
-      for (const name of dishes) {
+      for (const [index, name] of dishes.entries()) {
+        const source = chosen ? (line.dishSources?.[index] ?? null) : null;
+        const family = source?.familyName ?? familyOfDish(name);
         labels.push({
-          abbreviation: abbreviationOf(line),
+          abbreviation: family ? sourceAbbreviation(family) : abbreviationOf(line),
           composable: true,
           customerName: options.intuitivoCustomerName ? line.customerDisplayName : null,
           ...splitDish(name),
+          orderCustomer: line.customerDisplayName,
+          orderKey: line.orderPublicNumber,
           sizeName: options.showSize ? line.variantName : null,
         });
       }

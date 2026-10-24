@@ -95,7 +95,9 @@ describe('order CSV export', () => {
       },
     ]);
 
-    expect(csv).toContain(',Lola,');
+    expect(csv).toContain('\nLola,');
+    // El número de pedido es un control interno: no sale.
+    expect(csv).not.toContain('N00004');
   });
 });
 

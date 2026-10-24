@@ -118,4 +118,34 @@ describe('buildKitchenLabels', () => {
         ?.customerName,
     ).toBeNull();
   });
+
+  it('cada plato del Intuitivo lleva en el pie el menú del que viene, no INTUITIVO', () => {
+    const intuitivo = linea({
+      composable: true,
+      dishSelections: ['Lomo', 'Curry'],
+      dishSources: [
+        { familyName: 'Menú Nuevo Keto', slot: 1 },
+        { familyName: 'Menú Real', slot: 3 },
+      ],
+      familyAbbreviation: 'INTUITIVO',
+      familyName: 'Menú Intuitivo',
+    });
+    const etiquetas = buildKitchenLabels([intuitivo], opciones);
+    expect(etiquetas.map((label) => label.abbreviation)).toEqual(['KETO', 'REAL']);
+    // De qué pedido es, para agruparlo en Etiquetas 2.0 (no se imprime).
+    expect(etiquetas[0]).toMatchObject({ orderCustomer: 'Ana Prueba' });
+    expect(etiquetas[0]?.orderKey).toBeTruthy();
+  });
+
+  it('sin origen guardado, busca el plato entre los menús de la tanda', () => {
+    const keto = linea({ dishes: ['Lomo', 'B', 'C', 'D', 'E'], familyAbbreviation: 'KETO' });
+    const intuitivo = linea({
+      composable: true,
+      dishSelections: ['Lomo'],
+      familyAbbreviation: 'INTUITIVO',
+      familyName: 'Menú Intuitivo',
+    });
+    const etiquetas = buildKitchenLabels([keto, intuitivo], opciones);
+    expect(etiquetas.at(-1)?.abbreviation).toBe('KETO');
+  });
 });

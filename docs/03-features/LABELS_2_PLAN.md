@@ -108,3 +108,13 @@ Serif Variable igual: instalada se usa ésa; si no, Source Serif 4.
 - La impresión usa un marco fuera de la vista del tamaño de la hoja (antes, 0 × 0).
 - − / + en cada grupo: le saca etiquetas del final o le agrega repitiendo las del grupo. Las de más
   son sueltas (no se anotan como impresas).
+
+## Correcciones (2026-10-24)
+
+- **El Intuitivo no es una categoría de cocina**: no hay etiqueta vertical "Intuitivo". Cada plato de un
+  Intuitivo lleva en el pie el menú del que viene ("KETO ELAB # …"), tomado del origen que guarda el
+  plato elegido (o, si no lo tiene, buscando el plato entre los menús de la tanda). Los platos de
+  cada Intuitivo forman un grupo por pedido, con el nombre del cliente, para agregarlos a la tanda.
+- La tanda **arranca sin nada tildado**.
+- **"×" en la vista previa**: aparece al pasar por encima de una etiqueta y la saca de la tanda
+  ("Volver a ponerlas" la devuelve). La vista previa avisa a la página por `postMessage`.

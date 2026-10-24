@@ -106,7 +106,7 @@ export function DeliveryRunOrders({
                 <li key={order.id}>
                   {canManage ? (
                     <input
-                      aria-label={`Elegir ${order.publicNumber}`}
+                      aria-label={`Elegir el pedido de ${order.customerName}`}
                       checked={selected.has(order.id)}
                       onChange={() => toggle(order.id)}
                       type="checkbox"
@@ -114,8 +114,9 @@ export function DeliveryRunOrders({
                   ) : null}
                   <div>
                     <p>
-                      <Link to={`/app/pedidos/${order.id}`}>{order.publicNumber}</Link> ·{' '}
-                      <strong>{order.customerName}</strong>
+                      <Link to={`/app/pedidos/${order.id}`}>
+                        <strong>{order.customerName}</strong>
+                      </Link>
                     </p>
                     <small>
                       {[

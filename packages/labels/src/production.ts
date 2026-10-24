@@ -151,6 +151,14 @@ function menuHtml(label: Extract<ProductionLabel, { kind: 'menu' }>): string {
   return `<div class="menu"><img class="badge" src="${PRODUCTION_BADGE}" alt=""><div class="turn"><div class="figures"><span class="size">${escape(label.size)}</span><span class="kcal">Kcal</span></div><p class="line${isName ? ' name' : ''}">${escape(label.line.toLocaleUpperCase('es-AR'))}</p></div></div>`;
 }
 
+/** La "×" de la vista previa avisa a la página que la contiene qué etiqueta sacar. */
+const REMOVE_SCRIPT = `<script>
+document.addEventListener('click', function (event) {
+  var button = event.target.closest && event.target.closest('.remove');
+  if (button) parent.postMessage({ type: 'verdeo-label-remove', key: button.getAttribute('data-key') }, '*');
+});
+</script>`;
+
 const FONTS =
   'https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@1,400&family=Source+Sans+3:wght@400&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&display=swap';
 
@@ -183,6 +191,24 @@ function css(preview: boolean): string {
   }
   .cell.empty { ${preview ? 'background: repeating-linear-gradient(45deg, #fafafa 0 2mm, #f0f0f0 2mm 4mm);' : ''} }
   .cell.printed { ${preview ? 'outline: 0.5mm solid #d98e04;' : ''} }
+  /* La "×" para sacar una etiqueta de la tanda: sólo en la vista previa y al pasar por encima. */
+  .cell .remove {
+    display: none;
+    position: absolute;
+    top: 0.8mm;
+    right: 0.8mm;
+    z-index: 2;
+    width: 5mm;
+    height: 5mm;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: #b42318;
+    color: #fff;
+    font: 700 3.6mm/5mm Arial, sans-serif;
+    cursor: pointer;
+  }
+  .cell:hover .remove { display: block; }
 
   /*
    * Plato, medido sobre el PDF de producción: el ícono fijo arriba (a 1 mm del borde), el pie fijo
@@ -293,6 +319,8 @@ export function renderProductionSheets(options: {
   labels: readonly ProductionLabel[];
   preview?: boolean;
   printedKeys?: ReadonlySet<string>;
+  /** Sólo en la vista previa: una "×" en cada etiqueta que avisa a la página cuál sacar. */
+  removable?: boolean;
   startAt?: number;
   title?: string;
 }): string {
@@ -315,12 +343,18 @@ export function renderProductionSheets(options: {
         const top = p.marginTopMm + row * p.labelHeightMm;
         const printed = label && options.printedKeys?.has(label.key) ? ' printed' : '';
         const body = !label ? '' : label.kind === 'plato' ? plateHtml(label) : menuHtml(label);
-        return `<div class="cell${label ? '' : ' empty'}${printed}" style="left:${left.toFixed(2)}mm;top:${top.toFixed(2)}mm">${body}</div>`;
+        const remove =
+          label && preview && options.removable
+            ? `<button class="remove" data-key="${escape(label.key)}" title="Sacar de la tanda" type="button">×</button>`
+            : '';
+        return `<div class="cell${label ? '' : ' empty'}${printed}" style="left:${left.toFixed(2)}mm;top:${top.toFixed(2)}mm">${remove}${body}</div>`;
       })
       .join('');
     sheets.push(`<section class="sheet">${html}</section>`);
   }
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escape(
     options.title ?? 'Etiquetas',
-  )}</title><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="${FONTS}"><style>${css(preview)}</style></head><body>${sheets.join('')}${FIT_SCRIPT}</body></html>`;
+  )}</title><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="${FONTS}"><style>${css(preview)}</style></head><body>${sheets.join('')}${FIT_SCRIPT}${
+    preview && options.removable ? REMOVE_SCRIPT : ''
+  }</body></html>`;
 }

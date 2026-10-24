@@ -77,6 +77,16 @@ describe('los textos', () => {
 });
 
 describe('la hoja', () => {
+  it('en la vista previa, una "×" por etiqueta para sacarla; nunca en la impresión', () => {
+    const labels: ProductionLabel[] = [
+      { dish: 'Lomo', footer: 'KETO', key: 'k-1', kind: 'plato', side: null },
+    ];
+    expect(renderProductionSheets({ labels, preview: true, removable: true })).toContain(
+      'data-key="k-1"',
+    );
+    expect(renderProductionSheets({ labels, removable: true })).not.toContain('class="remove"');
+  });
+
   it('ubica cada etiqueta en su lugar del papel', () => {
     const html = renderProductionSheets({
       labels: [plato('a'), plato('b'), plato('c'), plato('d')],

@@ -238,8 +238,6 @@ export function MoveSiteDialog({
             <ul>
               {preview.map((order) => (
                 <li key={order.id}>
-                  <strong>{order.previousPublicNumber}</strong> pasa a ser{' '}
-                  <strong>{order.publicNumber.replace(/\d+$/, '…')}</strong> ·{' '}
                   {formatMoney(order.previousTotalMinor, target.currency)} →{' '}
                   {formatMoney(order.totalMinor, target.currency)} · entrega{' '}
                   {formatDay(order.previousDeliveryDate)} → {formatDay(order.deliveryDate)}

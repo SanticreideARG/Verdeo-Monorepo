@@ -56,7 +56,7 @@ export function DuplicateOrdersPanel({
   async function remove(order: DuplicateOrder, keep: DuplicateOrder) {
     setMessage('');
     const response = await apiRequest(`/api/v1/orders/${order.id}`, {
-      body: JSON.stringify({ reason: `Pedido repetido de ${keep.publicNumber}` }),
+      body: JSON.stringify({ reason: `Pedido repetido (${keep.publicNumber})` }),
       method: 'DELETE',
       notify: false,
     });
@@ -65,7 +65,7 @@ export function DuplicateOrdersPanel({
       setMessage(await errorMessage(response));
       return;
     }
-    showToast(`${order.publicNumber} eliminado. Queda ${keep.publicNumber}.`);
+    showToast('Pedido repetido eliminado. Queda el otro.');
     await load();
     onChanged();
   }
@@ -100,7 +100,7 @@ export function DuplicateOrdersPanel({
               <ol>
                 {group.orders.map((order) => (
                   <li key={order.id}>
-                    <Link to={`/app/pedidos/${order.id}`}>{order.publicNumber}</Link>
+                    <Link to={`/app/pedidos/${order.id}`}>Ver pedido</Link>
                     <small>
                       {formatMoment(order.createdAt)} · {orderStatusLabel(order.status)} ·{' '}
                       {formatMoney(order.totalMinor, 'ARS')}
@@ -126,8 +126,8 @@ export function DuplicateOrdersPanel({
       </ul>
       {pending ? (
         <ConfirmDialog
-          confirmLabel={`Eliminar ${pending.order.publicNumber}`}
-          detail={`Se elimina ${pending.order.publicNumber} y queda ${pending.keep.publicNumber}, que es el mismo pedido. Queda registrado como "Pedido repetido de ${pending.keep.publicNumber}".${pending.order.paid ? ' Este pedido figura cobrado: revisá el cobro antes.' : ''}`}
+          confirmLabel="Eliminar el repetido"
+          detail={`Se elimina el pedido cargado el ${formatMoment(pending.order.createdAt)} y queda el otro, que es el mismo pedido. Queda registrado como "Pedido repetido de ${pending.keep.publicNumber}".${pending.order.paid ? ' Este pedido figura cobrado: revisá el cobro antes.' : ''}`}
           onCancel={() => setPending(null)}
           onConfirm={() => remove(pending.order, pending.keep)}
           title="Eliminar el pedido repetido"

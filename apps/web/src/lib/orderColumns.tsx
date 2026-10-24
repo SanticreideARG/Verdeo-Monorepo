@@ -235,13 +235,6 @@ export function buildOrderColumns(options: { maskSurnames?: boolean } = {}): Ord
       sortValue: (order) => sourceLabel(order.source),
     },
     {
-      key: 'numero',
-      label: 'N° de pedido',
-      // Sin jerarquía a propósito: identifica el pedido para citarlo, no para reconocerlo.
-      render: (order) => <span className="order-card-meta">{order.publicNumber}</span>,
-      sortValue: (order) => order.publicNumber,
-    },
-    {
       key: 'email',
       label: 'Email',
       render: (order) => order.customer.email ?? '—',

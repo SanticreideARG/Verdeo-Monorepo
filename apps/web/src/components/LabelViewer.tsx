@@ -213,10 +213,7 @@ export function LabelViewer({
         </button>
         <p aria-live="polite">
           <strong>{position}</strong>
-          <small>
-            {name}
-            {view === 'etiqueta' ? ` · ${label.orderPublicNumber}` : ''}
-          </small>
+          <small>{name}</small>
         </p>
         <button
           aria-label={view === 'hoja' ? 'Hoja siguiente' : 'Etiqueta siguiente'}

@@ -47,7 +47,7 @@ describe('UnlocatedOrdersPanel', () => {
     render(<UnlocatedOrdersPanel deliveryDate="2026-10-10" onChanged={vi.fn()} />);
 
     expect(await screen.findByText('2 pedidos no tienen ubicación')).toBeTruthy();
-    expect(screen.getByText('CABA-1')).toBeTruthy();
+    expect(screen.queryByText(/CABA-1/)).toBeNull();
   });
 
   // El botón repite por tandas y pasa los ya intentados para no volver sobre los que fallaron.

@@ -1301,7 +1301,10 @@ describe('API foundation', () => {
     );
     // Sin comillas: un nombre sin comas no las necesita, y entrecomillar todo era lo que dejaba el
     // BOM pegado a la primera comilla y rompía el archivo en Google Sheets.
-    expect(await exportResponse.text()).toContain(',Ana Isabella Vega,');
+    // Sin el número de pedido (control interno): el cliente abre el renglón.
+    const csvText = await exportResponse.text();
+    expect(csvText).toMatch(/^\uFEFF?cliente,/);
+    expect(csvText).toContain('\nAna Isabella Vega,');
 
     // La misma ruta y los mismos filtros devuelven la planilla: son dos presentaciones del mismo
     // recorte, no dos exportaciones distintas.
@@ -1324,7 +1327,7 @@ describe('API foundation', () => {
       headers: { cookie },
     });
     const masked = await maskedResponse.text();
-    expect(masked).toContain(',Ana I. V.,');
+    expect(masked).toContain('\nAna I. V.,');
     expect(masked).not.toContain('Vega');
   });
 

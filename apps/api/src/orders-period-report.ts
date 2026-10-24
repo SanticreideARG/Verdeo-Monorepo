@@ -177,7 +177,6 @@ function trailing(): Layout['columns'] {
       width: 15,
     },
     { header: 'Notas', value: (row) => text(row.first ? notesOf(row) : ''), width: 28 },
-    { header: 'N°', value: (row) => text(row.first ? row.order.publicNumber : ''), width: 11 },
   ];
 }
 

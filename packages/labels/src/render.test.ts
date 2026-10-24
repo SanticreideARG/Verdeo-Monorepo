@@ -285,6 +285,7 @@ describe('el formato', () => {
 describe('las páginas', () => {
   const many = Array.from({ length: 19 }, (_, index) => ({
     ...label,
+    customerDisplayName: `Cliente ${String(index).padStart(2, '0')}`,
     orderPublicNumber: `NQN-${String(index).padStart(5, '0')}`,
   }));
 
@@ -305,8 +306,10 @@ describe('las páginas', () => {
 
     expect(html.match(/class="sheet"/g)).toHaveLength(1);
     expect(html.match(/class="cell"/g)).toHaveLength(3);
-    expect(html).toContain('NQN-00018');
-    expect(html).not.toContain('NQN-00000');
+    expect(html).toContain('Cliente 18');
+    expect(html).not.toContain('Cliente 00');
+    // El número de pedido no sale en ninguna etiqueta.
+    expect(html).not.toContain('NQN-');
   });
 
   it('destaca la etiqueta actual, y sólo en la vista previa', () => {

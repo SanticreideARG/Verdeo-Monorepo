@@ -333,8 +333,6 @@ export function OrderDetailPage() {
               <h1 className="text-2xl font-semibold text-forest">{order.customer.displayName}</h1>
               <span className="status-chip">{orderStatusLabel(order.status)}</span>
             </div>
-            {/* El número queda a mano —es lo que se dicta por teléfono— pero sin encabezar. */}
-            <p className="order-card-meta mt-2">{order.publicNumber}</p>
           </div>
           <div className="order-detail-nav">
             {/*
@@ -345,7 +343,7 @@ export function OrderDetailPage() {
               <span className="order-detail-nav-steps">
                 {neighbours.previous ? (
                   <Link
-                    aria-label={`Pedido anterior: ${neighbours.previous.publicNumber}`}
+                    aria-label="Pedido anterior"
                     className="button button-secondary"
                     to={`/app/pedidos/${neighbours.previous.id}`}
                   >
@@ -357,7 +355,7 @@ export function OrderDetailPage() {
                 </small>
                 {neighbours.next ? (
                   <Link
-                    aria-label={`Pedido siguiente: ${neighbours.next.publicNumber}`}
+                    aria-label="Pedido siguiente"
                     className="button button-secondary"
                     to={`/app/pedidos/${neighbours.next.id}`}
                   >
@@ -755,7 +753,7 @@ export function OrderDetailPage() {
           <CancelOrderDialog
             onCancel={() => setCancelOpen(false)}
             onConfirm={cancelOrder}
-            orderNumber={order.publicNumber}
+            orderNumber={order.customer.displayName}
           />
         ) : null}
 
@@ -792,9 +790,9 @@ export function OrderDetailPage() {
       {moving && order ? (
         <MoveSiteDialog
           onClose={() => setMoving(false)}
-          onMoved={(moved) => {
+          onMoved={() => {
             setMoving(false);
-            showToast(`Pedido movido: ahora es el ${moved[0]?.publicNumber ?? ''}.`);
+            showToast('Pedido movido a la otra ciudad.');
             void load();
           }}
           target={{

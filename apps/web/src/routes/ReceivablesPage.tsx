@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { ActionButton } from '../components/ActionButton.js';
+import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
@@ -53,7 +54,7 @@ export function reminderText(receivable: Receivable): string {
   const currency = receivable.orders[0]?.currency ?? 'ARS';
   const lines = receivable.orders.map(
     (order) =>
-      `• ${order.publicNumber} (${formatDay(order.deliveryDate)}): ${order.items} — ${formatMoney(order.totalMinor, order.currency)}`,
+      `• ${formatDay(order.deliveryDate)}: ${order.items} — ${formatMoney(order.totalMinor, order.currency)}`,
   );
   return [
     `¡Hola${firstName ? ` ${firstName}` : ''}! Te escribimos de Verdeo: nos figura pendiente de pago:`,
@@ -75,6 +76,11 @@ export function ReceivablesPage() {
   const [sort, setSort] = useState<Sort>('monto');
   const [open, setOpen] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  const [collecting, setCollecting] = useState<{
+    customerName: string;
+    orderIds: readonly string[];
+    totalMinor: number;
+  } | null>(null);
 
   const permissions = profile?.permissions ?? [];
   const canRead = permissions.includes('payments.read');
@@ -93,6 +99,11 @@ export function ReceivablesPage() {
   useEffect(() => {
     if (canRead) void load();
   }, [canRead, load]);
+
+  /** Marcar como cobrado pide confirmación (2026-10-23): dice a quién y cuánto. */
+  function askCollect(orderIds: readonly string[], customerName: string, totalMinor: number) {
+    setCollecting({ customerName, orderIds, totalMinor });
+  }
 
   async function collect(orderIds: readonly string[], customerName: string) {
     setMessage('');
@@ -207,8 +218,10 @@ export function ReceivablesPage() {
                           {item.orders.map((order) => (
                             <li key={order.id}>
                               <span>
-                                <Link to={`/app/pedidos/${order.id}`}>{order.publicNumber}</Link> ·{' '}
-                                {order.cycleAlias} · entrega {formatDay(order.deliveryDate)}
+                                <Link to={`/app/pedidos/${order.id}`}>
+                                  Entrega {formatDay(order.deliveryDate)}
+                                </Link>{' '}
+                                · {order.cycleAlias}
                                 <small>
                                   {order.items} · {order.paymentExpectation}
                                 </small>
@@ -218,7 +231,13 @@ export function ReceivablesPage() {
                                 {canCollect ? (
                                   <ActionButton
                                     className="button button-secondary"
-                                    onClick={() => collect([order.id], item.customer.displayName)}
+                                    onClick={() =>
+                                      askCollect(
+                                        [order.id],
+                                        item.customer.displayName,
+                                        order.totalMinor,
+                                      )
+                                    }
                                     pendingLabel="Registrando…"
                                   >
                                     Cobrado
@@ -245,9 +264,10 @@ export function ReceivablesPage() {
                             <ActionButton
                               className="button button-primary"
                               onClick={() =>
-                                collect(
+                                askCollect(
                                   item.orders.map((order) => order.id),
                                   item.customer.displayName,
+                                  item.totalMinor,
                                 )
                               }
                               pendingLabel="Registrando…"
@@ -265,6 +285,18 @@ export function ReceivablesPage() {
           </>
         )}
       </section>
+      {collecting ? (
+        <ConfirmDialog
+          confirmLabel="Marcar como cobrado"
+          detail={`${collecting.orderIds.length === 1 ? 'El pedido' : `Los ${String(collecting.orderIds.length)} pedidos`} de ${collecting.customerName} (${formatMoney(collecting.totalMinor, 'ARS')}) pasa${collecting.orderIds.length === 1 ? '' : 'n'} de pendiente a cobrado. Confirmalo sólo si el pago ya entró.`}
+          onCancel={() => setCollecting(null)}
+          onConfirm={async () => {
+            await collect(collecting.orderIds, collecting.customerName);
+            setCollecting(null);
+          }}
+          title="¿Ya pagó?"
+        />
+      ) : null}
     </DashboardShell>
   );
 }

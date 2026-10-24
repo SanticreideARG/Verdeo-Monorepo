@@ -246,7 +246,6 @@ export function DeliverySheetPage() {
                     <span className="delivery-sheet-seq">{stop.sequence}</span>
                     <div>
                       <h2>{stop.customerFirstName}</h2>
-                      <p className="delivery-sheet-number">{stop.publicNumber}</p>
                     </div>
                     {entregada ? (
                       <span className="delivery-sheet-done">Entregada</span>

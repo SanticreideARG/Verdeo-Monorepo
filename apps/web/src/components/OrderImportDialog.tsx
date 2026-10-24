@@ -600,7 +600,7 @@ export function OrderImportDialog({
                     </div>
                     <p>
                       {item.status === 'created'
-                        ? `Creado: ${item.publicNumber ?? 'pedido nuevo'}`
+                        ? 'Pedido creado.'
                         : item.status === 'failed'
                           ? `No entró: ${item.reason ?? 'error desconocido'}`
                           : 'No se importó (quedó destildado).'}
@@ -790,10 +790,7 @@ export function OrderImportDialog({
                     {(row.existingOrders ?? []).length > 0 && !row.duplicateOf ? (
                       <p className="order-import-row-existing">
                         Ya tiene en este período:{' '}
-                        {(row.existingOrders ?? [])
-                          .map((order) => `${order.publicNumber} (${order.summary})`)
-                          .join('; ')}
-                        .
+                        {(row.existingOrders ?? []).map((order) => order.summary).join('; ')}.
                       </p>
                     ) : null}
                     {(row.notices ?? []).map((notice) => (

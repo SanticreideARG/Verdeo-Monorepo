@@ -66,7 +66,6 @@ const FIELD_OPTIONS = [
   { key: 'variedad', label: 'Variedad' },
   { key: 'platos', label: 'Platos de la vianda (la lista)' },
   { key: 'unidad', label: 'Unidad (1 de 3)' },
-  { key: 'numero', label: 'N° de pedido' },
   { key: 'zona', label: 'Zona de entrega' },
   { key: 'entrega', label: 'Fecha de entrega' },
   { key: 'produccion', label: 'Fecha de producción' },
@@ -87,7 +86,7 @@ export function LabelsPage() {
   const [labelsPerPage, setLabelsPerPage] = useState(8);
   const [fontFamily, setFontFamily] = useState<LabelSettings['fontFamily']>('system');
   const [fontScale, setFontScale] = useState(100);
-  const [fields, setFields] = useState<LabelField[]>(['tamano', 'numero']);
+  const [fields, setFields] = useState<LabelField[]>(['tamano']);
   const [alignment, setAlignment] = useState<'center' | 'left'>('center');
   const [uppercaseName, setUppercaseName] = useState(false);
   const [onePerDish, setOnePerDish] = useState(false);
@@ -481,8 +480,7 @@ export function LabelsPage() {
                           type="button"
                         >
                           <span>
-                            <strong>{hit.publicNumber}</strong>
-                            <small>{hit.customer.displayName}</small>
+                            <strong>{hit.customer.displayName}</strong>
                           </span>
                           <span aria-hidden="true">Imprimir</span>
                         </button>

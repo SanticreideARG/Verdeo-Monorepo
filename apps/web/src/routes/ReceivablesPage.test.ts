@@ -34,7 +34,7 @@ describe('Por cobrar', () => {
     const text = reminderText(receivable);
 
     expect(text).toContain('¡Hola Ana!');
-    expect(text).toContain('NQN-00012');
+    expect(text).not.toContain('NQN-00012');
     expect(text).toContain('Keto 400 × 1');
     expect(text).toMatch(/Total: \$\s?85\.000/);
   });
