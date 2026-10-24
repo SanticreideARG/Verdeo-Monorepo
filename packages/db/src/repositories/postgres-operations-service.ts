@@ -27,6 +27,7 @@ import {
   normalizeCustomerIdentity,
   normalizeCustomerText,
   renderTemplate,
+  splitAddressDetail,
 } from '@verdeo/customers';
 import {
   decideAutoAccept,
@@ -3225,6 +3226,103 @@ export class PostgresOperationsService {
    * hoja de ruta), después por el último pedido y por nombre. Con la cuenta total y las ubicadas,
    * para mostrar el avance.
    */
+  /**
+   * Los domicilios viejos con el detalle mezclado en la línea 1 ("Santa Rosa 31 Piso 12 Dpto C"):
+   * la separación que se propone para cada uno (`splitAddressDetail`). Sólo los que todavía no
+   * tienen línea 2; una persona elige cuáles aplicar.
+   */
+  public async listAddressDetailProposals(operatingSiteId: string | null) {
+    const rows = await this.database
+      .select({
+        addressId: customerAddresses.id,
+        customerId: customers.id,
+        customerName: customers.displayName,
+        writtenAddress: customerAddresses.writtenAddress,
+      })
+      .from(customerAddresses)
+      .innerJoin(customers, eq(customers.id, customerAddresses.customerId))
+      .innerJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
+      .where(
+        and(
+          eq(customerAddresses.active, true),
+          eq(customers.status, 'active'),
+          sql`coalesce(trim(${customerAddresses.unit}), '') = ''`,
+          operatingSiteId ? eq(geographicZones.operatingSiteId, operatingSiteId) : undefined,
+        ),
+      )
+      .orderBy(asc(customers.displayName));
+    return rows
+      .flatMap((row) => {
+        const split = splitAddressDetail(row.writtenAddress);
+        return split.line2 ? [{ ...row, line1: split.line1, line2: split.line2 }] : [];
+      })
+      .slice(0, 500);
+  }
+
+  /**
+   * Aplicar la separación a los domicilios elegidos: la línea 1 queda con calle, número y ciudad y
+   * el detalle pasa a la línea 2. También a sus pedidos abiertos (borrador, confirmado o listo) que
+   * tengan esa misma dirección sin línea 2. La ubicación ya encontrada no se toca.
+   */
+  public async applyAddressDetailSplit(addressIds: readonly string[], context: OperationsContext) {
+    if (addressIds.length === 0) return { addresses: 0, orders: 0 };
+    return this.database
+      .transaction(async (transaction) => {
+        const rows = await transaction
+          .select({ id: customerAddresses.id, writtenAddress: customerAddresses.writtenAddress })
+          .from(customerAddresses)
+          .where(
+            and(
+              inArray(customerAddresses.id, [...addressIds]),
+              sql`coalesce(trim(${customerAddresses.unit}), '') = ''`,
+            ),
+          );
+        let addresses = 0;
+        let ordersUpdated = 0;
+        for (const row of rows) {
+          // Se vuelve a calcular acá: lo que se guarda es lo que propone la regla, no lo que mande la pantalla.
+          const split = splitAddressDetail(row.writtenAddress);
+          if (!split.line2) continue;
+          await transaction
+            .update(customerAddresses)
+            .set({ unit: split.line2, updatedAt: new Date(), writtenAddress: split.line1 })
+            .where(eq(customerAddresses.id, row.id));
+          addresses += 1;
+          const touched = await transaction
+            .update(orders)
+            .set({
+              deliveryAddressLine2: split.line2,
+              deliveryAddressSnapshot: split.line1,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(orders.deliveryAddressId, row.id),
+                inArray(orders.status, ['DRAFT', 'CONFIRMED', 'READY']),
+                eq(orders.deliveryAddressSnapshot, row.writtenAddress),
+                sql`coalesce(trim(${orders.deliveryAddressLine2}), '') = ''`,
+              ),
+            )
+            .returning({ id: orders.id });
+          ordersUpdated += touched.length;
+        }
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        await audit.record({
+          action: 'customer_address.detail_split',
+          actor: auditActor(context),
+          after: { addresses, orders: ordersUpdated },
+          correlationId: context.correlationId,
+          entityId: context.requestId,
+          entityType: 'customer_address_collection',
+          metadata: { addressIds: [...addressIds] },
+          requestId: context.requestId,
+          source: context.source,
+        });
+        return { addresses, orders: ordersUpdated };
+      })
+      .catch(translateDatabaseConflict);
+  }
+
   public async listUnlocatedAddresses(operatingSiteId: string | null, limit = 200) {
     const now = new Date().toISOString();
     const siteFilter = operatingSiteId

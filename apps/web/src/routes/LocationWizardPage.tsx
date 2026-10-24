@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom';
 
 import { AddressMap } from '../components/AddressMap.js';
+import { AddressDetailSplitPanel } from '../components/AddressDetailSplitPanel.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { locateStatusText, type LocateResult } from '../components/LocateAddress.js';
@@ -507,6 +508,7 @@ export function LocationWizardPage() {
             )}
           </>
         )}
+        {canRead ? <AddressDetailSplitPanel canEdit={canEdit} /> : null}
       </section>
     </DashboardShell>
   );

@@ -42,12 +42,17 @@ export function ProductionStockPanel({
   // El stock de períodos anteriores (STOCK_LOTS_PLAN.md): lotes ya cocinados, por ciudad.
   const [lots, setLots] = useState<StockLot[]>([]);
   const [writingOff, setWritingOff] = useState<StockLot | null>(null);
+  // Las ciudades, para pasar un lote a otra si el cierre lo asignó mal.
+  const [sites, setSites] = useState<{ displayName: string; id: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
   const load = useCallback(async () => {
     const response = await apiRequest(`/api/v1/production/${cycleId}/stock`);
     if (response.ok) setStock(((await response.json()) as { items: StockRow[] }).items);
+    const scope = await apiRequest('/api/v1/scope', { notify: false });
+    if (scope.ok)
+      setSites(((await scope.json()) as { sites: { displayName: string; id: string }[] }).sites);
     const stockLots = await apiRequest('/api/v1/stock-lots', { notify: false });
     if (stockLots.ok) setLots(((await stockLots.json()) as { items: StockLot[] }).items);
   }, [cycleId]);
@@ -211,7 +216,26 @@ export function ProductionStockPanel({
                 <span className="stock-steppers-name">
                   {name} · <strong>{lot.cycleAlias}</strong>
                   <small>
-                    {lot.operatingSiteName} · quedan {lot.available}
+                    {canEdit && sites.length > 1 ? (
+                      <select
+                        aria-label={`Ciudad del stock de ${name} de ${lot.cycleAlias}`}
+                        className="stock-lot-site"
+                        disabled={saving}
+                        onChange={(event) =>
+                          void patchLot(lot, { operatingSiteId: event.target.value })
+                        }
+                        value={lot.operatingSiteId}
+                      >
+                        {sites.map((site) => (
+                          <option key={site.id} value={site.id}>
+                            {site.displayName}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      lot.operatingSiteName
+                    )}{' '}
+                    · quedan {lot.available}
                     {lot.soldUnits > 0 ? ` · vendidas ${String(lot.soldUnits)}` : ''}
                     {lot.expired ? ' · vencido' : ` · hasta el ${formatDay(lot.expiresAt)}`}
                   </small>

@@ -387,3 +387,42 @@ describe('NUEVO', () => {
     expect((await service.getCustomer(CUSTOMER, false)).isNew).toBe(false);
   });
 });
+
+describe('separar el detalle de los domicilios viejos', () => {
+  it('propone la separación y, al aplicarla, la guarda en el domicilio y en sus pedidos abiertos', async () => {
+    const { client, service } = await base();
+    await client.exec(`
+      insert into geographic_zones (id, operating_site_id, slug, display_name)
+      values ('${ZONE}', '${SITE}', 'centro', 'Centro');
+      insert into customer_addresses (id, customer_id, label, written_address, geographic_zone_id)
+      values ('${ADDRESS}', '${CUSTOMER}', 'Casa', 'Santa Rosa 31 Piso 12 Dpto C', '${ZONE}');
+    `);
+    const order = (await service.createOrder(
+      { ...pedido('2026-10-18'), deliveryAddressId: ADDRESS },
+      contexto,
+    )) as { id: string };
+
+    expect(await service.listAddressDetailProposals(SITE)).toEqual([
+      expect.objectContaining({
+        addressId: ADDRESS,
+        line1: 'Santa Rosa 31',
+        line2: 'Piso 12 Dpto C',
+      }),
+    ]);
+
+    expect(await service.applyAddressDetailSplit([ADDRESS], contexto)).toEqual({
+      addresses: 1,
+      orders: 1,
+    });
+    const after = (await service.getOrder(order.id)) as {
+      deliveryAddress: string;
+      deliveryAddressLine2: string | null;
+    };
+    expect(after).toMatchObject({
+      deliveryAddress: 'Santa Rosa 31',
+      deliveryAddressLine2: 'Piso 12 Dpto C',
+    });
+    // Ya separado, no se vuelve a proponer.
+    expect(await service.listAddressDetailProposals(SITE)).toEqual([]);
+  });
+});

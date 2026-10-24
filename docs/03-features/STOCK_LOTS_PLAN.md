@@ -109,3 +109,5 @@ período siguiente" del cierre se reemplaza por la conversión automática.
 - El pedido conserva su origen; el ítem dice de qué período es (pedido, lista, planilla de pedidos).
 - Se sacaron "Pasar el sobrante al período siguiente" del cierre y la carga manual del sobrante
   (`/production/:cycleId/carry-over`).
+- La ciudad de un lote se cambia en Cocina → Stock (selector en cada lote), para corregir la que
+  asignó el cierre (2026-10-24).

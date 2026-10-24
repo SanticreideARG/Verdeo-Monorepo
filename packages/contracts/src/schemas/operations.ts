@@ -1672,6 +1672,8 @@ export const OrderImportPreviewRowSchema = z.object({
   }),
   customerName: z.string(),
   deliveryAddress: z.string().nullable(),
+  /** El detalle de la dirección (piso, depto, barrio), separado de la línea 1. */
+  deliveryAddressLine2: z.string().nullable().default(null),
   /**
    * El número del pedido que ya existe y parece ser el mismo, si lo hay.
    *
@@ -1742,6 +1744,7 @@ export const OrderImportConfirmRequestSchema = z.object({
         customerId: UuidSchema.nullable(),
         customerName: z.string().trim().min(1).max(160),
         deliveryAddress: z.string().trim().max(500).nullable(),
+        deliveryAddressLine2: z.string().trim().max(500).nullable().optional(),
         /** El día de reparto elegido; el servidor lo valida contra los días de la ciudad. */
         deliveryDate: z
           .string()

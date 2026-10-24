@@ -30,6 +30,8 @@ interface PreviewRow {
   };
   customerName: string;
   deliveryAddress: string | null;
+  /** El detalle de la dirección, separado de la línea 1 al leer el mail o la planilla. */
+  deliveryAddressLine2?: string | null;
   duplicateOf: string | null;
   email: string | null;
   /** Lo que el cliente ya tiene en el período, igual o no. */
@@ -195,6 +197,7 @@ export function OrderImportDialog({
       {
         customerName?: string;
         deliveryAddress?: string;
+        deliveryAddressLine2?: string;
         deliveryDate?: string;
         paymentExpectation?: string;
       }
@@ -317,12 +320,15 @@ export function OrderImportDialog({
   const edited = (row: PreviewRow) => ({
     customerName: edits[row.rowNumber]?.customerName ?? row.customerName,
     deliveryAddress: edits[row.rowNumber]?.deliveryAddress ?? row.deliveryAddress,
+    deliveryAddressLine2:
+      edits[row.rowNumber]?.deliveryAddressLine2 ?? row.deliveryAddressLine2 ?? null,
   });
   const editRow = (
     row: PreviewRow,
     change: {
       customerName?: string;
       deliveryAddress?: string;
+      deliveryAddressLine2?: string;
       deliveryDate?: string;
       paymentExpectation?: string;
     },
@@ -360,6 +366,7 @@ export function OrderImportDialog({
             customerId: decision === 'nuevo' ? null : decision,
             customerName: edited(row).customerName.trim() || row.customerName,
             deliveryAddress: edited(row).deliveryAddress?.trim() || null,
+            deliveryAddressLine2: edited(row).deliveryAddressLine2?.trim() || null,
             ...((edits[row.rowNumber]?.deliveryDate ?? defaultDelivery)
               ? { deliveryDate: edits[row.rowNumber]?.deliveryDate ?? defaultDelivery }
               : {}),
@@ -666,6 +673,16 @@ export function OrderImportDialog({
                             editRow(row, { deliveryAddress: event.target.value })
                           }
                           value={edited(row).deliveryAddress ?? ''}
+                        />
+                      </label>
+                      <label className="field">
+                        Piso, depto, barrio
+                        <input
+                          onChange={(event) =>
+                            editRow(row, { deliveryAddressLine2: event.target.value })
+                          }
+                          placeholder="Detalle de la dirección"
+                          value={edited(row).deliveryAddressLine2 ?? ''}
                         />
                       </label>
                       {deliveryChoices.options.length > 1 ? (

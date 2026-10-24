@@ -6,7 +6,7 @@ import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
 import type { AuthenticatedSession, SessionSummary, UserDirectoryPage } from '@verdeo/auth';
-import { argentinePhoneKey } from '@verdeo/customers';
+import { argentinePhoneKey, splitAddressDetail } from '@verdeo/customers';
 import {
   AIExecutionListResponseSchema,
   AuditEventListResponseSchema,
@@ -670,6 +670,11 @@ interface OperationsEngine {
     retry?: { address?: string | undefined; locationUrl?: string | undefined },
   ): Promise<unknown>;
   listUnlocatedAddresses?(operatingSiteId: string | null): Promise<unknown>;
+  listAddressDetailProposals?(operatingSiteId: string | null): Promise<unknown>;
+  applyAddressDetailSplit?(
+    addressIds: readonly string[],
+    context: OperationsContext,
+  ): Promise<{ addresses: number; orders: number }>;
   cycleKitchenLabels(
     cycleId: string,
     operatingSiteId?: string | null,
@@ -4039,8 +4044,15 @@ export function createApp(options: CreateAppOptions) {
           row.paymentExpectation && !payment
             ? [`No reconocimos el medio de pago «${row.paymentExpectation}»: elegilo de la lista.`]
             : [];
+        /*
+         * La dirección llega en una sola línea ("Calle 123 4B, Palermo"): el detalle va a la línea 2,
+         * que no se busca en el mapa (2026-10-24). Se ve y se corrige en la vista previa.
+         */
+        const address = row.deliveryAddress ? splitAddressDetail(row.deliveryAddress) : null;
         return {
           ...row,
+          deliveryAddress: address?.line1 ?? null,
+          deliveryAddressLine2: address?.line2 ?? null,
           paymentExpectation: payment,
           customerMatch: match?.customerMatch ?? {
             candidates: [],
@@ -4213,6 +4225,7 @@ export function createApp(options: CreateAppOptions) {
           {
             customerId,
             deliveryAddress: row.deliveryAddress ?? '',
+            ...(row.deliveryAddressLine2 ? { deliveryAddressLine2: row.deliveryAddressLine2 } : {}),
             // El elegido en la vista previa; el servidor lo valida contra los días de la ciudad.
             deliveryDate: row.deliveryDate ?? deliveryDateFor(menu.cycle.closeAt),
             dietaryInstructions: [],
@@ -5233,6 +5246,43 @@ export function createApp(options: CreateAppOptions) {
       context.get('scope')?.operatingSiteId ?? null,
     );
     return context.json(contractValue(result));
+  });
+
+  /*
+   * Separar el detalle de los domicilios viejos (2026-10-24): la propuesta para cada uno y aplicar
+   * la de los elegidos. Mismos permisos que ubicar un domicilio.
+   */
+  app.get('/api/v1/address-locations/detail-proposals', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (
+      !permissions.includes('customers.read') ||
+      !permissions.includes('customers.view_sensitive')
+    )
+      return forbidden(context);
+    const operations = requireOperations();
+    if (!operations.listAddressDetailProposals) return context.json({ items: [] });
+    const items = await operations.listAddressDetailProposals(
+      context.get('scope')?.operatingSiteId ?? null,
+    );
+    return context.json({ items: contractValue(items) });
+  });
+
+  app.post('/api/v1/address-locations/detail-split', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (
+      !permissions.includes('customers.edit') ||
+      !permissions.includes('customers.view_sensitive')
+    )
+      return forbidden(context);
+    const body = z
+      .object({ addressIds: z.array(z.uuid()).min(1).max(500) })
+      .safeParse(await context.req.json().catch(() => null));
+    if (!body.success) return badRequest(context, 'Elegí al menos un domicilio.');
+    const operations = requireOperations();
+    if (!operations.applyAddressDetailSplit) throw new Error('Address split is not configured');
+    return context.json(
+      await operations.applyAddressDetailSplit(body.data.addressIds, operationsContext(context)),
+    );
   });
 
   app.post('/api/v1/address-locations/:id/locate', async (context) => {

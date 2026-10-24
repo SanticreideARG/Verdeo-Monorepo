@@ -652,3 +652,8 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] Chat: sin conversaciones con uno mismo; las que se quedan sin otros participantes se pueden archivar.
 - [x] Salida y llegada de las rutas: por defecto por ciudad (Ajustes → Reparto) y cambiables en cada ruta, con hora de salida; tiempos estimados por parada y total; el recorrido en Google Maps (en tramos de nueve paradas). Migración 0072.
 - [ ] Paso 2 (si hace falta): tiempos reales con el servicio de rutas de Google.
+
+## Direcciones y stock (2026-10-24)
+
+- [x] Separar el detalle de las direcciones: los pedidos importados (mail y planilla) traen la línea 2; los domicilios viejos se separan con revisión en Conciliar ubicaciones.
+- [x] La ciudad de un lote de stock se cambia desde Cocina.

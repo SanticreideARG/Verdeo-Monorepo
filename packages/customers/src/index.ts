@@ -183,3 +183,4 @@ export function canonicalArgentinePhone(raw: string): string {
   const key = argentinePhoneKey(trimmed);
   return key ? `+549${key}` : trimmed;
 }
+export * from './address-detail.js';

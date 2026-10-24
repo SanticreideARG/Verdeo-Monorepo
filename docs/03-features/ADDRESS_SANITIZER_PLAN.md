@@ -302,3 +302,17 @@ detalles), y eso iba entero al buscador. Ahora la dirección tiene dos líneas: 
 número y ciudad) es lo único que se geocodifica; la **línea 2** (`orders.delivery_address_line2` y
 `customer_addresses.unit`) es para quien reparte y no se manda al buscador. Un test
 (`packages/db/src/address-line2.test.ts`) asegura que la consulta no lleva la línea 2.
+
+## Separar el detalle de las direcciones viejas e importadas (2026-10-24)
+
+- `splitAddressDetail` (`packages/customers/src/address-detail.ts`, con los casos reales de la
+  planilla como tests): en el primer tramo, todo lo que viene después del número de la calle es
+  detalle (el número no es parte del nombre: "9 de Julio", "27 de Abril"); un tramo después de una
+  coma es detalle si tiene números o palabras de detalle ("casa", "recibe", "piso"…), si no es parte
+  de la ciudad.
+- **Importación** (mail y planilla): la vista previa ya trae la dirección separada en dos líneas y
+  se puede corregir; la línea 2 llega al pedido.
+- **Domicilios viejos**: en Conciliar ubicaciones, "Separar el detalle de la dirección" propone la
+  separación de cada domicilio sin línea 2 y se aplica a los elegidos
+  (`GET /api/v1/address-locations/detail-proposals`, `POST .../detail-split`); también a sus pedidos
+  abiertos con la misma dirección. La ubicación no se toca.

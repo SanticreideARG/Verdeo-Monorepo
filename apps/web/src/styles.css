@@ -11319,3 +11319,48 @@ label.field:has(> input[type='radio']) {
   font-variant-numeric: tabular-nums;
   color: var(--db-muted, var(--color-ink-muted));
 }
+
+/* --- Separar el detalle de la dirección (Conciliar ubicaciones, 2026-10-24) ------------------- */
+.address-split {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+.address-split ul {
+  display: grid;
+  gap: 0.35rem;
+  max-height: 26rem;
+  overflow-y: auto;
+}
+.address-split label {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--db-border-soft, rgb(0 0 0 / 10%));
+  border-radius: 0.6rem;
+  cursor: pointer;
+}
+.address-split label > span {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.address-split small {
+  color: var(--db-muted, var(--color-ink-muted));
+  text-decoration: line-through;
+}
+.address-split-result em {
+  color: var(--db-muted, var(--color-ink-muted));
+}
+
+/* La ciudad de un lote de stock, cambiable desde Cocina. */
+.stock-lot-site {
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--db-border-soft, rgb(0 0 0 / 15%));
+  border-radius: 0.4rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}

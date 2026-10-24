@@ -1468,6 +1468,35 @@ describe('API foundation', () => {
       ]);
     });
 
+    it('separa el detalle de la dirección en la línea 2 (piso, depto, barrio)', async () => {
+      const previewOrderImport = vi.fn(() =>
+        Promise.resolve({
+          matches: [
+            {
+              customerMatch: { candidates: [], customerId: null, displayName: null, kind: 'nuevo' },
+              duplicateOf: null,
+              itemMatches: [KETO_400],
+              rowNumber: 1,
+            },
+          ],
+          offerings: [{ id: KETO_400, label: 'Menú Paleo & Keto 400' }],
+        }),
+      );
+      const app = buildApp({ previewOrderImport });
+
+      const response = await post(app, '/api/v1/orders/import/preview-email', {
+        text: EMAIL_DE_PEDIDO.replace('Calle Falsa 123', 'Calle Falsa 123 4B'),
+      });
+      const body = (await response.json()) as {
+        items: { deliveryAddress: string | null; deliveryAddressLine2: string | null }[];
+      };
+
+      expect(body.items[0]).toMatchObject({
+        deliveryAddress: 'Calle Falsa 123',
+        deliveryAddressLine2: '4B, Palermo',
+      });
+    });
+
     it('responde con un mensaje claro cuando el texto no tiene ningún pedido', async () => {
       const app = buildApp({ previewOrderImport: vi.fn() });
 
