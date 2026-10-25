@@ -336,6 +336,8 @@ export function renderLabelDocument(options: LabelRenderOptions): string {
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; }
+  /* Sin agrandar el texto en el teléfono: en una etiqueta de medida fija lo rompía letra por letra. */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   body {
     font-family: ${fontStack(settings.fontFamily)};
     color: #111;

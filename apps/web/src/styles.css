@@ -68,6 +68,9 @@
 
 html {
   scroll-behavior: smooth;
+  /* El texto no se agranda solo en el teléfono: la app ya está pensada para ese ancho. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {

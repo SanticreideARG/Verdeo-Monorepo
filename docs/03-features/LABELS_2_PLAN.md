@@ -118,3 +118,11 @@ Serif Variable igual: instalada se usa ésa; si no, Source Serif 4.
 - La tanda **arranca sin nada tildado**.
 - **"×" en la vista previa**: aparece al pasar por encima de una etiqueta y la saca de la tanda
   ("Volver a ponerlas" la devuelve). La vista previa avisa a la página por `postMessage`.
+
+## En el teléfono (2026-10-25)
+
+- El texto de las etiquetas se veía letra por letra, en vertical, en un teléfono de verdad: el navegador
+  agranda solo el texto de una página ancha (la hoja, 210 mm) mostrada en poco espacio, y en una
+  etiqueta de medida fija el nombre agrandado se partía en cualquier lugar. La hoja (vista previa e
+  impresión, y la versión anterior) lleva `text-size-adjust: 100%`. El emulador del navegador no lo
+  reproduce: hay que mirarlo en un teléfono.

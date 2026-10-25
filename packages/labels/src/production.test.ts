@@ -77,6 +77,14 @@ describe('los textos', () => {
 });
 
 describe('la hoja', () => {
+  it('el teléfono no agranda el texto (lo rompía letra por letra)', () => {
+    const labels: ProductionLabel[] = [
+      { dish: 'Lomo', footer: 'KETO', key: 'k-1', kind: 'plato', side: null },
+    ];
+    expect(renderProductionSheets({ labels, preview: true })).toContain('text-size-adjust: 100%');
+    expect(renderProductionSheets({ labels })).toContain('text-size-adjust: 100%');
+  });
+
   it('en la vista previa, una "×" por etiqueta para sacarla; nunca en la impresión', () => {
     const labels: ProductionLabel[] = [
       { dish: 'Lomo', footer: 'KETO', key: 'k-1', kind: 'plato', side: null },

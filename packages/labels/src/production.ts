@@ -168,6 +168,12 @@ function css(preview: boolean): string {
   @page { size: ${String(p.pageWidthMm)}mm ${String(p.pageHeightMm)}mm; margin: 0; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: ${preview ? '#e8e8e8' : '#fff'}; }
+  /*
+   * Sin agrandar el texto: en un teléfono, el navegador agranda solo el texto de una página ancha
+   * mostrada en poco espacio, y en una etiqueta de medida fija un nombre agrandado quedaba con una
+   * o dos letras por renglón, leyéndose en vertical (2026-10-25).
+   */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; color: #231f20; }
   .sheet {
     position: relative;

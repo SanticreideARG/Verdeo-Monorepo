@@ -657,3 +657,4 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 
 - [x] Separar el detalle de las direcciones: los pedidos importados (mail y planilla) traen la línea 2; los domicilios viejos se separan con revisión en Conciliar ubicaciones.
 - [x] La ciudad de un lote de stock se cambia desde Cocina.
+- [x] Etiquetas en el teléfono: el texto no se agranda solo (lo partía letra por letra, en vertical).
