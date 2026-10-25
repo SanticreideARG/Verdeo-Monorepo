@@ -126,3 +126,8 @@ Serif Variable igual: instalada se usa ésa; si no, Source Serif 4.
   etiqueta de medida fija el nombre agrandado se partía en cualquier lugar. La hoja (vista previa e
   impresión, y la versión anterior) lleva `text-size-adjust: 100%`. El emulador del navegador no lo
   reproduce: hay que mirarlo en un teléfono.
+- En la app instalada de Android el texto puede crecer igual por el **tamaño de letra del sistema**.
+  Por eso, además: los nombres se parten entre palabras (no en cualquier letra), y el ajuste del
+  plato sigue achicando plato y acompañamiento por debajo de 10 pt hasta que entren en la etiqueta.
+  La app instalada muestra las versiones nuevas con el aviso "Hay una versión nueva de Verdeo" →
+  "Actualizar" (`UpdatePrompt`).

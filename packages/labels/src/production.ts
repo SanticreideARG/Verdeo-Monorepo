@@ -139,6 +139,12 @@ const FIT_SCRIPT = `<script>
       }
       // Último recurso, para un nombre muy largo: también se achica el acompañamiento.
       for (var s = 11.5; side && s >= 10 && !fits(); s -= 0.5) side.style.fontSize = s + 'pt';
+      // Si el teléfono agrandó el texto (el tamaño de letra del sistema), se sigue achicando todo
+      // hasta que entre: una etiqueta de medida fija no puede crecer (2026-10-25).
+      for (var k = 9.5; k >= 4 && !fits(); k -= 0.5) {
+        el.style.fontSize = k + 'pt';
+        if (side) side.style.fontSize = Math.min(10, k + 1) + 'pt';
+      }
     });
     document.documentElement.setAttribute('data-fitted', '');
   }
@@ -249,7 +255,9 @@ function css(preview: boolean): string {
     font-optical-sizing: none;
     line-height: 1.2;
     max-width: 56mm;
-    overflow-wrap: anywhere;
+    /* Se parte entre palabras; una palabra sola sólo si no entra entera (antes se partía en
+       cualquier letra, y con el texto agrandado quedaba una letra por renglón). */
+    overflow-wrap: break-word;
   }
   .plato .dish.large { font-size: 12pt; }
   .plato .dish.small { font-size: 10pt; }

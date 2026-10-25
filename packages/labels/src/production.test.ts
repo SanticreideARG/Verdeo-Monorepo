@@ -83,6 +83,8 @@ describe('la hoja', () => {
     ];
     expect(renderProductionSheets({ labels, preview: true })).toContain('text-size-adjust: 100%');
     expect(renderProductionSheets({ labels })).toContain('text-size-adjust: 100%');
+    // Y si igual lo agranda (el tamaño de letra del sistema): se parte entre palabras, no en letras.
+    expect(renderProductionSheets({ labels })).not.toContain('overflow-wrap: anywhere');
   });
 
   it('en la vista previa, una "×" por etiqueta para sacarla; nunca en la impresión', () => {

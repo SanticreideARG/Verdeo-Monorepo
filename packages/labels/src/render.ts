@@ -400,7 +400,7 @@ export function renderLabelDocument(options: LabelRenderOptions): string {
     font-size: var(--name-size);
     font-weight: 700;
     line-height: 1.15;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     text-transform: ${settings.uppercaseName ? 'uppercase' : 'none'};
   }
   .customer.s1 { font-size: calc(var(--name-size) * 0.85); }
@@ -415,7 +415,7 @@ export function renderLabelDocument(options: LabelRenderOptions): string {
     align-items: ${inlineFields ? 'baseline' : align};
     column-gap: 2.5mm;
   }
-  .fields p { margin: 0; max-width: 100%; overflow-wrap: anywhere; }
+  .fields p { margin: 0; max-width: 100%; overflow-wrap: break-word; }
   .destacado { font-size: var(--strong-size); font-weight: 600; margin: 1mm 0 0; }
   .menor { font-size: var(--minor-size); color: #555; margin: 1mm 0 0; }
   .platos { font-size: var(--minor-size); color: #333; margin: 0.4mm 0 0; }
