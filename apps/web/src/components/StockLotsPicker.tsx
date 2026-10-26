@@ -73,6 +73,11 @@ export function StockLotsPicker({
                 <small>
                   · {lot.available === 1 ? 'queda 1' : `quedan ${String(lot.available)}`}
                 </small>
+                {lot.dishes.length > 0 ? (
+                  <small className="stock-lot-dishes">
+                    {lot.dishes.map((dish) => dish.dishName).join(' · ')}
+                  </small>
+                ) : null}
               </span>
               <span className="studio-stepper">
                 <button

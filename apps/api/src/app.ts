@@ -861,7 +861,11 @@ interface OperationsEngine {
     confirmedReversal: boolean,
     allowCycleOverride: boolean,
     context: OperationsContext,
-    cancellation?: { notes?: string | undefined; reasonId?: string | undefined },
+    cancellation?: {
+      notes?: string | undefined;
+      reasonId?: string | undefined;
+      toStock?: boolean | undefined;
+    },
   ): Promise<unknown>;
   updateCustomer(
     customerId: string,
@@ -6836,6 +6840,7 @@ export function createApp(options: CreateAppOptions) {
       {
         notes: input.data.cancellationNotes,
         reasonId: input.data.cancellationReasonId,
+        toStock: input.data.toStock,
       },
     );
     return context.json(OrderSchema.parse(contractValue(order)));

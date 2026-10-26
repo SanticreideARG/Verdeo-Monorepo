@@ -695,6 +695,12 @@ export const orders = pgTable(
     }),
     cancellationNotes: text('cancellation_notes'),
     /*
+     * Cancelado después de cocinarse y sus viandas pasaron al stock (2026-10-25): para el excedente
+     * del período siguen contando como consumidas (están en el lote, no sobran dos veces), y si se
+     * reactiva el pedido se devuelven del lote.
+     */
+    cancelledToStock: boolean('cancelled_to_stock').default(false).notNull(),
+    /*
      * Cobrado o no, y nada más.
      *
      * Reemplaza a la sección Pagos entera —tres estados, rendiciones de repartidor, conciliación de
@@ -756,6 +762,13 @@ export const orders = pgTable(
  * baja menos las viandas vendidas (los ítems de pedido no cancelados que apuntan al lote). Así,
  * cancelar o borrar el pedido devuelve la vianda al lote sin tocar nada.
  */
+/** Un plato de un lote de Intuitivo: el nombre, de qué menú y de qué día (1 = lunes). */
+export interface StockLotDish {
+  dishName: string;
+  familyName: string | null;
+  slot: number | null;
+}
+
 export const stockLots = pgTable(
   'stock_lots',
   {
@@ -771,6 +784,15 @@ export const stockLots = pgTable(
     variantName: text('variant_name').notNull(),
     quantityUnits: integer('quantity_units').notNull(),
     writtenOffUnits: integer('written_off_units').default(0).notNull(),
+    /*
+     * Un Intuitivo cancelado que pasó a stock (2026-10-25): sus platos, con el menú y el día de
+     * cada uno. Null en un lote de una variedad fija.
+     */
+    dishSelections: jsonb('dish_selections').$type<StockLotDish[]>(),
+    // El pedido cancelado del que sale un lote de Intuitivo: al reactivarlo, el lote se borra.
+    sourceOrderId: uuid('source_order_id').references(() => orders.id, {
+      onDelete: 'set null',
+    }),
     notes: text('notes'),
     // Se vende hasta un mes después del cierre de su período.
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),

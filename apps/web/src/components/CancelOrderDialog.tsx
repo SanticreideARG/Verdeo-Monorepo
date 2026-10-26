@@ -20,14 +20,19 @@ export interface CancellationReason {
  * the grouping comes from the data, not from a hardcoded list of names.
  */
 export function CancelOrderDialog({
+  cooked = false,
   onCancel,
   onConfirm,
   orderNumber,
 }: {
+  /** Ya se cocinó (confirmado, listo o entregado): se ofrece pasar sus viandas al stock. */
+  cooked?: boolean;
   onCancel: () => void;
-  onConfirm: (input: { notes: string; reasonId: string }) => Promise<void>;
+  onConfirm: (input: { notes: string; reasonId: string; toStock: boolean }) => Promise<void>;
   orderNumber: string;
 }) {
+  // Pasar lo cocinado al stock (2026-10-25): se pregunta, porque a veces se lo lleva igual.
+  const [toStock, setToStock] = useState(false);
   const [reasons, setReasons] = useState<CancellationReason[]>([]);
   const [reasonId, setReasonId] = useState('');
   const [notes, setNotes] = useState('');
@@ -79,7 +84,7 @@ export function CancelOrderDialog({
     setSaving(true);
     setError('');
     try {
-      await onConfirm({ notes: notes.trim(), reasonId });
+      await onConfirm({ notes: notes.trim(), reasonId, toStock: cooked && toStock });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No pudimos cancelar el pedido.');
       setSaving(false);
@@ -149,6 +154,21 @@ export function CancelOrderDialog({
                 value={notes}
               />
             </label>
+            {cooked ? (
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  checked={toStock}
+                  className="mt-1"
+                  onChange={(event) => setToStock(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>
+                  <strong>Pasar las viandas a stock.</strong> Ya están cocinadas: quedan para
+                  venderse desde Nuevo pedido (un Intuitivo, con sus platos). Si se reactiva el
+                  pedido, vuelven.
+                </span>
+              </label>
+            ) : null}
           </div>
         )}
 

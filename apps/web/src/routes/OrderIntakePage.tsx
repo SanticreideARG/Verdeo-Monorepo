@@ -80,6 +80,9 @@ import {
 } from '../lib/orderCart.js';
 import { usePersistedState } from '../lib/usePersistedState.js';
 
+// Ya se cocinó: al cancelarlo se puede pasar a stock (2026-10-25).
+const COOKED: readonly string[] = ['CONFIRMED', 'READY', 'DELIVERED'];
+
 /**
  * Qué se ve de cada pedido en la cola de trabajo.
  *
@@ -1074,16 +1077,19 @@ export function OrderIntakePage() {
   /** Confirma la cancelación con el motivo elegido en el diálogo. */
   async function cancelOrder(
     order: OrderSummary,
-    { notes, reasonId }: { notes: string; reasonId: string },
+    { notes, reasonId, toStock }: { notes: string; reasonId: string; toStock: boolean },
   ) {
     await mutate(`/api/v1/orders/${order.id}/status`, {
       cancellationNotes: notes || undefined,
       cancellationReasonId: reasonId,
       confirmedReversal: false,
       status: 'CANCELLED',
+      toStock,
     });
     setCancelling(null);
-    showToast(`Pedido de ${order.customer.displayName} cancelado.`);
+    showToast(
+      `Pedido de ${order.customer.displayName} cancelado${toStock ? '; sus viandas pasaron al stock' : ''}.`,
+    );
     await loadData();
   }
 
@@ -2210,6 +2216,7 @@ export function OrderIntakePage() {
       ) : null}
       {cancelling ? (
         <CancelOrderDialog
+          cooked={COOKED.includes(cancelling.status)}
           onCancel={() => setCancelling(null)}
           onConfirm={(input) => cancelOrder(cancelling, input)}
           orderNumber={`el pedido de ${maskSurnames ? maskSurname(cancelling.customer.displayName) : cancelling.customer.displayName}`}

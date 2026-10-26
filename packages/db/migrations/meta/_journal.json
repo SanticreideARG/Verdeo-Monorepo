@@ -519,6 +519,13 @@
       "when": 1792817877707,
       "tag": "0073_dear_ghost_rider",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1792978193149,
+      "tag": "0074_exotic_junta",
+      "breakpoints": true
     }
   ]
 }

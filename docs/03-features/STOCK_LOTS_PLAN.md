@@ -111,3 +111,21 @@ período siguiente" del cierre se reemplaza por la conversión automática.
   (`/production/:cycleId/carry-over`).
 - La ciudad de un lote se cambia en Cocina → Stock (selector en cada lote), para corregir la que
   asignó el cierre (2026-10-24).
+
+## Cancelados ya cocinados (2026-10-25)
+
+- El diálogo de cancelar ofrece **"Pasar las viandas a stock"** si el pedido estaba confirmado,
+  listo o entregado (`toStock` en `POST /orders/:id/status`). Se pregunta: a veces el cliente se lo
+  lleva igual.
+- **Fijo**: se suma al lote de su variedad, tamaño, período y ciudad (o lo abre). Al cerrar el
+  período, el sobrante se suma a ese mismo lote (`addToVarietyLot`): un solo "Keto 400 · Octubre 4".
+- **Intuitivo**: abre un lote propio con sus platos (`stock_lots.dish_selections`, con menú y día) y
+  el pedido de origen (`source_order_id`). Se vende con el Intuitivo del menú del mismo tamaño;
+  lleva los platos del lote aunque no estén en el menú de la semana, al precio del Intuitivo con esa
+  cantidad de platos.
+- **Sin doble conteo**: `orders.cancelled_to_stock` hace que el excedente del período siga contando
+  esas viandas como consumidas (están en el lote).
+- **Reactivar**: las viandas salen del lote (el lote del Intuitivo se borra). Si ya se vendieron, no
+  se puede reactivar.
+- Lo que el pedido ya sacaba de un lote vuelve solo a ese lote al cancelarse.
+- Migración 0074.

@@ -43,6 +43,9 @@ import {
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { useOrderFormSettings } from '../lib/useOrderFormSettings.js';
 
+// Ya se cocinó: al cancelarlo se puede pasar a stock (2026-10-25).
+const COOKED: readonly string[] = ['CONFIRMED', 'READY', 'DELIVERED'];
+
 function formText(form: FormData, key: string): string {
   const value = form.get(key);
   return typeof value === 'string' ? value : '';
@@ -189,7 +192,15 @@ export function OrderDetailPage() {
     await load();
   }
 
-  async function cancelOrder({ notes, reasonId }: { notes: string; reasonId: string }) {
+  async function cancelOrder({
+    notes,
+    reasonId,
+    toStock,
+  }: {
+    notes: string;
+    reasonId: string;
+    toStock: boolean;
+  }) {
     if (!order) return;
     const response = await apiRequest(`/api/v1/orders/${order.id}/status`, {
       body: JSON.stringify({
@@ -197,12 +208,13 @@ export function OrderDetailPage() {
         cancellationReasonId: reasonId,
         confirmedReversal: false,
         status: 'CANCELLED',
+        toStock,
       }),
       method: 'POST',
     });
     if (!response.ok) throw new Error(await errorMessage(response));
     setCancelOpen(false);
-    showToast('Pedido cancelado.');
+    showToast(toStock ? 'Pedido cancelado. Sus viandas pasaron al stock.' : 'Pedido cancelado.');
     await load();
   }
 
@@ -752,6 +764,7 @@ export function OrderDetailPage() {
 
         {cancelOpen && order ? (
           <CancelOrderDialog
+            cooked={COOKED.includes(order.status)}
             onCancel={() => setCancelOpen(false)}
             onConfirm={cancelOrder}
             orderNumber={order.customer.displayName}

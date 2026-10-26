@@ -215,6 +215,12 @@ export function ProductionStockPanel({
               <li key={lot.id}>
                 <span className="stock-steppers-name">
                   {name} · <strong>{lot.cycleAlias}</strong>
+                  {/* Un Intuitivo cancelado que pasó a stock: sus platos. */}
+                  {lot.dishes.length > 0 ? (
+                    <small className="stock-lot-dishes">
+                      {lot.dishes.map((dish) => dish.dishName).join(' · ')}
+                    </small>
+                  ) : null}
                   <small>
                     {canEdit && sites.length > 1 ? (
                       <select

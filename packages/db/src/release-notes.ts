@@ -83,4 +83,12 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Rutas: las paradas se reordenan arrastrando; la card muestra la franja horaria; el mapa marca la salida y la llegada.
 • Quien reparte sólo ve los montos en efectivo, y el mensaje de WhatsApp lleva la segunda línea de la dirección.`,
   },
+  {
+    key: '2026-10-25-cancelado-a-stock',
+    body: `Pedidos cancelados ya cocinados:
+• Al cancelar un pedido confirmado, listo o entregado, el diálogo ofrece "Pasar las viandas a stock".
+• Lo fijo se suma al stock de su variedad; un Intuitivo queda como stock propio, con sus platos.
+• Se vende desde Nuevo pedido, como el resto del stock. El Intuitivo lleva sus platos aunque no estén en el menú de la semana.
+• Si se reactiva el pedido, las viandas vuelven a él (salvo que ya se hayan vendido).`,
+  },
 ];

@@ -274,3 +274,144 @@ describe('etiquetas impresas', () => {
     ]);
   });
 });
+
+describe('cancelado después de cocinarse: pasa a stock', () => {
+  const INT_VARIANT = 'f2000000-0000-4000-8000-000000000009';
+  const INT_A = 'f3000000-0000-4000-8000-000000000008';
+  const INT_B = 'f3000000-0000-4000-8000-000000000009';
+  // El Intuitivo 250 en los menús de A y de B.
+  const seedIntuitivo = `
+    insert into product_variants (id, product_family_id, product_size_id, code, display_name)
+    values ('${INT_VARIANT}', (select id from product_families where code = 'intuitivo'),
+            '${SIZE}', 'intuitivo-250', '250');
+    insert into weekly_menu_offerings (id, weekly_menu_id, product_variant_id)
+    values ('${INT_A}', '${MENU}', '${INT_VARIANT}'), ('${INT_B}', '${MENU_B}', '${INT_VARIANT}');
+  `;
+
+  async function conB() {
+    const { client, service } = await base();
+    await client.exec(seedB);
+    await client.exec(seedIntuitivo);
+    await client.exec(`update weekly_menus set operating_site_id = '${SITE}'`);
+    return { client, service };
+  }
+
+  const cancelar = (service: PostgresOperationsService, orderId: string, toStock: boolean) =>
+    service.transitionOrder(orderId, 'CANCELLED', 'No lo quiso', false, true, contexto, {
+      toStock,
+    });
+
+  it('lo fijo se suma al lote de su variedad y no sobra dos veces en el período', async () => {
+    const { service } = await conB();
+    const order = await service.createOrder(
+      {
+        ...pedido('2026-10-19'),
+        initialStatus: 'CONFIRMED' as const,
+        items: [{ offeringId: OFFERING, quantityUnits: 2 }],
+      },
+      contexto,
+    );
+    await cancelar(service, order.id, true);
+    const [lot] = await service.listStockLots({ operatingSiteId: SITE });
+    expect(lot).toMatchObject({
+      available: 2,
+      cycleAlias: 'Octubre 3',
+      dishes: [],
+      familyName: 'Keto',
+    });
+    // En el período no aparece como sobrante: ya está en el lote.
+    const report = await service.surplusReport(CYCLE);
+    expect(report.items.find((item) => item.familyName === 'Keto')?.disponible ?? 0).toBe(0);
+    // Al cerrar con 4 más de sobrante, se suman al mismo lote.
+    await service.setProductionStock(
+      CYCLE,
+      [{ familyName: 'Keto', quantityUnits: 4, variantName: '250' }],
+      contexto,
+    );
+    await service.setCycleClosed(CYCLE, true, contexto);
+    const lots = await service.listStockLots({ operatingSiteId: SITE });
+    expect(lots).toHaveLength(1);
+    expect(lots[0]).toMatchObject({ available: 6 });
+  });
+
+  it('sin la casilla, no pasa nada al stock', async () => {
+    const { service } = await conB();
+    const order = await service.createOrder(
+      { ...pedido('2026-10-19'), initialStatus: 'CONFIRMED' as const },
+      contexto,
+    );
+    await cancelar(service, order.id, false);
+    expect(await service.listStockLots({ operatingSiteId: SITE })).toEqual([]);
+  });
+
+  it('el Intuitivo abre su lote con sus platos y se vende en B con esos platos', async () => {
+    const { service } = await conB();
+    const order = await service.createOrder(
+      {
+        ...pedido('2026-10-19'),
+        initialStatus: 'CONFIRMED' as const,
+        items: [
+          {
+            offeringId: INT_A,
+            quantityUnits: 1,
+            selectedDishes: ['A', 'B', 'C', 'D', 'E', 'A'].map((dishName) => ({
+              dishName,
+              familyName: 'Keto',
+            })),
+          },
+        ],
+      },
+      contexto,
+    );
+    await cancelar(service, order.id, true);
+    const [lot] = await service.listStockLots({ onlyAvailable: true, operatingSiteId: SITE });
+    expect(lot?.familyName).toBe('Intuitivo');
+    expect(lot?.dishes.map((dish) => dish.dishName)).toEqual(['A', 'B', 'C', 'D', 'E', 'A']);
+    expect(lot?.dishes[1]).toMatchObject({ familyName: 'Keto', slot: 2 });
+
+    // B no tiene esos platos en su menú: igual se vende, con los platos del lote.
+    const sold = await service.createOrder(
+      {
+        ...pedido('2126-10-26'),
+        items: [{ offeringId: INT_B, quantityUnits: 1, stockLotId: lot?.id }],
+        menuId: MENU_B,
+      },
+      contexto,
+    );
+    expect(sold.items[0]?.stockLot).toMatchObject({ cycleAlias: 'Octubre 3' });
+    expect(sold.items[0]?.dishSelections).toEqual(['A', 'B', 'C', 'D', 'E', 'A']);
+    // No se cocina en B.
+    expect((await service.kitchenSummary(CYCLE_B)).base).toEqual([]);
+    // Ya no queda: no se vende dos veces.
+    await expect(
+      service.createOrder(
+        {
+          ...pedido('2126-10-26'),
+          items: [{ offeringId: INT_B, quantityUnits: 1, stockLotId: lot?.id }],
+          menuId: MENU_B,
+        },
+        contexto,
+      ),
+    ).rejects.toThrow(/ya se vendió/);
+    // Y el pedido original ya no se puede reactivar.
+    await expect(
+      service.transitionOrder(order.id, 'CONFIRMED', 'Lo quiso', true, true, contexto),
+    ).rejects.toThrow(/ya se vendió/);
+  });
+
+  it('reactivar un pedido que pasó a stock saca sus viandas del lote', async () => {
+    const { service } = await conB();
+    const order = await service.createOrder(
+      {
+        ...pedido('2026-10-19'),
+        initialStatus: 'CONFIRMED' as const,
+        items: [{ offeringId: OFFERING, quantityUnits: 2 }],
+      },
+      contexto,
+    );
+    await cancelar(service, order.id, true);
+    await service.transitionOrder(order.id, 'CONFIRMED', 'Lo quiso', true, true, contexto);
+    const [lot] = await service.listStockLots({ operatingSiteId: SITE });
+    expect(lot).toMatchObject({ available: 0, quantityUnits: 0 });
+  });
+});

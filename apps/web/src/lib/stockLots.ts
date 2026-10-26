@@ -7,6 +7,8 @@ import type { MenuOffering } from './operations.js';
 export interface StockLot {
   available: number;
   cycleAlias: string;
+  /** Los platos de un Intuitivo cancelado que pasó a stock; vacío en una variedad fija. */
+  dishes: { dishName: string; familyName: string | null; slot: number | null }[];
   expired: boolean;
   expiresAt: string;
   familyName: string;
@@ -41,10 +43,14 @@ export function lotsForMenu(
   offerings: readonly MenuOffering[],
 ): (StockLot & { offeringId: string })[] {
   return lots.flatMap((lot) => {
+    // Un Intuitivo del stock se vende con el Intuitivo de este menú, del mismo tamaño.
+    const intuitivo = lot.dishes.length > 0;
     const offering = offerings.find(
       (candidate) =>
-        !candidate.composable &&
-        familyKey(candidate.familyName) === familyKey(lot.familyName) &&
+        (intuitivo
+          ? candidate.composable
+          : !candidate.composable &&
+            familyKey(candidate.familyName) === familyKey(lot.familyName)) &&
         sizeKey(candidate.variantName) === sizeKey(lot.variantName),
     );
     return offering && lot.available > 0 && !lot.expired

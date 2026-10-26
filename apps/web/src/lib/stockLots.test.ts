@@ -6,6 +6,7 @@ import { lotsForMenu, stockItemsPayload, type StockLot } from './stockLots.js';
 const lot = (overrides: Partial<StockLot> = {}): StockLot => ({
   available: 2,
   cycleAlias: 'Octubre 2',
+  dishes: [],
   expired: false,
   expiresAt: '2026-11-18T00:00:00Z',
   familyName: 'Menú Nuevo Keto',
@@ -37,8 +38,26 @@ describe('lotsForMenu', () => {
     expect(matched.map((item) => [item.id, item.offeringId])).toEqual([['l1', 'o1']]);
   });
 
-  it('nunca con un Intuitivo', () => {
+  it('un lote fijo nunca con el Intuitivo', () => {
     expect(lotsForMenu([lot()], [offering({ composable: true })])).toEqual([]);
+  });
+
+  it('un Intuitivo del stock, con el Intuitivo del menú de su tamaño', () => {
+    const intuitivo = lot({
+      dishes: [{ dishName: 'Lomo', familyName: 'Keto', slot: 1 }],
+      familyName: 'Intuitivo',
+      quantityUnits: 1,
+      available: 1,
+    });
+    expect(
+      lotsForMenu(
+        [intuitivo],
+        [offering({}), offering({ composable: true, familyName: 'Intuitivo', id: 'o2' })],
+      ).map((entry) => entry.offeringId),
+    ).toEqual(['o2']);
+    expect(
+      lotsForMenu([intuitivo], [offering({ composable: true, id: 'o3', variantName: '250' })]),
+    ).toEqual([]);
   });
 });
 

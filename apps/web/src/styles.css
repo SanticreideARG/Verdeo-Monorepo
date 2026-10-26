@@ -11400,3 +11400,10 @@ label.field:has(> input[type='radio']) {
 .routes-stop.is-drop-after {
   box-shadow: inset 0 -3px 0 var(--db-accent);
 }
+
+/* Los platos de un Intuitivo del stock (2026-10-25). */
+.stock-lot-dishes {
+  display: block;
+  color: var(--db-text-muted, inherit);
+  font-size: 0.75rem;
+}

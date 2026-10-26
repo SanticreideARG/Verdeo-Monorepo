@@ -666,4 +666,4 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] Informe del período: hoja Pedidos sin horario/ruta/zona/notas y colores de nuevos por canal; hoja Reparto con un renglón por bulto, transferencias en $0, total en efectivo y resumen por reparto; sin "$" en tamaños.
 - [x] Hojas de ruta: franja horaria en la card, reordenar arrastrando, salida y llegada en el mapa.
 - [x] Quien reparte sólo ve los montos en efectivo (hoja, WhatsApp, CSV); el mensaje de WhatsApp lleva la línea 2 de la dirección.
-- [ ] Intuitivo cancelado después del pedido a cocina como stock vendible (propuesta, a confirmar).
+- [x] Cancelado después de cocinarse como stock vendible: el diálogo pregunta; lo fijo se suma al lote de su variedad, el Intuitivo abre un lote con sus platos; reactivar lo devuelve. Migración 0074.

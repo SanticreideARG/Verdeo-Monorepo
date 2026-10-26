@@ -782,6 +782,8 @@ export const OrderTransitionRequestSchema = z.object({
   confirmedReversal: z.boolean().default(false),
   reason: z.string().trim().min(1).max(500).optional(),
   status: OrderStatusSchema,
+  /** Al cancelar algo ya cocinado: sus viandas pasan al stock para venderse (2026-10-25). */
+  toStock: z.boolean().optional(),
 });
 
 export const CancellationReasonSchema = z.object({
@@ -863,6 +865,16 @@ export const StockLotSchema = z.object({
   available: z.number().int(),
   createdAt: IsoDateTimeSchema,
   cycleAlias: z.string(),
+  /** Los platos de un Intuitivo cancelado que pasó a stock; vacío en una variedad fija. */
+  dishes: z
+    .array(
+      z.object({
+        dishName: z.string(),
+        familyName: z.string().nullable(),
+        slot: z.number().int().nullable(),
+      }),
+    )
+    .default([]),
   expired: z.boolean(),
   expiresAt: IsoDateTimeSchema,
   familyName: z.string(),

@@ -376,7 +376,11 @@ interface ResolvedOrderItem {
   currency: string;
   dishSelections: readonly string[];
   /** El plato exacto de cada elegido, en el mismo orden. Null: el nombre estaba en dos menús. */
-  dishSources: readonly ({ familyName: string; menuItemId: string; slot: number } | null)[];
+  dishSources: readonly ({
+    familyName: string | null;
+    menuItemId: string | null;
+    slot: number | null;
+  } | null)[];
   offeringId: string;
   productNameSnapshot: string;
   productVariantId: string;
@@ -5340,15 +5344,19 @@ export class PostgresOperationsService {
             for (const row of pending) {
               const site = siteOf(row.familyName, row.variantName);
               if (!site) continue;
-              await transaction.insert(stockLots).values({
-                actorUserId: context.actorUserId ?? null,
-                expiresAt,
-                familyName: row.familyName,
-                operatingSiteId: site.id,
-                quantityUnits: row.disponible,
-                salesCycleId: cycleId,
-                variantName: row.variantName,
-              });
+              // Si ya hay un lote de esa variedad (de pedidos cancelados que pasaron a stock),
+              // se suma ahí: un solo "Keto 400 · Octubre 4" por ciudad.
+              await this.addToVarietyLot(
+                transaction,
+                {
+                  familyName: row.familyName,
+                  operatingSiteId: site.id,
+                  salesCycleId: cycleId,
+                  variantName: row.variantName,
+                },
+                row.disponible,
+                { actorUserId: context.actorUserId ?? null, expiresAt },
+              );
               lotsCreated.push({
                 familyName: row.familyName,
                 operatingSiteName: site.name,
@@ -6363,6 +6371,53 @@ export class PostgresOperationsService {
       const currency =
         offering.overridePriceMinor === null ? offering.sizeCurrency : offering.overrideCurrency;
 
+      /*
+       * Un Intuitivo del stock (2026-10-25): uno cancelado después de cocinarse. Lleva los platos
+       * del lote, tal cual, aunque no estén en el menú de esta semana; se cobra como un Intuitivo
+       * de esos platos con la regla de hoy. No se cocina ni se etiqueta.
+       */
+      if (item.stockLotId && offering.familyName === composableFamilyName) {
+        const lot = await this.sellableLot(
+          transaction,
+          item.stockLotId,
+          options.excludeOrderId,
+          operatingSiteId,
+        );
+        const dishes = lot.dishSelections ?? [];
+        if (dishes.length === 0)
+          throw new OperationsConflictError('Ese stock no es de un Intuitivo.');
+        if (!sameSize(lot.variantName, offering.variantName))
+          throw new OperationsConflictError('El stock elegido no es de ese tamaño.');
+        const wanted = (usedFromLot.get(lot.id) ?? 0) + item.quantityUnits;
+        if (wanted > lot.available)
+          throw new OperationsConflictError(`Ese Intuitivo de ${lot.cycleAlias} ya se vendió.`);
+        usedFromLot.set(lot.id, wanted);
+        const price = intuitivoUnitPriceMinor({
+          baseDishes: offering.mealsPerUnit,
+          basePriceMinor: unitPriceMinor,
+          dishes: dishes.length,
+          rule,
+        });
+        resolvedItems.push({
+          currency: currency ?? 'ARS',
+          dishSelections: dishes.map((dish) => dish.dishName),
+          dishSources: dishes.map((dish) => ({
+            familyName: dish.familyName,
+            menuItemId: null,
+            slot: dish.slot,
+          })),
+          offeringId: offering.id,
+          productNameSnapshot: offering.familyName,
+          productVariantId: offering.productVariantId,
+          quantityUnits: item.quantityUnits,
+          stockLotId: lot.id,
+          totalMinor: calculateLineTotal(item.quantityUnits, price),
+          unitPriceMinor: price,
+          variantSnapshot: offering.variantName,
+        });
+        continue;
+      }
+
       const baseDishes = await transaction
         .select({ dishName: weeklyMenuItems.dishName })
         .from(weeklyMenuItems)
@@ -6451,21 +6506,14 @@ export class PostgresOperationsService {
        */
       let stockLotId: string | null = null;
       if (item.stockLotId) {
-        if (offering.familyName === composableFamilyName)
-          throw new OperationsConflictError('Un Intuitivo no sale del stock.');
-        const lot = await this.lotAvailability(
+        const lot = await this.sellableLot(
           transaction,
           item.stockLotId,
           options.excludeOrderId,
+          operatingSiteId,
         );
-        if (!lot) throw new OperationsNotFoundError('No se encontró ese stock.');
-        if (operatingSiteId && lot.operatingSiteId !== operatingSiteId)
-          throw new OperationsConflictError('Ese stock es de otra ciudad.');
-        if (lot.expiresAt.getTime() < Date.now())
-          throw new OperationsConflictError(
-            `El stock de ${lot.cycleAlias} venció: pasó más de un mes.`,
-          );
         if (
+          (lot.dishSelections?.length ?? 0) > 0 ||
           !sameFamily(lot.familyName, offering.familyName) ||
           !sameSize(lot.variantName, offering.variantName)
         )
@@ -8307,13 +8355,21 @@ export class PostgresOperationsService {
     allowCycleOverride: boolean,
     context: OperationsContext,
     /** Only meaningful when cancelling: which category of cancellation this is. */
-    cancellation?: { notes?: string | undefined; reasonId?: string | undefined },
+    cancellation?: {
+      notes?: string | undefined;
+      reasonId?: string | undefined;
+      /** Las viandas ya se cocinaron: pasan al stock (2026-10-25). */
+      toStock?: boolean | undefined;
+    },
   ) {
     await this.database.transaction(async (transaction) => {
       const [current] = await transaction
         .select({
+          cancelledToStock: orders.cancelledToStock,
           closeAt: salesCycles.closeAt,
           cycleStatus: salesCycles.status,
+          operatingSiteId: orders.operatingSiteId,
+          salesCycleId: orders.salesCycleId,
           status: orders.status,
         })
         .from(orders)
@@ -8348,6 +8404,11 @@ export class PostgresOperationsService {
         reason: effectiveReason,
         to: targetStatus,
       });
+      // Sólo lo que ya se cocinó puede pasar al stock: confirmado, listo o entregado.
+      const toStock =
+        targetStatus === 'CANCELLED' &&
+        cancellation?.toStock === true &&
+        ['CONFIRMED', 'READY', 'DELIVERED'].includes(fromStatus);
 
       await transaction
         .update(orders)
@@ -8360,10 +8421,21 @@ export class PostgresOperationsService {
             ? {
                 cancellationNotes: cancellation?.notes ?? reason ?? null,
                 cancellationReasonId: cancellation?.reasonId ?? null,
+                cancelledToStock: toStock,
               }
-            : { cancellationNotes: null, cancellationReasonId: null }),
+            : { cancellationNotes: null, cancellationReasonId: null, cancelledToStock: false }),
         })
         .where(eq(orders.id, orderId));
+      // Las viandas de un pedido cancelado ya cocinado van al stock; al reactivarlo, vuelven.
+      const order = {
+        closeAt: current.closeAt,
+        id: orderId,
+        operatingSiteId: current.operatingSiteId,
+        salesCycleId: current.salesCycleId,
+      };
+      if (toStock) await this.cancelledOrderToStock(transaction, order, context);
+      else if (fromStatus === 'CANCELLED' && current.cancelledToStock)
+        await this.reactivatedOrderFromStock(transaction, order);
       // Cancelado sale de su reparto; si se reactiva, vuelve al de su fecha.
       if (targetStatus === 'CANCELLED') await leaveRun(transaction, orderId);
       else if (fromStatus === 'CANCELLED') await assignOrderToRun(transaction, orderId);
@@ -9333,7 +9405,11 @@ export class PostgresOperationsService {
       .where(
         and(
           eq(orders.salesCycleId, cycleId),
-          inArray(orders.status, ['CONFIRMED', 'READY', 'DELIVERED']),
+          or(
+            inArray(orders.status, ['CONFIRMED', 'READY', 'DELIVERED']),
+            // Cancelado después de cocinarse: sus viandas están en un lote, no sobran acá.
+            and(eq(orders.status, 'CANCELLED'), eq(orders.cancelledToStock, true)),
+          ),
           // Lo vendido de un lote de un período anterior descuenta del lote, no de este período.
           isNull(orderItems.stockLotId),
         ),
@@ -9494,6 +9570,7 @@ export class PostgresOperationsService {
         operatingSiteId: stockLots.operatingSiteId,
         quantityUnits: stockLots.quantityUnits,
         variantName: stockLots.variantName,
+        dishSelections: stockLots.dishSelections,
         writtenOffUnits: stockLots.writtenOffUnits,
       })
       .from(stockLots)
@@ -9518,6 +9595,196 @@ export class PostgresOperationsService {
       available: Math.max(0, lot.quantityUnits - lot.writtenOffUnits - soldUnits),
       soldUnits,
     };
+  }
+
+  /** Un lote que se puede vender en esa ciudad: existe, es de ahí y no venció. */
+  private async sellableLot(
+    executor: Pick<Database, 'select'>,
+    lotId: string,
+    excludeOrderId: string | undefined,
+    operatingSiteId: string | null,
+  ) {
+    const lot = await this.lotAvailability(executor, lotId, excludeOrderId);
+    if (!lot) throw new OperationsNotFoundError('No se encontró ese stock.');
+    if (operatingSiteId && lot.operatingSiteId !== operatingSiteId)
+      throw new OperationsConflictError('Ese stock es de otra ciudad.');
+    if (lot.expiresAt.getTime() < Date.now())
+      throw new OperationsConflictError(
+        `El stock de ${lot.cycleAlias} venció: pasó más de un mes.`,
+      );
+    return lot;
+  }
+
+  /**
+   * Un pedido cancelado después de cocinarse pasa sus viandas al stock (2026-10-25).
+   *
+   * Lo fijo se suma al lote de su variedad y tamaño de ese período y esa ciudad (o abre uno); un
+   * Intuitivo abre un lote propio con sus platos. Lo que el pedido ya sacaba de un lote vuelve solo
+   * a ese lote al cancelarse, así que no se toca.
+   */
+  private async cancelledOrderToStock(
+    transaction: DatabaseTransaction,
+    order: { closeAt: Date; id: string; operatingSiteId: string | null; salesCycleId: string },
+    context: OperationsContext,
+  ) {
+    const composableFamilyName = await this.composableFamilyName(transaction);
+    const items = await transaction
+      .select({
+        familyName: orderItems.productNameSnapshot,
+        id: orderItems.id,
+        offeringId: orderItems.offeringId,
+        quantityUnits: orderItems.quantityUnits,
+        stockLotId: orderItems.stockLotId,
+        variantName: orderItems.variantSnapshot,
+      })
+      .from(orderItems)
+      .where(eq(orderItems.orderId, order.id));
+    const siteOf = order.operatingSiteId
+      ? null
+      : await this.leftoverSite(transaction, order.salesCycleId);
+    const expiresAt = new Date(order.closeAt.getTime() + LOT_LIFETIME_MS);
+    for (const item of items) {
+      if (item.stockLotId) continue;
+      const siteId = order.operatingSiteId ?? siteOf?.(item.familyName, item.variantName)?.id;
+      if (!siteId) continue;
+      const selections = await transaction
+        .select({
+          dishName: orderItemSelections.dishNameSnapshot,
+          familyName: orderItemSelections.sourceFamilySnapshot,
+          slot: orderItemSelections.sourceSlot,
+        })
+        .from(orderItemSelections)
+        .where(eq(orderItemSelections.orderItemId, item.id))
+        .orderBy(asc(orderItemSelections.slot));
+      if (selections.length > 0 || sameFamily(item.familyName, composableFamilyName)) {
+        // Un Intuitivo igual a la base no guarda platos: son los del menú.
+        const dishes =
+          selections.length > 0 || !item.offeringId
+            ? selections
+            : (
+                await transaction
+                  .select({ dishName: weeklyMenuItems.dishName, slot: weeklyMenuItems.slot })
+                  .from(weeklyMenuItems)
+                  .where(eq(weeklyMenuItems.offeringId, item.offeringId))
+                  .orderBy(asc(weeklyMenuItems.slot))
+              ).map((dish) => ({ ...dish, familyName: null }));
+        await transaction.insert(stockLots).values({
+          actorUserId: context.actorUserId ?? null,
+          dishSelections: dishes,
+          expiresAt,
+          familyName: item.familyName,
+          operatingSiteId: siteId,
+          quantityUnits: 1,
+          salesCycleId: order.salesCycleId,
+          sourceOrderId: order.id,
+          variantName: item.variantName,
+        });
+        continue;
+      }
+      await this.addToVarietyLot(
+        transaction,
+        {
+          familyName: item.familyName,
+          operatingSiteId: siteId,
+          salesCycleId: order.salesCycleId,
+          variantName: item.variantName,
+        },
+        item.quantityUnits,
+        { actorUserId: context.actorUserId ?? null, expiresAt },
+      );
+    }
+  }
+
+  /** Suma viandas al lote de esa variedad, período y ciudad; si no hay, lo abre. */
+  private async addToVarietyLot(
+    transaction: DatabaseTransaction,
+    key: { familyName: string; operatingSiteId: string; salesCycleId: string; variantName: string },
+    units: number,
+    created: { actorUserId: string | null; expiresAt: Date },
+  ) {
+    const [existing] = await transaction
+      .select({ id: stockLots.id })
+      .from(stockLots)
+      .where(
+        and(
+          eq(stockLots.salesCycleId, key.salesCycleId),
+          eq(stockLots.operatingSiteId, key.operatingSiteId),
+          eq(stockLots.familyName, key.familyName),
+          eq(stockLots.variantName, key.variantName),
+          isNull(stockLots.dishSelections),
+        ),
+      )
+      .limit(1);
+    if (existing) {
+      await transaction
+        .update(stockLots)
+        .set({ quantityUnits: sql`${stockLots.quantityUnits} + ${units}`, updatedAt: new Date() })
+        .where(eq(stockLots.id, existing.id));
+      return;
+    }
+    await transaction.insert(stockLots).values({ ...key, ...created, quantityUnits: units });
+  }
+
+  /**
+   * Reactivar un pedido que había pasado a stock: sus viandas salen del lote. Si ya se vendieron,
+   * no se puede: no hay de dónde sacarlas.
+   */
+  private async reactivatedOrderFromStock(
+    transaction: DatabaseTransaction,
+    order: { id: string; operatingSiteId: string | null; salesCycleId: string },
+  ) {
+    const ownLots = await transaction
+      .select({ id: stockLots.id })
+      .from(stockLots)
+      .where(eq(stockLots.sourceOrderId, order.id));
+    for (const own of ownLots) {
+      const lot = await this.lotAvailability(transaction, own.id);
+      if (lot && lot.soldUnits > 0)
+        throw new OperationsConflictError(
+          'El Intuitivo de este pedido ya se vendió del stock: no se puede reactivar.',
+        );
+      await transaction.delete(stockLots).where(eq(stockLots.id, own.id));
+    }
+    const composableFamilyName = await this.composableFamilyName(transaction);
+    const items = await transaction
+      .select({
+        familyName: orderItems.productNameSnapshot,
+        quantityUnits: orderItems.quantityUnits,
+        stockLotId: orderItems.stockLotId,
+        variantName: orderItems.variantSnapshot,
+      })
+      .from(orderItems)
+      .where(eq(orderItems.orderId, order.id));
+    for (const item of items) {
+      if (item.stockLotId || sameFamily(item.familyName, composableFamilyName)) continue;
+      const [lotRow] = await transaction
+        .select({ id: stockLots.id })
+        .from(stockLots)
+        .where(
+          and(
+            eq(stockLots.salesCycleId, order.salesCycleId),
+            order.operatingSiteId
+              ? eq(stockLots.operatingSiteId, order.operatingSiteId)
+              : undefined,
+            eq(stockLots.familyName, item.familyName),
+            eq(stockLots.variantName, item.variantName),
+            isNull(stockLots.dishSelections),
+          ),
+        )
+        .limit(1);
+      const lot = lotRow ? await this.lotAvailability(transaction, lotRow.id) : null;
+      if (!lot || lot.available < item.quantityUnits)
+        throw new OperationsConflictError(
+          `Las viandas de ${item.familyName} ${item.variantName} de este pedido ya se vendieron del stock: no se puede reactivar.`,
+        );
+      await transaction
+        .update(stockLots)
+        .set({
+          quantityUnits: lot.quantityUnits - item.quantityUnits,
+          updatedAt: new Date(),
+        })
+        .where(eq(stockLots.id, lot.id));
+    }
   }
 
   /**
@@ -9579,6 +9846,7 @@ export class PostgresOperationsService {
         createdAt: stockLots.createdAt,
         cycleAlias: salesCycles.alias,
         cycleOpenAt: salesCycles.openAt,
+        dishSelections: stockLots.dishSelections,
         expiresAt: stockLots.expiresAt,
         familyName: stockLots.familyName,
         id: stockLots.id,
@@ -9627,6 +9895,8 @@ export class PostgresOperationsService {
           available: Math.max(0, lot.quantityUnits - lot.writtenOffUnits - soldUnits),
           createdAt: lot.createdAt,
           cycleAlias: lot.cycleAlias,
+          // Los platos de un Intuitivo cancelado que pasó a stock; vacío en una variedad fija.
+          dishes: lot.dishSelections ?? [],
           expired: lot.expiresAt.getTime() < now,
           expiresAt: lot.expiresAt,
           familyName: lot.familyName,
