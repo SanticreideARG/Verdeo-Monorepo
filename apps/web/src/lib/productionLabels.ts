@@ -13,7 +13,7 @@ import {
   type LabelData,
   type ProductionLabel,
 } from '@verdeo/labels';
-import { compareProducts } from '@verdeo/orders';
+import { compareProducts, familyRank } from '@verdeo/orders';
 
 /** Una etiqueta de cocina tal como la da el servidor: una por plato. */
 export interface KitchenLabelRow {
@@ -30,6 +30,8 @@ export interface KitchenLabelRow {
 
 /** Un grupo de la tanda: se tilda entero. */
 export interface LabelGroup {
+  /** Las verticales que se imprimen siempre (Keto 400 e Intuitivos); el resto, en "Mostrar más". */
+  featured?: boolean;
   /** Para ordenar los menús en la jerarquía de productos (PRODUCT_ORDER.md). */
   product?: { composable: boolean; familyName: string; variantName: string };
   id: string;
@@ -57,14 +59,18 @@ export function plateGroups(
       : splitDishName(row.dish);
     const footer = `${row.abbreviation} ELAB # ${day}`;
     const ofOrder = row.composable && row.orderKey ? row.orderKey : null;
-    const groupId = ofOrder ? `plato:pedido:${ofOrder}` : `plato:${row.abbreviation}`;
+    // Por variedad y tamaño: sumados, el 250 y el 400 daban el doble de lo que se esperaba ver.
+    const size = row.sizeName ? sizeNumber(row.sizeName) : '';
+    const groupId = ofOrder
+      ? `plato:pedido:${ofOrder}`
+      : `plato:${row.abbreviation}${size ? `:${size}` : ''}`;
     const group = groups.get(groupId) ?? {
       id: groupId,
       kind: 'plato' as const,
       labels: [],
       title: ofOrder
         ? `Platos de ${row.orderCustomer ?? 'un Intuitivo'}`
-        : `Platos ${row.abbreviation}`,
+        : `Platos ${row.abbreviation}${size ? ` ${size}` : ''}`,
     };
     groups.set(groupId, group);
     // La clave: variedad, plato y número de repetición, que no cambia con la fecha de elaboración.
@@ -96,20 +102,24 @@ export function menuGroups(rows: readonly LabelData[]): LabelGroup[] {
   const groups = new Map<string, LabelGroup>();
   const seen = new Set<string>();
   for (const row of rows) {
-    // El Intuitivo no lleva etiqueta de menú: sus platos van con el menú del que vienen.
-    if (row.composable) continue;
     // Con "una etiqueta por plato" activado en la versión anterior, cada vianda llega repetida.
     const key = `menu:${row.orderPublicNumber}:${row.familyName}:${row.variantName}:${String(row.unitIndex)}`;
     if (seen.has(key)) continue;
     seen.add(key);
     const size = sizeNumber(row.variantName);
+    /*
+     * El Intuitivo lleva el nombre del cliente y el tamaño, nunca la palabra "Intuitivo" (2026-10-25).
+     * Se imprimen siempre los Intuitivos y el Keto 400; el resto de las verticales, si se piden.
+     */
     const groupId = row.composable
       ? `menu:intuitivo:${row.orderPublicNumber}`
       : `menu:${row.familyName}:${row.variantName}`;
+    const featured = row.composable || (familyRank(row.familyName) === 0 && size === '400');
     const title = row.composable
       ? `${row.customerDisplayName} · Intuitivo ${size}`
       : `${familyShortName(row.familyName)} ${size}`;
     const group = groups.get(groupId) ?? {
+      featured,
       id: groupId,
       kind: 'menu' as const,
       labels: [],
@@ -135,6 +145,19 @@ export function menuGroups(rows: readonly LabelData[]): LabelGroup[] {
       (left.product && right.product ? compareProducts(left.product, right.product) : 0) ||
       left.title.localeCompare(right.title, 'es-AR', { numeric: true }),
   );
+}
+
+/**
+ * Etiquetas verticales Keto 400 para llenar los lugares libres de la última hoja (2026-10-25): así
+ * no se tira papel de etiquetas en blanco. Son sueltas: no se anotan como impresas.
+ */
+export function fillerLabels(count: number, line = 'KETO'): ProductionLabel[] {
+  return Array.from({ length: Math.max(0, count) }, (_, index) => ({
+    key: `suelta:relleno:keto-400:${String(index)}`,
+    kind: 'menu' as const,
+    line,
+    size: '400',
+  }));
 }
 
 /** Una etiqueta suelta, para reponer: se repite `quantity` veces, con claves propias. */

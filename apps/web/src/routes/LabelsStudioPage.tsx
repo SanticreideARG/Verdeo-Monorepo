@@ -20,6 +20,7 @@ import { errorMessage, type WeeklyMenu } from '../lib/operations.js';
 import { currentPeriod, periodsFromMenus, type Period } from '../lib/periods.js';
 import {
   adjustGroup,
+  fillerLabels,
   looseLabels,
   menuGroups,
   plateGroups,
@@ -108,6 +109,10 @@ export function LabelsStudioPage() {
   const [adjust, setAdjust] = useState<Map<string, number>>(new Map());
   // Las que se sacaron de la tanda con la "×" de la vista previa.
   const [removed, setRemoved] = useState<Set<string>>(new Set());
+  // Llenar la última hoja con verticales Keto 400 (2026-10-25).
+  const [fillLastSheet, setFillLastSheet] = useState(false);
+  // Las verticales que no se imprimen siempre, a la vista sólo si se piden.
+  const [showAllMenus, setShowAllMenus] = useState(false);
 
   /*
    * La vista previa avisa por mensaje cuál se tocó para sacar (la "×" que aparece al pasar por
@@ -146,8 +151,12 @@ export function LabelsStudioPage() {
     setLoading(true);
     setMessage('');
     const reparto = runId ? `?reparto=${runId}` : '';
+    // Los platos, siempre por tamaño: sumados, el 250 y el 400 daban el doble en "Platos KETO".
+    const kitchenQuery = runId ? `?reparto=${runId}&tamano=1` : '?tamano=1';
     void Promise.all([
-      apiRequest(`/api/v1/production/${cycleId}/kitchen-labels${reparto}`, { notify: false }),
+      apiRequest(`/api/v1/production/${cycleId}/kitchen-labels${kitchenQuery}`, {
+        notify: false,
+      }),
       apiRequest(`/api/v1/production/${cycleId}/labels${reparto}`, { notify: false }),
       apiRequest(`/api/v1/production/${cycleId}/printed-labels`, { notify: false }),
     ])
@@ -205,7 +214,7 @@ export function LabelsStudioPage() {
     return [...options.entries()].map(([id, option]) => ({ id, ...option }));
   }, [platoGroups, menuGroupList]);
 
-  const batch = useMemo(() => {
+  const baseBatch = useMemo(() => {
     const fromGroups = [...platoGroups, ...menuGroupList]
       .filter((group) => selected.has(group.id))
       .flatMap((group) => adjustGroup(group, adjust.get(group.id) ?? 0));
@@ -213,10 +222,19 @@ export function LabelsStudioPage() {
       (label) => !removed.has(label.key),
     );
   }, [platoGroups, menuGroupList, selected, loose, adjust, removed]);
+  // Los lugares libres de la última hoja, antes de llenarlos.
+  const freeAtEnd =
+    productionSheetCount(baseBatch.length, startAt) * LABELS_PER_SHEET -
+    (startAt - 1) -
+    baseBatch.length;
+  // Llenar la última hoja con verticales Keto 400, para no tirar etiquetas en blanco.
+  const batch = useMemo(
+    () => (fillLastSheet ? [...baseBatch, ...fillerLabels(freeAtEnd)] : baseBatch),
+    [baseBatch, fillLastSheet, freeAtEnd],
+  );
 
   const printedKeys = useMemo(() => new Set(printed.keys()), [printed]);
   const sheetCount = productionSheetCount(batch.length, startAt);
-  const freeAtEnd = sheetCount * LABELS_PER_SHEET - (startAt - 1) - batch.length;
   const previewHtml = useMemo(
     () =>
       renderProductionSheets({
@@ -335,7 +353,17 @@ export function LabelsStudioPage() {
     );
   }
 
-  const groupCard = (title: string, groups: readonly LabelGroup[]) => {
+  const groupCard = (
+    title: string,
+    allGroups: readonly LabelGroup[],
+    options: { collapsible?: boolean } = {},
+  ) => {
+    // En las verticales, a la vista sólo las que se imprimen siempre (Keto 400 e Intuitivos); el
+    // resto con "Mostrar más". Una tildada no se esconde.
+    const hidden = options.collapsible
+      ? allGroups.filter((group) => !group.featured && !selected.has(group.id))
+      : [];
+    const groups = showAllMenus ? allGroups : allGroups.filter((group) => !hidden.includes(group));
     const count = (group: LabelGroup) => group.labels.length + (adjust.get(group.id) ?? 0);
     const total = groups.reduce((sum, group) => sum + count(group), 0);
     const chosen = groups.filter((group) => selected.has(group.id));
@@ -411,9 +439,18 @@ export function LabelsStudioPage() {
             })}
           </ul>
         )}
+        {hidden.length > 0 ? (
+          <button
+            className="link-button justify-self-start"
+            onClick={() => setShowAllMenus((current) => !current)}
+            type="button"
+          >
+            {showAllMenus ? 'Mostrar menos' : `Mostrar más (${String(hidden.length)})`}
+          </button>
+        ) : null}
         {groups.length > 0 ? (
           <p className="field-hint">
-            {String(chosen.length)} de {String(groups.length)} grupos en la tanda.
+            {String(chosen.length)} de {String(allGroups.length)} grupos en la tanda.
           </p>
         ) : null}
       </div>
@@ -467,7 +504,7 @@ export function LabelsStudioPage() {
             </div>
 
             {groupCard('Platos', platoGroups)}
-            {groupCard('Menús', menuGroupList)}
+            {groupCard('Menús (verticales)', menuGroupList, { collapsible: true })}
 
             <div className="operation-card grid gap-3">
               <p className="text-sm font-semibold text-forest">Sueltas</p>
@@ -510,11 +547,16 @@ export function LabelsStudioPage() {
                   Agregar
                 </button>
               </div>
-              {freeAtEnd > 0 && batch.length > 0 ? (
-                <p className="field-hint">
-                  La última hoja tiene {String(freeAtEnd)}{' '}
-                  {freeAtEnd === 1 ? 'lugar libre' : 'lugares libres'}.
-                </p>
+              {freeAtEnd > 0 && baseBatch.length > 0 ? (
+                <label className="label-switch">
+                  <input
+                    checked={fillLastSheet}
+                    onChange={(event) => setFillLastSheet(event.target.checked)}
+                    type="checkbox"
+                  />
+                  Llenar la última hoja con Keto 400 ({String(freeAtEnd)}{' '}
+                  {freeAtEnd === 1 ? 'lugar libre' : 'lugares libres'})
+                </label>
               ) : null}
               {loose.length > 0 ? (
                 <ul className="studio-loose-list">

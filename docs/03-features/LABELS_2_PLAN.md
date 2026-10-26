@@ -131,3 +131,14 @@ Serif Variable igual: instalada se usa ésa; si no, Source Serif 4.
   plato sigue achicando plato y acompañamiento por debajo de 10 pt hasta que entren en la etiqueta.
   La app instalada muestra las versiones nuevas con el aviso "Hay una versión nueva de Verdeo" →
   "Actualizar" (`UpdatePrompt`).
+
+## Ajustes del 2026-10-25
+
+- **Platos por tamaño**: los platos de cocina se piden siempre con el tamaño (`?tamano=1` →
+  `cycleKitchenLabels(..., { showSize: true })`) y se agrupan por abreviatura y tamaño
+  (`plato:KETO:400`). Sumados, el 250 y el 400 daban el doble de lo esperado en "Platos KETO".
+- **Verticales**: a la vista sólo el Keto 400 y los Intuitivos (`LabelGroup.featured`); el
+  Intuitivo vuelve a tener vertical, con el nombre del cliente y el tamaño. El resto, con "Mostrar
+  más"; una tildada no se esconde.
+- **Llenar la última hoja**: una casilla completa los lugares libres con verticales Keto 400
+  (`fillerLabels`, sueltas: no se anotan como impresas).

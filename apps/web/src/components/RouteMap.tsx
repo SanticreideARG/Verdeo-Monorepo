@@ -22,7 +22,33 @@ export interface RouteMapStop {
  * Las paradas sin domicilio geocodificado no se dibujan (no hay dónde), y se cuentan abajo: una
  * parada que falta en el mapa sin explicación se lee como un error del mapa.
  */
-export function RouteMap({ stops }: { stops: readonly RouteMapStop[] }) {
+/** La salida o la llegada de la ruta (2026-10-25): el primer y el último punto del mapa. */
+export interface RouteMapEnd {
+  address: string;
+  latitude: number;
+  longitude: number;
+}
+
+function sameSpot(left: RouteMapEnd, right: RouteMapEnd): boolean {
+  return (
+    Math.abs(left.latitude - right.latitude) < 1e-5 &&
+    Math.abs(left.longitude - right.longitude) < 1e-5
+  );
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => `&#${String(char.charCodeAt(0))};`);
+}
+
+export function RouteMap({
+  end = null,
+  start = null,
+  stops,
+}: {
+  end?: RouteMapEnd | null;
+  start?: RouteMapEnd | null;
+  stops: readonly RouteMapStop[];
+}) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const layer = useRef<L.LayerGroup | null>(null);
@@ -56,12 +82,14 @@ export function RouteMap({ stops }: { stops: readonly RouteMapStop[] }) {
     const group = layer.current;
     if (!instance || !group) return;
     group.clearLayers();
-    if (located.length === 0) return;
+    if (located.length === 0 && !start && !end) return;
 
-    const points: [number, number][] = located.map((stop) => [
-      stop.deliveryLatitude,
-      stop.deliveryLongitude,
-    ]);
+    // La línea sale de la salida, pasa por las paradas en orden y termina en la llegada.
+    const points: [number, number][] = [
+      ...(start ? [[start.latitude, start.longitude] as [number, number]] : []),
+      ...located.map((stop): [number, number] => [stop.deliveryLatitude, stop.deliveryLongitude]),
+      ...(end ? [[end.latitude, end.longitude] as [number, number]] : []),
+    ];
     // La línea va primero para que quede por debajo de los números.
     L.polyline(points, { color: '#174c3c', dashArray: '6 6', weight: 2 }).addTo(group);
     for (const stop of located) {
@@ -76,8 +104,26 @@ export function RouteMap({ stops }: { stops: readonly RouteMapStop[] }) {
         .bindPopup(`<strong>${stop.customerDisplayName}</strong><br>${stop.deliveryAddress}`)
         .addTo(group);
     }
+    // Salida y llegada, con su propio pin; si son el mismo lugar, uno solo.
+    const endPin = (point: RouteMapEnd, label: string, title: string) =>
+      L.marker([point.latitude, point.longitude], {
+        icon: L.divIcon({
+          className: 'route-pin route-pin-end',
+          html: `<span>${label}</span>`,
+          iconAnchor: [17, 13],
+          iconSize: [34, 26],
+        }),
+        zIndexOffset: 1000,
+      })
+        .bindPopup(`<strong>${title}</strong><br>${escapeHtml(point.address)}`)
+        .addTo(group);
+    if (start && end && sameSpot(start, end)) endPin(start, 'S/L', 'Salida y llegada');
+    else {
+      if (start) endPin(start, 'S', 'Salida');
+      if (end) endPin(end, 'L', 'Llegada');
+    }
     instance.fitBounds(L.latLngBounds(points).pad(0.2));
-  }, [located]);
+  }, [located, start, end]);
 
   return (
     <div className="route-map">

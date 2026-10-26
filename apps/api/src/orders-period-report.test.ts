@@ -39,56 +39,131 @@ const order = (overrides: Partial<PeriodReportOrder> = {}): PeriodReportOrder =>
 
 function read(orders: PeriodReportOrder[]) {
   const buffer = buildPeriodReportExcel(buildPeriodReport(orders), { cycleAlias: 'Semana 43' });
-  return XLSX.read(buffer, { cellStyles: true, type: 'array' });
+  return XLSX.read(buffer, { cellNF: true, cellStyles: true, type: 'array' });
 }
 
-describe('buildPeriodReportExcel', () => {
-  it('arma Pedidos y Reparto con la barra del día, la de carga y un renglón por vianda', () => {
+function sheetOf(book: ReturnType<typeof read>, name: string) {
+  const sheet = book.Sheets[name];
+  if (!sheet) throw new Error('sin hoja');
+  const cell = (address: string) => sheet[address] as CellObject | undefined;
+  const rgb = (address: string) =>
+    (cell(address)?.s as { fgColor?: { rgb?: string } } | undefined)?.fgColor?.rgb;
+  return { cell, rgb };
+}
+
+describe('buildPeriodReportExcel: Pedidos', () => {
+  it('sin horario, ruta, zona ni notas; la barra del día, la de carga y un renglón por vianda', () => {
     const book = read([order(), order({ isNew: false, paid: false, publicNumber: 'MZA-00002' })]);
     expect(book.SheetNames).toEqual(['Pedidos', 'Reparto']);
-
-    const sheet = book.Sheets.Pedidos;
-    if (!sheet) throw new Error('sin hoja');
-    const cell = (address: string) => sheet[address] as CellObject | undefined;
+    const { cell } = sheetOf(book, 'Pedidos');
+    expect(cell('A2')?.v).toBe('Dirección');
     expect(cell('A3')?.v).toBe('LUNES 26 de octubre');
     expect(cell('A4')?.v).toBe('Carga · Mañana · de 10 a 13h');
-    // Primer renglón del pedido: horario, tiempo de ruta, dirección en dos renglones, venta.
-    expect(cell('A5')?.v).toBe('10 a 12');
-    expect(cell('B5')?.v).toBe('≈ 40 min');
-    expect(cell('D5')?.v).toBe('Calle 1\nDepto 2');
-    expect(cell('G5')?.v).toBe('KETO');
-    expect(cell('L5')?.v).toBe(160_000);
-    expect(cell('L6')?.v).toBe('');
+    expect(cell('A5')?.v).toBe('Calle 1\nDepto 2');
+    expect(cell('B5')?.v).toBe('Ana');
+    expect(cell('C5')?.v).toBe(400);
+    expect(cell('D5')?.v).toBe('KETO');
+    expect(cell('I5')?.v).toBe(160_000);
+    expect(cell('I6')?.v).toBe('');
+    expect(cell('K2')?.v).toBe('Celular');
+    expect(cell('L2')).toBeUndefined();
     // Cuatro viandas (dos pedidos de dos) y el total del día con fórmula.
-    expect(cell('F9')?.f).toBe('COUNT(F5:F8)');
-    expect(cell('F9')?.v).toBe(4);
-    // El resumen a la derecha.
-    expect(cell('Q3')?.v).toBe('KETO 400');
-    expect(cell('R3')?.v).toBe(4);
+    expect(cell('C9')?.f).toBe('COUNT(C5:C8)');
+    expect(cell('C9')?.v).toBe(4);
+    // El resumen general a la derecha.
+    expect(cell('M3')?.v).toBe('KETO 400');
+    expect(cell('N3')?.v).toBe(4);
   });
 
-  it('pinta la norma de colores: nuevo, cobrado y no cobrado', () => {
-    const book = read([order(), order({ isNew: false, paid: false, publicNumber: 'MZA-00002' })]);
-    const sheet = book.Sheets.Pedidos;
-    if (!sheet) throw new Error('sin hoja');
-    const rgb = (address: string) =>
-      ((sheet[address] as CellObject | undefined)?.s as { fgColor?: { rgb?: string } } | undefined)
-        ?.fgColor?.rgb;
-    // Nuevo que entró por mail: rosado.
-    expect(rgb('E5')).toBe('F8CBAD');
-    expect(rgb('L5')).toBe('92D050');
-    expect(rgb('L7')).toBe('FF0000');
+  it('el "$" sólo en la venta: ni en el tamaño ni en las cantidades', () => {
+    const { cell } = sheetOf(read([order()]), 'Pedidos');
+    expect(String(cell('I5')?.z)).toContain('$');
+    expect(String(cell('C5')?.z ?? '')).not.toContain('$');
+    expect(String(cell('N3')?.z ?? '')).not.toContain('$');
   });
 
-  it('el nuevo por WhatsApp va más oscuro y el efectivo sin color', () => {
-    const book = read([order({ paymentExpectation: 'Efectivo', paid: false, source: 'whatsapp' })]);
-    const sheet = book.Sheets.Pedidos;
-    if (!sheet) throw new Error('sin hoja');
-    const rgb = (address: string) =>
-      ((sheet[address] as CellObject | undefined)?.s as { fgColor?: { rgb?: string } } | undefined)
-        ?.fgColor?.rgb;
-    expect(rgb('E5')).toBe('E26B0A');
-    expect(rgb('L5')).toBeUndefined();
+  it('nuevo por mail en naranja, por WhatsApp en marrón; el resto, sin color', () => {
+    const book = read([
+      order(),
+      order({ customerName: 'Beto', publicNumber: 'MZA-00002', source: 'whatsapp' }),
+      order({ customerName: 'Caro', isNew: false, paid: false, publicNumber: 'MZA-00003' }),
+      order({ customerName: 'Dani', publicNumber: 'MZA-00004', source: 'web' }),
+    ]);
+    const { cell, rgb } = sheetOf(book, 'Pedidos');
+    const rowOf = (name: string) =>
+      [5, 6, 7, 8, 9, 10, 11, 12].find((row) => cell(`B${String(row)}`)?.v === name);
+    expect(rgb(`B${String(rowOf('Ana'))}`)).toBe('FFC000');
+    expect(rgb(`B${String(rowOf('Beto'))}`)).toBe('C65911');
+    expect(rgb(`B${String(rowOf('Caro'))}`)).toBeUndefined();
+    expect(rgb(`B${String(rowOf('Dani'))}`)).toBeUndefined();
+    // La venta de una transferencia: verde cobrada, roja sin cobrar.
+    expect(rgb(`I${String(rowOf('Ana'))}`)).toBe('92D050');
+    expect(rgb(`I${String(rowOf('Caro'))}`)).toBe('FF0000');
+  });
+});
+
+describe('buildPeriodReportExcel: Reparto', () => {
+  it('tiempo de ruta primero, dirección en una línea, transferencia en $0 y total en efectivo', () => {
+    const book = read([
+      order(),
+      order({
+        customerName: 'Beto',
+        paymentExpectation: 'Efectivo',
+        publicNumber: 'MZA-00002',
+        route: { minutes: 55, routeLabel: 'A', sequence: 2 },
+        totalMinor: 50_000_00,
+      }),
+    ]);
+    const { cell, rgb } = sheetOf(book, 'Reparto');
+    expect(cell('A2')?.v).toBe('Tiempo de ruta');
+    expect(cell('A5')?.v).toBe('≈ 40 min');
+    expect(cell('B5')?.v).toBe('10 a 12');
+    expect(cell('D5')?.v).toBe('Calle 1 · Depto 2');
+    expect(cell('E5')?.v).toBe('Ana');
+    expect(rgb('E5')).toBeUndefined();
+    expect(cell('F5')?.v).toBe(400);
+    expect(String(cell('F5')?.z ?? '')).not.toContain('$');
+    // La transferencia no la cobra quien reparte.
+    expect(cell('H5')?.v).toBe(0);
+    expect(cell('H7')?.v).toBe(50_000);
+    expect(cell('J2')?.v).toBe('Celular');
+    expect(cell('K2')).toBeUndefined();
+    expect(cell('H9')?.f).toBe('SUM(H5:H8)');
+    expect(cell('H9')?.v).toBe(50_000);
+  });
+
+  it('un renglón por bulto y un resumen por día, desde la fila de su día', () => {
+    const dishes = Array.from({ length: 6 }, (_, index) => `Plato ${String(index)}`);
+    const book = read([
+      order({
+        customerName: 'Clara',
+        items: [
+          {
+            composable: true,
+            dishSelections: dishes,
+            familyName: 'Intuitivo',
+            mealsPerUnit: 5,
+            quantityUnits: 1,
+            variantName: '400',
+          },
+        ],
+      }),
+      order({ deliveryDate: '2026-10-27', publicNumber: 'MZA-00002' }),
+    ]);
+    const { cell } = sheetOf(book, 'Reparto');
+    // Lunes: dos renglones del Intuitivo de seis platos y el total en la fila 7.
+    expect(cell('G5')?.v).toBe('Clara');
+    expect(cell('G6')?.v).toBe('Clara');
+    expect(cell('F7')?.v).toBe(2);
+    expect(cell('L3')?.v).toBe('Producto');
+    expect(cell('L4')?.v).toBe('Clara 400');
+    expect(cell('M4')?.v).toBe(1);
+    expect(cell('L5')?.v).toBe('TOTAL');
+    // Martes: su barra en la fila 9 y su resumen ahí.
+    expect(cell('A9')?.v).toBe('MARTES 27 de octubre');
+    expect(cell('L9')?.v).toBe('Producto');
+    expect(cell('L10')?.v).toBe('KETO 400');
+    expect(cell('M10')?.v).toBe(2);
   });
 });
 

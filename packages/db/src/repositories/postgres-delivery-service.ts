@@ -1024,7 +1024,16 @@ export class PostgresDeliveryService {
       .limit(1);
     if (!route) return null;
 
-    const stops = await this.sheetStops(routeId);
+    /*
+     * Quien reparte sólo cobra el efectivo (2026-10-25): de una transferencia no le llega ni el
+     * monto ni el medio, y la parada cuenta como pagada (se entrega, no se cobra). Los totales de la
+     * hoja quedan en el efectivo.
+     */
+    const stops = (await this.sheetStops(routeId)).map((stop) =>
+      stop.isCash
+        ? stop
+        : { ...stop, collectedMinor: 0, paymentExpectation: '', prepaid: true, totalMinor: 0 },
+    );
     return {
       deliveryDate: route.deliveryDate,
       label: route.label,

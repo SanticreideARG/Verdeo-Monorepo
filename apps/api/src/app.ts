@@ -680,6 +680,7 @@ interface OperationsEngine {
     operatingSiteId?: string | null,
     zone?: string,
     deliveryRunId?: string,
+    options?: { showSize?: boolean },
   ): Promise<unknown[]>;
   getGeocodingSettings(operatingSiteId: string): Promise<GeocodingSettings>;
   getDeliverySettings?(operatingSiteId: string): Promise<DeliverySettings>;
@@ -7334,6 +7335,8 @@ export function createApp(options: CreateAppOptions) {
       context.get('scope')?.operatingSiteId ?? null,
       context.req.query('zone')?.trim() || undefined,
       runFromQuery(context),
+      // `tamano=1`: los platos separados por tamaño (Etiquetas 2.0), sea cual sea el ajuste.
+      context.req.query('tamano') === '1' ? { showSize: true } : {},
     );
     return context.json(KitchenLabelListResponseSchema.parse({ items }));
   });

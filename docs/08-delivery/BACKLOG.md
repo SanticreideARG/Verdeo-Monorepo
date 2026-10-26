@@ -659,3 +659,11 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] La ciudad de un lote de stock se cambia desde Cocina.
 - [x] Etiquetas en el teléfono: el texto no se agranda solo (lo partía letra por letra, en vertical).
 - [x] Etiquetas en la app de Android: nombres partidos entre palabras y ajuste que achica hasta que entren, aunque el sistema agrande la letra.
+
+## Informe y hojas de ruta (2026-10-25)
+
+- [x] Etiquetas: platos contados por tamaño (no el doble); verticales sólo Keto 400 e Intuitivos (resto en "Mostrar más"); casilla para llenar la última hoja con Keto 400.
+- [x] Informe del período: hoja Pedidos sin horario/ruta/zona/notas y colores de nuevos por canal; hoja Reparto con un renglón por bulto, transferencias en $0, total en efectivo y resumen por reparto; sin "$" en tamaños.
+- [x] Hojas de ruta: franja horaria en la card, reordenar arrastrando, salida y llegada en el mapa.
+- [x] Quien reparte sólo ve los montos en efectivo (hoja, WhatsApp, CSV); el mensaje de WhatsApp lleva la línea 2 de la dirección.
+- [ ] Intuitivo cancelado después del pedido a cocina como stock vendible (propuesta, a confirmar).

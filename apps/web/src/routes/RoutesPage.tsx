@@ -1,7 +1,14 @@
 import { RouteTimingPanel, type RoutePoint } from '../components/RouteTimingPanel.js';
 import { clockPlus, routeTiming } from '../lib/routeTiming.js';
 import { RouteMoneyBreakdown, type RouteMoney } from '../components/RouteMoneyBreakdown.js';
-import { Fragment, useCallback, useEffect, useState, type FormEvent } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useState,
+  type FormEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 
 import { useSearchParams } from 'react-router-dom';
 
@@ -18,6 +25,7 @@ import { googleMapsLink } from '../lib/mapLinks.js';
 import { maskSurname } from '../lib/maskName.js';
 import { neighborhoodHeading } from '../lib/neighborhoodGroups.js';
 import { errorMessage, formatMoney } from '../lib/operations.js';
+import { isTransfer } from '@verdeo/orders';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { useNarrowViewport } from '../lib/useNarrowViewport.js';
 import { showToast } from '../lib/toast.js';
@@ -60,14 +68,6 @@ interface RouteDetail extends RouteSummary {
   start?: RoutePoint | null;
   stops: RouteStop[];
 }
-
-const STOP_STATUS_LABELS: Record<string, string> = {
-  at_address: 'En el domicilio',
-  delivered: 'Entregado',
-  en_route: 'En camino',
-  pending: 'Pendiente',
-  skipped: 'Saltado',
-};
 
 function formText(form: FormData, key: string): string {
   const value = form.get(key);
@@ -121,6 +121,8 @@ export function RoutesPage() {
   );
   const [routes, setRoutes] = useState<RouteSummary[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteDetail | null>(null);
+  // La parada que se está arrastrando y sobre cuál va (2026-10-25).
+  const [drag, setDrag] = useState<{ from: number; over: number } | null>(null);
   const [message, setMessage] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   /*
@@ -325,9 +327,14 @@ export function RoutesPage() {
         // Qué entregar, antes que dónde: es lo que se busca en la caja al bajar del auto.
         ...(stop.detail ? [stop.detail] : []),
         stop.deliveryAddress,
+        // La segunda línea de la dirección (piso, depto, timbre): sin ella no se encuentra la puerta.
+        ...(stop.deliveryAddressLine2 ? [stop.deliveryAddressLine2] : []),
         stopMapLink(stop),
-        // El medio de pago va en la parada: es lo que el repartidor tiene que cobrar ahí.
-        `${stop.paymentExpectation} · ${formatMoney(stop.totalMinor, 'ARS')}`,
+        // Lo que hay que cobrar ahí: sólo el efectivo. Una transferencia no la cobra quien reparte,
+        // así que no lleva ni monto ni medio (2026-10-25).
+        ...(isTransfer(stop.paymentExpectation)
+          ? []
+          : [`${stop.paymentExpectation} · ${formatMoney(stop.totalMinor, 'ARS')}`]),
       ].join('\n'),
     );
     return [header, '', ...lines].join('\n\n');
@@ -372,10 +379,11 @@ export function RoutesPage() {
         maskSurname(stop.customerDisplayName),
         stop.deliveryWindow ?? '',
         stop.detail,
-        stop.deliveryAddress,
+        [stop.deliveryAddress, stop.deliveryAddressLine2 ?? ''].filter(Boolean).join(' · '),
         stopMapLink(stop),
-        stop.paymentExpectation,
-        String(stop.totalMinor / 100),
+        // Sólo el efectivo: la transferencia no la cobra quien reparte (2026-10-25).
+        isTransfer(stop.paymentExpectation) ? '' : stop.paymentExpectation,
+        isTransfer(stop.paymentExpectation) ? '' : String(stop.totalMinor / 100),
       ]),
     ];
     // BOM para que Excel abra los acentos bien; sin esto "Neuquén" sale roto.
@@ -445,21 +453,52 @@ export function RoutesPage() {
     showToast('El enlace dejó de servir.');
   }
 
-  async function move(index: number, direction: -1 | 1) {
-    if (!selectedRoute) return;
-    const stopIds = selectedRoute.stops.map((stop) => stop.id);
-    const target = index + direction;
-    if (target < 0 || target >= stopIds.length) return;
-    [stopIds[index], stopIds[target]] = [stopIds[target]!, stopIds[index]!];
+  /**
+   * Mover una parada de `from` a `to` (2026-10-25: arrastrando, en lugar de las flechas). La lista
+   * cambia en el acto; si el servidor no acepta el orden, se vuelve a leer la ruta.
+   */
+  async function reorder(from: number, to: number) {
+    if (!selectedRoute || from === to) return;
+    const stops = [...selectedRoute.stops];
+    if (to < 0 || to >= stops.length) return;
+    const [moved] = stops.splice(from, 1);
+    if (!moved) return;
+    stops.splice(to, 0, moved);
+    setSelectedRoute({
+      ...selectedRoute,
+      stops: stops.map((stop, index) => ({ ...stop, sequence: index + 1 })),
+    });
     const response = await apiRequest(`/api/v1/delivery/routes/${selectedRoute.id}/stops`, {
-      body: JSON.stringify({ stopIds }),
+      body: JSON.stringify({ stopIds: stops.map((stop) => stop.id) }),
       method: 'PUT',
     });
-    if (!response.ok) {
-      setMessage(await errorMessage(response));
-      return;
-    }
+    if (!response.ok) setMessage(await errorMessage(response));
     await loadRouteDetail(selectedRoute.id);
+  }
+
+  /*
+   * Arrastrar y soltar con el puntero (mouse o dedo, el mismo código): se toma la parada por la
+   * manija y se suelta sobre otra. Con el teclado, la manija se mueve con las flechas.
+   */
+  function startDrag(event: ReactPointerEvent<HTMLButtonElement>, index: number) {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDrag({ from: index, over: index });
+  }
+
+  function dragOver(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (!drag) return;
+    const target = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>('[data-stop-index]');
+    const over = target ? Number(target.dataset.stopIndex) : drag.over;
+    if (over !== drag.over) setDrag({ ...drag, over });
+  }
+
+  function endDrag() {
+    if (!drag) return;
+    setDrag(null);
+    void reorder(drag.from, drag.over);
   }
 
   if (failed) return <DashboardFailed label="las rutas" />;
@@ -842,7 +881,20 @@ export function RoutesPage() {
                                 {neighborhoodHeading(selectedRoute.stops, index)}
                               </li>
                             ) : null}
-                            <li className="routes-stop">
+                            <li
+                              className={[
+                                'routes-stop',
+                                drag?.from === index ? 'is-dragging' : '',
+                                drag && drag.from !== index && drag.over === index
+                                  ? drag.from < index
+                                    ? 'is-drop-after'
+                                    : 'is-drop-before'
+                                  : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' ')}
+                              data-stop-index={index}
+                            >
                               {/*
                                * El número de parada va en su propia columna, fija.
                                *
@@ -871,9 +923,6 @@ export function RoutesPage() {
                                       : ''}
                                   </p>
                                 ) : null}
-                                {stop.deliveryWindow ? (
-                                  <p className="routes-stop-window">🕒 {stop.deliveryWindow}</p>
-                                ) : null}
                                 {stop.detail ? (
                                   <p className="routes-stop-detail">{stop.detail}</p>
                                 ) : null}
@@ -883,34 +932,38 @@ export function RoutesPage() {
                                     <small> · {stop.deliveryAddressLine2}</small>
                                   ) : null}
                                 </p>
-                                <p className="routes-stop-facts">
-                                  {formatMoney(stop.totalMinor, 'ARS')} · {stop.paymentExpectation}{' '}
-                                  · {STOP_STATUS_LABELS[stop.status] ?? stop.status}
-                                </p>
+                                {/* La franja horaria, donde iban el monto, el medio y el estado
+                                  (2026-10-25): es lo que decide dónde va la parada. */}
+                                {stop.deliveryWindow ? (
+                                  <p className="routes-stop-window">🕒 {stop.deliveryWindow}</p>
+                                ) : null}
                               </div>
                               {/* Reordenar y el estado, en una columna angosta que no empuja al texto:
                               dos botones de flecha no pueden costarle la mitad del ancho al
                               nombre del cliente. */}
                               <div className="routes-stop-aside">
                                 {canManage ? (
-                                  <div className="routes-stop-move">
-                                    <button
-                                      aria-label="Subir esta parada"
-                                      disabled={index === 0}
-                                      onClick={() => void move(index, -1)}
-                                      type="button"
-                                    >
-                                      ↑
-                                    </button>
-                                    <button
-                                      aria-label="Bajar esta parada"
-                                      disabled={index === selectedRoute.stops.length - 1}
-                                      onClick={() => void move(index, 1)}
-                                      type="button"
-                                    >
-                                      ↓
-                                    </button>
-                                  </div>
+                                  <button
+                                    aria-label={`Mover la parada ${String(stop.sequence)}: arrastrala, o usá las flechas del teclado`}
+                                    className="routes-stop-handle"
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                                        event.preventDefault();
+                                        void reorder(
+                                          index,
+                                          index + (event.key === 'ArrowUp' ? -1 : 1),
+                                        );
+                                      }
+                                    }}
+                                    onPointerCancel={() => setDrag(null)}
+                                    onPointerDown={(event) => startDrag(event, index)}
+                                    onPointerMove={dragOver}
+                                    onPointerUp={endDrag}
+                                    title="Arrastrar para cambiar el orden"
+                                    type="button"
+                                  >
+                                    ⠿
+                                  </button>
                                 ) : null}
                                 {stop.status === 'delivered' ? (
                                   <span className="routes-stop-done">Entregada</span>
@@ -928,7 +981,11 @@ export function RoutesPage() {
                       {/* Todas las paradas juntas: es la única forma de ver si el orden propuesto
                       tiene sentido antes de publicarlo. */}
                       {selectedRoute.stops.length > 0 ? (
-                        <RouteMap stops={selectedRoute.stops} />
+                        <RouteMap
+                          end={selectedRoute.end ?? null}
+                          start={selectedRoute.start ?? null}
+                          stops={selectedRoute.stops}
+                        />
                       ) : null}
                     </div>
                   </>

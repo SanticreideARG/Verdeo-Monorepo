@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   adjustGroup,
+  fillerLabels,
   looseLabels,
   menuGroups,
   plateGroups,
@@ -91,7 +92,7 @@ describe('plateGroups del Intuitivo', () => {
 });
 
 describe('menuGroups', () => {
-  it('una por vianda, por variedad y tamaño; el Intuitivo no lleva etiqueta de menú', () => {
+  it('una por vianda, por variedad y tamaño; el Intuitivo con el nombre del cliente', () => {
     const groups = menuGroups([
       unit({ unitIndex: 0, unitTotal: 2 }),
       unit({ unitIndex: 1, unitTotal: 2 }),
@@ -103,7 +104,20 @@ describe('menuGroups', () => {
       }),
     ]);
 
-    expect(groups.map((group) => [group.title, group.labels.length])).toEqual([['KETO 400', 2]]);
+    expect(groups.map((group) => [group.title, group.labels.length, group.featured])).toEqual([
+      ['KETO 400', 2, true],
+      ['Juan Manuel Brandan · Intuitivo 400', 1, true],
+    ]);
+    // Sólo el nombre y el tamaño: nunca la palabra Intuitivo.
+    expect(groups[1]?.labels[0]).toMatchObject({ line: 'Juan Manuel Brandan', size: '400' });
+  });
+
+  it('las demás verticales no se imprimen siempre (van en Mostrar más)', () => {
+    const groups = menuGroups([
+      unit({ variantName: '250' }),
+      unit({ familyName: 'Menú Real', orderPublicNumber: 'NQN-3' }),
+    ]);
+    expect(groups.map((group) => group.featured)).toEqual([false, false]);
   });
 
   it('no repite la vianda cuando llega una vez por plato', () => {
@@ -147,5 +161,32 @@ describe('adjustGroup', () => {
       'Lomo',
     ]);
     expect(more[2]?.key).toBe('suelta:plato:KETO:0');
+  });
+});
+
+describe('platos por tamaño', () => {
+  it('el 250 y el 400 van en grupos separados', () => {
+    const groups = plateGroups(
+      [
+        { ...plate('Lomo'), sizeName: '400' },
+        { ...plate('Lomo'), sizeName: '250' },
+        { ...plate('Curry'), sizeName: '400' },
+      ],
+      '2026-10-15',
+    );
+    expect(groups.map((group) => [group.title, group.labels.length])).toEqual([
+      ['Platos KETO 400', 2],
+      ['Platos KETO 250', 1],
+    ]);
+  });
+});
+
+describe('fillerLabels', () => {
+  it('verticales Keto 400 para los lugares libres, como sueltas', () => {
+    const labels = fillerLabels(3);
+    expect(labels).toHaveLength(3);
+    expect(labels[0]).toMatchObject({ kind: 'menu', line: 'KETO', size: '400' });
+    expect(labels.every((label) => label.key.startsWith('suelta:'))).toBe(true);
+    expect(fillerLabels(-1)).toEqual([]);
   });
 });

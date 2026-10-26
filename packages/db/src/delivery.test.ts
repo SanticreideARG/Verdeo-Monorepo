@@ -408,7 +408,15 @@ describe('el enlace de la ruta', () => {
     await service.publishRoute(route!.id, CONTEXT);
     const { token } = await service.issueRouteLink(route!.id, 24, CONTEXT);
 
-    expect(await service.routeSheetByToken(token)).toMatchObject({
+    // Quien reparte sólo ve el efectivo (2026-10-25): de la transferencia no le llega monto ni medio.
+    const sheet = await service.routeSheetByToken(token);
+    expect(sheet).toMatchObject({ cashMinor: 25000, totalMinor: 25000, transferMinor: 0 });
+    expect(sheet?.stops.find((stop) => stop.paymentExpectation === '')).toMatchObject({
+      prepaid: true,
+      totalMinor: 0,
+    });
+    // En Rutas, el desglose entero.
+    expect(await service.routeProgress(route!.id)).toMatchObject({
       cashMinor: 25000,
       totalMinor: 55000,
       transferMinor: 30000,

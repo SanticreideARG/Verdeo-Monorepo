@@ -153,3 +153,41 @@ describe('isTransfer', () => {
     expect(isTransfer('Efectivo')).toBe(false);
   });
 });
+
+describe('hoja de reparto', () => {
+  it('un renglón por bulto: el Intuitivo, uno cada cinco platos; lo fijo, uno por vianda', () => {
+    const dishes = (count: number) =>
+      Array.from({ length: count }, (_, index) => `P${String(index)}`);
+    const report = buildPeriodReport([
+      order({
+        customerName: 'Clara',
+        items: [item({ composable: true, dishSelections: dishes(11), familyName: 'Intuitivo' })],
+      }),
+      order({
+        customerName: 'Beto',
+        items: [item({ composable: true, dishSelections: dishes(5), familyName: 'Intuitivo' })],
+      }),
+      order({ items: [item({ quantityUnits: 2 })] }),
+    ]);
+    const rows = report.days[0]?.deliveryRows ?? [];
+    const of = (name: string) => rows.filter((row) => row.order.customerName === name);
+    expect(of('Clara')).toHaveLength(3);
+    expect(of('Beto')).toHaveLength(1);
+    expect(of('Ana')).toHaveLength(2);
+    // La venta va sólo en el primer renglón de cada pedido.
+    expect(of('Clara').map((row) => row.first)).toEqual([true, false, false]);
+  });
+
+  it('el efectivo del día y el resumen de cada día', () => {
+    const report = buildPeriodReport([
+      order({ paymentExpectation: 'Efectivo', totalMinor: 50_000_00 }),
+      order({ totalMinor: 80_000_00 }),
+      order({ deliveryDate: '2026-10-27', items: [item({ variantName: '250' })] }),
+    ]);
+    expect(report.days.map((day) => day.cashMinor)).toEqual([50_000_00, 0]);
+    expect(report.days.map((day) => day.summary)).toEqual([
+      [{ label: 'KETO 400', units: 2 }],
+      [{ label: 'KETO 250', units: 1 }],
+    ]);
+  });
+});

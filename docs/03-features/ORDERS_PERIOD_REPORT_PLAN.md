@@ -123,3 +123,17 @@ hasta saber qué es (ver preguntas).
   en la dirección.
 - El período de una vianda del stock ("KETO · Oct 2") queda para el plan de lotes
   ([STOCK_LOTS_PLAN.md](STOCK_LOTS_PLAN.md)).
+
+## Ajustes del 2026-10-25
+
+- **"Pedidos"**: sin horario, tiempo de ruta, zona ni notas (quedan dirección, nombre, tamaño, los
+  cinco días, venta, pago y celular). El nombre de un cliente nuevo va en naranja (`FFC000`) si
+  entró por mail y en marrón (`C65911`) si entró por WhatsApp; el resto, sin estilo (ni la negrita
+  cursiva del Intuitivo).
+- **"Reparto"**: tiempo de ruta primero, después horario, zona, dirección en una línea (el ancho
+  sale de la más larga), nombre sin estilo, tamaño, variedad, venta, pago y celular. **Un renglón
+  por bulto** (`PeriodReportDay.deliveryRows`): un Intuitivo, `ceil(platos / 5)`. La transferencia
+  dice $0 y el total del día es el efectivo (`cashMinor`). A la derecha, **un resumen por reparto**
+  (`PeriodReportDay.summary`) que empieza en la fila del día (o debajo del anterior, si es largo).
+- El "$" en tamaños y cantidades: la librería le agregaba el formato de número al objeto de estilo
+  compartido; ahora cada celda lleva su propio estilo.

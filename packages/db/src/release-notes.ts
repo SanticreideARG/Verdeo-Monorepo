@@ -75,4 +75,12 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • La vianda dice de qué período es en el pedido y en la planilla, no se vuelve a cocinar ni a etiquetar.
 • Se vende hasta un mes después de su período. En Cocina → Stock se corrige o se da de baja.`,
   },
+  {
+    key: '2026-10-25-informe-rutas',
+    body: `Informe del período, etiquetas y rutas:
+• Etiquetas: los platos se cuentan por tamaño (Keto 400 y Keto 250 por separado). En las verticales se ven el Keto 400 y los Intuitivos (con el nombre y el tamaño); el resto, con "Mostrar más". Una casilla llena la última hoja con Keto 400.
+• Informe: la hoja de Pedidos sin horario, tiempo de ruta, zona ni notas; naranja = nuevo por mail, marrón = nuevo por WhatsApp. En Reparto, un renglón por bulto, la transferencia en $0, el total del día sólo en efectivo y un resumen por reparto. Sin el "$" en tamaños y cantidades.
+• Rutas: las paradas se reordenan arrastrando; la card muestra la franja horaria; el mapa marca la salida y la llegada.
+• Quien reparte sólo ve los montos en efectivo, y el mensaje de WhatsApp lleva la segunda línea de la dirección.`,
+  },
 ];

@@ -64,10 +64,20 @@ export interface PeriodReportRow {
 }
 
 export interface PeriodReportDay {
+  /** Lo que cobra quien reparte: sólo el efectivo (las transferencias no las cobra). */
+  cashMinor: number;
   date: string;
+  /**
+   * Los renglones de la hoja "Reparto": uno por bulto. Una variedad fija, uno por vianda; un
+   * Intuitivo, uno cada cinco platos (5 → 1, de 6 a 10 → 2, de 11 a 15 → 3…), porque cada cinco es
+   * un bulto.
+   */
+  deliveryRows: PeriodReportRow[];
   rows: PeriodReportRow[];
   runs: string[];
   saleMinor: number;
+  /** Lo del día por producto, para el resumen de cada reparto. */
+  summary: { label: string; units: number }[];
   units: number;
 }
 
@@ -148,6 +158,33 @@ function compareOrders(left: PeriodReportOrder, right: PeriodReportOrder): numbe
   );
 }
 
+/** Los platos que reparte un ítem: los elegidos de un Intuitivo o los del tamaño por cada vianda. */
+function dishCount(item: PeriodReportItem): number {
+  return item.dishSelections.length > 0
+    ? item.dishSelections.length
+    : item.mealsPerUnit * item.quantityUnits;
+}
+
+type SummaryEntry = {
+  composable: boolean;
+  familyName: string;
+  label: string;
+  size: string;
+  units: number;
+};
+
+function sortedSummary(entries: Iterable<SummaryEntry>): { label: string; units: number }[] {
+  return [...entries]
+    .sort(
+      (left, right) =>
+        compareProducts(
+          { composable: left.composable, familyName: left.familyName, variantName: left.size },
+          { composable: right.composable, familyName: right.familyName, variantName: right.size },
+        ) || left.label.localeCompare(right.label, 'es-AR'),
+    )
+    .map(({ label, units }) => ({ label, units }));
+}
+
 export function buildPeriodReport(orders: readonly PeriodReportOrder[]): PeriodReport {
   const byDate = new Map<string, PeriodReportOrder[]>();
   for (const order of orders) {
@@ -162,6 +199,8 @@ export function buildPeriodReport(orders: readonly PeriodReportOrder[]): PeriodR
   for (const date of [...byDate.keys()].sort()) {
     const dayOrders = [...(byDate.get(date) ?? [])].sort(compareOrders);
     const rows: PeriodReportRow[] = [];
+    const deliveryRows: PeriodReportRow[] = [];
+    const daySummary = new Map<string, SummaryEntry>();
     for (const order of dayOrders) {
       const items = [...order.items].sort(compareProducts);
       for (const item of items) {
@@ -183,6 +222,24 @@ export function buildPeriodReport(orders: readonly PeriodReportOrder[]): PeriodR
         };
         entry.units += item.quantityUnits;
         summary.set(label, entry);
+        const dayEntry = daySummary.get(label) ?? { ...entry, units: 0 };
+        dayEntry.units += item.quantityUnits;
+        daySummary.set(label, dayEntry);
+        // La hoja de reparto: un renglón por bulto (un Intuitivo, uno cada cinco platos).
+        const bundles = item.composable
+          ? Math.max(1, Math.ceil(dishCount(item) / 5))
+          : item.quantityUnits;
+        for (let bundle = 0; bundle < bundles; bundle += 1) {
+          deliveryRows.push({
+            composable: item.composable,
+            familyName: item.familyName,
+            first: deliveryRows.every((row) => row.order !== order),
+            meals,
+            order,
+            size,
+            variety,
+          });
+        }
         /*
          * Un Intuitivo no es una vianda por renglón: sus platos van por menú (`composableRows`).
          * Los platos elegidos son los de todas sus unidades juntas.
@@ -204,8 +261,13 @@ export function buildPeriodReport(orders: readonly PeriodReportOrder[]): PeriodR
       }
     }
     days.push({
+      cashMinor: dayOrders
+        .filter((order) => !isTransfer(order.paymentExpectation))
+        .reduce((sum, order) => sum + order.totalMinor, 0),
       date,
+      deliveryRows,
       rows,
+      summary: sortedSummary(daySummary.values()),
       runs: [...new Set(dayOrders.map((order) => order.run).filter((run) => run !== null))],
       saleMinor: dayOrders.reduce((sum, order) => sum + order.totalMinor, 0),
       units: dayOrders.reduce(
@@ -217,15 +279,7 @@ export function buildPeriodReport(orders: readonly PeriodReportOrder[]): PeriodR
 
   return {
     days,
-    summary: [...summary.values()]
-      .sort(
-        (left, right) =>
-          compareProducts(
-            { composable: left.composable, familyName: left.familyName, variantName: left.size },
-            { composable: right.composable, familyName: right.familyName, variantName: right.size },
-          ) || left.label.localeCompare(right.label, 'es-AR'),
-      )
-      .map(({ label, units }) => ({ label, units })),
+    summary: sortedSummary(summary.values()),
     totalSaleMinor: orders.reduce((sum, order) => sum + order.totalMinor, 0),
     totalUnits: days.reduce((sum, day) => sum + day.units, 0),
   };

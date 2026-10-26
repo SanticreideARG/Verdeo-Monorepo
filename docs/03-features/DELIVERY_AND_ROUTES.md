@@ -259,3 +259,14 @@ Rutas, el mensaje de WhatsApp y el CSV de la ruta, y la hoja del repartidor.
 - En cada parada, la **franja horaria del pedido** (o la del domicilio).
 - Paso 2, si hace falta: tiempos reales tramo por tramo con el servicio de rutas de Google (clave
   con facturación).
+
+## Hojas de ruta (2026-10-25)
+
+- La card de la parada muestra la **franja horaria** en lugar del monto, el medio y el estado.
+- **Arrastrar y soltar** para reordenar (puntero: mouse y dedo con el mismo código; con el teclado,
+  flechas sobre la manija). La lista cambia en el acto y se guarda con `PUT .../stops`.
+- En el mapa, la **salida (S)** y la **llegada (L)** son el primer y el último punto de la línea; si
+  son el mismo lugar, un solo pin "S/L".
+- **Quien reparte sólo ve el efectivo**: la hoja del enlace no trae monto ni medio de las
+  transferencias (la parada cuenta como pagada y los totales son del efectivo), y el mensaje de
+  WhatsApp y la planilla CSV los dejan en blanco. El mensaje suma la segunda línea de la dirección.

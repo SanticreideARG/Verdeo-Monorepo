@@ -8616,6 +8616,8 @@ export class PostgresOperationsService {
     operatingSiteId?: string | null,
     zone?: string,
     deliveryRunId?: string,
+    /** Etiquetas 2.0 pide siempre el tamaño: sin él, el 250 y el 400 se sumaban en un grupo. */
+    options: { showSize?: boolean } = {},
   ) {
     const ajustes = await this.getLabelSettings();
     return buildKitchenLabels(
@@ -8625,7 +8627,10 @@ export class PostgresOperationsService {
         ...(zone ? { zone } : {}),
         ...(deliveryRunId ? { deliveryRunId } : {}),
       }),
-      { intuitivoCustomerName: ajustes.intuitivoCustomerName, showSize: ajustes.showSize },
+      {
+        intuitivoCustomerName: ajustes.intuitivoCustomerName,
+        showSize: options.showSize ?? ajustes.showSize,
+      },
     );
   }
 

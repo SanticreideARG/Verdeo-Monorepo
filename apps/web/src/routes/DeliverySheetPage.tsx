@@ -1,4 +1,3 @@
-import { RouteMoneyBreakdown, type RouteMoney } from '../components/RouteMoneyBreakdown.js';
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -31,7 +30,7 @@ interface SheetStop {
   totalMinor: number;
 }
 
-interface Sheet extends RouteMoney {
+interface Sheet {
   collectedMinor: number;
   deliveredCount: number;
   failureReasons: { displayName: string; id: string }[];
@@ -215,7 +214,6 @@ export function DeliverySheetPage() {
           ) : null}
         </div>
       </header>
-      <RouteMoneyBreakdown money={sheet} />
 
       {failed ? (
         <p className="delivery-sheet-error" role="alert">
@@ -269,11 +267,15 @@ export function DeliverySheetPage() {
                     <p className="delivery-sheet-access">Nota: {stop.deliveryNote}</p>
                   ) : null}
 
-                  <p className={stop.prepaid ? 'delivery-sheet-paid' : 'delivery-sheet-collect'}>
-                    {stop.prepaid
-                      ? 'Ya está pagado · no cobrar'
-                      : `Cobrar ${formatMoney(stop.totalMinor, 'ARS')} · ${stop.paymentExpectation}`}
-                  </p>
+                  {/* Sólo el efectivo: una transferencia no la cobra quien reparte, así que el
+                    servidor no manda ni monto ni medio (2026-10-25) y acá no se muestra nada. */}
+                  {stop.paymentExpectation ? (
+                    <p className={stop.prepaid ? 'delivery-sheet-paid' : 'delivery-sheet-collect'}>
+                      {stop.prepaid
+                        ? 'Ya está pagado · no cobrar'
+                        : `Cobrar ${formatMoney(stop.totalMinor, 'ARS')} · ${stop.paymentExpectation}`}
+                    </p>
+                  ) : null}
 
                   <div className="delivery-sheet-actions">
                     <a href={mapLink(stop)} rel="noreferrer" target="_blank">
