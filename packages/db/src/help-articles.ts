@@ -259,6 +259,14 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Métodos de pago',
   },
   {
+    body: 'En fechas especiales el panel se viste solo para la ocasión. Del 24 de octubre al 1 de noviembre se pone el tema de Halloween: negro, naranja y verde, con telarañas en las esquinas y una calabaza al lado del logo.\n\nEncima del tema que tengas elegido: cuando termina la temporada vuelve el tuyo. Si no lo querés, sacalo con el botón "Aa" de la barra (o en Ajustes → Apariencia), en "Temporada". Se recuerda en ese equipo por ese año.\n\nNo cambia nada de lo que se imprime ni lo que ven los clientes: etiquetas, planillas y la página pública quedan iguales.',
+    category: 'Ajustes',
+    key: 'ajustes-tema-temporada',
+    ordinal: 9,
+    requiredPermission: null,
+    title: 'El tema de temporada (Halloween)',
+  },
+  {
     body: 'En [Ajustes → Menú personalizado](/app/ajustes/menu) cada ciudad tiene dos interruptores:\n\n- Intuitivo: si se ofrece o no en esa ciudad.\n- Indicaciones alimentarias: "Pedir indicaciones" muestra el campo en el formulario y en el pedido; "No pedir indicaciones" lo saca de todos lados.',
     category: 'Ajustes',
     key: 'ajustes-indicaciones',

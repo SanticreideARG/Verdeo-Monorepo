@@ -97,4 +97,8 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • En Pedidos, el período está siempre arriba, al lado de "Buscar" (también en el teléfono). Al elegir uno anterior, se ven todos sus pedidos.
 • "Es cliente nuevo" al crear un cliente desde Nuevo pedido y al importar pedidos: destildalo si ya compraba antes. Los contactos importados de una planilla entran como clientes de siempre, salvo que se tilde "Son clientes nuevos".`,
   },
+  {
+    key: '2026-10-27-halloween',
+    body: `🎃 Hasta el 1 de noviembre el panel se viste de Halloween: negro, naranja y verde, con telarañas y una calabaza. Vuelve tu tema solo cuando termina. Si no lo querés, sacalo en "Aa" → Temporada.`,
+  },
 ];

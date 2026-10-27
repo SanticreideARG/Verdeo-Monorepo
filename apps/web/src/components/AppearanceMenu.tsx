@@ -7,6 +7,14 @@ export interface ThemeOption {
   value: string;
 }
 
+/** La casilla del tema de temporada: qué temporada, hasta cuándo y si está puesta. */
+export interface SeasonControl {
+  label: string;
+  on: boolean;
+  onChange: (on: boolean) => void;
+  until: string;
+}
+
 export const FONT_OPTIONS = [
   { label: 'Barlow', sample: 'Aa', value: 'barlow' },
   { label: 'Del sistema', sample: 'Aa', value: 'sistema' },
@@ -36,6 +44,7 @@ export function AppearanceMenu({
   onScale,
   onTheme,
   scale,
+  season = null,
   theme,
   themes,
 }: {
@@ -44,6 +53,8 @@ export function AppearanceMenu({
   onScale: (value: string) => void;
   onTheme: (value: string) => void;
   scale: string;
+  /** El tema de temporada, si corre una: se puede sacar (HALLOWEEN_THEME_PLAN.md). */
+  season?: SeasonControl | null;
   theme: string;
   themes: readonly ThemeOption[];
 }) {
@@ -88,6 +99,7 @@ export function AppearanceMenu({
             onScale={onScale}
             onTheme={onTheme}
             scale={scale}
+            season={season}
             theme={theme}
             themes={themes}
           />
@@ -109,6 +121,7 @@ export function AppearanceControls({
   onScale,
   onTheme,
   scale,
+  season = null,
   theme,
   themes,
 }: {
@@ -117,6 +130,8 @@ export function AppearanceControls({
   onScale: (value: string) => void;
   onTheme: (value: string) => void;
   scale: string;
+  /** El tema de temporada, si corre una: se puede sacar (HALLOWEEN_THEME_PLAN.md). */
+  season?: SeasonControl | null;
   theme: string;
   themes: readonly ThemeOption[];
 }) {
@@ -127,6 +142,20 @@ export function AppearanceControls({
 
   return (
     <>
+      {/* La temporada manda sobre el tema elegido mientras está puesta; al sacarla, vuelve el tuyo. */}
+      {season ? (
+        <section>
+          <h3>Temporada</h3>
+          <label className="label-switch">
+            <input
+              checked={season.on}
+              onChange={(event) => season.onChange(event.target.checked)}
+              type="checkbox"
+            />
+            Tema de {season.label} (hasta el {season.until})
+          </label>
+        </section>
+      ) : null}
       {groups.map((group) => (
         <section key={group.tone}>
           <h3>{group.title}</h3>

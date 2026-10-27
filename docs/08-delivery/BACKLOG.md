@@ -672,4 +672,4 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 
 - [x] Pedidos: el selector de período siempre a la vista (computadora y teléfono); al elegir uno anterior el estado pasa a "Todos", porque "Pendientes de acción" lo dejaba vacío.
 - [x] "Es cliente nuevo" al crear un cliente en Nuevo pedido y al importar pedidos (mail y planilla); los contactos de planilla entran como no nuevos salvo "Son clientes nuevos".
-- [ ] Tema Halloween (plan en [HALLOWEEN_THEME_PLAN.md](../03-features/HALLOWEEN_THEME_PLAN.md)): falta decidir alcance y activación, y la calabaza en PNG transparente.
+- [x] Tema Halloween ([HALLOWEEN_THEME_PLAN.md](../03-features/HALLOWEEN_THEME_PLAN.md)): sólo el panel, solo del 24-oct al 1-nov, se saca en Apariencia; telarañas en las esquinas y calabaza.

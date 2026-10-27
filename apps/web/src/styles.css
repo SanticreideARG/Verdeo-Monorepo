@@ -11407,3 +11407,103 @@ label.field:has(> input[type='radio']) {
   color: var(--db-text-muted, inherit);
   font-size: 0.75rem;
 }
+
+/* Halloween (HALLOWEEN_THEME_PLAN.md): negro, naranja calabaza y verde. Se pone solo del 24 de
+   octubre al 1 de noviembre; quien no lo quiera lo saca en Apariencia. */
+.dashboard-shell[data-theme='halloween'] {
+  --db-bg: #0a0a0b;
+  --db-bg-2: #121213;
+  --db-surface: rgb(21 21 22 / 90%);
+  --db-surface-solid: #151516;
+  --db-sidebar: linear-gradient(180deg, rgb(8 8 9 / 98%), rgb(17 20 14 / 96%));
+  --db-topbar: rgb(10 10 11 / 88%);
+  --db-text: #f5efe6;
+  --db-text-soft: rgb(245 239 230 / 78%);
+  --db-muted: rgb(245 239 230 / 54%);
+  --db-muted-2: rgb(245 239 230 / 34%);
+  --db-border: rgb(123 192 67 / 26%);
+  --db-border-soft: rgb(255 255 255 / 8%);
+  --db-accent: #f97316;
+  --db-accent-strong: #ea580c;
+  --db-gold: #f97316;
+  --db-vignette:
+    radial-gradient(ellipse 70% 48% at 15% 0%, rgb(249 115 22 / 14%), transparent 60%),
+    radial-gradient(ellipse 48% 38% at 94% 96%, rgb(123 192 67 / 12%), transparent 58%);
+}
+.halloween-decor {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+.halloween-corner {
+  position: absolute;
+  width: clamp(7rem, 16vw, 13rem);
+  height: auto;
+  opacity: 0.55;
+}
+/* La telaraña es negra: sobre el fondo negro se aclara para que se vea. */
+.halloween-corner-top {
+  top: 0;
+  right: 0;
+  filter: invert(0.85);
+}
+/* Abajo a la izquierda del área de trabajo, al lado del menú lateral. Las arañitas son negras con
+   ojos naranjas: no se invierten (se pondrían azules), se las recorta con un brillo claro. */
+.halloween-corner-bottom {
+  bottom: 0;
+  left: 244px;
+  transform-origin: top left;
+  width: clamp(6rem, 11vw, 9.5rem);
+  opacity: 0.9;
+  filter: drop-shadow(0 0 1.5px rgb(245 239 230 / 95%)) drop-shadow(0 0 8px rgb(123 192 67 / 45%));
+  animation: halloween-sway 6s ease-in-out infinite;
+}
+.dashboard-shell.has-collapsed-sidebar .halloween-corner-bottom {
+  left: 72px;
+}
+@keyframes halloween-sway {
+  0%,
+  100% {
+    rotate: 0deg;
+  }
+  50% {
+    rotate: 0.8deg;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .halloween-corner-bottom {
+    animation: none;
+  }
+}
+/* Con el menú lateral como cajón (teléfono y tablet), la telaraña va contra el borde. */
+@media (max-width: 900px) {
+  .halloween-corner-bottom,
+  .dashboard-shell.has-collapsed-sidebar .halloween-corner-bottom {
+    left: 0;
+  }
+}
+@media (max-width: 760px) {
+  .halloween-corner {
+    width: 6.5rem;
+    opacity: 0.45;
+  }
+  /* Abajo está la barra de navegación del teléfono: la telaraña se apoya arriba de ella. */
+  .halloween-corner-bottom {
+    bottom: 4.5rem;
+    opacity: 0.7;
+  }
+}
+.halloween-pumpkin {
+  margin-left: -0.35rem;
+  align-self: center;
+}
+/* La calabaza en los estados vacíos ("Ningún pedido coincide…"). */
+.dashboard-shell[data-theme='halloween'] .empty-state::before {
+  content: '';
+  display: block;
+  width: 3.5rem;
+  height: 3.5rem;
+  margin: 0 auto 0.5rem;
+  background: url('/seasonal/halloween/halloween-pumpkin.png') center / contain no-repeat;
+}

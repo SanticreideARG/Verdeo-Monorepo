@@ -5,7 +5,20 @@ import { apiRequest, storeOperatingSiteId, storedOperatingSiteId } from '../lib/
 import { AppearanceContext, type AppearanceState } from '../lib/appearanceContext.js';
 import { ANALYSIS_TAB_PERMISSIONS } from './AnalysisTabs.js';
 import { useNarrowViewport } from '../lib/useNarrowViewport.js';
-import { AppearanceMenu, FONT_OPTIONS, SCALE_OPTIONS, type ThemeOption } from './AppearanceMenu.js';
+import {
+  AppearanceMenu,
+  FONT_OPTIONS,
+  SCALE_OPTIONS,
+  type SeasonControl,
+  type ThemeOption,
+} from './AppearanceMenu.js';
+import { HalloweenDecor } from './HalloweenDecor.js';
+import {
+  activeSeason,
+  seasonTurnedOff,
+  seasonUntilLabel,
+  setSeasonTurnedOff,
+} from '../lib/seasonalTheme.js';
 import { ChatDock } from './ChatDock.js';
 import { OperatorAssistant } from './OperatorAssistant.js';
 import { bottomNavLayout } from '../lib/bottomNav.js';
@@ -437,6 +450,26 @@ export function DashboardShell({
       'natural',
     ),
   );
+  /*
+   * El tema de temporada (HALLOWEEN_THEME_PLAN.md): entre sus fechas se pone solo, encima del tema
+   * elegido, y quien no lo quiera lo saca en Apariencia (se recuerda en este equipo, ese año).
+   */
+  const season = activeSeason(now);
+  const [seasonOff, setSeasonOff] = useState(() =>
+    season ? seasonTurnedOff(season, new Date()) : false,
+  );
+  const seasonOn = season !== null && !seasonOff;
+  const seasonControl: SeasonControl | null = season
+    ? {
+        label: season.label,
+        on: seasonOn,
+        onChange: (on) => {
+          setSeasonTurnedOff(season, new Date(), !on);
+          setSeasonOff(!on);
+        },
+        until: seasonUntilLabel(season),
+      }
+    : null;
   const [uiFont, setUiFont] = useState<string>(() =>
     known(window.localStorage.getItem('verdeo-ui-font'), FONT_KEYS, 'barlow'),
   );
@@ -652,6 +685,7 @@ export function DashboardShell({
           saveAppearance({ theme: value });
         }}
         scale={textScale}
+        season={seasonControl}
         theme={theme}
         themes={themes}
       />
@@ -673,6 +707,7 @@ export function DashboardShell({
       setTextScale(value);
       saveAppearance({ textScale: value });
     },
+    season: seasonControl,
     setTheme: (value) => {
       setTheme(value);
       saveAppearance({ theme: value });
@@ -701,8 +736,9 @@ export function DashboardShell({
     <AppearanceContext.Provider value={appearance}>
       <div
         className={`dashboard-shell ${sidebarCollapsed ? 'has-collapsed-sidebar' : ''}`}
-        data-theme={theme}
+        data-theme={seasonOn && season ? season.key : theme}
       >
+        {seasonOn && season?.key === 'halloween' ? <HalloweenDecor /> : null}
         <button
           aria-label="Cerrar navegación"
           className={`dashboard-sidebar-backdrop ${menuOpen ? 'is-visible' : ''}`}
@@ -712,6 +748,15 @@ export function DashboardShell({
         <aside className={`dashboard-sidebar ${menuOpen ? 'is-open' : ''}`}>
           <Link className="dashboard-brand" to="/app" aria-label="Verdeo SCA, dashboard">
             <img src="/brand/verdeo-icon-128.webp" alt="" width="38" height="38" />
+            {seasonOn && season?.key === 'halloween' ? (
+              <img
+                alt=""
+                className="halloween-pumpkin"
+                height="30"
+                src="/seasonal/halloween/halloween-pumpkin.png"
+                width="30"
+              />
+            ) : null}
             <span>
               verdeo<strong>.</strong>
             </span>

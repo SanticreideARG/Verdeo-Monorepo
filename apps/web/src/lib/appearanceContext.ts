@@ -1,8 +1,12 @@
 import { createContext, useContext } from 'react';
 
+import type { SeasonControl } from '../components/AppearanceMenu.js';
+
 export interface AppearanceState {
   font: string;
   scale: string;
+  /** El tema de temporada, si corre una (HALLOWEEN_THEME_PLAN.md). */
+  season: SeasonControl | null;
   setFont: (value: string) => void;
   setScale: (value: string) => void;
   setTheme: (value: string) => void;

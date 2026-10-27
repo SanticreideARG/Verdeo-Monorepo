@@ -33,6 +33,7 @@ function AppearanceBody() {
         onScale={appearance.setScale}
         onTheme={appearance.setTheme}
         scale={appearance.scale}
+        season={appearance.season}
         theme={appearance.theme}
         themes={THEMES}
       />
