@@ -183,6 +183,8 @@ export function OrderImportDialog({
   // "no se reconoció un pedido" hasta que corría el efecto de abajo.
   const [preview, setPreview] = useState<Preview | null>(() => inbound?.preview ?? null);
   const [decisions, setDecisions] = useState<Record<number, string>>({});
+  // Las filas cuyo cliente nuevo ya compraba antes (destildado "Es cliente nuevo").
+  const [notNew, setNotNew] = useState<Set<number>>(new Set());
   // Las variedades que se eligieron a mano, por pedido y posición.
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [included, setIncluded] = useState<Record<number, boolean>>({});
@@ -365,6 +367,7 @@ export function OrderImportDialog({
           return {
             customerId: decision === 'nuevo' ? null : decision,
             customerName: edited(row).customerName.trim() || row.customerName,
+            ...(decision === 'nuevo' && notNew.has(row.rowNumber) ? { customerIsNew: false } : {}),
             deliveryAddress: edited(row).deliveryAddress?.trim() || null,
             deliveryAddressLine2: edited(row).deliveryAddressLine2?.trim() || null,
             ...((edits[row.rowNumber]?.deliveryDate ?? defaultDelivery)
@@ -664,6 +667,24 @@ export function OrderImportDialog({
                             onChange={(event) => editRow(row, { customerName: event.target.value })}
                             value={edited(row).customerName}
                           />
+                        </label>
+                      ) : null}
+                      {/* Se crea el cliente: ¿es nuevo de verdad o ya compraba? (2026-10-27) */}
+                      {(decisions[row.rowNumber] ?? 'nuevo') === 'nuevo' ? (
+                        <label className="label-switch">
+                          <input
+                            checked={!notNew.has(row.rowNumber)}
+                            onChange={(event) =>
+                              setNotNew((current) => {
+                                const next = new Set(current);
+                                if (event.target.checked) next.delete(row.rowNumber);
+                                else next.add(row.rowNumber);
+                                return next;
+                              })
+                            }
+                            type="checkbox"
+                          />
+                          Es cliente nuevo
                         </label>
                       ) : null}
                       <label className="field">

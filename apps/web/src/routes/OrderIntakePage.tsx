@@ -886,6 +886,8 @@ export function OrderIntakePage() {
         }
         const createdCustomer = await mutate('/api/v1/customers', {
           displayName: newDisplayName,
+          // "Es cliente nuevo" destildado: ya compraba antes de estar en el sistema.
+          ...(form.get('newCustomerIsNew') ? {} : { isNewOverride: false }),
           phone: formText(form, 'newCustomerPhone').trim() || undefined,
         });
         customerId = ((await createdCustomer.json()) as CustomerSummary).id;
@@ -1180,12 +1182,12 @@ export function OrderIntakePage() {
   /*
    * Qué dice el botón de filtros cuando está plegado.
    *
-   * "Pendientes de acción" y el período abierto son el estado de entrada, así que no cuentan: si
-   * contaran, el botón diría "2 filtros" siempre y el número dejaría de significar algo.
+   * "Pendientes de acción" es el estado de entrada, así que no cuenta: si contara, el botón diría
+   * "1 filtro" siempre y el número dejaría de significar algo. El período ya no está acá: va
+   * siempre a la vista, arriba.
    */
   const filtrosPuestos = [
     statusFilter !== PENDING_FILTER,
-    periodId !== null && periodId !== periods[0]?.id,
     visibleColumns.length !== DEFAULT_COLUMNS.length,
   ].filter(Boolean).length;
   const filterSummary =
@@ -1194,6 +1196,18 @@ export function OrderIntakePage() {
       : filtrosPuestos === 1
         ? '1 cambiado'
         : `${String(filtrosPuestos)} cambiados`;
+
+  /**
+   * Elegir un período. Uno anterior (o todos) ya no tiene nada "pendiente de acción": todo está
+   * entregado o cancelado, y con ese filtro la lista salía vacía. Al salir del período actual, el
+   * estado pasa a "Todos"; si se vuelve, a "Pendientes de acción".
+   */
+  function choosePeriod(cycleId: string) {
+    setPeriodId(cycleId);
+    const current = currentPeriod(periods)?.id ?? '';
+    if (cycleId !== current && statusFilter === PENDING_FILTER) setStatusFilter('');
+    else if (cycleId === current && statusFilter === '') setStatusFilter(PENDING_FILTER);
+  }
 
   function runRowAction(order: OrderSummary, key: OrderRowActionKey) {
     if (key === 'confirm') void transition(order, 'CONFIRMED');
@@ -1286,6 +1300,17 @@ export function OrderIntakePage() {
            */}
           <div className="screen-filters">
             <div className="screen-filters-main">
+              {/*
+               * El período, siempre a la vista (2026-10-27): plegado en "Filtros" no se encontraba y
+               * los pedidos de los períodos anteriores parecían no estar. Con "Todos los períodos"
+               * incluido: la misma pantalla es la cola de esta semana y el historial completo.
+               */}
+              <PeriodPicker
+                allowAll
+                onChange={choosePeriod}
+                periods={periods}
+                value={periodId ?? ''}
+              />
               <label className="field">
                 Buscar
                 <input
@@ -1322,14 +1347,6 @@ export function OrderIntakePage() {
                 <span>{filterSummary}</span>
               </summary>
               <div>
-                {/* Con "Todos los períodos" incluido: la misma pantalla es la cola de esta semana y
-                    el historial completo, según lo que se elija acá y en Estado. */}
-                <PeriodPicker
-                  allowAll
-                  onChange={setPeriodId}
-                  periods={periods}
-                  value={periodId ?? ''}
-                />
                 <label className="field">
                   Estado
                   <select
@@ -1562,6 +1579,12 @@ export function OrderIntakePage() {
                   <label className="field">
                     Teléfono
                     <input name="newCustomerPhone" />
+                  </label>
+                  {/* Nuevo de verdad o ya era cliente (2026-10-27): pinta el color de nuevo en el
+                    informe y decide a quién van las recomendaciones de la primera compra. */}
+                  <label className="label-switch field-wide">
+                    <input defaultChecked name="newCustomerIsNew" type="checkbox" />
+                    Es cliente nuevo
                   </label>
                 </div>
               )}

@@ -142,6 +142,8 @@ export const CustomerRestrictionUpdateRequestSchema = z.object({
 export const CustomerCreateRequestSchema = z.object({
   addresses: z.array(CustomerAddressCreateRequestSchema).max(20).default([]),
   displayName: RequiredTextSchema,
+  /** "NUEVO" a mano al crearlo (2026-10-27): false si ya era cliente antes del sistema. */
+  isNewOverride: z.boolean().nullable().optional(),
   email: z.email().max(320).optional(),
   firstName: z.string().trim().max(100).optional(),
   identities: z.array(CustomerIdentityCreateRequestSchema).max(20).default([]),
@@ -1755,6 +1757,8 @@ export const OrderImportConfirmRequestSchema = z.object({
         /** El cliente elegido; sin esto se crea uno nuevo con `customerName`, `phone` y `email`. */
         customerId: UuidSchema.nullable(),
         customerName: z.string().trim().min(1).max(160),
+        /** Al crear el cliente: false si ya era cliente (no es "nuevo"); sin esto, se calcula. */
+        customerIsNew: z.boolean().optional(),
         deliveryAddress: z.string().trim().max(500).nullable(),
         deliveryAddressLine2: z.string().trim().max(500).nullable().optional(),
         /** El día de reparto elegido; el servidor lo valida contra los días de la ciudad. */

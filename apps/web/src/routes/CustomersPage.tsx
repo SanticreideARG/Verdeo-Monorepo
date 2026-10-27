@@ -88,6 +88,8 @@ export function CustomersPage() {
   const createFormRef = useRef<HTMLFormElement>(null);
   const createDraft = useFormDraft(createFormRef, 'customer-create', showCreate);
   const [importFile, setImportFile] = useState<File | null>(null);
+  // Si los contactos de la planilla son clientes nuevos; si no, entran como cartera (2026-10-27).
+  const [importAsNew, setImportAsNew] = useState(false);
   const [importing, setImporting] = useState(false);
   // El error de la importación se muestra dentro del diálogo: el aviso general queda tapado.
   const [importError, setImportError] = useState('');
@@ -355,6 +357,7 @@ export function CustomersPage() {
     if (importFile) body.set('file', importFile);
     // Una planilla con direcciones necesita la zona: sin ella el servidor la rechaza.
     if (zoneId) body.set('geographicZoneId', zoneId);
+    if (importAsNew) body.set('areNew', 'true');
     return body;
   }
 
@@ -1565,6 +1568,15 @@ export function CustomersPage() {
                       </option>
                     ))}
                   </select>
+                </label>
+                {/* La cartera de siempre no es "nueva": sin tildar, no se pintan como nuevos. */}
+                <label className="label-switch field-wide">
+                  <input
+                    checked={importAsNew}
+                    onChange={(event) => setImportAsNew(event.target.checked)}
+                    type="checkbox"
+                  />
+                  Son clientes nuevos (sin tildar, entran como clientes de siempre)
                 </label>
                 {importError ? (
                   <p className="screen-notice" role="alert">

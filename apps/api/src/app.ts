@@ -4219,6 +4219,8 @@ export function createApp(options: CreateAppOptions) {
             scoped(context, {
               displayName: row.customerName,
               ...(email ? { email } : {}),
+              // Destildado "es cliente nuevo": ya era cliente antes de cargarse acá.
+              ...(row.customerIsNew === false ? { isNewOverride: false } : {}),
               ...(row.phone ? { phone: row.phone } : {}),
             } as never),
             operationsContext(context),
@@ -4547,7 +4549,15 @@ export function createApp(options: CreateAppOptions) {
       });
       if (dryRun) return context.json(CustomerImportPreviewResponseSchema.parse({ rows }));
 
-      const toImport = scopedRows.filter((_, index) => (checks[index]?.status ?? 'new') === 'new');
+      /*
+       * Una planilla de contactos suele ser la cartera de siempre: si no se tilda "Son clientes
+       * nuevos", entran como no nuevos (2026-10-27). Sin esto, todos salían "NUEVO" hasta su segundo
+       * pedido, con el color de nuevo en el informe.
+       */
+      const asNew = body?.areNew === 'true';
+      const toImport = scopedRows
+        .filter((_, index) => (checks[index]?.status ?? 'new') === 'new')
+        .map((customer) => (asNew ? customer : { ...customer, isNewOverride: false }));
       if (toImport.length > 0) {
         await operations.importCustomers(toImport, {
           ...operationsContext(context),

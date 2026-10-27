@@ -157,6 +157,8 @@ export interface CustomerInput {
   firstName?: string | undefined;
   identities?: readonly CustomerIdentityInput[] | undefined;
   internalNotes?: string | undefined;
+  /** "NUEVO" a mano; sin esto (o null) se calcula por la cantidad de pedidos. */
+  isNewOverride?: boolean | null | undefined;
   lastName?: string | undefined;
   phone?: string | undefined;
   restrictions?: readonly { reason: string; type: string }[] | undefined;
@@ -1731,6 +1733,7 @@ export class PostgresOperationsService {
         displayName: normalizeCustomerText(input.displayName),
         firstName: input.firstName ? normalizeCustomerText(input.firstName) : undefined,
         internalNotes: input.internalNotes,
+        isNewOverride: input.isNewOverride ?? null,
         lastName: input.lastName ? normalizeCustomerText(input.lastName) : undefined,
       })
       .returning({

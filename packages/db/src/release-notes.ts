@@ -91,4 +91,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Se vende desde Nuevo pedido, como el resto del stock. El Intuitivo lleva sus platos aunque no estén en el menú de la semana.
 • Si se reactiva el pedido, las viandas vuelven a él (salvo que ya se hayan vendido).`,
   },
+  {
+    key: '2026-10-27-periodo-y-nuevos',
+    body: `Pedidos y clientes:
+• En Pedidos, el período está siempre arriba, al lado de "Buscar" (también en el teléfono). Al elegir uno anterior, se ven todos sus pedidos.
+• "Es cliente nuevo" al crear un cliente desde Nuevo pedido y al importar pedidos: destildalo si ya compraba antes. Los contactos importados de una planilla entran como clientes de siempre, salvo que se tilde "Son clientes nuevos".`,
+  },
 ];

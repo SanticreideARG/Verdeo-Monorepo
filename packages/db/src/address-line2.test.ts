@@ -386,6 +386,26 @@ describe('NUEVO', () => {
     await service.updateCustomer(CUSTOMER, { isNewOverride: null }, true, contexto);
     expect((await service.getCustomer(CUSTOMER, false)).isNew).toBe(false);
   });
+
+  it('se crea como "no nuevo" si ya era cliente antes del sistema', async () => {
+    const { service } = await base();
+    const created = (await service.createCustomer(
+      { displayName: 'Bruno Cartera', isNewOverride: false, operatingSiteId: SITE },
+      contexto,
+    )) as { id: string };
+    expect(await service.getCustomer(created.id, false)).toMatchObject({
+      isNew: false,
+      isNewOverride: false,
+    });
+    // Sin decir nada, se calcula: sin pedidos, es nuevo.
+    const otro = (await service.createCustomer(
+      { displayName: 'Carla Nueva', operatingSiteId: SITE },
+      contexto,
+    )) as {
+      id: string;
+    };
+    expect((await service.getCustomer(otro.id, false)).isNew).toBe(true);
+  });
 });
 
 describe('separar el detalle de los domicilios viejos', () => {

@@ -667,3 +667,9 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] Hojas de ruta: franja horaria en la card, reordenar arrastrando, salida y llegada en el mapa.
 - [x] Quien reparte sólo ve los montos en efectivo (hoja, WhatsApp, CSV); el mensaje de WhatsApp lleva la línea 2 de la dirección.
 - [x] Cancelado después de cocinarse como stock vendible: el diálogo pregunta; lo fijo se suma al lote de su variedad, el Intuitivo abre un lote con sus platos; reactivar lo devuelve. Migración 0074.
+
+## Pedidos, clientes y temporada (2026-10-27)
+
+- [x] Pedidos: el selector de período siempre a la vista (computadora y teléfono); al elegir uno anterior el estado pasa a "Todos", porque "Pendientes de acción" lo dejaba vacío.
+- [x] "Es cliente nuevo" al crear un cliente en Nuevo pedido y al importar pedidos (mail y planilla); los contactos de planilla entran como no nuevos salvo "Son clientes nuevos".
+- [ ] Tema Halloween (plan en [HALLOWEEN_THEME_PLAN.md](../03-features/HALLOWEEN_THEME_PLAN.md)): falta decidir alcance y activación, y la calabaza en PNG transparente.
