@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import {
+  isNotNull,
   and,
   asc,
   desc,
@@ -4622,7 +4623,13 @@ export class PostgresOperationsService {
       .innerJoin(salesCycles, eq(salesCycles.id, weeklyMenus.salesCycleId))
       .leftJoin(operatingSites, eq(operatingSites.id, weeklyMenus.operatingSiteId))
       .where(onlyPublished ? eq(weeklyMenus.status, 'PUBLISHED') : undefined)
-      .orderBy(desc(salesCycles.openAt));
+      // Si hay dos semanas publicadas que se pisan, la publicada más recientemente va primero: es
+      // la que se quiso poner (2026-10-28). Antes el empate lo decidía el orden de la base.
+      .orderBy(
+        desc(salesCycles.openAt),
+        sql`${weeklyMenus.publishedAt} desc nulls last`,
+        desc(weeklyMenus.createdAt),
+      );
 
     if (menuRows.length === 0) return [];
     const offeringRows = await this.database
@@ -5134,11 +5141,48 @@ export class PostgresOperationsService {
         return menuId;
       })
       .then(async (updatedMenuId) => {
+        await this.refreshRegionalRevisions(updatedMenuId, context);
         const menu = (await this.listMenus()).find(({ id }) => id === updatedMenuId);
         if (!menu) throw new Error('Updated menu could not be reloaded');
         return menu;
       })
       .catch(translateDatabaseConflict);
+  }
+
+  /**
+   * Después de guardar la semana general, sus ciudades se actualizan solas (2026-10-28).
+   *
+   * Publicar copia la semana a cada ciudad, y la venta usa la copia de la ciudad. Corregir la
+   * general no tocaba las copias: se seguía vendiendo la carga con el error. Ahora se refrescan
+   * las copias que ya existen, en el modo que no pisa lo que una ciudad personalizó a mano. Las
+   * ciudades sin copia no se crean acá: eso lo hace publicar.
+   */
+  private async refreshRegionalRevisions(menuId: string, context: OperationsContext) {
+    const [menu] = await this.database
+      .select({
+        operatingSiteId: weeklyMenus.operatingSiteId,
+        salesCycleId: weeklyMenus.salesCycleId,
+      })
+      .from(weeklyMenus)
+      .where(eq(weeklyMenus.id, menuId))
+      .limit(1);
+    if (!menu || menu.operatingSiteId !== null) return;
+    const regional = await this.database
+      .select({ operatingSiteId: weeklyMenus.operatingSiteId })
+      .from(weeklyMenus)
+      .innerJoin(operatingSites, eq(operatingSites.id, weeklyMenus.operatingSiteId))
+      .where(
+        and(
+          eq(weeklyMenus.salesCycleId, menu.salesCycleId),
+          isNotNull(weeklyMenus.operatingSiteId),
+          eq(operatingSites.active, true),
+        ),
+      );
+    const operatingSiteIds = regional
+      .map((row) => row.operatingSiteId)
+      .filter((id): id is string => id !== null);
+    if (operatingSiteIds.length === 0) return;
+    await this.distributeMenu(menuId, { mode: 'UPDATE_UNCUSTOMIZED', operatingSiteIds }, context);
   }
 
   // "Precios por ubicación": editing just the price for a size on one already-distributed menu,
@@ -5548,16 +5592,15 @@ export class PostgresOperationsService {
             continue;
           }
 
-          // A published regional revision is what live orders reference, so it is never rewritten
-          // in place: refreshing it would mutate the snapshot those orders were priced against.
-          if (existing?.status === 'PUBLISHED') {
-            results.push({
-              operatingSiteId,
-              outcome: 'SKIPPED_PUBLISHED',
-              weeklyMenuId: existing.id,
-            });
-            continue;
-          }
+          /*
+           * Una revisión publicada también se actualiza (2026-10-28).
+           *
+           * Antes se salteaba "para no cambiar lo que los pedidos ya tomaron", y el resultado fue el
+           * contrario: se corrigió el menú de la semana y las ciudades siguieron vendiendo la carga
+           * con el error. Los pedidos no dependen de esto —cada uno guardó su precio y sus platos
+           * elegidos, y las opciones conservan su id porque se actualizan en el lugar—; lo que una
+           * ciudad personalizó a mano sigue sin pisarse, salvo en REPLACE.
+           */
 
           const regionalId =
             existing?.id ??

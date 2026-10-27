@@ -324,3 +324,101 @@ describe('updateMenu y el ciclo compartido entre localidades', () => {
     expect(price?.customized).toBe(true);
   });
 });
+
+describe('corregir la semana general llega a las ciudades', () => {
+  async function distribuidaYPublicada() {
+    const { db, service } = await seeded();
+    const master = await service.createMenu(
+      { ...menuInputBase, offerings: [fixedOffering('Real')] },
+      CONTEXT,
+    );
+    await service.publishMenu(master.id, CONTEXT);
+    await service.distributeMenu(
+      master.id,
+      { mode: 'CREATE_MISSING', operatingSiteIds: [SITE_A, SITE_B] },
+      CONTEXT,
+    );
+    const regionals = await db
+      .select({ id: weeklyMenus.id, operatingSiteId: weeklyMenus.operatingSiteId })
+      .from(weeklyMenus)
+      .where(eq(weeklyMenus.sourceMenuId, master.id));
+    for (const regional of regionals) await service.publishMenu(regional.id, CONTEXT);
+    const regionalA = regionals.find((row) => row.operatingSiteId === SITE_A);
+    const regionalB = regionals.find((row) => row.operatingSiteId === SITE_B);
+    if (!regionalA || !regionalB) throw new Error('Faltan las revisiones regionales');
+    return { db, master, regionalA, regionalB, service };
+  }
+
+  const dishesOf = async (db: Database, menuId: string) => {
+    const [offering] = await db
+      .select({ id: weeklyMenuOfferings.id })
+      .from(weeklyMenuOfferings)
+      .where(eq(weeklyMenuOfferings.weeklyMenuId, menuId));
+    const rows = await db
+      .select({ dishName: weeklyMenuItems.dishName })
+      .from(weeklyMenuItems)
+      .where(eq(weeklyMenuItems.offeringId, offering?.id ?? ''));
+    return { dishes: rows.map((row) => row.dishName).sort(), offeringId: offering?.id };
+  };
+
+  it('las ciudades ya publicadas toman la corrección, con sus pedidos intactos', async () => {
+    const { db, master, regionalA, service } = await distribuidaYPublicada();
+    const before = await dishesOf(db, regionalA.id);
+    expect(before.dishes).toEqual(['A', 'B', 'C', 'D', 'E']);
+    await orderAgainst(db, regionalA.id, before.offeringId ?? '');
+
+    // La operadora corrige los platos en la semana general.
+    await service.updateMenu(
+      master.id,
+      {
+        ...menuInputBase,
+        offerings: [{ ...fixedOffering('Real'), dishes: ['F', 'G', 'H', 'I', 'J'] }],
+      },
+      CONTEXT,
+    );
+
+    const after = await dishesOf(db, regionalA.id);
+    expect(after.dishes).toEqual(['F', 'G', 'H', 'I', 'J']);
+    // La misma opción: el pedido de la ciudad sigue apuntando a ella.
+    expect(after.offeringId).toBe(before.offeringId);
+    const [item] = await db
+      .select({ offeringId: orderItems.offeringId })
+      .from(orderItems)
+      .where(eq(orderItems.orderId, ORDER_ID));
+    expect(item?.offeringId).toBe(before.offeringId);
+    // Sigue publicada.
+    const [status] = await db
+      .select({ status: weeklyMenus.status })
+      .from(weeklyMenus)
+      .where(eq(weeklyMenus.id, regionalA.id));
+    expect(status?.status).toBe('PUBLISHED');
+  });
+
+  it('no pisa lo que una ciudad personalizó a mano', async () => {
+    const { db, master, regionalB, service } = await distribuidaYPublicada();
+    // Sitio B cambió su precio a mano.
+    await service.updateMenu(
+      regionalB.id,
+      {
+        ...menuInputBase,
+        offerings: [fixedOffering('Real')],
+        prices: [{ currency: 'ARS', mealsPerUnit: 5, sizeName: '250', unitPriceMinor: 31000 }],
+      },
+      CONTEXT,
+    );
+    await service.updateMenu(
+      master.id,
+      {
+        ...menuInputBase,
+        offerings: [fixedOffering('Real')],
+        prices: [{ currency: 'ARS', mealsPerUnit: 5, sizeName: '250', unitPriceMinor: 27000 }],
+      },
+      CONTEXT,
+    );
+    const [price] = await db
+      .select({ value: weeklyMenuPrices.unitPriceMinor })
+      .from(weeklyMenuPrices)
+      .where(eq(weeklyMenuPrices.weeklyMenuId, regionalB.id));
+    expect(price?.value).toBe(31000);
+  });
+});

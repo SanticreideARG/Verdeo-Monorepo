@@ -101,4 +101,8 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
     key: '2026-10-27-halloween',
     body: `🎃 Hasta el 1 de noviembre el panel se viste de Halloween: negro, naranja y verde, con telarañas y una calabaza. Vuelve tu tema solo cuando termina. Si no lo querés, sacalo en "Aa" → Temporada.`,
   },
+  {
+    key: '2026-10-28-correccion-menu',
+    body: `Corregir un menú ya publicado: al guardar la corrección en la semana general, llega sola a todas las ciudades (antes las ciudades seguían vendiendo la carga original). Lo que una ciudad haya personalizado a mano no se pisa.`,
+  },
 ];

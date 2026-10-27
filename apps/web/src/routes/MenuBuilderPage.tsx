@@ -354,7 +354,13 @@ export function MenuBuilderPage() {
       if (!response.ok) throw new Error(await errorMessage(response));
 
       if (editingMenu) {
-        showToast('Cambios guardados.');
+        // La semana general lleva la corrección a las copias de cada ciudad, salvo lo que una
+        // ciudad haya personalizado (2026-10-28): antes las ciudades seguían vendiendo la carga vieja.
+        showToast(
+          editingMenu.operatingSiteId === null
+            ? 'Cambios guardados, también en las ciudades (salvo lo que cada una personalizó).'
+            : 'Cambios guardados.',
+        );
         return;
       }
 

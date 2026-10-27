@@ -270,3 +270,19 @@ Ranking determinista por:
 - disponibilidad de marketing/consentimiento.
 
 IA redacta la oferta; no selecciona arbitrariamente ni envía sin aprobación en V1.
+
+## Corregir una semana ya publicada (2026-10-28)
+
+Incidente: se cargó la semana del 1 de noviembre con un error y se corrigió en la semana general,
+pero al tomar pedidos seguía apareciendo la carga original. Publicar copia la semana a cada ciudad
+(`CREATE_MISSING`), la venta usa la copia de la ciudad, y ni guardar la general ni distribuir
+tocaban una copia ya publicada (`SKIPPED_PUBLISHED`).
+
+- **Guardar la semana general refresca las copias de las ciudades** que ya existen
+  (`refreshRegionalRevisions` → `distributeMenu` en `UPDATE_UNCUSTOMIZED`), publicadas o no. Lo
+  personalizado por una ciudad (`customized`) no se pisa, salvo en `REPLACE`.
+- **Distribuir ya no saltea las copias publicadas.** Los pedidos no dependen de eso: cada uno guardó
+  su precio y sus platos elegidos, y las opciones se actualizan en el lugar (conservan su id).
+- **Dos semanas publicadas que se pisan**: la publicada más recientemente va primero en la lista, y
+  es la que se ofrece al tomar pedidos (antes el empate lo decidía el orden de la base).
+- Para arreglar una semana ya afectada: abrir la semana general, guardar (aunque sea sin cambios).
