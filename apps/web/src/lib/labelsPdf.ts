@@ -82,6 +82,11 @@ export async function downloadLabelsPdf(html: string, fileName: string): Promise
   try {
     const p = PRODUCTION_PAPER;
     const pdf = new jsPDF({ format: [p.pageWidthMm, p.pageHeightMm], unit: 'mm' });
+    /*
+     * Una impresión del PDF salió entera al ~95 % (2026-10-28): el visor la ajustó al área
+     * imprimible. Con esto Acrobat y el visor de Chrome arrancan en "Tamaño real".
+     */
+    pdf.viewerPreferences({ PrintScaling: 'None' });
     const fontEmbedCSS = await embeddedFonts(view);
     const sheets = [...view.document.querySelectorAll<HTMLElement>('.sheet')];
     for (const [index, sheet] of sheets.entries()) {

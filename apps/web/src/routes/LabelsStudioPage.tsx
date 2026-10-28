@@ -776,7 +776,9 @@ function PrintInstructions() {
         </li>
         <li>
           La primera vez, probá con una hoja común y ponela a contraluz sobre una de etiquetas: si
-          calza, ya está. Si toda la hoja sale más chica, el diálogo la está ajustando.
+          calza, ya está. Si toda la hoja sale más chica (las de arriba corridas hacia abajo y las
+          de abajo hacia arriba), el diálogo la está ajustando: revisá la escala y que el papel sea
+          A4.
         </li>
       </ol>
     </details>
