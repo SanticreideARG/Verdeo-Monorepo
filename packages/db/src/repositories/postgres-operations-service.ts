@@ -414,6 +414,8 @@ function sameSize(left: string, right: string): boolean {
 }
 
 const LOT_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
+/** Hasta cuántos meses atrás se puede cargar a mano un Intuitivo al stock (2026-10-27). */
+export const PAST_INTUITIVO_MONTHS = 4;
 
 /**
  * Si el cliente es "NUEVO": lo que se marcó a mano, o, si no, que tenga a lo sumo un pedido no
@@ -9963,6 +9965,105 @@ export class PostgresOperationsService {
           compareProducts(left, right) ||
           (openAtOf.get(right.id) ?? 0) - (openAtOf.get(left.id) ?? 0),
       );
+  }
+
+  /**
+   * Cargar a mano un Intuitivo de un período anterior al stock (2026-10-27).
+   *
+   * Para lo que se cocinó y quedó sin pasar por un pedido cancelado: se elige el período (hasta
+   * cuatro meses atrás), los platos de su menú, el tamaño y un nombre. Queda como cualquier lote de
+   * Intuitivo: se vende con el Intuitivo de la semana del mismo tamaño, y se da de baja igual. Vence
+   * un mes después de cargarlo, no de su período: si no, uno de hace tres meses nacería vencido.
+   */
+  public async createIntuitivoLot(
+    input: {
+      dishes: readonly { dishName: string; familyName: string | null; slot: number | null }[];
+      name: string;
+      operatingSiteId: string;
+      quantityUnits: number;
+      salesCycleId: string;
+      variantName: string;
+    },
+    context: OperationsContext,
+  ) {
+    return this.database
+      .transaction(async (transaction) => {
+        const [cycle] = await transaction
+          .select({ alias: salesCycles.alias, openAt: salesCycles.openAt })
+          .from(salesCycles)
+          .where(eq(salesCycles.id, input.salesCycleId))
+          .limit(1);
+        if (!cycle) throw new OperationsNotFoundError('No se encontró el período de venta');
+        const limit = new Date();
+        limit.setMonth(limit.getMonth() - PAST_INTUITIVO_MONTHS);
+        if (cycle.openAt < limit)
+          throw new OperationsConflictError(
+            `Sólo se cargan Intuitivos de los últimos ${String(PAST_INTUITIVO_MONTHS)} meses.`,
+          );
+        const [site] = await transaction
+          .select({ id: operatingSites.id })
+          .from(operatingSites)
+          .where(eq(operatingSites.id, input.operatingSiteId))
+          .limit(1);
+        if (!site) throw new OperationsNotFoundError('No se encontró la ciudad');
+
+        // Los platos tienen que ser del menú de ese período (de la semana general o de una ciudad).
+        const served = new Set(
+          (
+            await transaction
+              .selectDistinct({ dishName: weeklyMenuItems.dishName })
+              .from(weeklyMenuItems)
+              .innerJoin(
+                weeklyMenuOfferings,
+                eq(weeklyMenuOfferings.id, weeklyMenuItems.offeringId),
+              )
+              .innerJoin(weeklyMenus, eq(weeklyMenus.id, weeklyMenuOfferings.weeklyMenuId))
+              .where(eq(weeklyMenus.salesCycleId, input.salesCycleId))
+          ).map((row) => row.dishName),
+        );
+        const unknown = input.dishes.find((dish) => !served.has(dish.dishName));
+        if (unknown)
+          throw new OperationsConflictError(
+            `"${unknown.dishName}" no está en el menú de ${cycle.alias}.`,
+          );
+
+        const familyName = await this.composableFamilyName(transaction);
+        const [lot] = await transaction
+          .insert(stockLots)
+          .values({
+            actorUserId: context.actorUserId ?? null,
+            dishSelections: input.dishes.map((dish) => ({ ...dish })),
+            expiresAt: new Date(Date.now() + LOT_LIFETIME_MS),
+            familyName,
+            notes: input.name,
+            operatingSiteId: input.operatingSiteId,
+            quantityUnits: input.quantityUnits,
+            salesCycleId: input.salesCycleId,
+            variantName: input.variantName,
+          })
+          .returning({ id: stockLots.id });
+        if (!lot) throw new Error('Stock lot insert did not return a row');
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        await audit.record({
+          action: 'stock_lot.created',
+          actor: auditActor(context),
+          after: {
+            dishes: input.dishes.map((dish) => dish.dishName),
+            name: input.name,
+            quantityUnits: input.quantityUnits,
+            variantName: input.variantName,
+          },
+          before: null,
+          correlationId: context.correlationId,
+          entityId: lot.id,
+          entityType: 'stock_lot',
+          metadata: { cycle: cycle.alias, family: familyName },
+          requestId: context.requestId,
+          source: context.source,
+        });
+        return { id: lot.id };
+      })
+      .catch(translateDatabaseConflict);
   }
 
   /**

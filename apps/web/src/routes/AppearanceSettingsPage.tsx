@@ -37,6 +37,17 @@ function AppearanceBody() {
         theme={appearance.theme}
         themes={THEMES}
       />
+      <fieldset className="appearance-settings-orders">
+        <legend>Al tomar pedidos</legend>
+        <label>
+          <input
+            checked={appearance.newCustomerIsNew}
+            onChange={(event) => appearance.setNewCustomerIsNew(event.target.checked)}
+            type="checkbox"
+          />{' '}
+          Marcar "Es cliente nuevo" de entrada al crear un cliente desde Nuevo pedido
+        </label>
+      </fieldset>
     </div>
   );
 }
@@ -63,7 +74,7 @@ export function AppearanceSettingsPage() {
           <h1 className="text-2xl font-semibold text-forest">Apariencia</h1>
           <p className="mt-2 text-ink-muted">
             Se guarda en tu cuenta, así que te sigue a cualquier dispositivo donde entres. El tamaño
-            del texto también alcanza a las pantallas públicas.
+            del texto también alcanza a las pantallas públicas. Cada persona elige lo suyo.
           </p>
         </header>
         <AppearanceBody />

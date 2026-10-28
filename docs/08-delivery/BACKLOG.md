@@ -672,8 +672,15 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 
 - [x] Pedidos: el selector de período siempre a la vista (computadora y teléfono); al elegir uno anterior el estado pasa a "Todos", porque "Pendientes de acción" lo dejaba vacío.
 - [x] "Es cliente nuevo" al crear un cliente en Nuevo pedido y al importar pedidos (mail y planilla); los contactos de planilla entran como no nuevos salvo "Son clientes nuevos".
+- [x] "Es cliente nuevo" en Nuevo pedido arranca sin tildar; cada persona elige en Ajustes → Apariencia ("Al tomar pedidos") si viene tildado (`user_appearance.new_customer_is_new`, migración 0075).
 - [x] Tema Halloween ([HALLOWEEN_THEME_PLAN.md](../03-features/HALLOWEEN_THEME_PLAN.md)): sólo el panel, solo del 24-oct al 1-nov, se saca en Apariencia; telarañas en las esquinas y calabaza.
 
 ## Menús (2026-10-28)
 
 - [x] Corregir una semana publicada llega a las ciudades: guardar la general refresca sus copias (también las publicadas) sin pisar lo personalizado; con dos semanas publicadas que se pisan, gana la más reciente.
+
+## Etiquetas, pedidos y stock (2026-10-27)
+
+- [x] Etiquetas: "Descargar PDF" arma el PDF en el navegador (html-to-image + jsPDF, 300 ppp, A4 exacto, tipografías incrustadas) y anota la tanda como impresa; instrucciones de impresión debajo.
+- [x] Nuevo pedido en pantalla ancha (≥1360px): dos columnas, cliente a la izquierda y pedido a la derecha, cuatro campos por fila.
+- [x] Stock: cargar a mano un Intuitivo de un período anterior (hasta 4 meses; platos validados contra el menú de ese período; nombre en `stock_lots.notes`; vence un mes después de cargarlo). `POST /api/v1/stock-lots`.

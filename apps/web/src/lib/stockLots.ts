@@ -13,6 +13,8 @@ export interface StockLot {
   expiresAt: string;
   familyName: string;
   id: string;
+  /** El nombre de un Intuitivo cargado a mano (2026-10-27); null en los demás. */
+  notes?: string | null;
   operatingSiteId: string;
   operatingSiteName: string;
   quantityUnits: number;

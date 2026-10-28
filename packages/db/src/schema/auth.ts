@@ -233,6 +233,11 @@ export const userAppearance = pgTable('user_appearance', {
   theme: text('theme'),
   fontKey: text('font_key'),
   textScale: text('text_scale'),
+  /*
+   * Si al crear un cliente desde Nuevo pedido "Es cliente nuevo" arranca marcado (2026-10-27). Es
+   * una costumbre de quien toma pedidos, no de la empresa. Null: sin marcar.
+   */
+  newCustomerIsNew: boolean('new_customer_is_new'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 

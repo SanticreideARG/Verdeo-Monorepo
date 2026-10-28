@@ -894,6 +894,29 @@ export const StockLotSchema = z.object({
 export const StockLotListResponseSchema = z.object({ items: z.array(StockLotSchema) });
 
 /** Corregir un lote: la cantidad, dar de baja lo que queda o pasarlo a otra ciudad. */
+/**
+ * Cargar a mano un Intuitivo de un período anterior al stock (2026-10-27): para lo que se cocinó y
+ * quedó sin pasar por un pedido cancelado. Platos del menú de ese período; el nombre es el que se
+ * ve en el stock.
+ */
+export const StockLotCreateRequestSchema = z.object({
+  dishes: z
+    .array(
+      z.object({
+        dishName: z.string().trim().min(1).max(200),
+        familyName: z.string().trim().min(1).max(120).nullable(),
+        slot: z.number().int().min(1).max(20).nullable(),
+      }),
+    )
+    .min(1)
+    .max(20),
+  name: z.string().trim().min(1).max(80),
+  operatingSiteId: UuidSchema,
+  quantityUnits: z.number().int().min(1).max(100),
+  salesCycleId: UuidSchema,
+  variantName: z.string().trim().min(1).max(80),
+});
+
 export const StockLotUpdateRequestSchema = z.object({
   operatingSiteId: UuidSchema.optional(),
   quantityUnits: z.number().int().min(0).max(10_000).optional(),

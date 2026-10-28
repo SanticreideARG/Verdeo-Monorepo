@@ -15,6 +15,7 @@ import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus
 import { PeriodPicker } from '../components/PeriodPicker.js';
 import { RunFilter } from '../components/RunFilter.js';
 import { apiRequest } from '../lib/api.js';
+import { downloadLabelsPdf } from '../lib/labelsPdf.js';
 import { todayInOperation } from '../lib/dates.js';
 import { errorMessage, type WeeklyMenu } from '../lib/operations.js';
 import { currentPeriod, periodsFromMenus, type Period } from '../lib/periods.js';
@@ -133,6 +134,9 @@ export function LabelsStudioPage() {
   const [startAt, setStartAt] = useState(1);
   const [message, setMessage] = useState('');
   const [repeated, setRepeated] = useState<ProductionLabel[] | null>(null);
+  /** Qué se pidió con la tanda: mandarla a la impresora o bajar el PDF (2026-10-27). */
+  const [output, setOutput] = useState<'pdf' | 'print'>('print');
+  const [makingPdf, setMakingPdf] = useState(false);
 
   useEffect(() => {
     if (!canRead) return;
@@ -294,22 +298,35 @@ export function LabelsStudioPage() {
     setLooseQuantity(1);
   }
 
-  /** Pedir imprimir: si la tanda repite etiquetas, primero se pregunta. */
-  function requestPrint() {
+  /** Pedir imprimir o el PDF: si la tanda repite etiquetas, primero se pregunta. */
+  function requestPrint(kind: 'pdf' | 'print') {
+    setOutput(kind);
     const again = batch.filter((label) => !isLoose(label) && printed.has(label.key));
     if (again.length > 0) {
       setRepeated(again);
       return;
     }
-    print(batch);
+    print(batch, kind);
   }
 
-  function print(labels: readonly ProductionLabel[]) {
+  function print(labels: readonly ProductionLabel[], kind = output) {
     setRepeated(null);
     if (labels.length === 0) return;
-    printInFrame(renderProductionSheets({ labels, startAt, title: 'Etiquetas' }));
-    void record(labels);
+    const html = renderProductionSheets({ labels, startAt, title: 'Etiquetas' });
+    if (kind === 'print') {
+      printInFrame(html);
+      void record(labels);
+      return;
+    }
+    setMakingPdf(true);
+    setMessage('');
+    void downloadLabelsPdf(html, `etiquetas-${todayInOperation()}.pdf`)
+      .then(() => record(labels))
+      .catch(() => setMessage('No se pudo armar el PDF. Probá de nuevo o usá «Imprimir».'))
+      .finally(() => setMakingPdf(false));
   }
+
+  const verb = output === 'pdf' ? 'Descargar' : 'Imprimir';
 
   async function record(labels: readonly ProductionLabel[]) {
     const toRecord = labels
@@ -618,18 +635,26 @@ export function LabelsStudioPage() {
                   </button>
                 </p>
               ) : null}
-              <button
-                className="button button-primary"
-                disabled={batch.length === 0}
-                onClick={requestPrint}
-                type="button"
-              >
-                Imprimir
-              </button>
-              <p className="field-hint">
-                Imprimí al 100 % («Tamaño real», sin ajustar a la página) y sin márgenes. Las
-                marcadas en naranja ya se imprimieron.
-              </p>
+              <div className="studio-output">
+                <button
+                  className="button button-primary"
+                  disabled={batch.length === 0 || makingPdf}
+                  onClick={() => requestPrint('pdf')}
+                  type="button"
+                >
+                  {makingPdf ? 'Armando el PDF…' : 'Descargar PDF'}
+                </button>
+                <button
+                  className="button button-secondary"
+                  disabled={batch.length === 0}
+                  onClick={() => requestPrint('print')}
+                  type="button"
+                >
+                  Imprimir
+                </button>
+              </div>
+              <p className="field-hint">Las marcadas en naranja ya se imprimieron.</p>
+              <PrintInstructions />
             </div>
             <SheetPreview html={previewHtml} sheets={Math.max(1, sheetCount)} />
           </aside>
@@ -658,7 +683,8 @@ export function LabelsStudioPage() {
                     timeStyle: 'short',
                   })})`
                 : ''}
-              . Podés sacarlas de la tanda o imprimirlas de nuevo.
+              . Podés sacarlas de la tanda o {output === 'pdf' ? 'incluirlas' : 'imprimirlas'} de
+              nuevo.
             </p>
             <div className="form-actions mt-5">
               {repeated.length < batch.length ? (
@@ -670,7 +696,7 @@ export function LabelsStudioPage() {
                   }}
                   type="button"
                 >
-                  Imprimir sólo las nuevas ({String(batch.length - repeated.length)})
+                  {verb} sólo las nuevas ({String(batch.length - repeated.length)})
                 </button>
               ) : null}
               <button
@@ -678,7 +704,7 @@ export function LabelsStudioPage() {
                 onClick={() => print(batch)}
                 type="button"
               >
-                Imprimir todas igual
+                {verb} todas igual
               </button>
               <button
                 className="button button-secondary"
@@ -720,5 +746,39 @@ function SheetPreview({ html, sheets }: { html: string; sheets: number }) {
         title="Vista previa de las etiquetas"
       />
     </div>
+  );
+}
+
+/**
+ * Cómo imprimir (2026-10-27). Una impresión de prueba salió entera al 87 %: el molde estaba bien, el
+ * diálogo de impresión la achicó. Estos son los ajustes que la dejan a tamaño real.
+ */
+function PrintInstructions() {
+  return (
+    <details className="studio-print-help" open>
+      <summary>Cómo imprimir para que calce en la hoja</summary>
+      <ol>
+        <li>
+          Papel: <strong>Husares H34124</strong> (A4, 24 etiquetas), con la cara de las etiquetas
+          hacia donde imprime tu impresora.
+        </li>
+        <li>
+          Abrí el PDF y elegí <strong>Imprimir</strong>. En el tamaño, marcá{' '}
+          <strong>«Tamaño real»</strong> o <strong>escala 100 %</strong>. Nunca «Ajustar», «Ajustar
+          a la página» ni «Reducir páginas grandes».
+        </li>
+        <li>
+          Papel <strong>A4</strong> (no Carta) y bandeja la que tenga las hojas de etiquetas.
+        </li>
+        <li>
+          Si imprimís con «Imprimir» desde acá: márgenes <strong>Ninguno</strong>, escala{' '}
+          <strong>Predeterminada / 100</strong>, y sin encabezados ni pies de página.
+        </li>
+        <li>
+          La primera vez, probá con una hoja común y ponela a contraluz sobre una de etiquetas: si
+          calza, ya está. Si toda la hoja sale más chica, el diálogo la está ajustando.
+        </li>
+      </ol>
+    </details>
   );
 }

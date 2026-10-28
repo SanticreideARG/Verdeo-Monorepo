@@ -68,6 +68,7 @@ export function StockLotsPicker({
           return (
             <li key={lot.id}>
               <span>
+                {lot.notes ? `${lot.notes} · ` : ''}
                 {lot.familyName.replace(/^men[uú]\s+/i, '')} {lot.variantName} ·{' '}
                 <strong>{lot.cycleAlias}</strong>{' '}
                 <small>

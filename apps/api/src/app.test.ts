@@ -58,6 +58,7 @@ const customerOperationsStubs = {
   recordPrintedLabels: vi.fn(),
   cycleReport: vi.fn(),
   listStockLots: vi.fn(),
+  createIntuitivoLot: vi.fn(),
   updateStockLot: vi.fn(),
   moveCustomerToSite: vi.fn(),
   moveOrderToSite: vi.fn(),

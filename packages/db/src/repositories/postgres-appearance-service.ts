@@ -5,11 +5,13 @@ import { userAppearance } from '../schema/index.js';
 
 export interface Appearance {
   fontKey: string | null;
+  /** "Es cliente nuevo" marcado de entrada al crear un cliente desde Nuevo pedido. */
+  newCustomerIsNew: boolean | null;
   textScale: string | null;
   theme: string | null;
 }
 
-const EMPTY: Appearance = { fontKey: null, textScale: null, theme: null };
+const EMPTY: Appearance = { fontKey: null, newCustomerIsNew: null, textScale: null, theme: null };
 
 /**
  * Tema, fuente y tamaño de texto de una persona.
@@ -29,6 +31,7 @@ export class PostgresAppearanceService {
     const [row] = await this.database
       .select({
         fontKey: userAppearance.fontKey,
+        newCustomerIsNew: userAppearance.newCustomerIsNew,
         textScale: userAppearance.textScale,
         theme: userAppearance.theme,
       })
@@ -43,6 +46,8 @@ export class PostgresAppearanceService {
     // Un PATCH parcial: mandar sólo la fuente no debe borrar el tema elegido antes.
     const next: Appearance = {
       fontKey: input.fontKey === undefined ? current.fontKey : input.fontKey,
+      newCustomerIsNew:
+        input.newCustomerIsNew === undefined ? current.newCustomerIsNew : input.newCustomerIsNew,
       textScale: input.textScale === undefined ? current.textScale : input.textScale,
       theme: input.theme === undefined ? current.theme : input.theme,
     };

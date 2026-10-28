@@ -1,5 +1,5 @@
 import { compareSizes } from '@verdeo/orders';
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { ActionButton } from '../components/ActionButton.js';
@@ -42,6 +42,7 @@ import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
 import { DeliveryDayPicker, useDeliveryOptions } from '../components/DeliveryDayPicker.js';
 import { deliveryDateFor } from '../lib/dates.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
+import { AppearanceContext } from '../lib/appearanceContext.js';
 import { describeResponse, type AppError } from '../lib/errors.js';
 import { maskSurname, readMaskSurnames, writeMaskSurnames } from '../lib/maskName.js';
 import {
@@ -1428,7 +1429,7 @@ export function OrderIntakePage() {
         ) : null}
         {formOpen && permissions.includes('orders.create') ? (
           <form
-            className="operation-card mt-6 max-w-3xl"
+            className="operation-card intake-form mt-6"
             // El navegador no reporta: cortaba el envío y mostraba su globo sobre un campo que en
             // este formulario suele estar fuera de la pantalla. Lo reporta createOrder.
             noValidate
@@ -1436,501 +1437,503 @@ export function OrderIntakePage() {
             ref={formRef}
           >
             {draft.restored ? <DraftNotice onDiscard={draft.dismissNotice} /> : null}
-            {selectedMenu ? (
-              <details className="paste-message mb-4">
-                <summary>Pegar el mensaje del cliente</summary>
-                <textarea
-                  aria-label="Mensaje del cliente"
-                  onChange={(event) => setPasteText(event.target.value)}
-                  placeholder="Pegá acá el mensaje de WhatsApp: la IA propone el pedido y lo revisás antes de guardar."
-                  rows={3}
-                  value={pasteText}
-                />
-                <button
-                  className="button button-secondary"
-                  disabled={pasteBusy || pasteText.trim().length < 3}
-                  onClick={() => void fillFromMessage()}
-                  type="button"
-                >
-                  {pasteBusy ? 'Leyendo el mensaje…' : 'Completar con el mensaje'}
-                </button>
-              </details>
-            ) : null}
-            <fieldset className="mb-5 rounded-2xl border border-forest/10 p-4">
-              <legend className="px-2 text-sm font-bold text-forest">Cliente</legend>
-              <div className="flex gap-2">
-                <button
-                  className={`button ${customerMode === 'search' ? 'button-primary' : 'button-secondary'}`}
-                  onClick={() => setCustomerMode('search')}
-                  type="button"
-                >
-                  Buscar cliente
-                </button>
-                <button
-                  className={`button ${customerMode === 'new' ? 'button-primary' : 'button-secondary'}`}
-                  onClick={() => {
-                    setCustomerMode('new');
-                    setSelectedCustomer(null);
-                  }}
-                  type="button"
-                >
-                  Nuevo cliente
-                </button>
-              </div>
-
-              {customerMode === 'search' ? (
-                <div className="mt-3">
-                  {selectedCustomer ? (
-                    <>
-                      <p className="flex items-center gap-2 text-sm">
-                        <span className="status-chip">{selectedCustomer.displayName}</span>
-                        <button
-                          className="button button-secondary"
-                          onClick={() => {
-                            setSelectedCustomer(null);
-                            setLastOrder(null);
-                          }}
-                          type="button"
-                        >
-                          Cambiar
-                        </button>
-                      </p>
-                      {lastOrder ? (
-                        <div className="repeat-order">
-                          <p>
-                            <strong>Última vez</strong>: {orderItemsSummary(lastOrder.items)} ·{' '}
-                            {paymentMethodLabel(lastOrder.paymentExpectation, paymentMethods)}
-                          </p>
-                          <button
-                            className="button button-secondary"
-                            onClick={repeatLastOrder}
-                            type="button"
-                          >
-                            Repetir lo de la última vez
-                          </button>
-                        </div>
-                      ) : null}
-                    </>
-                  ) : (
-                    <>
-                      <div className="relative">
-                        <input
-                          autoComplete="off"
-                          onChange={(event) => setCustomerQuery(event.target.value)}
-                          // Flechas para recorrer, Enter para elegir. Enter acá nunca envía el
-                          // formulario: guardaría un pedido sin cliente a medio elegir.
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault();
-                              const customer = customerResults[customerActive];
-                              if (customer) chooseCustomer(customer);
-                            } else if (event.key === 'ArrowDown' && customerResults.length > 0) {
-                              event.preventDefault();
-                              setCustomerActive((current) =>
-                                Math.min(current + 1, customerResults.length - 1),
-                              );
-                            } else if (event.key === 'ArrowUp' && customerResults.length > 0) {
-                              event.preventDefault();
-                              setCustomerActive((current) => Math.max(current - 1, 0));
-                            }
-                          }}
-                          placeholder="Empezá a escribir un nombre o teléfono…"
-                          value={customerQuery}
-                        />
-                        {customerSearching ? (
-                          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-muted">
-                            Buscando…
-                          </span>
-                        ) : null}
-                      </div>
-                      {customerQuery.trim().length >= 2 &&
-                      !customerSearching &&
-                      customerResults.length === 0 ? (
-                        <p className="mt-2 text-sm text-ink-muted">
-                          Sin resultados para “{customerQuery.trim()}”.
-                        </p>
-                      ) : null}
-                      {customerResults.length > 0 ? (
-                        <ul className="mt-2 grid gap-1">
-                          {customerResults.map((customer, index) => (
-                            <li key={customer.id}>
-                              <button
-                                aria-selected={index === customerActive}
-                                className={`customer-result w-full rounded-lg border border-forest/10 px-3 py-2 text-left text-sm hover:bg-forest/5${index === customerActive ? ' is-active' : ''}`}
-                                onClick={() => chooseCustomer(customer)}
-                                type="button"
-                              >
-                                {customer.displayName}
-                                {customer.phone ? ` · ${customer.phone}` : ''}
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : null}
-                    </>
-                  )}
-                </div>
-              ) : (
-                <div className="form-grid mt-3">
-                  <label className="field">
-                    Nombre
-                    <input name="newCustomerDisplayName" required />
-                  </label>
-                  <label className="field">
-                    Teléfono
-                    <input name="newCustomerPhone" />
-                  </label>
-                  {/* Nuevo de verdad o ya era cliente (2026-10-27): pinta el color de nuevo en el
-                    informe y decide a quién van las recomendaciones de la primera compra. */}
-                  <label className="label-switch field-wide">
-                    <input defaultChecked name="newCustomerIsNew" type="checkbox" />
-                    Es cliente nuevo
-                  </label>
-                </div>
-              )}
-            </fieldset>
-
-            <div className="form-grid form-grid-wide">
-              {/*
-               * El período no se pregunta: hay uno abierto por vez, y elegirlo era confirmar lo
-               * único posible. Si alguna vez hay dos publicados a la vez vuelve el desplegable,
-               * porque ahí sí hay una decisión que tomar.
-               */}
-              {publishedMenus.length > 1 ? (
-                <label className="field">
-                  Período
-                  <select
-                    name="menuId"
-                    onChange={(event) => {
-                      setSelectedMenuId(event.target.value);
-                      setSelectedOfferingId('');
-                    }}
-                    required
-                    value={selectedMenuId}
-                  >
-                    <option value="">Seleccionar</option>
-                    {publishedMenus.map((menu) => (
-                      <option key={menu.id} value={menu.id}>
-                        {menu.cycle.alias}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : (
-                <input name="menuId" type="hidden" value={selectedMenuId} />
-              )}
-              <label className="field">
-                Variedad
-                <select
-                  name="offeringFamily"
-                  onChange={(event) => chooseIntakeFamily(event.target.value)}
-                  // Un pedido sólo con viandas del stock de períodos anteriores no lleva variedad.
-                  required={stockPicks.size === 0}
-                  value={selectedOffering?.familyName ?? ''}
-                >
-                  <option value="">Seleccionar</option>
-                  {intakeFamilies.map((familyName) => (
-                    <option key={familyName} value={familyName}>
-                      {familyName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                Tamaño
-                {/* El precio va con el tamaño: depende de él y no de la variedad (ADR-030). */}
-                <select
-                  disabled={!selectedOffering}
-                  name="offeringSize"
-                  onChange={(event) => chooseIntakeSize(event.target.value)}
-                  required={stockPicks.size === 0}
-                  value={selectedOffering?.variantName ?? ''}
-                >
-                  <option value="">Seleccionar</option>
-                  {intakeSizes.map((size) => {
-                    const sized = findIntakeOffering(selectedOffering?.familyName ?? '', size);
-                    return (
-                      <option disabled={!sized} key={size} value={size}>
-                        {size}
-                        {sized
-                          ? ` · ${formatMoney(sized.unitPriceMinor, sized.currency)}`
-                          : ' · no disponible'}
-                      </option>
-                    );
-                  })}
-                </select>
-              </label>
-              {/* Lo que se envía: la oferta concreta, igual que antes de partir el desplegable. */}
-              <input name="offeringId" type="hidden" value={selectedOfferingId} />
-              <label className="field">
-                Unidades
-                <input
-                  min="1"
-                  name="quantityUnits"
-                  onChange={(event) => setUnits(Math.max(1, Number(event.target.value) || 1))}
-                  required
-                  type="number"
-                  value={units}
-                />
-              </label>
-              {deliveryChoices.options.length > 1 && !otherDate ? (
-                <div className="field field-wide">
-                  <DeliveryDayPicker
-                    onChange={setChosenDeliveryDate}
-                    options={deliveryChoices.options}
-                    value={deliveryDate}
+            {/* En pantalla ancha, quién pide va a la izquierda y qué pide a la derecha (2026-10-27). */}
+            <div className="intake-form-side">
+              {selectedMenu ? (
+                <details className="paste-message mb-4">
+                  <summary>Pegar el mensaje del cliente</summary>
+                  <textarea
+                    aria-label="Mensaje del cliente"
+                    onChange={(event) => setPasteText(event.target.value)}
+                    placeholder="Pegá acá el mensaje de WhatsApp: la IA propone el pedido y lo revisás antes de guardar."
+                    rows={3}
+                    value={pasteText}
                   />
-                  {selectedMenu ? (
-                    <small className="field-hint">{selectedMenu.cycle.alias}</small>
-                  ) : null}
                   <button
-                    className="locate-retry-open"
+                    className="button button-secondary"
+                    disabled={pasteBusy || pasteText.trim().length < 3}
+                    onClick={() => void fillFromMessage()}
+                    type="button"
+                  >
+                    {pasteBusy ? 'Leyendo el mensaje…' : 'Completar con el mensaje'}
+                  </button>
+                </details>
+              ) : null}
+              <fieldset className="mb-5 rounded-2xl border border-forest/10 p-4">
+                <legend className="px-2 text-sm font-bold text-forest">Cliente</legend>
+                <div className="flex gap-2">
+                  <button
+                    className={`button ${customerMode === 'search' ? 'button-primary' : 'button-secondary'}`}
+                    onClick={() => setCustomerMode('search')}
+                    type="button"
+                  >
+                    Buscar cliente
+                  </button>
+                  <button
+                    className={`button ${customerMode === 'new' ? 'button-primary' : 'button-secondary'}`}
                     onClick={() => {
-                      setCustomDeliveryDate(deliveryDate);
-                      setOtherDate(true);
+                      setCustomerMode('new');
+                      setSelectedCustomer(null);
                     }}
                     type="button"
                   >
-                    Otra fecha
+                    Nuevo cliente
                   </button>
                 </div>
-              ) : (
-                /*
-                 * Un calendario, como al editar el pedido. Antes, con un solo día de reparto la fecha
-                 * era texto fijo en la computadora y no había forma de cambiarla al crear.
-                 */
-                <label className="field">
-                  Entrega
-                  <input
-                    onChange={(event) => {
-                      setCustomDeliveryDate(event.target.value);
-                      setOtherDate(true);
-                    }}
-                    type="date"
-                    value={otherDate ? customDeliveryDate : deliveryDate}
-                  />
-                  {selectedMenu ? (
-                    <small className="field-hint">
-                      {selectedMenu.cycle.alias}
-                      {deliveryChoices.options.length > 1 ? (
-                        <>
-                          {' · '}
+
+                {customerMode === 'search' ? (
+                  <div className="mt-3">
+                    {selectedCustomer ? (
+                      <>
+                        <p className="flex items-center gap-2 text-sm">
+                          <span className="status-chip">{selectedCustomer.displayName}</span>
                           <button
-                            className="locate-retry-open"
-                            onClick={() => setOtherDate(false)}
+                            className="button button-secondary"
+                            onClick={() => {
+                              setSelectedCustomer(null);
+                              setLastOrder(null);
+                            }}
                             type="button"
                           >
-                            Volver a los días de reparto
+                            Cambiar
                           </button>
-                        </>
-                      ) : null}
-                    </small>
-                  ) : null}
-                </label>
-              )}
-              <label className="field field-wide">
-                Dirección, línea 1
-                <input
-                  minLength={4}
-                  name="deliveryAddress"
-                  onChange={(event) => setDeliveryAddress(event.target.value)}
-                  placeholder="Calle, número y ciudad"
-                  required
-                  value={deliveryAddress}
-                />
-                <small className="field-hint">
-                  {addressHint || 'Sólo calle, número y ciudad: es lo que se busca en el mapa.'}
-                </small>
-              </label>
-              <label className="field field-wide">
-                Dirección, línea 2
-                <input
-                  maxLength={300}
-                  name="deliveryAddressLine2"
-                  onChange={(event) => setDeliveryAddressLine2(event.target.value)}
-                  placeholder="Piso, depto, timbre, barrio, detalles"
-                  value={deliveryAddressLine2}
-                />
-              </label>
-              {zones.length > 1 ? (
+                        </p>
+                        {lastOrder ? (
+                          <div className="repeat-order">
+                            <p>
+                              <strong>Última vez</strong>: {orderItemsSummary(lastOrder.items)} ·{' '}
+                              {paymentMethodLabel(lastOrder.paymentExpectation, paymentMethods)}
+                            </p>
+                            <button
+                              className="button button-secondary"
+                              onClick={repeatLastOrder}
+                              type="button"
+                            >
+                              Repetir lo de la última vez
+                            </button>
+                          </div>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>
+                        <div className="relative">
+                          <input
+                            autoComplete="off"
+                            onChange={(event) => setCustomerQuery(event.target.value)}
+                            // Flechas para recorrer, Enter para elegir. Enter acá nunca envía el
+                            // formulario: guardaría un pedido sin cliente a medio elegir.
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault();
+                                const customer = customerResults[customerActive];
+                                if (customer) chooseCustomer(customer);
+                              } else if (event.key === 'ArrowDown' && customerResults.length > 0) {
+                                event.preventDefault();
+                                setCustomerActive((current) =>
+                                  Math.min(current + 1, customerResults.length - 1),
+                                );
+                              } else if (event.key === 'ArrowUp' && customerResults.length > 0) {
+                                event.preventDefault();
+                                setCustomerActive((current) => Math.max(current - 1, 0));
+                              }
+                            }}
+                            placeholder="Empezá a escribir un nombre o teléfono…"
+                            value={customerQuery}
+                          />
+                          {customerSearching ? (
+                            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-muted">
+                              Buscando…
+                            </span>
+                          ) : null}
+                        </div>
+                        {customerQuery.trim().length >= 2 &&
+                        !customerSearching &&
+                        customerResults.length === 0 ? (
+                          <p className="mt-2 text-sm text-ink-muted">
+                            Sin resultados para “{customerQuery.trim()}”.
+                          </p>
+                        ) : null}
+                        {customerResults.length > 0 ? (
+                          <ul className="mt-2 grid gap-1">
+                            {customerResults.map((customer, index) => (
+                              <li key={customer.id}>
+                                <button
+                                  aria-selected={index === customerActive}
+                                  className={`customer-result w-full rounded-lg border border-forest/10 px-3 py-2 text-left text-sm hover:bg-forest/5${index === customerActive ? ' is-active' : ''}`}
+                                  onClick={() => chooseCustomer(customer)}
+                                  type="button"
+                                >
+                                  {customer.displayName}
+                                  {customer.phone ? ` · ${customer.phone}` : ''}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="form-grid mt-3">
+                    <label className="field">
+                      Nombre
+                      <input name="newCustomerDisplayName" required />
+                    </label>
+                    <label className="field">
+                      Teléfono
+                      <input name="newCustomerPhone" />
+                    </label>
+                    {/* Nuevo de verdad o ya era cliente (2026-10-27): pinta el color de nuevo en el
+                    informe y decide a quién van las recomendaciones de la primera compra. */}
+                    <NewCustomerIsNewSwitch />
+                  </div>
+                )}
+              </fieldset>
+            </div>
+
+            <div className="intake-form-main">
+              <div className="form-grid form-grid-wide">
+                {/*
+                 * El período no se pregunta: hay uno abierto por vez, y elegirlo era confirmar lo
+                 * único posible. Si alguna vez hay dos publicados a la vez vuelve el desplegable,
+                 * porque ahí sí hay una decisión que tomar.
+                 */}
+                {publishedMenus.length > 1 ? (
+                  <label className="field">
+                    Período
+                    <select
+                      name="menuId"
+                      onChange={(event) => {
+                        setSelectedMenuId(event.target.value);
+                        setSelectedOfferingId('');
+                      }}
+                      required
+                      value={selectedMenuId}
+                    >
+                      <option value="">Seleccionar</option>
+                      {publishedMenus.map((menu) => (
+                        <option key={menu.id} value={menu.id}>
+                          {menu.cycle.alias}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <input name="menuId" type="hidden" value={selectedMenuId} />
+                )}
                 <label className="field">
-                  Zona del domicilio
+                  Variedad
                   <select
-                    onChange={(event) => setAddressZoneId(event.target.value)}
-                    value={addressZoneId}
+                    name="offeringFamily"
+                    onChange={(event) => chooseIntakeFamily(event.target.value)}
+                    // Un pedido sólo con viandas del stock de períodos anteriores no lleva variedad.
+                    required={stockPicks.size === 0}
+                    value={selectedOffering?.familyName ?? ''}
                   >
-                    <option value="">Elegir zona</option>
-                    {zones.map((zone) => (
-                      <option key={zone.id} value={zone.id}>
-                        {zone.displayName}
+                    <option value="">Seleccionar</option>
+                    {intakeFamilies.map((familyName) => (
+                      <option key={familyName} value={familyName}>
+                        {familyName}
                       </option>
                     ))}
                   </select>
+                </label>
+                <label className="field">
+                  Tamaño
+                  {/* El precio va con el tamaño: depende de él y no de la variedad (ADR-030). */}
+                  <select
+                    disabled={!selectedOffering}
+                    name="offeringSize"
+                    onChange={(event) => chooseIntakeSize(event.target.value)}
+                    required={stockPicks.size === 0}
+                    value={selectedOffering?.variantName ?? ''}
+                  >
+                    <option value="">Seleccionar</option>
+                    {intakeSizes.map((size) => {
+                      const sized = findIntakeOffering(selectedOffering?.familyName ?? '', size);
+                      return (
+                        <option disabled={!sized} key={size} value={size}>
+                          {size}
+                          {sized
+                            ? ` · ${formatMoney(sized.unitPriceMinor, sized.currency)}`
+                            : ' · no disponible'}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </label>
+                {/* Lo que se envía: la oferta concreta, igual que antes de partir el desplegable. */}
+                <input name="offeringId" type="hidden" value={selectedOfferingId} />
+                <label className="field">
+                  Unidades
+                  <input
+                    min="1"
+                    name="quantityUnits"
+                    onChange={(event) => setUnits(Math.max(1, Number(event.target.value) || 1))}
+                    required
+                    type="number"
+                    value={units}
+                  />
+                </label>
+                {deliveryChoices.options.length > 1 && !otherDate ? (
+                  <div className="field field-wide">
+                    <DeliveryDayPicker
+                      onChange={setChosenDeliveryDate}
+                      options={deliveryChoices.options}
+                      value={deliveryDate}
+                    />
+                    {selectedMenu ? (
+                      <small className="field-hint">{selectedMenu.cycle.alias}</small>
+                    ) : null}
+                    <button
+                      className="locate-retry-open"
+                      onClick={() => {
+                        setCustomDeliveryDate(deliveryDate);
+                        setOtherDate(true);
+                      }}
+                      type="button"
+                    >
+                      Otra fecha
+                    </button>
+                  </div>
+                ) : (
+                  /*
+                   * Un calendario, como al editar el pedido. Antes, con un solo día de reparto la fecha
+                   * era texto fijo en la computadora y no había forma de cambiarla al crear.
+                   */
+                  <label className="field">
+                    Entrega
+                    <input
+                      onChange={(event) => {
+                        setCustomDeliveryDate(event.target.value);
+                        setOtherDate(true);
+                      }}
+                      type="date"
+                      value={otherDate ? customDeliveryDate : deliveryDate}
+                    />
+                    {selectedMenu ? (
+                      <small className="field-hint">
+                        {selectedMenu.cycle.alias}
+                        {deliveryChoices.options.length > 1 ? (
+                          <>
+                            {' · '}
+                            <button
+                              className="locate-retry-open"
+                              onClick={() => setOtherDate(false)}
+                              type="button"
+                            >
+                              Volver a los días de reparto
+                            </button>
+                          </>
+                        ) : null}
+                      </small>
+                    ) : null}
+                  </label>
+                )}
+                <label className="field field-wide">
+                  Dirección, línea 1
+                  <input
+                    minLength={4}
+                    name="deliveryAddress"
+                    onChange={(event) => setDeliveryAddress(event.target.value)}
+                    placeholder="Calle, número y ciudad"
+                    required
+                    value={deliveryAddress}
+                  />
                   <small className="field-hint">
-                    Si la dirección es nueva, queda en la ficha del cliente en esta zona.
+                    {addressHint || 'Sólo calle, número y ciudad: es lo que se busca en el mapa.'}
                   </small>
                 </label>
-              ) : null}
-              <label className="field">
-                Origen
-                {/*
-                 * Sin opción por defecto, igual que "Medio de pago" acá al lado. "Manual" era la
-                 * primera y la preseleccionada, así que nadie la cambiaba nunca: los 230 pedidos
-                 * cargados decían "Manual" y el campo no informaba absolutamente nada. Obligar a
-                 * elegir es lo que lo vuelve un dato.
-                 */}
-                <select defaultValue="" name="source" required>
-                  <option disabled value="">
-                    Seleccionar
-                  </option>
-                  <option value="whatsapp">WhatsApp</option>
-                  <option value="phone">Teléfono</option>
-                  <option value="instagram">Instagram</option>
-                  <option value="facebook">Facebook</option>
-                  <option value="email">Email</option>
-                  <option value="referral">Recomendación</option>
-                </select>
-              </label>
-              {permissions.includes('production.read') ? (
-                <StockSaleOption
-                  checked={fromStock}
-                  cycleId={selectedMenu?.cycle.id ?? null}
-                  onChange={setFromStock}
-                />
-              ) : null}
-              <StockLotsPicker
-                menu={selectedMenu}
-                onChange={setStockPicks}
-                onLots={setStockLots}
-                picks={stockPicks}
-              />
-              <label className="field">
-                Medio de pago
-                {paymentMethods.length > 0 ? (
-                  <select defaultValue="" name="paymentExpectation" required>
+                <label className="field field-wide">
+                  Dirección, línea 2
+                  <input
+                    maxLength={300}
+                    name="deliveryAddressLine2"
+                    onChange={(event) => setDeliveryAddressLine2(event.target.value)}
+                    placeholder="Piso, depto, timbre, barrio, detalles"
+                    value={deliveryAddressLine2}
+                  />
+                </label>
+                {zones.length > 1 ? (
+                  <label className="field">
+                    Zona del domicilio
+                    <select
+                      onChange={(event) => setAddressZoneId(event.target.value)}
+                      value={addressZoneId}
+                    >
+                      <option value="">Elegir zona</option>
+                      {zones.map((zone) => (
+                        <option key={zone.id} value={zone.id}>
+                          {zone.displayName}
+                        </option>
+                      ))}
+                    </select>
+                    <small className="field-hint">
+                      Si la dirección es nueva, queda en la ficha del cliente en esta zona.
+                    </small>
+                  </label>
+                ) : null}
+                <label className="field">
+                  Origen
+                  {/*
+                   * Sin opción por defecto, igual que "Medio de pago" acá al lado. "Manual" era la
+                   * primera y la preseleccionada, así que nadie la cambiaba nunca: los 230 pedidos
+                   * cargados decían "Manual" y el campo no informaba absolutamente nada. Obligar a
+                   * elegir es lo que lo vuelve un dato.
+                   */}
+                  <select defaultValue="" name="source" required>
                     <option disabled value="">
                       Seleccionar
                     </option>
-                    {paymentMethods.map((method) => (
-                      <option key={method.code} value={method.displayName}>
-                        {method.displayName}
-                      </option>
-                    ))}
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="phone">Teléfono</option>
+                    <option value="instagram">Instagram</option>
+                    <option value="facebook">Facebook</option>
+                    <option value="email">Email</option>
+                    <option value="referral">Recomendación</option>
                   </select>
-                ) : (
-                  <input name="paymentExpectation" placeholder="Transferencia" required />
-                )}
-              </label>
-              <label className="field">
-                {/* Se llamaba "Día de reparto"; se usa para anotar la zona que guía el armado. */}
-                Zona
-                <input maxLength={80} name="deliveryDayText" placeholder="Ej. Centro" />
-              </label>
-              <label className="field">
-                Franja horaria
-                <input maxLength={80} name="deliveryTimeSlot" placeholder="Ej. 9 a 12 hs" />
-              </label>
-              {dietaryInstructionsEnabled ? (
-                <label className="field field-wide">
-                  Comentario para la cocina
-                  <textarea
-                    maxLength={200}
-                    name="dietaryInstructions"
-                    placeholder="Una sola nota para este pedido"
-                    rows={2}
-                  />
                 </label>
-              ) : null}
-            </div>
-            {selectedOffering?.composable ? (
-              <div className="field field-wide mt-4">
-                Platos de Intuitivo
-                <IntuitivoDishPicker
-                  maxDishes={selectedMenu?.intuitivoMaxDishes ?? DISHES_PER_INTUITIVO}
-                  minDishes={selectedOffering.mealsPerUnit}
-                  offerings={selectedMenu?.offerings ?? []}
-                  onChange={setSelectedDishes}
-                  selected={selectedDishes}
+                {permissions.includes('production.read') ? (
+                  <StockSaleOption
+                    checked={fromStock}
+                    cycleId={selectedMenu?.cycle.id ?? null}
+                    onChange={setFromStock}
+                  />
+                ) : null}
+                <StockLotsPicker
+                  menu={selectedMenu}
+                  onChange={setStockPicks}
+                  onLots={setStockLots}
+                  picks={stockPicks}
                 />
+                <label className="field">
+                  Medio de pago
+                  {paymentMethods.length > 0 ? (
+                    <select defaultValue="" name="paymentExpectation" required>
+                      <option disabled value="">
+                        Seleccionar
+                      </option>
+                      {paymentMethods.map((method) => (
+                        <option key={method.code} value={method.displayName}>
+                          {method.displayName}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input name="paymentExpectation" placeholder="Transferencia" required />
+                  )}
+                </label>
+                <label className="field">
+                  {/* Se llamaba "Día de reparto"; se usa para anotar la zona que guía el armado. */}
+                  Zona
+                  <input maxLength={80} name="deliveryDayText" placeholder="Ej. Centro" />
+                </label>
+                <label className="field">
+                  Franja horaria
+                  <input maxLength={80} name="deliveryTimeSlot" placeholder="Ej. 9 a 12 hs" />
+                </label>
+                {dietaryInstructionsEnabled ? (
+                  <label className="field field-wide">
+                    Comentario para la cocina
+                    <textarea
+                      maxLength={200}
+                      name="dietaryInstructions"
+                      placeholder="Una sola nota para este pedido"
+                      rows={2}
+                    />
+                  </label>
+                ) : null}
               </div>
-            ) : null}
+              {selectedOffering?.composable ? (
+                <div className="field field-wide mt-4">
+                  Platos de Intuitivo
+                  <IntuitivoDishPicker
+                    maxDishes={selectedMenu?.intuitivoMaxDishes ?? DISHES_PER_INTUITIVO}
+                    minDishes={selectedOffering.mealsPerUnit}
+                    offerings={selectedMenu?.offerings ?? []}
+                    onChange={setSelectedDishes}
+                    selected={selectedDishes}
+                  />
+                </div>
+              ) : null}
 
-            {/*
-             * El estado de la regla, al lado del botón y contando en vivo.
-             *
-             * El aviso de "elegí exactamente cinco" se dibuja arriba de todo el formulario, a
-             * doscientas líneas de acá: en un teléfono, con la lista de platos abierta, apretar
-             * "Registrar borrador" parecía no hacer nada porque el mensaje aparecía fuera de la
-             * pantalla. Contar antes de apretar evita llegar a ese punto.
-             */}
-            {selectedOffering?.composable ? (
-              <p
-                className={`intake-rule mt-3 ${
-                  selectedDishes.length >= selectedOffering.mealsPerUnit ? 'is-ready' : ''
-                }`}
-              >
-                {selectedDishes.length >= selectedOffering.mealsPerUnit
-                  ? `${String(selectedDishes.length)} platos elegidos. Ya podés registrar el borrador.`
-                  : `Elegiste ${String(selectedDishes.length)} de ${String(
-                      selectedOffering.mealsPerUnit,
-                    )} platos.`}
-              </p>
-            ) : null}
+              {/*
+               * El estado de la regla, al lado del botón y contando en vivo.
+               *
+               * El aviso de "elegí exactamente cinco" se dibuja arriba de todo el formulario, a
+               * doscientas líneas de acá: en un teléfono, con la lista de platos abierta, apretar
+               * "Registrar borrador" parecía no hacer nada porque el mensaje aparecía fuera de la
+               * pantalla. Contar antes de apretar evita llegar a ese punto.
+               */}
+              {selectedOffering?.composable ? (
+                <p
+                  className={`intake-rule mt-3 ${
+                    selectedDishes.length >= selectedOffering.mealsPerUnit ? 'is-ready' : ''
+                  }`}
+                >
+                  {selectedDishes.length >= selectedOffering.mealsPerUnit
+                    ? `${String(selectedDishes.length)} platos elegidos. Ya podés registrar el borrador.`
+                    : `Elegiste ${String(selectedDishes.length)} de ${String(
+                        selectedOffering.mealsPerUnit,
+                      )} platos.`}
+                </p>
+              ) : null}
 
-            {/*
+              {/*
               Agregar otra variedad al mismo pedido.
               
               Secundario y no primario: el pedido de una variedad sola es el caso normal y se
               guarda sin pasar por acá. Un botón primario de más al lado del de guardar es una
               invitación a apretar el equivocado.
             */}
-            <div className="intake-cart-add mt-3">
-              <button className="button button-secondary" onClick={addToCart} type="button">
-                + Agregar otra variedad
-              </button>
+              <div className="intake-cart-add mt-3">
+                <button className="button button-secondary" onClick={addToCart} type="button">
+                  + Agregar otra variedad
+                </button>
+                {cart.length > 0 ? (
+                  <small>Lo que ya agregaste queda abajo; lo de arriba se suma al guardar.</small>
+                ) : null}
+              </div>
+
               {cart.length > 0 ? (
-                <small>Lo que ya agregaste queda abajo; lo de arriba se suma al guardar.</small>
+                <ul className="intake-cart mt-3">
+                  {cart.map((line, index) => (
+                    // El índice como clave: la misma variedad puede ir dos veces en un pedido, así
+                    // que el id de la oferta no identifica el renglón.
+                    <li key={`${line.offeringId}-${String(index)}`}>
+                      <div>
+                        <strong>
+                          {line.label}
+                          {line.quantityUnits > 1 ? ` ×${String(line.quantityUnits)}` : ''}
+                        </strong>
+                        {line.selectedDishes.length > 0 ? (
+                          <small>{line.selectedDishes.map(dishLabel).join(' · ')}</small>
+                        ) : null}
+                      </div>
+                      <span>
+                        {formatMoney(line.unitPriceMinor * line.quantityUnits, line.currency)}
+                      </span>
+                      <button
+                        aria-label={`Quitar ${line.label}`}
+                        onClick={() =>
+                          setCart((current) => current.filter((_, position) => position !== index))
+                        }
+                        type="button"
+                      >
+                        ✕
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+
+              {/* El mismo mensaje que arriba, acá abajo, donde está el dedo cuando algo falla. */}
+              {message ? (
+                <p className="intake-rule intake-rule-alert mt-3" role="alert">
+                  {message}
+                </p>
               ) : null}
             </div>
-
-            {cart.length > 0 ? (
-              <ul className="intake-cart mt-3">
-                {cart.map((line, index) => (
-                  // El índice como clave: la misma variedad puede ir dos veces en un pedido, así
-                  // que el id de la oferta no identifica el renglón.
-                  <li key={`${line.offeringId}-${String(index)}`}>
-                    <div>
-                      <strong>
-                        {line.label}
-                        {line.quantityUnits > 1 ? ` ×${String(line.quantityUnits)}` : ''}
-                      </strong>
-                      {line.selectedDishes.length > 0 ? (
-                        <small>{line.selectedDishes.map(dishLabel).join(' · ')}</small>
-                      ) : null}
-                    </div>
-                    <span>
-                      {formatMoney(line.unitPriceMinor * line.quantityUnits, line.currency)}
-                    </span>
-                    <button
-                      aria-label={`Quitar ${line.label}`}
-                      onClick={() =>
-                        setCart((current) => current.filter((_, position) => position !== index))
-                      }
-                      type="button"
-                    >
-                      ✕
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-
-            {/* El mismo mensaje que arriba, acá abajo, donde está el dedo cuando algo falla. */}
-            {message ? (
-              <p className="intake-rule intake-rule-alert mt-3" role="alert">
-                {message}
-              </p>
-            ) : null}
 
             {/* En el teléfono queda fija abajo: el formulario es largo y, después de elegir los
                 cinco platos de un Intuitivo, guardar quedaba a varias pantallas de distancia. El
@@ -2283,5 +2286,28 @@ export function OrderIntakePage() {
         />
       ) : null}
     </DashboardShell>
+  );
+}
+
+/**
+ * "Es cliente nuevo" al crear un cliente desde Nuevo pedido (2026-10-27).
+ *
+ * Arranca como cada persona lo eligió en Ajustes → Apariencia ("Al tomar pedidos"); sin elegir,
+ * sin marcar. Es un componente aparte porque la preferencia vive en el shell, y la página lo monta
+ * desde afuera: sólo un hijo puede leerla. La `key` lo vuelve a armar si la preferencia llega
+ * después de abrir el formulario.
+ */
+function NewCustomerIsNewSwitch() {
+  const preferred = useContext(AppearanceContext)?.newCustomerIsNew ?? false;
+  return (
+    <label className="label-switch field-wide">
+      <input
+        defaultChecked={preferred}
+        key={String(preferred)}
+        name="newCustomerIsNew"
+        type="checkbox"
+      />
+      Es cliente nuevo
+    </label>
   );
 }

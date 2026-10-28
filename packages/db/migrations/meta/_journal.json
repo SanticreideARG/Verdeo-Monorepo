@@ -526,6 +526,13 @@
       "when": 1792978193149,
       "tag": "0074_exotic_junta",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1793152636922,
+      "tag": "0075_greedy_lake",
+      "breakpoints": true
     }
   ]
 }

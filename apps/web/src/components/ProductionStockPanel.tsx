@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { apiRequest } from '../lib/api.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
+import { PastIntuitivoForm } from './PastIntuitivoForm.js';
 import { formatDay } from '../lib/dates.js';
 import { errorMessage, type MenuOffering, type SurplusItem } from '../lib/operations.js';
 import type { StockLot } from '../lib/stockLots.js';
@@ -205,7 +206,8 @@ export function ProductionStockPanel({
       <p className="mt-1 text-sm text-ink-muted">
         Lo que sobró al cerrar cada período pasa solo acá, con su período y su ciudad. Ya está
         cocinado: se vende desde Nuevo pedido, a precio normal, hasta un mes después de su período,
-        y no suma a lo que hay que cocinar. Si contaste distinto, corregilo con − y +.
+        y no suma a lo que hay que cocinar. Si contaste distinto, corregilo con − y +. Un Intuitivo
+        que no llegó solo se carga abajo.
       </p>
       {liveLots.length > 0 ? (
         <ul className="stock-steppers mt-3" aria-busy={saving}>
@@ -214,6 +216,9 @@ export function ProductionStockPanel({
             return (
               <li key={lot.id}>
                 <span className="stock-steppers-name">
+                  {/* Un Intuitivo cargado a mano lleva el nombre que se le puso. */}
+                  {lot.notes ? <strong>{lot.notes}</strong> : null}
+                  {lot.notes ? ' · ' : null}
                   {name} · <strong>{lot.cycleAlias}</strong>
                   {/* Un Intuitivo cancelado que pasó a stock: sus platos. */}
                   {lot.dishes.length > 0 ? (
@@ -281,6 +286,15 @@ export function ProductionStockPanel({
             );
           })}
         </ul>
+      ) : null}
+      {canEdit ? (
+        <PastIntuitivoForm
+          onSaved={() => {
+            void load();
+            onSaved();
+          }}
+          sites={sites}
+        />
       ) : null}
       {writingOff ? (
         <ConfirmDialog

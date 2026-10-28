@@ -476,6 +476,8 @@ export function DashboardShell({
   const [textScale, setTextScale] = useState<string>(() =>
     known(window.localStorage.getItem('verdeo-text-scale'), SCALE_KEYS, 'normal'),
   );
+  // Vive sólo en la cuenta: hasta que llega, "Es cliente nuevo" arranca sin marcar.
+  const [newCustomerIsNew, setNewCustomerIsNew] = useState(false);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1_000);
@@ -534,10 +536,12 @@ export function DashboardShell({
       if (!response.ok || cancelled) return;
       const saved = (await response.json()) as {
         fontKey: string | null;
+        newCustomerIsNew: boolean | null;
         textScale: string | null;
         theme: string | null;
       };
       if (cancelled) return;
+      setNewCustomerIsNew(saved.newCustomerIsNew === true);
       if (saved.theme) setTheme(known(saved.theme, new Set(themes.map((i) => i.value)), 'natural'));
       if (saved.fontKey) setUiFont(known(saved.fontKey, FONT_KEYS, 'barlow'));
       if (saved.textScale) setTextScale(known(saved.textScale, SCALE_KEYS, 'normal'));
@@ -547,7 +551,7 @@ export function DashboardShell({
     };
   }, []);
 
-  const saveAppearance = useCallback((patch: Record<string, string>) => {
+  const saveAppearance = useCallback((patch: Record<string, boolean | string>) => {
     // Sin await ni toast: si la preferencia no llega a guardarse, el cambio local ya se ve y la
     // próxima vez se vuelve a intentar. Interrumpir a alguien por esto sería peor que el fallo.
     void apiRequest('/api/v1/me/appearance', {
@@ -698,10 +702,15 @@ export function DashboardShell({
    */
   const appearance: AppearanceState = {
     font: uiFont,
+    newCustomerIsNew,
     scale: textScale,
     setFont: (value) => {
       setUiFont(value);
       saveAppearance({ fontKey: value });
+    },
+    setNewCustomerIsNew: (value) => {
+      setNewCustomerIsNew(value);
+      saveAppearance({ newCustomerIsNew: value });
     },
     setScale: (value) => {
       setTextScale(value);

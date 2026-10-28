@@ -11507,3 +11507,90 @@ label.field:has(> input[type='radio']) {
   margin: 0 auto 0.5rem;
   background: url('/seasonal/halloween/halloween-pumpkin.png') center / contain no-repeat;
 }
+
+/*
+ * Nuevo pedido en pantalla ancha (2026-10-27). Hasta 1360px es una sola columna de 48rem, que en
+ * una pantalla mediana ya llena el área. Más ancho, quedaba media pantalla vacía: el formulario se
+ * abre en dos columnas — a la izquierda quién pide (pegar el mensaje, cliente), a la derecha qué
+ * pide, con más aire y cuatro campos por fila. Guardar ocupa el ancho entero.
+ */
+.intake-form {
+  max-width: 48rem;
+}
+
+@media (min-width: 1360px) {
+  .intake-form {
+    display: grid;
+    grid-template-columns: minmax(20rem, 2fr) minmax(0, 3fr);
+    gap: 0 2.25rem;
+    align-items: start;
+    max-width: 96rem;
+    padding: 2rem;
+  }
+
+  .intake-form > :not(.intake-form-side, .intake-form-main) {
+    grid-column: 1 / -1;
+  }
+
+  .intake-form-side {
+    position: sticky;
+    top: 1rem;
+  }
+
+  .intake-form-side .paste-message textarea {
+    min-height: 9rem;
+  }
+
+  .intake-form-main {
+    padding-left: 2.25rem;
+    border-left: 1px solid color-mix(in srgb, var(--color-forest) 10%, transparent);
+  }
+
+  .intake-form-main .form-grid {
+    gap: 1.25rem 1.5rem;
+  }
+
+  .intake-form-main .form-grid-wide {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Etiquetas: descargar el PDF o imprimir, y cómo imprimir para que calce (2026-10-27). */
+.studio-output {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.studio-print-help {
+  border: 1px solid color-mix(in srgb, var(--color-forest) 12%, transparent);
+  border-radius: 0.9rem;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.studio-print-help summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--color-forest);
+}
+
+.studio-print-help ol {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0;
+  padding-left: 1.2rem;
+  list-style: decimal;
+}
+
+/* Cargar a mano un Intuitivo de un período anterior al stock (2026-10-27). */
+.past-intuitivo {
+  border-top: 1px dashed color-mix(in srgb, var(--color-forest) 18%, transparent);
+  padding-top: 0.9rem;
+}
+
+.past-intuitivo summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--color-forest);
+}

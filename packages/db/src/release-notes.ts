@@ -105,4 +105,14 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
     key: '2026-10-28-correccion-menu',
     body: `Corregir un menú ya publicado: al guardar la corrección en la semana general, llega sola a todas las ciudades (antes las ciudades seguían vendiendo la carga original). Lo que una ciudad haya personalizado a mano no se pisa.`,
   },
+  {
+    key: '2026-10-27-cliente-nuevo-preferencia',
+    body: `Al crear un cliente desde Nuevo pedido, "Es cliente nuevo" ahora viene sin tildar. Si preferís que venga tildado, elegilo en Ajustes → Apariencia, "Al tomar pedidos": es una preferencia de cada uno.`,
+  },
+  {
+    key: '2026-10-27-etiquetas-pdf-stock-intuitivo',
+    body: `• Etiquetas: "Descargar PDF" baja la hoja en A4 exacto, lista para imprimir a tamaño real, y abajo están los pasos para que calce.
+• Nuevo pedido: en pantallas anchas el formulario se abre en dos columnas, el cliente a la izquierda y el pedido a la derecha.
+• Cocina: un Intuitivo de un período anterior (hasta 4 meses) se puede cargar a mano al stock, con su nombre y sus platos.`,
+  },
 ];

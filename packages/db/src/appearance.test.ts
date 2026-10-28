@@ -47,7 +47,12 @@ describe('PostgresAppearanceService', () => {
   it('treats a user with no row as "everything by default"', async () => {
     const service = await seeded();
 
-    expect(await service.get(USER)).toEqual({ fontKey: null, textScale: null, theme: null });
+    expect(await service.get(USER)).toEqual({
+      fontKey: null,
+      newCustomerIsNew: null,
+      textScale: null,
+      theme: null,
+    });
   });
 
   it('stores a preference and reads it back', async () => {
@@ -57,6 +62,7 @@ describe('PostgresAppearanceService', () => {
 
     expect(await service.get(USER)).toEqual({
       fontKey: 'legible',
+      newCustomerIsNew: null,
       textScale: 'grande',
       theme: 'cacao',
     });
@@ -81,8 +87,24 @@ describe('PostgresAppearanceService', () => {
 
     expect(await service.get(USER)).toEqual({
       fontKey: null,
+      newCustomerIsNew: null,
       textScale: null,
       theme: 'arena',
+    });
+  });
+
+  // "Es cliente nuevo" de entrada es de cada persona, y cambiar el tema no lo toca (2026-10-27).
+  it('guarda si "Es cliente nuevo" arranca marcado sin pisar el resto', async () => {
+    const service = await seeded();
+    await service.save(USER, { theme: 'bosque' });
+
+    await service.save(USER, { newCustomerIsNew: true });
+    await service.save(USER, { fontKey: 'mono' });
+
+    expect(await service.get(USER)).toMatchObject({
+      fontKey: 'mono',
+      newCustomerIsNew: true,
+      theme: 'bosque',
     });
   });
 });

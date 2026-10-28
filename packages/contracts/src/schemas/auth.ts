@@ -79,6 +79,8 @@ const AppearanceValueSchema = z.string().trim().min(1).max(40).nullable();
 
 export const AppearanceSchema = z.object({
   fontKey: AppearanceValueSchema,
+  /** "Es cliente nuevo" marcado de entrada en Nuevo pedido. Null: sin marcar. */
+  newCustomerIsNew: z.boolean().nullable(),
   textScale: AppearanceValueSchema,
   theme: AppearanceValueSchema,
 });
@@ -87,6 +89,7 @@ export const AppearanceSchema = z.object({
 export const AppearanceUpdateRequestSchema = z
   .object({
     fontKey: AppearanceValueSchema.optional(),
+    newCustomerIsNew: z.boolean().nullable().optional(),
     textScale: AppearanceValueSchema.optional(),
     theme: AppearanceValueSchema.optional(),
   })

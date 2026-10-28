@@ -171,6 +171,7 @@ import {
   OrderDeleteResponseSchema,
   ReceivablesResponseSchema,
   StockLotListResponseSchema,
+  StockLotCreateRequestSchema,
   StockLotUpdateRequestSchema,
   PrintedLabelsRequestSchema,
   PrintedLabelsResponseSchema,
@@ -630,6 +631,17 @@ interface OperationsEngine {
     onlyAvailable?: boolean | undefined;
     operatingSiteId?: string | null | undefined;
   }): Promise<unknown>;
+  createIntuitivoLot(
+    input: {
+      dishes: readonly { dishName: string; familyName: string | null; slot: number | null }[];
+      name: string;
+      operatingSiteId: string;
+      quantityUnits: number;
+      salesCycleId: string;
+      variantName: string;
+    },
+    context: OperationsContext,
+  ): Promise<{ id: string }>;
   updateStockLot(
     lotId: string,
     input: {
@@ -1501,6 +1513,7 @@ interface CreateAppOptions {
   appearance?: {
     get(userId: string): Promise<{
       fontKey: string | null;
+      newCustomerIsNew: boolean | null;
       textScale: string | null;
       theme: string | null;
     }>;
@@ -1508,10 +1521,16 @@ interface CreateAppOptions {
       userId: string,
       input: {
         fontKey?: string | null | undefined;
+        newCustomerIsNew?: boolean | null | undefined;
         textScale?: string | null | undefined;
         theme?: string | null | undefined;
       },
-    ): Promise<{ fontKey: string | null; textScale: string | null; theme: string | null }>;
+    ): Promise<{
+      fontKey: string | null;
+      newCustomerIsNew: boolean | null;
+      textScale: string | null;
+      theme: string | null;
+    }>;
   };
   dashboardLayout?: {
     get(userId: string): Promise<string[] | null>;
@@ -7044,6 +7063,19 @@ export function createApp(options: CreateAppOptions) {
       operatingSiteId: siteId ?? context.get('scope')?.operatingSiteId ?? null,
     });
     return context.json(StockLotListResponseSchema.parse({ items: contractValue(items) }));
+  });
+
+  // Cargar a mano un Intuitivo de un período anterior (2026-10-27).
+  app.post('/api/v1/stock-lots', async (context) => {
+    if (!context.get('session').permissions.includes('production.report'))
+      return forbidden(context);
+    const input = StockLotCreateRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success) return badRequest(context, 'Revisá el Intuitivo a cargar.');
+    const created = await requireOperations().createIntuitivoLot(
+      input.data,
+      operationsContext(context),
+    );
+    return context.json(created, 201);
   });
 
   app.patch('/api/v1/stock-lots/:id', async (context) => {

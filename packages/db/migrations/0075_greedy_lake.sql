@@ -1,0 +1,1 @@
+ALTER TABLE "user_appearance" ADD COLUMN "new_customer_is_new" boolean;

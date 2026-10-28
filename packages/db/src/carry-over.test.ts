@@ -415,3 +415,62 @@ describe('cancelado después de cocinarse: pasa a stock', () => {
     expect(lot).toMatchObject({ available: 0, quantityUnits: 0 });
   });
 });
+
+describe('Intuitivo de un período anterior cargado a mano', () => {
+  const lote = {
+    dishes: [
+      { dishName: 'A', familyName: 'Keto', slot: 1 },
+      { dishName: 'C', familyName: 'Keto', slot: 3 },
+    ],
+    name: 'Intuitivo sin lácteos',
+    operatingSiteId: SITE,
+    quantityUnits: 2,
+    salesCycleId: CYCLE,
+    variantName: '250',
+  };
+
+  it('queda como stock con su nombre y sus platos, y vence un mes después de cargarlo', async () => {
+    const { service } = await base();
+
+    await service.createIntuitivoLot(lote, contexto);
+
+    const [lot] = await service.listStockLots({ operatingSiteId: SITE });
+    expect(lot).toMatchObject({
+      available: 2,
+      cycleAlias: 'Octubre 3',
+      dishes: lote.dishes,
+      expired: false,
+      familyName: 'Intuitivo',
+      notes: 'Intuitivo sin lácteos',
+      variantName: '250',
+    });
+    expect(new Date(lot?.expiresAt ?? 0).getTime()).toBeGreaterThan(Date.now() + 29 * 86_400_000);
+  });
+
+  it('no acepta un plato que no estaba en el menú de ese período', async () => {
+    const { service } = await base();
+
+    await expect(
+      service.createIntuitivoLot(
+        { ...lote, dishes: [{ dishName: 'Z', familyName: 'Keto', slot: null }] },
+        contexto,
+      ),
+    ).rejects.toThrow('no está en el menú');
+  });
+
+  it('no acepta un período de hace más de cuatro meses', async () => {
+    const { client, service } = await base();
+    const viejo = 'd0000000-0000-4000-8000-000000000099';
+    const desde = new Date();
+    desde.setMonth(desde.getMonth() - 5);
+    const dia = (n: number) => new Date(desde.getTime() + n * 86_400_000).toISOString();
+    await client.exec(`
+      insert into sales_cycles (id, alias, open_at, partial_kitchen_cutoff_at, close_at)
+      values ('${viejo}', 'Viejo', '${desde.toISOString()}', '${dia(5)}', '${dia(6)}');
+    `);
+
+    await expect(
+      service.createIntuitivoLot({ ...lote, salesCycleId: viejo }, contexto),
+    ).rejects.toThrow('últimos 4 meses');
+  });
+});
