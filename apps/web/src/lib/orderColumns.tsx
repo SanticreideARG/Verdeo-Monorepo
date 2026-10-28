@@ -82,7 +82,25 @@ function orderKind(order: OrderSummary): string {
  * Todas ordenan. `sortValue` devuelve el dato y no lo que se ve, así que "Total" compara números y
  * no "$ 1.000" contra "$ 900" como texto, y "Entrega" compara fechas ISO y no "3/9" contra "12/9".
  */
-export function buildOrderColumns(options: { maskSurnames?: boolean } = {}): OrderColumn[] {
+/** Los totales de todo lo filtrado, que manda el servidor (2026-10-28). */
+export interface OrderListSummary {
+  orderCount: number;
+  paidCount: number;
+  totalMinor: number;
+  units: number;
+}
+
+export function buildOrderColumns(
+  options: {
+    maskSurnames?: boolean;
+    /**
+     * Con la lista partida ("Cargar más"), los totales del pie salen de acá y no de las filas
+     * cargadas: sumar sólo la página daba otro número que el informe del período (2026-10-28).
+     */
+    summary?: OrderListSummary | null;
+  } = {},
+): OrderColumn[] {
+  const summary = options.summary ?? null;
   const displayName = (order: OrderSummary) =>
     options.maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName;
 
@@ -106,7 +124,10 @@ export function buildOrderColumns(options: { maskSurnames?: boolean } = {}): Ord
       sortValue: (order) => displayName(order),
       // Ancla la fila de totales: sin un rótulo a la izquierda, una fila con dos números sueltos
       // al pie no se sabe de qué es.
-      total: (rows) => `${String(rows.length)} ${rows.length === 1 ? 'pedido' : 'pedidos'}`,
+      total: (rows) =>
+        summary
+          ? `${String(rows.length)} de ${String(summary.orderCount)} pedidos`
+          : `${String(rows.length)} ${rows.length === 1 ? 'pedido' : 'pedidos'}`,
     },
     {
       key: 'whatsapp',
@@ -145,6 +166,7 @@ export function buildOrderColumns(options: { maskSurnames?: boolean } = {}): Ord
       sortValue: orderKind,
       // Unidades y no pedidos: es lo que cocina tiene que producir, y no coinciden.
       total: (rows) => {
+        if (summary) return `${String(summary.units)} u.`;
         const units = rows.reduce(
           (all, order) => all + order.items.reduce((sum, item) => sum + item.quantityUnits, 0),
           0,
@@ -171,6 +193,7 @@ export function buildOrderColumns(options: { maskSurnames?: boolean } = {}): Ord
        * un número que no coincide con ninguna otra pantalla.
        */
       total: (rows) => {
+        if (summary) return formatMoney(summary.totalMinor, rows[0]?.currency ?? 'ARS');
         const vigentes = rows.filter((order) => order.status !== 'CANCELLED');
         const sum = vigentes.reduce((all, order) => all + order.totalMinor, 0);
         return formatMoney(sum, vigentes[0]?.currency ?? 'ARS');
@@ -229,7 +252,9 @@ export function buildOrderColumns(options: { maskSurnames?: boolean } = {}): Ord
       sortValue: (order) => (order.paidAt ? 1 : 0),
       // "18 de 24" contesta de un vistazo lo que la columna sólo contesta contando a mano.
       total: (rows) =>
-        `${String(rows.filter((order) => order.paidAt).length)} de ${String(rows.length)}`,
+        summary
+          ? `${String(summary.paidCount)} de ${String(summary.orderCount)}`
+          : `${String(rows.filter((order) => order.paidAt).length)} de ${String(rows.length)}`,
     },
     {
       key: 'origen',

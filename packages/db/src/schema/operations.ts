@@ -769,6 +769,43 @@ export interface StockLotDish {
   slot: number | null;
 }
 
+/** Un pedido tal como salió en una planilla de cocina: quién y qué llevaba, en texto. */
+export interface KitchenSheetOrder {
+  customerName: string;
+  lines: string[];
+  orderId: string;
+  publicNumber: string;
+}
+
+/*
+ * Cada planilla de cocina que salió —descargada, impresa o copiada— (2026-10-28).
+ *
+ * Incidente: un pedido se canceló después de que la planilla ya había ido a cocina. Al volver a
+ * bajarla el pedido ya no estaba, y no había forma de saber que se había cocinado. El consolidado
+ * (`production_snapshots`) guarda sólo totales y se pisa en cada descarga. Acá queda cada salida
+ * con sus pedidos, para ver qué cambió desde la última y para volver a bajarla tal como se envió.
+ */
+export const kitchenSheets = pgTable(
+  'kitchen_sheets',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    salesCycleId: uuid('sales_cycle_id')
+      .notNull()
+      .references(() => salesCycles.id, { onDelete: 'cascade' }),
+    // Null: la planilla de todas las ciudades.
+    operatingSiteId: uuid('operating_site_id').references(() => operatingSites.id, {
+      onDelete: 'set null',
+    }),
+    format: text('format').notNull(),
+    orders: jsonb('orders').$type<KitchenSheetOrder[]>().notNull(),
+    // Lo que se usó para armarla: con esto se vuelve a bajar igual.
+    report: jsonb('report').$type<Record<string, unknown>>().notNull(),
+    actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index('kitchen_sheets_cycle_idx').on(table.salesCycleId, table.createdAt)],
+);
+
 export const stockLots = pgTable(
   'stock_lots',
   {

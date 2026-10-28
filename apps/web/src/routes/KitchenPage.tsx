@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { ProductionStockPanel } from '../components/ProductionStockPanel.js';
 import { RunFilter } from '../components/RunFilter.js';
+import { KitchenSheetsPanel } from '../components/KitchenSheetsPanel.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import {
@@ -32,6 +33,8 @@ export function KitchenPage() {
   const [selectedMenuId, setSelectedMenuId] = useState('');
   const [kitchen, setKitchen] = useState<KitchenSummary | null>(null);
   const [snapshots, setSnapshots] = useState<ProductionSnapshot[]>([]);
+  // Cada exportación anota una planilla: el aviso de cambios se vuelve a pedir (2026-10-28).
+  const [sheetsKey, setSheetsKey] = useState(0);
   const [surplus, setSurplus] = useState<SurplusReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -100,6 +103,7 @@ export function KitchenPage() {
     await navigator.clipboard.writeText(await response.text());
     showToast('Producción copiada. Pegala en el chat de cocina.');
     await loadSnapshots(selectedMenu.cycle.id);
+    setSheetsKey((key) => key + 1);
   }
 
   /** El informe del período: lo vendido, la plata por medio de pago, quién debe y el stock. */
@@ -141,6 +145,7 @@ export function KitchenPage() {
     // Revocar en el mismo turno corre carrera con la pestaña que recién se abre.
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
     await loadSnapshots(selectedMenu.cycle.id);
+    setSheetsKey((key) => key + 1);
   }
 
   /*
@@ -161,6 +166,7 @@ export function KitchenPage() {
       if (!response.ok) throw new Error(await errorMessage(response));
       setKitchen((await response.json()) as KitchenSummary);
       await loadSnapshots(selectedMenu.cycle.id);
+      setSheetsKey((key) => key + 1);
       await loadSurplus(selectedMenu.cycle.id);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos generar el consolidado.');
@@ -336,6 +342,10 @@ export function KitchenPage() {
                 </p>
               ) : null}
             </div>
+
+            {selectedMenu && !runId ? (
+              <KitchenSheetsPanel cycleId={selectedMenu.cycle.id} refreshKey={sheetsKey} />
+            ) : null}
 
             {kitchen ? (
               <>

@@ -119,6 +119,8 @@ import {
   weeklyMenuOfferings,
   weeklyMenuPrices,
   weeklyMenus,
+  kitchenSheets,
+  type KitchenSheetOrder,
 } from '../schema/index.js';
 import { findMergeCandidates, mergeCustomers } from './customer-merge.js';
 import { assignOrderToRun, dropEmptyAutoRun, leaveRun, runLabel } from './delivery-runs.js';
@@ -6813,11 +6815,53 @@ export class PostgresOperationsService {
       .orderBy(desc(sql`sum(${orders.totalMinor})`));
     const [cancelled] = await this.database
       .select({
+        cookedCount: sql<number>`count(*) filter (where ${orders.cancelledToStock})::int`,
+        cookedTotalMinor: sql<number>`coalesce(sum(${orders.totalMinor}) filter (where ${orders.cancelledToStock}), 0)::int`,
         count: sql<number>`count(*)::int`,
         totalMinor: sql<number>`coalesce(sum(${orders.totalMinor}), 0)::int`,
       })
       .from(orders)
       .where(and(scope, eq(orders.status, 'CANCELLED')));
+    /*
+     * Los cancelados uno por uno, y si ya se habían cocinado (2026-10-28): uno cancelado después de
+     * que la planilla fue a cocina se cocinó igual, y el informe tiene que decir dónde quedó.
+     */
+    const cancelledRows = await this.database
+      .select({
+        customerName: customers.displayName,
+        deliveryDate: orders.deliveryDate,
+        id: orders.id,
+        toStock: orders.cancelledToStock,
+        totalMinor: orders.totalMinor,
+      })
+      .from(orders)
+      .innerJoin(customers, eq(customers.id, orders.customerId))
+      .where(and(scope, eq(orders.status, 'CANCELLED')))
+      .orderBy(asc(orders.deliveryDate));
+    const cancelledItems =
+      cancelledRows.length === 0
+        ? []
+        : await this.database
+            .select({
+              familyName: orderItems.productNameSnapshot,
+              orderId: orderItems.orderId,
+              quantityUnits: orderItems.quantityUnits,
+              variantName: orderItems.variantSnapshot,
+            })
+            .from(orderItems)
+            .where(
+              inArray(
+                orderItems.orderId,
+                cancelledRows.map((row) => row.id),
+              ),
+            );
+    const sheetsOfCycle = await this.database
+      .select({ orders: kitchenSheets.orders })
+      .from(kitchenSheets)
+      .where(eq(kitchenSheets.salesCycleId, cycleId));
+    const sentToKitchen = new Set(
+      sheetsOfCycle.flatMap((sheet) => sheet.orders.map((order) => order.orderId)),
+    );
 
     const methods = byMethod.map((row) => ({
       count: Number(row.count),
@@ -6870,7 +6914,20 @@ export class PostgresOperationsService {
     const receivables = await this.listReceivables({ cycleId, operatingSiteId });
     return {
       cancelled: {
+        cookedCount: Number(cancelled?.cookedCount ?? 0),
+        cookedTotalMinor: Number(cancelled?.cookedTotalMinor ?? 0),
         count: Number(cancelled?.count ?? 0),
+        orders: cancelledRows.map((row) => ({
+          customerName: row.customerName,
+          deliveryDate: row.deliveryDate,
+          items: cancelledItems
+            .filter((item) => item.orderId === row.id)
+            .map((item) => `${item.familyName} ${item.variantName} × ${String(item.quantityUnits)}`)
+            .join(', '),
+          sentToKitchen: sentToKitchen.has(row.id),
+          toStock: row.toStock,
+          totalMinor: row.totalMinor,
+        })),
         totalMinor: Number(cancelled?.totalMinor ?? 0),
       },
       cycle,
@@ -6944,9 +7001,45 @@ export class PostgresOperationsService {
       this.database,
       pageRows.map(({ id }) => id),
     );
+    /*
+     * Los totales de todo lo filtrado, no de la página (2026-10-28). El pie de la lista sumaba sólo
+     * los treinta cargados: con "Cargar más" daba $2.625.000 mientras el informe del período daba
+     * $2.695.000, y parecía que el informe contaba un cancelado. Se calcula sólo con la primera
+     * página; las siguientes no lo cambian. El dinero, como en el informe: sin cancelados ni stock.
+     */
+    let summary = null;
+    if (!cursor) {
+      const filtered = conditions.length > 0 ? and(...conditions) : undefined;
+      const [row] = await this.database
+        .select({
+          orderCount: sql<number>`count(distinct ${orders.id})::int`,
+          paidCount: sql<number>`count(distinct ${orders.id}) filter (where ${orders.paidAt} is not null)::int`,
+          totalMinor: sql<number>`coalesce(sum(${orders.totalMinor}) filter (where ${orders.status} <> 'CANCELLED' and ${notStockCustomer}), 0)::bigint`,
+        })
+        .from(orders)
+        .innerJoin(customers, eq(customers.id, orders.customerId))
+        .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+        .where(filtered);
+      const [units] = await this.database
+        .select({
+          units: sql<number>`coalesce(sum(${orderItems.quantityUnits}), 0)::int`,
+        })
+        .from(orderItems)
+        .innerJoin(orders, eq(orders.id, orderItems.orderId))
+        .innerJoin(customers, eq(customers.id, orders.customerId))
+        .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+        .where(and(filtered, ne(orders.status, 'CANCELLED')));
+      summary = {
+        orderCount: Number(row?.orderCount ?? 0),
+        paidCount: Number(row?.paidCount ?? 0),
+        totalMinor: Number(row?.totalMinor ?? 0),
+        units: Number(units?.units ?? 0),
+      };
+    }
     return {
       items: loaded,
       nextCursor: hasMore ? (pageRows.at(-1)?.id ?? null) : null,
+      summary,
     };
   }
 
@@ -8537,7 +8630,7 @@ export class PostgresOperationsService {
           zone?: string | undefined;
         }
       | { orderId: string },
-  ): Promise<readonly KitchenSourceLine[]> {
+  ): Promise<readonly (KitchenSourceLine & { orderId: string })[]> {
     const lines = await this.database
       .select({
         // Derived from the catalog rather than compared against a variety name. A line whose variant
@@ -8664,6 +8757,237 @@ export class PostgresOperationsService {
         dishSelections,
         dishSources,
       };
+    });
+  }
+
+  /** Los pedidos que entran en la planilla de cocina, cada uno con lo que lleva en texto. */
+  private async kitchenSheetOrders(
+    cycleId: string,
+    operatingSiteId: string | null,
+  ): Promise<KitchenSheetOrder[]> {
+    const lines = await this.loadKitchenLines({ cycleId, operatingSiteId });
+    const byOrder = new Map<string, KitchenSheetOrder>();
+    for (const line of lines) {
+      // Lo vendido del stock no se cocina: tampoco va en la planilla.
+      if (line.orderSource === 'opportunity_sale') continue;
+      const entry = byOrder.get(line.orderId) ?? {
+        customerName: line.customerDisplayName,
+        lines: [],
+        orderId: line.orderId,
+        publicNumber: line.orderPublicNumber,
+      };
+      const dishes = line.dishSelections.length > 0 ? `: ${line.dishSelections.join(' · ')}` : '';
+      entry.lines.push(
+        `${line.familyName} ${line.variantName} × ${String(line.quantityUnits)}${dishes}`,
+      );
+      byOrder.set(line.orderId, entry);
+    }
+    return [...byOrder.values()];
+  }
+
+  /**
+   * Anota una planilla de cocina que salió (2026-10-28): con qué pedidos y con qué contenido, para
+   * ver después qué cambió y volver a bajarla igual. Ver `kitchenSheets` en el esquema.
+   */
+  public async recordKitchenSheet(
+    cycleId: string,
+    operatingSiteId: string | null,
+    format: string,
+    report: Record<string, unknown>,
+    context: OperationsContext,
+  ) {
+    const sheetOrders = await this.kitchenSheetOrders(cycleId, operatingSiteId);
+    await this.database.insert(kitchenSheets).values({
+      actorUserId: context.actorUserId ?? null,
+      format,
+      operatingSiteId,
+      orders: sheetOrders,
+      report,
+      salesCycleId: cycleId,
+    });
+  }
+
+  /**
+   * Las planillas que salieron de un período y qué cambió desde la última (2026-10-28): pedidos
+   * nuevos, pedidos que ya no están (con su estado: un cancelado ya cocinado tiene que ir al stock)
+   * y pedidos que cambiaron lo que llevan.
+   */
+  public async listKitchenSheets(cycleId: string, operatingSiteId: string | null) {
+    const sheets = await this.database
+      .select({
+        actorName: users.displayName,
+        createdAt: kitchenSheets.createdAt,
+        format: kitchenSheets.format,
+        id: kitchenSheets.id,
+        orders: kitchenSheets.orders,
+      })
+      .from(kitchenSheets)
+      .leftJoin(users, eq(users.id, kitchenSheets.actorUserId))
+      .where(
+        and(
+          eq(kitchenSheets.salesCycleId, cycleId),
+          operatingSiteId
+            ? eq(kitchenSheets.operatingSiteId, operatingSiteId)
+            : isNull(kitchenSheets.operatingSiteId),
+        ),
+      )
+      .orderBy(desc(kitchenSheets.createdAt));
+    const items = sheets.map((sheet) => ({
+      actorName: sheet.actorName ?? null,
+      createdAt: sheet.createdAt,
+      format: sheet.format,
+      id: sheet.id,
+      orderCount: sheet.orders.length,
+    }));
+    const last = sheets[0];
+    if (!last) return { changes: null, items };
+
+    const now = await this.kitchenSheetOrders(cycleId, operatingSiteId);
+    const before = new Map(last.orders.map((order) => [order.orderId, order]));
+    const after = new Map(now.map((order) => [order.orderId, order]));
+    const added = now.filter((order) => !before.has(order.orderId));
+    const changed = now
+      .filter((order) => {
+        const previous = before.get(order.orderId);
+        return previous && previous.lines.join('|') !== order.lines.join('|');
+      })
+      .map((order) => ({ ...order, before: before.get(order.orderId)?.lines ?? [] }));
+    const gone = last.orders.filter((order) => !after.has(order.orderId));
+    const states =
+      gone.length === 0
+        ? []
+        : await this.database
+            .select({
+              cancelledToStock: orders.cancelledToStock,
+              id: orders.id,
+              status: orders.status,
+            })
+            .from(orders)
+            .where(
+              inArray(
+                orders.id,
+                gone.map((order) => order.orderId),
+              ),
+            );
+    const removed = gone.map((order) => {
+      const state = states.find((row) => row.id === order.orderId);
+      return {
+        ...order,
+        cancelledToStock: state?.cancelledToStock ?? false,
+        // Null: el pedido se borró.
+        status: state?.status ?? null,
+      };
+    });
+    return {
+      changes: {
+        added,
+        changed,
+        removed,
+        since: { actorName: last.actorName ?? null, createdAt: last.createdAt, id: last.id },
+      },
+      items,
+    };
+  }
+
+  /** Lo que se usó para armar una planilla que ya salió: para volver a bajarla igual. */
+  public async kitchenSheetReport(sheetId: string) {
+    const [sheet] = await this.database
+      .select({
+        createdAt: kitchenSheets.createdAt,
+        report: kitchenSheets.report,
+        salesCycleId: kitchenSheets.salesCycleId,
+      })
+      .from(kitchenSheets)
+      .where(eq(kitchenSheets.id, sheetId))
+      .limit(1);
+    if (!sheet) throw new OperationsNotFoundError('No se encontró esa planilla');
+    return sheet;
+  }
+
+  /**
+   * Si un pedido ya salió en una planilla de cocina, y si al cancelarlo pasó al stock
+   * (2026-10-28). Lo usa el diálogo de cancelar para avisar y la ficha para ofrecer pasarlo.
+   */
+  public async orderKitchenStatus(orderId: string) {
+    const [order] = await this.database
+      .select({
+        cancelledToStock: orders.cancelledToStock,
+        salesCycleId: orders.salesCycleId,
+        status: orders.status,
+      })
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .limit(1);
+    if (!order) throw new OperationsNotFoundError('No se encontró el pedido');
+    const [sheet] = await this.database
+      .select({ createdAt: kitchenSheets.createdAt })
+      .from(kitchenSheets)
+      .where(
+        and(
+          eq(kitchenSheets.salesCycleId, order.salesCycleId),
+          sql`${kitchenSheets.orders} @> ${JSON.stringify([{ orderId }])}::jsonb`,
+        ),
+      )
+      .orderBy(desc(kitchenSheets.createdAt))
+      .limit(1);
+    return {
+      cancelledToStock: order.cancelledToStock,
+      sentToKitchenAt: sheet?.createdAt ?? null,
+      status: order.status,
+    };
+  }
+
+  /**
+   * Pasar al stock un pedido que ya está cancelado (2026-10-28). Para cuando se canceló sin tildar
+   * "Pasar las viandas a stock" y después se supo que ya estaba cocinado: el mismo lote que se
+   * habría armado al cancelar, atado al pedido.
+   */
+  public async cancelledOrderToStockLater(orderId: string, context: OperationsContext) {
+    await this.database.transaction(async (transaction) => {
+      const [current] = await transaction
+        .select({
+          cancelledToStock: orders.cancelledToStock,
+          closeAt: salesCycles.closeAt,
+          operatingSiteId: orders.operatingSiteId,
+          salesCycleId: orders.salesCycleId,
+          status: orders.status,
+        })
+        .from(orders)
+        .innerJoin(salesCycles, eq(salesCycles.id, orders.salesCycleId))
+        .where(eq(orders.id, orderId))
+        .limit(1);
+      if (!current) throw new OperationsNotFoundError('No se encontró el pedido');
+      if (current.status !== 'CANCELLED')
+        throw new OperationsConflictError('Sólo un pedido cancelado pasa al stock.');
+      if (current.cancelledToStock)
+        throw new OperationsConflictError('Las viandas de este pedido ya están en el stock.');
+      await transaction
+        .update(orders)
+        .set({ cancelledToStock: true, updatedAt: new Date() })
+        .where(eq(orders.id, orderId));
+      await this.cancelledOrderToStock(
+        transaction,
+        {
+          closeAt: current.closeAt,
+          id: orderId,
+          operatingSiteId: current.operatingSiteId,
+          salesCycleId: current.salesCycleId,
+        },
+        context,
+      );
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: 'order.cancelled_to_stock',
+        actor: auditActor(context),
+        after: { cancelledToStock: true },
+        before: { cancelledToStock: false },
+        correlationId: context.correlationId,
+        entityId: orderId,
+        entityType: 'order',
+        metadata: {},
+        requestId: context.requestId,
+        source: context.source,
+      });
     });
   }
 

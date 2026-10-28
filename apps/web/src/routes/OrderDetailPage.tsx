@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import { DeliveryDayPicker, useDeliveryOptions } from '../components/DeliveryDayPicker.js';
 import { neighboursOf } from '../lib/orderNavigation.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { CancelOrderDialog } from '../components/CancelOrderDialog.js';
+import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { DeliveryMap } from '../components/DeliveryMap.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
@@ -66,13 +67,18 @@ export function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const paymentMethods = usePaymentMethods();
   const [order, setOrder] = useState<OrderSummary | null>(null);
+  // Si salió en una planilla de cocina y si pasó al stock (2026-10-28).
+  const [kitchenStatus, setKitchenStatus] = useState<{ cancelledToStock: boolean } | null>(null);
+  const [confirmToStock, setConfirmToStock] = useState(false);
   const [history, setHistory] = useState<OrderStatusHistoryEntry[]>([]);
   const [revisions, setRevisions] = useState<OrderRevision[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [message, setMessage] = useState('');
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
+  // "Editar" desde el menú ⋯ de la lista llega con ?editar=1: la ficha abre ya en edición.
+  const [searchParams] = useSearchParams();
+  const [editing, setEditing] = useState(() => searchParams.get('editar') === '1');
   const [moving, setMoving] = useState(false);
   /*
    * El día de reparto en la edición: uno de los de la ciudad para el menú del pedido, u "otra
@@ -123,6 +129,11 @@ export function OrderDetailPage() {
       apiRequest(`/api/v1/orders/${id}/history`),
       apiRequest(`/api/v1/orders/${id}/revisions`),
     ]);
+    void apiRequest(`/api/v1/orders/${id}/kitchen-status`, { notify: false }).then(
+      async (response) => {
+        if (response.ok) setKitchenStatus((await response.json()) as { cancelledToStock: boolean });
+      },
+    );
     if (orderResponse.status === 404) {
       setNotFound(true);
       setLoading(false);
@@ -215,6 +226,22 @@ export function OrderDetailPage() {
     if (!response.ok) throw new Error(await errorMessage(response));
     setCancelOpen(false);
     showToast(toStock ? 'Pedido cancelado. Sus viandas pasaron al stock.' : 'Pedido cancelado.');
+    await load();
+  }
+
+  /*
+   * Un cancelado que ya estaba cocinado y no pasó al stock al cancelarse (2026-10-28): sus viandas
+   * pasan ahora, al mismo lote que se habría armado entonces.
+   */
+  async function sendToStock() {
+    if (!order) return;
+    const response = await apiRequest(`/api/v1/orders/${order.id}/to-stock`, { method: 'POST' });
+    setConfirmToStock(false);
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    showToast('Sus viandas pasaron al stock de períodos anteriores.');
     await load();
   }
 
@@ -334,6 +361,9 @@ export function OrderDetailPage() {
   const compositionEditable = order.status === 'DRAFT' || order.status === 'CONFIRMED';
   const canConfirm = profile.permissions.includes('orders.confirm');
   const canCancel = profile.permissions.includes('orders.cancel');
+  // Cancelado sin pasar a stock: se ofrece pasarlo después, si resulta que ya estaba cocinado.
+  const canSendToStock =
+    canCancel && order.status === 'CANCELLED' && kitchenStatus?.cancelledToStock === false;
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
@@ -397,6 +427,15 @@ export function OrderDetailPage() {
           {order.status === 'CONFIRMED' && canEdit ? (
             <button className="button button-secondary" onClick={() => void transition('READY')}>
               Marcar listo
+            </button>
+          ) : null}
+          {canSendToStock ? (
+            <button
+              className="button button-secondary"
+              onClick={() => setConfirmToStock(true)}
+              type="button"
+            >
+              Pasar sus viandas a stock
             </button>
           ) : null}
           {['DRAFT', 'CONFIRMED'].includes(order.status) && canCancel ? (
@@ -766,8 +805,19 @@ export function OrderDetailPage() {
           <CancelOrderDialog
             cooked={COOKED.includes(order.status)}
             onCancel={() => setCancelOpen(false)}
+            orderId={order.id}
             onConfirm={cancelOrder}
             orderNumber={order.customer.displayName}
+          />
+        ) : null}
+
+        {confirmToStock ? (
+          <ConfirmDialog
+            confirmLabel="Pasar a stock"
+            detail="Sus viandas quedan en el stock de períodos anteriores, para venderse desde Nuevo pedido. Usalo si el pedido ya estaba cocinado cuando se canceló."
+            onCancel={() => setConfirmToStock(false)}
+            onConfirm={sendToStock}
+            title="¿Pasar sus viandas a stock?"
           />
         ) : null}
 

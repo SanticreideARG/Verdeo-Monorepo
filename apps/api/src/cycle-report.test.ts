@@ -4,7 +4,22 @@ import { describe, expect, it } from 'vitest';
 import { buildCycleReportExcel, type CycleReport } from './cycle-report.js';
 
 const report: CycleReport = {
-  cancelled: { count: 1, totalMinor: 7_000_000 },
+  cancelled: {
+    cookedCount: 1,
+    cookedTotalMinor: 7_000_000,
+    count: 1,
+    orders: [
+      {
+        customerName: 'Adriana Prueba',
+        deliveryDate: '2026-10-26',
+        items: 'Intuitivo 250 × 1',
+        sentToKitchen: true,
+        toStock: false,
+        totalMinor: 7_000_000,
+      },
+    ],
+    totalMinor: 7_000_000,
+  },
   cycle: { alias: 'Octubre 3', id: 'c', status: 'CLOSED' },
   generatedAt: '2026-10-22T12:00:00.000Z',
   methods: [
@@ -69,7 +84,13 @@ describe('buildCycleReportExcel', () => {
   const book = XLSX.read(buildCycleReportExcel(report), { type: 'array' });
 
   it('trae resumen, medios de pago, por cobrar y stock', () => {
-    expect(book.SheetNames).toEqual(['Resumen', 'Por medio de pago', 'Por cobrar', 'Stock']);
+    expect(book.SheetNames).toEqual([
+      'Resumen',
+      'Por medio de pago',
+      'Cancelados',
+      'Por cobrar',
+      'Stock',
+    ]);
     expect(rowsOf(book, 'Resumen')[0]?.[0]).toBe('Informe del período Octubre 3');
   });
 
@@ -93,6 +114,19 @@ describe('buildCycleReportExcel', () => {
       'Keto 400 × 1',
       'Transferencia',
       80_000,
+    ]);
+  });
+
+  // Un cancelado que salió en la planilla y no pasó al stock se marca para revisar (2026-10-28).
+  it('lista los cancelados y marca el cocinado que no pasó al stock', () => {
+    const rows = rowsOf(book, 'Cancelados');
+    expect(rows.at(-1)).toEqual([
+      'Adriana Prueba',
+      '2026-10-26',
+      'Intuitivo 250 × 1',
+      70_000,
+      'Sí',
+      'No — revisar',
     ]);
   });
 });

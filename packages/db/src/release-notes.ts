@@ -115,4 +115,15 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Nuevo pedido: en pantallas anchas el formulario se abre en dos columnas, el cliente a la izquierda y el pedido a la derecha.
 • Cocina: un Intuitivo de un período anterior (hasta 4 meses) se puede cargar a mano al stock, con su nombre y sus platos.`,
   },
+  {
+    key: '2026-10-28-planillas-y-cancelados',
+    body: `• Cocina: cada planilla que sale queda anotada. Arriba se ve qué pedidos cambiaron desde la última (nuevos, cancelados, cambiados) y se puede volver a bajar cualquiera tal como salió.
+• Cancelar un pedido que ya salió en la planilla avisa y deja tildado "Pasar a stock". Si se canceló sin pasarlo y estaba cocinado, en el pedido está "Pasar sus viandas a stock".
+• Informe del período: los cancelados van aparte, uno por uno, diciendo si se cocinaron y si pasaron al stock.
+• Pedidos: con la lista partida ("Cargar más"), el pie muestra los totales de todo el período, igual que el informe.`,
+  },
+  {
+    key: '2026-10-28-editar-desde-lista',
+    body: `Pedidos: el menú ⋯ de cada pedido tiene "Editar", que abre la ficha ya en edición.`,
+  },
 ];

@@ -228,7 +228,7 @@ describe('informe del período', () => {
       pendingMinor: 7_000_000,
       totalMinor: 14_000_000,
     });
-    expect(report.cancelled).toEqual({ count: 1, totalMinor: 7_000_000 });
+    expect(report.cancelled).toMatchObject({ cookedCount: 0, count: 1, totalMinor: 7_000_000 });
     expect(report.receivables).toHaveLength(1);
     expect(report.receivables[0]?.orders[0]?.paymentExpectation).toBe('Transferencia');
     // El stock: 4 de la semana, que pasaron al período siguiente.
@@ -472,5 +472,66 @@ describe('Intuitivo de un período anterior cargado a mano', () => {
     await expect(
       service.createIntuitivoLot({ ...lote, salesCycleId: viejo }, contexto),
     ).rejects.toThrow('últimos 4 meses');
+  });
+});
+
+describe('planilla de cocina enviada y cancelado después (2026-10-28)', () => {
+  const cancelarSinStock = (service: PostgresOperationsService, orderId: string) =>
+    service.transitionOrder(orderId, 'CANCELLED', 'No lo quiso', false, true, contexto, {
+      toStock: false,
+    });
+
+  it('anota la planilla, avisa el cancelado, lo pasa a stock después y el informe lo separa', async () => {
+    const { service } = await base();
+    const ana = await service.createOrder(
+      { ...pedido('2026-10-19'), initialStatus: 'CONFIRMED' as const },
+      contexto,
+    );
+    // La planilla sale con el pedido de Ana.
+    await service.recordKitchenSheet(CYCLE, null, 'xlsx', { totalUnits: 1 }, contexto);
+    expect((await service.orderKitchenStatus(ana.id)).sentToKitchenAt).not.toBeNull();
+
+    // Se cancela sin pasar a stock: la próxima planilla ya no lo trae, y el aviso lo marca.
+    await cancelarSinStock(service, ana.id);
+    const sheets = await service.listKitchenSheets(CYCLE, null);
+    expect(sheets.items).toHaveLength(1);
+    expect(sheets.changes?.removed).toMatchObject([
+      { cancelledToStock: false, customerName: 'Ana Prueba', status: 'CANCELLED' },
+    ]);
+
+    // Después se sabe que estaba cocinado: pasa a stock, una sola vez.
+    await service.cancelledOrderToStockLater(ana.id, contexto);
+    expect(await service.listStockLots({ operatingSiteId: SITE })).toMatchObject([
+      { available: 1, cycleAlias: 'Octubre 3', familyName: 'Keto' },
+    ]);
+    await expect(service.cancelledOrderToStockLater(ana.id, contexto)).rejects.toThrow(
+      'ya están en el stock',
+    );
+
+    // El informe no lo suma como venta, y dice que se cocinó y pasó al stock.
+    const report = await service.cycleReport(CYCLE);
+    expect(report.totals.orderCount).toBe(0);
+    expect(report.cancelled).toMatchObject({ cookedCount: 1, count: 1 });
+    expect(report.cancelled.orders).toMatchObject([
+      { customerName: 'Ana Prueba', sentToKitchen: true, toStock: true },
+    ]);
+  });
+
+  it('el pie de la lista suma todo lo filtrado, sin cancelados', async () => {
+    const { service } = await base();
+    for (let index = 0; index < 3; index += 1)
+      await service.createOrder(
+        { ...pedido('2026-10-19'), initialStatus: 'CONFIRMED' as const },
+        contexto,
+      );
+    const cancelado = await service.createOrder(
+      { ...pedido('2026-10-19'), initialStatus: 'CONFIRMED' as const },
+      contexto,
+    );
+    await cancelarSinStock(service, cancelado.id);
+
+    const page = await service.listOrders({ cycleId: CYCLE, limit: 2 });
+    expect(page.items).toHaveLength(2);
+    expect(page.summary).toMatchObject({ orderCount: 4, units: 3, totalMinor: 3 * 7000000 });
   });
 });

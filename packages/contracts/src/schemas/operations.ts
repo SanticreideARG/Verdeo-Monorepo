@@ -1072,6 +1072,63 @@ export const OrderListQuerySchema = z
 export const OrderPageResponseSchema = z.object({
   items: z.array(OrderSchema),
   nextCursor: UuidSchema.nullable(),
+  /**
+   * Los totales de todo lo filtrado, no de la página (2026-10-28). Sólo en la primera página. El
+   * dinero va sin cancelados ni stock, igual que el informe del período.
+   */
+  summary: z
+    .object({
+      orderCount: z.number().int(),
+      paidCount: z.number().int(),
+      totalMinor: z.number().int(),
+      units: z.number().int(),
+    })
+    .nullable()
+    .optional(),
+});
+
+const KitchenSheetOrderSchema = z.object({
+  customerName: z.string(),
+  lines: z.array(z.string()),
+  orderId: UuidSchema,
+  publicNumber: z.string(),
+});
+
+/** Las planillas de cocina que salieron y qué cambió desde la última (2026-10-28). */
+export const KitchenSheetListResponseSchema = z.object({
+  changes: z
+    .object({
+      added: z.array(KitchenSheetOrderSchema),
+      changed: z.array(KitchenSheetOrderSchema.extend({ before: z.array(z.string()) })),
+      removed: z.array(
+        KitchenSheetOrderSchema.extend({
+          cancelledToStock: z.boolean(),
+          status: z.string().nullable(),
+        }),
+      ),
+      since: z.object({
+        actorName: z.string().nullable(),
+        createdAt: IsoDateTimeSchema,
+        id: UuidSchema,
+      }),
+    })
+    .nullable(),
+  items: z.array(
+    z.object({
+      actorName: z.string().nullable(),
+      createdAt: IsoDateTimeSchema,
+      format: z.string(),
+      id: UuidSchema,
+      orderCount: z.number().int(),
+    }),
+  ),
+});
+
+/** Si un pedido ya salió en una planilla de cocina y si pasó al stock al cancelarse. */
+export const OrderKitchenStatusResponseSchema = z.object({
+  cancelledToStock: z.boolean(),
+  sentToKitchenAt: IsoDateTimeSchema.nullable(),
+  status: z.string(),
 });
 
 export const OrderRevisionSchema = z.object({

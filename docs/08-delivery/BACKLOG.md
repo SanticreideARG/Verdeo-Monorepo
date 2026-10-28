@@ -684,3 +684,12 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] Etiquetas: "Descargar PDF" arma el PDF en el navegador (html-to-image + jsPDF, 300 ppp, A4 exacto, tipografías incrustadas) y anota la tanda como impresa; instrucciones de impresión debajo.
 - [x] Nuevo pedido en pantalla ancha (≥1360px): dos columnas, cliente a la izquierda y pedido a la derecha, cuatro campos por fila.
 - [x] Stock: cargar a mano un Intuitivo de un período anterior (hasta 4 meses; platos validados contra el menú de ese período; nombre en `stock_lots.notes`; vence un mes después de cargarlo). `POST /api/v1/stock-lots`.
+
+## Pedido cancelado ya cocinado (2026-10-28) — [caso](../07-operations/CASO_2026-10-28_CANCELADO_YA_COCINADO.md)
+
+- [x] Planillas de cocina anotadas con sus pedidos (`kitchen_sheets`, migración 0076): cambios desde la última en Cocina y volver a bajar cada una tal como salió.
+- [x] Cancelar un pedido que ya salió en la planilla: aviso y "Pasar a stock" tildado de entrada.
+- [x] Pasar a stock un pedido ya cancelado (`POST /api/v1/orders/:id/to-stock`).
+- [x] Informe del período: hoja "Cancelados" (salió en la planilla / pasó a stock) y cancelados ya cocinados en el resumen.
+- [x] Pie de la lista de Pedidos con los totales de todo lo filtrado (`summary` en `GET /api/v1/orders`).
+- [x] "Editar" en el menú ⋯ de la lista de Pedidos: abre la ficha en edición (`?editar=1`).

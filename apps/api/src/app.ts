@@ -172,6 +172,8 @@ import {
   ReceivablesResponseSchema,
   StockLotListResponseSchema,
   StockLotCreateRequestSchema,
+  KitchenSheetListResponseSchema,
+  OrderKitchenStatusResponseSchema,
   StockLotUpdateRequestSchema,
   PrintedLabelsRequestSchema,
   PrintedLabelsResponseSchema,
@@ -834,6 +836,19 @@ interface OperationsEngine {
     preview?: boolean,
   ): Promise<unknown>;
   cycleReport(cycleId: string, operatingSiteId?: string | null): Promise<unknown>;
+  recordKitchenSheet(
+    cycleId: string,
+    operatingSiteId: string | null,
+    format: string,
+    report: Record<string, unknown>,
+    context: OperationsContext,
+  ): Promise<unknown>;
+  listKitchenSheets(cycleId: string, operatingSiteId: string | null): Promise<unknown>;
+  kitchenSheetReport(
+    sheetId: string,
+  ): Promise<{ createdAt: Date; report: Record<string, unknown>; salesCycleId: string }>;
+  orderKitchenStatus(orderId: string): Promise<unknown>;
+  cancelledOrderToStockLater(orderId: string, context: OperationsContext): Promise<unknown>;
   listReceivables(input: {
     customerId?: string | undefined;
     cycleId?: string | undefined;
@@ -6828,6 +6843,27 @@ export function createApp(options: CreateAppOptions) {
     return context.json(OrderRevisionListResponseSchema.parse({ items: contractValue(items) }));
   });
 
+  // Si el pedido ya salió en una planilla de cocina, y si pasó al stock (2026-10-28).
+  app.get('/api/v1/orders/:id/kitchen-status', async (context) => {
+    if (!context.get('session').permissions.includes('orders.read')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El pedido indicado no es válido.');
+    const status = await requireOperations().orderKitchenStatus(params.data.id);
+    return context.json(OrderKitchenStatusResponseSchema.parse(contractValue(status)));
+  });
+
+  // Pasar al stock un pedido ya cancelado que se había cocinado (2026-10-28).
+  app.post('/api/v1/orders/:id/to-stock', async (context) => {
+    if (!context.get('session').permissions.includes('orders.cancel')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El pedido indicado no es válido.');
+    await requireOperations().cancelledOrderToStockLater(
+      params.data.id,
+      operationsContext(context),
+    );
+    return context.body(null, 204);
+  });
+
   app.post('/api/v1/orders/:id/status', async (context) => {
     const session = context.get('session');
     const params = IdParamSchema.safeParse(context.req.param());
@@ -7267,6 +7303,18 @@ export function createApp(options: CreateAppOptions) {
       );
     }
 
+    /*
+     * Cada planilla que sale queda anotada con sus pedidos (2026-10-28): para ver qué cambió desde
+     * la última y volver a bajarla tal como se envió. Ver `kitchen_sheets`.
+     */
+    await requireOperations().recordKitchenSheet(
+      params.data.cycleId,
+      context.get('scope')?.operatingSiteId ?? null,
+      format,
+      report,
+      operationsContext(context),
+    );
+
     context.header('cache-control', 'private, no-store');
     if (format === 'xlsx') {
       context.header('content-disposition', `attachment; filename="${filename}.xlsx"`);
@@ -7282,6 +7330,38 @@ export function createApp(options: CreateAppOptions) {
     }
     context.header('content-type', 'text/html; charset=utf-8');
     return context.html(buildProductionPrintHtml(report));
+  });
+
+  // Las planillas de cocina que salieron y qué cambió desde la última (2026-10-28).
+  app.get('/api/v1/production/:cycleId/sheets', async (context) => {
+    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    const params = CycleIdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El ciclo indicado no es válido.');
+    const sheets = await requireOperations().listKitchenSheets(
+      params.data.cycleId,
+      context.get('scope')?.operatingSiteId ?? null,
+    );
+    return context.json(KitchenSheetListResponseSchema.parse(contractValue(sheets)));
+  });
+
+  // Volver a bajar una planilla tal como salió: el Excel se arma con lo que se guardó entonces.
+  app.get('/api/v1/production/sheets/:id/export', async (context) => {
+    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    if (!params.success) return badRequest(context, 'La planilla indicada no es válida.');
+    const sheet = await requireOperations().kitchenSheetReport(params.data.id);
+    const report = sheet.report as unknown as Parameters<typeof buildProductionExcel>[0];
+    const stamp = new Date(sheet.createdAt).toISOString().slice(0, 16).replace(/[:T]/g, '-');
+    context.header('cache-control', 'private, no-store');
+    context.header(
+      'content-disposition',
+      `attachment; filename="produccion-enviada-${stamp}.xlsx"`,
+    );
+    context.header(
+      'content-type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    return context.body(buildProductionExcel(report), 200);
   });
 
   app.get('/api/v1/production/:cycleId/surplus', async (context) => {

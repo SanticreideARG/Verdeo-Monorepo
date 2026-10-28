@@ -1,4 +1,5 @@
-export type OrderRowActionKey = 'cancel' | 'confirm' | 'delete' | 'ready' | 'revert' | 'view';
+export type OrderRowActionKey =
+  'cancel' | 'confirm' | 'delete' | 'edit' | 'ready' | 'revert' | 'view';
 
 export interface OrderRowAction {
   key: OrderRowActionKey;
@@ -19,7 +20,9 @@ export interface OrderRowAction {
  * también evita tocarlas sin querer.
  *
  * "Ver detalle" está siempre en el menú porque el doble clic sobre la fila no se ve: es la forma de
- * descubrir que el detalle existe.
+ * descubrir que el detalle existe. "Editar" va al lado (2026-10-28): abre el pedido ya en edición,
+ * sin el paso de entrar y buscar el botón. La dirección, la entrega, el pago y las notas se editan
+ * en cualquier estado; los platos, el servidor los deja sólo en borrador o confirmado.
  */
 export function orderRowActions(
   order: { status: string },
@@ -32,6 +35,7 @@ export function orderRowActions(
   }
 
   const menu: OrderRowAction[] = [{ key: 'view', label: 'Ver detalle' }];
+  if (can('orders.edit')) menu.push({ key: 'edit', label: 'Editar' });
   if (order.status === 'CONFIRMED' && can('orders.edit')) {
     menu.push({ key: 'ready', label: 'Marcar listo' });
   }

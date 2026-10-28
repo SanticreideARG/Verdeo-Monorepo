@@ -7,7 +7,21 @@ import xlsxStyle, { type CellObject, type WorkSheet } from 'xlsx-js-style';
 const XLSX = xlsxStyle;
 
 export interface CycleReport {
-  cancelled: { count: number; totalMinor: number };
+  cancelled: {
+    /** Cancelados que ya se habían cocinado y pasaron al stock (2026-10-28). */
+    cookedCount: number;
+    cookedTotalMinor: number;
+    count: number;
+    orders: {
+      customerName: string;
+      deliveryDate: string;
+      items: string;
+      sentToKitchen: boolean;
+      toStock: boolean;
+      totalMinor: number;
+    }[];
+    totalMinor: number;
+  };
   cycle: { alias: string; id: string; status: string };
   generatedAt: string;
   methods: {
@@ -120,8 +134,11 @@ export function buildCycleReportExcel(report: CycleReport): ArrayBuffer {
         ['Pendiente de cobro', money(totals.pendingMinor)],
         ['En efectivo', money(totals.cashMinor)],
         ['En transferencia u otros', money(totals.transferMinor)],
-        ['Pedidos cancelados', report.cancelled.count],
+        ['Pedidos cancelados (no suman)', report.cancelled.count],
         ['Monto cancelado (no suma)', money(report.cancelled.totalMinor)],
+        // Cancelado después de cocinarse: no es venta, pero la comida existe y está en el stock.
+        ['Cancelados ya cocinados → stock', report.cancelled.cookedCount],
+        ['Monto de esos (no suma)', money(report.cancelled.cookedTotalMinor)],
         ['Clientes que deben', report.receivables.length],
         ['Generado', new Date(report.generatedAt).toLocaleString('es-AR')],
       ],
@@ -156,6 +173,36 @@ export function buildCycleReportExcel(report: CycleReport): ArrayBuffer {
       [24, 20, 10, 16, 16, 16],
     ),
     'Por medio de pago',
+  );
+
+  /*
+   * Los cancelados uno por uno (2026-10-28): si habían salido en la planilla de cocina y si sus
+   * viandas pasaron al stock. Uno que salió en la planilla y no pasó al stock es comida cocinada
+   * que no figura en ningún lado: es lo que hay que revisar.
+   */
+  XLSX.utils.book_append_sheet(
+    workbook,
+    sheet(
+      title,
+      [
+        'Cliente',
+        'Entrega',
+        'Qué llevaba',
+        'Monto (no suma)',
+        'Salió en la planilla',
+        'Pasó a stock',
+      ],
+      report.cancelled.orders.map((row): Cell[] => [
+        row.customerName,
+        row.deliveryDate,
+        row.items,
+        money(row.totalMinor),
+        row.sentToKitchen ? 'Sí' : 'No',
+        row.toStock ? 'Sí' : row.sentToKitchen ? 'No — revisar' : 'No',
+      ]),
+      [28, 12, 40, 16, 20, 16],
+    ),
+    'Cancelados',
   );
 
   const debtRows: Cell[][] = report.receivables.flatMap((entry) =>

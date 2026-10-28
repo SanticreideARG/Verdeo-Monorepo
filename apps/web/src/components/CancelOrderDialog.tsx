@@ -23,8 +23,11 @@ export function CancelOrderDialog({
   cooked = false,
   onCancel,
   onConfirm,
+  orderId,
   orderNumber,
 }: {
+  /** Para saber si ya salió en una planilla de cocina (2026-10-28). */
+  orderId?: string;
   /** Ya se cocinó (confirmado, listo o entregado): se ofrece pasar sus viandas al stock. */
   cooked?: boolean;
   onCancel: () => void;
@@ -47,6 +50,29 @@ export function CancelOrderDialog({
    * para siempre y no había forma de cancelar el pedido ni de saber por qué.
    */
   const [loadingReasons, setLoadingReasons] = useState(true);
+  /*
+   * Si ya salió en una planilla de cocina (2026-10-28): se avisa y "Pasar a stock" viene tildado.
+   * Un pedido cancelado después de que la planilla fue a cocina se cocinó igual; sin tildar, esa
+   * comida no quedaba en ningún lado.
+   */
+  const [sentAt, setSentAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!cooked || !orderId) return;
+    let active = true;
+    void apiRequest(`/api/v1/orders/${orderId}/kitchen-status`, { notify: false }).then(
+      async (response) => {
+        if (!active || !response.ok) return;
+        const body = (await response.json()) as { sentToKitchenAt: string | null };
+        if (!active || !body.sentToKitchenAt) return;
+        setSentAt(body.sentToKitchenAt);
+        setToStock(true);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [cooked, orderId]);
 
   useEffect(() => {
     let active = true;
@@ -154,6 +180,16 @@ export function CancelOrderDialog({
                 value={notes}
               />
             </label>
+            {cooked && sentAt ? (
+              <p className="intake-rule intake-rule-alert" role="status">
+                Este pedido ya salió en la planilla de cocina del{' '}
+                {new Date(sentAt).toLocaleString('es-AR', {
+                  dateStyle: 'short',
+                  timeStyle: 'short',
+                })}
+                : probablemente ya está cocinado. Si no lo está, destildá la casilla de abajo.
+              </p>
+            ) : null}
             {cooked ? (
               <label className="flex items-start gap-2 text-sm">
                 <input

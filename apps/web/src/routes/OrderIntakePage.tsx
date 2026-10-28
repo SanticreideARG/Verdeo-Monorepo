@@ -1,6 +1,6 @@
 import { compareSizes } from '@verdeo/orders';
 import { useCallback, useContext, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { ActionButton } from '../components/ActionButton.js';
 import { AfterSaveDialog } from '../components/AfterSaveDialog.js';
@@ -11,7 +11,7 @@ import { DashboardShell } from '../components/DashboardShell.js';
 import { StockLotsPicker } from '../components/StockLotsPicker.js';
 import { StockSaleOption } from '../components/StockSaleOption.js';
 import { stockItemsPayload, type StockLot, type StockPicks } from '../lib/stockLots.js';
-import { sourceLabel } from '../lib/orderColumns.js';
+import { type OrderListSummary, sourceLabel } from '../lib/orderColumns.js';
 import { rememberOrderList } from '../lib/orderNavigation.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { DataTable } from '../components/DataTable.js';
@@ -309,7 +309,10 @@ export function OrderIntakePage() {
   const [searchInput, setSearchInput] = useState(() => searchParams.get('search') ?? '');
   // Lo que se tipea y lo que se consulta son dos cosas: sin el retardo, cada tecla es un pedido.
   const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
+  const navigate = useNavigate();
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  // Los totales de todo lo filtrado, para el pie cuando la lista está partida (2026-10-28).
+  const [listSummary, setListSummary] = useState<OrderListSummary | null>(null);
   // Qué pasó, qué hacer y si tiene sentido reintentar, separado de las confirmaciones.
   const [error, setError] = useState<AppError | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() =>
@@ -384,9 +387,11 @@ export function OrderIntakePage() {
       const body = (await orderResponse.json()) as {
         items: OrderSummary[];
         nextCursor: string | null;
+        summary?: OrderListSummary | null;
       };
       setOrders(body.items);
       setNextCursor(body.nextCursor);
+      setListSummary(body.summary ?? null);
       setError(null);
     } else if (orderResponse) {
       setError(await describeResponse(orderResponse));
@@ -1216,11 +1221,13 @@ export function OrderIntakePage() {
     else if (key === 'cancel') void transition(order, 'CANCELLED');
     else if (key === 'revert') setReverting(order);
     else if (key === 'delete') setDeleting(order);
+    // Editar abre la ficha ya en edición (2026-10-28).
+    else if (key === 'edit') void navigate(`/app/pedidos/${order.id}?editar=1`);
     else setViewing(order);
   }
 
   const intakeColumns: readonly OrderColumn[] = [
-    ...buildOrderColumns({ maskSurnames }),
+    ...buildOrderColumns({ maskSurnames, summary: nextCursor ? listSummary : null }),
     {
       /* Al pie de la tarjeta y sin rótulo: "Acciones" encima de un botón no dice nada. */
       actions: true,
@@ -2004,7 +2011,11 @@ export function OrderIntakePage() {
             {orders.length === 1 ? '1 pedido' : String(orders.length) + ' pedidos'}
             {/* Con la lista paginada no se puede contar mirando: si quedan más, se dice, para que
                 "30" no se lea como "hay treinta y se terminó". */}
-            {nextCursor ? ' cargados · hay más' : ''}
+            {nextCursor
+              ? listSummary
+                ? ` cargados de ${String(listSummary.orderCount)} · los totales son de todos`
+                : ' cargados · hay más'
+              : ''}
             {/* El vacío casi nunca es el estado real: es un filtro puesto de más. */}
             {orders.length === 0 && (statusFilter || search.trim() || periodId) ? (
               <>
@@ -2244,6 +2255,7 @@ export function OrderIntakePage() {
         <CancelOrderDialog
           cooked={COOKED.includes(cancelling.status)}
           onCancel={() => setCancelling(null)}
+          orderId={cancelling.id}
           onConfirm={(input) => cancelOrder(cancelling, input)}
           orderNumber={`el pedido de ${maskSurnames ? maskSurname(cancelling.customer.displayName) : cancelling.customer.displayName}`}
         />
