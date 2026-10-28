@@ -3849,6 +3849,276 @@ a {
   color: #a24335;
 }
 
+/*
+ * Estadísticas, rediseño (STATS_REDESIGN_PLAN.md): el carrusel de gráficos con "Lo que pasó" al lado,
+ * las barras por período y el análisis contable.
+ */
+.stats-hero-row {
+  display: grid;
+  gap: 1.5rem;
+}
+@media (min-width: 1200px) {
+  .stats-hero-row {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+}
+.stats-hero {
+  min-width: 0;
+}
+.stats-hero-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.stats-hero-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.stats-hero-button {
+  display: inline-grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid var(--db-border);
+  border-radius: 999px;
+  color: var(--db-text);
+  font-size: 0.85rem;
+  line-height: 1;
+}
+.stats-hero-button:hover {
+  border-color: var(--db-accent);
+  color: var(--db-accent);
+}
+/* Las diapositivas apiladas en la misma celda: la más alta fija el alto y el cambio no salta. */
+.stats-hero-track {
+  display: grid;
+  margin-top: 0.75rem;
+  overflow: hidden;
+}
+.stats-hero-slide {
+  grid-area: 1 / 1;
+  min-width: 0;
+  opacity: 0;
+  transform: translateX(28px) scale(0.985);
+  transition:
+    opacity 520ms ease,
+    transform 640ms cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 640ms;
+  visibility: hidden;
+}
+.stats-hero-slide.is-before {
+  transform: translateX(-28px) scale(0.985);
+}
+.stats-hero-slide.is-active {
+  opacity: 1;
+  transform: none;
+  transition-delay: 0s;
+  visibility: visible;
+}
+.stats-hero-dots {
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+.stats-hero-dot {
+  position: relative;
+  width: 0.55rem;
+  height: 0.55rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--db-border);
+  transition: width 320ms ease;
+}
+.stats-hero-dot.is-active {
+  width: 2.2rem;
+  background: color-mix(in srgb, var(--db-accent) 35%, transparent);
+}
+.stats-hero-progress {
+  position: absolute;
+  inset: 0;
+  background: var(--db-accent);
+  transform-origin: left;
+  animation: stats-hero-progress linear forwards;
+}
+@keyframes stats-hero-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stats-hero-slide,
+  .stats-hero-dot {
+    transition: none;
+  }
+  .stats-hero-slide {
+    transform: none;
+  }
+  .stats-hero-progress {
+    animation: none;
+  }
+}
+
+.stats-bars svg {
+  width: 100%;
+  height: 210px;
+}
+.stats-bar {
+  transition: opacity 160ms ease;
+}
+.stats-bar:hover {
+  opacity: 0.8;
+}
+.stats-bar-1 {
+  fill: var(--db-accent);
+}
+.stats-bar-2 {
+  fill: color-mix(in srgb, var(--db-accent) 72%, white);
+}
+.stats-bar-3 {
+  fill: color-mix(in srgb, var(--db-accent) 48%, white);
+}
+.stats-bar-4 {
+  fill: color-mix(in srgb, var(--db-accent) 60%, black);
+}
+.stats-bar-5 {
+  fill: color-mix(in srgb, var(--db-accent) 30%, white);
+}
+.stats-bars-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem 1rem;
+  margin-top: 0.4rem;
+  color: var(--db-text-soft);
+  font-size: 0.75rem;
+}
+.stats-bars-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.stats-bars-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.stats-feed {
+  min-width: 0;
+}
+.stats-feed-list {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+}
+.stats-feed-item {
+  --stats-tone: var(--db-accent);
+  padding: 0.55rem 0.7rem;
+  border-left: 3px solid var(--stats-tone);
+  background: color-mix(in srgb, var(--stats-tone) 8%, transparent);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.stats-feed-item.is-success {
+  --stats-tone: #2f7a4d;
+}
+.stats-feed-item.is-warning {
+  --stats-tone: #b7791f;
+}
+.stats-feed-item.is-danger {
+  --stats-tone: #a24335;
+}
+.stats-feed-kind {
+  display: block;
+  color: var(--stats-tone);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.stats-feed-item p {
+  margin: 0.15rem 0 0;
+  color: var(--db-text);
+}
+.stats-feed-link {
+  color: var(--db-accent);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.stats-accounting-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.stats-accounting-table th.is-number,
+.stats-accounting-table td.is-number {
+  text-align: right;
+  white-space: nowrap;
+}
+.stats-accounting-table td.is-number small {
+  color: var(--db-muted);
+  font-size: 0.72rem;
+}
+.stats-accounting-table td.is-pending {
+  color: #b7791f;
+}
+.stats-accounting-table td.is-quiet {
+  color: var(--db-muted);
+}
+.stats-accounting-toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  text-align: left;
+  white-space: nowrap;
+}
+.stats-accounting-row:hover td,
+.stats-accounting-row.is-open td {
+  background: color-mix(in srgb, var(--db-accent) 6%, transparent);
+}
+.stats-accounting-detail > td {
+  padding: 0.75rem 0.75rem 1rem 1.4rem;
+  background: color-mix(in srgb, var(--db-accent) 4%, transparent);
+}
+.stats-accounting-detail-grid {
+  display: grid;
+  gap: 1rem;
+}
+@media (min-width: 900px) {
+  .stats-accounting-detail-grid {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+.stats-accounting-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem 1rem;
+  font-size: 0.82rem;
+}
+.stats-accounting-facts dt {
+  color: var(--db-muted);
+  font-size: 0.72rem;
+}
+.stats-accounting-facts dd {
+  margin: 0;
+  color: var(--db-text);
+  font-weight: 600;
+}
+.stats-accounting-total td {
+  border-top: 2px solid var(--db-border);
+  font-weight: 700;
+}
+
 /* Draft restore notice. Deliberately quiet — it reports something that already happened, it isn't
    an error and shouldn't read like one. */
 .draft-notice {

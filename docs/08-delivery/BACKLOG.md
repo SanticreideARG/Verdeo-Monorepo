@@ -693,3 +693,12 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] Informe del período: hoja "Cancelados" (salió en la planilla / pasó a stock) y cancelados ya cocinados en el resumen.
 - [x] Pie de la lista de Pedidos con los totales de todo lo filtrado (`summary` en `GET /api/v1/orders`).
 - [x] "Editar" en el menú ⋯ de la lista de Pedidos: abre la ficha en edición (`?editar=1`).
+
+## Estadísticas renovadas (2026-10-28) — [plan](../03-features/STATS_REDESIGN_PLAN.md)
+
+- [x] Análisis contable por período y ciudad (`GET /api/v1/stats/periods`, `?format=xlsx`), mismo criterio que el informe del período.
+- [x] Carrusel de gráficos: ingresos por día, ventas por período, cobrado/por cobrar, clientes nuevos/recurrentes, mezcla de menús.
+- [x] Feed "Lo que pasó" (`GET /api/v1/stats/events`), calculado al momento.
+- [x] Comparación automática con el período anterior cuando hay rango de fechas.
+- [ ] Feed, etapa 2: guardar los eventos (historial), marcarlos como vistos y avisar los importantes.
+- [ ] Margen: cargar costos por vianda o gastos por período.

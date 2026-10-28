@@ -147,7 +147,7 @@ export function MetricCard({
   value,
   valueNumber,
 }: {
-  hint?: string;
+  hint?: string | undefined;
   label: string;
   previous?: number | undefined;
   value: string;
@@ -171,5 +171,106 @@ export function MetricCard({
         <p className="mt-1 text-xs text-ink-muted">{hint}</p>
       ) : null}
     </article>
+  );
+}
+
+export interface PeriodBar {
+  /** Lo que se lee arriba de la barra (el total, la cantidad de pedidos). */
+  caption?: string;
+  label: string;
+  segments: { label: string; value: number }[];
+}
+
+/**
+ * Barras por período, apiladas por serie (STATS_REDESIGN_PLAN.md): ventas, cobrado contra por
+ * cobrar, nuevos contra recurrentes, la mezcla de menús. Con `normalize` cada barra es el 100% y se
+ * compara la proporción, no el tamaño: es lo que importa en la mezcla.
+ */
+export function PeriodBarsChart({
+  bars,
+  formatValue,
+  normalize = false,
+  title,
+}: {
+  bars: PeriodBar[];
+  formatValue: (value: number) => string;
+  normalize?: boolean;
+  title: string;
+}) {
+  const series = [...new Set(bars.flatMap((bar) => bar.segments.map((segment) => segment.label)))];
+  const totalOf = (bar: PeriodBar) => bar.segments.reduce((sum, segment) => sum + segment.value, 0);
+  if (bars.length === 0 || bars.every((bar) => totalOf(bar) === 0)) {
+    return <p className="mt-3 text-sm text-ink-muted">Sin datos en este período.</p>;
+  }
+
+  const width = 640;
+  const height = 210;
+  const padding = { bottom: 30, left: 8, right: 8, top: 20 };
+  const plotHeight = height - padding.top - padding.bottom;
+  const slot = (width - padding.left - padding.right) / bars.length;
+  const barWidth = Math.min(64, slot * 0.6);
+  const max = Math.max(1, ...bars.map(totalOf));
+
+  return (
+    <div className="stats-bars">
+      <svg role="img" viewBox={`0 0 ${width} ${height}`}>
+        <title>{title}</title>
+        {bars.map((bar, index) => {
+          const total = totalOf(bar);
+          const scale = normalize ? (total === 0 ? 0 : plotHeight / total) : plotHeight / max;
+          const x = padding.left + slot * index + (slot - barWidth) / 2;
+          let top = padding.top + plotHeight;
+          return (
+            <g key={bar.label}>
+              {bar.segments.map((segment) => {
+                const h = segment.value * scale;
+                top -= h;
+                const seriesIndex = series.indexOf(segment.label);
+                return (
+                  <rect
+                    className={`stats-bar stats-bar-${(seriesIndex % 5) + 1}`}
+                    height={Math.max(0, h)}
+                    key={segment.label}
+                    width={barWidth}
+                    x={x}
+                    y={top}
+                  >
+                    <title>{`${bar.label} · ${segment.label}: ${formatValue(segment.value)}${normalize && total > 0 ? ` (${Math.round((segment.value / total) * 100)}%)` : ''}`}</title>
+                  </rect>
+                );
+              })}
+              {bar.caption ? (
+                <text
+                  className="stats-chart-axis"
+                  textAnchor="middle"
+                  x={x + barWidth / 2}
+                  y={(normalize ? padding.top : top) - 6}
+                >
+                  {bar.caption}
+                </text>
+              ) : null}
+              <text
+                className="stats-chart-axis"
+                textAnchor="middle"
+                x={x + barWidth / 2}
+                y={height - 10}
+              >
+                {bar.label.length > 14 ? `${bar.label.slice(0, 13)}…` : bar.label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      {series.length > 1 ? (
+        <ul className="stats-bars-legend">
+          {series.map((label, index) => (
+            <li key={label}>
+              <i className={`stats-donut-key-${(index % 5) + 1}`} />
+              {label}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }

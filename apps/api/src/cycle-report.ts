@@ -66,15 +66,15 @@ const MONEY = '"$" #,##0.00';
 const THIN = { style: 'thin', color: { rgb: '9E9E9E' } } as const;
 const BORDER = { bottom: THIN, left: THIN, right: THIN, top: THIN };
 
-type Cell = number | string | { money: number };
+export type Cell = number | string | { money: number };
 
-const money = (minor: number): Cell => ({ money: minor / 100 });
+export const money = (minor: number): Cell => ({ money: minor / 100 });
 
 /**
  * Una hoja con un título, un encabezado gris y bordes finos. Las celdas `{ money }` salen como número
  * con formato de pesos: se pueden sumar en Excel, a diferencia de un texto "$ 1.000".
  */
-function sheet(
+export function sheet(
   title: string,
   header: readonly string[],
   body: readonly (readonly Cell[])[],

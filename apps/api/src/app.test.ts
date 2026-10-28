@@ -89,6 +89,8 @@ const customerOperationsStubs = {
   previewOrderImport: vi.fn(() => Promise.resolve([])),
   getOrder: vi.fn(),
   getStatsOverview: vi.fn(),
+  getStatsPeriods: vi.fn(),
+  getStatsEvents: vi.fn(),
   listMenuCatalogSettings: vi.fn(),
   getSurplusConfig: vi.fn(),
   deleteOrder: vi.fn(),
@@ -3634,6 +3636,67 @@ describe('API foundation', () => {
       const denied = buildStatsApp({ getStatsOverview: vi.fn() }, []);
       const deniedResponse = await denied.request('/api/v1/stats', { headers: { cookie } });
       expect(deniedResponse.status).toBe(403);
+    });
+
+    it('serves the accounting rows as json and xlsx, and the events feed', async () => {
+      const row = {
+        adjustmentMinor: 0,
+        cancelledCount: 1,
+        cancelledMinor: 7_000_000,
+        cancelledToStockMinor: 0,
+        closeAt: '2026-10-27T00:00:00.000Z',
+        customerCount: 30,
+        cycleAlias: 'Octubre 4',
+        discountMinor: 0,
+        fromStockMinor: 0,
+        grossMinor: 269_500_000,
+        methods: [
+          { isCash: false, method: 'transferencia', paidMinor: 0, totalMinor: 269_500_000 },
+        ],
+        netMinor: 269_500_000,
+        newCustomerCount: 4,
+        openAt: '2026-10-20T00:00:00.000Z',
+        operatingSiteId: '90000000-0000-4000-8000-000000000001',
+        operatingSiteName: 'Córdoba',
+        orderCount: 30,
+        paidMinor: 0,
+        pendingMinor: 269_500_000,
+        salesCycleId: '91000000-0000-4000-8000-000000000001',
+        surchargeMinor: 0,
+        units: 40,
+      };
+      const getStatsPeriods = vi.fn(() =>
+        Promise.resolve({ currency: 'ARS', mix: [], rows: [row] }),
+      );
+      const getStatsEvents = vi.fn(() =>
+        Promise.resolve([
+          { href: null, key: 'record:x', kind: 'record', text: 'Récord.', tone: 'success' },
+        ]),
+      );
+      const app = buildStatsApp({ getStatsEvents, getStatsPeriods }, ['stats.read']);
+
+      const json = await app.request('/api/v1/stats/periods?from=2026-10-01', {
+        headers: { cookie },
+      });
+      expect(json.status).toBe(200);
+      expect(((await json.json()) as { rows: unknown[] }).rows).toHaveLength(1);
+      expect(getStatsPeriods).toHaveBeenCalledWith({ from: '2026-10-01' });
+
+      const xlsx = await app.request('/api/v1/stats/periods?format=xlsx', { headers: { cookie } });
+      expect(xlsx.status).toBe(200);
+      expect(xlsx.headers.get('content-disposition')).toContain('analisis-contable.xlsx');
+
+      const events = await app.request('/api/v1/stats/events', { headers: { cookie } });
+      expect(events.status).toBe(200);
+      expect(((await events.json()) as { items: unknown[] }).items).toHaveLength(1);
+
+      const denied = buildStatsApp({ getStatsEvents, getStatsPeriods }, []);
+      expect((await denied.request('/api/v1/stats/periods', { headers: { cookie } })).status).toBe(
+        403,
+      );
+      expect((await denied.request('/api/v1/stats/events', { headers: { cookie } })).status).toBe(
+        403,
+      );
     });
 
     it('rejects a malformed date filter with 400', async () => {

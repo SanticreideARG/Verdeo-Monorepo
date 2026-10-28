@@ -326,7 +326,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'El Panel de control: dónde está cada ajuste',
   },
   {
-    body: '"Estadísticas" resume pedidos y ventas por período, ciudad y menú. Los menús se agrupan por nombre sin importar mayúsculas: "Menú Keto" y "MENÚ KETO" cuentan como el mismo.\n\n[Ir a Estadísticas](/app/estadisticas)',
+    body: '"Estadísticas" resume pedidos y ventas por período, ciudad y menú. Los cancelados y los pedidos de stock no suman en ningún lado. Los menús se agrupan por nombre sin importar mayúsculas: "Menú Keto" y "MENÚ KETO" cuentan como el mismo.\n\nArriba están los indicadores. Con "Desde" y "Hasta" cargados, cada uno se compara solo con el mismo largo de tiempo justo antes.\n\nEl carrusel pasa los gráficos solo: ingresos por día, ventas por período, cobrado y por cobrar, clientes nuevos y recurrentes, y la mezcla de menús. Se frena con el mouse encima o con el botón de pausa, y se maneja con las flechas.\n\n"Lo que pasó" muestra lo que conviene mirar del período en curso: récords, un menú que pasó la mitad o que cayó, lo que falta cobrar cerca del cierre, clientes de siempre que no pidieron, hitos y cancelados ya cocinados que no pasaron al stock.\n\nAbajo, el análisis contable: una fila por período y ciudad con bruto, descuentos, neto vendido, cobrado, por cobrar y cancelados (que no suman). Da lo mismo que el informe del período. Tocá una fila para ver el detalle por medio de pago, y "Descargar Excel" para bajarlo.\n\n[Ir a Estadísticas](/app/estadisticas)',
     category: 'Administración',
     key: 'admin-estadisticas',
     ordinal: 2,

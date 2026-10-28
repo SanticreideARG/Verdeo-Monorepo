@@ -5,51 +5,21 @@ import { AnalysisTabs } from '../components/AnalysisTabs.js';
 import { DeskWorkNotice } from '../components/DeskWorkNotice.js';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
-import { DonutChart, MetricCard, TrendChart } from '../components/StatsCharts.js';
+import { StatsAccountingTable, totalsOf } from '../components/StatsAccountingTable.js';
+import { DonutChart, MetricCard, PeriodBarsChart, TrendChart } from '../components/StatsCharts.js';
+import { StatsEventsFeed } from '../components/StatsEventsFeed.js';
+import { StatsHeroCarousel, type StatsSlide } from '../components/StatsHeroCarousel.js';
 import { apiRequest } from '../lib/api.js';
 import {
   errorMessage,
   formatMoney,
   orderStatusLabel,
+  type StatsEvent,
   type StatsOverview,
+  type StatsPeriods,
 } from '../lib/operations.js';
+import { mixSegments, periodPoints } from '../lib/statsPeriods.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
-
-interface RankedRow {
-  label: string;
-  orderCount?: number;
-  revenueMinor: number;
-  secondary?: string;
-}
-
-/** A horizontal bar list ranked by revenue — each bar's width is relative to the top row in its
- * own list, not a shared scale across lists, since "por zona" and "por tamaño" have very
- * different magnitudes and forcing one scale would flatten the smaller list to nothing. */
-function RankedList({ currency, rows }: { currency: string; rows: RankedRow[] }) {
-  const max = Math.max(1, ...rows.map((row) => row.revenueMinor));
-  if (rows.length === 0) return <p className="mt-3 text-sm text-ink-muted">Sin datos todavía.</p>;
-  return (
-    <ul className="mt-4 grid gap-3">
-      {rows.map((row) => (
-        <li key={row.label}>
-          <div className="flex items-baseline justify-between gap-3 text-sm">
-            <strong className="text-forest">{row.label}</strong>
-            <span className="text-ink-muted">
-              {formatMoney(row.revenueMinor, currency)}
-              {row.secondary ? ` · ${row.secondary}` : ''}
-            </span>
-          </div>
-          <div className="mt-1 h-2 overflow-hidden rounded-full bg-forest/10">
-            <div
-              className="h-full rounded-full bg-forest/60"
-              style={{ width: `${Math.max(4, (row.revenueMinor / max) * 100)}%` }}
-            />
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 /**
  * The window of the same length immediately before [from, to] — what "vs. período anterior" means.
@@ -69,9 +39,11 @@ function precedingWindow(from: string, to: string): { from: string; to: string }
   };
 }
 
-/** "Estadísticas": decision-making rollups over orders — global, por zona, por semana (ciclo) y
- * por tamaño. A cancelled order is excluded everywhere on the backend (never real demand), and the
- * date window defaults to open (all history) unless the operator narrows it. */
+/**
+ * "Estadísticas" (STATS_REDESIGN_PLAN.md): los indicadores arriba, un carrusel de gráficos con "Lo
+ * que pasó" al lado, la demanda y abajo el análisis contable por período y ciudad. Un cancelado no
+ * suma en ningún lado (nunca fue demanda real) y sin fechas es todo el historial.
+ */
 export function StatsPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const [overview, setOverview] = useState<StatsOverview | null>(null);
@@ -81,8 +53,9 @@ export function StatsPage() {
   const [operatingSiteId, setOperatingSiteId] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
-  const [compare, setCompare] = useState(false);
   const [previous, setPrevious] = useState<StatsOverview | null>(null);
+  const [periods, setPeriods] = useState<StatsPeriods | null>(null);
+  const [events, setEvents] = useState<StatsEvent[] | null>(null);
 
   const canRead = profile?.permissions.includes('stats.read') ?? false;
 
@@ -97,17 +70,21 @@ export function StatsPage() {
       return params.toString();
     };
 
-    const response = await apiRequest(`/api/v1/stats?${query({ from, to })}`);
+    const [response, periodsResponse] = await Promise.all([
+      apiRequest(`/api/v1/stats?${query({ from, to })}`),
+      apiRequest(`/api/v1/stats/periods?${query({ from, to })}`),
+    ]);
     if (!response.ok) {
       setMessage(await errorMessage(response));
       setLoading(false);
       return;
     }
     setOverview((await response.json()) as StatsOverview);
+    setPeriods(periodsResponse.ok ? ((await periodsResponse.json()) as StatsPeriods) : null);
 
-    // Comparison needs a closed window to mirror: with an open-ended range there is no "previous
-    // period" of the same length to compare against.
-    const previousWindow = compare && from && to ? precedingWindow(from, to) : null;
+    // Con un rango cerrado se compara solo contra el anterior del mismo largo; con uno abierto no
+    // hay "anterior" que espejar.
+    const previousWindow = from && to ? precedingWindow(from, to) : null;
     if (previousWindow) {
       const previousResponse = await apiRequest(`/api/v1/stats?${query(previousWindow)}`);
       setPrevious(previousResponse.ok ? ((await previousResponse.json()) as StatsOverview) : null);
@@ -115,12 +92,42 @@ export function StatsPage() {
       setPrevious(null);
     }
     setLoading(false);
-  }, [compare, from, operatingSiteId, to]);
+  }, [from, operatingSiteId, to]);
 
   useEffect(() => {
     if (canRead) void load();
     else setLoading(false);
   }, [canRead, load]);
+
+  // "Lo que pasó" mira el período en curso: depende de la ciudad, no de las fechas.
+  useEffect(() => {
+    if (!canRead) return;
+    setEvents(null);
+    const params = operatingSiteId ? `?operatingSiteId=${operatingSiteId}` : '';
+    void apiRequest(`/api/v1/stats/events${params}`)
+      .then(async (response) =>
+        setEvents(response.ok ? ((await response.json()) as { items: StatsEvent[] }).items : []),
+      )
+      .catch(() => setEvents([]));
+  }, [canRead, operatingSiteId]);
+
+  async function downloadAccounting() {
+    const params = new URLSearchParams({ format: 'xlsx' });
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    if (operatingSiteId) params.set('operatingSiteId', operatingSiteId);
+    const response = await apiRequest(`/api/v1/stats/periods?${params.toString()}`);
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'analisis-contable.xlsx';
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  }
 
   useEffect(() => {
     if (!profile?.permissions.includes('sites.read')) return;
@@ -154,6 +161,95 @@ export function StatsPage() {
   }
 
   const currency = overview?.global.currency ?? 'ARS';
+  const totals = periods ? totalsOf(periods.rows) : null;
+  const points = periods ? periodPoints(periods) : [];
+  const mix = periods
+    ? mixSegments(periods, points)
+    : new Map<string, { label: string; value: number }[]>();
+  const money = (minor: number) => formatMoney(minor, currency);
+  const slides: StatsSlide[] = overview
+    ? [
+        {
+          content: <TrendChart currency={currency} points={overview.byDay} />,
+          key: 'ingresos',
+          subtitle: 'Lo vendido cada día de entrega.',
+          title: 'Ingresos por fecha de entrega',
+        },
+        {
+          content: (
+            <PeriodBarsChart
+              bars={points.map((point) => ({
+                caption: `${point.orderCount} ped.`,
+                label: point.label,
+                segments: [{ label: 'Vendido', value: point.netMinor }],
+              }))}
+              formatValue={money}
+              title="Ventas por período"
+            />
+          ),
+          key: 'periodos',
+          subtitle: 'Neto vendido de cada período, con la cantidad de pedidos.',
+          title: 'Ventas por período',
+        },
+        {
+          content: (
+            <PeriodBarsChart
+              bars={points.map((point) => ({
+                caption:
+                  point.netMinor > 0
+                    ? `${Math.round((point.paidMinor / point.netMinor) * 100)}%`
+                    : '',
+                label: point.label,
+                segments: [
+                  { label: 'Cobrado', value: point.paidMinor },
+                  { label: 'Por cobrar', value: point.pendingMinor },
+                ],
+              }))}
+              formatValue={money}
+              title="Cobrado y por cobrar"
+            />
+          ),
+          key: 'cobro',
+          subtitle: 'Arriba de cada barra, qué parte ya se cobró.',
+          title: 'Cobrado y por cobrar',
+        },
+        {
+          content: (
+            <PeriodBarsChart
+              bars={points.map((point) => ({
+                caption: String(point.customerCount),
+                label: point.label,
+                segments: [
+                  { label: 'Recurrentes', value: point.customerCount - point.newCustomerCount },
+                  { label: 'Nuevos', value: point.newCustomerCount },
+                ],
+              }))}
+              formatValue={(value) => `${value} clientes`}
+              title="Clientes nuevos y recurrentes"
+            />
+          ),
+          key: 'clientes',
+          subtitle: `Nuevo es el primer pedido de su historia. Recurrencia: ${overview.global.ordersPerCustomer.toFixed(2)} pedidos por cliente.`,
+          title: 'Clientes nuevos y recurrentes',
+        },
+        {
+          content: (
+            <PeriodBarsChart
+              bars={points.map((point) => ({
+                label: point.label,
+                segments: mix.get(point.salesCycleId) ?? [],
+              }))}
+              formatValue={(value) => `${value} u.`}
+              normalize
+              title="Mezcla de menús por período"
+            />
+          ),
+          key: 'mezcla',
+          subtitle: 'Qué parte de las unidades se llevó cada menú.',
+          title: 'Mezcla de menús por período',
+        },
+      ]
+    : [];
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
@@ -165,7 +261,8 @@ export function StatsPage() {
           <h1 className="text-2xl font-semibold text-forest">Estadísticas</h1>
           <p className="mt-2 max-w-3xl text-sm text-ink-muted">
             Pedidos cancelados quedan afuera de todo lo que ves acá — nunca fueron demanda real. Sin
-            filtro de fechas, es todo el historial.
+            filtro de fechas, es todo el historial; con desde y hasta, cada indicador se compara con
+            el mismo largo de tiempo justo antes.
           </p>
         </header>
 
@@ -210,15 +307,6 @@ export function StatsPage() {
               </select>
             </label>
           ) : null}
-          <label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-forest">
-            <input
-              checked={compare}
-              disabled={!from || !to}
-              onChange={(event) => setCompare(event.target.checked)}
-              type="checkbox"
-            />
-            Comparar con período anterior
-          </label>
           <button className="button button-secondary" type="submit">
             Aplicar
           </button>
@@ -255,10 +343,20 @@ export function StatsPage() {
                 valueNumber={overview.global.orderCount}
               />
               <MetricCard
-                label="Ingresos"
+                label="Vendido"
                 previous={previous?.global.revenueMinor}
                 value={formatMoney(overview.global.revenueMinor, currency)}
                 valueNumber={overview.global.revenueMinor}
+              />
+              <MetricCard
+                hint={`${formatMoney(totals?.pendingMinor ?? 0, currency)} por cobrar`}
+                label="Cobrado"
+                value={
+                  totals && totals.netMinor > 0
+                    ? `${Math.round((totals.paidMinor / totals.netMinor) * 100)}%`
+                    : '—'
+                }
+                valueNumber={0}
               />
               <MetricCard
                 label="Ticket promedio"
@@ -267,24 +365,18 @@ export function StatsPage() {
                 valueNumber={overview.global.averageOrderValueMinor}
               />
               <MetricCard
+                hint={totals ? `${totals.newCustomerCount} nuevos` : undefined}
                 label="Clientes"
                 previous={previous?.global.customerCount}
                 value={String(overview.global.customerCount)}
                 valueNumber={overview.global.customerCount}
               />
-              <MetricCard
-                hint="Pedidos por cliente"
-                label="Recurrencia"
-                previous={previous?.global.ordersPerCustomer}
-                value={overview.global.ordersPerCustomer.toFixed(2)}
-                valueNumber={overview.global.ordersPerCustomer}
-              />
             </div>
 
-            <article className="operation-card mt-6">
-              <h2 className="text-lg font-semibold text-forest">Ingresos por fecha de entrega</h2>
-              <TrendChart currency={currency} points={overview.byDay} />
-            </article>
+            <div className="stats-hero-row mt-6">
+              <StatsHeroCarousel slides={slides} />
+              <StatsEventsFeed items={events} />
+            </div>
 
             <div className="mt-6 grid gap-6 lg:grid-cols-2">
               <article className="operation-card">
@@ -319,30 +411,16 @@ export function StatsPage() {
               </div>
             ) : null}
 
-            <div className="mt-6 grid gap-6 lg:grid-cols-2">
-              <article className="operation-card">
-                <h2 className="text-lg font-semibold text-forest">Por zona</h2>
-                <RankedList
+            <div className="mt-6">
+              {periods ? (
+                <StatsAccountingTable
                   currency={currency}
-                  rows={overview.byZone.map((row) => ({
-                    label: row.operatingSiteName,
-                    revenueMinor: row.revenueMinor,
-                    secondary: `${row.orderCount} pedido${row.orderCount === 1 ? '' : 's'}`,
-                  }))}
+                  onDownload={() => void downloadAccounting()}
+                  rows={periods.rows}
                 />
-              </article>
-
-              <article className="operation-card">
-                <h2 className="text-lg font-semibold text-forest">Por semana</h2>
-                <RankedList
-                  currency={currency}
-                  rows={overview.byCycle.map((row) => ({
-                    label: row.cycleAlias,
-                    revenueMinor: row.revenueMinor,
-                    secondary: `${row.orderCount} pedido${row.orderCount === 1 ? '' : 's'}`,
-                  }))}
-                />
-              </article>
+              ) : (
+                <p className="screen-notice">No se pudo cargar el análisis contable.</p>
+              )}
             </div>
           </>
         ) : null}

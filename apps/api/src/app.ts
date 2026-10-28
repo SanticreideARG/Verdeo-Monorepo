@@ -283,7 +283,10 @@ import {
   PageRevisionSchema,
   PermissionCatalogResponseSchema,
   RoleListResponseSchema,
+  StatsEventsResponseSchema,
   StatsOverviewSchema,
+  StatsPeriodsQuerySchema,
+  StatsPeriodsResponseSchema,
   StatsQuerySchema,
   UserAdminDetailSchema,
   UserListQuerySchema,
@@ -387,6 +390,7 @@ import {
   reportFromSnapshot,
 } from './production-export.js';
 import { buildCycleReportExcel, type CycleReport } from './cycle-report.js';
+import { buildStatsPeriodsExcel } from './stats-report.js';
 import { requirePermission } from './middleware/authorization.js';
 
 interface AppVariables {
@@ -795,6 +799,12 @@ interface OperationsEngine {
     operatingSiteId?: string | undefined;
     to?: string | undefined;
   }): Promise<unknown>;
+  getStatsPeriods(filters: {
+    from?: string | undefined;
+    operatingSiteId?: string | undefined;
+    to?: string | undefined;
+  }): Promise<unknown>;
+  getStatsEvents(filters: { operatingSiteId?: string | undefined }): Promise<unknown>;
   cycleLabels(
     cycleId: string,
     operatingSiteId: string | null,
@@ -2872,6 +2882,7 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/delivery/*', requireAuthentication);
   app.use('/api/v1/payments/*', requireAuthentication);
   app.use('/api/v1/stats', requireAuthentication);
+  app.use('/api/v1/stats/*', requireAuthentication);
   app.use('/api/v1/access-tokens/*', requireAuthentication);
   app.use('/api/v1/scope', requireAuthentication);
   app.use('/api/v1/operating-sites', requireAuthentication);
@@ -5885,6 +5896,50 @@ export function createApp(options: CreateAppOptions) {
       ...(site.operatingSiteId ? { operatingSiteId: site.operatingSiteId } : {}),
     });
     return context.json(StatsOverviewSchema.parse(contractValue(overview)));
+  });
+
+  /*
+   * El análisis contable por período y ciudad (STATS_REDESIGN_PLAN.md), con los mismos filtros que
+   * el resto de Estadísticas. `?format=xlsx` lo baja en Excel.
+   */
+  app.get('/api/v1/stats/periods', async (context) => {
+    if (!context.get('session').permissions.includes('stats.read')) return forbidden(context);
+    const query = StatsPeriodsQuerySchema.safeParse(context.req.query());
+    if (!query.success) return badRequest(context, 'Revisá el filtro.', query.error.issues);
+    const site = await resolveSiteQuery(context, query.data.operatingSiteId);
+    if (!site) return forbidden(context);
+    const { format, ...filters } = query.data;
+    const periods = StatsPeriodsResponseSchema.parse(
+      contractValue(
+        await requireOperations().getStatsPeriods({
+          ...filters,
+          ...(site.operatingSiteId ? { operatingSiteId: site.operatingSiteId } : {}),
+        }),
+      ),
+    );
+    if (format !== 'xlsx') return context.json(periods);
+    const range =
+      filters.from || filters.to
+        ? ` del ${filters.from ?? 'inicio'} al ${filters.to ?? 'hoy'}`
+        : ' (todo el historial)';
+    context.header('cache-control', 'private, no-store');
+    context.header('content-disposition', 'attachment; filename="analisis-contable.xlsx"');
+    context.header(
+      'content-type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    return context.body(buildStatsPeriodsExcel(periods, `Análisis contable${range}`), 200);
+  });
+
+  // "Lo que pasó": los eventos del período en curso para el feed de Estadísticas.
+  app.get('/api/v1/stats/events', async (context) => {
+    if (!context.get('session').permissions.includes('stats.read')) return forbidden(context);
+    const site = await resolveSiteQuery(context, context.req.query('operatingSiteId'));
+    if (!site) return forbidden(context);
+    const items = await requireOperations().getStatsEvents(
+      site.operatingSiteId ? { operatingSiteId: site.operatingSiteId } : {},
+    );
+    return context.json(StatsEventsResponseSchema.parse({ items }));
   });
 
   app.get('/api/v1/payments', async (context) => {

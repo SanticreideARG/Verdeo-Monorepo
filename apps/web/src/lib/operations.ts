@@ -494,6 +494,47 @@ export interface StatsOverview {
   };
 }
 
+/** Análisis contable de Estadísticas: una fila por período y ciudad (GET /api/v1/stats/periods). */
+export interface StatsPeriodRow {
+  adjustmentMinor: number;
+  cancelledCount: number;
+  cancelledMinor: number;
+  cancelledToStockMinor: number;
+  closeAt: string;
+  customerCount: number;
+  cycleAlias: string;
+  discountMinor: number;
+  fromStockMinor: number;
+  grossMinor: number;
+  methods: { isCash: boolean; method: string; paidMinor: number; totalMinor: number }[];
+  netMinor: number;
+  newCustomerCount: number;
+  openAt: string;
+  operatingSiteId: string;
+  operatingSiteName: string;
+  orderCount: number;
+  paidMinor: number;
+  pendingMinor: number;
+  salesCycleId: string;
+  surchargeMinor: number;
+  units: number;
+}
+
+export interface StatsPeriods {
+  currency: string;
+  mix: { familyName: string; salesCycleId: string; units: number }[];
+  rows: StatsPeriodRow[];
+}
+
+/** "Lo que pasó": un evento del feed de Estadísticas (GET /api/v1/stats/events). */
+export interface StatsEvent {
+  href: string | null;
+  key: string;
+  kind: 'ausentes' | 'cobro' | 'cocina' | 'hito' | 'mezcla' | 'record';
+  text: string;
+  tone: 'danger' | 'info' | 'success' | 'warning';
+}
+
 /**
  * El error de una respuesta, como una sola línea lista para mostrar.
  *

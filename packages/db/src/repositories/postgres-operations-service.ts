@@ -125,6 +125,8 @@ import {
 import { findMergeCandidates, mergeCustomers } from './customer-merge.js';
 import { assignOrderToRun, dropEmptyAutoRun, leaveRun, runLabel } from './delivery-runs.js';
 import { PostgresAuditSink } from './postgres-audit-sink.js';
+import { statsEvents } from './stats-events.js';
+import { statsPeriods } from './stats-periods.js';
 
 type DatabaseTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
@@ -10634,6 +10636,23 @@ export class PostgresOperationsService {
   // than by the individual weeklyMenu row, since a cycle's regional distributions are separate
   // weeklyMenu rows sharing one alias — "por semana" is the meaningful decision-making unit, not
   // "por copia regional del menú".
+  /** El análisis contable por período y ciudad, y lo que usan los gráficos del carrusel. */
+  public getStatsPeriods(filters: {
+    from?: string | undefined;
+    operatingSiteId?: string | undefined;
+    to?: string | undefined;
+  }) {
+    return statsPeriods(this.database, filters);
+  }
+
+  /** "Lo que pasó": los eventos del período en curso, para el feed de Estadísticas. */
+  public getStatsEvents(filters: { now?: Date; operatingSiteId?: string | undefined }) {
+    return statsEvents(this.database, {
+      operatingSiteId: filters.operatingSiteId ?? null,
+      ...(filters.now ? { now: filters.now } : {}),
+    });
+  }
+
   public async getStatsOverview(filters: {
     from?: string | undefined;
     operatingSiteId?: string | undefined;

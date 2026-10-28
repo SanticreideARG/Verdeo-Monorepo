@@ -126,4 +126,12 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
     key: '2026-10-28-editar-desde-lista',
     body: `Pedidos: el menú ⋯ de cada pedido tiene "Editar", que abre la ficha ya en edición.`,
   },
+  {
+    key: '2026-10-28-estadisticas-nuevas',
+    body: `Estadísticas, renovada:
+• Un carrusel de gráficos que pasa solo: ingresos por día, ventas por período, cobrado y por cobrar, clientes nuevos y recurrentes, y la mezcla de menús.
+• "Lo que pasó": récords, cambios fuertes en la mezcla, lo que falta cobrar cerca del cierre, clientes de siempre que no pidieron y más.
+• Análisis contable por período y ciudad, con el detalle por medio de pago y descarga en Excel. Da lo mismo que el informe del período.
+• Con un rango de fechas, cada indicador se compara solo con el período anterior.`,
+  },
 ];
