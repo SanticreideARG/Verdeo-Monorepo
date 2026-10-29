@@ -150,4 +150,8 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Cada persona con su cuenta, sin compartir contraseñas. Y nada de datos de prueba en el sistema: para practicar, pedí un entorno de prueba.
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
+  {
+    key: '2026-10-29-pantalla-ancha',
+    body: `En monitores anchos, las tablas y los formularios del panel ahora usan todo el ancho de la pantalla, en vez de quedar en una franja al medio.`,
+  },
 ];

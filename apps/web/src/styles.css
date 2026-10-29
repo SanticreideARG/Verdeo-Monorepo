@@ -5586,6 +5586,17 @@ main .operation-card {
    agrega otra capa de estilos, se agrega ANTES de esta sección, nunca después.
    ========================================================================== */
 
+/* Pantalla ancha (2026-10-29): con el tope de 1400px, en un monitor ancho las tablas y los
+   formularios quedaban en una franja al medio, con la mitad de la pantalla vacía. Desde 1700px el
+   contenido se abre hasta 2400px. El inicio (hero y tarjetas) mantiene el tope: estirado se lee
+   peor y no gana nada. */
+@media (min-width: 1700px) {
+  .dashboard-content:not(:has(.dashboard-hero)) {
+    width: min(100%, 2400px);
+    padding-inline: 2.5rem;
+  }
+}
+
 @media (max-width: 1180px) {
   .dashboard-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -11898,7 +11909,7 @@ label.field:has(> input[type='radio']) {
     grid-template-columns: minmax(22rem, 1fr) minmax(0, 1.2fr);
     gap: 0 1.75rem;
     align-items: start;
-    max-width: 96rem;
+    max-width: none;
     padding: 2rem;
   }
 

@@ -727,5 +727,6 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] Formulario en cuatro bloques (Cliente, Entrega, Pedido, Pago y origen); dos columnas desde 1200px (quién y dónde | qué y cómo), cada bloque acomoda sus campos según su ancho.
 - [x] Período con botones (radio) cuando hay dos publicados: el desplegable cortaba el nombre.
 - [x] Etiqueta NUEVO al lado del nombre del cliente en la lista de Pedidos.
+- [x] Pantalla ancha: desde 1700px el contenido del panel se abre hasta 2400px (antes, tope de 1400px); el inicio mantiene el tope. El formulario de Nuevo pedido ya no tiene ancho máximo propio.
 - [x] Etiquetas: el PDF lleva `PrintScaling=None` (una impresión salió al ~95 %).
 - [x] Columnas elegidas y vista tarjetas/tabla: ya se guardaban por dispositivo (`localStorage`), verificado.
