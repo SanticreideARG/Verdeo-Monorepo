@@ -134,4 +134,20 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Análisis contable por período y ciudad, con el detalle por medio de pago y descarga en Excel. Da lo mismo que el informe del período.
 • Con un rango de fechas, cada indicador se compara solo con el período anterior.`,
   },
+  {
+    key: '2026-10-29-nuevo-pedido-ordenado',
+    body: `Nuevo pedido, ordenado:
+• El formulario va en cuatro bloques: Cliente, Entrega, Pedido y Pago y origen. En pantalla ancha, quién y dónde a la izquierda; qué y cómo paga a la derecha.
+• Los desplegables ya no se cortan: con dos períodos publicados se eligen con botones, y en el teléfono variedad, tamaño y unidades van uno abajo del otro.
+• En la lista de Pedidos, la etiqueta NUEVO va al lado del nombre del cliente.
+• Etiquetas: el PDF pide imprimirse a tamaño real.`,
+  },
+  {
+    key: '2026-10-29-version-1',
+    body: `Versión 1.0 🎉 Cerramos el primer sprint: Verdeo ya corre con el trabajo de todos los días. La etapa que sigue es de estabilización y seguridad:
+• Los cambios grandes se avisan por acá antes, con día y hora, y se hacen fuera del cierre y del reparto.
+• Si aparece "Algo falló de nuestro lado", mandá una captura con el número de solicitud: con eso se encuentra el error en minutos.
+• Cada persona con su cuenta, sin compartir contraseñas. Y nada de datos de prueba en el sistema: para practicar, pedí un entorno de prueba.
+• Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
+  },
 ];

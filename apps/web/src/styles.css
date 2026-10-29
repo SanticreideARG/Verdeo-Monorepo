@@ -11507,6 +11507,10 @@ label.field:has(> input[type='radio']) {
   font-weight: 800;
   letter-spacing: 0.04em;
 }
+.new-badge-inline {
+  margin-left: 0.4rem;
+  vertical-align: 0.1em;
+}
 .crm-new-toggle {
   margin-top: 0.35rem;
   font-size: 0.85rem;
@@ -11779,20 +11783,120 @@ label.field:has(> input[type='radio']) {
 }
 
 /*
- * Nuevo pedido en pantalla ancha (2026-10-27). Hasta 1360px es una sola columna de 48rem, que en
- * una pantalla mediana ya llena el área. Más ancho, quedaba media pantalla vacía: el formulario se
- * abre en dos columnas — a la izquierda quién pide (pegar el mensaje, cliente), a la derecha qué
- * pide, con más aire y cuatro campos por fila. Guardar ocupa el ancho entero.
+ * Nuevo pedido (2026-10-27, reordenado el 2026-10-29). Cuatro bloques: Cliente y Entrega (quién y
+ * dónde), Pedido y Pago y origen (qué y cómo). En una columna van en ese orden; desde 1200px se
+ * abren en dos, y cada bloque acomoda sus campos según el ancho que le toca en vez de forzar
+ * cuatro por fila: así un desplegable nunca queda tan angosto que corte lo que dice.
  */
 .intake-form {
   max-width: 48rem;
 }
 
-@media (min-width: 1360px) {
+.intake-section {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  margin: 0 0 1.25rem;
+  border: 1px solid var(--db-border, color-mix(in srgb, var(--color-forest) 10%, transparent));
+  border-radius: 1rem;
+  padding: 1rem;
+}
+
+/* En el teléfono, menos relleno: el de la tarjeta más el del bloque comían un tercio del ancho. */
+@media (max-width: 639px) {
+  .intake-section {
+    padding: 0.75rem;
+  }
+}
+
+.intake-section > legend {
+  padding: 0 0.5rem;
+  color: var(--db-accent, var(--color-forest));
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.intake-section-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+}
+
+.intake-section-grid:empty {
+  display: none;
+}
+
+.intake-section-grid > .field-wide {
+  grid-column: 1 / -1;
+}
+
+/*
+ * En el teléfono, uno abajo del otro: el tamaño lleva el precio y en media pantalla se cortaba.
+ * Unidades, angosto, que es un número corto.
+ */
+.intake-order-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.intake-order-grid > .field:last-child {
+  max-width: 8rem;
+}
+
+@media (min-width: 560px) {
+  .intake-order-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 6.5rem;
+  }
+
+  .intake-order-grid > .field:last-child {
+    max-width: none;
+  }
+}
+
+/* El período, con dos publicados a la vez: botones con el nombre entero. */
+.intake-periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.intake-period {
+  position: relative;
+  cursor: pointer;
+}
+
+.intake-period input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.intake-period span {
+  display: inline-block;
+  border: 1px solid var(--db-border, color-mix(in srgb, var(--color-forest) 25%, transparent));
+  border-radius: 999px;
+  padding: 0.45rem 0.95rem;
+  color: var(--db-text, var(--color-forest));
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.intake-period input:checked + span {
+  border-color: var(--db-accent, var(--color-forest));
+  background: var(--db-accent, var(--color-forest));
+  color: #fff;
+}
+
+.intake-period input:focus-visible + span {
+  outline: 2px solid var(--color-forest);
+  outline-offset: 2px;
+}
+
+@media (min-width: 1200px) {
   .intake-form {
     display: grid;
-    grid-template-columns: minmax(20rem, 2fr) minmax(0, 3fr);
-    gap: 0 2.25rem;
+    grid-template-columns: minmax(22rem, 1fr) minmax(0, 1.2fr);
+    gap: 0 1.75rem;
     align-items: start;
     max-width: 96rem;
     padding: 2rem;
@@ -11802,26 +11906,8 @@ label.field:has(> input[type='radio']) {
     grid-column: 1 / -1;
   }
 
-  .intake-form-side {
-    position: sticky;
-    top: 1rem;
-  }
-
   .intake-form-side .paste-message textarea {
-    min-height: 9rem;
-  }
-
-  .intake-form-main {
-    padding-left: 2.25rem;
-    border-left: 1px solid color-mix(in srgb, var(--color-forest) 10%, transparent);
-  }
-
-  .intake-form-main .form-grid {
-    gap: 1.25rem 1.5rem;
-  }
-
-  .intake-form-main .form-grid-wide {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    min-height: 7rem;
   }
 }
 

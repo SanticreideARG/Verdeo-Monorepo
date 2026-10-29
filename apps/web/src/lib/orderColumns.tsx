@@ -115,9 +115,17 @@ export function buildOrderColumns(
        * convierte cualquier intento de seleccionar un texto en una navegación accidental.
        */
       render: (order) => (
-        <Link className="order-name" to={`/app/pedidos/${order.id}`}>
-          {displayName(order)}
-        </Link>
+        <>
+          <Link className="order-name" to={`/app/pedidos/${order.id}`}>
+            {displayName(order)}
+          </Link>
+          {/* Al lado del nombre, sin gastar una columna (2026-10-29). */}
+          {order.customer.isNew ? (
+            <span className="new-badge new-badge-inline" title="Cliente nuevo: primera compra">
+              NUEVO
+            </span>
+          ) : null}
+        </>
       ),
       // Se ordena por lo que se muestra: con los apellidos tapados, ordenar por el nombre completo
       // daría un orden que en pantalla no se explica.

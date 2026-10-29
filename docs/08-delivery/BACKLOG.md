@@ -3,6 +3,25 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## V1.0 - Estabilización y seguridad (desde 2026-10-29) — [análisis](../07-operations/ESTABILIZACION_V1.md)
+
+Sprint 1 y MVP cerrados: la versión 1.0 corre en producción. Esta etapa prioriza no romper el trabajo de quien usa el sistema y no perder datos.
+
+- [ ] Orden de despliegue: la migración en producción antes que el código que la usa (commit de migración aparte, se pushea solo).
+- [ ] Doble factor en GitHub, Vercel, Neon, Supabase, Resend y el correo del responsable.
+- [ ] Protección de `main` en GitHub: CI obligatorio, sin force push.
+- [ ] Límite de intentos en login, acceso por correo del portal, encuestas abiertas y asistente (`RATE_LIMITED` existe y no se usa).
+- [ ] Alarma de migración pendiente en Estado del sistema y en el keep-alive.
+- [ ] Volcado nocturno cifrado (`pg_dump` + `age`) fuera de Neon, 30 diarios y 12 mensuales.
+- [ ] Anotar la ventana de restauración (PITR) del plan de Neon y acordar RPO/RTO.
+- [ ] Primer simulacro de restauración en una rama de Neon, anotado.
+- [ ] Despliegue desde el CI: chequeo → rama de respaldo → migración → deploy hook de Vercel → semillas.
+- [ ] Usuarios de base separados (la app sin permisos de esquema; migraciones con otro usuario).
+- [ ] `audit_mirror` en Supabase con clave de servicio y política cerrada.
+- [ ] Rotar secretos expuestos alguna vez.
+- [ ] Dependabot o Renovate y `pnpm audit` en el CI (sólo aviso).
+- [ ] Revisar permisos y sacar cuentas de prueba de producción; limpiar datos de prueba antes de abrir.
+
 ## P0 - Foundation
 
 - [x] Scaffold monorepo.
@@ -702,3 +721,11 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] Comparación automática con el período anterior cuando hay rango de fechas.
 - [ ] Feed, etapa 2: guardar los eventos (historial), marcarlos como vistos y avisar los importantes.
 - [ ] Margen: cargar costos por vianda o gastos por período.
+
+## Nuevo pedido ordenado (2026-10-29)
+
+- [x] Formulario en cuatro bloques (Cliente, Entrega, Pedido, Pago y origen); dos columnas desde 1200px (quién y dónde | qué y cómo), cada bloque acomoda sus campos según su ancho.
+- [x] Período con botones (radio) cuando hay dos publicados: el desplegable cortaba el nombre.
+- [x] Etiqueta NUEVO al lado del nombre del cliente en la lista de Pedidos.
+- [x] Etiquetas: el PDF lleva `PrintScaling=None` (una impresión salió al ~95 %).
+- [x] Columnas elegidas y vista tarjetas/tabla: ya se guardaban por dispositivo (`localStorage`), verificado.

@@ -1444,7 +1444,8 @@ export function OrderIntakePage() {
             ref={formRef}
           >
             {draft.restored ? <DraftNotice onDiscard={draft.dismissNotice} /> : null}
-            {/* En pantalla ancha, quién pide va a la izquierda y qué pide a la derecha (2026-10-27). */}
+            {/* En pantalla ancha, quién pide y dónde va a la izquierda; qué pide y cómo paga a la
+                derecha (2026-10-27, reordenado el 2026-10-29). */}
             <div className="intake-form-side">
               {selectedMenu ? (
                 <details className="paste-message mb-4">
@@ -1466,8 +1467,8 @@ export function OrderIntakePage() {
                   </button>
                 </details>
               ) : null}
-              <fieldset className="mb-5 rounded-2xl border border-forest/10 p-4">
-                <legend className="px-2 text-sm font-bold text-forest">Cliente</legend>
+              <fieldset className="intake-section">
+                <legend>Cliente</legend>
                 <div className="flex gap-2">
                   <button
                     className={`button ${customerMode === 'search' ? 'button-primary' : 'button-secondary'}`}
@@ -1596,343 +1597,367 @@ export function OrderIntakePage() {
                   </div>
                 )}
               </fieldset>
+
+              {/*
+               * Dónde y cuándo va, al lado de quién pide (2026-10-29): la dirección sale del pedido
+               * anterior del cliente, así que se lee junto a él. En pantalla ancha la columna de la
+               * izquierda dejaba de quedar media vacía.
+               */}
+              <fieldset className="intake-section">
+                <legend>Entrega</legend>
+                <div className="intake-section-grid">
+                  {deliveryChoices.options.length > 1 && !otherDate ? (
+                    <div className="field field-wide">
+                      <DeliveryDayPicker
+                        onChange={setChosenDeliveryDate}
+                        options={deliveryChoices.options}
+                        value={deliveryDate}
+                      />
+                      {selectedMenu ? (
+                        <small className="field-hint">{selectedMenu.cycle.alias}</small>
+                      ) : null}
+                      <button
+                        className="locate-retry-open"
+                        onClick={() => {
+                          setCustomDeliveryDate(deliveryDate);
+                          setOtherDate(true);
+                        }}
+                        type="button"
+                      >
+                        Otra fecha
+                      </button>
+                    </div>
+                  ) : (
+                    /*
+                     * Un calendario, como al editar el pedido. Antes, con un solo día de reparto la fecha
+                     * era texto fijo en la computadora y no había forma de cambiarla al crear.
+                     */
+                    <label className="field">
+                      Entrega
+                      <input
+                        onChange={(event) => {
+                          setCustomDeliveryDate(event.target.value);
+                          setOtherDate(true);
+                        }}
+                        type="date"
+                        value={otherDate ? customDeliveryDate : deliveryDate}
+                      />
+                      {selectedMenu ? (
+                        <small className="field-hint">
+                          {selectedMenu.cycle.alias}
+                          {deliveryChoices.options.length > 1 ? (
+                            <>
+                              {' · '}
+                              <button
+                                className="locate-retry-open"
+                                onClick={() => setOtherDate(false)}
+                                type="button"
+                              >
+                                Volver a los días de reparto
+                              </button>
+                            </>
+                          ) : null}
+                        </small>
+                      ) : null}
+                    </label>
+                  )}
+                  <label className="field field-wide">
+                    Dirección, línea 1
+                    <input
+                      minLength={4}
+                      name="deliveryAddress"
+                      onChange={(event) => setDeliveryAddress(event.target.value)}
+                      placeholder="Calle, número y ciudad"
+                      required
+                      value={deliveryAddress}
+                    />
+                    <small className="field-hint">
+                      {addressHint || 'Sólo calle, número y ciudad: es lo que se busca en el mapa.'}
+                    </small>
+                  </label>
+                  <label className="field field-wide">
+                    Dirección, línea 2
+                    <input
+                      maxLength={300}
+                      name="deliveryAddressLine2"
+                      onChange={(event) => setDeliveryAddressLine2(event.target.value)}
+                      placeholder="Piso, depto, timbre, barrio, detalles"
+                      value={deliveryAddressLine2}
+                    />
+                  </label>
+                  {zones.length > 1 ? (
+                    <label className="field">
+                      Zona del domicilio
+                      <select
+                        onChange={(event) => setAddressZoneId(event.target.value)}
+                        value={addressZoneId}
+                      >
+                        <option value="">Elegir zona</option>
+                        {zones.map((zone) => (
+                          <option key={zone.id} value={zone.id}>
+                            {zone.displayName}
+                          </option>
+                        ))}
+                      </select>
+                      <small className="field-hint">
+                        Si la dirección es nueva, queda en la ficha del cliente en esta zona.
+                      </small>
+                    </label>
+                  ) : null}
+                  <label className="field">
+                    {/* Se llamaba "Día de reparto"; se usa para anotar la zona que guía el armado. */}
+                    Zona
+                    <input maxLength={80} name="deliveryDayText" placeholder="Ej. Centro" />
+                  </label>
+                  <label className="field">
+                    Franja horaria
+                    <input maxLength={80} name="deliveryTimeSlot" placeholder="Ej. 9 a 12 hs" />
+                  </label>
+                </div>
+              </fieldset>
             </div>
 
             <div className="intake-form-main">
-              <div className="form-grid form-grid-wide">
+              <fieldset className="intake-section">
+                <legend>Pedido</legend>
                 {/*
-                 * El período no se pregunta: hay uno abierto por vez, y elegirlo era confirmar lo
-                 * único posible. Si alguna vez hay dos publicados a la vez vuelve el desplegable,
-                 * porque ahí sí hay una decisión que tomar.
+                 * El período no se pregunta: hay uno abierto por vez, y elegirlo era confirmar lo único
+                 * posible. Con dos publicados a la vez se elige con botones y no con un desplegable: en
+                 * una columna angosta el desplegable cortaba el nombre ("NOVIEMBF") y no se leía cuál era
+                 * (2026-10-29).
                  */}
                 {publishedMenus.length > 1 ? (
-                  <label className="field">
-                    Período
-                    <select
-                      name="menuId"
-                      onChange={(event) => {
-                        setSelectedMenuId(event.target.value);
-                        setSelectedOfferingId('');
-                      }}
-                      required
-                      value={selectedMenuId}
-                    >
-                      <option value="">Seleccionar</option>
-                      {publishedMenus.map((menu) => (
-                        <option key={menu.id} value={menu.id}>
-                          {menu.cycle.alias}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <div aria-label="Período" className="intake-periods" role="radiogroup">
+                    {publishedMenus.map((menu) => (
+                      <label className="intake-period" key={menu.id}>
+                        <input
+                          checked={selectedMenuId === menu.id}
+                          name="menuId"
+                          onChange={() => {
+                            setSelectedMenuId(menu.id);
+                            setSelectedOfferingId('');
+                          }}
+                          required
+                          type="radio"
+                          value={menu.id}
+                        />
+                        <span>{menu.cycle.alias}</span>
+                      </label>
+                    ))}
+                  </div>
                 ) : (
                   <input name="menuId" type="hidden" value={selectedMenuId} />
                 )}
-                <label className="field">
-                  Variedad
-                  <select
-                    name="offeringFamily"
-                    onChange={(event) => chooseIntakeFamily(event.target.value)}
-                    // Un pedido sólo con viandas del stock de períodos anteriores no lleva variedad.
-                    required={stockPicks.size === 0}
-                    value={selectedOffering?.familyName ?? ''}
-                  >
-                    <option value="">Seleccionar</option>
-                    {intakeFamilies.map((familyName) => (
-                      <option key={familyName} value={familyName}>
-                        {familyName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  Tamaño
-                  {/* El precio va con el tamaño: depende de él y no de la variedad (ADR-030). */}
-                  <select
-                    disabled={!selectedOffering}
-                    name="offeringSize"
-                    onChange={(event) => chooseIntakeSize(event.target.value)}
-                    required={stockPicks.size === 0}
-                    value={selectedOffering?.variantName ?? ''}
-                  >
-                    <option value="">Seleccionar</option>
-                    {intakeSizes.map((size) => {
-                      const sized = findIntakeOffering(selectedOffering?.familyName ?? '', size);
-                      return (
-                        <option disabled={!sized} key={size} value={size}>
-                          {size}
-                          {sized
-                            ? ` · ${formatMoney(sized.unitPriceMinor, sized.currency)}`
-                            : ' · no disponible'}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </label>
-                {/* Lo que se envía: la oferta concreta, igual que antes de partir el desplegable. */}
-                <input name="offeringId" type="hidden" value={selectedOfferingId} />
-                <label className="field">
-                  Unidades
-                  <input
-                    min="1"
-                    name="quantityUnits"
-                    onChange={(event) => setUnits(Math.max(1, Number(event.target.value) || 1))}
-                    required
-                    type="number"
-                    value={units}
-                  />
-                </label>
-                {deliveryChoices.options.length > 1 && !otherDate ? (
-                  <div className="field field-wide">
-                    <DeliveryDayPicker
-                      onChange={setChosenDeliveryDate}
-                      options={deliveryChoices.options}
-                      value={deliveryDate}
-                    />
-                    {selectedMenu ? (
-                      <small className="field-hint">{selectedMenu.cycle.alias}</small>
-                    ) : null}
-                    <button
-                      className="locate-retry-open"
-                      onClick={() => {
-                        setCustomDeliveryDate(deliveryDate);
-                        setOtherDate(true);
-                      }}
-                      type="button"
-                    >
-                      Otra fecha
-                    </button>
-                  </div>
-                ) : (
-                  /*
-                   * Un calendario, como al editar el pedido. Antes, con un solo día de reparto la fecha
-                   * era texto fijo en la computadora y no había forma de cambiarla al crear.
-                   */
+                <div className="intake-order-grid">
                   <label className="field">
-                    Entrega
-                    <input
-                      onChange={(event) => {
-                        setCustomDeliveryDate(event.target.value);
-                        setOtherDate(true);
-                      }}
-                      type="date"
-                      value={otherDate ? customDeliveryDate : deliveryDate}
-                    />
-                    {selectedMenu ? (
-                      <small className="field-hint">
-                        {selectedMenu.cycle.alias}
-                        {deliveryChoices.options.length > 1 ? (
-                          <>
-                            {' · '}
-                            <button
-                              className="locate-retry-open"
-                              onClick={() => setOtherDate(false)}
-                              type="button"
-                            >
-                              Volver a los días de reparto
-                            </button>
-                          </>
-                        ) : null}
-                      </small>
-                    ) : null}
-                  </label>
-                )}
-                <label className="field field-wide">
-                  Dirección, línea 1
-                  <input
-                    minLength={4}
-                    name="deliveryAddress"
-                    onChange={(event) => setDeliveryAddress(event.target.value)}
-                    placeholder="Calle, número y ciudad"
-                    required
-                    value={deliveryAddress}
-                  />
-                  <small className="field-hint">
-                    {addressHint || 'Sólo calle, número y ciudad: es lo que se busca en el mapa.'}
-                  </small>
-                </label>
-                <label className="field field-wide">
-                  Dirección, línea 2
-                  <input
-                    maxLength={300}
-                    name="deliveryAddressLine2"
-                    onChange={(event) => setDeliveryAddressLine2(event.target.value)}
-                    placeholder="Piso, depto, timbre, barrio, detalles"
-                    value={deliveryAddressLine2}
-                  />
-                </label>
-                {zones.length > 1 ? (
-                  <label className="field">
-                    Zona del domicilio
+                    Variedad
                     <select
-                      onChange={(event) => setAddressZoneId(event.target.value)}
-                      value={addressZoneId}
+                      name="offeringFamily"
+                      onChange={(event) => chooseIntakeFamily(event.target.value)}
+                      // Un pedido sólo con viandas del stock de períodos anteriores no lleva variedad.
+                      required={stockPicks.size === 0}
+                      value={selectedOffering?.familyName ?? ''}
                     >
-                      <option value="">Elegir zona</option>
-                      {zones.map((zone) => (
-                        <option key={zone.id} value={zone.id}>
-                          {zone.displayName}
+                      <option value="">Seleccionar</option>
+                      {intakeFamilies.map((familyName) => (
+                        <option key={familyName} value={familyName}>
+                          {familyName}
                         </option>
                       ))}
                     </select>
-                    <small className="field-hint">
-                      Si la dirección es nueva, queda en la ficha del cliente en esta zona.
-                    </small>
                   </label>
-                ) : null}
-                <label className="field">
-                  Origen
-                  {/*
-                   * Sin opción por defecto, igual que "Medio de pago" acá al lado. "Manual" era la
-                   * primera y la preseleccionada, así que nadie la cambiaba nunca: los 230 pedidos
-                   * cargados decían "Manual" y el campo no informaba absolutamente nada. Obligar a
-                   * elegir es lo que lo vuelve un dato.
-                   */}
-                  <select defaultValue="" name="source" required>
-                    <option disabled value="">
-                      Seleccionar
-                    </option>
-                    <option value="whatsapp">WhatsApp</option>
-                    <option value="phone">Teléfono</option>
-                    <option value="instagram">Instagram</option>
-                    <option value="facebook">Facebook</option>
-                    <option value="email">Email</option>
-                    <option value="referral">Recomendación</option>
-                  </select>
-                </label>
-                {permissions.includes('production.read') ? (
-                  <StockSaleOption
-                    checked={fromStock}
-                    cycleId={selectedMenu?.cycle.id ?? null}
-                    onChange={setFromStock}
+                  <label className="field">
+                    Tamaño
+                    {/* El precio va con el tamaño: depende de él y no de la variedad (ADR-030). */}
+                    <select
+                      disabled={!selectedOffering}
+                      name="offeringSize"
+                      onChange={(event) => chooseIntakeSize(event.target.value)}
+                      required={stockPicks.size === 0}
+                      value={selectedOffering?.variantName ?? ''}
+                    >
+                      <option value="">Seleccionar</option>
+                      {intakeSizes.map((size) => {
+                        const sized = findIntakeOffering(selectedOffering?.familyName ?? '', size);
+                        return (
+                          <option disabled={!sized} key={size} value={size}>
+                            {size}
+                            {sized
+                              ? ` · ${formatMoney(sized.unitPriceMinor, sized.currency)}`
+                              : ' · no disponible'}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </label>
+                  {/* Lo que se envía: la oferta concreta, igual que antes de partir el desplegable. */}
+                  <input name="offeringId" type="hidden" value={selectedOfferingId} />
+                  <label className="field">
+                    Unidades
+                    <input
+                      min="1"
+                      name="quantityUnits"
+                      onChange={(event) => setUnits(Math.max(1, Number(event.target.value) || 1))}
+                      required
+                      type="number"
+                      value={units}
+                    />
+                  </label>
+                </div>
+                <div className="intake-section-grid">
+                  {permissions.includes('production.read') ? (
+                    <StockSaleOption
+                      checked={fromStock}
+                      cycleId={selectedMenu?.cycle.id ?? null}
+                      onChange={setFromStock}
+                    />
+                  ) : null}
+                  <StockLotsPicker
+                    menu={selectedMenu}
+                    onChange={setStockPicks}
+                    onLots={setStockLots}
+                    picks={stockPicks}
                   />
+                </div>
+                {selectedOffering?.composable ? (
+                  <div className="field field-wide mt-4">
+                    Platos de Intuitivo
+                    <IntuitivoDishPicker
+                      maxDishes={selectedMenu?.intuitivoMaxDishes ?? DISHES_PER_INTUITIVO}
+                      minDishes={selectedOffering.mealsPerUnit}
+                      offerings={selectedMenu?.offerings ?? []}
+                      onChange={setSelectedDishes}
+                      selected={selectedDishes}
+                    />
+                  </div>
                 ) : null}
-                <StockLotsPicker
-                  menu={selectedMenu}
-                  onChange={setStockPicks}
-                  onLots={setStockLots}
-                  picks={stockPicks}
-                />
-                <label className="field">
-                  Medio de pago
-                  {paymentMethods.length > 0 ? (
-                    <select defaultValue="" name="paymentExpectation" required>
+
+                {/*
+                 * El estado de la regla, al lado del botón y contando en vivo.
+                 *
+                 * El aviso de "elegí exactamente cinco" se dibuja arriba de todo el formulario, a
+                 * doscientas líneas de acá: en un teléfono, con la lista de platos abierta, apretar
+                 * "Registrar borrador" parecía no hacer nada porque el mensaje aparecía fuera de la
+                 * pantalla. Contar antes de apretar evita llegar a ese punto.
+                 */}
+                {selectedOffering?.composable ? (
+                  <p
+                    className={`intake-rule mt-3 ${
+                      selectedDishes.length >= selectedOffering.mealsPerUnit ? 'is-ready' : ''
+                    }`}
+                  >
+                    {selectedDishes.length >= selectedOffering.mealsPerUnit
+                      ? `${String(selectedDishes.length)} platos elegidos. Ya podés registrar el borrador.`
+                      : `Elegiste ${String(selectedDishes.length)} de ${String(
+                          selectedOffering.mealsPerUnit,
+                        )} platos.`}
+                  </p>
+                ) : null}
+
+                {/*
+                Agregar otra variedad al mismo pedido.
+              
+                Secundario y no primario: el pedido de una variedad sola es el caso normal y se
+                guarda sin pasar por acá. Un botón primario de más al lado del de guardar es una
+                invitación a apretar el equivocado.
+              */}
+                <div className="intake-cart-add mt-3">
+                  <button className="button button-secondary" onClick={addToCart} type="button">
+                    + Agregar otra variedad
+                  </button>
+                  {cart.length > 0 ? (
+                    <small>Lo que ya agregaste queda abajo; lo de arriba se suma al guardar.</small>
+                  ) : null}
+                </div>
+
+                {cart.length > 0 ? (
+                  <ul className="intake-cart mt-3">
+                    {cart.map((line, index) => (
+                      // El índice como clave: la misma variedad puede ir dos veces en un pedido, así
+                      // que el id de la oferta no identifica el renglón.
+                      <li key={`${line.offeringId}-${String(index)}`}>
+                        <div>
+                          <strong>
+                            {line.label}
+                            {line.quantityUnits > 1 ? ` ×${String(line.quantityUnits)}` : ''}
+                          </strong>
+                          {line.selectedDishes.length > 0 ? (
+                            <small>{line.selectedDishes.map(dishLabel).join(' · ')}</small>
+                          ) : null}
+                        </div>
+                        <span>
+                          {formatMoney(line.unitPriceMinor * line.quantityUnits, line.currency)}
+                        </span>
+                        <button
+                          aria-label={`Quitar ${line.label}`}
+                          onClick={() =>
+                            setCart((current) =>
+                              current.filter((_, position) => position !== index),
+                            )
+                          }
+                          type="button"
+                        >
+                          ✕
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </fieldset>
+
+              <fieldset className="intake-section">
+                <legend>Pago y origen</legend>
+                <div className="intake-section-grid">
+                  <label className="field">
+                    Medio de pago
+                    {paymentMethods.length > 0 ? (
+                      <select defaultValue="" name="paymentExpectation" required>
+                        <option disabled value="">
+                          Seleccionar
+                        </option>
+                        {paymentMethods.map((method) => (
+                          <option key={method.code} value={method.displayName}>
+                            {method.displayName}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input name="paymentExpectation" placeholder="Transferencia" required />
+                    )}
+                  </label>
+                  <label className="field">
+                    Origen
+                    {/*
+                     * Sin opción por defecto, igual que "Medio de pago" acá al lado. "Manual" era la
+                     * primera y la preseleccionada, así que nadie la cambiaba nunca: los 230 pedidos
+                     * cargados decían "Manual" y el campo no informaba absolutamente nada. Obligar a
+                     * elegir es lo que lo vuelve un dato.
+                     */}
+                    <select defaultValue="" name="source" required>
                       <option disabled value="">
                         Seleccionar
                       </option>
-                      {paymentMethods.map((method) => (
-                        <option key={method.code} value={method.displayName}>
-                          {method.displayName}
-                        </option>
-                      ))}
+                      <option value="whatsapp">WhatsApp</option>
+                      <option value="phone">Teléfono</option>
+                      <option value="instagram">Instagram</option>
+                      <option value="facebook">Facebook</option>
+                      <option value="email">Email</option>
+                      <option value="referral">Recomendación</option>
                     </select>
-                  ) : (
-                    <input name="paymentExpectation" placeholder="Transferencia" required />
-                  )}
-                </label>
-                <label className="field">
-                  {/* Se llamaba "Día de reparto"; se usa para anotar la zona que guía el armado. */}
-                  Zona
-                  <input maxLength={80} name="deliveryDayText" placeholder="Ej. Centro" />
-                </label>
-                <label className="field">
-                  Franja horaria
-                  <input maxLength={80} name="deliveryTimeSlot" placeholder="Ej. 9 a 12 hs" />
-                </label>
-                {dietaryInstructionsEnabled ? (
-                  <label className="field field-wide">
-                    Comentario para la cocina
-                    <textarea
-                      maxLength={200}
-                      name="dietaryInstructions"
-                      placeholder="Una sola nota para este pedido"
-                      rows={2}
-                    />
                   </label>
-                ) : null}
-              </div>
-              {selectedOffering?.composable ? (
-                <div className="field field-wide mt-4">
-                  Platos de Intuitivo
-                  <IntuitivoDishPicker
-                    maxDishes={selectedMenu?.intuitivoMaxDishes ?? DISHES_PER_INTUITIVO}
-                    minDishes={selectedOffering.mealsPerUnit}
-                    offerings={selectedMenu?.offerings ?? []}
-                    onChange={setSelectedDishes}
-                    selected={selectedDishes}
-                  />
+                  {dietaryInstructionsEnabled ? (
+                    <label className="field field-wide">
+                      Comentario para la cocina
+                      <textarea
+                        maxLength={200}
+                        name="dietaryInstructions"
+                        placeholder="Una sola nota para este pedido"
+                        rows={2}
+                      />
+                    </label>
+                  ) : null}
                 </div>
-              ) : null}
-
-              {/*
-               * El estado de la regla, al lado del botón y contando en vivo.
-               *
-               * El aviso de "elegí exactamente cinco" se dibuja arriba de todo el formulario, a
-               * doscientas líneas de acá: en un teléfono, con la lista de platos abierta, apretar
-               * "Registrar borrador" parecía no hacer nada porque el mensaje aparecía fuera de la
-               * pantalla. Contar antes de apretar evita llegar a ese punto.
-               */}
-              {selectedOffering?.composable ? (
-                <p
-                  className={`intake-rule mt-3 ${
-                    selectedDishes.length >= selectedOffering.mealsPerUnit ? 'is-ready' : ''
-                  }`}
-                >
-                  {selectedDishes.length >= selectedOffering.mealsPerUnit
-                    ? `${String(selectedDishes.length)} platos elegidos. Ya podés registrar el borrador.`
-                    : `Elegiste ${String(selectedDishes.length)} de ${String(
-                        selectedOffering.mealsPerUnit,
-                      )} platos.`}
-                </p>
-              ) : null}
-
-              {/*
-              Agregar otra variedad al mismo pedido.
-              
-              Secundario y no primario: el pedido de una variedad sola es el caso normal y se
-              guarda sin pasar por acá. Un botón primario de más al lado del de guardar es una
-              invitación a apretar el equivocado.
-            */}
-              <div className="intake-cart-add mt-3">
-                <button className="button button-secondary" onClick={addToCart} type="button">
-                  + Agregar otra variedad
-                </button>
-                {cart.length > 0 ? (
-                  <small>Lo que ya agregaste queda abajo; lo de arriba se suma al guardar.</small>
-                ) : null}
-              </div>
-
-              {cart.length > 0 ? (
-                <ul className="intake-cart mt-3">
-                  {cart.map((line, index) => (
-                    // El índice como clave: la misma variedad puede ir dos veces en un pedido, así
-                    // que el id de la oferta no identifica el renglón.
-                    <li key={`${line.offeringId}-${String(index)}`}>
-                      <div>
-                        <strong>
-                          {line.label}
-                          {line.quantityUnits > 1 ? ` ×${String(line.quantityUnits)}` : ''}
-                        </strong>
-                        {line.selectedDishes.length > 0 ? (
-                          <small>{line.selectedDishes.map(dishLabel).join(' · ')}</small>
-                        ) : null}
-                      </div>
-                      <span>
-                        {formatMoney(line.unitPriceMinor * line.quantityUnits, line.currency)}
-                      </span>
-                      <button
-                        aria-label={`Quitar ${line.label}`}
-                        onClick={() =>
-                          setCart((current) => current.filter((_, position) => position !== index))
-                        }
-                        type="button"
-                      >
-                        ✕
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
+              </fieldset>
 
               {/* El mismo mensaje que arriba, acá abajo, donde está el dedo cuando algo falla. */}
               {message ? (

@@ -6,6 +6,11 @@ Llegar a V1 de pruebas reales rápidamente sin construir primero integraciones s
 
 ## Estado (as built)
 
+**29 de octubre de 2026: versión 1.0.** Sprint 1 y MVP cerrados; la 1.0 corre en producción, todavía
+en prueba. La etapa actual es de estabilización y seguridad: cambios a la base sin cortes, respaldos
+probados, despliegue desde el CI y cuentas protegidas. El análisis y el plan están en
+`../07-operations/ESTABILIZACION_V1.md`; las tareas, en `BACKLOG.md`, "V1.0 - Estabilización y seguridad".
+
 Fases 0-3 y 7 completas. Fases 4, 5, 6 y 8 completas como V1/esqueleto funcional — cada una con su
 propia sección "As built" en el documento de feature correspondiente, con lo diferido explícito ahí.
 Fase 9 (QA/Pilot) es la única que queda: es mayormente trabajo humano (piloto real, migración de

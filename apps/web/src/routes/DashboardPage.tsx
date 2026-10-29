@@ -294,12 +294,16 @@ export function DashboardPage() {
           <p>Una lectura clara de la semana y acceso directo a cada motor del negocio.</p>
         </div>
         <div className="dashboard-sprint-card">
-          <span>Sprint actual</span>
-          <strong>Motor de pedidos MVP</strong>
-          <p>Clientes, menús, pedidos y salida de producción conectados.</p>
-          <Link to="/app/pedidos/nuevo">
-            Abrir centro de pedidos <ModuleArrow />
-          </Link>
+          <span>Sprint actual · Versión 1.0</span>
+          <strong>Estabilización y seguridad</strong>
+          <p>
+            La 1.0 ya corre. Ahora: cambios sin cortes, respaldos probados y el sistema más seguro.
+          </p>
+          {profile.permissions.includes('audit.read') ? (
+            <Link to="/app/sistema">
+              Ver el estado del sistema <ModuleArrow />
+            </Link>
+          ) : null}
         </div>
       </section>
 
