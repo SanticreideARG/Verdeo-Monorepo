@@ -151,6 +151,14 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-10-30-stock-por-ciudad',
+    body: `Stock por ciudad: el "Stock para el cierre" de Cocina ahora es de cada ciudad. Lo que se carga en una ya no aparece, no se cocina ni se vende en las otras.
+• Para cargar o dar de baja, elegí la ciudad arriba. Con "Todas las ciudades" se ve la suma.
+• "Sale del stock" vende sólo del stock de la ciudad del pedido.
+• Al cerrar el período, el stock de cada ciudad pasa a un lote de esa ciudad.
+• Lo que ya estaba cargado se asignó a la ciudad que más vendió esa variedad: revisalo en Cocina por si hay que moverlo.`,
+  },
+  {
     key: '2026-10-29-ajuste-impresora',
     body: `Etiquetas:
 • Nuevo "Ajuste de la impresora": imprimís una hoja de prueba con los 24 recuadros, la ponés a contraluz sobre una de etiquetas y corregís en milímetros cuánto mover o estirar la hoja. Queda guardado en esa compu.

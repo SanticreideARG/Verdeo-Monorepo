@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { apiRequest } from '../lib/api.js';
+import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { PastIntuitivoForm } from './PastIntuitivoForm.js';
 import { formatDay } from '../lib/dates.js';
@@ -47,6 +47,13 @@ export function ProductionStockPanel({
   const [sites, setSites] = useState<{ displayName: string; id: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  /*
+   * El stock es de cada ciudad (STOCK_POR_CIUDAD_PLAN.md, 2026-10-29): se carga con una ciudad
+   * elegida arriba. Con "Todas las ciudades" se ve la suma, sin editar. Cambiar de ciudad vuelve a
+   * montar la pantalla, así que alcanza con leerla al empezar.
+   */
+  const [siteId] = useState(() => storedOperatingSiteId());
+  const canEditStock = canEdit && siteId !== null;
 
   const load = useCallback(async () => {
     const response = await apiRequest(`/api/v1/production/${cycleId}/stock`);
@@ -147,6 +154,12 @@ export function ProductionStockPanel({
         Los menús que se piden para tener a mano y vender después. Se cocinan con el resto y salen
         en la planilla, pero no cuentan como ventas. Los Intuitivos no van acá.
       </p>
+      {canEdit && !siteId ? (
+        <p className="screen-notice mt-3">
+          Con «Todas las ciudades» se ve la suma del stock de cada una. Para cargarlo, elegí una
+          ciudad arriba.
+        </p>
+      ) : null}
       {message ? (
         <p className="screen-notice mt-3" role="alert">
           {message}
@@ -173,7 +186,7 @@ export function ProductionStockPanel({
                   <button
                     aria-label={`Quitar uno de ${name}`}
                     className="button button-secondary"
-                    disabled={!canEdit || saving || row.quantityUnits === 0}
+                    disabled={!canEditStock || saving || row.quantityUnits === 0}
                     onClick={() => void change(row, -1)}
                     type="button"
                   >
@@ -183,7 +196,7 @@ export function ProductionStockPanel({
                   <button
                     aria-label={`Agregar uno de ${name}`}
                     className="button button-secondary"
-                    disabled={!canEdit || saving}
+                    disabled={!canEditStock || saving}
                     onClick={() => void change(row, 1)}
                     type="button"
                   >

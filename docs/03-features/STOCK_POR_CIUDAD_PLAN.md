@@ -35,6 +35,9 @@ cambian.
    - stock de la ciudad + sobrante de la ciudad − vendido del stock en la ciudad − bajas de la ciudad;
    - y nunca más que lo disponible del total, que es el cálculo de hoy. Ese tope cubre el caso en que
      la producción real informada (que es una sola, de la cocina) dio menos de lo planeado.
+   - Lo que la cocina hizo de más sin que fuera stock de ninguna ciudad (producción real por encima
+     de lo pedido más el stock) es de la ciudad que más vendió esa variedad, la regla del cierre.
+     Con una sola ciudad, todo queda como antes.
 4. **Venta del stock en Nuevo pedido:** valida contra lo disponible de la ciudad del pedido.
    - Mensaje: "No queda stock de Keto 400 en Córdoba".
 5. **Resumen de cocina:**
@@ -82,7 +85,7 @@ código.
 
 - [x] 0077 escrita y probada en `migrations.test.ts` (asigna el stock existente por la regla del cierre).
 - [ ] 0077 corrida en producción.
-- [ ] Código (commit B).
+- [x] Código (commit B), con tests de dos ciudades en `production.test.ts` y de la API.
 - [ ] 0078: `NOT NULL`.
 
 ## Orden

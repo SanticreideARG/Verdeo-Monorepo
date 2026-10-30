@@ -110,6 +110,7 @@ describe('stock de períodos anteriores (lotes)', () => {
     // A cocinó 4 Keto 250 de más y no los vendió.
     await service.setProductionStock(
       CYCLE,
+      SITE,
       [{ familyName: 'Keto', quantityUnits: 4, variantName: '250' }],
       contexto,
     );
@@ -215,6 +216,7 @@ describe('informe del período', () => {
       update orders set status = 'CANCELLED' where id = '${cancelado.id}';`);
     await service.setProductionStock(
       CYCLE,
+      SITE,
       [{ familyName: 'Keto', quantityUnits: 4, variantName: '250' }],
       contexto,
     );
@@ -325,6 +327,7 @@ describe('cancelado después de cocinarse: pasa a stock', () => {
     // Al cerrar con 4 más de sobrante, se suman al mismo lote.
     await service.setProductionStock(
       CYCLE,
+      SITE,
       [{ familyName: 'Keto', quantityUnits: 4, variantName: '250' }],
       contexto,
     );

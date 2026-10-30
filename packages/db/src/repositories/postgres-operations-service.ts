@@ -591,6 +591,13 @@ interface SurplusRow {
   vendidoOportunidad: number;
 }
 
+/** Una fila de stock o de bajas, con su ciudad (null: anterior a la migración 0077). */
+interface SiteScopedRow {
+  familyName: string;
+  operatingSiteId: string | null;
+  variantName: string;
+}
+
 // A JSON tuple is a safe map key regardless of what characters a family or variant name contains,
 // unlike a joined string that would need to guess a separator that never collides.
 function surplusKey(familyName: string, variantName: string): string {
@@ -5379,43 +5386,65 @@ export class PostgresOperationsService {
           variantName: string;
         }[] = [];
         if (closed) {
-          const rows = await this.surplusRows(transaction, cycleId);
-          const pending = [...rows.values()].filter((row) => row.disponible > 0);
-          if (pending.length > 0) {
-            await transaction.insert(surplusWriteoffs).values(
-              pending.map((row) => ({
-                actorUserId: context.actorUserId ?? null,
+          const expiresAt = new Date((current.closeAt ?? new Date()).getTime() + LOT_LIFETIME_MS);
+          // Sale de este período como baja de esa ciudad y entra a su lote.
+          const carry = async (row: SurplusRow, site: { id: string; name: string }) => {
+            await transaction.insert(surplusWriteoffs).values({
+              actorUserId: context.actorUserId ?? null,
+              familyName: row.familyName,
+              operatingSiteId: site.id,
+              quantityUnits: row.disponible,
+              reason: 'Cierre de período: pasó al stock de períodos anteriores.',
+              salesCycleId: cycleId,
+              variantName: row.variantName,
+            });
+            // Si ya hay un lote de esa variedad (de pedidos cancelados que pasaron a stock),
+            // se suma ahí: un solo "Keto 400 · Octubre 4" por ciudad.
+            await this.addToVarietyLot(
+              transaction,
+              {
                 familyName: row.familyName,
-                quantityUnits: row.disponible,
-                reason: 'Cierre de período: pasó al stock de períodos anteriores.',
+                operatingSiteId: site.id,
                 salesCycleId: cycleId,
                 variantName: row.variantName,
-              })),
+              },
+              row.disponible,
+              { actorUserId: context.actorUserId ?? null, expiresAt },
             );
-            const siteOf = await this.leftoverSite(transaction, cycleId);
-            const expiresAt = new Date((current.closeAt ?? new Date()).getTime() + LOT_LIFETIME_MS);
-            for (const row of pending) {
-              const site = siteOf(row.familyName, row.variantName);
-              if (!site) continue;
-              // Si ya hay un lote de esa variedad (de pedidos cancelados que pasaron a stock),
-              // se suma ahí: un solo "Keto 400 · Octubre 4" por ciudad.
-              await this.addToVarietyLot(
-                transaction,
-                {
-                  familyName: row.familyName,
-                  operatingSiteId: site.id,
-                  salesCycleId: cycleId,
-                  variantName: row.variantName,
-                },
-                row.disponible,
-                { actorUserId: context.actorUserId ?? null, expiresAt },
-              );
+            const same = lotsCreated.find(
+              (lot) =>
+                lot.operatingSiteName === site.name &&
+                lot.familyName === row.familyName &&
+                lot.variantName === row.variantName,
+            );
+            if (same) same.quantityUnits += row.disponible;
+            else
               lotsCreated.push({
                 familyName: row.familyName,
                 operatingSiteName: site.name,
                 quantityUnits: row.disponible,
                 variantName: row.variantName,
               });
+          };
+          // Primero el stock de cada ciudad, a un lote en esa ciudad (STOCK_POR_CIUDAD_PLAN.md).
+          const sites = await transaction
+            .select({ id: operatingSites.id, name: operatingSites.displayName })
+            .from(operatingSites)
+            .orderBy(asc(operatingSites.createdAt));
+          for (const site of sites) {
+            const rows = await this.surplusRows(transaction, cycleId, site.id);
+            for (const row of rows.values()) if (row.disponible > 0) await carry(row, site);
+          }
+          // Lo que sobra sin ser stock de ninguna ciudad (se cocinó de más): a la ciudad que más
+          // vendió esa variedad, como antes.
+          const rest = [...(await this.surplusRows(transaction, cycleId)).values()].filter(
+            (row) => row.disponible > 0,
+          );
+          if (rest.length > 0) {
+            const siteOf = await this.leftoverSite(transaction, cycleId);
+            for (const row of rest) {
+              const site = siteOf(row.familyName, row.variantName);
+              if (site) await carry(row, site);
             }
           }
         }
@@ -6283,7 +6312,12 @@ export class PostgresOperationsService {
     const currency = resolvedItems[0]?.currency;
     if (!currency) throw new OperationsConflictError('El pedido necesita al menos un plato');
     if (input.source === 'opportunity_sale') {
-      await this.assertOpportunitySaleAvailability(transaction, menu.salesCycleId, resolvedItems);
+      await this.assertOpportunitySaleAvailability(
+        transaction,
+        menu.salesCycleId,
+        operatingSiteId ?? null,
+        resolvedItems,
+      );
     }
     const initialStatus = input.initialStatus ?? 'DRAFT';
     const [createdOrder] = await transaction
@@ -9013,7 +9047,10 @@ export class PostgresOperationsService {
       ...(deliveryRunId ? { deliveryRunId } : {}),
     });
     // El stock para la venta también se cocina: va aparte, para que se vea de dónde sale el número.
-    const stock = deliveryRunId ? [] : await this.listProductionStock(cycleId);
+    // El stock de la ciudad del resumen; con todas, el de todas (STOCK_POR_CIUDAD_PLAN.md).
+    const stock = deliveryRunId
+      ? []
+      : await this.listProductionStock(cycleId, operatingSiteId ?? null);
     /*
      * Lo vendido del stock (venta de oportunidad) no suma a lo que hay que cocinar: ya está en el
      * stock, o en el excedente de lo que se cocinó. Contarlo como pedido lo cocinaba dos veces.
@@ -9764,6 +9801,11 @@ export class PostgresOperationsService {
   private async surplusRows(
     database: Database | DatabaseTransaction,
     cycleId: string,
+    /*
+     * Una ciudad (STOCK_POR_CIUDAD_PLAN.md, 2026-10-29): sus pedidos, su stock y sus bajas. Null:
+     * todas juntas, como antes.
+     */
+    operatingSiteId: string | null = null,
   ): Promise<Map<string, SurplusRow>> {
     const coefficientPercent = await this.surplusCoefficientPercent(database);
 
@@ -9786,12 +9828,18 @@ export class PostgresOperationsService {
           ),
           // Lo vendido de un lote de un período anterior descuenta del lote, no de este período.
           isNull(orderItems.stockLotId),
+          operatingSiteId ? eq(orders.operatingSiteId, operatingSiteId) : undefined,
         ),
       );
-    const actuals = await this.listProductionActualsRows(database, cycleId);
+    /*
+     * La producción real es una sola, la de la cocina: no dice cuánto es de cada ciudad. Lo
+     * disponible de una ciudad sale de su stock, y abajo se topa con lo disponible del total.
+     */
+    const actuals = operatingSiteId ? [] : await this.listProductionActualsRows(database, cycleId);
     const writeoffs = await database
       .select({
         familyName: surplusWriteoffs.familyName,
+        operatingSiteId: surplusWriteoffs.operatingSiteId,
         quantityUnits: surplusWriteoffs.quantityUnits,
         variantName: surplusWriteoffs.variantName,
       })
@@ -9800,12 +9848,17 @@ export class PostgresOperationsService {
     const stock = await database
       .select({
         familyName: productionStock.familyName,
+        operatingSiteId: productionStock.operatingSiteId,
         origin: productionStock.origin,
         quantityUnits: productionStock.quantityUnits,
         variantName: productionStock.variantName,
       })
       .from(productionStock)
       .where(eq(productionStock.salesCycleId, cycleId));
+    const ofSite = await this.siteFilter(database, cycleId, operatingSiteId, [
+      ...writeoffs,
+      ...stock,
+    ]);
 
     const rows = new Map<string, SurplusRow>();
     const ensure = (familyName: string, variantName: string) => {
@@ -9839,11 +9892,11 @@ export class PostgresOperationsService {
       const row = ensure(actual.familyName, actual.variantName);
       row.produccionReal = (row.produccionReal ?? 0) + actual.quantityUnits;
     }
-    for (const writeoff of writeoffs) {
+    for (const writeoff of writeoffs.filter(ofSite)) {
       const row = ensure(writeoff.familyName, writeoff.variantName);
       row.bajaMerma += writeoff.quantityUnits;
     }
-    for (const item of stock) {
+    for (const item of stock.filter(ofSite)) {
       const row = ensure(item.familyName, item.variantName);
       if (item.origin === 'carry_over') row.sobrante += item.quantityUnits;
       else row.stockPlanificado += item.quantityUnits;
@@ -9865,15 +9918,69 @@ export class PostgresOperationsService {
         row.sobrante;
       row.disponible = Math.max(0, row.excedenteEfectivo - row.vendidoOportunidad - row.bajaMerma);
     }
+    // Una ciudad nunca vende más de lo que queda en total (si la cocina hizo menos de lo pedido).
+    if (operatingSiteId) {
+      const all = await this.surplusRows(database, cycleId);
+      /*
+       * Lo que la cocina hizo de más sin que fuera stock de ninguna ciudad (la producción real pasó
+       * lo pedido más el stock): va a la ciudad que más vendió esa variedad, la misma regla del
+       * cierre. Con una sola ciudad queda todo como antes.
+       */
+      const ownTotal = new Map<string, number>();
+      for (const item of stock) {
+        const key = surplusKey(item.familyName, item.variantName);
+        ownTotal.set(key, (ownTotal.get(key) ?? 0) + item.quantityUnits);
+      }
+      let siteOf: ((familyName: string, variantName: string) => { id: string } | null) | null =
+        null;
+      for (const [key, total] of all) {
+        const pool = Math.max(0, total.excedenteEfectivo - (ownTotal.get(key) ?? 0));
+        if (pool === 0 || total.produccionReal === null) continue;
+        siteOf ??= await this.leftoverSite(database, cycleId);
+        if (siteOf(total.familyName, total.variantName)?.id !== operatingSiteId) continue;
+        const row = ensure(total.familyName, total.variantName);
+        row.excedenteEfectivo += pool;
+        row.disponible = Math.max(
+          0,
+          row.excedenteEfectivo - row.vendidoOportunidad - row.bajaMerma,
+        );
+      }
+      for (const [key, row] of rows)
+        row.disponible = Math.min(row.disponible, all.get(key)?.disponible ?? 0);
+    }
     return rows;
   }
 
-  /** El stock para la venta del período, por variedad y tamaño. */
-  public async listProductionStock(cycleId: string) {
-    return this.database
+  /**
+   * Qué filas de stock o de bajas son de una ciudad (STOCK_POR_CIUDAD_PLAN.md). Las que quedaron
+   * sin ciudad —las escribió el código anterior entre la migración 0077 y este deploy— toman la de
+   * la regla del cierre. Sin ciudad pedida, todas.
+   */
+  private async siteFilter(
+    executor: Pick<Database, 'select'>,
+    cycleId: string,
+    operatingSiteId: string | null,
+    rows: readonly SiteScopedRow[],
+  ): Promise<(row: SiteScopedRow) => boolean> {
+    if (!operatingSiteId) return () => true;
+    const siteOf = rows.some((row) => !row.operatingSiteId)
+      ? await this.leftoverSite(executor, cycleId)
+      : null;
+    return (row) =>
+      (row.operatingSiteId ?? siteOf?.(row.familyName, row.variantName)?.id ?? null) ===
+      operatingSiteId;
+  }
+
+  /**
+   * El stock para la venta del período, por variedad y tamaño: el de una ciudad o, sin ciudad, la
+   * suma de todas (STOCK_POR_CIUDAD_PLAN.md).
+   */
+  public async listProductionStock(cycleId: string, operatingSiteId: string | null = null) {
+    const rows = await this.database
       .select({
         familyName: productionStock.familyName,
         notes: productionStock.notes,
+        operatingSiteId: productionStock.operatingSiteId,
         quantityUnits: productionStock.quantityUnits,
         updatedAt: productionStock.updatedAt,
         variantName: productionStock.variantName,
@@ -9881,6 +9988,39 @@ export class PostgresOperationsService {
       .from(productionStock)
       .where(and(eq(productionStock.salesCycleId, cycleId), eq(productionStock.origin, 'planned')))
       .orderBy(asc(productionStock.familyName), asc(productionStock.variantName));
+    const ofSite = await this.siteFilter(this.database, cycleId, operatingSiteId, rows);
+    const merged = new Map<
+      string,
+      {
+        familyName: string;
+        notes: string | null;
+        quantityUnits: number;
+        updatedAt: Date;
+        variantName: string;
+      }
+    >();
+    for (const row of rows.filter(ofSite)) {
+      const key = surplusKey(row.familyName, row.variantName);
+      const current = merged.get(key);
+      merged.set(
+        key,
+        current
+          ? {
+              ...current,
+              notes: current.notes ?? row.notes,
+              quantityUnits: current.quantityUnits + row.quantityUnits,
+              updatedAt: row.updatedAt > current.updatedAt ? row.updatedAt : current.updatedAt,
+            }
+          : {
+              familyName: row.familyName,
+              notes: row.notes,
+              quantityUnits: row.quantityUnits,
+              updatedAt: row.updatedAt,
+              variantName: row.variantName,
+            },
+      );
+    }
+    return [...merged.values()];
   }
 
   /** Las etiquetas ya impresas del período (Etiquetas 2.0): para avisar antes de repetirlas. */
@@ -10453,6 +10593,8 @@ export class PostgresOperationsService {
    */
   public async setProductionStock(
     cycleId: string,
+    // El stock es de una ciudad (STOCK_POR_CIUDAD_PLAN.md): se reemplaza sólo el de ésa.
+    operatingSiteId: string,
     entries: readonly { familyName: string; quantityUnits: number; variantName: string }[],
     context: OperationsContext,
   ) {
@@ -10471,13 +10613,21 @@ export class PostgresOperationsService {
         })
         .from(productionStock)
         .where(
-          and(eq(productionStock.salesCycleId, cycleId), eq(productionStock.origin, 'planned')),
+          and(
+            eq(productionStock.salesCycleId, cycleId),
+            eq(productionStock.operatingSiteId, operatingSiteId),
+            eq(productionStock.origin, 'planned'),
+          ),
         );
-      // Sólo el stock propio del período: el sobrante de otro período se corrige aparte.
+      // Sólo el stock propio del período y de esta ciudad: lo de las otras no se toca.
       await transaction
         .delete(productionStock)
         .where(
-          and(eq(productionStock.salesCycleId, cycleId), eq(productionStock.origin, 'planned')),
+          and(
+            eq(productionStock.salesCycleId, cycleId),
+            eq(productionStock.operatingSiteId, operatingSiteId),
+            eq(productionStock.origin, 'planned'),
+          ),
         );
       const merged = new Map<
         string,
@@ -10501,6 +10651,7 @@ export class PostgresOperationsService {
           rows.map((row) => ({
             ...row,
             actorUserId: context.actorUserId ?? null,
+            operatingSiteId,
             salesCycleId: cycleId,
           })),
         );
@@ -10513,6 +10664,7 @@ export class PostgresOperationsService {
         correlationId: context.correlationId,
         entityId: cycleId,
         entityType: 'sales_cycle',
+        metadata: { operatingSiteId },
         requestId: context.requestId,
         source: context.source,
       });
@@ -10520,7 +10672,7 @@ export class PostgresOperationsService {
     });
   }
 
-  public async surplusReport(cycleId: string) {
+  public async surplusReport(cycleId: string, operatingSiteId: string | null = null) {
     const [cycle] = await this.database
       .select({ alias: salesCycles.alias, id: salesCycles.id })
       .from(salesCycles)
@@ -10528,7 +10680,7 @@ export class PostgresOperationsService {
       .limit(1);
     if (!cycle) throw new OperationsNotFoundError('No se encontró el período de venta');
     const coefficientPercent = await this.surplusCoefficientPercent(this.database);
-    const rows = await this.surplusRows(this.database, cycleId);
+    const rows = await this.surplusRows(this.database, cycleId, operatingSiteId);
     return {
       coefficientPercent,
       cycle,
@@ -10542,6 +10694,8 @@ export class PostgresOperationsService {
   private async assertOpportunitySaleAvailability(
     transaction: DatabaseTransaction,
     cycleId: string,
+    // La ciudad del pedido: se vende de su stock, no del de otra (STOCK_POR_CIUDAD_PLAN.md).
+    operatingSiteId: string | null,
     items: readonly ResolvedOrderItem[],
   ) {
     const requested = new Map<string, number>();
@@ -10549,14 +10703,14 @@ export class PostgresOperationsService {
       const key = surplusKey(item.productNameSnapshot, item.variantSnapshot);
       requested.set(key, (requested.get(key) ?? 0) + item.quantityUnits);
     }
-    const rows = await this.surplusRows(transaction, cycleId);
+    const rows = await this.surplusRows(transaction, cycleId, operatingSiteId);
     for (const [key, quantity] of requested) {
       const [familyName, variantName] = parseSurplusKey(key);
       const available = rows.get(key)?.disponible ?? 0;
       if (quantity > available) {
         throw new OperationsConflictError(
           available === 0
-            ? `No queda stock de ${familyName} ${variantName} en este período.`
+            ? `No queda stock de ${familyName} ${variantName} en esta ciudad.`
             : `No alcanza el stock de ${familyName} ${variantName}: quedan ${available} y el ` +
                 `pedido lleva ${quantity}.`,
         );
@@ -10568,6 +10722,8 @@ export class PostgresOperationsService {
   // sales can draw from. Never carried to the next cycle — nothing here reads across `salesCycleId`.
   public async writeOffSurplus(
     cycleId: string,
+    // La baja es del stock de una ciudad (STOCK_POR_CIUDAD_PLAN.md).
+    operatingSiteId: string,
     entries: readonly {
       familyName: string;
       quantityUnits: number;
@@ -10586,7 +10742,7 @@ export class PostgresOperationsService {
           .limit(1);
         if (!cycle) throw new OperationsNotFoundError('No se encontró el período de venta');
 
-        const rows = await this.surplusRows(transaction, cycleId);
+        const rows = await this.surplusRows(transaction, cycleId, operatingSiteId);
         for (const entry of entries) {
           const key = surplusKey(entry.familyName, entry.variantName);
           const row = rows.get(key);
@@ -10605,6 +10761,7 @@ export class PostgresOperationsService {
           entries.map((entry) => ({
             actorUserId: context.actorUserId ?? null,
             familyName: entry.familyName,
+            operatingSiteId,
             quantityUnits: entry.quantityUnits,
             reason: entry.reason,
             salesCycleId: cycleId,
@@ -10616,7 +10773,7 @@ export class PostgresOperationsService {
         await audit.record({
           action: 'surplus.written_off',
           actor: auditActor(context),
-          after: { entries: [...entries] },
+          after: { entries: [...entries], operatingSiteId },
           correlationId: context.correlationId,
           entityId: cycleId,
           entityType: 'sales_cycle',
@@ -10624,7 +10781,7 @@ export class PostgresOperationsService {
           source: context.source,
         });
 
-        const refreshed = await this.surplusRows(transaction, cycleId);
+        const refreshed = await this.surplusRows(transaction, cycleId, operatingSiteId);
         return [...refreshed.values()].sort(compareProducts);
       })
       .catch(translateDatabaseConflict);

@@ -1787,19 +1787,30 @@ describe('API foundation', () => {
         ]),
       );
       const app = buildApp({ listProductionStock, setProductionStock }, ['production.report']);
-      const request = (target: typeof app) =>
+      const SITE_ID = '90000000-0000-4000-8000-000000000001';
+      const request = (target: typeof app, site: string | null = SITE_ID) =>
         target.request(`/api/v1/production/${CYCLE}/stock`, {
           body: JSON.stringify({
             entries: [{ familyName: 'Keto', quantityUnits: 3, variantName: '250' }],
           }),
-          headers: { cookie, 'content-type': 'application/json' },
+          headers: {
+            cookie,
+            'content-type': 'application/json',
+            ...(site ? { 'x-verdeo-site': site } : {}),
+          },
           method: 'PUT',
         });
+
+      // El stock es de una ciudad (STOCK_POR_CIUDAD_PLAN.md): con "Todas las ciudades" no se carga.
+      const global = await request(app, null);
+      expect(global.status).toBe(400);
+      expect(setProductionStock).not.toHaveBeenCalled();
 
       const response = await request(app);
       expect(response.status).toBe(200);
       expect(setProductionStock).toHaveBeenCalledWith(
         CYCLE,
+        SITE_ID,
         [{ familyName: 'Keto', quantityUnits: 3, variantName: '250' }],
         expect.objectContaining({ actorUserId: '55276601-ec66-4f63-9f2f-edf73904ede0' }),
       );
@@ -2212,10 +2223,20 @@ describe('API foundation', () => {
             { familyName: 'Keto', quantityUnits: 1, reason: 'Vencimiento', variantName: '250' },
           ],
         }),
-        headers: { cookie, 'content-type': 'application/json' },
+        headers: {
+          cookie,
+          'content-type': 'application/json',
+          'x-verdeo-site': '90000000-0000-4000-8000-000000000001',
+        },
         method: 'POST',
       });
       expect(response.status).toBe(200);
+      expect(writeOffSurplus).toHaveBeenCalledWith(
+        CYCLE,
+        '90000000-0000-4000-8000-000000000001',
+        expect.any(Array),
+        expect.any(Object),
+      );
 
       const denied = buildApp({ writeOffSurplus: vi.fn() }, ['production.read']);
       const deniedResponse = await denied.request(`/api/v1/production/${CYCLE}/surplus/writeoffs`, {

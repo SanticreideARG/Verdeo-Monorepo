@@ -974,15 +974,17 @@ interface OperationsEngine {
   ): Promise<unknown>;
   setLabelSettings(input: LabelSettingsUpdateRequest, context: OperationsContext): Promise<unknown>;
   setSurplusConfig(coefficientPercent: number, context: OperationsContext): Promise<unknown>;
-  surplusReport(cycleId: string): Promise<unknown>;
-  listProductionStock(cycleId: string): Promise<unknown[]>;
+  surplusReport(cycleId: string, operatingSiteId?: string | null): Promise<unknown>;
+  listProductionStock(cycleId: string, operatingSiteId?: string | null): Promise<unknown[]>;
   setProductionStock(
     cycleId: string,
+    operatingSiteId: string,
     entries: readonly { familyName: string; quantityUnits: number; variantName: string }[],
     context: OperationsContext,
   ): Promise<unknown>;
   writeOffSurplus(
     cycleId: string,
+    operatingSiteId: string,
     entries: SurplusWriteoffRequest['entries'],
     context: OperationsContext,
   ): Promise<unknown>;
@@ -7083,7 +7085,11 @@ export function createApp(options: CreateAppOptions) {
     if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
     const params = CycleIdParamSchema.safeParse(context.req.param());
     if (!params.success) return badRequest(context, 'El ciclo indicado no es válido.');
-    const items = await requireOperations().listProductionStock(params.data.cycleId);
+    // El de la ciudad elegida arriba; con "Todas las ciudades", la suma (STOCK_POR_CIUDAD_PLAN.md).
+    const items = await requireOperations().listProductionStock(
+      params.data.cycleId,
+      context.get('scope')?.operatingSiteId ?? null,
+    );
     return context.json(ProductionStockListResponseSchema.parse({ items: contractValue(items) }));
   });
 
@@ -7100,12 +7106,15 @@ export function createApp(options: CreateAppOptions) {
         'Revisá las cantidades del stock.',
         input.success ? undefined : input.error.issues,
       );
+    const siteId = context.get('scope')?.operatingSiteId ?? null;
+    if (!siteId) return badRequest(context, 'Elegí una ciudad arriba para cargar su stock.');
     await requireOperations().setProductionStock(
       params.data.cycleId,
+      siteId,
       input.data.entries,
       operationsContext(context),
     );
-    const items = await requireOperations().listProductionStock(params.data.cycleId);
+    const items = await requireOperations().listProductionStock(params.data.cycleId, siteId);
     return context.json(ProductionStockListResponseSchema.parse({ items: contractValue(items) }));
   });
 
@@ -7423,7 +7432,10 @@ export function createApp(options: CreateAppOptions) {
     if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
     const params = CycleIdParamSchema.safeParse(context.req.param());
     if (!params.success) return badRequest(context, 'El ciclo indicado no es válido.');
-    const report = await requireOperations().surplusReport(params.data.cycleId);
+    const report = await requireOperations().surplusReport(
+      params.data.cycleId,
+      context.get('scope')?.operatingSiteId ?? null,
+    );
     return context.json(SurplusReportResponseSchema.parse(contractValue(report)));
   });
 
@@ -7440,8 +7452,11 @@ export function createApp(options: CreateAppOptions) {
         'Revisá las bajas informadas.',
         input.success ? undefined : input.error.issues,
       );
+    const siteId = context.get('scope')?.operatingSiteId ?? null;
+    if (!siteId) return badRequest(context, 'Elegí una ciudad arriba para dar de baja su stock.');
     const items = await requireOperations().writeOffSurplus(
       params.data.cycleId,
+      siteId,
       input.data.entries,
       operationsContext(context),
     );

@@ -9,7 +9,7 @@ El stock del período y sus bajas eran sólo por período: lo cargado en una ciu
 
 - [x] Migración 0077 (expandir): `operating_site_id` en `production_stock` y `surplus_writeoffs`, lo existente asignado por la regla del cierre, índice único con la ciudad. Probada en `migrations.test.ts`.
 - [ ] Correr 0077 en producción (antes que el código).
-- [ ] Código: stock, bajas, disponible, venta del stock, resumen de cocina y cierre por ciudad; con "Todas las ciudades" se ve la suma y no se edita.
+- [x] Código: stock, bajas, disponible, venta del stock, resumen de cocina y cierre por ciudad; con "Todas las ciudades" se ve la suma y no se edita. Lo que la cocina hizo de más sin ser stock de nadie va a la ciudad que más vendió esa variedad (con una ciudad, igual que antes).
 - [ ] 0078 (contraer): `NOT NULL` en las dos columnas.
 
 ## V1.0 - Estabilización y seguridad (desde 2026-10-29) — [análisis](../07-operations/ESTABILIZACION_V1.md)

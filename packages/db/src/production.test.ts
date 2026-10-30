@@ -115,10 +115,11 @@ afterEach(async () => {
   close = null;
 });
 
-async function seededService(): Promise<PostgresOperationsService> {
+async function seededService(extra = ''): Promise<PostgresOperationsService> {
   const { client, close: closeDatabase, db } = await migratedDatabase();
   close = closeDatabase;
   await client.exec(seed);
+  if (extra) await client.exec(extra);
   return new PostgresOperationsService(db, {
     key: 'test',
     resolve: () => Promise.resolve({ candidates: [], status: 'NO_MATCH' }),
@@ -304,6 +305,7 @@ describe('excedente', () => {
 
     await service.writeOffSurplus(
       CYCLE,
+      SITE,
       [{ familyName: 'Keto', quantityUnits: 1, reason: 'Vencimiento', variantName: '250' }],
       context,
     );
@@ -316,6 +318,7 @@ describe('excedente', () => {
     await expect(
       service.writeOffSurplus(
         CYCLE,
+        SITE,
         [{ familyName: 'Keto', quantityUnits: 5, reason: 'Otra baja', variantName: '250' }],
         context,
       ),
@@ -526,6 +529,7 @@ describe('stock para la venta (STOCK_PLAN.md)', () => {
     const service = await seededService();
     await service.setProductionStock(
       CYCLE,
+      SITE,
       [{ familyName: 'Keto', quantityUnits: 3, variantName: '250' }],
       context,
     );
@@ -546,6 +550,7 @@ describe('stock para la venta (STOCK_PLAN.md)', () => {
     const service = await seededService();
     await service.setProductionStock(
       CYCLE,
+      SITE,
       [{ familyName: 'Keto', quantityUnits: 2, variantName: '250' }],
       context,
     );
@@ -580,6 +585,7 @@ describe('stock para la venta (STOCK_PLAN.md)', () => {
     const service = await seededService();
     await service.setProductionStock(
       CYCLE,
+      SITE,
       [
         { familyName: 'Keto', quantityUnits: 2, variantName: '250' },
         { familyName: 'Keto', quantityUnits: 1, variantName: '250' },
@@ -596,6 +602,7 @@ describe('stock para la venta (STOCK_PLAN.md)', () => {
 
     await service.setProductionStock(
       CYCLE,
+      SITE,
       [{ familyName: 'Veggie', quantityUnits: 0, variantName: '300' }],
       context,
     );
@@ -606,6 +613,7 @@ describe('stock para la venta (STOCK_PLAN.md)', () => {
     const service = await seededService();
     await service.setProductionStock(
       CYCLE,
+      SITE,
       [{ familyName: 'Keto', quantityUnits: 3, variantName: '250' }],
       context,
     );
@@ -616,6 +624,127 @@ describe('stock para la venta (STOCK_PLAN.md)', () => {
         0,
       ),
     ).toBe(3);
+  });
+});
+
+/*
+ * Stock por ciudad (STOCK_POR_CIUDAD_PLAN.md, 2026-10-29): el stock cargado en una ciudad aparecía,
+ * se cocinaba y se vendía en las otras.
+ */
+describe('stock por ciudad', () => {
+  const OTHER = 'a0000000-0000-4000-8000-000000000010';
+  const twoCities = () =>
+    seededService(`
+      insert into operating_sites (id, slug, display_name, order_prefix)
+      values ('${OTHER}', 'salta', 'Salta', 'SLA');
+    `);
+  const ketoIn = async (service: PostgresOperationsService, site: string | null) =>
+    (await service.surplusReport(CYCLE, site)).items.find(
+      (item) => item.familyName === 'Keto' && item.variantName === '250',
+    );
+
+  it('el stock de una ciudad no aparece en otra; sin ciudad se ve la suma', async () => {
+    const service = await twoCities();
+    await service.setProductionStock(
+      CYCLE,
+      OTHER,
+      [{ familyName: 'Keto', quantityUnits: 3, variantName: '250' }],
+      context,
+    );
+    await service.setProductionStock(
+      CYCLE,
+      SITE,
+      [{ familyName: 'Keto', quantityUnits: 1, variantName: '250' }],
+      context,
+    );
+
+    expect((await service.listProductionStock(CYCLE, SITE))[0]?.quantityUnits).toBe(1);
+    expect((await service.listProductionStock(CYCLE, OTHER))[0]?.quantityUnits).toBe(3);
+    expect((await service.listProductionStock(CYCLE))[0]?.quantityUnits).toBe(4);
+
+    // Guardar en una ciudad no pisa la otra.
+    await service.setProductionStock(CYCLE, SITE, [], context);
+    expect(await service.listProductionStock(CYCLE, SITE)).toEqual([]);
+    expect((await service.listProductionStock(CYCLE, OTHER))[0]?.quantityUnits).toBe(3);
+
+    // Cocina de cada ciudad cocina sólo su stock.
+    expect((await service.kitchenSummary(CYCLE, SITE)).stock).toEqual([]);
+    expect((await service.kitchenSummary(CYCLE, OTHER)).stock).toEqual([
+      { familyName: 'Keto', quantityUnits: 3, variantName: '250' },
+    ]);
+    expect((await ketoIn(service, SITE))?.disponible ?? 0).toBe(0);
+    expect((await ketoIn(service, OTHER))?.disponible).toBe(3);
+  });
+
+  it('no se vende del stock de otra ciudad, y la baja es de una sola', async () => {
+    const service = await twoCities();
+    await service.setProductionStock(
+      CYCLE,
+      OTHER,
+      [{ familyName: 'Keto', quantityUnits: 2, variantName: '250' }],
+      context,
+    );
+
+    await expect(
+      service.createOrder(
+        {
+          customerId: CUSTOMER,
+          operatingSiteId: SITE,
+          deliveryAddress: 'Calle 9',
+          deliveryDate: '2026-08-26',
+          dietaryInstructions: [],
+          initialStatus: 'CONFIRMED',
+          items: [{ offeringId: OFFERING, quantityUnits: 1 }],
+          menuId: MENU,
+          paymentExpectation: 'efectivo',
+          source: 'opportunity_sale',
+        },
+        context,
+      ),
+    ).rejects.toThrow('No queda stock de Keto 250 en esta ciudad');
+
+    await expect(
+      service.writeOffSurplus(
+        CYCLE,
+        SITE,
+        [{ familyName: 'Keto', quantityUnits: 1, reason: 'Vencimiento', variantName: '250' }],
+        context,
+      ),
+    ).rejects.toThrow(OperationsConflictError);
+    await service.writeOffSurplus(
+      CYCLE,
+      OTHER,
+      [{ familyName: 'Keto', quantityUnits: 1, reason: 'Vencimiento', variantName: '250' }],
+      context,
+    );
+    expect((await ketoIn(service, OTHER))?.disponible).toBe(1);
+  });
+
+  it('al cerrar, el stock de cada ciudad pasa a un lote en esa ciudad', async () => {
+    const service = await twoCities();
+    await service.setProductionStock(
+      CYCLE,
+      OTHER,
+      [{ familyName: 'Keto', quantityUnits: 2, variantName: '250' }],
+      context,
+    );
+    await service.setProductionStock(
+      CYCLE,
+      SITE,
+      [{ familyName: 'Keto', quantityUnits: 1, variantName: '250' }],
+      context,
+    );
+
+    const closed = await service.setCycleClosed(CYCLE, true, context);
+    expect(closed.stockLots).toHaveLength(2);
+    expect(closed.stockLots).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ operatingSiteName: 'Salta', quantityUnits: 2 }),
+      ]),
+    );
+    // El período de prueba cerró en agosto: el lote ya figura vencido, pero está en Salta.
+    const lots = await service.listStockLots({ onlyAvailable: false, operatingSiteId: OTHER });
+    expect(lots.map((lot) => lot.quantityUnits)).toEqual([2]);
   });
 });
 
