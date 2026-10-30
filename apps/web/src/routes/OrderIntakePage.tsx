@@ -8,6 +8,7 @@ import { CancelOrderDialog } from '../components/CancelOrderDialog.js';
 import { ColumnPicker } from '../components/ColumnPicker.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { DashboardShell } from '../components/DashboardShell.js';
+import { StockAvailablePanel, type StockSale } from '../components/StockAvailablePanel.js';
 import { StockLotsPicker } from '../components/StockLotsPicker.js';
 import { StockSaleOption } from '../components/StockSaleOption.js';
 import { stockItemsPayload, type StockLot, type StockPicks } from '../lib/stockLots.js';
@@ -275,6 +276,8 @@ export function OrderIntakePage() {
   // vender con el menú elegido.
   const [stockPicks, setStockPicks] = useState<StockPicks>(new Map());
   const [stockLots, setStockLots] = useState<(StockLot & { offeringId: string })[]>([]);
+  // Sube con cada pedido guardado, para que "Stock disponible" vuelva a mirar lo que queda.
+  const [stockVersion, setStockVersion] = useState(0);
   /** El pedido que se está mirando en la ficha. Es el de la lista: no se vuelve a pedir nada. */
   const [viewing, setViewing] = useState<OrderSummary | null>(null);
   // La zona cuyo lote se está marcando: deshabilita todos los botones mientras corre, para que dos
@@ -584,6 +587,30 @@ export function OrderIntakePage() {
   function chooseIntakeSize(variantName: string) {
     const next = findIntakeOffering(selectedOffering?.familyName ?? '', variantName);
     if (next) setSelectedOfferingId(next.id);
+  }
+
+  /**
+   * "Vender" desde "Stock disponible": abre Nuevo pedido con eso ya elegido. Del período es la
+   * variedad con "Sale del stock" marcado; de un período anterior, una vianda de ese lote. El resto
+   * —cliente, entrega, cuántas— se completa como siempre.
+   */
+  function sellFromStock(sale: StockSale) {
+    setSelectedMenuId(sale.menuId);
+    setSelectedDishes([]);
+    setUnits(1);
+    if (sale.kind === 'period') {
+      setSelectedOfferingId(sale.offeringId);
+      setFromStock(true);
+      setStockPicks(new Map());
+    } else {
+      setSelectedOfferingId('');
+      setFromStock(false);
+      setStockPicks(new Map([[sale.lot.id, 1]]));
+    }
+    setFormOpen(true);
+    window.setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
   }
 
   /**
@@ -945,6 +972,7 @@ export function OrderIntakePage() {
       resetCart();
       setFromStock(false);
       setStockPicks(new Map());
+      setStockVersion((current) => current + 1);
       setMessage('');
       showToast(
         confirmNow ? 'Pedido registrado y confirmado.' : 'Pedido registrado como borrador.',
@@ -1426,6 +1454,15 @@ export function OrderIntakePage() {
 
         {/* Lo que sale hoy, y lo que falta para que salga. */}
         {permissions.includes('orders.read') ? <DispatchTodayBanner /> : null}
+        {/* Lo que se puede vender ya cocinado, sin ir a Cocina. */}
+        {permissions.includes('orders.read') ? (
+          <StockAvailablePanel
+            canSell={permissions.includes('orders.create')}
+            menus={publishedMenus}
+            onSell={sellFromStock}
+            version={stockVersion}
+          />
+        ) : null}
         {/* Los pedidos que llegaron solos por correo, esperando revisión. */}
         {permissions.includes('orders.create') ? (
           <InboundEmailsPanel canConfirm={canConfirm} onChanged={() => void loadData()} />
@@ -1805,7 +1842,9 @@ export function OrderIntakePage() {
                   </label>
                 </div>
                 <div className="intake-section-grid">
-                  {permissions.includes('production.read') ? (
+                  {permissions.some((permission) =>
+                    ['orders.create', 'production.read'].includes(permission),
+                  ) ? (
                     <StockSaleOption
                       checked={fromStock}
                       cycleId={selectedMenu?.cycle.id ?? null}

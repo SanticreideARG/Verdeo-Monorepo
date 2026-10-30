@@ -10342,6 +10342,94 @@ body {
   font-size: 0.88rem;
 }
 
+/* Stock disponible en Pedidos: un renglón que se abre; adentro, variedad, cuántas y "Vender". */
+.stock-available {
+  margin: 0 0 1rem;
+  border: 1px solid var(--db-border);
+  border-left: 5px solid #2f7d4a;
+  border-radius: 0.8rem;
+  background: var(--db-surface-solid, #fff);
+}
+.stock-available-head {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  width: 100%;
+  min-height: 2.75rem;
+  border: 0;
+  padding: 0.6rem 1rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.stock-available-head span:not(.stock-available-caret) {
+  color: var(--db-muted, #6b7280);
+  font-size: 0.9rem;
+}
+.stock-available-caret {
+  margin-left: auto;
+  transition: transform 0.15s;
+}
+.stock-available.is-open .stock-available-caret {
+  transform: rotate(90deg);
+}
+.stock-available-body {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  padding: 0 1rem 0.9rem;
+}
+.stock-available-empty {
+  margin: 0;
+  color: var(--db-muted, #6b7280);
+}
+.stock-available-group h3 {
+  margin: 0 0 0.35rem;
+  color: var(--db-muted, #6b7280);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.stock-available-group ul {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stock-available-group li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  border-radius: 0.5rem;
+  padding: 0.3rem 0.5rem;
+}
+.stock-available-group li:nth-child(odd) {
+  background: color-mix(in srgb, var(--db-text-soft, #64748b) 7%, transparent);
+}
+.stock-available-group li.is-soon {
+  background: rgb(183 121 31 / 14%);
+}
+.stock-available-group li > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.stock-available-group li small {
+  color: var(--db-muted, #6b7280);
+}
+.stock-available-group li > strong {
+  min-width: 2ch;
+  font-size: 1.05rem;
+  text-align: right;
+}
+.stock-available-group li .button {
+  min-height: 2.25rem;
+  padding: 0 0.8rem;
+  font-size: 0.85rem;
+}
+
 /* Repartos: los días, uno debajo del otro, con el día de la semana bien a la vista. */
 .routes-tabs {
   margin-top: 1rem;

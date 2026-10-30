@@ -8,9 +8,17 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 El stock del período y sus bajas eran sólo por período: lo cargado en una ciudad aparecía, se cocinaba y se vendía en las otras.
 
 - [x] Migración 0077 (expandir): `operating_site_id` en `production_stock` y `surplus_writeoffs`, lo existente asignado por la regla del cierre, índice único con la ciudad. Probada en `migrations.test.ts`.
-- [ ] Correr 0077 en producción (antes que el código).
+- [x] Correr 0077 en producción (antes que el código). Corrida el 2026-10-30; el código salió después.
 - [x] Código: stock, bajas, disponible, venta del stock, resumen de cocina y cierre por ciudad; con "Todas las ciudades" se ve la suma y no se edita. Lo que la cocina hizo de más sin ser stock de nadie va a la ciudad que más vendió esa variedad (con una ciudad, igual que antes).
 - [ ] 0078 (contraer): `NOT NULL` en las dos columnas.
+
+## Stock disponible en Pedidos (2026-10-30)
+
+Para ver el stock había que ir a Cocina.
+
+- [x] Panel "Stock disponible" arriba de la lista de Pedidos (`StockAvailablePanel`): lo que queda del período y los lotes de períodos anteriores de la ciudad elegida, los que vencen en tres días o menos primero y resaltados. Cerrado es un renglón con el total; se recuerda abierto o cerrado por navegador. Sólo para mirar.
+- [x] "Vender" en cada renglón abre Nuevo pedido con la variedad y "Sale del stock" marcado (del período) o una vianda del lote (de un período anterior).
+- [x] Permisos: el disponible del período (`GET /production/:cycleId/surplus`) y los lotes también los lee `orders.read`; "Sale del stock" se ofrece a quien carga pedidos. Las bajas siguen pidiendo `production.adjust_surplus`.
 
 ## V1.0 - Estabilización y seguridad (desde 2026-10-29) — [análisis](../07-operations/ESTABILIZACION_V1.md)
 

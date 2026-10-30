@@ -2213,6 +2213,48 @@ describe('API foundation', () => {
       expect(body.items[0]?.disponible).toBe(2);
     });
 
+    it('lets orders.read see the surplus (Stock disponible) but not write it off', async () => {
+      const surplusReport = vi.fn(() =>
+        Promise.resolve({
+          coefficientPercent: 10,
+          cycle: { alias: 'Semana 34', id: CYCLE },
+          generatedAt: new Date('2026-08-25T20:00:00.000Z'),
+          items: [],
+        }),
+      );
+      const writeOffSurplus = vi.fn(() => Promise.resolve([]));
+      const app = buildApp({ surplusReport, writeOffSurplus }, ['orders.read']);
+
+      const read = await app.request(`/api/v1/production/${CYCLE}/surplus`, {
+        headers: { cookie },
+      });
+      expect(read.status).toBe(200);
+
+      const write = await app.request(`/api/v1/production/${CYCLE}/surplus/writeoffs`, {
+        body: JSON.stringify({
+          entries: [
+            { familyName: 'Keto', quantityUnits: 1, reason: 'Vencimiento', variantName: '250' },
+          ],
+        }),
+        headers: {
+          cookie,
+          'content-type': 'application/json',
+          'x-verdeo-site': '90000000-0000-4000-8000-000000000001',
+        },
+        method: 'POST',
+      });
+      expect(write.status).toBe(403);
+      expect(writeOffSurplus).not.toHaveBeenCalled();
+    });
+
+    it('denies the surplus without orders or production permissions', async () => {
+      const app = buildApp({ surplusReport: vi.fn() }, ['customers.read']);
+      const response = await app.request(`/api/v1/production/${CYCLE}/surplus`, {
+        headers: { cookie },
+      });
+      expect(response.status).toBe(403);
+    });
+
     it('writes off surplus with production.adjust_surplus and denies without it', async () => {
       const writeOffSurplus = vi.fn(() => Promise.resolve([]));
       const app = buildApp({ writeOffSurplus }, ['production.adjust_surplus']);

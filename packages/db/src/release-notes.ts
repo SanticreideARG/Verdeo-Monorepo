@@ -151,6 +151,13 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-10-30-stock-en-pedidos',
+    body: `Stock disponible en Pedidos: arriba de la lista se ve lo que hay para vender ya cocinado en la ciudad elegida, sin ir a Cocina.
+• Del período y de períodos anteriores, con su vencimiento. Lo que vence en tres días o menos aparece primero y resaltado.
+• "Vender" abre Nuevo pedido con esa variedad ya elegida del stock: sólo falta el cliente y la entrega.
+• Se abre y se cierra tocándolo, y recuerda cómo lo dejaste.`,
+  },
+  {
     key: '2026-10-30-selector-vista',
     body: `En el teléfono, el selector "Tarjetas / Columnas" de las listas ahora son dos íconos: los cuadritos muestran tarjetas y la grilla, columnas. El elegido queda resaltado.`,
   },

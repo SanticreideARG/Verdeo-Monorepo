@@ -84,7 +84,7 @@ código.
 ## Estado
 
 - [x] 0077 escrita y probada en `migrations.test.ts` (asigna el stock existente por la regla del cierre).
-- [ ] 0077 corrida en producción.
+- [x] 0077 corrida en producción (2026-10-30), y el código desplegado después.
 - [x] Código (commit B), con tests de dos ciudades en `production.test.ts` y de la API.
 - [ ] 0078: `NOT NULL`.
 

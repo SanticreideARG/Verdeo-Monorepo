@@ -61,6 +61,23 @@ export function lotsForMenu(
   });
 }
 
+/**
+ * La opción del menú para una variedad del stock del período ("Keto" "400"), con la misma
+ * comparación que los lotes: el stock se nombra como se cocinó y el menú puede decir "Menú Keto".
+ */
+export function offeringForStock(
+  offerings: readonly MenuOffering[],
+  familyName: string,
+  variantName: string,
+): MenuOffering | undefined {
+  return offerings.find(
+    (offering) =>
+      !offering.composable &&
+      familyKey(offering.familyName) === familyKey(familyName) &&
+      sizeKey(offering.variantName) === sizeKey(variantName),
+  );
+}
+
 /** Los ítems del pedido que salen del stock. */
 export function stockItemsPayload(
   picks: StockPicks,

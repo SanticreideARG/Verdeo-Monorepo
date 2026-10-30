@@ -7154,7 +7154,11 @@ export function createApp(options: CreateAppOptions) {
    */
   app.get('/api/v1/stock-lots', async (context) => {
     const permissions = context.get('session').permissions;
-    if (!permissions.includes('orders.create') && !permissions.includes('production.read'))
+    if (
+      !['orders.read', 'orders.create', 'production.read'].some((permission) =>
+        permissions.includes(permission),
+      )
+    )
       return forbidden(context);
     const city = context.req.query('ciudad');
     const siteId = city && z.uuid().safeParse(city).success ? city : null;
@@ -7429,7 +7433,10 @@ export function createApp(options: CreateAppOptions) {
   });
 
   app.get('/api/v1/production/:cycleId/surplus', async (context) => {
-    if (!context.get('session').permissions.includes('production.read')) return forbidden(context);
+    // Pedidos también lo lee (2026-10-30): "Stock disponible" y "Sale del stock", sólo para mirar.
+    const permissions = context.get('session').permissions;
+    if (!['production.read', 'orders.read'].some((permission) => permissions.includes(permission)))
+      return forbidden(context);
     const params = CycleIdParamSchema.safeParse(context.req.param());
     if (!params.success) return badRequest(context, 'El ciclo indicado no es válido.');
     const report = await requireOperations().surplusReport(
