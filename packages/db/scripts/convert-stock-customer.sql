@@ -5,7 +5,7 @@
 -- pedidos del período en curso a la tabla de stock (production_stock), borra esos pedidos y archiva
 -- el cliente. Lo que se cocina no cambia: los mismos números pasan de "pedidos" a "stock".
 --
--- Se corre en el editor SQL de Neon, en dos pasos. Requiere la migración 0061.
+-- Se corre en el editor SQL de Neon, en dos pasos. Requiere la migración 0077 (stock por ciudad).
 --
 -- PASO 1 — VISTA PREVIA: correr sólo el SELECT de abajo. No cambia nada. Mirar que el cliente,
 -- el período y las cantidades sean los esperados.
@@ -63,14 +63,16 @@ where o.customer_id in (select id from stock_customers)
   and o.status <> 'CANCELLED';
 
 -- Las cantidades, sumadas a lo que ya hubiera cargado desde Cocina.
-insert into production_stock (sales_cycle_id, family_name, variant_name, quantity_units, notes)
-select k.id, i.product_name_snapshot, i.variant_snapshot, sum(i.quantity_units)::int,
-  'Convertido del cliente STOCK'
-from order_items i, stock_kept k
+-- Cada pedido deja su stock en la ciudad del pedido (0077: el stock es por ciudad).
+insert into production_stock (sales_cycle_id, operating_site_id, family_name, variant_name,
+  quantity_units, notes)
+select k.id, o.operating_site_id, i.product_name_snapshot, i.variant_snapshot,
+  sum(i.quantity_units)::int, 'Convertido del cliente STOCK'
+from order_items i join orders o on o.id = i.order_id, stock_kept k
 where i.order_id in (select id from stock_orders)
-group by k.id, i.product_name_snapshot, i.variant_snapshot
+group by k.id, o.operating_site_id, i.product_name_snapshot, i.variant_snapshot
 having sum(i.quantity_units) > 0
-on conflict (sales_cycle_id, origin, family_name, variant_name) do update
+on conflict (sales_cycle_id, operating_site_id, origin, family_name, variant_name) do update
   set quantity_units = production_stock.quantity_units + excluded.quantity_units,
       updated_at = now();
 

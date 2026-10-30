@@ -3,6 +3,15 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Stock por ciudad (2026-10-29) — [plan](../03-features/STOCK_POR_CIUDAD_PLAN.md)
+
+El stock del período y sus bajas eran sólo por período: lo cargado en una ciudad aparecía, se cocinaba y se vendía en las otras.
+
+- [x] Migración 0077 (expandir): `operating_site_id` en `production_stock` y `surplus_writeoffs`, lo existente asignado por la regla del cierre, índice único con la ciudad. Probada en `migrations.test.ts`.
+- [ ] Correr 0077 en producción (antes que el código).
+- [ ] Código: stock, bajas, disponible, venta del stock, resumen de cocina y cierre por ciudad; con "Todas las ciudades" se ve la suma y no se edita.
+- [ ] 0078 (contraer): `NOT NULL` en las dos columnas.
+
 ## V1.0 - Estabilización y seguridad (desde 2026-10-29) — [análisis](../07-operations/ESTABILIZACION_V1.md)
 
 Sprint 1 y MVP cerrados: la versión 1.0 corre en producción. Esta etapa prioriza no romper el trabajo de quien usa el sistema y no perder datos.

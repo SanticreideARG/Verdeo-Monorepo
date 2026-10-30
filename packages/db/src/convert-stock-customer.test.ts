@@ -53,9 +53,10 @@ const seed = `
     ('0a000000-0000-4000-8000-000000000003', 'KETO', '400', 1, 0, 0),
     ('0a000000-0000-4000-8000-000000000004', 'KETO', '400', 5, 0, 0),
     ('0a000000-0000-4000-8000-000000000005', 'KETO', '400', 1, 0, 0);
-  -- Ya había stock cargado desde Cocina: se suma.
-  insert into production_stock (sales_cycle_id, family_name, variant_name, quantity_units)
-  values ('${ACTUAL}', 'VEGGIE', '300', 4);
+  -- Ya había stock cargado desde Cocina en la misma ciudad: se suma.
+  insert into production_stock (sales_cycle_id, operating_site_id, family_name, variant_name,
+                                quantity_units)
+  values ('${ACTUAL}', '${SITE}', 'VEGGIE', '300', 4);
 `;
 
 let close: (() => Promise<void>) | null = null;

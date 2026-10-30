@@ -217,6 +217,93 @@ describe('database migrations', () => {
     expect(await count(target, 'select count(*)::int as n from user_operating_sites')).toBe(1);
   });
 
+  /*
+   * Stock por ciudad (0077, STOCK_POR_CIUDAD_PLAN.md): el stock y las bajas eran sólo por período.
+   * Lo ya cargado toma la ciudad que más vendió esa variedad en el período; si nadie la vendió, la
+   * del menú del período o la primera ciudad.
+   */
+  it('assigns the existing period stock and write-offs to a city', async () => {
+    const target = await freshDatabase();
+    const files = migrationFiles();
+    await applyMigrations(
+      target,
+      files.filter((name) => name < '0077'),
+    );
+    await target.exec(`
+      insert into operating_sites (id, slug, display_name, order_prefix) values
+        ('a0000000-0000-4000-8000-000000000001', 'cordoba', 'Córdoba', 'CBA'),
+        ('a0000000-0000-4000-8000-000000000002', 'salta', 'Salta', 'SLA');
+      insert into customers (id, display_name)
+      values ('c0000000-0000-4000-8000-000000000001', 'María Pérez');
+      insert into sales_cycles (id, alias, open_at, partial_kitchen_cutoff_at, close_at)
+      values ('d0000000-0000-4000-8000-000000000001', 'Noviembre 1',
+              '2026-10-26T12:00:00Z', '2026-10-30T23:00:00Z', '2026-10-31T22:00:00Z');
+      insert into weekly_menus (id, sales_cycle_id, status)
+      values ('e0000000-0000-4000-8000-000000000001',
+              'd0000000-0000-4000-8000-000000000001', 'PUBLISHED');
+      insert into orders (id, public_number, customer_id, sales_cycle_id, weekly_menu_id, source,
+                          delivery_date, delivery_address_snapshot, payment_expectation,
+                          total_minor, operating_site_id, status)
+      values
+        ('f0000000-0000-4000-8000-000000000001', 'CBA-00001',
+         'c0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001',
+         'e0000000-0000-4000-8000-000000000001', 'manual', '2026-11-02', 'Sucre 1918',
+         'efectivo', 85000, 'a0000000-0000-4000-8000-000000000001', 'CONFIRMED'),
+        ('f0000000-0000-4000-8000-000000000002', 'SLA-00001',
+         'c0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001',
+         'e0000000-0000-4000-8000-000000000001', 'manual', '2026-11-02', 'Caseros 10',
+         'efectivo', 170000, 'a0000000-0000-4000-8000-000000000002', 'CONFIRMED');
+      insert into order_items (order_id, product_name_snapshot, variant_snapshot, quantity_units,
+                               unit_price_minor, total_minor)
+      values
+        ('f0000000-0000-4000-8000-000000000001', 'Menú Keto', '400 g', 1, 85000, 85000),
+        ('f0000000-0000-4000-8000-000000000002', 'Menú Keto', '400 g', 2, 85000, 170000);
+      insert into production_stock (sales_cycle_id, family_name, variant_name, quantity_units)
+      values
+        ('d0000000-0000-4000-8000-000000000001', 'Menú Keto', '400 g', 3),
+        ('d0000000-0000-4000-8000-000000000001', 'Menú Real', '250 g', 2);
+      insert into surplus_writeoffs (sales_cycle_id, family_name, variant_name, quantity_units, reason)
+      values ('d0000000-0000-4000-8000-000000000001', 'Menú Keto', '400 g', 1, 'Se rompió');
+    `);
+    await applyMigrations(
+      target,
+      files.filter((name) => name >= '0077'),
+    );
+
+    const stock = await target.query<{ site: string; variant: string }>(
+      `select s.display_name as site, p.family_name || ' ' || p.variant_name as variant
+       from production_stock p join operating_sites s on s.id = p.operating_site_id
+       order by variant`,
+    );
+    // Keto 400: Salta vendió más. Real 250 no lo vendió nadie: la primera ciudad creada.
+    const first = await target.query<{ name: string }>(
+      'select display_name as name from operating_sites order by created_at limit 1',
+    );
+    expect(stock.rows).toEqual([
+      { site: 'Salta', variant: 'Menú Keto 400 g' },
+      { site: first.rows[0]?.name, variant: 'Menú Real 250 g' },
+    ]);
+    const writeoff = await target.query<{ site: string }>(
+      `select s.display_name as site
+       from surplus_writeoffs w join operating_sites s on s.id = w.operating_site_id`,
+    );
+    expect(writeoff.rows).toEqual([{ site: 'Salta' }]);
+
+    // Desde ahora la misma variedad puede tener stock en dos ciudades.
+    await target.exec(`
+      insert into production_stock (sales_cycle_id, operating_site_id, family_name, variant_name,
+                                    quantity_units)
+      values ('d0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001',
+              'Menú Keto', '400 g', 1);
+    `);
+    expect(
+      await count(
+        target,
+        'select count(*)::int as n from production_stock where operating_site_id is null',
+      ),
+    ).toBe(0);
+  });
+
   it('rejects a zone that belongs to a different operation than the order', async () => {
     const target = await freshDatabase();
     await applyMigrations(target, migrationFiles());

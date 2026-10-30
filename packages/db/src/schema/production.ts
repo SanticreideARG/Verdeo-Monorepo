@@ -13,6 +13,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { users } from './auth.js';
+import { operatingSites } from './geography.js';
 import { salesCycles } from './operations.js';
 
 const timestamps = {
@@ -106,6 +107,13 @@ export const surplusWriteoffs = pgTable(
     salesCycleId: uuid('sales_cycle_id')
       .notNull()
       .references(() => salesCycles.id, { onDelete: 'cascade' }),
+    /*
+     * La ciudad de la baja (STOCK_POR_CIUDAD_PLAN.md, 2026-10-29). Nula sólo en las filas de antes
+     * de la migración que no se pudieron asignar; se vuelve obligatoria en la siguiente.
+     */
+    operatingSiteId: uuid('operating_site_id').references(() => operatingSites.id, {
+      onDelete: 'restrict',
+    }),
     familyName: text('family_name').notNull(),
     variantName: text('variant_name').notNull(),
     quantityUnits: integer('quantity_units').notNull(),
@@ -249,6 +257,14 @@ export const productionStock = pgTable(
     salesCycleId: uuid('sales_cycle_id')
       .notNull()
       .references(() => salesCycles.id, { onDelete: 'cascade' }),
+    /*
+     * La ciudad del stock (STOCK_POR_CIUDAD_PLAN.md, 2026-10-29). Era sólo por período, y como los
+     * períodos son de todas las ciudades, el stock cargado en una aparecía en las otras. Nula
+     * mientras convive con el código anterior; se vuelve obligatoria en la siguiente migración.
+     */
+    operatingSiteId: uuid('operating_site_id').references(() => operatingSites.id, {
+      onDelete: 'restrict',
+    }),
     familyName: text('family_name').notNull(),
     variantName: text('variant_name').notNull(),
     quantityUnits: integer('quantity_units').notNull(),
@@ -266,8 +282,9 @@ export const productionStock = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex('production_stock_cycle_origin_variant_unique').on(
+    uniqueIndex('production_stock_cycle_site_origin_variant_unique').on(
       table.salesCycleId,
+      table.operatingSiteId,
       table.origin,
       table.familyName,
       table.variantName,
