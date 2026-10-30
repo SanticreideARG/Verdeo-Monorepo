@@ -729,4 +729,6 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] Etiqueta NUEVO al lado del nombre del cliente en la lista de Pedidos.
 - [x] Pantalla ancha: desde 1700px el contenido del panel se abre hasta 2400px (antes, tope de 1400px); el inicio mantiene el tope. El formulario de Nuevo pedido ya no tiene ancho máximo propio.
 - [x] Etiquetas: el PDF lleva `PrintScaling=None` (una impresión salió al ~95 %).
+- [x] Etiquetas: "Ajuste de la impresora" por equipo (mover X/Y en mm, estirar X/Y en %) con hoja de prueba de 24 recuadros; aun a tamaño real, una impresión salió corrida en las filas de arriba. El archivo de Illustrator de producción (210 × 294 mm, filas cada 33,75 mm, íconos corridos a mano en filas con mucho texto) confirma que se corregía a mano por impresora.
+- [x] Etiquetas: nombres de plato muy largos en tres renglones a 10–9,5 pt (antes, dos renglones hasta 6 pt).
 - [x] Columnas elegidas y vista tarjetas/tabla: ya se guardaban por dispositivo (`localStorage`), verificado.

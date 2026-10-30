@@ -128,20 +128,35 @@ const FIT_SCRIPT = `<script>
     document.querySelectorAll('.plato .dish').forEach(function (el) {
       var box = el.parentElement;
       var side = box.querySelector('.side');
-      function fits() {
+      function fitsIn(maxLines) {
         var used = 0;
         for (var c = box.firstElementChild; c; c = c.nextElementSibling) used += c.getBoundingClientRect().height;
-        return lines(el) <= 2 && used <= box.getBoundingClientRect().height + 0.5;
+        return lines(el) <= maxLines && used <= box.getBoundingClientRect().height + 0.5;
       }
+      function fits() { return fitsIn(2); }
+      function fits3() { return fitsIn(3); }
       for (var size = 12; size >= 10; size -= 0.5) {
         el.style.fontSize = size + 'pt';
         if (fits()) return;
       }
-      // Último recurso, para un nombre muy largo: también se achica el acompañamiento.
+      // Para un nombre largo, primero se achica el acompañamiento.
       for (var s = 11.5; side && s >= 10 && !fits(); s -= 0.5) side.style.fontSize = s + 'pt';
+      if (fits()) return;
+      /*
+       * Un nombre muy largo ("Sorrentinos integrales de calabaza, roquefort y cebolla
+       * caramelizada") va en tres renglones, un poco más juntos, antes que en letra diminuta:
+       * con dos renglones como máximo se achicaba hasta 6 pt y no se leía (2026-10-29).
+       */
+      el.style.lineHeight = '1.1';
+      if (side) side.style.lineHeight = '1.1';
+      for (var t = 10; t >= 8.5; t -= 0.5) {
+        el.style.fontSize = t + 'pt';
+        if (side) side.style.fontSize = Math.min(10, t) + 'pt';
+        if (fits3()) return;
+      }
       // Si el teléfono agrandó el texto (el tamaño de letra del sistema), se sigue achicando todo
       // hasta que entre: una etiqueta de medida fija no puede crecer (2026-10-25).
-      for (var k = 9.5; k >= 4 && !fits(); k -= 0.5) {
+      for (var k = 8; k >= 4 && !fits3(); k -= 0.5) {
         el.style.fontSize = k + 'pt';
         if (side) side.style.fontSize = Math.min(10, k + 1) + 'pt';
       }
@@ -193,6 +208,8 @@ function css(preview: boolean): string {
     ${preview ? 'margin: 0 auto 8mm; box-shadow: 0 1px 6px rgb(0 0 0 / 25%);' : ''}
   }
   .sheet:last-child { page-break-after: auto; break-after: auto; }
+  /* Lo que corre el ajuste de la impresora: todas las etiquetas de la hoja juntas. */
+  .frame { position: absolute; inset: 0; transform-origin: 0 0; }
   .cell {
     position: absolute;
     width: ${String(p.labelWidthMm)}mm;
@@ -325,11 +342,84 @@ function css(preview: boolean): string {
 }
 
 /**
+ * El ajuste de la impresora (2026-10-29). Con el PDF a tamaño real, una impresión salió igual
+ * corrida: las etiquetas de arriba bajaban hasta pisar el borde y las de abajo calzaban. Cada
+ * impresora arrastra el papel y escala a su manera, y eso no se arregla desde el PDF: se mide con la
+ * hoja de prueba y se corrige acá. Corre todo el contenido de la hoja junto, nunca una etiqueta sola.
+ */
+export interface PrintCalibration {
+  /** Milímetros hacia la derecha (negativo: hacia la izquierda). */
+  offsetXMm: number;
+  /** Milímetros hacia abajo (negativo: hacia arriba). */
+  offsetYMm: number;
+  /** Escala vertical en %: 100 es tamaño real. Más de 100 separa las filas. */
+  scaleYPercent: number;
+  /** Escala horizontal en %. */
+  scaleXPercent: number;
+}
+
+export const NO_CALIBRATION: PrintCalibration = {
+  offsetXMm: 0,
+  offsetYMm: 0,
+  scaleXPercent: 100,
+  scaleYPercent: 100,
+};
+
+/** Un ajuste guardado, acotado a lo razonable: un valor raro no puede mandar la hoja afuera. */
+export function normalizeCalibration(value: Partial<PrintCalibration> | null | undefined) {
+  const clamp = (raw: unknown, min: number, max: number, fallback: number) => {
+    const number = typeof raw === 'number' && Number.isFinite(raw) ? raw : fallback;
+    return Math.min(max, Math.max(min, number));
+  };
+  return {
+    offsetXMm: clamp(value?.offsetXMm, -10, 10, 0),
+    offsetYMm: clamp(value?.offsetYMm, -10, 10, 0),
+    scaleXPercent: clamp(value?.scaleXPercent, 90, 110, 100),
+    scaleYPercent: clamp(value?.scaleYPercent, 90, 110, 100),
+  } satisfies PrintCalibration;
+}
+
+function frameStyle(calibration: PrintCalibration | undefined): string {
+  if (!calibration) return '';
+  const c = normalizeCalibration(calibration);
+  if (c.offsetXMm === 0 && c.offsetYMm === 0 && c.scaleXPercent === 100 && c.scaleYPercent === 100)
+    return '';
+  return ` style="transform:translate(${String(c.offsetXMm)}mm,${String(c.offsetYMm)}mm) scale(${String(
+    c.scaleXPercent / 100,
+  )},${String(c.scaleYPercent / 100)})"`;
+}
+
+/**
+ * La hoja de prueba: el contorno de cada una de las 24 etiquetas, con su número y una cruz al
+ * centro. Se imprime en una hoja común y se pone a contraluz sobre una de etiquetas: lo que no
+ * calce se corrige con el ajuste, y se vuelve a imprimir hasta que calce.
+ */
+export function renderCalibrationSheet(calibration?: PrintCalibration): string {
+  const p = PRODUCTION_PAPER;
+  const cells = Array.from({ length: LABELS_PER_SHEET }, (_, index) => {
+    const column = index % p.columns;
+    const row = Math.floor(index / p.columns);
+    const left = p.marginLeftMm + column * (p.labelWidthMm + p.gapXMm);
+    const top = p.marginTopMm + row * p.labelHeightMm;
+    return `<div class="cell probe" style="left:${left.toFixed(2)}mm;top:${top.toFixed(2)}mm"><span>${String(index + 1)}</span></div>`;
+  }).join('');
+  const probe = `
+  .probe { outline: 0.25mm solid #000; outline-offset: -0.125mm; }
+  .probe::before, .probe::after { content: ''; position: absolute; background: #000; }
+  .probe::before { left: 50%; top: 40%; width: 0.25mm; height: 20%; }
+  .probe::after { top: 50%; left: 45%; height: 0.25mm; width: 10%; }
+  .probe span { position: absolute; top: 2mm; left: 3mm; font: 10pt Arial, sans-serif; }`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Hoja de prueba</title><style>${css(false)}${probe}</style></head><body><section class="sheet"><div class="frame"${frameStyle(calibration)}>${cells}</div></section><script>document.documentElement.setAttribute('data-fitted','')</script></body></html>`;
+}
+
+/**
  * La tanda lista para imprimir: hojas A4 con las etiquetas en sus posiciones del papel. `startAt`
  * deja libres las primeras posiciones de la primera hoja, para aprovechar una hoja ya usada.
  * `printedKeys` (sólo en la vista previa) marca las que ya se imprimieron.
  */
 export function renderProductionSheets(options: {
+  /** El ajuste de la impresora: sólo al imprimir, la vista previa muestra la hoja tal cual. */
+  calibration?: PrintCalibration;
   labels: readonly ProductionLabel[];
   preview?: boolean;
   printedKeys?: ReadonlySet<string>;
@@ -364,7 +454,9 @@ export function renderProductionSheets(options: {
         return `<div class="cell${label ? '' : ' empty'}${printed}" style="left:${left.toFixed(2)}mm;top:${top.toFixed(2)}mm">${remove}${body}</div>`;
       })
       .join('');
-    sheets.push(`<section class="sheet">${html}</section>`);
+    sheets.push(
+      `<section class="sheet"><div class="frame"${preview ? '' : frameStyle(options.calibration)}>${html}</div></section>`,
+    );
   }
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escape(
     options.title ?? 'Etiquetas',

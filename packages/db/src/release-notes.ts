@@ -151,6 +151,12 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-10-29-ajuste-impresora',
+    body: `Etiquetas:
+• Nuevo "Ajuste de la impresora": imprimís una hoja de prueba con los 24 recuadros, la ponés a contraluz sobre una de etiquetas y corregís en milímetros cuánto mover o estirar la hoja. Queda guardado en esa compu.
+• Los nombres de plato muy largos van en tres renglones, con letra legible, en vez de achicarse hasta no leerse.`,
+  },
+  {
     key: '2026-10-29-pantalla-ancha',
     body: `En monitores anchos, las tablas y los formularios del panel ahora usan todo el ancho de la pantalla, en vez de quedar en una franja al medio.`,
   },

@@ -11922,6 +11922,14 @@ label.field:has(> input[type='radio']) {
   }
 }
 
+/* Etiquetas: el ajuste de la impresora, cuatro números en dos columnas. */
+.studio-calibration {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  margin: 0.75rem 0;
+}
+
 /* Etiquetas: descargar el PDF o imprimir, y cómo imprimir para que calce (2026-10-27). */
 .studio-output {
   display: flex;

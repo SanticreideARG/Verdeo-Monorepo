@@ -6,7 +6,9 @@ import {
   PRODUCTION_PAPER,
   elaborationDay,
   familyShortName,
+  normalizeCalibration,
   productionSheetCount,
+  renderCalibrationSheet,
   renderProductionSheets,
   sizeNumber,
   splitDishName,
@@ -149,5 +151,29 @@ describe('la hoja', () => {
     });
 
     expect(html.match(/cell printed/g)).toHaveLength(1);
+  });
+
+  it('el ajuste de la impresora corre la hoja entera al imprimir, no en la vista previa', () => {
+    const calibration = { offsetXMm: 0.5, offsetYMm: -1.5, scaleXPercent: 100, scaleYPercent: 101 };
+    const printed = renderProductionSheets({ calibration, labels: [plato('a')] });
+    expect(printed).toContain(
+      '<div class="frame" style="transform:translate(0.5mm,-1.5mm) scale(1,1.01)">',
+    );
+    const preview = renderProductionSheets({ calibration, labels: [plato('a')], preview: true });
+    expect(preview).toContain('<div class="frame">');
+    // Sin ajuste, la hoja sale tal cual.
+    expect(renderProductionSheets({ labels: [plato('a')] })).toContain('<div class="frame">');
+  });
+
+  it('un ajuste fuera de rango se acota', () => {
+    expect(
+      normalizeCalibration({ offsetXMm: 40, offsetYMm: Number.NaN, scaleYPercent: 50 }),
+    ).toEqual({ offsetXMm: 10, offsetYMm: 0, scaleXPercent: 100, scaleYPercent: 90 });
+  });
+
+  it('la hoja de prueba dibuja las 24 etiquetas numeradas', () => {
+    const html = renderCalibrationSheet();
+    expect(html.match(/class="cell probe"/g)).toHaveLength(LABELS_PER_SHEET);
+    expect(html).toContain('<span>24</span>');
   });
 });

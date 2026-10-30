@@ -3,10 +3,14 @@ import { Link } from 'react-router-dom';
 
 import {
   LABELS_PER_SHEET,
+  NO_CALIBRATION,
   PRODUCTION_PAPER,
+  normalizeCalibration,
   productionSheetCount,
+  renderCalibrationSheet,
   renderProductionSheets,
   type LabelData,
+  type PrintCalibration,
   type ProductionLabel,
 } from '@verdeo/labels';
 
@@ -51,6 +55,23 @@ const isLoose = (label: ProductionLabel) => label.key.startsWith('suelta:');
  * Imprimir desde un marco oculto de la misma página: no abre ventanas, así que el bloqueador de
  * ventanas emergentes no la frena.
  */
+/*
+ * El ajuste de la impresora se guarda en este equipo: es de la impresora que tiene al lado, no de
+ * la cuenta. Otra compu con otra impresora lleva el suyo.
+ */
+const CALIBRATION_KEY = 'verdeo-labels-calibration';
+
+function storedCalibration(): PrintCalibration {
+  try {
+    const raw = window.localStorage.getItem(CALIBRATION_KEY);
+    return raw
+      ? normalizeCalibration(JSON.parse(raw) as Partial<PrintCalibration>)
+      : NO_CALIBRATION;
+  } catch {
+    return NO_CALIBRATION;
+  }
+}
+
 function printInFrame(html: string) {
   const frame = document.createElement('iframe');
   frame.setAttribute('aria-hidden', 'true');
@@ -137,6 +158,29 @@ export function LabelsStudioPage() {
   /** Qué se pidió con la tanda: mandarla a la impresora o bajar el PDF (2026-10-27). */
   const [output, setOutput] = useState<'pdf' | 'print'>('print');
   const [makingPdf, setMakingPdf] = useState(false);
+  const [calibration, setCalibration] = useState<PrintCalibration>(() => storedCalibration());
+
+  function changeCalibration(next: PrintCalibration) {
+    const clean = normalizeCalibration(next);
+    setCalibration(clean);
+    try {
+      window.localStorage.setItem(CALIBRATION_KEY, JSON.stringify(clean));
+    } catch {
+      // Sin almacenamiento (ventana privada): el ajuste dura lo que dure la pestaña.
+    }
+  }
+
+  function printProbe(kind: 'pdf' | 'print') {
+    const html = renderCalibrationSheet(calibration);
+    if (kind === 'print') {
+      printInFrame(html);
+      return;
+    }
+    setMakingPdf(true);
+    void downloadLabelsPdf(html, 'hoja-de-prueba.pdf')
+      .catch(() => setMessage('No se pudo armar el PDF. Probá de nuevo o usá «Imprimir».'))
+      .finally(() => setMakingPdf(false));
+  }
 
   useEffect(() => {
     if (!canRead) return;
@@ -312,7 +356,7 @@ export function LabelsStudioPage() {
   function print(labels: readonly ProductionLabel[], kind = output) {
     setRepeated(null);
     if (labels.length === 0) return;
-    const html = renderProductionSheets({ labels, startAt, title: 'Etiquetas' });
+    const html = renderProductionSheets({ calibration, labels, startAt, title: 'Etiquetas' });
     if (kind === 'print') {
       printInFrame(html);
       void record(labels);
@@ -655,6 +699,12 @@ export function LabelsStudioPage() {
               </div>
               <p className="field-hint">Las marcadas en naranja ya se imprimieron.</p>
               <PrintInstructions />
+              <PrinterCalibration
+                busy={makingPdf}
+                calibration={calibration}
+                onChange={changeCalibration}
+                onProbe={printProbe}
+              />
             </div>
             <SheetPreview html={previewHtml} sheets={Math.max(1, sheetCount)} />
           </aside>
@@ -746,6 +796,98 @@ function SheetPreview({ html, sheets }: { html: string; sheets: number }) {
         title="Vista previa de las etiquetas"
       />
     </div>
+  );
+}
+
+/**
+ * El ajuste de la impresora (2026-10-29): mover y estirar la hoja entera, medido con la hoja de
+ * prueba. Con el PDF a tamaño real una impresión salió igual corrida: cada impresora arrastra el
+ * papel a su manera.
+ */
+function PrinterCalibration({
+  busy,
+  calibration,
+  onChange,
+  onProbe,
+}: {
+  busy: boolean;
+  calibration: PrintCalibration;
+  onChange: (next: PrintCalibration) => void;
+  onProbe: (kind: 'pdf' | 'print') => void;
+}) {
+  const changed =
+    calibration.offsetXMm !== 0 ||
+    calibration.offsetYMm !== 0 ||
+    calibration.scaleXPercent !== 100 ||
+    calibration.scaleYPercent !== 100;
+  const field = (
+    key: keyof PrintCalibration,
+    label: string,
+    hint: string,
+    step: number,
+    unit: string,
+  ) => (
+    <label className="field">
+      <span>
+        {label} ({unit})
+      </span>
+      <input
+        inputMode="decimal"
+        onChange={(event) => {
+          const value = Number(event.target.value);
+          if (event.target.value !== '' && Number.isFinite(value))
+            onChange({ ...calibration, [key]: value });
+        }}
+        step={step}
+        type="number"
+        value={calibration[key]}
+      />
+      <span className="field-hint">{hint}</span>
+    </label>
+  );
+  return (
+    <details className="studio-print-help" open={changed}>
+      <summary>Ajuste de la impresora{changed ? ' (activo en este equipo)' : ''}</summary>
+      <ol>
+        <li>
+          Imprimí la <strong>hoja de prueba</strong> en una hoja común, con los mismos ajustes que
+          las etiquetas.
+        </li>
+        <li>
+          Ponela a contraluz sobre una hoja de etiquetas y mirá cuánto se corren los recuadros,
+          arriba y abajo de la hoja.
+        </li>
+        <li>
+          Si se corren todos igual, usá <strong>mover</strong>. Si arriba calza y abajo no (o al
+          revés), usá <strong>estirar</strong>: más de 100 separa las filas, menos las junta.
+        </li>
+        <li>Volvé a imprimir la prueba hasta que calce. Queda guardado en esta compu.</li>
+      </ol>
+      <div className="studio-calibration">
+        {field('offsetYMm', 'Mover hacia abajo', 'Negativo: hacia arriba.', 0.5, 'mm')}
+        {field('offsetXMm', 'Mover a la derecha', 'Negativo: a la izquierda.', 0.5, 'mm')}
+        {field('scaleYPercent', 'Estirar a lo alto', '100 = tamaño real.', 0.1, '%')}
+        {field('scaleXPercent', 'Estirar a lo ancho', '100 = tamaño real.', 0.1, '%')}
+      </div>
+      <div className="studio-output">
+        <button
+          className="button button-secondary"
+          disabled={busy}
+          onClick={() => onProbe('pdf')}
+          type="button"
+        >
+          Hoja de prueba (PDF)
+        </button>
+        <button className="button button-secondary" onClick={() => onProbe('print')} type="button">
+          Imprimir hoja de prueba
+        </button>
+        {changed ? (
+          <button className="link-button" onClick={() => onChange(NO_CALIBRATION)} type="button">
+            Volver a 0
+          </button>
+        ) : null}
+      </div>
+    </details>
   );
 }
 
