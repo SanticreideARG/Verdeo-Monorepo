@@ -574,7 +574,7 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 
 - [x] Tarjeta compacta: el menú "⋯" va arriba, al lado del estado, con el paso que sigue primero; se sacó la fila de botones del pie.
 - [x] "Marcar listo" deja de ser botón (en teléfono y escritorio): va al "⋯". Para todos juntos sigue "Marcar listos por zona".
-- [x] Vista "Tarjetas / Columnas" en el teléfono (`DataTable` con `narrowViewKey`): la tabla de escritorio compacta, con scroll de costado, cliente fijo, orden por encabezado y el mismo selector de columnas. Se recuerda por navegador.
+- [x] Vista "Tarjetas / Columnas" en el teléfono (`DataTable` con `narrowViewKey`): la tabla de escritorio compacta, con scroll de costado, cliente fijo, orden por encabezado y el mismo selector de columnas. Se recuerda por navegador. Desde 2026-10-30 el selector son dos íconos (cuadritos / grilla) en una cápsula, con el elegido resaltado.
 
 ## Domicilio en dos líneas (2026-10-19)
 

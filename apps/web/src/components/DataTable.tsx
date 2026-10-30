@@ -139,18 +139,30 @@ export function DataTable<T>({
     narrow && narrowViewKey ? (
       <div aria-label="Cómo ver la lista" className="data-view-switch" role="group">
         <button
+          aria-label="Tarjetas"
           aria-pressed={narrowView === 'cards'}
           onClick={() => chooseView('cards')}
+          title="Tarjetas"
           type="button"
         >
-          Tarjetas
+          <svg aria-hidden="true" viewBox="0 0 20 20">
+            <rect height="6" rx="1.5" width="6" x="3" y="3" />
+            <rect height="6" rx="1.5" width="6" x="11" y="3" />
+            <rect height="6" rx="1.5" width="6" x="3" y="11" />
+            <rect height="6" rx="1.5" width="6" x="11" y="11" />
+          </svg>
         </button>
         <button
+          aria-label="Columnas"
           aria-pressed={narrowView === 'table'}
           onClick={() => chooseView('table')}
+          title="Columnas"
           type="button"
         >
-          Columnas
+          <svg aria-hidden="true" viewBox="0 0 20 20">
+            <rect height="14" rx="2" width="14" x="3" y="3" />
+            <path d="M3 7.5h14M3 12h14M8.5 7.5V17" />
+          </svg>
         </button>
       </div>
     ) : null;

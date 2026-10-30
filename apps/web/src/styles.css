@@ -11231,29 +11231,49 @@ label.field:has(> input[type='radio']) {
   flex: 1 1 auto;
 }
 
-/* Tarjetas o columnas, en el teléfono. */
+/* Tarjetas o columnas, en el teléfono: dos íconos en una cápsula, el elegido resaltado. */
 .data-view-switch {
   display: inline-flex;
+  gap: 0.15rem;
   margin-bottom: 0.6rem;
   border: 1px solid var(--db-border, var(--border-hairline));
-  border-radius: 999px;
-  padding: 0.15rem;
-  background: var(--db-surface, #fff);
+  border-radius: 0.6rem;
+  padding: 0.2rem;
+  background: color-mix(in srgb, var(--db-text-soft, #64748b) 12%, transparent);
 }
 .data-view-switch button {
-  min-height: 2.25rem;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.25rem;
   border: 0;
-  border-radius: 999px;
-  padding: 0 0.9rem;
+  border-radius: 0.45rem;
+  padding: 0;
   background: transparent;
   color: var(--db-text-soft, inherit);
-  font: inherit;
-  font-size: 0.85rem;
-  font-weight: 600;
+  opacity: 0.65;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    opacity 0.15s;
+}
+.data-view-switch svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.6;
 }
 .data-view-switch button[aria-pressed='true'] {
-  background: var(--db-accent, #3a7d44);
-  color: #fff;
+  background: var(--db-surface, #fff);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+  color: var(--db-text, inherit);
+  opacity: 1;
+}
+.data-view-switch button:focus-visible {
+  outline: 2px solid var(--db-accent, #3a7d44);
+  outline-offset: 1px;
 }
 
 /* Las columnas en el teléfono: la misma tabla, más apretada, con scroll de costado y el cliente fijo. */

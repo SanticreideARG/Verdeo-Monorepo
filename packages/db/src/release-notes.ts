@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-10-30-selector-vista',
+    body: `En el teléfono, el selector "Tarjetas / Columnas" de las listas ahora son dos íconos: los cuadritos muestran tarjetas y la grilla, columnas. El elegido queda resaltado.`,
+  },
+  {
     key: '2026-10-30-stock-por-ciudad',
     body: `Stock por ciudad: el "Stock para el cierre" de Cocina ahora es de cada ciudad. Lo que se carga en una ya no aparece, no se cocina ni se vende en las otras.
 • Para cargar o dar de baja, elegí la ciudad arriba. Con "Todas las ciudades" se ve la suma.
