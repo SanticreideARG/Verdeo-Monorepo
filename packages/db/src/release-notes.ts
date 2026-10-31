@@ -168,7 +168,7 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Pegá el mensaje de un cliente en un cuadro grande y el búho lo analiza, arma la respuesta o la ficha del pedido. Cada respuesta se copia con un clic.
 • Con un clic arma el análisis del período, los pendientes antes del cierre, las tendencias, los cobros, el stock y el texto del menú, con los datos del sistema.
 • Preguntale lo que quieras sobre la operación, o cómo se hace algo.
-• Al búho no le llegan nombres, teléfonos ni domicilios de clientes. La Ayuda sigue en el botón "?".`,
+• Al búho no le llegan nombres, teléfonos ni domicilios de clientes. El búho de la Ayuda sigue en su lugar, abajo a la derecha.`,
   },
   {
     key: '2026-10-30-stock-en-pedidos',

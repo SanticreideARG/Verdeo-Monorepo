@@ -45,7 +45,7 @@ El Workbench pasa de herramienta de administración a mesa de trabajo con IA, co
 
 - [x] Fase 1: pantalla nueva (búho en tres estados, diálogo para pegar, conversación, copiar); 22 modos en cuatro grupos; el editor actual pasa a "Prompts maestros". El Workbench se abre con `ai.use`.
 - [x] Fase 2: resumen de datos del período para el búho (`assistant-context.ts`), sin datos personales y con el mismo permiso que cada pantalla; tope de 150 consultas por persona y por día.
-- [x] Fase 3: el búho sale del menú de Ayuda (queda un "?") y responde preguntas de uso con los artículos.
+- [x] Fase 3: el búho del Workbench responde preguntas de uso con los artículos. El búho sigue también en el botón de Ayuda (se había sacado por error; vuelve el 2026-10-31).
 - [ ] Fase 4: herramientas (tool calling) e historial, si se piden.
 
 ## Stock disponible en Pedidos (2026-10-30)

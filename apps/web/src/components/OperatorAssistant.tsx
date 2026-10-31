@@ -329,9 +329,7 @@ export function OperatorAssistant({
               ×
             </span>
           ) : (
-            <span aria-hidden="true" className="assistant-launcher-help">
-              ?
-            </span>
+            <img alt="" height="56" src="/brand/verdeo-buho-112.webp" width="56" />
           )}
         </span>
       </button>
@@ -340,6 +338,7 @@ export function OperatorAssistant({
         <div aria-label="Ayuda de Verdeo" className="assistant-panel is-operator" role="dialog">
           <header className="assistant-header">
             <div className="assistant-header-identity">
+              <img alt="" height="32" src="/brand/verdeo-buho-112.webp" width="32" />
               <p>Ayuda de Verdeo</p>
             </div>
             <div className="assistant-header-actions">
@@ -431,21 +430,23 @@ export function OperatorAssistant({
               <>
                 {atRoot ? (
                   <div className="assistant-bot-row">
+                    <img alt="" height="28" src="/brand/verdeo-buho-112.webp" width="28" />
                     <p className="assistant-turn is-bot">
                       Hola{firstName ? `, ${firstName}` : ''}. ¿Con qué te doy una mano? Elegí un
                       tema o buscá arriba.
                     </p>
-                    {canAskOwl ? (
-                      <Link
-                        className="assistant-owl-link"
-                        onClick={() => setOpen(false)}
-                        to="/app/ia/workbench"
-                      >
-                        ¿Preferís preguntarle al búho? Te contesta con la ayuda y los datos del
-                        sistema.
-                      </Link>
-                    ) : null}
                   </div>
+                ) : null}
+                {/* El búho vive en los dos lados: acá con la ayuda, y en el Workbench con los datos. */}
+                {atRoot && canAskOwl ? (
+                  <Link
+                    className="assistant-owl-link"
+                    onClick={() => setOpen(false)}
+                    to="/app/ia/workbench"
+                  >
+                    También podés preguntarme en el Workbench de IA: ahí te contesto con los datos
+                    del sistema.
+                  </Link>
                 ) : null}
                 {children.length === 0 && branchArticles.length === 0 ? (
                   <p className="assistant-block-empty">

@@ -12104,17 +12104,7 @@ label.field:has(> input[type='radio']) {
   color: #b42318;
 }
 
-/* Ayuda sin el búho (BUHO_WORKBENCH_PLAN.md): un "?" en el botón y el acceso al búho del Workbench. */
-.assistant-launcher-help {
-  color: var(--color-forest);
-  font-size: 1.7rem;
-  font-weight: 700;
-  line-height: 1;
-}
-.assistant-bot-row:has(.assistant-owl-link) {
-  flex-direction: column;
-  align-items: stretch;
-}
+/* El búho de la Ayuda también lleva al del Workbench (BUHO_WORKBENCH_PLAN.md). */
 .assistant-owl-link {
   border: 1px dashed var(--db-border);
   border-radius: 0.7rem;

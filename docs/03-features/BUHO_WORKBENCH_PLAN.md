@@ -64,8 +64,8 @@ qué tono, con qué datos). El editor de versiones de hoy queda como una pestañ
 
 ### El menú de Ayuda
 
-Ayuda sigue con sus artículos, pero **sin el búho**: vuelve a ser un buscador y un árbol de
-artículos simple. Agrega un renglón "¿Querés preguntarle al búho?" que lleva al Workbench.
+Ayuda sigue con sus artículos **y con el búho** (corregido el 2026-10-31: el búho va en los dos
+lugares, no se muda). Agrega un renglón que lleva al búho del Workbench, el que conoce los datos.
 
 El búho del Workbench **también conoce la ayuda**: si la pregunta es de uso ("¿cómo paso un pedido
 a stock?"), responde con los artículos de ayuda y el enlace a la pantalla.
@@ -152,7 +152,7 @@ pantalla), con el PNG de respaldo.
 | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | 1    | **Pantalla nueva:** búho grande con los tres estados, diálogo para pegar, conversación, copiar con un clic. Modos "Analizar mensaje" y "Responder a cliente" (sin datos). El editor actual pasa a la pestaña "Prompts maestros". | ninguna (las tareas nuevas van en el catálogo) |
 | 2    | **Datos:** resumen del período y comparación. Modos "Análisis del período" y "Preguntar sobre la operación". Ocultar nombres y teléfonos. Límite diario.                                                                         | ninguna                                        |
-| 3    | **Ayuda:** el búho sale del menú de Ayuda y responde preguntas de uso con los artículos.                                                                                                                                         | ninguna                                        |
+| 3    | **Ayuda:** el búho sigue en el menú de Ayuda (corregido 2026-10-31) y el del Workbench responde preguntas de uso con los artículos.                                                                                              | ninguna                                        |
 | 4    | **Herramientas** (tool calling) para preguntas que el resumen no cubre. Historial de conversaciones, si lo quieren.                                                                                                              | tabla de conversaciones, sólo si hay historial |
 
 ## 6. Decisiones (2026-10-30)
