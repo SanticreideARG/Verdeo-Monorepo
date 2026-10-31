@@ -31,6 +31,7 @@ import {
 } from '../lib/operations.js';
 import { sourceLabel } from '../lib/orderColumns.js';
 import { showToast } from '../lib/toast.js';
+import { ChangeCustomerDialog } from '../components/ChangeCustomerDialog.js';
 import { MoveSiteDialog } from '../components/MoveSiteDialog.js';
 import { ConfirmationMessageCard } from '../components/ConfirmationMessageCard.js';
 import { LocateOrderControl } from '../components/LocateAddress.js';
@@ -80,6 +81,7 @@ export function OrderDetailPage() {
   const [searchParams] = useSearchParams();
   const [editing, setEditing] = useState(() => searchParams.get('editar') === '1');
   const [moving, setMoving] = useState(false);
+  const [changingCustomer, setChangingCustomer] = useState(false);
   /*
    * El día de reparto en la edición: uno de los de la ciudad para el menú del pedido, u "otra
    * fecha" para un caso puntual (alguien que no está ese día).
@@ -453,6 +455,16 @@ export function OrderDetailPage() {
               type="button"
             >
               {editing ? 'Cerrar edición' : 'Editar pedido'}
+            </button>
+          ) : null}
+          {/* Cargado a nombre de otro (un "nn", un stock): pasa al cliente real sin rehacerlo. */}
+          {canEdit && order.status !== 'CANCELLED' ? (
+            <button
+              className="button button-secondary"
+              onClick={() => setChangingCustomer(true)}
+              type="button"
+            >
+              Cambiar cliente
             </button>
           ) : null}
           {/* Cargado en la ciudad que no era: se mueve con número, precio y día de la otra. */}
@@ -851,6 +863,19 @@ export function OrderDetailPage() {
           </div>
         ) : null}
       </section>
+      {changingCustomer && order ? (
+        <ChangeCustomerDialog
+          canCreateCustomer={profile.permissions.includes('customers.create')}
+          currentCustomerId={order.customer.id}
+          onChanged={() => {
+            setChangingCustomer(false);
+            showToast('Cliente cambiado.');
+            void load();
+          }}
+          onClose={() => setChangingCustomer(false)}
+          orderId={order.id}
+        />
+      ) : null}
       {moving && order ? (
         <MoveSiteDialog
           onClose={() => setMoving(false)}

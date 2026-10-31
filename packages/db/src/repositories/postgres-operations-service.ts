@@ -339,6 +339,8 @@ export interface OrderInput {
 }
 
 export interface OrderUpdateInput {
+  /** Cambiar cliente: el pedido pasa a otro cliente con sus platos, período y precio. */
+  customerId?: string | undefined;
   deliveryAddress?: string | undefined;
   deliveryAddressId?: string | null | undefined;
   deliveryDate?: string | undefined;
@@ -5941,6 +5943,59 @@ export class PostgresOperationsService {
         );
       }
 
+      /*
+       * Cambiar cliente (2026-10-31): un pedido cargado a nombre de otro —un "nn", un stock— pasa al
+       * cliente real sin cancelarlo ni cargarlo de nuevo, así no se pierde lo que ya está en cocina.
+       * Conserva platos, período, precio, cobro y ciudad; lo que cambia es a quién se entrega, así
+       * que el domicilio sale del cliente nuevo. Mover de ciudad sigue siendo "Mover a otra ciudad".
+       */
+      const customerChanged =
+        input.customerId !== undefined && input.customerId !== current.customerId;
+      const customerId =
+        customerChanged && input.customerId ? input.customerId : current.customerId;
+      let addressId = input.deliveryAddressId;
+      if (customerChanged) {
+        if (current.status === 'CANCELLED')
+          throw new OperationsConflictError('Un pedido cancelado no cambia de cliente');
+        const [customer] = await transaction
+          .select({ id: customers.id })
+          .from(customers)
+          .where(and(eq(customers.id, customerId), eq(customers.status, 'active')))
+          .limit(1);
+        if (!customer) throw new OperationsNotFoundError('No se encontró el cliente activo');
+
+        if (addressId === undefined && input.deliveryAddress?.trim()) {
+          addressId =
+            (await this.addressForTypedDelivery(transaction, {
+              customerId,
+              line2: input.deliveryAddressLine2?.trim() || null,
+              locationUrl: input.deliveryLocationUrl ?? null,
+              operatingSiteId: current.operatingSiteId,
+              writtenAddress: input.deliveryAddress.trim().replace(/s+/g, ' '),
+              zoneId: null,
+            })) ?? null;
+        } else if (addressId === undefined) {
+          const [primary] = await transaction
+            .select({ id: customerAddresses.id })
+            .from(customerAddresses)
+            .innerJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
+            .where(
+              and(
+                eq(customerAddresses.customerId, customerId),
+                eq(customerAddresses.active, true),
+                eq(customerAddresses.primary, true),
+                eq(geographicZones.operatingSiteId, current.operatingSiteId),
+              ),
+            )
+            .limit(1);
+          if (!primary)
+            throw new OperationsConflictError(
+              'El cliente nuevo no tiene domicilio en esta ciudad: elegí o escribí la dirección de entrega',
+            );
+          addressId = primary.id;
+        }
+      }
+
       const beforeSnapshot = await this.loadOrder(transaction, orderId);
       if (!beforeSnapshot) throw new Error('Order snapshot could not be loaded');
       const [latestRevision] = await transaction
@@ -5981,25 +6036,41 @@ export class PostgresOperationsService {
         input.deliveryLocationUrl === undefined
           ? current.deliveryLocationUrl
           : input.deliveryLocationUrl;
-      if (input.deliveryAddressId) {
+      let addressLine2: string | null | undefined = input.deliveryAddressLine2;
+      if (addressId) {
         const [address] = await transaction
           .select({
             locationUrl: customerAddresses.locationUrl,
+            operatingSiteId: geographicZones.operatingSiteId,
+            unit: customerAddresses.unit,
             writtenAddress: customerAddresses.writtenAddress,
           })
           .from(customerAddresses)
+          .innerJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
           .where(
             and(
-              eq(customerAddresses.id, input.deliveryAddressId),
-              eq(customerAddresses.customerId, current.customerId),
+              eq(customerAddresses.id, addressId),
+              eq(customerAddresses.customerId, customerId),
               eq(customerAddresses.active, true),
             ),
           )
           .limit(1);
         if (!address)
           throw new OperationsNotFoundError('No se encontró el domicilio activo del cliente');
+        if (customerChanged && address.operatingSiteId !== current.operatingSiteId)
+          throw new OperationsConflictError(
+            'Ese domicilio es de otra ciudad: para cambiar de ciudad usá "Mover a otra ciudad"',
+          );
         deliveryAddress = address.writtenAddress;
         if (input.deliveryLocationUrl === undefined) deliveryLocationUrl = address.locationUrl;
+        // Con otro cliente, la línea 2 del domicilio viejo no sirve: va la del nuevo, salvo que se
+        // haya escrito otra.
+        if (customerChanged && addressLine2 === undefined) addressLine2 = address.unit;
+      } else if (customerChanged && input.deliveryAddress?.trim()) {
+        // Una dirección escrita que no se pudo ubicar en una zona: queda el texto, sin domicilio.
+        deliveryAddress = input.deliveryAddress.trim();
+        if (input.deliveryLocationUrl === undefined) deliveryLocationUrl = null;
+        if (addressLine2 === undefined) addressLine2 = null;
       }
 
       const changes = {
@@ -6010,15 +6081,12 @@ export class PostgresOperationsService {
             }
           : {}),
         deliveryAddressSnapshot: deliveryAddress,
-        ...(input.deliveryAddressId !== undefined
-          ? { deliveryAddressId: input.deliveryAddressId }
-          : {}),
+        ...(customerChanged ? { customerId } : {}),
+        ...(addressId !== undefined ? { deliveryAddressId: addressId } : {}),
         ...(input.deliveryDate !== undefined ? { deliveryDate: input.deliveryDate } : {}),
         deliveryLocationUrlSnapshot: deliveryLocationUrl,
         ...(input.notes !== undefined ? { notes: input.notes } : {}),
-        ...(input.deliveryAddressLine2 !== undefined
-          ? { deliveryAddressLine2: input.deliveryAddressLine2 }
-          : {}),
+        ...(addressLine2 !== undefined ? { deliveryAddressLine2: addressLine2 } : {}),
         ...(input.deliveryDayText !== undefined ? { deliveryDayText: input.deliveryDayText } : {}),
         ...(input.deliveryTimeSlot !== undefined
           ? { deliveryTimeSlot: input.deliveryTimeSlot }
@@ -6052,10 +6120,12 @@ export class PostgresOperationsService {
         actor: auditActor(context),
         after: {
           changedFields: Object.keys(input).filter((key) => key !== 'reason'),
-          deliveryAddressId: input.deliveryAddressId ?? current.deliveryAddressId,
+          customerId,
+          deliveryAddressId: addressId ?? current.deliveryAddressId,
           totalMinor: resolvedTotal ?? current.totalMinor,
         },
         before: {
+          customerId: current.customerId,
           deliveryAddressId: current.deliveryAddressId,
           deliveryDate: current.deliveryDate,
           paymentExpectation: current.paymentExpectation,

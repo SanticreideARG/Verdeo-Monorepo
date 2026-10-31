@@ -113,6 +113,14 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Clientes nuevos (primera compra)',
   },
   {
+    body: 'Si un pedido quedó a nombre de otro —un "nn", un cliente de relleno, el stock— se pasa al cliente real sin cancelarlo ni cargarlo de nuevo.\n\nEn la ficha del pedido, "Cambiar cliente". Buscás al cliente por nombre, teléfono o correo; si no existe, "No está: crear un cliente nuevo" lo crea con nombre y WhatsApp. Después elegís en cuál de sus domicilios se entrega, u "Otra dirección…" para escribirla.\n\nEl pedido conserva sus platos, el período, el precio, la forma de pago y el cobro, y queda en la misma ciudad (para cambiar de ciudad está "Mover a otra ciudad"). El domicilio tiene que ser de esa ciudad. Un pedido cancelado no cambia de cliente.\n\nEn el historial del pedido queda cómo estaba, y en la auditoría de qué cliente a qué cliente pasó.',
+    category: 'Pedidos / Editar y cancelar',
+    key: 'pedidos-cambiar-cliente',
+    ordinal: 3,
+    requiredPermission: 'orders.edit',
+    title: 'Cambiar el cliente de un pedido',
+  },
+  {
     body: 'Si un pedido o un cliente se cargó en la ciudad que no era, se mueve, sin borrar ni volver a cargar.\n\n**Un pedido**: en su ficha, "Mover a otra ciudad". Elegís la ciudad y la zona, y "Ver qué cambia" muestra el número nuevo (con el prefijo de esa ciudad), el precio y el día de reparto de allá. Recién con "Mover" se guarda. Se pueden mover los pedidos en borrador, confirmados y listos. Si la otra ciudad no ofrece alguna variedad del pedido en ese período, no lo mueve y dice cuál, para cambiarla antes.\n\n**Un cliente**: en su ficha, "Cambiar de ciudad". Elegís la ciudad y la zona; si tiene varios domicilios, la zona de cada uno. El cliente deja la ciudad anterior, sus domicilios se vuelven a ubicar en el mapa, y sus pedidos en borrador, confirmados y listos se mueven con él en el mismo momento.\n\nLos demás datos (nombre, dirección, notas) no cambian solos: si hace falta, se corrigen a mano. En la auditoría queda de dónde a dónde se movió cada cosa.',
     category: 'Pedidos / Editar y cancelar',
     key: 'pedidos-mover-ciudad',

@@ -928,6 +928,8 @@ export const OrderPaidRequestSchema = z.object({ paid: z.boolean() });
 
 export const OrderUpdateRequestSchema = z
   .object({
+    /** Cambiar cliente: el pedido pasa a otro cliente de la misma ciudad, con su domicilio. */
+    customerId: UuidSchema.optional(),
     deliveryAddress: z.string().trim().min(4).max(500).optional(),
     deliveryAddressLine2: z.string().trim().max(300).nullable().optional(),
     deliveryAddressId: UuidSchema.nullable().optional(),

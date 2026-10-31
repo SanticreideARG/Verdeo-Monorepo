@@ -3,6 +3,14 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Cambiar el cliente de un pedido (2026-10-31)
+
+Pedidos cargados a nombre de "nn" (como stock) que había que pasar a los clientes reales. Antes sólo se podía cancelar y volver a cargar.
+
+- [x] `PATCH /orders/:id` acepta `customerId`: el pedido pasa al cliente nuevo con platos, período, precio, pago y cobro; el domicilio sale del cliente nuevo (el elegido, el principal de la ciudad o uno escrito). Mismo permiso que editar (`orders.edit`). No cambia de ciudad, y un pedido cancelado no cambia de cliente. Revisión y auditoría con el cliente anterior y el nuevo. Sin migración.
+- [x] "Cambiar cliente" en la ficha del pedido (`ChangeCustomerDialog`): buscar o crear el cliente, elegir domicilio u "Otra dirección…".
+- [x] Ayuda (`pedidos-cambiar-cliente`) y novedad.
+
 ## Pulido de UI del panel (2026-10-31) — [auditoría](../03-features/AUDITORIA_UI_2026-10-31.md)
 
 Auditoría de 40 pantallas en celular, tablet y escritorio. Sin scroll horizontal en ninguna; lo que falta es pulido.
