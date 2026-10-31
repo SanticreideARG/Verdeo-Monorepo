@@ -12424,3 +12424,24 @@ label.field:has(> input[type='radio']) {
   color: var(--db-muted, var(--color-ink-muted));
   font-size: 0.875rem;
 }
+
+/* La tarjeta de stock de Cocina, plegada por defecto (ProductionStockPanel). */
+.production-stock > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 1rem;
+  cursor: pointer;
+  list-style: none;
+}
+.production-stock > summary::-webkit-details-marker {
+  display: none;
+}
+.production-stock > summary::after {
+  content: '▾';
+  color: var(--db-muted, var(--color-ink-muted));
+}
+.production-stock[open] > summary::after {
+  content: '▴';
+}

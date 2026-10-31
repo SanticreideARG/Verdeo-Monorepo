@@ -3,6 +3,14 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Cocina: cancelados y stock (2026-10-31)
+
+Un cancelado en rojo en el aviso de cambios hacía pensar que se cocinaba, y un lote bajado a 0 por error desaparecía sin forma de deshacerlo.
+
+- [x] El aviso "cambiaron N pedidos" (`KitchenSheetsPanel`) no muestra ni cuenta los cancelados. Lo cocinado se resuelve al cancelar o con "Enviar a stock".
+- [x] La tarjeta de stock de Cocina (`ProductionStockPanel`) va plegada; cerrada muestra los totales. "Stock para el cierre" queda en desuso mientras el stock se carga desde Pedidos.
+- [x] Los lotes en 0 sin venderse (por − o "Dar de baja") se ven plegados, con su +.
+
 ## Cambiar el cliente de un pedido (2026-10-31)
 
 Pedidos cargados a nombre de "nn" (como stock) que había que pasar a los clientes reales. Antes sólo se podía cancelar y volver a cargar.

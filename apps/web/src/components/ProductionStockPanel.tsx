@@ -106,8 +106,19 @@ export function ProductionStockPanel({
 
   const total = stock.reduce((sum, item) => sum + item.quantityUnits, 0);
 
-  // Los lotes con algo para vender o dar de baja (los agotados ya no dicen nada).
+  // Los lotes con algo para vender o dar de baja.
   const liveLots = lots.filter((lot) => lot.available > 0);
+  /*
+   * Los que quedaron en 0 sin venderse (con − o "Dar de baja") siguen a mano, plegados, con su +:
+   * antes desaparecían y no había cómo deshacer un toque de más (2026-10-31). Los vencidos y los
+   * que se vendieron enteros no: ahí no hay nada que corregir.
+   */
+  const emptyLots = lots.filter(
+    (lot) =>
+      lot.available === 0 &&
+      !lot.expired &&
+      !(lot.soldUnits > 0 && lot.soldUnits >= lot.quantityUnits),
+  );
   const lotsTotal = liveLots
     .filter((lot) => !lot.expired)
     .reduce((sum, lot) => sum + lot.available, 0);
@@ -140,10 +151,23 @@ export function ProductionStockPanel({
     onSaved();
   }
 
+  /*
+   * Plegada por defecto (2026-10-31): el stock pasa a cargarse desde Pedidos y esta tarjeta queda
+   * para corregir. Cerrada igual muestra los totales: lo que suma a cocinar no queda escondido.
+   */
   return (
-    <section className="operation-card mt-6">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-xl font-semibold text-forest">Stock para el cierre</h3>
+    <details className="operation-card production-stock mt-6">
+      <summary>
+        <span className="text-xl font-semibold text-forest">Stock</span>
+        <span className="text-sm text-ink-muted">
+          {total === 0 ? 'Nada para cocinar de más' : `${String(total)} para cocinar de más`} ·{' '}
+          {lotsTotal === 0
+            ? 'sin stock de períodos anteriores'
+            : `${String(lotsTotal)} ${lotsTotal === 1 ? 'vianda' : 'viandas'} de períodos anteriores`}
+        </span>
+      </summary>
+      <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-lg font-semibold text-forest">Stock para el cierre</h3>
         <span className="text-sm text-ink-muted">
           {total === 0
             ? 'Sin stock pedido.'
@@ -300,6 +324,46 @@ export function ProductionStockPanel({
           })}
         </ul>
       ) : null}
+      {emptyLots.length > 0 ? (
+        <details className="mt-3">
+          <summary className="text-sm">
+            En 0 o dados de baja ({String(emptyLots.length)}): para deshacer un toque de más
+          </summary>
+          <ul className="stock-steppers mt-3" aria-busy={saving}>
+            {emptyLots.map((lot) => {
+              const name = `${lot.familyName} ${lot.variantName}`;
+              return (
+                <li key={lot.id}>
+                  <span className="stock-steppers-name">
+                    {lot.notes ? <strong>{lot.notes}</strong> : null}
+                    {lot.notes ? ' · ' : null}
+                    {name} · <strong>{lot.cycleAlias}</strong>
+                    <small>
+                      {lot.operatingSiteName}
+                      {lot.writtenOffUnits > 0
+                        ? ` · dadas de baja ${String(lot.writtenOffUnits)}`
+                        : ''}
+                      {lot.soldUnits > 0 ? ` · vendidas ${String(lot.soldUnits)}` : ''}
+                    </small>
+                  </span>
+                  <span className="stock-steppers-control">
+                    <strong aria-live="polite">0</strong>
+                    <button
+                      aria-label={`Una más en el stock de ${name} de ${lot.cycleAlias}`}
+                      className="button button-secondary"
+                      disabled={!canEdit || saving}
+                      onClick={() => void patchLot(lot, { quantityUnits: lot.quantityUnits + 1 })}
+                      type="button"
+                    >
+                      +
+                    </button>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </details>
+      ) : null}
       {canEdit ? (
         <PastIntuitivoForm
           onSaved={() => {
@@ -322,6 +386,6 @@ export function ProductionStockPanel({
           tone="destructivo"
         />
       ) : null}
-    </section>
+    </details>
   );
 }

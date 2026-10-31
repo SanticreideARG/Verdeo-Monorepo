@@ -151,6 +151,13 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-10-31-cocina-stock',
+    body: `Cocina más tranquila:
+• Los pedidos cancelados ya no aparecen en el aviso de "cambiaron N pedidos": no se cocinan y asustaban.
+• La tarjeta de Stock viene plegada. Cerrada muestra cuánto hay para cocinar de más y cuántas viandas de períodos anteriores.
+• Un lote que quedó en 0 por un toque de más ya no desaparece: está en "En 0 o dados de baja", con su + para devolverlo.`,
+  },
+  {
     key: '2026-10-31-enviar-a-stock',
     body: `En "Cambiar cliente" ahora también está "Enviar a stock": el pedido se cancela y sus viandas quedan en Stock disponible para venderlas a otro cliente.
 • Pide confirmarlo. Si el pedido figura como cobrado, lo pide dos veces.

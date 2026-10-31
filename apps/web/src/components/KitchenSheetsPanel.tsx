@@ -89,12 +89,13 @@ export function KitchenSheetsPanel({
 
   if (!sheets || sheets.items.length === 0) return null;
   const changes = sheets.changes;
-  const total = changes
-    ? changes.added.length + changes.removed.length + changes.changed.length
-    : 0;
-  const pending = changes?.removed.filter(
-    (order) => order.status === 'CANCELLED' && !order.cancelledToStock,
-  );
+  /*
+   * Los cancelados no se muestran (2026-10-31): no se cocinan, y verlos en rojo acá hacía pensar
+   * que sí. Lo cocinado de un cancelado se resuelve al cancelar ("¿ya estaba cocinado?") o después
+   * con "Enviar a stock" desde el pedido.
+   */
+  const removed = changes?.removed.filter((order) => order.status !== 'CANCELLED') ?? [];
+  const total = changes ? changes.added.length + removed.length + changes.changed.length : 0;
 
   return (
     <section
@@ -117,23 +118,11 @@ export function KitchenSheetsPanel({
       ) : null}
       {changes && total > 0 ? (
         <ul className="kitchen-sheet-changes">
-          {changes.removed.map((order) => (
-            <li
-              className={
-                order.status === 'CANCELLED' && !order.cancelledToStock ? 'is-alert' : undefined
-              }
-              key={order.orderId}
-            >
-              <span className="status-chip">
-                {order.status === 'CANCELLED' ? 'Cancelado' : order.status ? 'Salió' : 'Borrado'}
-              </span>{' '}
+          {removed.map((order) => (
+            <li key={order.orderId}>
+              <span className="status-chip">{order.status ? 'Salió' : 'Borrado'}</span>{' '}
               <Link to={`/app/pedidos/${order.orderId}`}>{order.customerName}</Link> ·{' '}
               {order.lines.join(' / ')}
-              {order.status === 'CANCELLED'
-                ? order.cancelledToStock
-                  ? ' · sus viandas pasaron al stock'
-                  : ' · ya estaba en la planilla: si se cocinó, pasalo a stock desde el pedido'
-                : ''}
             </li>
           ))}
           {changes.added.map((order) => (
@@ -151,12 +140,6 @@ export function KitchenSheetsPanel({
             </li>
           ))}
         </ul>
-      ) : null}
-      {pending && pending.length > 0 ? (
-        <p className="field-hint mt-2">
-          Un cancelado que ya estaba en la planilla y no pasó al stock es comida cocinada que no
-          figura en ningún lado.
-        </p>
       ) : null}
       {message ? (
         <p className="screen-notice mt-2" role="alert">
