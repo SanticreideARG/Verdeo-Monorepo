@@ -4110,6 +4110,150 @@ describe('API foundation', () => {
       expect(deniedResponse.status).toBe(403);
     });
 
+    /*
+     * El búho del Workbench (BUHO_WORKBENCH_PLAN.md): los datos del período viajan al modelo, pero
+     * nunca el nombre ni el teléfono de un cliente, y lo que falta cobrar va sumado.
+     */
+    it('answers the owl with period data and without personal data', async () => {
+      const runTask = vi.fn(() =>
+        Promise.resolve({
+          model: 'deepseek-chat',
+          output: 'Octubre 5 lleva 2 pedidos.',
+          promptVersion: 0,
+          providerKey: 'deepseek',
+          usage: { inputTokens: 10, outputTokens: 20 },
+        }),
+      );
+      const now = Date.now();
+      const operations = {
+        cycleReport: vi.fn(() =>
+          Promise.resolve({
+            cancelled: {
+              count: 1,
+              items: [{ customerName: 'Ana Secreta', totalMinor: 8_500_000 }],
+              totalMinor: 8_500_000,
+            },
+            cycle: { alias: 'Octubre 5', id: 'c1', status: 'OPEN' },
+            receivables: [
+              {
+                customer: { displayName: 'Ana Secreta', phone: '3515551234' },
+                orders: [
+                  {
+                    cycleAlias: 'Octubre 5',
+                    paymentExpectation: 'Efectivo',
+                    totalMinor: 5_000_000,
+                  },
+                ],
+              },
+            ],
+            totals: { orderCount: 2, totalMinor: 17_000_000 },
+          }),
+        ),
+        getStatsPeriods: vi.fn(() => Promise.resolve({ items: [] })),
+        kitchenSummary: vi.fn(() => Promise.resolve({ items: [] })),
+        listMenus: vi.fn(() =>
+          Promise.resolve([
+            {
+              cycle: {
+                alias: 'Octubre 5',
+                closeAt: new Date(now + 86_400_000),
+                id: '0c000000-0000-4000-8000-000000000001',
+                openAt: new Date(now - 86_400_000),
+              },
+              offerings: [
+                { dishes: [], familyName: 'Keto', unitPriceMinor: 8_500_000, variantName: '400' },
+              ],
+              operatingSiteId: null,
+              operatingSiteName: null,
+            },
+          ]),
+        ),
+        listReceivables: vi.fn(() => Promise.resolve({ items: [] })),
+        listStockLots: vi.fn(() => Promise.resolve([])),
+      };
+      const app = buildAIApp(
+        {
+          aiTasks: { runTask },
+          geography: {
+            resolveScope: () =>
+              Promise.resolve({ canSelectGlobal: true, defaultSiteId: null, sites: [] }),
+          },
+          operations,
+        } as never,
+        ['ai.use', 'stats.read'],
+      );
+
+      const response = await app.request('/api/v1/ai/assistant/messages', {
+        body: JSON.stringify({ message: 'Hacé el análisis.', mode: 'buho_analisis_periodo' }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        context: { cycleAlias: 'Octubre 5' },
+        reply: 'Octubre 5 lleva 2 pedidos.',
+      });
+      const [taskKey, , , options] = runTask.mock.calls[0] as unknown as [
+        string,
+        unknown,
+        unknown,
+        { systemPrefix: string; systemSuffix: string; userPrompt: string },
+      ];
+      expect(taskKey).toBe('buho_analisis_periodo');
+      expect(options.userPrompt).toBe('Hacé el análisis.');
+      expect(options.systemPrefix).toContain('búho de Verdeo');
+      expect(options.systemSuffix).toContain('Octubre 5');
+      expect(options.systemSuffix).toContain('"total":170000');
+      expect(options.systemSuffix).not.toContain('Ana Secreta');
+      expect(options.systemSuffix).not.toContain('3515551234');
+      expect(operations.cycleReport).toHaveBeenCalledWith(
+        '0c000000-0000-4000-8000-000000000001',
+        null,
+      );
+    });
+
+    it('lists the owl modes with ai.use and denies without it', async () => {
+      const app = buildAIApp({}, ['ai.use']);
+      const response = await app.request('/api/v1/ai/assistant/modes', { headers: { cookie } });
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { items: { key: string }[] };
+      expect(body.items.map((item) => item.key)).toContain('buho_analizar_mensaje');
+
+      const denied = buildAIApp({}, []);
+      const deniedResponse = await denied.request('/api/v1/ai/assistant/modes', {
+        headers: { cookie },
+      });
+      expect(deniedResponse.status).toBe(403);
+    });
+
+    it('says the daily owl limit is reached with a 429', async () => {
+      class AITaskLimitError extends Error {
+        public constructor(message: string) {
+          super(message);
+          this.name = 'AITaskLimitError';
+        }
+      }
+      const runTask = vi.fn(() => Promise.reject(new AITaskLimitError('Llegaste a las 150.')));
+      const operations = { listMenus: vi.fn(() => Promise.resolve([])) };
+      const app = buildAIApp(
+        {
+          aiTasks: { runTask },
+          geography: {
+            resolveScope: () =>
+              Promise.resolve({ canSelectGlobal: true, defaultSiteId: null, sites: [] }),
+          },
+          operations,
+        } as never,
+        ['ai.use'],
+      );
+      const response = await app.request('/api/v1/ai/assistant/messages', {
+        body: JSON.stringify({ message: 'hola', mode: 'buho_mejorar_texto' }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(response.status).toBe(429);
+    });
+
     it('turns AITaskNotConfiguredError into a 409, not a 500', async () => {
       class AITaskNotConfiguredError extends Error {
         public constructor(message: string) {

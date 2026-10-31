@@ -21,13 +21,21 @@ describe('findTask', () => {
     expect(findTask('does_not_exist')).toBeUndefined();
   });
 
-  it('lists the V1 tasks plus address normalization', () => {
-    expect(AI_TASKS.map((task) => task.key)).toEqual([
+  it('lists the V1 tasks plus address normalization, then the owl modes', () => {
+    const keys = AI_TASKS.map((task) => task.key);
+    expect(keys.slice(0, 4)).toEqual([
       'rewrite_message',
       'extract_order',
       'kitchen_summary',
       'normalize_address',
     ]);
+    // Los modos del búho (BUHO_WORKBENCH_PLAN.md) son tareas como las demás, con prompt de fábrica.
+    const owl = AI_TASKS.slice(4);
+    expect(owl.length).toBeGreaterThan(15);
+    expect(owl.every((task) => task.key.startsWith('buho_') && task.defaultSystemPrompt)).toBe(
+      true,
+    );
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });
 

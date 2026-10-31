@@ -13,6 +13,12 @@ export type ModelCapability =
   | 'LONG_CONTEXT'
   | 'REASONING';
 
+/** Una vuelta anterior de la conversación (el búho del Workbench). */
+export interface ChatTurn {
+  content: string;
+  role: 'assistant' | 'user';
+}
+
 export interface GenerateTextInput {
   /**
    * The task expects a JSON object back. Providers that support a JSON mode are asked for it
@@ -20,6 +26,8 @@ export interface GenerateTextInput {
    * link in structured extraction, and every OpenAI-compatible host worth using accepts the hint.
    */
   expectsJson?: boolean | undefined;
+  /** Lo conversado antes de `userPrompt`, en orden. Vacío o ausente en una tarea de un solo paso. */
+  history?: readonly ChatTurn[] | undefined;
   maxTokens: number;
   model: string;
   systemPrompt: string;

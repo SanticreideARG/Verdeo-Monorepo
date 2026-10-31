@@ -25,6 +25,7 @@ export class OpenAICompatibleProvider implements AIProvider {
         max_tokens: input.maxTokens,
         messages: [
           { content: input.systemPrompt, role: 'system' },
+          ...(input.history ?? []).map((turn) => ({ content: turn.content, role: turn.role })),
           { content: input.userPrompt, role: 'user' },
         ],
         model: input.model,

@@ -146,6 +146,8 @@ function readStored(): StoredState {
 const INLINE_LINK = /\[\[([a-z0-9-]+)\]\]|\[([^\]]+)\]\((\/[^)\s]*)\)/g;
 
 interface OperatorAssistantProps {
+  /** Tiene permiso de IA: se le ofrece preguntarle al búho del Workbench. */
+  canAskOwl?: boolean;
   canManage: boolean;
   displayName: string;
 }
@@ -157,7 +159,11 @@ interface OperatorAssistantProps {
  * Reemplaza la entrada y no el contenido: los artículos siguen siendo los de `help_articles`,
  * filtrados por permiso en el backend, y se siguen editando en /app/ayuda.
  */
-export function OperatorAssistant({ canManage, displayName }: OperatorAssistantProps) {
+export function OperatorAssistant({
+  canAskOwl = false,
+  canManage,
+  displayName,
+}: OperatorAssistantProps) {
   const initial = useMemo(readStored, []);
   const [open, setOpen] = useState(initial.open);
   const [path, setPath] = useState<string[]>(initial.path);
@@ -323,7 +329,9 @@ export function OperatorAssistant({ canManage, displayName }: OperatorAssistantP
               ×
             </span>
           ) : (
-            <img alt="" height="56" src="/brand/verdeo-buho-112.webp" width="56" />
+            <span aria-hidden="true" className="assistant-launcher-help">
+              ?
+            </span>
           )}
         </span>
       </button>
@@ -332,7 +340,6 @@ export function OperatorAssistant({ canManage, displayName }: OperatorAssistantP
         <div aria-label="Ayuda de Verdeo" className="assistant-panel is-operator" role="dialog">
           <header className="assistant-header">
             <div className="assistant-header-identity">
-              <img alt="" height="32" src="/brand/verdeo-buho-112.webp" width="32" />
               <p>Ayuda de Verdeo</p>
             </div>
             <div className="assistant-header-actions">
@@ -424,11 +431,20 @@ export function OperatorAssistant({ canManage, displayName }: OperatorAssistantP
               <>
                 {atRoot ? (
                   <div className="assistant-bot-row">
-                    <img alt="" height="28" src="/brand/verdeo-buho-112.webp" width="28" />
                     <p className="assistant-turn is-bot">
                       Hola{firstName ? `, ${firstName}` : ''}. ¿Con qué te doy una mano? Elegí un
                       tema o buscá arriba.
                     </p>
+                    {canAskOwl ? (
+                      <Link
+                        className="assistant-owl-link"
+                        onClick={() => setOpen(false)}
+                        to="/app/ia/workbench"
+                      >
+                        ¿Preferís preguntarle al búho? Te contesta con la ayuda y los datos del
+                        sistema.
+                      </Link>
+                    ) : null}
                   </div>
                 ) : null}
                 {children.length === 0 && branchArticles.length === 0 ? (

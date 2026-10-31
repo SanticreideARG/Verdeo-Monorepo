@@ -283,6 +283,15 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'El asistente de la web',
   },
 
+  {
+    body: 'El búho está en [Workbench de IA](/app/ia/workbench), para todos los que tienen permiso de IA. Arriba se elige qué hacer:\n\n- **Mensajes:** pegás el mensaje de un cliente en el cuadro grande ("Pegar el texto") y el búho lo analiza, arma la respuesta, lo pasa a la ficha del pedido, responde un reclamo o resume una conversación.\n- **Período:** con un clic en "Generar" arma el análisis del período, la lista de pendientes antes del cierre, las tendencias, los cobros, las cancelaciones, el stock, el reparto de hoy o el resumen para cocina.\n- **Comunicación:** el texto del menú, una oferta del stock, un aviso de cambio, un recordatorio de pago o mejorar un texto.\n- **Preguntas:** preguntale lo que quieras sobre la operación, o cómo se hace algo en el sistema.\n\nCada respuesta tiene **Copiar**, y abajo dice de qué período y ciudad son los datos que usó. Podés seguir la conversación ("más corto", "agregá el precio") y cambiar de modo en el medio. La ciudad es la elegida arriba de todo; el período se elige al costado del búho.\n\nAl búho no le llegan nombres, teléfonos ni domicilios de los clientes: los datos del sistema van sumados. Al pegar un mensaje, la opción "Ocultar teléfonos, correos y documentos" viene marcada; los nombres no se detectan, así que si no hacen falta, sacalos.\n\nLa conversación dura mientras la pestaña esté abierta. Cada persona tiene 150 consultas por día.',
+    category: 'Inteligencia',
+    key: 'ia-buho',
+    ordinal: 1,
+    requiredPermission: 'ai.use',
+    title: 'El búho: analizar mensajes y preguntar sobre la operación',
+  },
+
   // --- Avisos ----------------------------------------------------------------------------------
   {
     body: 'Avisar a los clientes es a mano: el aviso sale de tu WhatsApp, no del sistema. "Avisos" no manda nada — lleva la cuenta de a quién ya se le avisó, que es lo que se pierde cuando son cien.\n\nArriba elegís el período, cuál de los mensajes guardados querés mandar y, si querés, una zona. Abajo aparece una tarjeta por pedido confirmado, con el texto ya armado con los datos de ese cliente.\n\n"Abrir WhatsApp y marcar" abre el chat con el texto escrito y marca la fila como avisada en el mismo gesto: apretás enviar en WhatsApp y volvés. Si alguien no tiene WhatsApp cargado, el botón no está y queda "Copiar texto"; el número se completa en la ficha del cliente.\n\n"Saltear" sirve para los que decidís no avisar, y deja constancia de que fue una decisión y no un olvido.\n\nEl tilde "Sólo los que faltan" viene puesto. Destildalo para repasar la vuelta entera y ver que no quedó nadie.\n\nLos textos se escriben una vez: ver [[avisos-plantillas]].\n\n[Ir a Avisos](/app/avisos)',

@@ -12097,3 +12097,278 @@ label.field:has(> input[type='radio']) {
   font-weight: 600;
   color: #b42318;
 }
+
+/* Ayuda sin el búho (BUHO_WORKBENCH_PLAN.md): un "?" en el botón y el acceso al búho del Workbench. */
+.assistant-launcher-help {
+  color: var(--color-forest);
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.assistant-bot-row:has(.assistant-owl-link) {
+  flex-direction: column;
+  align-items: stretch;
+}
+.assistant-owl-link {
+  border: 1px dashed var(--db-border);
+  border-radius: 0.7rem;
+  padding: 0.55rem 0.75rem;
+  color: var(--db-accent, var(--color-forest));
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.assistant-owl-link:hover {
+  background: color-mix(in srgb, var(--db-accent, #3a7d44) 8%, transparent);
+}
+
+/* El búho del Workbench de IA: el búho grande a un costado, la conversación al otro. */
+.buho-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+.buho-tabs {
+  display: inline-flex;
+  gap: 0.2rem;
+  border: 1px solid var(--db-border);
+  border-radius: 0.7rem;
+  padding: 0.2rem;
+}
+.buho-tabs button {
+  min-height: 2.5rem;
+  border: 0;
+  border-radius: 0.5rem;
+  padding: 0 1rem;
+  background: transparent;
+  color: var(--db-text-soft, inherit);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.buho-tabs button[aria-selected='true'] {
+  background: var(--db-accent, #3a7d44);
+  color: #fff;
+}
+.buho {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+@media (min-width: 960px) {
+  .buho {
+    grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
+    align-items: start;
+  }
+  .buho-side {
+    position: sticky;
+    top: 1rem;
+  }
+}
+.buho-side {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: center;
+}
+.buho-owl {
+  width: min(100%, 20rem);
+  height: auto;
+  filter: drop-shadow(0 18px 28px rgb(9 40 25 / 18%));
+  animation: buho-in 0.25s ease;
+}
+@keyframes buho-in {
+  from {
+    opacity: 0.4;
+    transform: scale(0.97);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .buho-owl {
+    animation: none;
+  }
+}
+@media (max-width: 959px) {
+  .buho-side {
+    grid-template-columns: 7rem minmax(0, 1fr);
+    align-items: center;
+    justify-items: stretch;
+  }
+  .buho-owl {
+    grid-row: span 2;
+    width: 7rem;
+  }
+}
+.buho-period {
+  width: 100%;
+}
+.buho-side-note {
+  margin: 0;
+  color: var(--db-muted, #6b7280);
+  font-size: 0.8rem;
+}
+.buho-main {
+  display: grid;
+  gap: 0.9rem;
+  min-width: 0;
+}
+.buho-modes {
+  display: grid;
+  gap: 0.6rem;
+}
+.buho-mode-group {
+  display: grid;
+  gap: 0.3rem;
+}
+.buho-mode-group > span {
+  color: var(--db-muted, #6b7280);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.buho-mode-group > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.buho-mode-group button {
+  min-height: 2.25rem;
+  border: 1px solid var(--db-border);
+  border-radius: 999px;
+  padding: 0 0.85rem;
+  background: var(--db-surface-solid, #fff);
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.buho-mode-group button[aria-pressed='true'] {
+  border-color: var(--db-accent, #3a7d44);
+  background: var(--db-accent, #3a7d44);
+  color: #fff;
+}
+.buho-mode-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--db-border);
+  border-left: 5px solid var(--db-accent, #3a7d44);
+  border-radius: 0.8rem;
+  padding: 0.75rem 1rem;
+  background: var(--db-surface-solid, #fff);
+}
+.buho-mode-card p {
+  flex: 1 1 18rem;
+  margin: 0;
+}
+.buho-chat {
+  display: grid;
+  gap: 0.75rem;
+  max-height: min(60vh, 42rem);
+  min-height: 12rem;
+  overflow-y: auto;
+  border: 1px solid var(--db-border);
+  border-radius: 0.9rem;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--db-surface-solid, #fff) 85%, transparent);
+}
+.buho-empty,
+.buho-typing {
+  margin: 0;
+  color: var(--db-muted, #6b7280);
+}
+.buho-typing {
+  font-style: italic;
+}
+.buho-turn {
+  max-width: 52rem;
+  border-radius: 0.9rem;
+  padding: 0.7rem 0.9rem;
+}
+.buho-turn p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.buho-turn.is-user {
+  justify-self: end;
+  background: color-mix(in srgb, var(--db-accent, #3a7d44) 14%, transparent);
+}
+.buho-turn.is-assistant {
+  justify-self: start;
+  border: 1px solid var(--db-border);
+  background: var(--db-surface-solid, #fff);
+}
+.buho-turn details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.buho-turn details p {
+  margin-top: 0.4rem;
+}
+.buho-turn footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.6rem;
+}
+.buho-turn footer small {
+  color: var(--db-muted, #6b7280);
+}
+.buho-turn footer .button {
+  min-height: 2.25rem;
+  padding: 0 0.9rem;
+}
+.buho-failure {
+  margin: 0;
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  background: rgb(220 38 38 / 10%);
+  color: #b91c1c;
+}
+.buho-composer {
+  display: grid;
+  gap: 0.5rem;
+}
+.buho-composer textarea {
+  width: 100%;
+  border: 1px solid var(--db-border);
+  border-radius: 0.8rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--db-surface-solid, #fff);
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+}
+.buho-composer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.modal-panel.buho-paste {
+  max-width: 48rem;
+  display: grid;
+  gap: 0.8rem;
+}
+.buho-paste textarea {
+  min-height: 16rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  background: #fff;
+  color: #111;
+}
+.buho-mask {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  font-size: 0.85rem;
+}
+.buho-mask input {
+  margin-top: 0.2rem;
+}

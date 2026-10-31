@@ -151,6 +151,14 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-10-30-buho-workbench',
+    body: `El búho se mudó al Workbench de IA, ahora para todos los que tienen permiso de IA.
+• Pegá el mensaje de un cliente en un cuadro grande y el búho lo analiza, arma la respuesta o la ficha del pedido. Cada respuesta se copia con un clic.
+• Con un clic arma el análisis del período, los pendientes antes del cierre, las tendencias, los cobros, el stock y el texto del menú, con los datos del sistema.
+• Preguntale lo que quieras sobre la operación, o cómo se hace algo.
+• Al búho no le llegan nombres, teléfonos ni domicilios de clientes. La Ayuda sigue en el botón "?".`,
+  },
+  {
     key: '2026-10-30-stock-en-pedidos',
     body: `Stock disponible en Pedidos: arriba de la lista se ve lo que hay para vender ya cocinado en la ciudad elegida, sin ir a Cocina.
 • Del período y de períodos anteriores, con su vencimiento. Lo que vence en tres días o menos aparece primero y resaltado.

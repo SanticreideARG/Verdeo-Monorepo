@@ -79,6 +79,35 @@ export const AITaskRunRequestSchema = z.object({
   variables: z.record(z.string(), z.string().max(8_000)),
 });
 
+/** Una pregunta al búho del Workbench (BUHO_WORKBENCH_PLAN.md). */
+export const AIAssistantMessageRequestSchema = z.object({
+  cycleId: UuidSchema.optional(),
+  /** Lo conversado antes, para seguir el hilo; el navegador lo guarda mientras dure la pestaña. */
+  history: z
+    .array(
+      z.object({
+        content: z.string().max(16_000),
+        role: z.enum(['assistant', 'user']),
+      }),
+    )
+    .max(40)
+    .default([]),
+  message: z.string().trim().min(1).max(16_000),
+  mode: z.string().trim().min(1).max(80),
+});
+
+export const AIAssistantMessageResponseSchema = z.object({
+  /** De qué período y ciudad son los datos que usó, para decirlo debajo de la respuesta. */
+  context: z.object({
+    cycleAlias: z.string().nullable(),
+    omitted: z.array(z.string()),
+    siteName: z.string().nullable(),
+  }),
+  model: z.string(),
+  providerKey: z.string(),
+  reply: z.string(),
+});
+
 export const AITaskRunResponseSchema = z.object({
   model: z.string(),
   output: z.unknown(),
@@ -111,6 +140,8 @@ export const AIExecutionListResponseSchema = z.object({
 export type AIPromptVersionCreateRequest = z.infer<typeof AIPromptVersionCreateRequestSchema>;
 export type AIPromptVersionActivateRequest = z.infer<typeof AIPromptVersionActivateRequestSchema>;
 export type AITaskRunRequest = z.infer<typeof AITaskRunRequestSchema>;
+export type AIAssistantMessageRequest = z.infer<typeof AIAssistantMessageRequestSchema>;
+export type AIAssistantMessageResponse = z.infer<typeof AIAssistantMessageResponseSchema>;
 
 /** El resultado de probar un proveedor: anduvo o no, qué contestó y cuánto tardó. */
 export const AIProviderTestResponseSchema = z.object({

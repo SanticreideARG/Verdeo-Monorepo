@@ -1,6 +1,8 @@
 # El búho en el Workbench de IA — plan (2026-10-30)
 
-Estado: **plan, sin código.** Rama `plan/buho-workbench`.
+Estado: **fases 1 a 3 hechas (2026-10-30)**, con 22 modos. La fase 4 (herramientas e historial) queda para más adelante.
+
+**As built:** los modos están en `packages/ai/src/assistant-modes.ts` (tareas `buho_*` del catálogo, con prompt de fábrica y versionables desde "Prompts maestros"); la identidad común del búho es `BUHO_BASE_PROMPT`, que no se edita. Los datos los arma `apps/api/src/assistant-context.ts` (`clean` saca nombres, contactos, domicilios, notas e identificadores y pasa los importes a pesos; lo que falta cobrar va sumado). Rutas: `GET /api/v1/ai/assistant/modes` y `POST /api/v1/ai/assistant/messages` (tope de 150 consultas por persona y por día, `ASSISTANT_DAILY_LIMIT`). La pantalla es `BuhoAssistant`; el editor de antes es `AIPromptsAdmin`. La Ayuda quedó con un "?" y un acceso al búho.
 
 ## 1. Qué cambia
 
@@ -153,7 +155,16 @@ pantalla), con el PNG de respaldo.
 | 3    | **Ayuda:** el búho sale del menú de Ayuda y responde preguntas de uso con los artículos.                                                                                                                                         | ninguna                                        |
 | 4    | **Herramientas** (tool calling) para preguntas que el resumen no cubre. Historial de conversaciones, si lo quieren.                                                                                                              | tabla de conversaciones, sólo si hay historial |
 
-## 6. Decisiones pendientes
+## 6. Decisiones (2026-10-30)
+
+- Imágenes: re-exportadas con fondo transparente.
+- Las tres imágenes según la tabla de la sección 2.
+- La conversación dura lo que la pestaña (`sessionStorage`).
+- Proveedor: el predeterminado (hoy DeepSeek). Los prompts que piden JSON no aplican: los modos devuelven texto.
+- Lo usan todos los que tienen `ai.use`.
+- Modos: 22, diseñados a partir de las pantallas de la operación (pedidos, mensajes, cocina, cobros, reparto, stock, menú, ayuda), en cuatro grupos: Mensajes (7, con texto pegado), Período (8, un clic con datos), Comunicación (5) y Preguntas (2, libres).
+
+## 7. Preguntas que se hicieron antes de decidir
 
 1. **Imágenes:** ¿las exportan de nuevo con fondo transparente, o les saco el fondo por script?
 2. **La tercera imagen:** ¿te sirve el reparto de la tabla de la sección 2? (Saludo al entrar,

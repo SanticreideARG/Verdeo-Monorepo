@@ -7,6 +7,7 @@ import {
 } from '@verdeo/geocoding';
 
 import type { ModelCapability } from './adapters.js';
+import { ASSISTANT_MODES } from './assistant-modes.js';
 
 /**
  * AI_TASK_CATALOG.md's first three tasks wired end-to-end, chosen to exercise the whole engine
@@ -116,6 +117,8 @@ export const AI_TASKS: readonly AITaskDefinition[] = [
   EXTRACT_ORDER_TASK,
   KITCHEN_SUMMARY_TASK,
   NORMALIZE_ADDRESS_TASK,
+  // Los modos del búho (BUHO_WORKBENCH_PLAN.md): tareas como las demás, con su prompt versionable.
+  ...ASSISTANT_MODES.map((assistantMode) => assistantMode.task),
 ];
 
 export function findTask(key: string): AITaskDefinition | undefined {

@@ -23,6 +23,8 @@ import {
   AIPromptDetailSchema,
   AIPromptVersionActivateRequestSchema,
   AIPromptVersionCreateRequestSchema,
+  AIAssistantMessageRequestSchema,
+  AIAssistantMessageResponseSchema,
   AITaskRunRequestSchema,
   AITaskRunResponseSchema,
   AddressGeocodingConfirmRequestSchema,
@@ -368,6 +370,8 @@ import {
   parseOrderImport,
   type OrderImportRow,
 } from './integrations/order-import.js';
+import { ASSISTANT_MODES, BUHO_BASE_PROMPT, findAssistantMode } from '@verdeo/ai';
+import { buildAssistantContext } from './assistant-context.js';
 import { buildKitchenLabelsPrintHtml } from './kitchen-labels-export.js';
 import { renderLabelDocument } from '@verdeo/labels';
 import { RequestStats } from './request-stats.js';
@@ -1002,6 +1006,9 @@ interface AIConfigurationEngine {
   upsert(input: AIProviderConfigUpsertRequest, context: AIConfigurationContext): Promise<unknown>;
 }
 
+/** Cuántas preguntas al búho puede hacer cada persona por día (BUHO_WORKBENCH_PLAN.md). */
+const ASSISTANT_DAILY_LIMIT = 150;
+
 interface AIConfigurationContext {
   actorUserId: string;
   correlationId: string;
@@ -1131,6 +1138,13 @@ interface AITaskEngine {
     taskKey: string,
     variables: Record<string, string>,
     context: AIConfigurationContext,
+    options?: {
+      dailyLimit?: { max: number; taskPrefix: string } | undefined;
+      history?: readonly { content: string; role: 'assistant' | 'user' }[] | undefined;
+      systemPrefix?: string | undefined;
+      systemSuffix?: string | undefined;
+      userPrompt?: string | undefined;
+    },
   ): Promise<{
     model: string;
     output: unknown;
@@ -2929,6 +2943,8 @@ export function createApp(options: CreateAppOptions) {
   app.use('/api/v1/help', requireAuthentication);
   app.use('/api/v1/help/*', requireAuthentication);
   app.use('/api/v1/ai/tasks/*', requireAuthentication);
+  app.use('/api/v1/ai/assistant/*', requireAuthentication);
+  app.use('/api/v1/ai/assistant/messages', resolveScopeSelection);
   /*
    * Rutas que leían la sesión sin que nadie la hubiera resuelto.
    *
@@ -8325,6 +8341,110 @@ export function createApp(options: CreateAppOptions) {
       aiEngineContext(context),
     );
     return context.json(AITaskRunResponseSchema.parse(contractValue(result)));
+  });
+
+  /*
+   * El búho del Workbench (BUHO_WORKBENCH_PLAN.md, 2026-10-30): los modos, y una pregunta con lo
+   * conversado antes. El servidor arma los datos del período y la ciudad elegidos, sin datos
+   * personales (assistant-context.ts), y le pone un tope diario a cada persona para cuidar el costo.
+   */
+  app.get('/api/v1/ai/assistant/modes', (context) => {
+    if (!context.get('session').permissions.includes('ai.use')) return forbidden(context);
+    return context.json({
+      items: ASSISTANT_MODES.map((assistantMode) => ({
+        group: assistantMode.group,
+        input: assistantMode.input,
+        key: assistantMode.key,
+        label: assistantMode.label,
+        starter: assistantMode.starter,
+        summary: assistantMode.summary,
+      })),
+    });
+  });
+
+  app.post('/api/v1/ai/assistant/messages', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('ai.use')) return forbidden(context);
+    const input = AIAssistantMessageRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success) return badRequest(context, 'Revisá la pregunta.', input.error.issues);
+    const assistantMode = findAssistantMode(input.data.mode);
+    if (!assistantMode) return badRequest(context, 'Ese modo del búho no existe.');
+
+    const operations = requireOperations();
+    const siteId = context.get('scope')?.operatingSiteId ?? null;
+    const now = new Date();
+    const data = await buildAssistantContext({
+      cycleId: input.data.cycleId,
+      mode: assistantMode,
+      now,
+      permissions: session.permissions,
+      port: {
+        cycleReport: (cycleId, site) => operations.cycleReport(cycleId, site),
+        ...(operations.dispatchSummary
+          ? {
+              dispatchSummary: (date: string, site: string | null) =>
+                operations.dispatchSummary!(date, site),
+            }
+          : {}),
+        getStatsPeriods: (filters) => operations.getStatsPeriods(filters),
+        kitchenSummary: (cycleId, site) => operations.kitchenSummary(cycleId, site),
+        listHelp: () => requireHelp().listVisible(session.permissions),
+        listMenus: (onlyPublished) => operations.listMenus(onlyPublished),
+        listReceivables: (filters) => operations.listReceivables(filters),
+        listStockLots: (filters) => operations.listStockLots(filters),
+      },
+      question: input.data.message,
+      siteId,
+      today: deliveryDateFor(now),
+    });
+
+    try {
+      const result = await requireAiTasks().runTask(
+        assistantMode.key,
+        {},
+        aiEngineContext(context),
+        {
+          dailyLimit: { max: ASSISTANT_DAILY_LIMIT, taskPrefix: 'buho_' },
+          history: input.data.history,
+          systemPrefix: BUHO_BASE_PROMPT,
+          systemSuffix: data.text,
+          userPrompt: input.data.message,
+        },
+      );
+      return context.json(
+        AIAssistantMessageResponseSchema.parse({
+          context: { cycleAlias: data.cycleAlias, omitted: data.omitted, siteName: data.siteName },
+          model: result.model,
+          providerKey: result.providerKey,
+          reply: typeof result.output === 'string' ? result.output : JSON.stringify(result.output),
+        }),
+      );
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AITaskLimitError') {
+        const code: ApiErrorCode = 'RATE_LIMITED';
+        return context.json(
+          { error: { code, message: error.message, requestId: context.get('requestId') } },
+          statusForCode(code),
+        );
+      }
+      // El proveedor caído o que rechaza el pedido: se dice tal cual, para saber qué arreglar.
+      if (error instanceof Error && error.name === 'AIProviderError') {
+        const code: ApiErrorCode = 'SERVICE_UNAVAILABLE';
+        return context.json(
+          {
+            error: {
+              code,
+              message: `El proveedor de IA no respondió: ${error.message.slice(0, 300)}`,
+              requestId: context.get('requestId'),
+            },
+          },
+          statusForCode(code),
+        );
+      }
+      throw error;
+    }
   });
 
   app.notFound((context) => {

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, gte, like, sql } from 'drizzle-orm';
 
 import {
   decryptSecret,
@@ -8,6 +8,7 @@ import {
   selectProvider,
   type AIProvider,
   type AITaskDefinition,
+  type ChatTurn,
 } from '@verdeo/ai';
 
 import type { Database } from '../index.js';
@@ -19,6 +20,27 @@ export interface AITaskContext {
   correlationId: string;
   requestId: string;
   source: string;
+}
+
+/**
+ * Lo que una conversación del búho agrega a una tarea (BUHO_WORKBENCH_PLAN.md): las vueltas
+ * anteriores, lo que va antes y después del prompt de la tarea (la identidad del búho y los datos
+ * del sistema), el mensaje tal cual y un tope de usos por persona y por día.
+ */
+export interface AITaskRunOptions {
+  dailyLimit?: { max: number; taskPrefix: string } | undefined;
+  history?: readonly ChatTurn[] | undefined;
+  systemPrefix?: string | undefined;
+  systemSuffix?: string | undefined;
+  userPrompt?: string | undefined;
+}
+
+/** Se pasó del tope de usos del día. */
+export class AITaskLimitError extends Error {
+  public constructor(message: string) {
+    super(message);
+    this.name = 'AITaskLimitError';
+  }
 }
 
 export class AITaskNotFoundError extends Error {
@@ -129,9 +151,33 @@ export class PostgresAITaskService {
     }
   }
 
-  public async runTask(taskKey: string, variables: Record<string, string>, context: AITaskContext) {
+  public async runTask(
+    taskKey: string,
+    variables: Record<string, string>,
+    context: AITaskContext,
+    options: AITaskRunOptions = {},
+  ) {
     const task = findTask(taskKey);
     if (!task) throw new AITaskNotFoundError(`Tarea de IA desconocida: ${taskKey}`);
+
+    if (options.dailyLimit && context.actorUserId) {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const [used] = await this.database
+        .select({ count: sql<number>`count(*)::int` })
+        .from(aiExecutions)
+        .where(
+          and(
+            eq(aiExecutions.actorUserId, context.actorUserId),
+            like(aiExecutions.taskKey, `${options.dailyLimit.taskPrefix}%`),
+            gte(aiExecutions.createdAt, startOfDay),
+          ),
+        );
+      if ((used?.count ?? 0) >= options.dailyLimit.max)
+        throw new AITaskLimitError(
+          `Llegaste a las ${String(options.dailyLimit.max)} consultas de hoy. Mañana se renueva.`,
+        );
+    }
 
     const activeVersion = await this.promptService.getActiveVersion(taskKey);
     const promptVersion =
@@ -179,16 +225,20 @@ export class PostgresAITaskService {
       baseUrl: selected.baseUrl,
     });
 
-    const userPrompt = renderVariables(variables);
+    const userPrompt = options.userPrompt ?? renderVariables(variables);
+    const systemPrompt = [options.systemPrefix, promptVersion.systemPrompt, options.systemSuffix]
+      .filter((part): part is string => Boolean(part?.trim()))
+      .join('\n\n');
     const inputHash = createHash('sha256').update(userPrompt).digest('hex');
     const startedAt = Date.now();
 
     try {
       const result = await provider.generateText({
         expectsJson: Boolean(task.outputSchema),
+        history: options.history,
         maxTokens: promptVersion.maxTokens,
         model: selected.defaultModel,
-        systemPrompt: promptVersion.systemPrompt,
+        systemPrompt,
         temperature: promptVersion.temperature,
         userPrompt,
       });

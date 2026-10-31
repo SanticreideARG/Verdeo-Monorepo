@@ -12,13 +12,13 @@ El stock del período y sus bajas eran sólo por período: lo cargado en una ciu
 - [x] Código: stock, bajas, disponible, venta del stock, resumen de cocina y cierre por ciudad; con "Todas las ciudades" se ve la suma y no se edita. Lo que la cocina hizo de más sin ser stock de nadie va a la ciudad que más vendió esa variedad (con una ciudad, igual que antes).
 - [ ] 0078 (contraer): `NOT NULL` en las dos columnas.
 
-## El búho en el Workbench de IA (plan, 2026-10-30) — [plan](../03-features/BUHO_WORKBENCH_PLAN.md)
+## El búho en el Workbench de IA (2026-10-30) — [plan](../03-features/BUHO_WORKBENCH_PLAN.md)
 
-El Workbench pasa de herramienta de administración a mesa de trabajo con IA, con el búho al centro: analizar mensajes pegados, copiar la respuesta con un clic, preguntar sobre la operación y armar el análisis del período con prompts maestros. Esperando las decisiones de la sección 6 del plan.
+El Workbench pasa de herramienta de administración a mesa de trabajo con IA, con el búho al centro: analizar mensajes pegados, copiar la respuesta con un clic, preguntar sobre la operación y armar el análisis del período con prompts maestros. Decisiones tomadas (sección 6 del plan).
 
-- [ ] Fase 1: pantalla nueva (búho en tres estados, diálogo para pegar, conversación, copiar); modos sin datos; el editor actual pasa a "Prompts maestros".
-- [ ] Fase 2: resumen de datos del período para el búho, sin datos personales; límite diario.
-- [ ] Fase 3: el búho sale del menú de Ayuda y responde preguntas de uso con los artículos.
+- [x] Fase 1: pantalla nueva (búho en tres estados, diálogo para pegar, conversación, copiar); 22 modos en cuatro grupos; el editor actual pasa a "Prompts maestros". El Workbench se abre con `ai.use`.
+- [x] Fase 2: resumen de datos del período para el búho (`assistant-context.ts`), sin datos personales y con el mismo permiso que cada pantalla; tope de 150 consultas por persona y por día.
+- [x] Fase 3: el búho sale del menú de Ayuda (queda un "?") y responde preguntas de uso con los artículos.
 - [ ] Fase 4: herramientas (tool calling) e historial, si se piden.
 
 ## Stock disponible en Pedidos (2026-10-30)
