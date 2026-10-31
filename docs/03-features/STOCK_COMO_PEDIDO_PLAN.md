@@ -152,7 +152,7 @@ Es una acción del "⋯" de un pedido, de cliente o de stock:
 2. Mueve el pedido al período siguiente y recalcula la fecha de entrega con el día de reparto de
    siempre. Le saca el reparto (`delivery_run_id`) y le asigna el menú de ese período si ya existe.
 3. Si no está cocinado, sus renglones pasan a cocinarse en el período nuevo. Un Intuitivo sin
-   cocinar queda con **platos a elegir** hasta que se cargue el menú nuevo (sección 8).
+   cocinar **conserva la lista elegida**: sus platos viajan con el pedido (sección 8).
 4. Si es stock, sus renglones con disponible se suman al pedido de stock de la semana siguiente de
    esa ciudad, que se crea si no existe. Lo vendido queda donde estaba.
 5. Queda en el historial del pedido: "Pasó de Octubre 5 a Noviembre 1 (ya cocinado)".
@@ -251,6 +251,52 @@ Tomadas el 2026-10-30:
 
 Por confirmar:
 
-- **Intuitivo que pasa de semana sin cocinar:** la propuesta es que quede con "platos a elegir"
-  hasta que se cargue el menú nuevo, y que la planilla de cocina avise si un pedido sigue así.
+- **Intuitivo que pasa de semana sin cocinar:** decidido (2026-10-30): conserva la lista elegida. Si hace falta cargar un Intuitivo de una semana anterior, se carga desde esa semana.
 - **Vencimiento del stock:** se mantiene en un mes desde el cierre del período en que se cocinó.
+
+## 9. Stock viejo: absorción y convivencia (aprobado el 2026-10-30)
+
+Hay **cinco formas** de stock cargado, no dos: pedidos del cliente "STOCK" (el método más viejo: con
+precio, en rutas y etiquetas, excluidos de estadísticas por el nombre), `production_stock`,
+`surplus_writeoffs`, `stock_lots` (con viandas ya vendidas por `order_items.stock_lot_id`) y las
+ventas `opportunity_sale` / `cancelled_to_stock`, que son historial.
+
+**Paso 0 — diagnóstico.** `packages/db/scripts/diagnose-stock-legacy.sql`, de sólo lectura (corre en
+una transacción `READ ONLY` que termina en `ROLLBACK`). Lo corre el equipo en Neon y muestra cuánto
+hay de cada forma, por período y ciudad, qué está vencido, qué ya se vendió, qué pedidos del STOCK
+siguen vivos y los controles que la migración tiene que contemplar. Probado en
+`diagnose-stock-legacy.test.ts`.
+
+**Una sola fuente de verdad por período (corte).** Lo nuevo y lo viejo nunca cuentan a la vez en
+producción: los períodos anteriores al corte siguen leyendo el stock viejo; desde el período de corte
+la producción lee sólo los pedidos de stock. El panel viejo de Cocina sigue visible en la transición,
+pero escribe en el pedido de stock por detrás; después se borra.
+
+**Absorción** (en la migración del corte):
+
+- lotes con disponible → renglones del pedido de stock de su período y ciudad, con lo que queda; lo
+  vendido sigue en sus pedidos;
+- `production_stock` y bajas del período abierto → renglones (y `written_off_units`) del pedido de
+  stock de ese período;
+- pedidos del cliente "STOCK": los de períodos terminados se marcan como stock (las estadísticas ya
+  los excluían); los vivos quedan para resolver;
+- **las tablas viejas no se tocan:** cada renglón nuevo guarda de qué registro salió
+  (`legacy_source`), para comparar y poder volver atrás;
+- se ensaya en `migrations.test.ts` y sobre una copia de la base (un respaldo), comparando por
+  período y ciudad que los totales de producción y de stock den igual antes y después.
+
+**Bandeja "Stock heredado para resolver"**, arriba de Pedidos: todo lo absorbido queda "a revisar",
+con acciones vender (a un cliente, cobrado o no), pasar al período siguiente, dar de baja (con
+motivo; no se borra), dejar como stock, y para un pedido "STOCK" con importe, pasarlo a "Sin pago" o
+asignarlo a un cliente real. Hasta que se vacíe no se borra nada viejo.
+
+**Orden** (reemplaza las fases 3 a 6 de la sección 5):
+
+1. Fase 0 ("Sin pago") y diagnóstico: no tocan producción.
+2. Fases 1 y 2 (períodos automáticos, pasar de semana).
+3. Pedido de stock y venta desde el stock, en local, sin corte.
+4. Migración de corte y absorción, ensayada sobre un respaldo; el corte se elige fuera del cierre y
+   del reparto.
+5. Bandeja de stock heredado.
+6. Contraer: borrar las tablas viejas y el panel de Cocina después de un par de semanas sin
+   diferencias.
