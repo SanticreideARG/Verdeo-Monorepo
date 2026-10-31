@@ -3,6 +3,18 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Pulido de UI del panel (2026-10-31) — [auditoría](../03-features/AUDITORIA_UI_2026-10-31.md)
+
+Auditoría de 40 pantallas en celular, tablet y escritorio. Sin scroll horizontal en ninguna; lo que falta es pulido.
+
+- [ ] Contraste: `--db-muted` de 52–54 % a ~70 % en todos los temas (hoy 3,2:1, por debajo de AA).
+- [ ] Barra superior: controles tocables de 40 px, etiquetas de 11 px o más; en tablet, sin nombre ni reloj en la barra.
+- [ ] Botones que se parten en celular (Cocina, Nuevo pedido); "Cerrar período" con estilo propio.
+- [ ] Botones flotantes ("?" y logo de la barra inferior) que tapan la última tarjeta y "Limpiar".
+- [ ] Un solo `PageHeader` (hoy conviven `dashboard-kicker` y `eyebrow`; 11 pantallas a migrar).
+- [ ] Detalle de pedido en celular: volver como flecha, una acción visible y el resto en "···".
+- [ ] Detalles: "Períodos" con tilde, tabla de Pedidos en tablet, Stock disponible vacío, `h1` de `/app/ia` y del tablero de celular, gráfico con un día, textos largos de encabezado, selector del Workbench en celular, títulos de Ayuda, campos de archivo sin etiqueta.
+
 ## Movimiento: GSAP, Lenis y React Bits (2026-10-31) — [plan](../03-features/MOVIMIENTO_PLAN.md)
 
 Animaciones en el sitio público y en el panel, empezando por el público. Siempre respetando "reducir movimiento" y con carga aparte.
