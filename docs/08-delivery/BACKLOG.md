@@ -3,6 +3,17 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Stock como pedido y períodos automáticos (plan, 2026-10-30) — [plan](../03-features/STOCK_COMO_PEDIDO_PLAN.md)
+
+El stock vive en cuatro lugares con reglas distintas y confunde. La idea: el stock es un pedido sin cliente ni valor, venderlo es pasar viandas a un pedido de cliente, y los períodos se crean solos para poder pasar pedidos a la semana siguiente. Esperando las decisiones de la sección 8 del plan.
+
+- [ ] Fase 1: períodos automáticos (en curso + siguiente), el menú elige el período.
+- [ ] Fase 2: pasar un pedido a la semana siguiente ("¿ya está cocinado?").
+- [ ] Fase 3: pedido de stock (uno por ciudad y período), fuera de la contabilidad.
+- [ ] Fase 4: vender del stock desde los pedidos de stock; pasar un pedido no cobrado a stock.
+- [ ] Fase 5: pasar el stock, las bajas y los lotes existentes a pedidos de stock.
+- [ ] Fase 6: contraer (borrar las tablas viejas). Reemplaza a la 0078 de stock por ciudad.
+
 ## Stock por ciudad (2026-10-29) — [plan](../03-features/STOCK_POR_CIUDAD_PLAN.md)
 
 El stock del período y sus bajas eran sólo por período: lo cargado en una ciudad aparecía, se cocinaba y se vendía en las otras.
