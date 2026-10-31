@@ -151,6 +151,12 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-10-31-enviar-a-stock',
+    body: `En "Cambiar cliente" ahora también está "Enviar a stock": el pedido se cancela y sus viandas quedan en Stock disponible para venderlas a otro cliente.
+• Pide confirmarlo. Si el pedido figura como cobrado, lo pide dos veces.
+• Sólo para pedidos confirmados.`,
+  },
+  {
     key: '2026-10-31-cambiar-cliente',
     body: `Nuevo en la ficha del pedido: "Cambiar cliente". Un pedido cargado a nombre de otro (un "nn", el stock) pasa al cliente real sin cancelarlo ni cargarlo de nuevo.
 • Buscás al cliente o lo creás ahí mismo, y elegís en cuál de sus domicilios se entrega.

@@ -20,19 +20,27 @@ const OTHER = 'otra';
  * Para el pedido cargado a nombre de otro —un "nn", un stock—: pasa al cliente real con sus platos,
  * período, precio y cobro, sin cancelarlo ni cargarlo de nuevo. Se busca el cliente o se crea en el
  * momento, y se elige a qué domicilio suyo va; sin domicilio, se escribe la dirección.
+ *
+ * O, si todavía no es de nadie, "Enviar a stock": se cancela y sus viandas quedan en Stock
+ * disponible para venderlas a otro cliente. Pide confirmar, y dos veces si el pedido figura cobrado.
  */
 export function ChangeCustomerDialog({
   canCreateCustomer,
   currentCustomerId,
   onChanged,
   onClose,
+  onSentToStock,
   orderId,
+  stock,
 }: {
   canCreateCustomer: boolean;
   currentCustomerId: string;
   onChanged: () => void;
   onClose: () => void;
+  onSentToStock?: () => void;
   orderId: string;
+  /** Se ofrece "Enviar a stock" (pedido confirmado y permiso de cancelar). */
+  stock?: { paid: boolean } | null;
 }) {
   const [mode, setMode] = useState<'search' | 'new'>('search');
   const [query, setQuery] = useState('');
@@ -46,6 +54,8 @@ export function ChangeCustomerDialog({
   const [typedAddress, setTypedAddress] = useState('');
   const [message, setMessage] = useState('');
   const [working, setWorking] = useState(false);
+  // 0: cambiar cliente; 1: confirmar el envío a stock; 2: segunda confirmación, por estar cobrado.
+  const [stockStep, setStockStep] = useState<0 | 1 | 2>(0);
 
   useEffect(() => {
     if (mode !== 'search' || chosen) return;
@@ -131,6 +141,93 @@ export function ChangeCustomerDialog({
       return;
     }
     onChanged();
+  }
+
+  async function sendToStock() {
+    if (stock?.paid && stockStep === 1) {
+      setStockStep(2);
+      return;
+    }
+    setMessage('');
+    setWorking(true);
+    const response = await apiRequest(`/api/v1/orders/${orderId}/status`, {
+      body: JSON.stringify({
+        confirmedReversal: false,
+        reason: 'Enviado a stock desde Cambiar cliente',
+        status: 'CANCELLED',
+        toStock: true,
+      }),
+      method: 'POST',
+      notify: false,
+    });
+    setWorking(false);
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    onSentToStock?.();
+  }
+
+  if (stockStep > 0) {
+    const second = stockStep === 2;
+    return (
+      <div
+        aria-label="Enviar a stock"
+        aria-modal="true"
+        className="modal-backdrop"
+        role="alertdialog"
+      >
+        <div className="modal-panel grid gap-3">
+          <h2 className="text-lg font-semibold text-forest">
+            {second ? 'Este pedido figura como cobrado' : '¿Enviar el pedido a stock?'}
+          </h2>
+          {second ? (
+            <p className="text-sm">
+              Si lo enviás a stock, se cancela igual y el cobro queda registrado en el pedido
+              cancelado: revisá si hay que devolver o pasar ese pago a otro pedido.{' '}
+              <strong>¿Seguro que querés enviarlo a stock?</strong>
+            </p>
+          ) : (
+            <p className="text-sm">
+              El pedido se cancela y sus viandas quedan en <strong>Stock disponible</strong>, en
+              Pedidos, para venderlas a otro cliente con "Vender".
+              {stock?.paid ? ' Figura como cobrado: te lo vamos a preguntar otra vez.' : ''}
+            </p>
+          )}
+          {message ? (
+            <p className="screen-notice" role="alert">
+              {message}
+            </p>
+          ) : null}
+          <div className="form-actions justify-end">
+            <button
+              className="button button-secondary"
+              onClick={() => {
+                setStockStep(0);
+                setMessage('');
+              }}
+              type="button"
+            >
+              Volver
+            </button>
+            <button
+              className="button button-danger"
+              disabled={working}
+              onClick={() => void sendToStock()}
+              type="button"
+            >
+              {working
+                ? 'Enviando…'
+                : second
+                  ? 'Sí, enviar a stock igual'
+                  : stock?.paid
+                    ? 'Continuar'
+                    : 'Enviar a stock'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const needsTyped = mode === 'new' || addressChoice === OTHER;
@@ -253,6 +350,22 @@ export function ChangeCustomerDialog({
           <p className="screen-notice" role="alert">
             {message}
           </p>
+        ) : null}
+
+        {stock ? (
+          <div className="change-customer-stock">
+            <p>¿Todavía no es de nadie? Mandalo a stock y vendelo después a quien lo pida.</p>
+            <button
+              className="button button-secondary"
+              onClick={() => {
+                setMessage('');
+                setStockStep(1);
+              }}
+              type="button"
+            >
+              Enviar a stock
+            </button>
+          </div>
         ) : null}
 
         <div className="form-actions justify-end">

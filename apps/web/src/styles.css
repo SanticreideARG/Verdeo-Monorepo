@@ -12411,3 +12411,16 @@ label.field:has(> input[type='radio']) {
   color: var(--db-muted, var(--color-ink-muted));
   font-size: 0.85rem;
 }
+
+/* "Enviar a stock", la otra salida de Cambiar cliente. */
+.change-customer-stock {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--db-border);
+}
+.change-customer-stock p {
+  color: var(--db-muted, var(--color-ink-muted));
+  font-size: 0.875rem;
+}

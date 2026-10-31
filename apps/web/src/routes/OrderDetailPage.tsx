@@ -873,7 +873,13 @@ export function OrderDetailPage() {
             void load();
           }}
           onClose={() => setChangingCustomer(false)}
+          onSentToStock={() => {
+            setChangingCustomer(false);
+            showToast('Pedido enviado a stock. Sus viandas están en Stock disponible.');
+            void load();
+          }}
           orderId={order.id}
+          stock={order.status === 'CONFIRMED' && canCancel ? { paid: order.paidAt !== null } : null}
         />
       ) : null}
       {moving && order ? (

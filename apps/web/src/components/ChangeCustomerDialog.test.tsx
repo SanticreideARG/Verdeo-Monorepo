@@ -72,4 +72,71 @@ describe('cambiar el cliente de un pedido', () => {
       reason: 'Cambio de cliente',
     });
   });
+
+  const statusCalls = () =>
+    vi.mocked(apiRequest).mock.calls.filter(([path]) => path === '/api/v1/orders/pedido/status');
+
+  it('"Enviar a stock" pide una confirmación y cancela pasando las viandas a stock', async () => {
+    const onSentToStock = vi.fn();
+    render(
+      <ChangeCustomerDialog
+        canCreateCustomer
+        currentCustomerId="nn"
+        onChanged={() => undefined}
+        onClose={() => undefined}
+        onSentToStock={onSentToStock}
+        orderId="pedido"
+        stock={{ paid: false }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar a stock' }));
+    expect(screen.getByRole('heading', { name: '¿Enviar el pedido a stock?' })).toBeTruthy();
+    expect(statusCalls()).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar a stock' }));
+
+    await waitFor(() => expect(onSentToStock).toHaveBeenCalled());
+    expect(JSON.parse(statusCalls()[0]?.[1]?.body as string)).toMatchObject({
+      status: 'CANCELLED',
+      toStock: true,
+    });
+  });
+
+  it('si figura cobrado, pide una segunda confirmación', async () => {
+    const onSentToStock = vi.fn();
+    render(
+      <ChangeCustomerDialog
+        canCreateCustomer
+        currentCustomerId="nn"
+        onChanged={() => undefined}
+        onClose={() => undefined}
+        onSentToStock={onSentToStock}
+        orderId="pedido"
+        stock={{ paid: true }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar a stock' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(screen.getByRole('heading', { name: 'Este pedido figura como cobrado' })).toBeTruthy();
+    expect(statusCalls()).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Sí, enviar a stock igual' }));
+
+    await waitFor(() => expect(onSentToStock).toHaveBeenCalled());
+    expect(statusCalls()).toHaveLength(1);
+  });
+
+  it('sin permiso o con el pedido sin confirmar, no ofrece enviar a stock', () => {
+    render(
+      <ChangeCustomerDialog
+        canCreateCustomer
+        currentCustomerId="nn"
+        onChanged={() => undefined}
+        onClose={() => undefined}
+        orderId="pedido"
+        stock={null}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Enviar a stock' })).toBeNull();
+  });
 });

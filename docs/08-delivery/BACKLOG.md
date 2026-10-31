@@ -10,6 +10,7 @@ Pedidos cargados a nombre de "nn" (como stock) que había que pasar a los client
 - [x] `PATCH /orders/:id` acepta `customerId`: el pedido pasa al cliente nuevo con platos, período, precio, pago y cobro; el domicilio sale del cliente nuevo (el elegido, el principal de la ciudad o uno escrito). Mismo permiso que editar (`orders.edit`). No cambia de ciudad, y un pedido cancelado no cambia de cliente. Revisión y auditoría con el cliente anterior y el nuevo. Sin migración.
 - [x] "Cambiar cliente" en la ficha del pedido (`ChangeCustomerDialog`): buscar o crear el cliente, elegir domicilio u "Otra dirección…".
 - [x] Ayuda (`pedidos-cambiar-cliente`) y novedad.
+- [x] "Enviar a stock" en el mismo diálogo (pedidos confirmados, permiso `orders.cancel`): cancela con `toStock` y las viandas quedan como lote en Stock disponible. Una confirmación; dos si el pedido figura cobrado.
 
 ## Pulido de UI del panel (2026-10-31) — [auditoría](../03-features/AUDITORIA_UI_2026-10-31.md)
 
