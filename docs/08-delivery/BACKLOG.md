@@ -3,6 +3,13 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Movimiento: GSAP, Lenis y React Bits (2026-10-31) — [plan](../03-features/MOVIMIENTO_PLAN.md)
+
+Animaciones en el sitio público y en el panel, empezando por el público. Siempre respetando "reducir movimiento" y con carga aparte.
+
+- [x] Fase 1: portada pública. Scroll suave (Lenis, sólo rueda), enlaces del menú que deslizan hasta la sección, entrada del primer bloque y de cada sección al aparecer (GSAP).
+- [ ] Fase 2: panel, sin Lenis. Elegir pantallas y efectos (búho, Estadísticas, tablero).
+
 ## Stock por ciudad (2026-10-29) — [plan](../03-features/STOCK_POR_CIUDAD_PLAN.md)
 
 El stock del período y sus bajas eran sólo por período: lo cargado en una ciudad aparecía, se cocinaba y se vendía en las otras.

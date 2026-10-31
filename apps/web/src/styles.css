@@ -73,6 +73,12 @@ html {
   text-size-adjust: 100%;
 }
 
+/* Con Lenis en la portada (lib/publicMotion.ts) el deslizamiento lo hace Lenis: si el navegador
+   también suaviza, los dos pelean y el scroll se arrastra. */
+html.lenis {
+  scroll-behavior: auto;
+}
+
 body {
   margin: 0;
   min-width: 320px;

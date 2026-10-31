@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { SettingsGate } from '../components/SettingsGate.js';
@@ -231,6 +231,28 @@ type HomeContent =
 
 function HomePage() {
   const [content, setContent] = useState<HomeContent>({ status: 'loading' });
+  const mainRef = useRef<HTMLElement>(null);
+  const ready = content.status !== 'loading';
+
+  /*
+   * El movimiento de la portada (MOVIMIENTO_PLAN.md) se baja aparte y recién con la página ya
+   * dibujada: no demora la primera pintura y no viaja a ninguna otra pantalla.
+   */
+  useEffect(() => {
+    const root = mainRef.current;
+    if (!ready || !root) return;
+    let stop: (() => void) | undefined;
+    let active = true;
+    void import('../lib/publicMotion.js')
+      .then(({ startPublicMotion }) => {
+        if (active) stop = startPublicMotion(root);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      stop?.();
+    };
+  }, [ready]);
 
   useEffect(() => {
     let active = true;
@@ -264,7 +286,7 @@ function HomePage() {
 
   return (
     <PublicLayout>
-      <main>
+      <main ref={mainRef}>
         {content.status === 'published'
           ? content.sections.map((section) => <CmsSection key={section.id} section={section} />)
           : null}

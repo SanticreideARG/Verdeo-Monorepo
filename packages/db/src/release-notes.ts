@@ -151,6 +151,12 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-10-31-movimiento-portada',
+    body: `La portada pública ahora se mueve: el scroll con la rueda es más suave, los enlaces del menú deslizan hasta cada sección y las secciones aparecen a medida que se baja.
+• En el teléfono el scroll sigue siendo el de siempre.
+• Quien tiene activado "reducir movimiento" en su equipo ve la página quieta, como antes.`,
+  },
+  {
     key: '2026-10-30-buho-workbench',
     body: `El búho se mudó al Workbench de IA, ahora para todos los que tienen permiso de IA.
 • Pegá el mensaje de un cliente en un cuadro grande y el búho lo analiza, arma la respuesta o la ficha del pedido. Cada respuesta se copia con un clic.
