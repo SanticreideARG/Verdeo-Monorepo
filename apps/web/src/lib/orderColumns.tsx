@@ -302,7 +302,8 @@ export function buildOrderColumns(
       key: 'nuevo',
       label: '¿Es nuevo?',
       // Para saber a quién mandarle las recomendaciones para descongelar de la primera compra.
-      render: (order) => (order.customer.isNew ? <span className="new-badge">NUEVO</span> : '—'),
+      // La etiqueta ya va al lado del nombre: acá, un dato para leer. Quien edita ve un tilde.
+      render: (order) => (order.customer.isNew ? 'Sí' : '—'),
       sortValue: (order) => (order.customer.isNew ? 0 : 1),
     },
     {

@@ -490,6 +490,27 @@ export function OrderIntakePage() {
     );
   }
 
+  /**
+   * "NUEVO" desde la lista, sin confirmación (2026-11-01). Vale para el cliente en el período del
+   * pedido: el servidor lo marca en todos sus pedidos de ese período y devuelve cuáles cambiaron.
+   */
+  async function toggleNew(order: OrderSummary) {
+    const response = await apiRequest(`/api/v1/orders/${order.id}/new`, {
+      body: JSON.stringify({ isNew: !order.customer.isNew }),
+      method: 'POST',
+    });
+    if (!response.ok) {
+      setError(await describeResponse(response));
+      return;
+    }
+    const { isNew, orderIds } = (await response.json()) as { isNew: boolean; orderIds: string[] };
+    setOrders((current) =>
+      current.map((row) =>
+        orderIds.includes(row.id) ? { ...row, customer: { ...row.customer, isNew } } : row,
+      ),
+    );
+  }
+
   async function togglePaid(order: OrderSummary) {
     const response = await apiRequest(`/api/v1/orders/${order.id}/paid`, {
       body: JSON.stringify({ paid: !order.paidAt }),
@@ -2237,25 +2258,39 @@ export function OrderIntakePage() {
                             paymentMethodLabel(order.paymentExpectation, paymentMethods)
                           ),
                       }
-                    : column.key === 'cobrado' && permissions.includes('orders.edit')
+                    : column.key === 'nuevo' && permissions.includes('orders.edit')
                       ? {
                           ...column,
-                          render: (order: OrderSummary) =>
-                            isNoCharge(order.paymentExpectation) ? (
-                              '—'
-                            ) : (
-                              <label className="paid-check">
-                                <input
-                                  aria-label={`Marcar ${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName} como cobrado`}
-                                  checked={Boolean(order.paidAt)}
-                                  onChange={() => setPaying(order)}
-                                  type="checkbox"
-                                />
-                                <span>{order.paidAt ? 'Cobrado' : 'Pendiente'}</span>
-                              </label>
-                            ),
+                          render: (order: OrderSummary) => (
+                            <label className="paid-check">
+                              <input
+                                aria-label={`${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName} es cliente nuevo`}
+                                checked={Boolean(order.customer.isNew)}
+                                onChange={() => void toggleNew(order)}
+                                type="checkbox"
+                              />
+                            </label>
+                          ),
                         }
-                      : column,
+                      : column.key === 'cobrado' && permissions.includes('orders.edit')
+                        ? {
+                            ...column,
+                            render: (order: OrderSummary) =>
+                              isNoCharge(order.paymentExpectation) ? (
+                                '—'
+                              ) : (
+                                <label className="paid-check">
+                                  <input
+                                    aria-label={`Marcar ${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName} como cobrado`}
+                                    checked={Boolean(order.paidAt)}
+                                    onChange={() => setPaying(order)}
+                                    type="checkbox"
+                                  />
+                                  <span>{order.paidAt ? 'Cobrado' : 'Pendiente'}</span>
+                                </label>
+                              ),
+                          }
+                        : column,
               )}
             empty={
               <EmptyState

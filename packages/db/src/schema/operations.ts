@@ -679,6 +679,12 @@ export const orders = pgTable(
     deliveryAddressLine2: text('delivery_address_line2'),
     deliveryLocationUrlSnapshot: text('delivery_location_url_snapshot'),
     paymentExpectation: text('payment_expectation').notNull(),
+    /*
+     * "NUEVO" a mano para este pedido (2026-11-01). Ser nuevo vale sólo en el período en que el
+     * cliente entró: null se calcula (es su primer período con un pedido no cancelado). Se marca o
+     * desmarca desde la lista, para todos sus pedidos de ese período.
+     */
+    isNewOverride: boolean('is_new_override'),
     notes: text('notes'),
     /*
      * Día de reparto y franja horaria tal como los anota quien carga el pedido ("martes", "9 a 12").

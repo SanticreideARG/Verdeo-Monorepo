@@ -437,6 +437,22 @@ export function isNewCustomer(override: boolean | null, activeOrders: number): b
 }
 
 /**
+ * Si un pedido sale como "NUEVO" (2026-11-01): ser nuevo vale sólo en el período en que el cliente
+ * entró, no para siempre. Gana lo marcado en el pedido; si no, un cliente marcado "no es nuevo" no
+ * lo es nunca; si no, es nuevo el pedido de su primer período con un pedido no cancelado. En el
+ * período siguiente deja de serlo solo.
+ */
+export function isNewOrder(input: {
+  customerOverride: boolean | null;
+  inFirstPeriod: boolean;
+  orderOverride: boolean | null;
+}): boolean {
+  if (input.orderOverride !== null) return input.orderOverride;
+  if (input.customerOverride === false) return false;
+  return input.inFirstPeriod;
+}
+
+/**
  * Los pedidos del cliente STOCK no son ventas: no generan deuda ni cuentan en las estadísticas
  * (2026-10-21). Es el mismo criterio del script de conversión del stock: un cliente llamado "STOCK".
  */
@@ -5976,6 +5992,53 @@ export class PostgresOperationsService {
       .catch(translateDatabaseConflict);
   }
 
+  /**
+   * Marcar o desmarcar "NUEVO" desde la lista (2026-11-01), sin confirmación. Vale para el cliente
+   * en ese período: se marca en todos sus pedidos del período del pedido tocado, y no en los de
+   * otros períodos. Devuelve los pedidos que cambiaron, para actualizar la lista en el lugar.
+   */
+  public async setOrderNew(orderId: string, isNew: boolean, context: OperationsContext) {
+    return this.database
+      .transaction(async (transaction) => {
+        const [current] = await transaction
+          .select({
+            customerId: orders.customerId,
+            publicNumber: orders.publicNumber,
+            salesCycleId: orders.salesCycleId,
+          })
+          .from(orders)
+          .where(eq(orders.id, orderId))
+          .limit(1);
+        if (!current) throw new OperationsNotFoundError('No se encontró el pedido');
+
+        const changed = await transaction
+          .update(orders)
+          .set({ isNewOverride: isNew, updatedAt: new Date() })
+          .where(
+            and(
+              eq(orders.customerId, current.customerId),
+              eq(orders.salesCycleId, current.salesCycleId),
+            ),
+          )
+          .returning({ id: orders.id });
+
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        await audit.record({
+          action: isNew ? 'order.marked_new' : 'order.marked_not_new',
+          actor: auditActor(context),
+          after: { isNew, orderIds: changed.map((row) => row.id) },
+          correlationId: context.correlationId,
+          entityId: orderId,
+          entityType: 'order',
+          metadata: { publicNumber: current.publicNumber },
+          requestId: context.requestId,
+          source: context.source,
+        });
+        return { isNew, orderIds: changed.map((row) => row.id) };
+      })
+      .catch(translateDatabaseConflict);
+  }
+
   public async updateOrder(
     orderId: string,
     input: OrderUpdateInput,
@@ -8026,6 +8089,7 @@ export class PostgresOperationsService {
         deliveryWindow: customerAddresses.deliveryWindow,
         deliveryZone: customerAddresses.operationalZone,
         id: orders.id,
+        isNewOverride: orders.isNewOverride,
         menuId: orders.weeklyMenuId,
         // La ciudad de la operación, no la del domicilio: es la que decide numeración, menú y
         // precios, y la que alguien busca cuando pregunta "¿de dónde era este pedido?".
@@ -8037,6 +8101,7 @@ export class PostgresOperationsService {
         paidAt: orders.paidAt,
         paymentExpectation: orders.paymentExpectation,
         publicNumber: orders.publicNumber,
+        salesCycleId: orders.salesCycleId,
         source: orders.source,
         status: orders.status,
         totalMinor: orders.totalMinor,
@@ -8147,19 +8212,29 @@ export class PostgresOperationsService {
     const contactFor = (customerId: string, type: string) =>
       contactRows.find((row) => row.customerId === customerId && row.type === type)?.value ?? null;
 
-    // "NUEVO": lo marcado a mano o, si no, a lo sumo un pedido no cancelado.
+    // "NUEVO" es del pedido: sólo en el primer período del cliente (isNewOrder).
     const customerIds = [...new Set(rows.map((row) => row.customerId))];
     const newnessRows = await database
       .select({
-        activeOrders: sql<number>`(select count(*)::int from orders o where o.customer_id = ${customers.id} and o.status <> 'CANCELLED')`,
+        firstCycleId: sql<
+          string | null
+        >`(select o.sales_cycle_id from orders o join sales_cycles sc on sc.id = o.sales_cycle_id where o.customer_id = "customers"."id" and o.status <> 'CANCELLED' order by sc.open_at, o.created_at limit 1)`,
         id: customers.id,
         override: customers.isNewOverride,
       })
       .from(customers)
       .where(inArray(customers.id, customerIds));
-    const isNewFor = (customerId: string) => {
-      const row = newnessRows.find((entry) => entry.id === customerId);
-      return row ? isNewCustomer(row.override, row.activeOrders) : false;
+    const isNewFor = (row: {
+      customerId: string;
+      isNewOverride: boolean | null;
+      salesCycleId: string;
+    }) => {
+      const customer = newnessRows.find((entry) => entry.id === row.customerId);
+      return isNewOrder({
+        customerOverride: customer?.override ?? null,
+        inFirstPeriod: customer?.firstCycleId === row.salesCycleId,
+        orderOverride: row.isNewOverride,
+      });
     };
 
     const byId = new Map(
@@ -8174,7 +8249,7 @@ export class PostgresOperationsService {
             displayName: row.customerDisplayName,
             email: contactFor(row.customerId, 'email'),
             id: row.customerId,
-            isNew: isNewFor(row.customerId),
+            isNew: isNewFor(row),
             phone: contactFor(row.customerId, 'phone'),
             whatsapp: contactFor(row.customerId, 'whatsapp'),
           },

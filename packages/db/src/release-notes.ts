@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-02-nuevo-por-periodo',
+    body: `Cliente "NUEVO", sólo en su período: sale como nuevo en el período en que entró y en el siguiente deja de serlo. La columna "¿Es nuevo?" de Pedidos ahora es un tilde: se marca o desmarca al toque, sin confirmar.`,
+  },
+  {
     key: '2026-11-02-orden-manual-ruta',
     body: `Hojas de ruta: con "Establecer orden manualmente" tocás los puntos del mapa en el orden del recorrido. En la computadora, el selector de ruta pasó arriba y el mapa se ve mucho más grande.`,
   },

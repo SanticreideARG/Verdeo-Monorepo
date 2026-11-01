@@ -162,6 +162,8 @@ import {
   CycleClosedRequestSchema,
   CycleClosedResponseSchema,
   OrderCreateRequestSchema,
+  OrderNewRequestSchema,
+  OrderNewResponseSchema,
   OrderPaidRequestSchema,
   OrderReadyBatchRequestSchema,
   OrderReadyBatchResponseSchema,
@@ -642,6 +644,7 @@ interface OperationsEngine {
     paid: boolean,
     context: OperationsContext & { actorUserId: string },
   ): Promise<unknown>;
+  setOrderNew(orderId: string, isNew: boolean, context: OperationsContext): Promise<unknown>;
   setCycleClosed(cycleId: string, closed: boolean, context: OperationsContext): Promise<unknown>;
   listStockLots(input: {
     onlyAvailable?: boolean | undefined;
@@ -6942,6 +6945,22 @@ export function createApp(options: CreateAppOptions) {
       actorUserId: session.userId,
     });
     return context.json(OrderSchema.parse(contractValue(order)));
+  });
+
+  /** "NUEVO" desde la lista, sin confirmación: el cliente en el período de este pedido. */
+  app.post('/api/v1/orders/:id/new', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('orders.edit')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = OrderNewRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success) return badRequest(context, 'Revisá el pedido.');
+
+    const result = await requireOperations().setOrderNew(
+      params.data.id,
+      input.data.isNew,
+      operationsContext(context),
+    );
+    return context.json(OrderNewResponseSchema.parse(result));
   });
 
   app.patch('/api/v1/orders/:id', async (context) => {

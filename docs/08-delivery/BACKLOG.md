@@ -3,6 +3,12 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## "Es nuevo" por período (2026-11-02)
+
+- [x] "NUEVO" en un pedido vale sólo en el primer período del cliente (`isNewOrder`): en el siguiente deja de salir, y al volver a elegir aquel período sigue saliendo. Vale para la lista y el informe del período.
+- [x] La columna "¿Es nuevo?" es un tilde sin confirmación (`POST /orders/:id/new`): marca `orders.is_new_override` en los pedidos del cliente en ese período, no en otros.
+- [x] La ficha del cliente sigue con su interruptor: "no es nuevo" a mano gana en todos los períodos; "nuevo" a mano no lo hace nuevo en períodos siguientes.
+
 ## Hojas de ruta: orden manual en el mapa (2026-11-02) — [norma](../03-features/DELIVERY_AND_ROUTES.md)
 
 - [x] "Establecer orden manualmente": en una ruta en borrador, se tocan los puntos del mapa en orden; se puede deshacer, empezar de nuevo o cancelar, y se guarda con todas elegidas.

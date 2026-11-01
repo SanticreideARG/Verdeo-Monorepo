@@ -926,6 +926,13 @@ export const StockLotUpdateRequestSchema = z.object({
 /** Un tilde, nada más: quién y cuándo los pone el servidor. */
 export const OrderPaidRequestSchema = z.object({ paid: z.boolean() });
 
+// "NUEVO" del cliente en el período del pedido (2026-11-01): se marca en todos sus pedidos de ese período.
+export const OrderNewRequestSchema = z.object({ isNew: z.boolean() });
+export const OrderNewResponseSchema = z.object({
+  isNew: z.boolean(),
+  orderIds: z.array(UuidSchema),
+});
+
 export const OrderUpdateRequestSchema = z
   .object({
     /** Cambiar cliente: el pedido pasa a otro cliente de la misma ciudad, con su domicilio. */
@@ -1622,6 +1629,7 @@ export type PublicOrderTrackResponse = z.infer<typeof PublicOrderTrackResponseSc
 export type Order = z.infer<typeof OrderSchema>;
 export type OrderTransitionRequest = z.infer<typeof OrderTransitionRequestSchema>;
 export type OrderPaidRequest = z.infer<typeof OrderPaidRequestSchema>;
+export type OrderNewRequest = z.infer<typeof OrderNewRequestSchema>;
 export type OrderReadyBatchRequest = z.infer<typeof OrderReadyBatchRequestSchema>;
 export type OrderUpdateRequest = z.infer<typeof OrderUpdateRequestSchema>;
 export type OrderListQuery = z.infer<typeof OrderListQuerySchema>;
