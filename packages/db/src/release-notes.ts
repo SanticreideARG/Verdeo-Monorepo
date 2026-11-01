@@ -151,6 +151,13 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-01-cierre-sin-atajos',
+    body: `Cocina → Cierre de pedidos queda más simple:
+• Se sacaron "Imprimir", "Copiar para WhatsApp" y el atajo a Etiquetas. Las etiquetas siguen en su lugar del menú.
+• Ya no se elige reparto: la planilla de producción es siempre la de todos los repartos del período.
+• El período y los botones van en un solo renglón.`,
+  },
+  {
     key: '2026-11-01-columna-zona',
     body: `En Pedidos, la columna "Zona" ya muestra la zona que se escribe en el pedido. Antes salía un guión aunque el pedido la tuviera cargada.`,
   },

@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 
 import { DashboardShell } from '../components/DashboardShell.js';
 import { ProductionStockPanel } from '../components/ProductionStockPanel.js';
-import { RunFilter } from '../components/RunFilter.js';
 import { KitchenSheetsPanel } from '../components/KitchenSheetsPanel.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
@@ -19,7 +18,6 @@ import {
 } from '../lib/operations.js';
 import { formatMoment } from '../lib/dates.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
-import { showToast } from '../lib/toast.js';
 
 function stockUnits(kitchen: KitchenSummary): number {
   return (kitchen.stock ?? []).reduce((sum, item) => sum + item.quantityUnits, 0);
@@ -28,7 +26,6 @@ function stockUnits(kitchen: KitchenSummary): number {
 export function KitchenPage() {
   const { failed, logout, profile } = useDashboardProfile();
   // Un reparto: lo que hay que cocinar para esa salida.
-  const [runId, setRunId] = useState('');
   const [menus, setMenus] = useState<WeeklyMenu[]>([]);
   const [selectedMenuId, setSelectedMenuId] = useState('');
   const [kitchen, setKitchen] = useState<KitchenSummary | null>(null);
@@ -84,28 +81,6 @@ export function KitchenPage() {
     }
   }, []);
 
-  /**
-   * El consolidado en vivo, listo para pegar en un chat.
-   *
-   * Se copia al portapapeles en vez de descargar un archivo: lo que se hace con esto es mandárselo
-   * a cocina por WhatsApp, y un .txt adjunto obliga a abrirlo, copiarlo y recién ahí pegarlo.
-   */
-  async function copyProduction() {
-    if (!selectedMenu) return;
-    setMessage('');
-    const response = await apiRequest(
-      `/api/v1/production/${selectedMenu.cycle.id}/export?format=whatsapp`,
-    );
-    if (!response.ok) {
-      setMessage(await errorMessage(response));
-      return;
-    }
-    await navigator.clipboard.writeText(await response.text());
-    showToast('Producción copiada. Pegala en el chat de cocina.');
-    await loadSnapshots(selectedMenu.cycle.id);
-    setSheetsKey((key) => key + 1);
-  }
-
   /** El informe del período: lo vendido, la plata por medio de pago, quién debe y el stock. */
   async function downloadReport() {
     if (!selectedMenu) return;
@@ -123,26 +98,25 @@ export function KitchenPage() {
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
   }
 
-  async function downloadProduction(format: 'pdf' | 'xlsx') {
+  /*
+   * Sólo la planilla (2026-11-01): "Imprimir", "Copiar para WhatsApp" y el atajo a Etiquetas se
+   * sacaron de Cierre de pedidos. Las etiquetas siguen en su sección del menú.
+   */
+  async function downloadProduction() {
     if (!selectedMenu) return;
     setMessage('');
     const response = await apiRequest(
-      `/api/v1/production/${selectedMenu.cycle.id}/export?format=${format}`,
+      `/api/v1/production/${selectedMenu.cycle.id}/export?format=xlsx`,
     );
     if (!response.ok) {
       setMessage(await errorMessage(response));
       return;
     }
     const url = URL.createObjectURL(await response.blob());
-    if (format === 'pdf') {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    } else {
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `produccion-${selectedMenu.cycle.alias}.xlsx`;
-      link.click();
-    }
-    // Revocar en el mismo turno corre carrera con la pestaña que recién se abre.
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `produccion-${selectedMenu.cycle.alias}.xlsx`;
+    link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
     await loadSnapshots(selectedMenu.cycle.id);
     setSheetsKey((key) => key + 1);
@@ -154,15 +128,13 @@ export function KitchenPage() {
    */
   useEffect(() => {
     if (selectedMenu) void generate();
-  }, [selectedMenu?.cycle.id, runId]);
+  }, [selectedMenu?.cycle.id]);
 
   async function generate() {
     if (!selectedMenu) return;
     setMessage('');
     try {
-      const response = await apiRequest(
-        `/api/v1/production/${selectedMenu.cycle.id}${runId ? `?reparto=${runId}` : ''}`,
-      );
+      const response = await apiRequest(`/api/v1/production/${selectedMenu.cycle.id}`);
       if (!response.ok) throw new Error(await errorMessage(response));
       setKitchen((await response.json()) as KitchenSummary);
       await loadSnapshots(selectedMenu.cycle.id);
@@ -235,7 +207,7 @@ export function KitchenPage() {
     );
   }
 
-  // El último consolidado exportado: cada descarga, impresión o copia lo vuelve a guardar.
+  // El último consolidado exportado: cada descarga de la planilla lo vuelve a guardar.
   const lastExport = snapshots.find((snapshot) => snapshot.kind === 'final') ?? null;
 
   return (
@@ -263,12 +235,12 @@ export function KitchenPage() {
           // Cambiar de ciclo atenúa lo que hay en vez de vaciarlo.
           <div className={loading ? 'is-refreshing' : undefined}>
             {/*
-             * La cabecera en dos renglones: qué se mira (período y reparto) y qué se hace con eso.
-             * Eran siete botones del mismo peso en una fila que se partía en cualquier lado.
+             * Un solo renglón (2026-11-01): el período y lo que se hace con él. Sin elegir reparto:
+             * la planilla de producción es siempre la de todos los repartos del período.
              */}
             <div className="operation-card kitchen-toolbar mt-6">
-              <div className="kitchen-toolbar-filters">
-                <label className="field">
+              <div className="kitchen-toolbar-row">
+                <label className="field kitchen-period">
                   Período
                   <select
                     onChange={(event) => setSelectedMenuId(event.target.value)}
@@ -282,58 +254,36 @@ export function KitchenPage() {
                     ))}
                   </select>
                 </label>
-                {/* Un reparto: lo que hay que cocinar para esa salida, no para el período entero. */}
-                <RunFilter onChange={setRunId} value={runId} />
-              </div>
-              <div className="kitchen-toolbar-actions">
-                <button
-                  className="button button-primary"
-                  disabled={!kitchen}
-                  onClick={() => void downloadProduction('xlsx')}
-                  type="button"
-                >
-                  Descargar planilla
-                </button>
-                <button
-                  className="button button-secondary"
-                  disabled={!kitchen}
-                  onClick={() => void downloadProduction('pdf')}
-                  type="button"
-                >
-                  Imprimir
-                </button>
-                <button
-                  className="button button-secondary"
-                  disabled={!kitchen}
-                  onClick={() => void copyProduction()}
-                  type="button"
-                >
-                  Copiar para WhatsApp
-                </button>
-                {/* Las etiquetas tienen su propia sección: ahí se elige la tanda y se ve cómo salen. */}
-                <Link className="button button-secondary" to="/app/etiquetas">
-                  Etiquetas
-                </Link>
-                {canSeeMoney ? (
+                <div className="kitchen-toolbar-actions">
                   <button
-                    className="button button-secondary"
-                    disabled={!selectedMenu}
-                    onClick={() => void downloadReport()}
+                    className="button button-primary"
+                    disabled={!kitchen}
+                    onClick={() => void downloadProduction()}
                     type="button"
                   >
-                    Informe del período
+                    Descargar planilla
                   </button>
-                ) : null}
-                {/* Cerrar es lo último de la semana: separado del resto, al final. */}
-                {canGenerate && selectedMenu && selectedMenu.cycle.status !== 'CLOSED' ? (
-                  <button
-                    className="button button-secondary kitchen-close"
-                    onClick={() => setClosing(true)}
-                    type="button"
-                  >
-                    Cerrar período
-                  </button>
-                ) : null}
+                  {canSeeMoney ? (
+                    <button
+                      className="button button-secondary"
+                      disabled={!selectedMenu}
+                      onClick={() => void downloadReport()}
+                      type="button"
+                    >
+                      Informe del período
+                    </button>
+                  ) : null}
+                  {/* Cerrar es lo último de la semana: separado del resto, al final. */}
+                  {canGenerate && selectedMenu && selectedMenu.cycle.status !== 'CLOSED' ? (
+                    <button
+                      className="button button-secondary kitchen-close"
+                      onClick={() => setClosing(true)}
+                      type="button"
+                    >
+                      Cerrar período
+                    </button>
+                  ) : null}
+                </div>
               </div>
               {lastExport ? (
                 <p className="kitchen-toolbar-note">
@@ -343,7 +293,7 @@ export function KitchenPage() {
               ) : null}
             </div>
 
-            {selectedMenu && !runId ? (
+            {selectedMenu ? (
               <KitchenSheetsPanel cycleId={selectedMenu.cycle.id} refreshKey={sheetsKey} />
             ) : null}
 
@@ -488,7 +438,7 @@ export function KitchenPage() {
                   </p>
                 </div>
 
-                {selectedMenu && !runId ? (
+                {selectedMenu ? (
                   <ProductionStockPanel
                     canEdit={canReport}
                     cycleId={selectedMenu.cycle.id}

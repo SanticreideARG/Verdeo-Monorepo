@@ -3,6 +3,11 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Cocina: Cierre de pedidos sin atajos (2026-11-01)
+
+- [x] Fuera "Imprimir", "Copiar para WhatsApp" y el enlace a Etiquetas de la barra de Cierre de pedidos (`KitchenPage`). Quedan "Descargar planilla", "Informe del período" y "Cerrar período". El servidor sigue sabiendo exportar en PDF y texto (`/production/:id/export`), sin botón que lo pida.
+- [x] Sin selector de reparto: el consolidado y la planilla son siempre de todos los repartos del período (`?reparto=` sigue en el servidor y en Etiquetas). Período y acciones en un solo renglón.
+
 ## Pedidos: columna Zona (2026-11-01)
 
 - [x] La columna "Zona" mostraba "—" en todos los pedidos: leía la zona del domicilio (`deliveryZone`, casi nunca cargada) y no la "Zona" que se escribe en el pedido (`deliveryDayText`, antes "Día de reparto"). Ahora muestra y ordena por la del pedido, con la del domicilio de respaldo (`zoneOf` en `orderColumns.tsx`).

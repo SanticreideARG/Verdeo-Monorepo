@@ -32,7 +32,7 @@ No se revisaron: la vista de repartidor (`/reparto/:token`), el sitio público, 
    Arreglo: altura mínima de 40 px para todo lo tocable, etiquetas de 11 px como mínimo, y en tablet esconder el nombre y el reloj (o pasarlos al menú del avatar).
 
 3. **Botones que se parten en dos o tres renglones en celular.** Los botones son píldoras y, cuando el texto no entra, quedan "huevos":
-   - Cocina: "Copiar para WhatsApp", "Informe del período", "Cerrar período".
+   - Cocina: "Informe del período", "Cerrar período" ("Copiar para WhatsApp" se sacó el 2026-11-01).
    - Nuevo pedido: "Buscar cliente" / "Nuevo cliente" y "Guardar y confirmar" / "Guardar como borrador".
 
    Arreglo: en celular, botones a lo ancho (uno por renglón) o en grilla de dos columnas con `white-space: nowrap` y texto más corto. Además, "Cerrar período" debería verse distinto (acción importante y difícil de deshacer), no igual que "Imprimir".
