@@ -39,6 +39,18 @@ Animaciones en el sitio público y en el panel, empezando por el público. Siemp
 - [x] Fase 1: portada pública. Scroll suave (Lenis, sólo rueda), enlaces del menú que deslizan hasta la sección, entrada del primer bloque y de cada sección al aparecer (GSAP).
 - [ ] Fase 2: panel, sin Lenis. Elegir pantallas y efectos (búho, Estadísticas, tablero).
 
+## Stock como pedido y períodos automáticos (plan, 2026-10-30) — [plan](../03-features/STOCK_COMO_PEDIDO_PLAN.md)
+
+El stock vive en cuatro lugares con reglas distintas y confunde. La idea: el stock es un pedido sin cliente ni valor, venderlo es pasar viandas a un pedido de cliente, y los períodos se crean solos para poder pasar pedidos a la semana siguiente. Decisiones tomadas el 2026-10-30 (sección 8): sin coeficiente, stock siempre a mano, período automático vacío, stock como pedido con "Sin pago". Se trabaja sólo en local, en la rama `stock-como-pedido`.
+
+- [ ] Fase 0: forma de pago "Sin pago" (total 0, motivo, fuera de la contabilidad; prueba, regalo, compensación).
+- [ ] Fase 1: períodos automáticos (en curso + siguiente), el menú elige el período.
+- [ ] Fase 2: pasar un pedido a la semana siguiente ("¿ya está cocinado?").
+- [ ] Fase 3: pedido de stock (uno por ciudad y período, cliente de sistema, "Sin pago"); se elimina el coeficiente.
+- [ ] Fase 4: vender del stock desde los pedidos de stock; pasar un pedido no cobrado a stock.
+- [ ] Fase 5: pasar el stock, las bajas y los lotes existentes a pedidos de stock.
+- [ ] Fase 6: contraer (borrar las tablas viejas). Reemplaza a la 0078 de stock por ciudad.
+
 ## Stock por ciudad (2026-10-29) — [plan](../03-features/STOCK_POR_CIUDAD_PLAN.md)
 
 El stock del período y sus bajas eran sólo por período: lo cargado en una ciudad aparecía, se cocinaba y se vendía en las otras.
