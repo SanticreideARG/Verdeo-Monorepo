@@ -90,6 +90,10 @@ export interface OrderListSummary {
   units: number;
 }
 
+/** La zona del pedido: la escrita en el pedido y, si no tiene, la del domicilio. */
+export const zoneOf = (order: OrderSummary): string =>
+  order.deliveryDayText?.trim() || order.deliveryZone?.trim() || '';
+
 export function buildOrderColumns(
   options: {
     maskSurnames?: boolean;
@@ -239,8 +243,13 @@ export function buildOrderColumns(
     {
       key: 'zona',
       label: 'Zona',
-      render: (order) => order.deliveryZone ?? '—',
-      sortValue: (order) => order.deliveryZone ?? '',
+      /*
+       * La "Zona" que se escribe en el pedido (`deliveryDayText`, antes "Día de reparto"). Leía la
+       * zona del domicilio, que casi nunca está cargada, y la columna salía en "—" aunque el pedido
+       * dijera su zona (2026-11-01). La del domicilio queda como respaldo.
+       */
+      render: (order) => zoneOf(order) || '—',
+      sortValue: (order) => zoneOf(order),
     },
     {
       key: 'pago',

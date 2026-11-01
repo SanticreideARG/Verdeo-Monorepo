@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-01-columna-zona',
+    body: `En Pedidos, la columna "Zona" ya muestra la zona que se escribe en el pedido. Antes salía un guión aunque el pedido la tuviera cargada.`,
+  },
+  {
     key: '2026-10-31-cocina-stock',
     body: `Cocina más tranquila:
 • Los pedidos cancelados ya no aparecen en el aviso de "cambiaron N pedidos": no se cocinan y asustaban.

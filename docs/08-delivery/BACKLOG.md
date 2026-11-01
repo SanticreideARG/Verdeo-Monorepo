@@ -3,6 +3,10 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Pedidos: columna Zona (2026-11-01)
+
+- [x] La columna "Zona" mostraba "—" en todos los pedidos: leía la zona del domicilio (`deliveryZone`, casi nunca cargada) y no la "Zona" que se escribe en el pedido (`deliveryDayText`, antes "Día de reparto"). Ahora muestra y ordena por la del pedido, con la del domicilio de respaldo (`zoneOf` en `orderColumns.tsx`).
+
 ## Cocina: cancelados y stock (2026-10-31)
 
 Un cancelado en rojo en el aviso de cambios hacía pensar que se cocinaba, y un lote bajado a 0 por error desaparecía sin forma de deshacerlo.
