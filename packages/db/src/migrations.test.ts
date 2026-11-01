@@ -304,6 +304,42 @@ describe('database migrations', () => {
     ).toBe(0);
   });
 
+  it('adds "Sin pago" without touching a name already changed', async () => {
+    const target = await freshDatabase();
+    const files = migrationFiles();
+    await applyMigrations(
+      target,
+      files.filter((name) => name < '0078'),
+    );
+    await applyMigrations(
+      target,
+      files.filter((name) => name.startsWith('0078')),
+    );
+    const methods = await target.query<{ display_name: string; is_cash: boolean }>(
+      `select display_name, is_cash from payment_methods where code = 'sin_pago'`,
+    );
+    expect(methods.rows).toEqual([{ display_name: 'Sin pago', is_cash: false }]);
+
+    // Otra vez, con el nombre cambiado: no lo pisa ni duplica.
+    await target.exec(
+      `update payment_methods set display_name = 'Sin cargo' where code = 'sin_pago'`,
+    );
+    await applyMigrations(
+      target,
+      files.filter((name) => name.startsWith('0078')),
+    );
+    expect(
+      await count(target, `select count(*)::int as n from payment_methods where code = 'sin_pago'`),
+    ).toBe(1);
+    expect(
+      (
+        await target.query<{ name: string }>(
+          `select display_name as name from payment_methods where code = 'sin_pago'`,
+        )
+      ).rows[0]?.name,
+    ).toBe('Sin cargo');
+  });
+
   it('rejects a zone that belongs to a different operation than the order', async () => {
     const target = await freshDatabase();
     await applyMigrations(target, migrationFiles());

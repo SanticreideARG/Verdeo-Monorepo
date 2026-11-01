@@ -67,7 +67,7 @@ código.
   - El `PUT` de hoy borra y reinserta todo el stock del período sin ciudad, así que si alguien carga
     stock entre la migración y el deploy, quedan filas con `null`.
   - El código nuevo trata esas filas como "sin ciudad" y las asigna con la misma regla al leerlas.
-- **Contraer (0078, más adelante):** completar los `null` que queden y poner `NOT NULL`. Va un
+- **Contraer (más adelante; el número 0078 terminó siendo "Sin pago"):** completar los `null` que queden y poner `NOT NULL`. Va un
   deploy después.
 
 ## Verificación
@@ -86,7 +86,7 @@ código.
 - [x] 0077 escrita y probada en `migrations.test.ts` (asigna el stock existente por la regla del cierre).
 - [x] 0077 corrida en producción (2026-10-30), y el código desplegado después.
 - [x] Código (commit B), con tests de dos ciudades en `production.test.ts` y de la API.
-- [ ] 0078: `NOT NULL`.
+- [ ] Contraer: `NOT NULL`.
 
 ## Orden
 

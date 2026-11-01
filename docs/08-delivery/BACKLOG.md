@@ -45,15 +45,18 @@ Animaciones en el sitio público y en el panel, empezando por el público. Siemp
 
 ## Stock como pedido y períodos automáticos (plan, 2026-10-30) — [plan](../03-features/STOCK_COMO_PEDIDO_PLAN.md)
 
-El stock vive en cuatro lugares con reglas distintas y confunde. La idea: el stock es un pedido sin cliente ni valor, venderlo es pasar viandas a un pedido de cliente, y los períodos se crean solos para poder pasar pedidos a la semana siguiente. Decisiones tomadas el 2026-10-30 (sección 8): sin coeficiente, stock siempre a mano, período automático vacío, stock como pedido con "Sin pago". Se trabaja sólo en local, en la rama `stock-como-pedido`.
+El stock vive en cuatro lugares con reglas distintas y confunde. La idea: el stock es un pedido sin cliente ni valor, venderlo es pasar viandas a un pedido de cliente, y los períodos se crean solos para poder pasar pedidos a la semana siguiente. Decisiones tomadas el 2026-10-30 (sección 8): sin coeficiente, stock siempre a mano, período automático vacío, stock como pedido con "Sin pago". El plan se trajo a `main` el 2026-11-01 para empezar por la fase 0.
 
 - [ ] Fase 0: forma de pago "Sin pago" (total 0, motivo, fuera de la contabilidad; prueba, regalo, compensación).
+  - [x] Migración 0078: el medio de pago `sin_pago` ("Sin pago", no efectivo). Probada en `migrations.test.ts`.
+  - [ ] Correr 0078 en producción (antes que el código).
+  - [ ] Código: total 0, motivo, fuera de Por cobrar, deudores y cobros; sin tilde de cobrado; no se ofrece en el pedido público.
 - [ ] Fase 1: períodos automáticos (en curso + siguiente), el menú elige el período.
 - [ ] Fase 2: pasar un pedido a la semana siguiente ("¿ya está cocinado?").
 - [ ] Fase 3: pedido de stock (uno por ciudad y período, cliente de sistema, "Sin pago"); se elimina el coeficiente.
 - [ ] Fase 4: vender del stock desde los pedidos de stock; pasar un pedido no cobrado a stock.
 - [ ] Fase 5: pasar el stock, las bajas y los lotes existentes a pedidos de stock.
-- [ ] Fase 6: contraer (borrar las tablas viejas). Reemplaza a la 0078 de stock por ciudad.
+- [ ] Fase 6: contraer (borrar las tablas viejas). Reemplaza a la contracción de stock por ciudad.
 
 ## Stock por ciudad (2026-10-29) — [plan](../03-features/STOCK_POR_CIUDAD_PLAN.md)
 
@@ -62,7 +65,7 @@ El stock del período y sus bajas eran sólo por período: lo cargado en una ciu
 - [x] Migración 0077 (expandir): `operating_site_id` en `production_stock` y `surplus_writeoffs`, lo existente asignado por la regla del cierre, índice único con la ciudad. Probada en `migrations.test.ts`.
 - [x] Correr 0077 en producción (antes que el código). Corrida el 2026-10-30; el código salió después.
 - [x] Código: stock, bajas, disponible, venta del stock, resumen de cocina y cierre por ciudad; con "Todas las ciudades" se ve la suma y no se edita. Lo que la cocina hizo de más sin ser stock de nadie va a la ciudad que más vendió esa variedad (con una ciudad, igual que antes).
-- [ ] 0078 (contraer): `NOT NULL` en las dos columnas.
+- [ ] Contraer: `NOT NULL` en las dos columnas (la 0078 terminó siendo "Sin pago").
 
 ## El búho en el Workbench de IA (2026-10-30) — [plan](../03-features/BUHO_WORKBENCH_PLAN.md)
 

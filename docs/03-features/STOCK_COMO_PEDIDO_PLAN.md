@@ -189,7 +189,7 @@ Reemplaza al "cancelado y pasó a stock" de hoy (`orders.cancelled_to_stock`, qu
 | cierre de período que crea lotes          | ya no crea nada: el stock sin vender sigue en su pedido o se pasa de semana |
 
 Las tablas viejas no se borran hasta que la versión nueva lleve un par de semanas en uso. Ese
-borrado es la fase de "contraer" y deja sin sentido la 0078 pendiente del stock por ciudad.
+borrado es la fase de "contraer" y deja sin sentido la contracción pendiente del stock por ciudad.
 
 ## 5. Fases
 

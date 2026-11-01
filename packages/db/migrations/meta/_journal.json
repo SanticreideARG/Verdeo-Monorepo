@@ -547,6 +547,13 @@
       "when": 1793357090075,
       "tag": "0077_boring_wallow",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1793574445847,
+      "tag": "0078_sin_pago",
+      "breakpoints": true
     }
   ]
 }
