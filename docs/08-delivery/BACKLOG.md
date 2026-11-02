@@ -3,6 +3,12 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Temas: Verano y Calabaza (2026-11-01) — [plan](../03-features/TEMAS_TEMPORADA_PLAN.md)
+
+- [x] Halloween termina el 31-oct a las 23:59; sus colores quedan como tema "Calabaza" (oscuro, sin telarañas ni calabaza).
+- [x] Temporada Verano del 1-nov al 28-feb (cruza el año), también como tema "Verano": celeste arriba y blanco abajo, letras negras, acento e íconos verde intenso, brillo naranja en hover y foco. Sacarla se recuerda por temporada, no por año calendario.
+- [ ] Tokens `--db-icon` y `--db-glow` para todos los temas (hoy el brillo naranja son reglas propias de Verano sobre los elementos principales).
+
 ## Orden de tamaños: 250 arriba, 400 abajo (2026-11-01) — [norma](../02-domain/PRODUCT_ORDER.md)
 
 - [x] `compareSizes` ordena de menor a mayor: dentro de cada menú, 250 antes que 400, en todas las salidas (planilla "Pedido" y "Conciliado", informes, etiquetas, listas, formularios). El orden de los menús no cambia.
@@ -782,7 +788,7 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 - [x] Pedidos: el selector de período siempre a la vista (computadora y teléfono); al elegir uno anterior el estado pasa a "Todos", porque "Pendientes de acción" lo dejaba vacío.
 - [x] "Es cliente nuevo" al crear un cliente en Nuevo pedido y al importar pedidos (mail y planilla); los contactos de planilla entran como no nuevos salvo "Son clientes nuevos".
 - [x] "Es cliente nuevo" en Nuevo pedido arranca sin tildar; cada persona elige en Ajustes → Apariencia ("Al tomar pedidos") si viene tildado (`user_appearance.new_customer_is_new`, migración 0075).
-- [x] Tema Halloween ([HALLOWEEN_THEME_PLAN.md](../03-features/HALLOWEEN_THEME_PLAN.md)): sólo el panel, solo del 24-oct al 1-nov, se saca en Apariencia; telarañas en las esquinas y calabaza.
+- [x] Tema Halloween ([HALLOWEEN_THEME_PLAN.md](../03-features/HALLOWEEN_THEME_PLAN.md)): sólo el panel, solo del 24-oct al 1-nov (desde 2026-11-01: hasta el 31-oct), se saca en Apariencia; telarañas en las esquinas y calabaza.
 
 ## Menús (2026-10-28)
 

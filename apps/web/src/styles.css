@@ -11812,9 +11812,11 @@ label.field:has(> input[type='radio']) {
   font-size: 0.75rem;
 }
 
-/* Halloween (HALLOWEEN_THEME_PLAN.md): negro, naranja calabaza y verde. Se pone solo del 24 de
-   octubre al 1 de noviembre; quien no lo quiera lo saca en Apariencia. */
-.dashboard-shell[data-theme='halloween'] {
+/* Halloween (HALLOWEEN_THEME_PLAN.md): negro, naranja calabaza y verde. Se pone solo del 24 al 31
+   de octubre; quien no lo quiera lo saca en Apariencia. Los mismos colores, sin telarañas ni
+   calabaza, quedan todo el año como el tema "Calabaza". */
+.dashboard-shell[data-theme='halloween'],
+.dashboard-shell[data-theme='calabaza'] {
   --db-bg: #0a0a0b;
   --db-bg-2: #121213;
   --db-surface: rgb(21 21 22 / 90%);
@@ -11910,6 +11912,69 @@ label.field:has(> input[type='radio']) {
   height: 3.5rem;
   margin: 0 auto 0.5rem;
   background: url('/seasonal/halloween/halloween-pumpkin.png') center / contain no-repeat;
+}
+
+/*
+ * Verano (TEMAS_TEMPORADA_PLAN.md): claro, celeste arriba y blanco abajo, letras negras, íconos y
+ * acento verde intenso, y brillos naranjas al pasar el mouse o con el foco. Se pone solo del 1 de
+ * noviembre al 28 de febrero, y queda además como tema "Verano" para todo el año.
+ *
+ * El naranja (#f97316) da 2.8:1 sobre blanco: no sirve para texto, sólo para brillos y bordes.
+ * `--db-bg` queda liso (blanco) porque también se usa como color de letra sobre el acento; el
+ * degradado va aparte, fijo a la pantalla para que el blanco quede abajo de la vista.
+ */
+.dashboard-shell[data-theme='verano'] {
+  --db-bg: #ffffff;
+  --db-bg-2: #e9f5fc;
+  --db-surface: rgb(255 255 255 / 88%);
+  --db-surface-solid: #ffffff;
+  --db-sidebar: linear-gradient(180deg, rgb(214 237 251 / 97%), rgb(255 255 255 / 97%));
+  --db-topbar: rgb(255 255 255 / 82%);
+  --db-text: #0b0b0b;
+  --db-text-soft: rgb(11 11 11 / 76%);
+  --db-muted: rgb(11 11 11 / 60%);
+  --db-muted-2: rgb(11 11 11 / 38%);
+  --db-border: rgb(14 116 144 / 24%);
+  --db-border-soft: rgb(11 11 11 / 9%);
+  --db-accent: #15803d;
+  --db-accent-strong: #166534;
+  --db-gold: #c2410c;
+  --db-glow: #f97316;
+  --db-vignette: radial-gradient(
+    ellipse 40% 34% at 96% 0%,
+    rgb(255 214 140 / 30%),
+    transparent 62%
+  );
+  background: linear-gradient(180deg, #bfe3f7 0%, #e6f4fc 38%, #ffffff 72%) fixed;
+}
+/* Brillo naranja en lo que se toca: botones, menú, pestañas, tarjetas y filas. */
+.dashboard-shell[data-theme='verano']
+  :is(
+    .button,
+    .dashboard-nav-cluster > a,
+    .panel-tabs a,
+    .settings-nav a,
+    .settings-card,
+    .dashboard-module-card,
+    .dashboard-topbar-icon,
+    .appearance-trigger,
+    .action-menu-item,
+    .data-view-switch button,
+    .link-button
+  ):hover {
+  border-color: color-mix(in srgb, var(--db-glow) 70%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--db-glow) 55%, transparent),
+    0 0 14px color-mix(in srgb, var(--db-glow) 35%, transparent);
+}
+.dashboard-shell[data-theme='verano'] .dashboard-nav-cluster > a:hover {
+  background: color-mix(in srgb, var(--db-glow) 10%, transparent);
+}
+.dashboard-shell[data-theme='verano'] .data-table tbody tr:hover > td {
+  background: color-mix(in srgb, var(--db-glow) 8%, transparent);
+}
+.dashboard-shell[data-theme='verano'] :focus-visible {
+  outline-color: var(--db-glow);
 }
 
 /*

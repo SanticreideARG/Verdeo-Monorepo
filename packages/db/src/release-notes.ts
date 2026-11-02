@@ -151,6 +151,11 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-01-tema-verano',
+    body: `☀️ Llegó el verano: hasta el 28 de febrero el panel se viste claro, celeste arriba y blanco abajo, con letras negras, íconos verdes y un brillo naranja al pasar el mouse. Si no lo querés, sacalo en "Aa" → Temporada.
+🎃 Halloween se despide, pero sus colores se quedan: elegí el tema "Calabaza" en Apariencia (sin telarañas ni calabaza). "Verano" también queda como tema para todo el año.`,
+  },
+  {
     key: '2026-11-01-orden-250-400',
     body: `Nuevo orden en todas las planillas, etiquetas e informes: dentro de cada menú va primero el 250 y abajo el 400 (Keto 250, Keto 400, Anti-Age 250, Anti-Age 400…). El orden de los menús no cambia.`,
   },

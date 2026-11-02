@@ -45,3 +45,9 @@ la aplicación: se elige, se saca, y no toca etiquetas, planillas ni nada que se
   bordes más las zonas encerradas con el patrón blanco y gris) y se achicó a 256 px. Va al lado del
   logo y en los estados vacíos.
 - Imágenes en `apps/web/public/seasonal/halloween/`: se cargan sólo con el tema puesto.
+
+## Cambio del 2026-11-01
+
+- La temporada termina el **31 de octubre** a las 23:59 (antes, el 1 de noviembre).
+- Los colores quedan todo el año como el tema **"Calabaza"**, sin telarañas ni calabaza. Ver
+  [TEMAS_TEMPORADA_PLAN.md](TEMAS_TEMPORADA_PLAN.md), que suma además la temporada de Verano.

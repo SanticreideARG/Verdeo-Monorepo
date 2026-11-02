@@ -216,11 +216,14 @@ const themes: readonly ThemeOption[] = [
   { color: '#3b82f6', label: 'Cielo', tone: 'claro', value: 'cielo' },
   { color: '#b47834', label: 'Arena', tone: 'claro', value: 'arena' },
   { color: '#111111', label: 'Papel', tone: 'claro', value: 'papel' },
+  // Los colores de las temporadas, para quien los quiera todo el año (sin adornos).
+  { color: '#7cc8ef', label: 'Verano', tone: 'claro', value: 'verano' },
   { color: '#3a7d44', label: 'Bosque', tone: 'oscuro', value: 'bosque' },
   { color: '#a855f7', label: 'Aurora', tone: 'oscuro', value: 'aurora' },
   { color: '#6b7280', label: 'Carbón', tone: 'oscuro', value: 'carbon' },
   { color: '#d69e5c', label: 'Cacao', tone: 'oscuro', value: 'cacao' },
   { color: '#2db2ac', label: 'Marea', tone: 'oscuro', value: 'marea' },
+  { color: '#f97316', label: 'Calabaza', tone: 'oscuro', value: 'calabaza' },
 ];
 
 const FONT_KEYS = new Set(FONT_OPTIONS.map((item) => item.value as string));
@@ -453,20 +456,19 @@ export function DashboardShell({
   );
   /*
    * El tema de temporada (HALLOWEEN_THEME_PLAN.md): entre sus fechas se pone solo, encima del tema
-   * elegido, y quien no lo quiera lo saca en Apariencia (se recuerda en este equipo, ese año).
+   * elegido, y quien no lo quiera lo saca en Apariencia (se recuerda en este equipo, esa temporada).
+   * Se relee en cada render: a medianoche puede empezar otra temporada, que no viene sacada.
    */
   const season = activeSeason(now);
-  const [seasonOff, setSeasonOff] = useState(() =>
-    season ? seasonTurnedOff(season, new Date()) : false,
-  );
-  const seasonOn = season !== null && !seasonOff;
+  const [, setSeasonOffChanged] = useState(0);
+  const seasonOn = season !== null && !seasonTurnedOff(season, now);
   const seasonControl: SeasonControl | null = season
     ? {
         label: season.label,
         on: seasonOn,
         onChange: (on) => {
           setSeasonTurnedOff(season, new Date(), !on);
-          setSeasonOff(!on);
+          setSeasonOffChanged((count) => count + 1);
         },
         until: seasonUntilLabel(season),
       }
