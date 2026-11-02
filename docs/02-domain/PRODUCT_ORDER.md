@@ -3,14 +3,14 @@
 Norma central (pedido del usuario, 2026-10-22): **todas las salidas de datos de la aplicación**
 —planillas, etiquetas, informes, listas y formularios— muestran los productos en este orden:
 
-1. Keto 400
-2. Keto 250
-3. Antiage
-4. Real
-5. Vegetariano
-6. Intuitivos
+1. Keto
+2. Antiage
+3. Real
+4. Vegetariano
+5. Intuitivos
 
-Dentro de cada variedad, el tamaño más grande primero (400 antes que 250). Una variedad que no está
+Dentro de cada variedad, el tamaño más chico primero: **250 arriba, 400 abajo** (cambio pedido por
+el usuario el 2026-11-01; antes iba 400 primero). Una variedad que no está
 en la lista va después de Vegetariano y antes de los Intuitivos, por nombre. Los Intuitivos, entre
 sí, por cliente o por número de pedido, según la salida.
 

@@ -2,9 +2,9 @@
  * La jerarquía de orden de los productos (PRODUCT_ORDER.md): una sola, para todas las salidas de la
  * aplicación —planillas, etiquetas, informes, listas—.
  *
- *   Keto 400 · Keto 250 · Antiage · Real · Vegetariano · Intuitivos
+ *   Keto · Antiage · Real · Vegetariano · Intuitivos
  *
- * Dentro de cada variedad, el tamaño más grande primero. Una variedad que no está en la lista va
+ * Dentro de cada variedad, el tamaño más chico primero: 250 arriba, 400 abajo (2026-11-01). Una variedad que no está en la lista va
  * después de las nombradas y antes de los Intuitivos, por nombre.
  *
  * Se reconoce la variedad por su nombre ("Menú Nuevo Keto" es Keto, "Menú Anti-Age" es Antiage):
@@ -42,11 +42,11 @@ export function compareFamilies(
   );
 }
 
-/** Los tamaños de mayor a menor: 400 antes que 250. Sin número, por nombre. */
+/** Los tamaños de menor a mayor: 250 antes que 400 (2026-11-01). Sin número, por nombre. */
 export function compareSizes(left: string | null, right: string | null): number {
   const a = Number.parseFloat(left ?? '');
   const b = Number.parseFloat(right ?? '');
-  if (Number.isFinite(a) && Number.isFinite(b) && a !== b) return b - a;
+  if (Number.isFinite(a) && Number.isFinite(b) && a !== b) return a - b;
   return (left ?? '').localeCompare(right ?? '', 'es-AR', { numeric: true });
 }
 

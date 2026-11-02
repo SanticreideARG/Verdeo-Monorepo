@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { compareProducts, familyRank } from './product-order.js';
 
 describe('jerarquía de productos', () => {
-  it('Keto 400, Keto 250, Antiage, Real, Vegetariano, otras, Intuitivos', () => {
+  it('Keto, Antiage, Real, Vegetariano, otras, Intuitivos; 250 antes que 400', () => {
     const products = [
       { familyName: 'Intuitivo', variantName: '400' },
       { familyName: 'Menú Vegetariano', variantName: '250' },
@@ -18,11 +18,11 @@ describe('jerarquía de productos', () => {
     expect(
       [...products].sort(compareProducts).map((p) => `${p.familyName} ${p.variantName}`),
     ).toEqual([
-      'Menú Nuevo Keto 400',
       'Menú Nuevo Keto 250',
+      'Menú Nuevo Keto 400',
       'Menú Anti-Age 250',
-      'Menú Real 400',
       'Menú Real 250',
+      'Menú Real 400',
       'Menú Vegetariano 250',
       'Menú Especial 400',
       'Intuitivo 400',

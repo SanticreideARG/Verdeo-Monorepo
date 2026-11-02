@@ -98,14 +98,14 @@ describe('buildProductionExcel', () => {
       'JUEVES',
       'VIERNES',
     ]);
-    // De mayor a menor tamaño. El Intuitivo 400 (dos unidades) se desarma: sus platos de Keto
-    // suman en KETO 400, cada uno en su día, y el de Anti-Age en ANTI-AGE 400 el martes.
-    expect(rows[1]?.slice(0, 6)).toEqual(['KETO 400', 13, 11, 13, 13, 13]);
-    // Pedidos más stock, las mismas porciones en cada plato.
-    expect(rows[2]?.slice(0, 6)).toEqual(['KETO 250', 14, 14, 14, 14, 14]);
+    // 250 arriba y 400 abajo (2026-11-01). Pedidos más stock, las mismas porciones en cada plato.
+    expect(rows[1]?.slice(0, 6)).toEqual(['KETO 250', 14, 14, 14, 14, 14]);
+    // El Intuitivo 400 (dos unidades) se desarma: sus platos de Keto suman en KETO 400, cada uno en
+    // su día, y el de Anti-Age en ANTI-AGE 400 el martes.
+    expect(rows[2]?.slice(0, 6)).toEqual(['KETO 400', 13, 11, 13, 13, 13]);
     expect((rows[3] ?? []).every((cell) => cell === '')).toBe(true);
-    expect(rows[4]?.slice(0, 6)).toEqual(['ANTI-AGE 400', 0, 2, 0, 0, 0]);
-    expect(rows[5]?.slice(0, 6)).toEqual(['ANTI-AGE 250', 1, 1, 1, 1, 1]);
+    expect(rows[4]?.slice(0, 6)).toEqual(['ANTI-AGE 250', 1, 1, 1, 1, 1]);
+    expect(rows[5]?.slice(0, 6)).toEqual(['ANTI-AGE 400', 0, 2, 0, 0, 0]);
     expect(rows.some((row) => String(row[0]).startsWith('INTUITIVO'))).toBe(false);
     // El pedido viejo sin origen va aparte, con sus porciones en la última columna.
     expect(rows[7]?.[0]).toBe('SIN MENÚ DE ORIGEN 400');
@@ -149,9 +149,9 @@ describe('buildProductionExcel', () => {
     expect(book.SheetNames[1]).toBe('Conciliado');
     expect(rowsOf(book, 'Conciliado')).toEqual([
       // La jerarquía de productos (PRODUCT_ORDER.md): Keto antes que Real, aunque el menú diga otra
-      // cosa. 400 antes que 250, y el stock suma: 5 pedidos + 2 de stock.
-      ['KETO 400', 7],
+      // cosa. 250 antes que 400, y el stock suma: 5 pedidos + 2 de stock.
       ['KETO 250', 12],
+      ['KETO 400', 7],
       ['', ''],
       ['REAL 250', 3],
       ['', ''],

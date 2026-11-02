@@ -86,7 +86,7 @@ describe('buildKitchenLabels', () => {
       true,
     );
     const conTamano = buildKitchenLabels(lineas, { ...opciones, showSize: true });
-    expect([...new Set(conTamano.map((label) => label.sizeName))]).toEqual(['400', '250']);
+    expect([...new Set(conTamano.map((label) => label.sizeName))]).toEqual(['250', '400']);
   });
 
   it('la abreviatura sugerida de Anti-Age es ANTIAGE', () => {

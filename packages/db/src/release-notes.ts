@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-01-orden-250-400',
+    body: `Nuevo orden en todas las planillas, etiquetas e informes: dentro de cada menú va primero el 250 y abajo el 400 (Keto 250, Keto 400, Anti-Age 250, Anti-Age 400…). El orden de los menús no cambia.`,
+  },
+  {
     key: '2026-11-01-cierre-sin-atajos',
     body: `Cocina → Cierre de pedidos queda más simple:
 • Se sacaron "Imprimir", "Copiar para WhatsApp" y el atajo a Etiquetas. Las etiquetas siguen en su lugar del menú.

@@ -3,6 +3,10 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Orden de tamaños: 250 arriba, 400 abajo (2026-11-01) — [norma](../02-domain/PRODUCT_ORDER.md)
+
+- [x] `compareSizes` ordena de menor a mayor: dentro de cada menú, 250 antes que 400, en todas las salidas (planilla "Pedido" y "Conciliado", informes, etiquetas, listas, formularios). El orden de los menús no cambia.
+
 ## Cocina: Cierre de pedidos sin atajos (2026-11-01)
 
 - [x] Fuera "Imprimir", "Copiar para WhatsApp" y el enlace a Etiquetas de la barra de Cierre de pedidos (`KitchenPage`). Quedan "Descargar planilla", "Informe del período" y "Cerrar período". El servidor sigue sabiendo exportar en PDF y texto (`/production/:id/export`), sin botón que lo pida.

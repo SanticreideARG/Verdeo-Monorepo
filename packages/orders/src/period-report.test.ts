@@ -49,13 +49,13 @@ describe('buildPeriodReport', () => {
     const rows = report.days[0]?.rows ?? [];
 
     expect(rows.map((row) => [row.first, row.size, row.meals.join(',')])).toEqual([
-      [true, '400', 'KETO,KETO,KETO,KETO,KETO'],
+      [true, '250', 'KETO,KETO,KETO,,'],
       [false, '400', 'KETO,KETO,KETO,KETO,KETO'],
-      [false, '250', 'KETO,KETO,KETO,,'],
+      [false, '400', 'KETO,KETO,KETO,KETO,KETO'],
     ]);
     expect(report.summary).toEqual([
-      { label: 'KETO 400', units: 2 },
       { label: 'KETO 250', units: 1 },
+      { label: 'KETO 400', units: 2 },
     ]);
     expect(report.totalUnits).toBe(3);
   });
