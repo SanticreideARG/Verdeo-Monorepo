@@ -50,6 +50,8 @@ import {
   compareProducts,
   intuitivoUnitPriceMinor,
   calculateOrderTotal,
+  isNoCharge,
+  NO_CHARGE_PAYMENT_CODE,
   deliveryOptions,
   resolveDeliveryDate,
   weekdayOf,
@@ -89,6 +91,7 @@ import {
   aiExecutions,
   geographicZones,
   neighborhoods,
+  paymentMethods,
   geocodingRequests,
   labelBackgrounds,
   labelSettings,
@@ -5875,11 +5878,17 @@ export class PostgresOperationsService {
     return this.database
       .transaction(async (transaction) => {
         const [current] = await transaction
-          .select({ paidAt: orders.paidAt, publicNumber: orders.publicNumber })
+          .select({
+            paidAt: orders.paidAt,
+            paymentExpectation: orders.paymentExpectation,
+            publicNumber: orders.publicNumber,
+          })
           .from(orders)
           .where(eq(orders.id, orderId))
           .limit(1);
         if (!current) throw new OperationsNotFoundError('No se encontró el pedido');
+        if (paid && isNoCharge(current.paymentExpectation))
+          throw new OperationsConflictError('Un pedido sin pago no se cobra.');
 
         const paidAt = paid ? new Date() : null;
         await transaction
@@ -6036,15 +6045,33 @@ export class PostgresOperationsService {
         snapshot: JSON.parse(JSON.stringify(beforeSnapshot)) as Record<string, unknown>,
       });
 
+      const nextPayment =
+        input.paymentExpectation === undefined
+          ? current.paymentExpectation
+          : await this.storedPayment(transaction, input.paymentExpectation);
+      const noCharge = isNoCharge(nextPayment);
+      const noChargeChanged = noCharge !== isNoCharge(current.paymentExpectation);
       const resolvedItems = input.items
-        ? await this.resolveOrderItems(
-            transaction,
-            current.menuId,
-            input.items,
-            current.operatingSiteId,
-            { excludeOrderId: orderId },
+        ? this.chargeFor(
+            noCharge,
+            await this.resolveOrderItems(
+              transaction,
+              current.menuId,
+              input.items,
+              current.operatingSiteId,
+              { excludeOrderId: orderId },
+            ),
           )
         : null;
+      // Entrar o salir de "Sin pago" sin tocar los platos recalcula el precio de los que ya están.
+      const repricedTotal =
+        noChargeChanged && !resolvedItems
+          ? await this.repriceOrder(
+              transaction,
+              { id: orderId, menuId: current.menuId, operatingSiteId: current.operatingSiteId },
+              noCharge,
+            )
+          : undefined;
       const firstResolvedItem = resolvedItems?.[0];
       const resolvedTotal = resolvedItems
         ? calculateOrderTotal(resolvedItems.map(({ totalMinor }) => totalMinor))
@@ -6102,6 +6129,9 @@ export class PostgresOperationsService {
               totalMinor: resolvedTotal,
             }
           : {}),
+        ...(repricedTotal !== undefined ? { totalMinor: repricedTotal } : {}),
+        // Lo que no se cobra no puede figurar cobrado.
+        ...(noCharge && noChargeChanged ? { paidAt: null, paidByUserId: null } : {}),
         deliveryAddressSnapshot: deliveryAddress,
         ...(customerChanged ? { customerId } : {}),
         ...(addressId !== undefined ? { deliveryAddressId: addressId } : {}),
@@ -6113,9 +6143,7 @@ export class PostgresOperationsService {
         ...(input.deliveryTimeSlot !== undefined
           ? { deliveryTimeSlot: input.deliveryTimeSlot }
           : {}),
-        ...(input.paymentExpectation !== undefined
-          ? { paymentExpectation: input.paymentExpectation }
-          : {}),
+        ...(input.paymentExpectation !== undefined ? { paymentExpectation: nextPayment } : {}),
         updatedAt: new Date(),
       };
       if (resolvedItems) {
@@ -6144,7 +6172,7 @@ export class PostgresOperationsService {
           changedFields: Object.keys(input).filter((key) => key !== 'reason'),
           customerId,
           deliveryAddressId: addressId ?? current.deliveryAddressId,
-          totalMinor: resolvedTotal ?? current.totalMinor,
+          totalMinor: resolvedTotal ?? repricedTotal ?? current.totalMinor,
         },
         before: {
           customerId: current.customerId,
@@ -6395,11 +6423,14 @@ export class PostgresOperationsService {
           deliverySettings.defaultWeekday,
         );
 
-    const resolvedItems = await this.resolveOrderItems(
-      transaction,
-      input.menuId,
-      input.items,
-      operatingSiteId,
+    const paymentExpectation = await this.storedPayment(transaction, input.paymentExpectation);
+    const noCharge = isNoCharge(paymentExpectation);
+    // Sólo lo carga el equipo: no se le ofrece al cliente, y mandarlo a mano no regala el pedido.
+    if (noCharge && input.source === 'web')
+      throw new OperationsConflictError('Ese medio de pago no está disponible.');
+    const resolvedItems = this.chargeFor(
+      noCharge,
+      await this.resolveOrderItems(transaction, input.menuId, input.items, operatingSiteId),
     );
     const currency = resolvedItems[0]?.currency;
     if (!currency) throw new OperationsConflictError('El pedido necesita al menos un plato');
@@ -6428,7 +6459,7 @@ export class PostgresOperationsService {
         deliveryDayText: input.deliveryDayText ?? null,
         deliveryTimeSlot: input.deliveryTimeSlot ?? null,
         operatingSiteId,
-        paymentExpectation: input.paymentExpectation,
+        paymentExpectation,
         publicNumber: await this.nextPublicNumber(transaction, operatingSiteId),
         salesCycleId: menu.salesCycleId,
         source: input.source,
@@ -6479,6 +6510,109 @@ export class PostgresOperationsService {
     const order = await this.loadOrder(transaction, createdOrder.id);
     if (!order) throw new Error('Created order could not be reloaded');
     return order;
+  }
+
+  /**
+   * Cómo se guarda el medio de pago: "Sin pago" siempre por código, venga el código o el nombre, para
+   * reconocerlo aunque después se cambie el nombre. El resto, como llegó.
+   */
+  private async storedPayment(transaction: DatabaseTransaction, value: string): Promise<string> {
+    if (isNoCharge(value)) return NO_CHARGE_PAYMENT_CODE;
+    const [method] = await transaction
+      .select({ displayName: paymentMethods.displayName })
+      .from(paymentMethods)
+      .where(eq(paymentMethods.code, NO_CHARGE_PAYMENT_CODE))
+      .limit(1);
+    return method && method.displayName.trim().toLowerCase() === value.trim().toLowerCase()
+      ? NO_CHARGE_PAYMENT_CODE
+      : value;
+  }
+
+  /** "Sin pago": cada renglón en 0, sin importar el precio del menú ni lo que mande el formulario. */
+  private chargeFor(noCharge: boolean, items: ResolvedOrderItem[]): ResolvedOrderItem[] {
+    return noCharge ? items.map((item) => ({ ...item, totalMinor: 0, unitPriceMinor: 0 })) : items;
+  }
+
+  /**
+   * Los precios de los renglones de un pedido al entrar o salir de "Sin pago". Sólo cambia la plata:
+   * los renglones son los mismos, así que lo que ya está en cocina no se entera. Devuelve el total.
+   */
+  private async repriceOrder(
+    transaction: DatabaseTransaction,
+    order: { id: string; menuId: string; operatingSiteId: string | null },
+    noCharge: boolean,
+  ): Promise<number> {
+    const items = await transaction
+      .select({
+        id: orderItems.id,
+        offeringId: orderItems.offeringId,
+        quantityUnits: orderItems.quantityUnits,
+        stockLotId: orderItems.stockLotId,
+      })
+      .from(orderItems)
+      .where(eq(orderItems.orderId, order.id))
+      .orderBy(orderItems.createdAt, orderItems.id);
+    if (noCharge) {
+      await transaction
+        .update(orderItems)
+        .set({ totalMinor: 0, unitPriceMinor: 0 })
+        .where(eq(orderItems.orderId, order.id));
+      return 0;
+    }
+    const selections =
+      items.length > 0
+        ? await transaction
+            .select({
+              dishName: orderItemSelections.dishNameSnapshot,
+              familyName: orderItemSelections.sourceFamilySnapshot,
+              orderItemId: orderItemSelections.orderItemId,
+            })
+            .from(orderItemSelections)
+            .where(
+              inArray(
+                orderItemSelections.orderItemId,
+                items.map((item) => item.id),
+              ),
+            )
+            .orderBy(asc(orderItemSelections.slot))
+        : [];
+    const priced = await this.resolveOrderItems(
+      transaction,
+      order.menuId,
+      items.map((item) => {
+        if (!item.offeringId)
+          throw new OperationsConflictError(
+            'Ese menú ya no está publicado: no se puede calcular el precio de este pedido.',
+          );
+        const own = selections.filter((selection) => selection.orderItemId === item.id);
+        return {
+          offeringId: item.offeringId,
+          quantityUnits: item.quantityUnits,
+          ...(item.stockLotId ? { stockLotId: item.stockLotId } : {}),
+          ...(own.length === 0
+            ? {}
+            : own.every((selection) => selection.familyName)
+              ? {
+                  selectedDishes: own.map((selection) => ({
+                    dishName: selection.dishName,
+                    familyName: selection.familyName ?? '',
+                  })),
+                }
+              : { selectedDishNames: own.map((selection) => selection.dishName) }),
+        };
+      }),
+      order.operatingSiteId,
+      { excludeOrderId: order.id },
+    );
+    for (const [index, item] of items.entries()) {
+      const price = priced[index];
+      if (!price) throw new Error('Repricing lost an order item');
+      await transaction
+        .update(orderItems)
+        .set({ totalMinor: price.totalMinor, unitPriceMinor: price.unitPriceMinor })
+        .where(eq(orderItems.id, item.id));
+    }
+    return calculateOrderTotal(priced.map(({ totalMinor }) => totalMinor));
   }
 
   private async resolveOrderItems(
@@ -6938,7 +7072,14 @@ export class PostgresOperationsService {
         totalMinor: sql<number>`coalesce(sum(${orders.totalMinor}), 0)::int`,
       })
       .from(orders)
-      .where(and(scope, ne(orders.status, 'CANCELLED')))
+      .where(
+        and(
+          scope,
+          ne(orders.status, 'CANCELLED'),
+          // Sin pago no es una venta: no entra en la rendición por medio de pago.
+          ne(orders.paymentExpectation, NO_CHARGE_PAYMENT_CODE),
+        ),
+      )
       .groupBy(orders.paymentExpectation)
       .orderBy(desc(sql`sum(${orders.totalMinor})`));
     const [cancelled] = await this.database
@@ -8481,11 +8622,14 @@ export class PostgresOperationsService {
     }
 
     // Precio y día de reparto, los de la ciudad destino.
-    const resolvedItems = await this.resolveOrderItems(
-      transaction,
-      menu.id,
-      mapped,
-      input.targetSiteId,
+    const [moved] = await transaction
+      .select({ paymentExpectation: orders.paymentExpectation })
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .limit(1);
+    const resolvedItems = this.chargeFor(
+      isNoCharge(moved?.paymentExpectation ?? ''),
+      await this.resolveOrderItems(transaction, menu.id, mapped, input.targetSiteId),
     );
     const deliverySettings = await this.getDeliverySettings(input.targetSiteId, transaction);
     const deliveryDate = resolveDeliveryDate(

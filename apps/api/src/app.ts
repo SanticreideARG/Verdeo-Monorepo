@@ -385,6 +385,7 @@ import {
   buildOrdersCsv,
   deliveryDateFor,
   maskSurname,
+  isNoCharge,
   matchPaymentMethod,
   type OrderExportRow,
   buildPeriodReport,
@@ -1798,7 +1799,8 @@ export function createApp(options: CreateAppOptions) {
       code: string;
       displayName: string;
     }[];
-    return items.filter((method) => method.active);
+    // Una importación no regala pedidos: "Sin pago" se elige a mano, con su motivo.
+    return items.filter((method) => method.active && !isNoCharge(method.code));
   };
 
   const paymentsContext = (context: Context<{ Variables: AppVariables }>): PaymentsContext => ({
@@ -2146,7 +2148,9 @@ export function createApp(options: CreateAppOptions) {
    * dice una cosa distinta según quién lo cargó. Público a propósito —quien pide no tiene sesión— y
    * sólo los activos, con lo que hace falta para mostrarlos: acá no hay nada sensible.
    */
+  // "Sin pago" es del equipo: la página pública y el asistente no lo ofrecen. El panel lo pide.
   app.get('/api/v1/public/payment-methods', async (context) => {
+    const withInternal = context.req.query('internos') === '1';
     const items = (await requirePayments().listPaymentMethods()) as readonly {
       active: boolean;
       code: string;
@@ -2155,7 +2159,7 @@ export function createApp(options: CreateAppOptions) {
     }[];
     return context.json({
       items: items
-        .filter((method) => method.active)
+        .filter((method) => method.active && (withInternal || !isNoCharge(method.code)))
         .map(({ code, displayName, sortOrder }) => ({ code, displayName, sortOrder })),
     });
   });

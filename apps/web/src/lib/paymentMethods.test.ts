@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  isNoChargeChoice,
   isParametrized,
   paymentMethodLabel,
   paymentOptions,
@@ -54,5 +55,19 @@ describe('paymentSelectValue / isParametrized', () => {
   it('distingue lo parametrizado de lo que no', () => {
     expect(isParametrized('transfer', medios)).toBe(true);
     expect(isParametrized('A confirmar', medios)).toBe(false);
+  });
+});
+
+describe('Sin pago en los selectores', () => {
+  const conSinPago = [...medios, { code: 'sin_pago', displayName: 'Cortesía' }];
+
+  it('se reconoce por código y por el nombre que le pusieron', () => {
+    expect(isNoChargeChoice('sin_pago', conSinPago)).toBe(true);
+    expect(isNoChargeChoice('Cortesía', conSinPago)).toBe(true);
+    expect(isNoChargeChoice('Efectivo', conSinPago)).toBe(false);
+  });
+
+  it('un pedido guardado por código muestra el nombre', () => {
+    expect(paymentMethodLabel('sin_pago', conSinPago)).toBe('Cortesía');
   });
 });

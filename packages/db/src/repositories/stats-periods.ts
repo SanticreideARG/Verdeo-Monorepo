@@ -98,7 +98,7 @@ export async function statsPeriods(
       database,
       sql`select o.sales_cycle_id, o.operating_site_id, s.alias, s.open_at, s.close_at,
                  os.display_name as site_name,
-                 count(*) filter (where o.status <> 'CANCELLED')::int as order_count,
+                 count(*) filter (where o.status <> 'CANCELLED' and o.payment_expectation <> 'sin_pago')::int as order_count,
                  coalesce(sum(o.total_minor) filter (where o.status <> 'CANCELLED'), 0)::bigint as net,
                  coalesce(sum(o.total_minor) filter (where o.status <> 'CANCELLED' and o.paid_at is not null), 0)::bigint as paid,
                  count(*) filter (where o.status = 'CANCELLED')::int as cancelled_count,

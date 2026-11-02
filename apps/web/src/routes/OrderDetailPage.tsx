@@ -41,6 +41,7 @@ import {
   paymentOptions,
   paymentSelectValue,
   usePaymentMethods,
+  isNoChargeChoice,
 } from '../lib/paymentMethods.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { useOrderFormSettings } from '../lib/useOrderFormSettings.js';
@@ -263,6 +264,10 @@ export function OrderDetailPage() {
           order.dietaryInstructions.length > 0 ? [order.dietaryInstructions.join(' · ')] : [],
         );
     const notes = formText(form, 'notes').trim();
+    if (isNoChargeChoice(formText(form, 'paymentExpectation'), paymentMethods) && !notes) {
+      setMessage('Escribí en Notas el motivo del pedido sin pago.');
+      return;
+    }
     const locationUrl = formText(form, 'deliveryLocationUrl').trim();
     // Los ítems se mandan sólo si alguno cambió: un PATCH que los reenvía iguales igual dispara la
     // reescritura y la revisión auditada, y ensucia el historial con cambios que no lo son.

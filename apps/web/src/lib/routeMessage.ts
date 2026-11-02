@@ -1,4 +1,4 @@
-import { isTransfer } from '@verdeo/orders';
+import { isNoCharge, isTransfer } from '@verdeo/orders';
 
 import { formatDay } from './dates.js';
 import { formatMoney } from './operations.js';
@@ -32,7 +32,7 @@ export function withoutNewMark(text: string): string {
  * sin pago no lo cobra nadie.
  */
 export function courierCollects(paymentExpectation: string): boolean {
-  return !isTransfer(paymentExpectation) && paymentExpectation.trim().toLowerCase() !== 'sin_pago';
+  return !isTransfer(paymentExpectation) && !isNoCharge(paymentExpectation);
 }
 
 /**

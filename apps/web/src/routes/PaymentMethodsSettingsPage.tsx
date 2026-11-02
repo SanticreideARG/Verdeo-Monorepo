@@ -1,3 +1,4 @@
+import { isNoCharge } from '@verdeo/orders';
 import { useCallback, useEffect, useState } from 'react';
 
 import { DashboardShell } from '../components/DashboardShell.js';
@@ -160,7 +161,7 @@ export function PaymentMethodsSettingsPage() {
                   <label className="field flex-1 min-w-[140px]">
                     Código
                     <input
-                      disabled={!canWrite}
+                      disabled={!canWrite || isNoCharge(draft.code)}
                       onChange={(event) => updateDraft(index, { code: event.target.value })}
                       placeholder="efectivo"
                       value={draft.code}
@@ -169,7 +170,7 @@ export function PaymentMethodsSettingsPage() {
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       checked={draft.isCash}
-                      disabled={!canWrite}
+                      disabled={!canWrite || isNoCharge(draft.code)}
                       onChange={(event) => updateDraft(index, { isCash: event.target.checked })}
                       type="checkbox"
                     />
@@ -178,13 +179,17 @@ export function PaymentMethodsSettingsPage() {
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       checked={draft.active}
-                      disabled={!canWrite}
+                      disabled={!canWrite || isNoCharge(draft.code)}
                       onChange={(event) => updateDraft(index, { active: event.target.checked })}
                       type="checkbox"
                     />
                     Activo
                   </label>
-                  {canWrite ? (
+                  {isNoCharge(draft.code) ? (
+                    <span className="text-sm text-ink-muted">
+                      Fijo: total $0, no se cobra. Sólo se le puede cambiar el nombre.
+                    </span>
+                  ) : canWrite ? (
                     <button
                       className="button button-secondary"
                       onClick={() => removeMethod(index)}

@@ -1,3 +1,4 @@
+import { isNoCharge } from '@verdeo/orders';
 import { useEffect, useState, type ChangeEvent } from 'react';
 
 import { apiRequest } from '../lib/api.js';
@@ -250,7 +251,8 @@ export function OrderImportDialog({
    * creó y no las duplica.
    */
   const [batchId, setBatchId] = useState(() => crypto.randomUUID());
-  const paymentMethods = usePaymentMethods();
+  // Una importación no regala pedidos: "Sin pago" se elige a mano, con su motivo.
+  const paymentMethods = usePaymentMethods().filter((method) => !isNoCharge(method.code));
   /*
    * El medio de pago de los pedidos que no lo traen.
    *

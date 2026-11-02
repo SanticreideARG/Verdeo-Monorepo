@@ -1,3 +1,4 @@
+import { isNoCharge } from '@verdeo/orders';
 import { Link } from 'react-router-dom';
 
 import type { DataColumn } from '../components/DataTable.js';
@@ -265,13 +266,18 @@ export function buildOrderColumns(
        * permiso y una función que recargue la lista; acá el catálogo no tiene ni una cosa ni la
        * otra.
        */
-      render: (order) => (order.paidAt ? `Sí · ${formatDay(order.paidAt)}` : 'No'),
+      render: (order) =>
+        isNoCharge(order.paymentExpectation)
+          ? '—'
+          : order.paidAt
+            ? `Sí · ${formatDay(order.paidAt)}`
+            : 'No',
       sortValue: (order) => (order.paidAt ? 1 : 0),
       // "18 de 24" contesta de un vistazo lo que la columna sólo contesta contando a mano.
       total: (rows) =>
         summary
           ? `${String(summary.paidCount)} de ${String(summary.orderCount)}`
-          : `${String(rows.filter((order) => order.paidAt).length)} de ${String(rows.length)}`,
+          : `${String(rows.filter((order) => order.paidAt).length)} de ${String(rows.filter((order) => !isNoCharge(order.paymentExpectation)).length)}`,
     },
     {
       key: 'origen',

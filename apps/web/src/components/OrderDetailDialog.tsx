@@ -1,3 +1,4 @@
+import { isNoCharge } from '@verdeo/orders';
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -196,7 +197,13 @@ export function OrderDetailDialog({
               <div>
                 <dt>Estado</dt>
                 {/* Lo que importa no es que exista un pago, es si la plata entró y cuándo. */}
-                <dd>{order.paidAt ? `Cobrado ${formatMoment(order.paidAt)}` : 'Sin cobrar'}</dd>
+                <dd>
+                  {isNoCharge(order.paymentExpectation)
+                    ? 'No se cobra'
+                    : order.paidAt
+                      ? `Cobrado ${formatMoment(order.paidAt)}`
+                      : 'Sin cobrar'}
+                </dd>
               </div>
             </dl>
           </section>

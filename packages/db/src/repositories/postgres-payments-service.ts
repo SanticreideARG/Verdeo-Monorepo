@@ -1,3 +1,5 @@
+import { NO_CHARGE_PAYMENT_CODE } from '@verdeo/orders';
+
 import { and, asc, desc, eq, isNull, notInArray, sql } from 'drizzle-orm';
 
 import { AuditService } from '@verdeo/audit';
@@ -139,7 +141,13 @@ export class PostgresPaymentsService {
     context: PaymentsContext,
   ) {
     const actorUserId = context.actorUserId;
-    const codes = methods.map((method) => method.code.trim().toLowerCase());
+    // "Sin pago" no se borra ni cambia: sólo su nombre (STOCK_COMO_PEDIDO_PLAN.md, 3.0).
+    const codes = [
+      ...new Set([
+        ...methods.map((method) => method.code.trim().toLowerCase()),
+        NO_CHARGE_PAYMENT_CODE,
+      ]),
+    ];
 
     return this.database.transaction(async (transaction) => {
       const before = await transaction
@@ -157,20 +165,23 @@ export class PostgresPaymentsService {
 
       for (const [index, method] of methods.entries()) {
         const code = method.code.trim().toLowerCase();
+        const fixed = code === NO_CHARGE_PAYMENT_CODE;
+        const active = fixed || method.active;
+        const isCash = !fixed && method.isCash;
         await transaction
           .insert(paymentMethods)
           .values({
-            active: method.active,
+            active,
             code,
             displayName: method.displayName.trim(),
-            isCash: method.isCash,
+            isCash,
             sortOrder: index,
           })
           .onConflictDoUpdate({
             set: {
-              active: method.active,
+              active,
               displayName: method.displayName.trim(),
-              isCash: method.isCash,
+              isCash,
               sortOrder: index,
               updatedAt: new Date(),
             },

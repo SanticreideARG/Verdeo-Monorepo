@@ -1,4 +1,4 @@
-import { compareSizes } from '@verdeo/orders';
+import { compareSizes, isNoCharge, NO_CHARGE_PAYMENT_CODE } from '@verdeo/orders';
 import { useCallback, useContext, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -27,6 +27,7 @@ import {
   paymentOptions,
   paymentSelectValue,
   usePaymentMethods,
+  isNoChargeChoice,
 } from '../lib/paymentMethods.js';
 import { orderRowActions, type OrderRowActionKey } from '../lib/orderRowActions.js';
 import {
@@ -328,6 +329,9 @@ export function OrderIntakePage() {
   // Qué pasó, qué hacer y si tiene sentido reintentar, separado de las confirmaciones.
   const [error, setError] = useState<AppError | null>(null);
   const [byDelivery, setByDelivery] = useState(readByDelivery);
+  const [noChargeFor, setNoChargeFor] = useState<OrderSummary | null>(null);
+  // Sólo muestra el motivo y el $0: al guardar manda lo que dice el formulario.
+  const [noChargeChosen, setNoChargeChosen] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() =>
     readStoredColumns(COLUMNS_KEY, DEFAULT_COLUMNS, INTAKE_CATALOGUE),
   );
@@ -451,9 +455,19 @@ export function OrderIntakePage() {
   /** El tilde de cobrado, en la misma lista. Actualiza la fila en el lugar: recargar la lista
    * paginada devolvería al principio y perdería de vista justo la fila recién tildada. */
   /** Cambiar el medio de pago desde la lista, sin abrir el pedido. */
-  async function changePayment(order: OrderSummary, value: string) {
+  async function changePayment(order: OrderSummary, value: string, reason?: string) {
+    // "Sin pago" pide el motivo antes de guardar: es lo que explica por qué ese pedido da $0.
+    if (reason === undefined && isNoChargeChoice(value, paymentMethods)) {
+      setNoChargeFor(order);
+      return;
+    }
     const response = await apiRequest(`/api/v1/orders/${order.id}`, {
-      body: JSON.stringify({ paymentExpectation: value }),
+      body: JSON.stringify({
+        paymentExpectation: value,
+        ...(reason === undefined
+          ? {}
+          : { notes: [order.notes, `Sin pago: ${reason}`].filter(Boolean).join(' · ') }),
+      }),
       method: 'PATCH',
     });
     if (!response.ok) {
@@ -463,7 +477,15 @@ export function OrderIntakePage() {
     const updated = (await response.json()) as OrderSummary;
     setOrders((current) =>
       current.map((row) =>
-        row.id === updated.id ? { ...row, paymentExpectation: updated.paymentExpectation } : row,
+        row.id === updated.id
+          ? {
+              ...row,
+              notes: updated.notes,
+              paidAt: updated.paidAt,
+              paymentExpectation: updated.paymentExpectation,
+              totalMinor: updated.totalMinor,
+            }
+          : row,
       ),
     );
   }
@@ -939,6 +961,15 @@ export function OrderIntakePage() {
         return;
       }
 
+      const noChargeOrder = isNoChargeChoice(formText(form, 'paymentExpectation'), paymentMethods);
+      const noChargeReason = formText(form, 'noChargeReason').trim();
+      if (noChargeOrder && !noChargeReason) {
+        setNoChargeChosen(true);
+        setMessage('Escribí el motivo del pedido sin pago.');
+        return;
+      }
+      const noChargeNote = noChargeOrder ? `Sin pago: ${noChargeReason}` : '';
+
       const createdOrder = await mutate('/api/v1/orders', {
         customerId,
         deliveryAddress: formText(form, 'deliveryAddress'),
@@ -969,10 +1000,18 @@ export function OrderIntakePage() {
          */
         ...(fromStock
           ? {
-              notes: `Del stock · pidió por ${sourceLabel(formText(form, 'source'))}`,
+              notes: [
+                `Del stock · pidió por ${sourceLabel(formText(form, 'source'))}`,
+                noChargeNote,
+              ]
+                .filter(Boolean)
+                .join(' · '),
               source: 'opportunity_sale',
             }
-          : { source: formText(form, 'source') }),
+          : {
+              ...(noChargeNote ? { notes: noChargeNote } : {}),
+              source: formText(form, 'source'),
+            }),
         ...(confirmNow ? { confirm: true } : {}),
       });
       // The draft is dropped on a successful save, not on unmount: that is what makes "I switched
@@ -1960,7 +1999,14 @@ export function OrderIntakePage() {
                   <label className="field">
                     Medio de pago
                     {paymentMethods.length > 0 ? (
-                      <select defaultValue="" name="paymentExpectation" required>
+                      <select
+                        defaultValue=""
+                        name="paymentExpectation"
+                        onChange={(event) =>
+                          setNoChargeChosen(isNoChargeChoice(event.target.value, paymentMethods))
+                        }
+                        required
+                      >
                         <option disabled value="">
                           Seleccionar
                         </option>
@@ -1974,6 +2020,12 @@ export function OrderIntakePage() {
                       <input name="paymentExpectation" placeholder="Transferencia" required />
                     )}
                   </label>
+                  {noChargeChosen ? (
+                    <label className="field">
+                      Motivo (va en las notas)
+                      <input name="noChargeReason" placeholder="Prueba, regalo, compensación…" />
+                    </label>
+                  ) : null}
                   <label className="field">
                     Origen
                     {/*
@@ -2021,7 +2073,11 @@ export function OrderIntakePage() {
                 total va acá por lo mismo — era el otro dato que había que ir a buscar. */}
             <div className="form-actions form-actions-sticky mt-4">
               {/* El total del pedido entero: lo agregado más lo que está elegido arriba. */}
-              {totalMinor > 0 ? (
+              {noChargeChosen ? (
+                <p className="form-actions-total">
+                  Total <strong>{formatMoney(0, cartCurrency)}</strong> · sin pago
+                </p>
+              ) : totalMinor > 0 ? (
                 <p className="form-actions-total">
                   Total <strong>{formatMoney(totalMinor, cartCurrency)}</strong>
                 </p>
@@ -2044,6 +2100,7 @@ export function OrderIntakePage() {
                 className="button button-secondary"
                 onClick={() => {
                   draft.clear();
+                  setNoChargeChosen(false);
                   resetCart();
                   setSelectedCustomer(null);
                   setDeliveryAddress('');
@@ -2183,17 +2240,20 @@ export function OrderIntakePage() {
                     : column.key === 'cobrado' && permissions.includes('orders.edit')
                       ? {
                           ...column,
-                          render: (order: OrderSummary) => (
-                            <label className="paid-check">
-                              <input
-                                aria-label={`Marcar ${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName} como cobrado`}
-                                checked={Boolean(order.paidAt)}
-                                onChange={() => setPaying(order)}
-                                type="checkbox"
-                              />
-                              <span>{order.paidAt ? 'Cobrado' : 'Pendiente'}</span>
-                            </label>
-                          ),
+                          render: (order: OrderSummary) =>
+                            isNoCharge(order.paymentExpectation) ? (
+                              '—'
+                            ) : (
+                              <label className="paid-check">
+                                <input
+                                  aria-label={`Marcar ${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName} como cobrado`}
+                                  checked={Boolean(order.paidAt)}
+                                  onChange={() => setPaying(order)}
+                                  type="checkbox"
+                                />
+                                <span>{order.paidAt ? 'Cobrado' : 'Pendiente'}</span>
+                              </label>
+                            ),
                         }
                       : column,
               )}
@@ -2300,6 +2360,21 @@ export function OrderIntakePage() {
           ) : null}
         </div>
       </section>
+
+      {noChargeFor ? (
+        <ReasonDialog
+          confirmLabel="Pasar a Sin pago"
+          detail="El total pasa a $0 y queda fuera de lo que hay que cobrar. Se sigue cocinando y entregando. El motivo queda en las notas."
+          onCancel={() => setNoChargeFor(null)}
+          onConfirm={async (reason) => {
+            const order = noChargeFor;
+            setNoChargeFor(null);
+            await changePayment(order, NO_CHARGE_PAYMENT_CODE, reason);
+          }}
+          placeholder="Prueba, regalo, compensación…"
+          title={`¿El pedido de ${noChargeFor.customer.displayName} va sin pago?`}
+        />
+      ) : null}
 
       {paying ? (
         <ConfirmDialog

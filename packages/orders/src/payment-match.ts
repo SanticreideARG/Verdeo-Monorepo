@@ -9,6 +9,16 @@ import { editDistance } from './offering-match.js';
  * medios configurados.
  */
 
+/**
+ * La forma de pago de lo que se cocina y se entrega sin ser una venta (STOCK_COMO_PEDIDO_PLAN.md,
+ * 3.0). El pedido la guarda por código: el nombre que se muestra se puede cambiar.
+ */
+export const NO_CHARGE_PAYMENT_CODE = 'sin_pago';
+
+export function isNoCharge(paymentExpectation: string): boolean {
+  return paymentExpectation.trim().toLowerCase() === NO_CHARGE_PAYMENT_CODE;
+}
+
 export interface MatchablePaymentMethod {
   code: string;
   displayName: string;

@@ -78,7 +78,7 @@ export async function statsEvents(
     database,
     sql`select o.sales_cycle_id, count(*)::int as orders, avg(o.total_minor)::float as ticket
         from orders o join sales_cycles s on s.id = o.sales_cycle_id
-        where ${real} and s.open_at <= ${openAt}::timestamptz
+        where ${real} and o.payment_expectation <> 'sin_pago' and s.open_at <= ${openAt}::timestamptz
         group by o.sales_cycle_id`,
   );
   const mine = perCycle.find((row) => String(row.sales_cycle_id) === cycleId);
@@ -174,7 +174,7 @@ export async function statsEvents(
       sql`select count(*)::int as total, coalesce(sum(o.total_minor), 0)::bigint as amount
           from orders o
           where ${real} and o.sales_cycle_id = ${cycleId}::uuid and o.paid_at is null
-            and not ${IS_CASH}`,
+            and o.total_minor > 0 and not ${IS_CASH}`,
     );
     const total = Number(unpaid?.total ?? 0);
     if (total > 0) {

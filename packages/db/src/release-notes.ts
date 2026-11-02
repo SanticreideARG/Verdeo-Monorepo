@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-02-sin-pago',
+    body: `Nuevo medio de pago "Sin pago", para pruebas, regalos o compensaciones. El pedido da $0, pide un motivo y no aparece en Por cobrar ni tiene tilde de Cobrado. Se cocina y se entrega como cualquier otro.`,
+  },
+  {
     key: '2026-11-02-mensaje-repartidor',
     body: `Repartos:
 • "Copiar para el repartidor": cada parada dice qué hacer con el pago. Las que no se cobran dicen "No cobrar".

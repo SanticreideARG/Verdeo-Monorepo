@@ -3,6 +3,14 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Medio de pago "Sin pago" (2026-11-02) — [plan](../03-features/STOCK_COMO_PEDIDO_PLAN.md)
+
+- [x] Fase 3.0. Elegido en el panel, el pedido da $0 y pide motivo, que queda en las notas. Se guarda por código (`sin_pago`), así el nombre se puede cambiar. Entrar o salir recalcula los precios de los mismos renglones, y al entrar se borra el cobro.
+- [x] Fuera de Por cobrar, deudores, avisos, rendición por medio de pago, tilde de Cobrado y ticket promedio. Se sigue cocinando, etiquetando y entregando. Quien reparte ve "No cobrar".
+- [x] No se ofrece en la página pública, el asistente ni la importación, y un pedido web con ese código se rechaza. En Ajustes sólo se le cambia el nombre: no se quita ni se desactiva.
+- [ ] En estadísticas, una línea aparte: "N menús sin pago".
+- [ ] El "18 de 24" del pie de Cobrado, con la lista paginada, todavía cuenta los sin pago en el 24.
+
 ## Mensaje del repartidor y barrio (2026-11-02)
 
 - [x] "Copiar para el repartidor": toda parada dice qué hacer con el pago. Lo que no cobra quien reparte (transferencia) dice "No cobrar", sin monto ni medio; antes no decía nada y parecía un dato faltante. La planilla de la ruta, igual.

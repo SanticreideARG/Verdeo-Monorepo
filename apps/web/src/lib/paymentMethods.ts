@@ -1,3 +1,4 @@
+import { isNoCharge } from '@verdeo/orders';
 import { useEffect, useState } from 'react';
 
 import { apiRequest } from './api.js';
@@ -25,6 +26,16 @@ export function paymentMethodLabel(value: string, methods: readonly PaymentChoic
     (method) => normalize(method.code) === key || normalize(method.displayName) === key,
   );
   return found ? found.displayName : value;
+}
+
+/** Si lo elegido es "Sin pago", por su código o por el nombre que le hayan puesto. */
+export function isNoChargeChoice(value: string, methods: readonly PaymentChoice[]): boolean {
+  const key = normalize(value);
+  return methods.some(
+    (method) =>
+      isNoCharge(method.code) &&
+      (normalize(method.code) === key || normalize(method.displayName) === key),
+  );
 }
 
 /** Si el valor del pedido es uno de los parametrizados. */
@@ -72,7 +83,7 @@ export function usePaymentMethods(): PaymentChoice[] {
   const [methods, setMethods] = useState<PaymentChoice[]>([]);
   useEffect(() => {
     let cancelled = false;
-    void apiRequest('/api/v1/public/payment-methods', { notify: false })
+    void apiRequest('/api/v1/public/payment-methods?internos=1', { notify: false })
       .then(async (response) => {
         if (!response.ok || cancelled) return;
         const body = (await response.json()) as {
