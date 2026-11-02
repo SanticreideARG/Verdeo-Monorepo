@@ -4,6 +4,7 @@ import {
   deliveryDateFor,
   deliveryDateLabel,
   formatDay,
+  formatDayHeading,
   formatDayLong,
   formatMoment,
 } from './dates.js';
@@ -52,6 +53,13 @@ describe('formatDay', () => {
 
   it('lleva un instante al día que era en Argentina', () => {
     expect(formatDay('2026-09-14T02:15:00.000Z')).toBe('13 sep 2026');
+  });
+});
+
+describe('formatDayHeading', () => {
+  it('dice el día de la semana, que es lo que se busca al repartir', () => {
+    expect(formatDayHeading('2026-11-03')).toBe('Martes 3 de noviembre de 2026');
+    expect(formatDayHeading('2026-09-13')).toBe('Domingo 13 de septiembre de 2026');
   });
 });
 

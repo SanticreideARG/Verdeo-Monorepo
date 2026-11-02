@@ -212,3 +212,89 @@ describe('DataTable en el teléfono: tarjetas o columnas', () => {
     expect(screen.queryByRole('table')).toBeNull();
   });
 });
+
+describe('DataTable con grupos', () => {
+  const GROUPED: Row[] = [
+    { demanda: 1, disponible: 0, variedad: 'B martes' },
+    { demanda: 2, disponible: 0, variedad: 'C lunes' },
+    { demanda: 3, disponible: 0, variedad: 'A martes' },
+    { demanda: 4, disponible: 0, variedad: 'Sin día' },
+  ];
+  const dayOf = (row: Row) =>
+    row.variedad.includes('lunes')
+      ? '2026-11-02'
+      : row.variedad.includes('martes')
+        ? '2026-11-03'
+        : '';
+  const groupBy = {
+    key: dayOf,
+    label: (key: string, rows: readonly Row[]) => `${key || 'Sin fecha'} (${String(rows.length)})`,
+  };
+  const lines = () => screen.getAllByRole('row').map((row) => row.textContent);
+
+  beforeEach(() => setViewport(false));
+
+  it('encabeza cada grupo, en orden de clave y con el vacío al final', () => {
+    render(
+      <DataTable
+        caption="Grupos"
+        columns={COLUMNS.slice(0, 1)}
+        empty="Nada"
+        groupBy={groupBy}
+        rowKey={(row) => row.variedad}
+        rows={GROUPED}
+      />,
+    );
+    expect(lines().slice(1)).toEqual([
+      '2026-11-02 (1)',
+      'C lunes',
+      '2026-11-03 (2)',
+      'B martes',
+      'A martes',
+      'Sin fecha (1)',
+      'Sin día',
+    ]);
+  });
+
+  it('ordenar por una columna ordena adentro de cada grupo', () => {
+    const variedad: DataColumn<Row> = {
+      key: 'variedad',
+      label: 'Variedad',
+      render: (row) => row.variedad,
+      sortValue: (row) => row.variedad,
+    };
+    render(
+      <DataTable
+        caption="Grupos"
+        columns={[variedad]}
+        empty="Nada"
+        groupBy={groupBy}
+        rowKey={(row) => row.variedad}
+        rows={GROUPED}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Variedad/ }));
+    expect(lines().slice(1, 6)).toEqual([
+      '2026-11-02 (1)',
+      'C lunes',
+      '2026-11-03 (2)',
+      'A martes',
+      'B martes',
+    ]);
+  });
+
+  it('también encabeza las tarjetas del teléfono', () => {
+    setViewport(true);
+    render(
+      <DataTable
+        caption="Grupos"
+        columns={COLUMNS.slice(0, 1)}
+        empty="Nada"
+        groupBy={groupBy}
+        rowKey={(row) => row.variedad}
+        rows={GROUPED}
+      />,
+    );
+    expect(screen.getByText('2026-11-03 (2)').tagName).toBe('LI');
+  });
+});

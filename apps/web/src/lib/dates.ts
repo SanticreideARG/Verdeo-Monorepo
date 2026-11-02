@@ -69,6 +69,8 @@ const MONTHS = [
   'diciembre',
 ];
 
+const WEEKDAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
 const SHORT_MONTHS = MONTHS.map((month) => month.slice(0, 3));
 
 function partsOf(value: string): { day: number; month: number; year: number } {
@@ -96,6 +98,13 @@ export function formatDay(value: string): string {
 export function formatDayLong(value: string): string {
   const { day, month, year } = partsOf(value);
   return `${String(day)} de ${MONTHS[month - 1] ?? ''} de ${String(year)}`;
+}
+
+/** "Domingo 13 de septiembre de 2026" — para el renglón que encabeza un día en una lista. */
+export function formatDayHeading(value: string): string {
+  const { day, month, year } = partsOf(value);
+  const weekday = WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()] ?? '';
+  return `${weekday} ${formatDayLong(value)}`;
 }
 
 /** "13 sep 2026, 14:05" — cuando la hora es parte del dato: una sesión, una revisión, un cambio. */

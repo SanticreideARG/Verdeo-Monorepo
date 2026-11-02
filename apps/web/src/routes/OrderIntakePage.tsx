@@ -41,7 +41,7 @@ import { ReasonDialog } from '../components/ReasonDialog.js';
 import { ErrorNotice } from '../components/ErrorNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
 import { DeliveryDayPicker, useDeliveryOptions } from '../components/DeliveryDayPicker.js';
-import { deliveryDateFor } from '../lib/dates.js';
+import { deliveryDateFor, formatDayHeading } from '../lib/dates.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { AppearanceContext } from '../lib/appearanceContext.js';
 import { describeResponse, type AppError } from '../lib/errors.js';
@@ -105,6 +105,15 @@ const DEFAULT_COLUMNS = [
 ];
 
 const COLUMNS_KEY = 'verdeo-intake-columns';
+const BY_DELIVERY_KEY = 'verdeo-intake-by-delivery';
+
+function readByDelivery(): boolean {
+  try {
+    return window.localStorage.getItem(BY_DELIVERY_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 /** Sólo claves y candados: los botones se arman en el render, donde están los permisos. */
 const INTAKE_CATALOGUE: readonly { key: string; locked?: boolean }[] = [
@@ -318,6 +327,7 @@ export function OrderIntakePage() {
   const [listSummary, setListSummary] = useState<OrderListSummary | null>(null);
   // Qué pasó, qué hacer y si tiene sentido reintentar, separado de las confirmaciones.
   const [error, setError] = useState<AppError | null>(null);
+  const [byDelivery, setByDelivery] = useState(readByDelivery);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() =>
     readStoredColumns(COLUMNS_KEY, DEFAULT_COLUMNS, INTAKE_CATALOGUE),
   );
@@ -2071,34 +2081,71 @@ export function OrderIntakePage() {
         <div className="mt-6">
           {/* Cuántos pedidos hay en la cola: una lista sin número no dice si es un rato de
               trabajo o una tarde. */}
-          <p className="mb-3 text-sm text-ink-muted" role="status">
-            {orders.length === 1 ? '1 pedido' : String(orders.length) + ' pedidos'}
-            {/* Con la lista paginada no se puede contar mirando: si quedan más, se dice, para que
+          <div className="order-list-head">
+            <p className="text-sm text-ink-muted" role="status">
+              {orders.length === 1 ? '1 pedido' : String(orders.length) + ' pedidos'}
+              {/* Con la lista paginada no se puede contar mirando: si quedan más, se dice, para que
                 "30" no se lea como "hay treinta y se terminó". */}
-            {nextCursor
-              ? listSummary
-                ? ` cargados de ${String(listSummary.orderCount)} · los totales son de todos`
-                : ' cargados · hay más'
-              : ''}
-            {/* El vacío casi nunca es el estado real: es un filtro puesto de más. */}
-            {orders.length === 0 && (statusFilter || search.trim() || periodId) ? (
-              <>
-                {' · '}
-                <button
-                  className="link-button"
-                  onClick={() => {
-                    setStatusFilter('');
-                    setSearchInput('');
-                    setPeriodId('');
+              {nextCursor
+                ? listSummary
+                  ? ` cargados de ${String(listSummary.orderCount)} · los totales son de todos`
+                  : ' cargados · hay más'
+                : ''}
+              {/* El vacío casi nunca es el estado real: es un filtro puesto de más. */}
+              {orders.length === 0 && (statusFilter || search.trim() || periodId) ? (
+                <>
+                  {' · '}
+                  <button
+                    className="link-button"
+                    onClick={() => {
+                      setStatusFilter('');
+                      setSearchInput('');
+                      setPeriodId('');
+                    }}
+                    type="button"
+                  >
+                    Limpiar los filtros
+                  </button>
+                </>
+              ) : null}
+            </p>
+            {orders.length > 0 ? (
+              <label className="order-list-group-check">
+                <input
+                  checked={byDelivery}
+                  onChange={(event) => {
+                    setByDelivery(event.target.checked);
+                    try {
+                      window.localStorage.setItem(
+                        BY_DELIVERY_KEY,
+                        event.target.checked ? '1' : '0',
+                      );
+                    } catch {
+                      // Sin almacenamiento la elección vale hasta recargar.
+                    }
                   }}
-                  type="button"
-                >
-                  Limpiar los filtros
-                </button>
-              </>
+                  type="checkbox"
+                />
+                Ordenar por entrega
+              </label>
             ) : null}
-          </p>
+          </div>
           <DataTable
+            {...(byDelivery
+              ? {
+                  groupBy: {
+                    key: (order: OrderSummary) => order.deliveryDate,
+                    label: (day: string, group: readonly OrderSummary[]) => (
+                      <>
+                        {day ? formatDayHeading(day) : 'Sin fecha de entrega'}
+                        <small>
+                          {group.length === 1 ? '1 pedido' : `${String(group.length)} pedidos`}
+                        </small>
+                      </>
+                    ),
+                  },
+                }
+              : {})}
             narrowViewKey="verdeo-intake-view"
             // Tocar la tarjeta abre la ficha del pedido sin salir de la cola: con treinta
             // pedidos cargados, mirar tres seguidos costaba tres viajes de ida y vuelta.

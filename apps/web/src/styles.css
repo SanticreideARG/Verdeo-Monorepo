@@ -7083,6 +7083,55 @@ a.order-card-phone:focus-visible {
   background: color-mix(in srgb, var(--db-muted, #5d6f68) 8%, transparent);
 }
 
+/* El renglón que encabeza un grupo: una fecha de entrega, con sus pedidos abajo. */
+.data-table tbody tr.data-table-group > th {
+  padding: 0.55rem 0.75rem;
+  background: var(--db-bg-2, #eef2ef);
+  border-top: 2px solid var(--db-accent, #2f6b4f);
+  color: var(--db-text, inherit);
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-align: left;
+}
+/* Con scroll de costado la fecha queda a la vista, como el cliente de cada fila. */
+.data-table-group > th > span {
+  position: sticky;
+  left: 0.75rem;
+}
+.data-table-group small,
+.data-cards-group small {
+  margin-left: 0.6rem;
+  color: var(--db-muted, var(--color-ink-muted));
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+.data-cards > li.data-cards-group {
+  padding: 0.5rem 0.75rem;
+  background: var(--db-bg-2, #eef2ef);
+  border: 0;
+  border-top: 2px solid var(--db-accent, #2f6b4f);
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--db-text, inherit);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+.order-list-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  margin-bottom: 0.75rem;
+}
+.order-list-group-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
 /* La misma señal en las tarjetas del teléfono, donde no hay filas que recorrer. */
 .data-cards li[data-tone='pendiente'] {
   border-left: 3px solid var(--color-lime, #d7e979);

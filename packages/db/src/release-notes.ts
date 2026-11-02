@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-02-ordenar-por-entrega',
+    body: `Pedidos: nuevo tilde "Ordenar por entrega". Separa la lista con un renglón por cada fecha de entrega y sus pedidos abajo. Se puede seguir ordenando por columna, adentro de cada fecha.`,
+  },
+  {
     key: '2026-11-02-importador-correos',
     body: `Importar pedidos de los correos, corregido:
 • Cada pedido tiene su ciudad: se sugiere la que dice el correo y se puede cambiar. Si no se sabe, se elige ahí mismo, también con "Todas las ciudades" arriba.

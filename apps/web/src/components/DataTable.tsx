@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 
 import { useNarrowViewport } from '../lib/useNarrowViewport.js';
 
@@ -67,6 +67,24 @@ function compare(a: number | string, b: number | string): number {
 }
 
 /**
+ * Las filas por grupo, con los grupos en orden de clave y el vacío al final.
+ *
+ * Reparte sobre lo ya ordenado, así que ordenar por una columna ordena adentro de cada grupo.
+ */
+function groupRows<T>(rows: readonly T[], keyOf: (row: T) => string) {
+  const groups = new Map<string, T[]>();
+  for (const row of rows) {
+    const key = keyOf(row);
+    const group = groups.get(key);
+    if (group) group.push(row);
+    else groups.set(key, [row]);
+  }
+  return [...groups.entries()]
+    .map(([key, members]) => ({ key, rows: members }))
+    .sort((a, b) => (!a.key ? 1 : !b.key ? -1 : compare(a.key, b.key)));
+}
+
+/**
  * Los mismos datos como tabla en escritorio y como tarjetas en un teléfono.
  *
  * Una tabla de ocho columnas en 375px no se arregla con scroll horizontal: obliga a arrastrar de
@@ -81,6 +99,7 @@ export function DataTable<T>({
   caption,
   columns,
   empty,
+  groupBy,
   onRowSelect,
   rowKey,
   rows,
@@ -92,6 +111,14 @@ export function DataTable<T>({
   columns: readonly DataColumn<T>[];
   /** Texto, o un <EmptyState> con la salida: un vacío por filtro tiene que poder deshacerse. */
   empty: ReactNode;
+  /**
+   * Parte la lista en grupos, cada uno con un renglón que lo encabeza. Los grupos van en orden de
+   * clave, y ordenar por una columna ordena adentro de cada uno.
+   */
+  groupBy?: {
+    key: (row: T) => string;
+    label: (key: string, rows: readonly T[]) => ReactNode;
+  };
   /**
    * Qué pasa al tocar la tarjeta, en el teléfono.
    *
@@ -176,6 +203,8 @@ export function DataTable<T>({
       })
     : rows;
 
+  const groups = groupBy ? groupRows(sorted, groupBy.key) : [{ key: '', rows: sorted }];
+
   /** Un clic ordena ascendente; el segundo sobre la misma columna invierte; el tercero desordena. */
   function toggleSort(key: string) {
     setSort((current) => {
@@ -237,54 +266,61 @@ export function DataTable<T>({
           </label>
         ) : null}
         <ul aria-label={caption} className="data-cards">
-          {sorted.map((row) => (
-            <li
-              className={onRowSelect ? 'is-linked' : undefined}
-              data-tone={rowTone?.(row)}
-              key={rowKey(row)}
-            >
-              {onRowSelect ? (
-                <button
-                  aria-label="Ver detalle"
-                  className="data-cards-link"
-                  onClick={() => onRowSelect(row)}
-                  type="button"
-                />
+          {groups.map((group) => (
+            <Fragment key={group.key}>
+              {groupBy ? (
+                <li className="data-cards-group">{groupBy.label(group.key, group.rows)}</li>
               ) : null}
-              <div className="data-cards-head">
-                <p className="data-cards-title">{primary?.render(row)}</p>
-                {chip ? <span className="data-cards-chip">{chip.render(row)}</span> : null}
-                {/* El menú de la fila va arriba, al lado del estado: al pie ocupaba un renglón
+              {group.rows.map((row) => (
+                <li
+                  className={onRowSelect ? 'is-linked' : undefined}
+                  data-tone={rowTone?.(row)}
+                  key={rowKey(row)}
+                >
+                  {onRowSelect ? (
+                    <button
+                      aria-label="Ver detalle"
+                      className="data-cards-link"
+                      onClick={() => onRowSelect(row)}
+                      type="button"
+                    />
+                  ) : null}
+                  <div className="data-cards-head">
+                    <p className="data-cards-title">{primary?.render(row)}</p>
+                    {chip ? <span className="data-cards-chip">{chip.render(row)}</span> : null}
+                    {/* El menú de la fila va arriba, al lado del estado: al pie ocupaba un renglón
                     entero de cada tarjeta para un solo botón. */}
-                {actions?.cardRender ? (
-                  <div className="data-cards-head-actions">{actions.cardRender(row)}</div>
-                ) : null}
-              </div>
-              {highlights.length > 0 ? (
-                <p className="data-cards-highlights">
-                  {highlights.map((column) => (
-                    <span key={column.key}>
-                      {/* Con su etiqueta, en chico: "6" suelto no dice 6 de qué, y una columna que
+                    {actions?.cardRender ? (
+                      <div className="data-cards-head-actions">{actions.cardRender(row)}</div>
+                    ) : null}
+                  </div>
+                  {highlights.length > 0 ? (
+                    <p className="data-cards-highlights">
+                      {highlights.map((column) => (
+                        <span key={column.key}>
+                          {/* Con su etiqueta, en chico: "6" suelto no dice 6 de qué, y una columna que
                           alguien eligió mostrar no puede quedar sin nombre en la tarjeta. */}
-                      <small>{column.label}</small> {column.render(row)}
-                    </span>
-                  ))}
-                </p>
-              ) : null}
-              {rest.length > 0 ? (
-                <dl>
-                  {rest.map((column) => (
-                    <div key={column.key}>
-                      <dt>{column.label}</dt>
-                      <dd>{column.render(row)}</dd>
-                    </div>
-                  ))}
-                </dl>
-              ) : null}
-              {actions && !actions.cardRender ? (
-                <div className="data-cards-actions">{actions.render(row)}</div>
-              ) : null}
-            </li>
+                          <small>{column.label}</small> {column.render(row)}
+                        </span>
+                      ))}
+                    </p>
+                  ) : null}
+                  {rest.length > 0 ? (
+                    <dl>
+                      {rest.map((column) => (
+                        <div key={column.key}>
+                          <dt>{column.label}</dt>
+                          <dd>{column.render(row)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : null}
+                  {actions && !actions.cardRender ? (
+                    <div className="data-cards-actions">{actions.render(row)}</div>
+                  ) : null}
+                </li>
+              ))}
+            </Fragment>
           ))}
         </ul>
       </>
@@ -334,32 +370,43 @@ export function DataTable<T>({
             </tr>
           </thead>
           <tbody>
-            {sorted.map((row) => (
-              <tr
-                data-tone={rowTone?.(row)}
-                key={rowKey(row)}
-                onDoubleClick={
-                  onRowSelect
-                    ? (event) => {
-                        // Doble clic sobre un control (un selector, un tilde, un botón) es del
-                        // control, no una orden de abrir la fila.
-                        if (
-                          (event.target as HTMLElement).closest(
-                            'a, button, input, label, select, textarea',
-                          )
-                        )
-                          return;
-                        onRowSelect(row);
-                      }
-                    : undefined
-                }
-              >
-                {columns.map((column) => (
-                  <td className={column.emphasis ? 'is-emphasis' : undefined} key={column.key}>
-                    {column.render(row)}
-                  </td>
+            {groups.map((group) => (
+              <Fragment key={group.key}>
+                {groupBy ? (
+                  <tr className="data-table-group">
+                    <th colSpan={columns.length} scope="colgroup">
+                      <span>{groupBy.label(group.key, group.rows)}</span>
+                    </th>
+                  </tr>
+                ) : null}
+                {group.rows.map((row) => (
+                  <tr
+                    data-tone={rowTone?.(row)}
+                    key={rowKey(row)}
+                    onDoubleClick={
+                      onRowSelect
+                        ? (event) => {
+                            // Doble clic sobre un control (un selector, un tilde, un botón) es del
+                            // control, no una orden de abrir la fila.
+                            if (
+                              (event.target as HTMLElement).closest(
+                                'a, button, input, label, select, textarea',
+                              )
+                            )
+                              return;
+                            onRowSelect(row);
+                          }
+                        : undefined
+                    }
+                  >
+                    {columns.map((column) => (
+                      <td className={column.emphasis ? 'is-emphasis' : undefined} key={column.key}>
+                        {column.render(row)}
+                      </td>
+                    ))}
+                  </tr>
                 ))}
-              </tr>
+              </Fragment>
             ))}
           </tbody>
           {/*

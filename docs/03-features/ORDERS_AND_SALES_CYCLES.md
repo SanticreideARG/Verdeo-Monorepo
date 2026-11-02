@@ -186,6 +186,11 @@ no se borran, para que dos "Ana" sigan siendo dos personas distinguibles.
 Las columnas de las dos pantallas —"Ver pedidos" y "Tomar y confirmar"— salen del mismo catálogo
 (`apps/web/src/lib/orderColumns.tsx`) y todas ordenan al tocar su encabezado. `sortValue` devuelve
 el dato y no lo que se ve: "Total" compara números y no `$ 1.000` contra `$ 900` como texto, y
+El tilde **"Ordenar por entrega"** parte la lista en fechas de entrega: un renglón destacado por
+fecha, de la más cercana a la más lejana, con sus pedidos abajo. Ordenar por una columna ordena
+adentro de cada fecha. Reparte los pedidos ya cargados: con la lista paginada, "Cargar más" puede
+sumar pedidos a una fecha que ya estaba.
+
 "Estado" ordena por el orden en que se trabaja un pedido (borrador, confirmado, listo, entregado,
 cancelado) y no alfabéticamente.
 

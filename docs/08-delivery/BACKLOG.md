@@ -3,6 +3,10 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Pedidos: ordenar por entrega (2026-11-02)
+
+- [x] Tilde "Ordenar por entrega" en la lista de Pedidos: un renglón destacado por fecha de entrega (día de la semana, fecha y cantidad) con sus pedidos abajo, en tabla y en tarjetas. Ordenar por una columna ordena adentro de cada fecha. Se recuerda por equipo.
+
 ## Importador de correos (2026-11-02) — [norma](../03-features/ORDERS_AND_SALES_CYCLES.md)
 
 - [x] Ciudad por pedido en la vista previa: sugerida por el asunto del mail, o la elegida arriba; si no, se elige en el pedido o con "Ciudad para todos". Antes, con "Todas las ciudades", fallaba al importar ("Un cliente necesita una ciudad") sin forma de elegirla. La vista previa se calcula para cada ciudad (`bySite`), porque cada una puede tener su menú y sus ofertas; el servidor valida la ciudad contra la sesión.
