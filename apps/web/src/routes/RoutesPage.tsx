@@ -17,6 +17,11 @@ import { DashboardShell } from '../components/DashboardShell.js';
 import { DeliveryRunsPanel } from '../components/DeliveryRunsPanel.js';
 import { UnlocatedOrdersPanel } from '../components/LocateAddress.js';
 import { EmptyState } from '../components/EmptyState.js';
+import {
+  RouteManualOrderBar,
+  RouteManualOrderList,
+  splitManualOrder,
+} from '../components/RouteManualOrder.js';
 import { RouteMap } from '../components/RouteMap.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
@@ -123,6 +128,9 @@ export function RoutesPage() {
   const [selectedRoute, setSelectedRoute] = useState<RouteDetail | null>(null);
   // La parada que se está arrastrando y sobre cuál va (2026-10-25).
   const [drag, setDrag] = useState<{ from: number; over: number } | null>(null);
+  // "Establecer orden manualmente": las paradas elegidas hasta ahora; null, fuera de ese modo.
+  const [manualOrder, setManualOrder] = useState<string[] | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
   const [message, setMessage] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   /*
@@ -426,16 +434,40 @@ export function RoutesPage() {
     const [moved] = stops.splice(from, 1);
     if (!moved) return;
     stops.splice(to, 0, moved);
+    await saveOrder(selectedRoute, stops);
+  }
+
+  async function saveOrder(route: RouteDetail, stops: RouteStop[]) {
     setSelectedRoute({
-      ...selectedRoute,
+      ...route,
       stops: stops.map((stop, index) => ({ ...stop, sequence: index + 1 })),
     });
-    const response = await apiRequest(`/api/v1/delivery/routes/${selectedRoute.id}/stops`, {
+    const response = await apiRequest(`/api/v1/delivery/routes/${route.id}/stops`, {
       body: JSON.stringify({ stopIds: stops.map((stop) => stop.id) }),
       method: 'PUT',
     });
     if (!response.ok) setMessage(await errorMessage(response));
-    await loadRouteDetail(selectedRoute.id);
+    await loadRouteDetail(route.id);
+    return response.ok;
+  }
+
+  async function saveManualOrder() {
+    if (!selectedRoute || !manualOrder) return;
+    const { pending, picked } = splitManualOrder(selectedRoute.stops, manualOrder);
+    if (pending.length > 0) return;
+    setSavingOrder(true);
+    const saved = await saveOrder(selectedRoute, picked);
+    setSavingOrder(false);
+    if (saved) {
+      setManualOrder(null);
+      showToast('Orden guardado.');
+    }
+  }
+
+  function pickStop(stopId: string) {
+    setManualOrder((current) =>
+      current && !current.includes(stopId) ? [...current, stopId] : current,
+    );
   }
 
   /*
@@ -462,6 +494,12 @@ export function RoutesPage() {
     setDrag(null);
     void reorder(drag.from, drag.over);
   }
+
+  // El orden a medio elegir es de esa ruta: al cambiar de ruta, se abandona.
+  const selectedRouteId = selectedRoute?.id;
+  useEffect(() => {
+    setManualOrder(null);
+  }, [selectedRouteId]);
 
   if (failed) return <DashboardFailed label="las rutas" />;
   if (!profile) return <DashboardLoading />;
@@ -763,188 +801,224 @@ export function RoutesPage() {
                       </div>
                     ) : null}
 
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                       <p className="font-semibold text-forest">
                         {formatDay(selectedRoute.deliveryDate)}{' '}
                         {selectedRoute.label ? `· ${selectedRoute.label}` : ''}
                       </p>
-                      <div className="flex flex-wrap gap-2">
-                        {/* Lo que faltaba: poder sacar la ruta de la pantalla. */}
-                        {selectedRoute.stops.length > 0 ? (
-                          <>
+                      {manualOrder ? null : (
+                        <div className="flex flex-wrap gap-2">
+                          {canManage &&
+                          selectedRoute.status === 'draft' &&
+                          selectedRoute.stops.length > 1 ? (
                             <button
                               className="button button-secondary"
-                              onClick={() => void copyRoute(selectedRoute)}
+                              onClick={() => setManualOrder([])}
                               type="button"
                             >
-                              Copiar para el repartidor
+                              Establecer orden manualmente
                             </button>
-                            <button
-                              className="button button-secondary"
-                              onClick={() => downloadRouteCsv(selectedRoute)}
-                              type="button"
-                            >
-                              Descargar planilla
-                            </button>
-                            {/* El enlace del repartidor. Sólo con la ruta publicada: un borrador se
-                              puede reordenar, y una hoja que cambia debajo de quien ya salió es
-                              peor que no tener hoja. */}
-                            {canPublish && selectedRoute.status === 'published' ? (
+                          ) : null}
+                          {/* Lo que faltaba: poder sacar la ruta de la pantalla. */}
+                          {selectedRoute.stops.length > 0 ? (
+                            <>
                               <button
-                                className="button button-primary"
-                                disabled={linkBusy}
-                                onClick={() => void issueLink(selectedRoute.id)}
+                                className="button button-secondary"
+                                onClick={() => void copyRoute(selectedRoute)}
                                 type="button"
                               >
-                                {linkBusy ? 'Generando…' : 'Enlace para el repartidor'}
+                                Copiar para el repartidor
                               </button>
-                            ) : null}
-                          </>
-                        ) : null}
-                        {canPublish && selectedRoute.status === 'draft' ? (
-                          <button
-                            className="button button-primary"
-                            onClick={() =>
-                              setPending({ kind: 'publicar', routeId: selectedRoute.id })
-                            }
-                            type="button"
-                          >
-                            Publicar
-                          </button>
-                        ) : null}
-                        {canManage && selectedRoute.status === 'draft' ? (
-                          <button
-                            className="button button-danger"
-                            onClick={() =>
-                              setPending({ kind: 'descartar', routeId: selectedRoute.id })
-                            }
-                            type="button"
-                          >
-                            Descartar propuesta
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                    <RouteTimingPanel
-                      canManage={canManage}
-                      departureTime={selectedRoute.departureTime ?? null}
-                      end={selectedRoute.end ?? null}
-                      onUpdated={(route) => setSelectedRoute(route as RouteDetail)}
-                      routeId={selectedRoute.id}
-                      start={selectedRoute.start ?? null}
-                      stops={selectedRoute.stops}
-                    />
-                    <div className="routes-viewer mt-4">
-                      <ol className="routes-stops grid content-start gap-2">
-                        {selectedRoute.stops.map((stop, index) => (
-                          <Fragment key={stop.id}>
-                            {neighborhoodHeading(selectedRoute.stops, index) ? (
-                              <li aria-hidden="true" className="routes-neighborhood">
-                                {neighborhoodHeading(selectedRoute.stops, index)}
-                              </li>
-                            ) : null}
-                            <li
-                              className={[
-                                'routes-stop',
-                                drag?.from === index ? 'is-dragging' : '',
-                                drag && drag.from !== index && drag.over === index
-                                  ? drag.from < index
-                                    ? 'is-drop-after'
-                                    : 'is-drop-before'
-                                  : '',
-                              ]
-                                .filter(Boolean)
-                                .join(' ')}
-                              data-stop-index={index}
+                              <button
+                                className="button button-secondary"
+                                onClick={() => downloadRouteCsv(selectedRoute)}
+                                type="button"
+                              >
+                                Descargar planilla
+                              </button>
+                              {/* El enlace del repartidor. Sólo con la ruta publicada: un borrador se
+                              puede reordenar, y una hoja que cambia debajo de quien ya salió es
+                              peor que no tener hoja. */}
+                              {canPublish && selectedRoute.status === 'published' ? (
+                                <button
+                                  className="button button-primary"
+                                  disabled={linkBusy}
+                                  onClick={() => void issueLink(selectedRoute.id)}
+                                  type="button"
+                                >
+                                  {linkBusy ? 'Generando…' : 'Enlace para el repartidor'}
+                                </button>
+                              ) : null}
+                            </>
+                          ) : null}
+                          {canPublish && selectedRoute.status === 'draft' ? (
+                            <button
+                              className="button button-primary"
+                              onClick={() =>
+                                setPending({ kind: 'publicar', routeId: selectedRoute.id })
+                              }
+                              type="button"
                             >
-                              {/*
-                               * El número de parada va en su propia columna, fija.
-                               *
-                               * Estaba adentro del párrafo del nombre, así que al angostarse la
-                               * columna "1. Sofía Romero — NQN-00012" se partía en cuatro renglones y
-                               * el orden de la ruta —que es lo único que se lee de corrido— dejaba de
-                               * leerse. Afuera y en ancho fijo, el número siempre está donde se lo
-                               * busca.
-                               */}
-                              <span className="routes-stop-seq">{stop.sequence}</span>
-                              <div className="routes-stop-body">
-                                <p className="routes-stop-name">{stop.customerDisplayName}</p>
-                                {stopTiming.byStop.get(stop.id) ? (
-                                  <p className="routes-stop-eta">
-                                    +{stopTiming.byStop.get(stop.id)?.leg} min
-                                    {clockPlus(
-                                      selectedRoute.departureTime,
-                                      stopTiming.byStop.get(stop.id)?.fromStart ?? 0,
-                                    )
-                                      ? ` · llega ≈ ${String(
-                                          clockPlus(
-                                            selectedRoute.departureTime,
-                                            stopTiming.byStop.get(stop.id)?.fromStart ?? 0,
-                                          ),
-                                        )}`
-                                      : ''}
-                                  </p>
-                                ) : null}
-                                {stop.detail ? (
-                                  <p className="routes-stop-detail">{stop.detail}</p>
-                                ) : null}
-                                <p className="routes-stop-address">
-                                  {stop.deliveryAddress}
-                                  {stop.deliveryAddressLine2 ? (
-                                    <small> · {stop.deliveryAddressLine2}</small>
+                              Publicar
+                            </button>
+                          ) : null}
+                          {canManage && selectedRoute.status === 'draft' ? (
+                            <button
+                              className="button button-danger"
+                              onClick={() =>
+                                setPending({ kind: 'descartar', routeId: selectedRoute.id })
+                              }
+                              type="button"
+                            >
+                              Descartar propuesta
+                            </button>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                    {manualOrder ? (
+                      <RouteManualOrderBar
+                        onCancel={() => setManualOrder(null)}
+                        onReset={() => setManualOrder([])}
+                        onSave={() => void saveManualOrder()}
+                        onUndo={() => setManualOrder((current) => current?.slice(0, -1) ?? null)}
+                        pickedCount={
+                          splitManualOrder(selectedRoute.stops, manualOrder).picked.length
+                        }
+                        saving={savingOrder}
+                        total={selectedRoute.stops.length}
+                      />
+                    ) : (
+                      <RouteTimingPanel
+                        canManage={canManage}
+                        departureTime={selectedRoute.departureTime ?? null}
+                        end={selectedRoute.end ?? null}
+                        onUpdated={(route) => setSelectedRoute(route as RouteDetail)}
+                        routeId={selectedRoute.id}
+                        start={selectedRoute.start ?? null}
+                        stops={selectedRoute.stops}
+                      />
+                    )}
+                    <div className={`routes-viewer mt-4 ${manualOrder ? 'is-picking' : ''}`}>
+                      {manualOrder ? (
+                        <RouteManualOrderList
+                          onPick={pickStop}
+                          order={manualOrder}
+                          stops={selectedRoute.stops}
+                        />
+                      ) : (
+                        <ol className="routes-stops grid content-start gap-2">
+                          {selectedRoute.stops.map((stop, index) => (
+                            <Fragment key={stop.id}>
+                              {neighborhoodHeading(selectedRoute.stops, index) ? (
+                                <li aria-hidden="true" className="routes-neighborhood">
+                                  {neighborhoodHeading(selectedRoute.stops, index)}
+                                </li>
+                              ) : null}
+                              <li
+                                className={[
+                                  'routes-stop',
+                                  drag?.from === index ? 'is-dragging' : '',
+                                  drag && drag.from !== index && drag.over === index
+                                    ? drag.from < index
+                                      ? 'is-drop-after'
+                                      : 'is-drop-before'
+                                    : '',
+                                ]
+                                  .filter(Boolean)
+                                  .join(' ')}
+                                data-stop-index={index}
+                              >
+                                {/*
+                                 * El número de parada va en su propia columna, fija.
+                                 *
+                                 * Estaba adentro del párrafo del nombre, así que al angostarse la
+                                 * columna "1. Sofía Romero — NQN-00012" se partía en cuatro renglones y
+                                 * el orden de la ruta —que es lo único que se lee de corrido— dejaba de
+                                 * leerse. Afuera y en ancho fijo, el número siempre está donde se lo
+                                 * busca.
+                                 */}
+                                <span className="routes-stop-seq">{stop.sequence}</span>
+                                <div className="routes-stop-body">
+                                  <p className="routes-stop-name">{stop.customerDisplayName}</p>
+                                  {stopTiming.byStop.get(stop.id) ? (
+                                    <p className="routes-stop-eta">
+                                      +{stopTiming.byStop.get(stop.id)?.leg} min
+                                      {clockPlus(
+                                        selectedRoute.departureTime,
+                                        stopTiming.byStop.get(stop.id)?.fromStart ?? 0,
+                                      )
+                                        ? ` · llega ≈ ${String(
+                                            clockPlus(
+                                              selectedRoute.departureTime,
+                                              stopTiming.byStop.get(stop.id)?.fromStart ?? 0,
+                                            ),
+                                          )}`
+                                        : ''}
+                                    </p>
                                   ) : null}
-                                </p>
-                                {/* La franja horaria, donde iban el monto, el medio y el estado
+                                  {stop.detail ? (
+                                    <p className="routes-stop-detail">{stop.detail}</p>
+                                  ) : null}
+                                  <p className="routes-stop-address">
+                                    {stop.deliveryAddress}
+                                    {stop.deliveryAddressLine2 ? (
+                                      <small> · {stop.deliveryAddressLine2}</small>
+                                    ) : null}
+                                  </p>
+                                  {/* La franja horaria, donde iban el monto, el medio y el estado
                                   (2026-10-25): es lo que decide dónde va la parada. */}
-                                {stop.deliveryWindow ? (
-                                  <p className="routes-stop-window">🕒 {stop.deliveryWindow}</p>
-                                ) : null}
-                              </div>
-                              {/* Reordenar y el estado, en una columna angosta que no empuja al texto:
+                                  {stop.deliveryWindow ? (
+                                    <p className="routes-stop-window">🕒 {stop.deliveryWindow}</p>
+                                  ) : null}
+                                </div>
+                                {/* Reordenar y el estado, en una columna angosta que no empuja al texto:
                               dos botones de flecha no pueden costarle la mitad del ancho al
                               nombre del cliente. */}
-                              <div className="routes-stop-aside">
-                                {canManage ? (
-                                  <button
-                                    aria-label={`Mover la parada ${String(stop.sequence)}: arrastrala, o usá las flechas del teclado`}
-                                    className="routes-stop-handle"
-                                    onKeyDown={(event) => {
-                                      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-                                        event.preventDefault();
-                                        void reorder(
-                                          index,
-                                          index + (event.key === 'ArrowUp' ? -1 : 1),
-                                        );
-                                      }
-                                    }}
-                                    onPointerCancel={() => setDrag(null)}
-                                    onPointerDown={(event) => startDrag(event, index)}
-                                    onPointerMove={dragOver}
-                                    onPointerUp={endDrag}
-                                    title="Arrastrar para cambiar el orden"
-                                    type="button"
-                                  >
-                                    ⠿
-                                  </button>
-                                ) : null}
-                                {stop.status === 'delivered' ? (
-                                  <span className="routes-stop-done">Entregada</span>
-                                ) : null}
-                              </div>
-                            </li>
-                          </Fragment>
-                        ))}
-                        {selectedRoute.stops.length === 0 ? (
-                          <p className="text-ink-muted">
-                            No hay pedidos por repartir en esa fecha y esa zona.
-                          </p>
-                        ) : null}
-                      </ol>
+                                <div className="routes-stop-aside">
+                                  {canManage ? (
+                                    <button
+                                      aria-label={`Mover la parada ${String(stop.sequence)}: arrastrala, o usá las flechas del teclado`}
+                                      className="routes-stop-handle"
+                                      onKeyDown={(event) => {
+                                        if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                                          event.preventDefault();
+                                          void reorder(
+                                            index,
+                                            index + (event.key === 'ArrowUp' ? -1 : 1),
+                                          );
+                                        }
+                                      }}
+                                      onPointerCancel={() => setDrag(null)}
+                                      onPointerDown={(event) => startDrag(event, index)}
+                                      onPointerMove={dragOver}
+                                      onPointerUp={endDrag}
+                                      title="Arrastrar para cambiar el orden"
+                                      type="button"
+                                    >
+                                      ⠿
+                                    </button>
+                                  ) : null}
+                                  {stop.status === 'delivered' ? (
+                                    <span className="routes-stop-done">Entregada</span>
+                                  ) : null}
+                                </div>
+                              </li>
+                            </Fragment>
+                          ))}
+                          {selectedRoute.stops.length === 0 ? (
+                            <p className="text-ink-muted">
+                              No hay pedidos por repartir en esa fecha y esa zona.
+                            </p>
+                          ) : null}
+                        </ol>
+                      )}
                       {/* Todas las paradas juntas: es la única forma de ver si el orden propuesto
                       tiene sentido antes de publicarlo. */}
                       {selectedRoute.stops.length > 0 ? (
                         <RouteMap
                           end={selectedRoute.end ?? null}
+                          picking={manualOrder ? { onPick: pickStop, order: manualOrder } : null}
                           start={selectedRoute.start ?? null}
                           stops={selectedRoute.stops}
                         />

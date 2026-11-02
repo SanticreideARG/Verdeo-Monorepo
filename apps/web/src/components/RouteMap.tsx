@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -42,10 +42,13 @@ function escapeHtml(value: string): string {
 
 export function RouteMap({
   end = null,
+  picking = null,
   start = null,
   stops,
 }: {
   end?: RouteMapEnd | null;
+  /** "Establecer orden manualmente": los puntos se tocan, y sólo se dibuja lo ya elegido. */
+  picking?: { onPick: (stopId: string) => void; order: readonly string[] } | null;
   start?: RouteMapEnd | null;
   stops: readonly RouteMapStop[];
 }) {
@@ -53,9 +56,19 @@ export function RouteMap({
   const map = useRef<L.Map | null>(null);
   const layer = useRef<L.LayerGroup | null>(null);
 
-  const located = stops.filter(
-    (stop): stop is RouteMapStop & { deliveryLatitude: number; deliveryLongitude: number } =>
-      stop.deliveryLatitude !== null && stop.deliveryLongitude !== null,
+  const fittedTo = useRef('');
+  // El marcador se dibuja una vez por cambio: lo que llama siempre la última versión, por acá.
+  const onPick = useRef(picking?.onPick);
+  onPick.current = picking?.onPick;
+  const order = picking?.order ?? null;
+
+  const located = useMemo(
+    () =>
+      stops.filter(
+        (stop): stop is RouteMapStop & { deliveryLatitude: number; deliveryLongitude: number } =>
+          stop.deliveryLatitude !== null && stop.deliveryLongitude !== null,
+      ),
+    [stops],
   );
   const missing = stops.length - located.length;
 
@@ -85,24 +98,53 @@ export function RouteMap({
     if (located.length === 0 && !start && !end) return;
 
     // La línea sale de la salida, pasa por las paradas en orden y termina en la llegada.
-    const points: [number, number][] = [
-      ...(start ? [[start.latitude, start.longitude] as [number, number]] : []),
-      ...located.map((stop): [number, number] => [stop.deliveryLatitude, stop.deliveryLongitude]),
-      ...(end ? [[end.latitude, end.longitude] as [number, number]] : []),
+    const startPoint: [number, number][] = start ? [[start.latitude, start.longitude]] : [];
+    const endPoint: [number, number][] = end ? [[end.latitude, end.longitude]] : [];
+    const stopPoint = (stop: (typeof located)[number]): [number, number] => [
+      stop.deliveryLatitude,
+      stop.deliveryLongitude,
     ];
+    const points = [...startPoint, ...located.map(stopPoint), ...endPoint];
+    // Eligiendo a mano, la línea es el recorrido que se va armando: sale de la salida y crece.
+    const line = order
+      ? [
+          ...startPoint,
+          ...order.flatMap((id) => {
+            const stop = located.find((candidate) => candidate.id === id);
+            return stop ? [stopPoint(stop)] : [];
+          }),
+        ]
+      : points;
     // La línea va primero para que quede por debajo de los números.
-    L.polyline(points, { color: '#174c3c', dashArray: '6 6', weight: 2 }).addTo(group);
+    L.polyline(line, { color: '#174c3c', dashArray: '6 6', weight: 2 }).addTo(group);
     for (const stop of located) {
-      L.marker([stop.deliveryLatitude, stop.deliveryLongitude], {
+      const position = order ? order.indexOf(stop.id) : stop.sequence - 1;
+      const pending = position < 0;
+      const text = `${escapeHtml(stop.customerDisplayName)}<br>${escapeHtml(stop.deliveryAddress)}`;
+      const marker = L.marker(stopPoint(stop), {
         icon: L.divIcon({
-          className: 'route-pin',
-          html: `<span>${String(stop.sequence)}</span>`,
+          className: pending ? 'route-pin route-pin-pending' : 'route-pin',
+          html: `<span>${pending ? '' : String(position + 1)}</span>`,
           iconAnchor: [13, 13],
           iconSize: [26, 26],
         }),
-      })
-        .bindPopup(`<strong>${stop.customerDisplayName}</strong><br>${stop.deliveryAddress}`)
-        .addTo(group);
+        // Las que faltan, encima: si dos paradas caen en el mismo edificio, la de abajo aparece
+        // al elegir la de arriba.
+        zIndexOffset: order && !pending ? -500 : 0,
+      }).addTo(group);
+      if (!order) marker.bindPopup(text);
+      else {
+        marker.bindTooltip(text, { direction: 'top', offset: [0, -12] });
+        marker
+          .getElement()
+          ?.setAttribute(
+            'aria-label',
+            pending
+              ? `Elegir a ${stop.customerDisplayName}, ${stop.deliveryAddress}`
+              : `Parada ${String(position + 1)}: ${stop.customerDisplayName}`,
+          );
+        if (pending) marker.on('click', () => onPick.current?.(stop.id));
+      }
     }
     // Salida y llegada, con su propio pin; si son el mismo lugar, uno solo.
     const endPin = (point: RouteMapEnd, label: string, title: string) =>
@@ -122,12 +164,18 @@ export function RouteMap({
       if (start) endPin(start, 'S', 'Salida');
       if (end) endPin(end, 'L', 'Llegada');
     }
-    instance.fitBounds(L.latLngBounds(points).pad(0.2));
-  }, [located, start, end]);
+    // Encuadrar sólo si cambian los puntos, no el orden: quien acercó el mapa para distinguir dos
+    // paradas no puede perder el zoom cada vez que elige una.
+    const spots = points.map(String).sort().join('|');
+    if (spots !== fittedTo.current) {
+      fittedTo.current = spots;
+      instance.fitBounds(L.latLngBounds(points).pad(0.2));
+    }
+  }, [located, order, start, end]);
 
   return (
     <div className="route-map">
-      <div className="route-map-canvas" ref={container} />
+      <div className="route-map-canvas" data-picking={order ? 'true' : undefined} ref={container} />
       {missing > 0 ? (
         <p className="route-map-note">
           {missing === 1

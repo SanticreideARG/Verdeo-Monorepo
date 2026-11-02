@@ -8073,28 +8073,31 @@ body:has(.assistant-launcher.is-operator) .toast-host {
   gap: 1rem;
   align-items: start;
 }
-@media (min-width: 1024px) {
-  .routes-layout {
-    grid-template-columns: minmax(14rem, 0.3fr) minmax(0, 0.7fr);
-  }
-}
 .routes-list {
   max-height: min(70vh, 44rem);
   overflow-y: auto;
+}
+/* Con ancho, el selector de ruta va arriba y todo lo de abajo es para la lista y el mapa. Dos filas
+   a la vista: las rutas anteriores se alcanzan con el scroll, sin empujar la hoja. */
+@media (min-width: 1024px) {
+  .routes-list {
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    max-height: 9.5rem;
+  }
 }
 .routes-viewer {
   display: grid;
   gap: 1rem;
   align-items: start;
 }
-@media (min-width: 1280px) {
-  /* El mapa a la derecha de las paradas; abajo en pantallas angostas. */
+@media (min-width: 1024px) {
+  /* El mapa a la derecha de las paradas, con la mayor parte del ancho; abajo en pantallas angostas. */
   .routes-viewer {
-    grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.8fr);
+    grid-template-columns: minmax(20rem, 0.55fr) minmax(0, 1.45fr);
   }
 }
 .routes-stops {
-  max-height: min(70vh, 44rem);
+  max-height: min(78vh, 52rem);
   overflow-y: auto;
   /* Aire para que la última parada no quede pegada al borde del scroll. */
   padding-right: 0.35rem;
@@ -8106,7 +8109,7 @@ body:has(.assistant-launcher.is-operator) .toast-host {
   gap: 0.5rem;
 }
 .route-map-canvas {
-  height: min(70vh, 44rem);
+  height: min(78vh, 52rem);
   border-radius: 16px;
   border: 1px solid var(--db-border, rgba(23, 76, 60, 0.15));
   /* Leaflet dibuja sus capas y controles por encima de todo si no se lo acota. */
@@ -11825,6 +11828,103 @@ label.field:has(> input[type='radio']) {
   background: transparent;
   color: inherit;
   font: inherit;
+}
+
+/* "Establecer orden manualmente": los puntos que faltan elegir son botones. */
+.route-pin-pending {
+  cursor: pointer;
+}
+.route-pin-pending span {
+  border-color: var(--color-forest, #174c3c);
+  background: #fff;
+}
+.route-pin-pending:hover span,
+.route-pin-pending:focus-visible span {
+  background: #f4d35e;
+}
+.route-manual-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  scroll-margin-top: 1rem;
+  border: 1px solid var(--color-forest, #174c3c);
+  border-radius: 0.75rem;
+  padding: 0.7rem 0.9rem;
+}
+.route-manual-bar p {
+  margin: 0;
+}
+.route-manual-bar > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.route-manual-list {
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+  max-height: min(78vh, 52rem);
+  overflow-y: auto;
+  padding-right: 0.35rem;
+}
+.route-manual-list ol,
+.route-manual-list ul {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.route-manual-list button.routes-stop {
+  width: 100%;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.route-manual-list button.routes-stop:hover {
+  border-color: var(--color-forest, #174c3c);
+}
+.route-manual-list button .routes-stop-name,
+.route-manual-list button .routes-stop-address {
+  display: block;
+}
+.route-manual-list li > .routes-stop:not(button) {
+  grid-template-columns: 2rem minmax(0, 1fr);
+}
+.routes-stop-seq.is-picked {
+  background: var(--color-forest, #174c3c);
+  color: #fff;
+}
+.route-manual-heading {
+  margin: 0.25rem 0 0;
+  color: var(--db-muted, #5b6b64);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+/* En el teléfono el mapa va abajo: para elegir, primero, y con lugar para ver la barra. */
+.routes-viewer.is-picking .route-map {
+  order: -1;
+}
+.routes-viewer.is-picking .route-map-canvas {
+  height: 60vh;
+}
+.route-manual-bar .button {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.85rem;
+}
+@media (min-width: 1024px) {
+  .routes-viewer.is-picking .route-map {
+    order: 0;
+  }
+  .routes-viewer.is-picking .route-map-canvas {
+    height: min(78vh, 52rem);
+  }
 }
 
 /* Rutas (2026-10-25): la salida y la llegada en el mapa, y reordenar arrastrando. */

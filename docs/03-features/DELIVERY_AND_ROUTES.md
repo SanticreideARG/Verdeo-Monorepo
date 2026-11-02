@@ -265,6 +265,13 @@ Rutas, el mensaje de WhatsApp y el CSV de la ruta, y la hoja del repartidor.
 - La card de la parada muestra la **franja horaria** en lugar del monto, el medio y el estado.
 - **Arrastrar y soltar** para reordenar (puntero: mouse y dedo con el mismo código; con el teclado,
   flechas sobre la manija). La lista cambia en el acto y se guarda con `PUT .../stops`.
+- **Establecer orden manualmente** (2026-11-02, sólo en borrador): los puntos del mapa pasan a ser
+  botones y cada toque asigna la posición siguiente; la línea crece con el recorrido. Lo que falta
+  también se elige desde la lista, que es como se elige una parada sin ubicación o una tapada por
+  otra. No guarda nada hasta "Guardar orden", con todas elegidas (`PUT .../stops`, el mismo de
+  arrastrar). El mapa no se reencuadra al elegir, para no perder el zoom.
+- En escritorio, el selector de ruta va arriba (2026-11-02) y la lista y el mapa ocupan todo el
+  ancho, con la mayor parte para el mapa.
 - En el mapa, la **salida (S)** y la **llegada (L)** son el primer y el último punto de la línea; si
   son el mismo lugar, un solo pin "S/L".
 - **Quien reparte sólo ve el efectivo**: la hoja del enlace no trae monto ni medio de las

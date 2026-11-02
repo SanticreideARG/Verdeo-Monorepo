@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-02-orden-manual-ruta',
+    body: `Hojas de ruta: con "Establecer orden manualmente" tocás los puntos del mapa en el orden del recorrido. En la computadora, el selector de ruta pasó arriba y el mapa se ve mucho más grande.`,
+  },
+  {
     key: '2026-11-02-buho-consulta',
     body: `Búho: ahora le podés preguntar directo desde el cuadro de arriba, sin elegir un modo. También sabe cuánto efectivo hay que rendir del reparto de hoy, en la ciudad elegida.`,
   },

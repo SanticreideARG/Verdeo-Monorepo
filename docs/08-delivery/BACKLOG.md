@@ -3,6 +3,11 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Hojas de ruta: orden manual en el mapa (2026-11-02) — [norma](../03-features/DELIVERY_AND_ROUTES.md)
+
+- [x] "Establecer orden manualmente": en una ruta en borrador, se tocan los puntos del mapa en orden; se puede deshacer, empezar de nuevo o cancelar, y se guarda con todas elegidas.
+- [x] En escritorio, el selector de ruta pasa arriba y el mapa gana el ancho.
+
 ## Búho: consulta directa y total a rendir (2026-11-02) — [plan](../03-features/BUHO_WORKBENCH_PLAN.md)
 
 - [x] Cuadro de diálogo arriba del Workbench: se pregunta directo, sin elegir modo ni prompt maestro. Las tareas armadas quedan debajo.
