@@ -1,0 +1,1 @@
+ALTER TABLE "orders" ADD COLUMN "is_new_override" boolean;
