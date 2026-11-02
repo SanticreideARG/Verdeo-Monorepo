@@ -31,6 +31,8 @@ export interface PeriodReportOrder {
   dietaryInstructions: readonly string[];
   isNew: boolean;
   items: readonly PeriodReportItem[];
+  /** El barrio del domicilio, si tiene: va en la hoja de reparto. */
+  neighborhood: string | null;
   notes: string | null;
   paid: boolean;
   paymentExpectation: string;

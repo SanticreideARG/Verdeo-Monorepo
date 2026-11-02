@@ -138,6 +138,12 @@ const zoneColumn: Column = {
   width: 16,
 };
 
+const neighborhoodColumn: Column = {
+  header: 'Barrio',
+  value: (row) => text(row.order.neighborhood ?? '', muted(row)),
+  width: 18,
+};
+
 const sizeColumn: Column = {
   header: 'Pedido',
   value: (row) => {
@@ -220,6 +226,7 @@ function deliveryLayout(report: PeriodReport): Layout {
     routeTimeColumn,
     timeSlotColumn,
     zoneColumn,
+    neighborhoodColumn,
     {
       header: 'Dirección',
       value: (row) =>
@@ -241,9 +248,9 @@ function deliveryLayout(report: PeriodReport): Layout {
   return {
     columns,
     rowsOf: (day) => day.deliveryRows,
-    saleColumn: 7,
+    saleColumn: 8,
     saleOf: (day) => day.cashMinor,
-    sizeColumn: 5,
+    sizeColumn: 6,
     summary: 'per-day',
   };
 }

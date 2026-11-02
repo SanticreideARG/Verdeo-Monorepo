@@ -24,8 +24,8 @@ import { formatDay, formatDayLong, todayInOperation } from '../lib/dates.js';
 import { googleMapsLink } from '../lib/mapLinks.js';
 import { maskSurname } from '../lib/maskName.js';
 import { neighborhoodHeading } from '../lib/neighborhoodGroups.js';
+import { courierCollects, routeMessage, withoutNewMark } from '../lib/routeMessage.js';
 import { errorMessage, formatMoney } from '../lib/operations.js';
-import { isTransfer } from '@verdeo/orders';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { useNarrowViewport } from '../lib/useNarrowViewport.js';
 import { showToast } from '../lib/toast.js';
@@ -302,46 +302,8 @@ export function RoutesPage() {
     });
   }
 
-  /**
-   * La ruta como algo que se le puede pasar a alguien.
-   *
-   * Es el mensaje que se pega en el chat del repartidor: las paradas en orden, con el enlace de
-   * mapa de cada una —que es lo que se abre en el teléfono, y lo que una dirección escrita no
-   * resuelve— y lo que hay que cobrar ahí.
-   *
-   * Sin apellidos. El mensaje sale del sistema y entra a un chat de WhatsApp, que se reenvía sin
-   * pensarlo; el nombre de pila alcanza de sobra para saber a quién se le entrega.
-   */
-  function routeMessage(route: RouteDetail): string {
-    const header = `Reparto ${formatDay(route.deliveryDate)}${route.label ? ` · ${route.label}` : ''} — ${String(route.stops.length)} paradas`;
-    const lines = route.stops.map((stop, index) =>
-      [
-        // El barrio encabeza cada tanda de paradas.
-        ...(neighborhoodHeading(route.stops, index)
-          ? [`📍 ${neighborhoodHeading(route.stops, index) ?? ''}`]
-          : []),
-        // La ventana va pegada al nombre: es lo que decide si esta parada puede ir acá o no.
-        `${String(stop.sequence)}. ${maskSurname(stop.customerDisplayName)}${
-          stop.deliveryWindow ? ` · 🕒 ${stop.deliveryWindow}` : ''
-        }`,
-        // Qué entregar, antes que dónde: es lo que se busca en la caja al bajar del auto.
-        ...(stop.detail ? [stop.detail] : []),
-        stop.deliveryAddress,
-        // La segunda línea de la dirección (piso, depto, timbre): sin ella no se encuentra la puerta.
-        ...(stop.deliveryAddressLine2 ? [stop.deliveryAddressLine2] : []),
-        stopMapLink(stop),
-        // Lo que hay que cobrar ahí: sólo el efectivo. Una transferencia no la cobra quien reparte,
-        // así que no lleva ni monto ni medio (2026-10-25).
-        ...(isTransfer(stop.paymentExpectation)
-          ? []
-          : [`${stop.paymentExpectation} · ${formatMoney(stop.totalMinor, 'ARS')}`]),
-      ].join('\n'),
-    );
-    return [header, '', ...lines].join('\n\n');
-  }
-
   async function copyRoute(route: RouteDetail) {
-    await navigator.clipboard.writeText(routeMessage(route));
+    await navigator.clipboard.writeText(routeMessage(route, stopMapLink));
     showToast('Mensaje de la ruta copiado. Pegalo en el chat del repartidor.');
   }
 
@@ -376,14 +338,14 @@ export function RoutesPage() {
       ...route.stops.map((stop) => [
         String(stop.sequence),
         stop.neighborhood ?? '',
-        maskSurname(stop.customerDisplayName),
+        maskSurname(withoutNewMark(stop.customerDisplayName)),
         stop.deliveryWindow ?? '',
-        stop.detail,
+        withoutNewMark(stop.detail),
         [stop.deliveryAddress, stop.deliveryAddressLine2 ?? ''].filter(Boolean).join(' · '),
         stopMapLink(stop),
-        // Sólo el efectivo: la transferencia no la cobra quien reparte (2026-10-25).
-        isTransfer(stop.paymentExpectation) ? '' : stop.paymentExpectation,
-        isTransfer(stop.paymentExpectation) ? '' : String(stop.totalMinor / 100),
+        // Sólo lo que cobra quien reparte; la transferencia no (2026-10-25).
+        courierCollects(stop.paymentExpectation) ? stop.paymentExpectation : 'No cobrar',
+        courierCollects(stop.paymentExpectation) ? String(stop.totalMinor / 100) : '',
       ]),
     ];
     // BOM para que Excel abra los acentos bien; sin esto "Neuquén" sale roto.

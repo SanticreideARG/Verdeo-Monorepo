@@ -7289,6 +7289,16 @@ export class PostgresOperationsService {
           : null,
       ]),
     );
+    const neighborhoodOf = new Map(
+      (
+        await this.database
+          .select({ id: orders.id, neighborhood: neighborhoods.displayName })
+          .from(orders)
+          .innerJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+          .innerJoin(neighborhoods, eq(neighborhoods.id, customerAddresses.neighborhoodId))
+          .where(inArray(orders.id, orderIds))
+      ).map((row) => [row.id, row.neighborhood]),
+    );
     const minutesOf = new Map<string, number | null>();
     const routeIds = [...new Set([...chosen.values()].map((stop) => stop.routeId))];
     for (const routeId of routeIds) {
@@ -7332,6 +7342,7 @@ export class PostgresOperationsService {
               variantName: item.variantName,
             };
           }),
+          neighborhood: neighborhoodOf.get(order.id) ?? null,
           notes: order.notes,
           paid: order.paidAt !== null,
           paymentExpectation: order.paymentExpectation,

@@ -33,6 +33,7 @@ const order = (overrides: Partial<PeriodReportOrder> = {}): PeriodReportOrder =>
   source: 'email',
   timeSlot: '10 a 12',
   totalMinor: 160_000_00,
+  neighborhood: 'Centro',
   zone: 'Capital',
   ...overrides,
 });
@@ -117,19 +118,21 @@ describe('buildPeriodReportExcel: Reparto', () => {
     const { cell, rgb } = sheetOf(book, 'Reparto');
     expect(cell('A2')?.v).toBe('Tiempo de ruta');
     expect(cell('A5')?.v).toBe('≈ 40 min');
+    expect(cell('D2')?.v).toBe('Barrio');
+    expect(cell('D5')?.v).toBe('Centro');
     expect(cell('B5')?.v).toBe('10 a 12');
-    expect(cell('D5')?.v).toBe('Calle 1 · Depto 2');
-    expect(cell('E5')?.v).toBe('Ana');
-    expect(rgb('E5')).toBeUndefined();
-    expect(cell('F5')?.v).toBe(400);
-    expect(String(cell('F5')?.z ?? '')).not.toContain('$');
+    expect(cell('E5')?.v).toBe('Calle 1 · Depto 2');
+    expect(cell('F5')?.v).toBe('Ana');
+    expect(rgb('F5')).toBeUndefined();
+    expect(cell('G5')?.v).toBe(400);
+    expect(String(cell('G5')?.z ?? '')).not.toContain('$');
     // La transferencia no la cobra quien reparte.
-    expect(cell('H5')?.v).toBe(0);
-    expect(cell('H7')?.v).toBe(50_000);
-    expect(cell('J2')?.v).toBe('Celular');
-    expect(cell('K2')).toBeUndefined();
-    expect(cell('H9')?.f).toBe('SUM(H5:H8)');
-    expect(cell('H9')?.v).toBe(50_000);
+    expect(cell('I5')?.v).toBe(0);
+    expect(cell('I7')?.v).toBe(50_000);
+    expect(cell('K2')?.v).toBe('Celular');
+    expect(cell('L2')).toBeUndefined();
+    expect(cell('I9')?.f).toBe('SUM(I5:I8)');
+    expect(cell('I9')?.v).toBe(50_000);
   });
 
   it('un renglón por bulto y un resumen por día, desde la fila de su día', () => {
@@ -152,18 +155,18 @@ describe('buildPeriodReportExcel: Reparto', () => {
     ]);
     const { cell } = sheetOf(book, 'Reparto');
     // Lunes: dos renglones del Intuitivo de seis platos y el total en la fila 7.
-    expect(cell('G5')?.v).toBe('Clara');
-    expect(cell('G6')?.v).toBe('Clara');
-    expect(cell('F7')?.v).toBe(2);
-    expect(cell('L3')?.v).toBe('Producto');
-    expect(cell('L4')?.v).toBe('Clara 400');
-    expect(cell('M4')?.v).toBe(1);
-    expect(cell('L5')?.v).toBe('TOTAL');
+    expect(cell('H5')?.v).toBe('Clara');
+    expect(cell('H6')?.v).toBe('Clara');
+    expect(cell('G7')?.v).toBe(2);
+    expect(cell('M3')?.v).toBe('Producto');
+    expect(cell('M4')?.v).toBe('Clara 400');
+    expect(cell('N4')?.v).toBe(1);
+    expect(cell('M5')?.v).toBe('TOTAL');
     // Martes: su barra en la fila 9 y su resumen ahí.
     expect(cell('A9')?.v).toBe('MARTES 27 de octubre');
-    expect(cell('L9')?.v).toBe('Producto');
-    expect(cell('L10')?.v).toBe('KETO 400');
-    expect(cell('M10')?.v).toBe(2);
+    expect(cell('M9')?.v).toBe('Producto');
+    expect(cell('M10')?.v).toBe('KETO 400');
+    expect(cell('N10')?.v).toBe(2);
   });
 });
 

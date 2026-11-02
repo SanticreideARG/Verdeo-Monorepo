@@ -130,7 +130,7 @@ hasta saber qué es (ver preguntas).
   cinco días, venta, pago y celular). El nombre de un cliente nuevo va en naranja (`FFC000`) si
   entró por mail y en marrón (`C65911`) si entró por WhatsApp; el resto, sin estilo (ni la negrita
   cursiva del Intuitivo).
-- **"Reparto"**: tiempo de ruta primero, después horario, zona, dirección en una línea (el ancho
+- **"Reparto"**: tiempo de ruta primero, después horario, zona, barrio, dirección en una línea (el ancho
   sale de la más larga), nombre sin estilo, tamaño, variedad, venta, pago y celular. **Un renglón
   por bulto** (`PeriodReportDay.deliveryRows`): un Intuitivo, `ceil(platos / 5)`. La transferencia
   dice $0 y el total del día es el efectivo (`cashMinor`). A la derecha, **un resumen por reparto**

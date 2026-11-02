@@ -37,6 +37,7 @@ const order = (overrides: Partial<PeriodReportOrder> = {}): PeriodReportOrder =>
   source: 'whatsapp',
   timeSlot: null,
   totalMinor: 80_000_00,
+  neighborhood: 'Centro',
   zone: 'Capital',
   ...overrides,
 });

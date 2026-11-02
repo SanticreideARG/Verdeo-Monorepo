@@ -3,6 +3,12 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Mensaje del repartidor y barrio (2026-11-02)
+
+- [x] "Copiar para el repartidor": toda parada dice qué hacer con el pago. Lo que no cobra quien reparte (transferencia) dice "No cobrar", sin monto ni medio; antes no decía nada y parecía un dato faltante. La planilla de la ruta, igual.
+- [x] El mensaje y la planilla de la ruta no dicen "nuevo": ni una marca escrita en el nombre ni el "Nuevo" de "Menú Nuevo Keto".
+- [x] Barrio: en el mensaje, en cada parada al lado de la dirección (reemplaza al encabezado por tandas); columna "Barrio" en la hoja Reparto del informe del período.
+
 ## Pedidos: ordenar por entrega (2026-11-02)
 
 - [x] Tilde "Ordenar por entrega" en la lista de Pedidos: un renglón destacado por fecha de entrega (día de la semana, fecha y cantidad) con sus pedidos abajo, en tabla y en tarjetas. Ordenar por una columna ordena adentro de cada fecha. Se recuerda por equipo.

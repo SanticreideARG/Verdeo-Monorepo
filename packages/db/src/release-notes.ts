@@ -151,6 +151,13 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-02-mensaje-repartidor',
+    body: `Repartos:
+• "Copiar para el repartidor": cada parada dice qué hacer con el pago. Las que no se cobran dicen "No cobrar".
+• El mensaje ya no dice "nuevo" y lleva el barrio al lado de la dirección.
+• La hoja Reparto del informe del período tiene columna Barrio.`,
+  },
+  {
     key: '2026-11-02-ordenar-por-entrega',
     body: `Pedidos: nuevo tilde "Ordenar por entrega". Separa la lista con un renglón por cada fecha de entrega y sus pedidos abajo. Se puede seguir ordenando por columna, adentro de cada fecha.`,
   },
