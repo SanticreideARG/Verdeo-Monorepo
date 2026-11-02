@@ -188,12 +188,52 @@ function parseBlock(block: string): ParsedBlock | null {
 }
 
 /**
+ * Varios mails pegados sin encabezado de reenvío, uno por cada "Celular:".
+ *
+ * Todo mail del formulario trae uno. Sin esto, dos clientes pegados de corrido se leían como un solo
+ * pedido, con las cantidades de los dos y a nombre del último. Se corta en el "From:" de cada uno.
+ */
+function splitPastedTogether(block: string): string[] {
+  const phones = [...block.matchAll(/^Celular:/gim)].map((match) => match.index);
+  if (phones.length < 2) return [block];
+  const starts = phones.map((phoneAt) => {
+    const froms = [...block.slice(0, phoneAt).matchAll(/^From:/gim)];
+    return froms.at(-1)?.index ?? 0;
+  });
+  return starts.map((start, index) => block.slice(index === 0 ? 0 : start, starts[index + 1]));
+}
+
+/** La ciudad que dice el asunto, entre las que se pueden elegir. Si no es una sola, ninguna. */
+export function matchLocalityToSite(
+  locality: string | null,
+  sites: readonly { id: string; name: string }[],
+): string | null {
+  const clean = (value: string) =>
+    value
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLocaleLowerCase('es-AR')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+  const wanted = locality ? clean(locality) : '';
+  if (!wanted) return null;
+  const found = sites.filter((site) => {
+    const name = clean(site.name);
+    return name.length > 0 && (name.includes(wanted) || wanted.includes(name));
+  });
+  return found.length === 1 ? (found[0]?.id ?? null) : null;
+}
+
+/**
  * Lee uno o varios emails de pedido pegados juntos.
  *
- * Cada bloque entre encabezados de reenvío es un mensaje. Sin encabezados, todo lo pegado es uno.
+ * Cada bloque entre encabezados de reenvío es un mensaje; dentro de un bloque, hay uno por "Celular:".
  */
 export function parseOrderEmails(text: string): ParsedOrderEmails {
-  const blocks = text.split(FORWARD_MARKER).filter((block) => block.trim().length > 0);
+  const blocks = text
+    .split(FORWARD_MARKER)
+    .filter((block) => block.trim().length > 0)
+    .flatMap(splitPastedTogether);
 
   const rows: OrderImportRow[] = [];
   const inquiries: OrderInquiry[] = [];

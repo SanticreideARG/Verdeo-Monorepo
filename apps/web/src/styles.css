@@ -9369,6 +9369,12 @@ textarea.sr-only {
   color: var(--db-danger, #b3261e);
   font-size: 0.78rem;
 }
+/* Se tocó "Importar" con algo sin resolver: que se note por qué no pasó nada. */
+.order-import-foot-note.is-tried {
+  flex-basis: 100%;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
 
 /* --- Estado del sistema -----------------------------------------------------------------------
    El modal de la barra y la página del panel comparten los medidores. Tres tonos —bien, lento,

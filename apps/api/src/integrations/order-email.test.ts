@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseOrderEmails } from './order-email.js';
+import { matchLocalityToSite, parseOrderEmails } from './order-email.js';
 
 /*
  * Los emails de abajo reproducen la forma de los que manda el formulario del sitio. Los nombres,
@@ -322,5 +322,61 @@ describe('parseOrderEmails', () => {
 
   it('no se rompe con un texto vacío', () => {
     expect(parseOrderEmails('   ')).toEqual({ inquiries: [], rows: [], unreadable: 0 });
+  });
+});
+
+describe('varios mails pegados sin encabezado de reenvío', () => {
+  const suelto = (from: string, phone: string, cantidad: string) =>
+    [
+      `From: ${from}`,
+      'Subject: [your-subject]',
+      '',
+      `Celular: ${phone}`,
+      'Dirección de entrega: Calle Falsa 123',
+      'Barrio : Palermo',
+      '',
+      'Pedido',
+      `Menú Real 400 ${cantidad}`,
+      '',
+      'Message Body:',
+      '',
+    ].join('\n');
+
+  // Antes salía un solo pedido, con las cantidades de los dos y a nombre del último.
+  it('cada cliente es su pedido', () => {
+    const { rows } = parseOrderEmails(
+      suelto('Ana Pérez ana@example.com', '1155550101', '2') +
+        suelto('Beto Gómez beto@example.com', '1155550102', '1'),
+    );
+    expect(rows.map((row) => [row.customerName, row.items[0]?.quantityUnits])).toEqual([
+      ['Ana Pérez', 2],
+      ['Beto Gómez', 1],
+    ]);
+    expect(rows.map((row) => row.rowNumber)).toEqual([1, 2]);
+  });
+});
+
+describe('matchLocalityToSite', () => {
+  const sitios = [
+    { id: 'caba', name: 'Capital Federal y Zona Norte' },
+    { id: 'cordoba', name: 'Córdoba' },
+    { id: 'neuquen', name: 'Neuquén' },
+  ];
+
+  it('reconoce la ciudad del asunto, sin tildes ni mayúsculas', () => {
+    expect(matchLocalityToSite('Capital Federal', sitios)).toBe('caba');
+    expect(matchLocalityToSite('cordoba', sitios)).toBe('cordoba');
+    expect(matchLocalityToSite('NEUQUEN', sitios)).toBe('neuquen');
+  });
+
+  it('sin una sola coincidencia no elige: elige una persona', () => {
+    expect(matchLocalityToSite('Rosario', sitios)).toBeNull();
+    expect(matchLocalityToSite(null, sitios)).toBeNull();
+    expect(
+      matchLocalityToSite('Norte', [
+        { id: 'a', name: 'Zona Norte' },
+        { id: 'b', name: 'Norte Grande' },
+      ]),
+    ).toBeNull();
   });
 });

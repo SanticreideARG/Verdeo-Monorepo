@@ -244,8 +244,14 @@ que está completo.
   preguntar algo y lo dice en el mensaje. Convertirlo en un pedido vacío lo perdería, y descartarlo
   también: queda aparte, con el mensaje y un enlace a WhatsApp, para contestarlo. No se importa.
 - **El mensaje del cliente va a la nota del pedido** ("soy alérgica a las nueces").
-- **La ciudad** que dice el asunto ("Pedido online Capital Federal") se muestra pero no se
-  interpreta: la ciudad del pedido es la que está elegida arriba, como en cualquier pedido.
+- **La ciudad** que dice el asunto ("Pedido online Capital Federal") es la sugerida, si coincide
+  con una sola de las ciudades de la sesión; si no, la elegida arriba. Sin ninguna (con "Todas las
+  ciudades" arriba), se elige en la vista previa antes de importar. Cada pedido la puede cambiar, y
+  entonces se compara contra el menú de esa ciudad.
+- **Los menús del formulario** tienen otros nombres que el catálogo: "Vegetariano" es **Real**,
+  "Paleo & Keto" es **Keto** y "Antiage & Detox" es **Anti-Age** (`matchEmailOffering`). Vale sólo
+  para los mails: en una planilla, vegetariano quiere decir Vegetariano. Si esa variedad no está
+  publicada en ese tamaño se elige a mano.
 - El origen del pedido queda como **Email**.
 
 **El celular se reconoce por su clave argentina, no por igualdad.** `normalizeCustomerIdentity`

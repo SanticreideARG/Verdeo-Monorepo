@@ -1786,8 +1786,27 @@ export const OrderImportPreviewRowSchema = z.object({
   existingOrders: z.array(z.object({ publicNumber: z.string(), summary: z.string() })).default([]),
   items: z.array(OrderImportPreviewItemSchema).min(1),
   kind: z.enum(['email', 'spreadsheet_import']),
-  /** La ciudad que dice el origen, tal como la escribió: se muestra, no se interpreta. */
+  /** La ciudad que dice el origen, tal como la escribió: de acá sale la ciudad sugerida. */
   locality: z.string().nullable(),
+  /** La ciudad sugerida para el pedido; null si hay que elegirla. */
+  operatingSiteId: UuidSchema.nullable().default(null),
+  /**
+   * Lo que depende de la ciudad, para cada una que se puede elegir: cada ciudad puede tener su menú,
+   * con sus propias ofertas, así que cambiarla cambia con qué coincide cada línea.
+   */
+  bySite: z
+    .record(
+      z.string(),
+      z.object({
+        duplicateOf: z.string().nullable(),
+        existingOrders: z.array(z.object({ publicNumber: z.string(), summary: z.string() })),
+        items: z.array(
+          z.object({ dishes: z.array(z.string()), offeringId: UuidSchema.nullable() }),
+        ),
+        notices: z.array(z.string()),
+      }),
+    )
+    .default({}),
   notes: z.string().nullable(),
   paymentExpectation: z.string().nullable(),
   phone: z.string().nullable(),
@@ -1815,6 +1834,20 @@ export const OrderImportPreviewResponseSchema = z.object({
   items: z.array(OrderImportPreviewRowSchema),
   /** Lo que se puede elegir a mano cuando una variedad no se reconoce. */
   offerings: z.array(z.object({ id: UuidSchema, label: z.string() })),
+  /** Las ciudades a las que puede ir un pedido, con su menú y sus días de reparto. */
+  sites: z
+    .array(
+      z.object({
+        deliveryDefault: z.string(),
+        deliveryOptions: z.array(
+          z.object({ date: z.string(), weekday: z.number().int().min(0).max(6) }),
+        ),
+        id: UuidSchema,
+        name: z.string(),
+        offerings: z.array(z.object({ id: UuidSchema, label: z.string() })),
+      }),
+    )
+    .default([]),
   /** Cuántos bloques de lo pegado no se pudieron leer como un pedido. */
   unreadable: z.number().int(),
 });
@@ -1861,6 +1894,8 @@ export const OrderImportConfirmRequestSchema = z.object({
           .max(20),
         kind: z.enum(['email', 'spreadsheet_import']),
         notes: z.string().trim().max(1_000).nullable(),
+        /** La ciudad elegida para este pedido; sin esto, la de arriba. */
+        operatingSiteId: UuidSchema.optional(),
         paymentExpectation: z.string().trim().min(1).max(60),
         phone: z.string().trim().max(60).nullable(),
         rowNumber: z.number().int(),

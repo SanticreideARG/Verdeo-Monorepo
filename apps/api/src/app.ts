@@ -364,7 +364,11 @@ import {
 import { renderEmail, type EmailSender } from '@verdeo/email';
 
 import { ContactImportError, parseContactImportRows } from './integrations/contact-import.js';
-import { parseOrderEmails, type OrderInquiry } from './integrations/order-email.js';
+import {
+  matchLocalityToSite,
+  parseOrderEmails,
+  type OrderInquiry,
+} from './integrations/order-email.js';
 import {
   OrderImportError,
   parseOrderImport,
@@ -484,7 +488,7 @@ interface ChatContext {
 interface ResolvedScope {
   canSelectGlobal: boolean;
   defaultSiteId: string | null;
-  sites: readonly { id: string }[];
+  sites: readonly { displayName?: string; id: string }[];
 }
 
 interface GeographyEngine {
@@ -583,6 +587,7 @@ interface OperationsEngine {
         size: string | null;
         variety: string | null;
       }[];
+      kind?: 'email' | 'spreadsheet_import';
       phone: string | null;
       rowNumber: number;
     }[],
@@ -4080,10 +4085,7 @@ export function createApp(options: CreateAppOptions) {
       unreadable?: number;
     },
   ) => {
-    const preview = (await requireOperations().previewOrderImport(
-      parsed.rows,
-      context.get('scope')?.operatingSiteId ?? null,
-    )) as {
+    type SitePreview = {
       matches: readonly {
         customerMatch: unknown;
         duplicateOf: string | null;
@@ -4093,13 +4095,63 @@ export function createApp(options: CreateAppOptions) {
         notices?: readonly string[];
         rowNumber: number;
       }[];
+      menuId?: string | null;
       offerings: readonly { id: string; label: string }[];
     };
+    const operations = requireOperations();
+    const session = context.get('session');
+    const scope = await requireGeography().resolveScope(
+      session.userId,
+      session.permissions.includes('sites.access_all'),
+    );
+    const currentSite = context.get('scope')?.operatingSiteId ?? null;
+    /*
+     * La vista previa de cada ciudad a la que puede ir el pedido.
+     *
+     * Con "Todas las ciudades" arriba no hay ciudad que tomar, y los pedidos no tienen cómo existir
+     * sin una: fallaban recién al importar. Se ofrece elegirla pedido por pedido, y como cada ciudad
+     * puede tener su menú, lo que coincide se calcula para todas.
+     */
+    const sitePreviews: { name: string; preview: SitePreview; siteId: string }[] = [];
+    const delivery = new Map<
+      string,
+      { defaultDate: string; options: { date: string; weekday: number }[] }
+    >();
+    for (const site of scope.sites) {
+      const preview = (await operations.previewOrderImport(parsed.rows, site.id)) as SitePreview;
+      sitePreviews.push({ name: site.displayName ?? '', preview, siteId: site.id });
+      if (preview.menuId && operations.deliveryOptionsForMenu) {
+        delivery.set(
+          site.id,
+          DeliveryOptionsResponseSchema.parse(
+            await operations.deliveryOptionsForMenu(preview.menuId, site.id),
+          ),
+        );
+      }
+    }
+    const previewOf = (siteId: string | null) =>
+      sitePreviews.find((item) => item.siteId === siteId)?.preview;
+    const fallback =
+      sitePreviews.length > 0
+        ? null
+        : ((await operations.previewOrderImport(parsed.rows, currentSite)) as SitePreview);
+    const onlySite = scope.sites.length === 1 ? (scope.sites[0]?.id ?? null) : null;
+    const siteOptions = scope.sites.map((site) => ({ id: site.id, name: site.displayName ?? '' }));
     const methods = await activePaymentMethods();
     return OrderImportPreviewResponseSchema.parse({
       inquiries: parsed.inquiries ?? [],
       items: parsed.rows.map((row) => {
+        // Lo que dice el mail primero: un pedido de Córdoba es de Córdoba aunque arriba diga otra.
+        const fromMail = matchLocalityToSite(row.locality, siteOptions);
+        const operatingSiteId = fromMail ?? currentSite ?? onlySite;
+        const preview =
+          previewOf(operatingSiteId) ?? fallback ?? (sitePreviews[0]?.preview as SitePreview);
+        const known = operatingSiteId !== null || fallback !== null;
         const match = preview.matches.find((item) => item.rowNumber === row.rowNumber);
+        const localityNotice =
+          row.locality && !fromMail && scope.sites.length > 1
+            ? [`El correo dice «${row.locality}» y no sabemos qué ciudad es: revisala.`]
+            : [];
         /*
          * El medio de pago es uno de los configurados, nunca el texto como vino: "trasferencia"
          * se guardó tal cual y llegó así al mensaje del cliente. Lo que no se reconoce queda vacío
@@ -4128,22 +4180,57 @@ export function createApp(options: CreateAppOptions) {
             displayName: null,
             kind: 'nuevo',
           },
-          duplicateOf: match?.duplicateOf ?? null,
-          existingOrders: match?.existingOrders ?? [],
+          duplicateOf: known ? (match?.duplicateOf ?? null) : null,
+          existingOrders: known ? (match?.existingOrders ?? []) : [],
           items: row.items.map((item, index) => ({
             ...item,
             // Los platos de un Intuitivo armado por variedades salen del menú publicado.
-            dishes: match?.itemDishes?.[index] ?? item.dishes,
-            offeringId: match?.itemMatches[index] ?? null,
+            dishes: (known ? match?.itemDishes?.[index] : null) ?? item.dishes,
+            offeringId: known ? (match?.itemMatches[index] ?? null) : null,
           })),
           notices: [
             ...((row as { notices?: string[] }).notices ?? []),
-            ...(match?.notices ?? []),
+            ...(fallback ? (match?.notices ?? []) : []),
+            ...localityNotice,
             ...paymentNotice,
           ],
+          operatingSiteId,
+          bySite: Object.fromEntries(
+            sitePreviews.map(({ preview: sitePreview, siteId }) => {
+              const siteMatch = sitePreview.matches.find(
+                (item) => item.rowNumber === row.rowNumber,
+              );
+              return [
+                siteId,
+                {
+                  duplicateOf: siteMatch?.duplicateOf ?? null,
+                  existingOrders: siteMatch?.existingOrders ?? [],
+                  items: row.items.map((item, index) => ({
+                    dishes: siteMatch?.itemDishes?.[index] ?? item.dishes,
+                    offeringId: siteMatch?.itemMatches[index] ?? null,
+                  })),
+                  notices: [
+                    ...(siteMatch?.notices ?? []),
+                    ...(sitePreview.offerings.length === 0
+                      ? ['Esta ciudad no tiene un menú publicado: no se puede importar a ella.']
+                      : []),
+                  ],
+                },
+              ];
+            }),
+          ),
         };
       }),
-      offerings: preview.offerings,
+      offerings:
+        (previewOf(currentSite ?? onlySite) ?? fallback ?? sitePreviews[0]?.preview)?.offerings ??
+        [],
+      sites: sitePreviews.map(({ name, preview, siteId }) => ({
+        deliveryDefault: delivery.get(siteId)?.defaultDate ?? '',
+        deliveryOptions: delivery.get(siteId)?.options ?? [],
+        id: siteId,
+        name,
+        offerings: preview.offerings,
+      })),
       unreadable: parsed.unreadable ?? 0,
     });
   };
@@ -4212,10 +4299,26 @@ export function createApp(options: CreateAppOptions) {
     batchId?: string,
   ) => {
     const operations = requireOperations();
-    const menu = (await operations.currentPublishedMenu(
-      context.get('scope')?.operatingSiteId ?? null,
-    )) as { cycle: { closeAt: string }; id: string } | null;
-    if (!menu) return { error: 'No hay un menú publicado para esta ciudad.' } as const;
+    const session = context.get('session');
+    const scope = await requireGeography().resolveScope(
+      session.userId,
+      session.permissions.includes('sites.access_all'),
+    );
+    const currentSite = context.get('scope')?.operatingSiteId ?? null;
+    // El menú de cada ciudad de la tanda: se busca una vez, aunque vengan cien pedidos.
+    const menus = new Map<string | null, { cycle: { closeAt: string }; id: string } | null>();
+    const menuOf = async (siteId: string | null) => {
+      if (!menus.has(siteId)) {
+        menus.set(
+          siteId,
+          (await operations.currentPublishedMenu(siteId)) as {
+            cycle: { closeAt: string };
+            id: string;
+          } | null,
+        );
+      }
+      return menus.get(siteId) ?? null;
+    };
 
     /*
      * Los clientes que se crean en esta misma tanda.
@@ -4268,6 +4371,20 @@ export function createApp(options: CreateAppOptions) {
         continue;
       }
       try {
+        // La ciudad se valida acá: viene del navegador, y una que la sesión no alcanza no entra.
+        if (row.operatingSiteId && !scope.sites.some((site) => site.id === row.operatingSiteId)) {
+          failed.push({ reason: 'No tenés acceso a esa ciudad.', rowNumber: row.rowNumber });
+          continue;
+        }
+        const siteId = row.operatingSiteId ?? currentSite;
+        const menu = await menuOf(siteId);
+        if (!menu) {
+          failed.push({
+            reason: 'No hay un menú publicado para esta ciudad.',
+            rowNumber: row.rowNumber,
+          });
+          continue;
+        }
         let customerId = row.customerId;
         if (!customerId) {
           customerId =
@@ -4279,13 +4396,14 @@ export function createApp(options: CreateAppOptions) {
           // Un email mal escrito no tiene que impedir el pedido: se crea el cliente sin él.
           const email = row.email && z.email().safeParse(row.email).success ? row.email : null;
           const customer = (await operations.createCustomer(
-            scoped(context, {
+            {
               displayName: row.customerName,
               ...(email ? { email } : {}),
               // Destildado "es cliente nuevo": ya era cliente antes de cargarse acá.
               ...(row.customerIsNew === false ? { isNewOverride: false } : {}),
+              operatingSiteId: siteId,
               ...(row.phone ? { phone: row.phone } : {}),
-            } as never),
+            } as never,
             operationsContext(context),
           )) as { id: string };
           customerId = customer.id;
@@ -4307,7 +4425,7 @@ export function createApp(options: CreateAppOptions) {
             })),
             menuId: menu.id,
             ...(row.notes ? { notes: row.notes } : {}),
-            operatingSiteId: context.get('scope')?.operatingSiteId ?? null,
+            operatingSiteId: siteId,
             paymentExpectation: payment,
             /*
              * El origen sale de la fila y es un valor que la API sabe leer de vuelta.
@@ -4356,7 +4474,6 @@ export function createApp(options: CreateAppOptions) {
       input.data.confirm ? 'CONFIRMED' : 'DRAFT',
       input.data.batchId,
     );
-    if ('error' in result) return badRequest(context, result.error);
     const { created, failed, orderIds, results } = result;
     return context.json(
       OrderImportConfirmResponseSchema.parse({ created, failed, orderIds, results }),
@@ -4549,9 +4666,8 @@ export function createApp(options: CreateAppOptions) {
       await inbound.release(params.data.id);
       throw error;
     }
-    if ('error' in result || result.created === 0) {
+    if (result.created === 0) {
       await inbound.release(params.data.id);
-      if ('error' in result) return badRequest(context, result.error);
       return context.json(OrderImportConfirmResponseSchema.parse(result), 200);
     }
     await inbound.resolve(

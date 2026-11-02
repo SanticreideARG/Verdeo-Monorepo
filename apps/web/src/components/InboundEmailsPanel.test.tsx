@@ -93,4 +93,93 @@ describe('InboundEmailsPanel', () => {
     expect(await screen.findByRole('button', { name: 'Aprobar y confirmar' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Descartar correo' })).toBeTruthy();
   });
+
+  describe('con varias ciudades', () => {
+    const CABA = '90000000-0000-4000-8000-00000000000a';
+    const NQN = '90000000-0000-4000-8000-00000000000b';
+    const OFERTA_NQN = 'f3000000-0000-4000-8000-00000000000b';
+    const fila = detalle.preview.items[0] as (typeof detalle.preview.items)[number];
+    const conCiudades = {
+      ...detalle,
+      preview: {
+        ...detalle.preview,
+        items: [
+          {
+            ...fila,
+            bySite: {
+              [CABA]: {
+                duplicateOf: null,
+                existingOrders: [],
+                items: [{ dishes: [], offeringId: 'f3000000-0000-4000-8000-00000000000a' }],
+                notices: [],
+              },
+              [NQN]: {
+                duplicateOf: null,
+                existingOrders: [],
+                items: [{ dishes: [], offeringId: OFERTA_NQN }],
+                notices: [],
+              },
+            },
+            items: fila.items.map((item) => ({ ...item, offeringId: null })),
+            notices: [],
+            operatingSiteId: null,
+          },
+        ],
+        sites: [
+          {
+            deliveryDefault: '',
+            deliveryOptions: [],
+            id: CABA,
+            name: 'Capital Federal',
+            offerings: [],
+          },
+          { deliveryDefault: '', deliveryOptions: [], id: NQN, name: 'Neuquén', offerings: [] },
+        ],
+      },
+    };
+
+    // Tocar el botón sin ciudad ni medio de pago no hacía nada: ahora dice qué falta.
+    it('dice qué falta al tocar el botón, y manda la ciudad elegida', async () => {
+      vi.mocked(apiRequest).mockImplementation((path: string) => {
+        if (path === '/api/v1/inbound-emails') return json({ items: [resumen] });
+        if (path.endsWith('/approve'))
+          return json({ created: 1, failed: [], orderIds: [], results: [] });
+        return json(conCiudades);
+      });
+      render(<InboundEmailsPanel canConfirm={false} onChanged={vi.fn()} />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Revisar' }));
+
+      const aprobar = await screen.findByRole('button', { name: 'Aprobar como borrador' });
+      fireEvent.click(aprobar);
+      expect(screen.getByRole('alert').textContent).toContain('Elegí la ciudad de un pedido');
+      expect(apiRequest).not.toHaveBeenCalledWith(
+        expect.stringContaining('/approve'),
+        expect.anything(),
+      );
+
+      fireEvent.change(screen.getByLabelText('Ciudad'), { target: { value: NQN } });
+      expect(screen.getByRole('alert').textContent).toContain('Elegí el medio de pago');
+
+      fireEvent.change(
+        screen.getAllByRole('combobox', { name: /Medio de pago/ }).at(-1) as Element,
+        {
+          target: { value: 'Transferencia' },
+        },
+      );
+      fireEvent.click(aprobar);
+
+      await waitFor(() =>
+        expect(apiRequest).toHaveBeenCalledWith(
+          expect.stringContaining('/approve'),
+          expect.anything(),
+        ),
+      );
+      const call = vi.mocked(apiRequest).mock.calls.find(([path]) => path.endsWith('/approve'));
+      const body = JSON.parse(call?.[1]?.body as string) as {
+        rows: { items: { offeringId: string }[]; operatingSiteId: string }[];
+      };
+      expect(body.rows[0]?.operatingSiteId).toBe(NQN);
+      expect(body.rows[0]?.items[0]?.offeringId).toBe(OFERTA_NQN);
+    });
+  });
 });

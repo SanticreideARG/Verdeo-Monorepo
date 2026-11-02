@@ -52,7 +52,12 @@ function inboundStore() {
 
 function buildApp(
   inbound: ReturnType<typeof inboundStore>,
-  options: { operations?: unknown; permissions?: string[]; secret?: string | null } = {},
+  options: {
+    operations?: unknown;
+    permissions?: string[];
+    secret?: string | null;
+    sites?: { displayName: string; id: string }[];
+  } = {},
 ) {
   return createApp({
     appOrigin: 'http://localhost:5173',
@@ -60,7 +65,11 @@ function buildApp(
     credentials: { login: () => Promise.resolve(null) },
     geography: {
       resolveScope: vi.fn(() =>
-        Promise.resolve({ canSelectGlobal: true, defaultSiteId: SEDE, sites: [{ id: SEDE }] }),
+        Promise.resolve({
+          canSelectGlobal: true,
+          defaultSiteId: SEDE,
+          sites: options.sites ?? [{ id: SEDE }],
+        }),
       ),
     } as never,
     ...(options.secret === null ? {} : { inboundEmailSecret: options.secret ?? SECRET }),
@@ -260,5 +269,165 @@ describe('aprobar un pedido que llegó por correo', () => {
     const response = await pedir(buildApp(inbound, { permissions: ['orders.read'] }));
     expect(response.status).toBe(403);
     expect(inbound.claim).not.toHaveBeenCalled();
+  });
+});
+
+describe('importar con "Todas las ciudades" arriba', () => {
+  const CABA = '90000000-0000-4000-8000-00000000000a';
+  const NQN = '90000000-0000-4000-8000-00000000000b';
+  const OFERTA_CABA = 'f3000000-0000-4000-8000-00000000000a';
+  const OFERTA_NQN = 'f3000000-0000-4000-8000-00000000000b';
+  const MENU_CABA = 'e0000000-0000-4000-8000-00000000000a';
+  const MENU_NQN = 'e0000000-0000-4000-8000-00000000000b';
+  const sites = [
+    { displayName: 'Capital Federal', id: CABA },
+    { displayName: 'Neuquén', id: NQN },
+  ];
+  // Sin el encabezado de ciudad: es la vista global.
+  const global = { 'content-type': 'application/json', cookie };
+
+  const previewOrderImport = vi.fn((rows: readonly { rowNumber: number }[], siteId: string) =>
+    Promise.resolve({
+      matches: rows.map(({ rowNumber }) => ({
+        customerMatch: { candidates: [], customerId: null, displayName: null, kind: 'nuevo' },
+        duplicateOf: null,
+        itemMatches: [siteId === CABA ? OFERTA_CABA : OFERTA_NQN],
+        rowNumber,
+      })),
+      menuId: siteId === CABA ? MENU_CABA : MENU_NQN,
+      offerings: [{ id: siteId === CABA ? OFERTA_CABA : OFERTA_NQN, label: 'Menú Real 400' }],
+    }),
+  );
+  const pedidoDe = (subject: string) =>
+    [
+      'From: Ana Prueba ana@example.com',
+      `Subject: ${subject}`,
+      '',
+      'Celular: 1155550101',
+      'Dirección de entrega: Calle Falsa 123',
+      '',
+      'Pedido',
+      'Menú Real 400 2',
+      '',
+      'Message Body:',
+      '',
+    ].join('\n');
+  type Vista = {
+    items: {
+      bySite: Record<string, { items: { offeringId: string }[] }>;
+      items: { offeringId: string | null }[];
+      notices: string[];
+      operatingSiteId: string | null;
+    }[];
+    sites: { deliveryOptions: unknown[]; id: string; name: string }[];
+  };
+  const leer = async (subject: string) => {
+    const app = buildApp(inboundStore(), {
+      operations: {
+        deliveryOptionsForMenu: vi.fn(() =>
+          Promise.resolve({
+            defaultDate: '2026-11-07',
+            options: [{ date: '2026-11-07', weekday: 6 }],
+          }),
+        ),
+        previewOrderImport,
+      },
+      sites,
+    });
+    const response = await app.request('/api/v1/orders/import/preview-email', {
+      body: JSON.stringify({ text: pedidoDe(subject) }),
+      headers: global,
+      method: 'POST',
+    });
+    expect(response.status).toBe(200);
+    return (await response.json()) as Vista;
+  };
+
+  it('sugiere la ciudad que dice el mail, con el menú de esa ciudad', async () => {
+    const vista = await leer('Pedido online Capital Federal');
+
+    expect(vista.items[0]?.operatingSiteId).toBe(CABA);
+    expect(vista.items[0]?.items[0]?.offeringId).toBe(OFERTA_CABA);
+    expect(vista.sites.map((site) => site.name)).toEqual(['Capital Federal', 'Neuquén']);
+    expect(vista.sites[0]?.deliveryOptions).toHaveLength(1);
+  });
+
+  it('una ciudad que no se reconoce queda para elegir, con lo de cada una a mano', async () => {
+    const vista = await leer('Pedido online Rosario');
+    const fila = vista.items[0];
+
+    expect(fila?.operatingSiteId).toBeNull();
+    expect(fila?.items[0]?.offeringId).toBeNull();
+    expect(fila?.notices.join(' ')).toContain('Rosario');
+    expect(fila?.bySite[NQN]?.items[0]?.offeringId).toBe(OFERTA_NQN);
+    expect(fila?.bySite[CABA]?.items[0]?.offeringId).toBe(OFERTA_CABA);
+  });
+
+  const fila = (operatingSiteId?: string) => ({
+    customerId: null,
+    customerName: 'Ana Prueba',
+    deliveryAddress: 'Calle Falsa 123',
+    email: null,
+    items: [{ dishes: [], offeringId: OFERTA_NQN, quantityUnits: 1 }],
+    kind: 'email',
+    notes: null,
+    ...(operatingSiteId ? { operatingSiteId } : {}),
+    paymentExpectation: 'Transferencia',
+    phone: '+5491155550101',
+    rowNumber: 1,
+  });
+  const importar = (row: unknown, operations: unknown, permitidas = sites) =>
+    buildApp(inboundStore(), { operations, sites: permitidas }).request('/api/v1/orders/import', {
+      body: JSON.stringify({ rows: [row] }),
+      headers: global,
+      method: 'POST',
+    });
+  const operaciones = () => ({
+    createCustomer: vi.fn(() => Promise.resolve({ id: 'c0000000-0000-4000-8000-000000000001' })),
+    createOrder: vi.fn(() => Promise.resolve({ id: '0a000000-0000-4000-8000-000000000009' })),
+    currentPublishedMenu: vi.fn((siteId: string) =>
+      Promise.resolve({
+        cycle: { closeAt: '2026-10-14T22:00:00Z' },
+        id: siteId === NQN ? MENU_NQN : MENU_CABA,
+      }),
+    ),
+  });
+
+  // Era el error: "Un cliente necesita una ciudad", sin forma de elegirla.
+  it('crea el cliente y el pedido en la ciudad elegida para esa fila, con su menú', async () => {
+    const operations = operaciones();
+    const response = await importar(fila(NQN), operations);
+
+    expect(response.status).toBe(201);
+    expect(operations.createCustomer).toHaveBeenCalledWith(
+      expect.objectContaining({ operatingSiteId: NQN }),
+      expect.anything(),
+    );
+    expect(operations.createOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ menuId: MENU_NQN, operatingSiteId: NQN }),
+      expect.anything(),
+    );
+  });
+
+  it('una ciudad que la sesión no alcanza no entra', async () => {
+    const operations = operaciones();
+    const response = await importar(fila(NQN), operations, [sites[0] as (typeof sites)[number]]);
+    const body = (await response.json()) as { created: number; failed: { reason: string }[] };
+
+    expect(body.created).toBe(0);
+    expect(body.failed[0]?.reason).toContain('acceso');
+    expect(operations.createOrder).not.toHaveBeenCalled();
+  });
+
+  // Una ciudad sin menú no frena las otras de la misma tanda.
+  it('sin menú en esa ciudad falla esa fila y lo dice', async () => {
+    const operations = {
+      ...operaciones(),
+      currentPublishedMenu: vi.fn(() => Promise.resolve(null)),
+    };
+    const response = await importar(fila(NQN), operations);
+    const body = (await response.json()) as { failed: { reason: string }[] };
+
+    expect(body.failed[0]?.reason).toContain('menú publicado');
   });
 });

@@ -53,6 +53,8 @@ import {
   deliveryOptions,
   resolveDeliveryDate,
   weekdayOf,
+  emailMenuFamily,
+  matchEmailOffering,
   matchOffering,
   mergeByLooseName,
   normalizeMenuName,
@@ -1228,6 +1230,8 @@ export class PostgresOperationsService {
     rows: readonly {
       customerName: string;
       email: string | null;
+      /** De un mail del formulario: sus menús tienen otros nombres (`matchEmailOffering`). */
+      kind?: 'email' | 'spreadsheet_import';
       items: readonly {
         quantityUnits: number;
         size: string | null;
@@ -1408,7 +1412,13 @@ export class PostgresOperationsService {
                 kind: parecidos.length > 0 ? ('parecidos' as const) : ('nuevo' as const),
               };
 
-      const itemMatches = row.items.map((item) => matchOffering(item.variety, item.size, ofertas));
+      const itemMatches = row.items.map((item) =>
+        (row.kind === 'email' ? matchEmailOffering : matchOffering)(
+          item.variety,
+          item.size,
+          ofertas,
+        ),
+      );
 
       /*
        * Un Intuitivo armado por variedades ("keto, keto, vegetariano, keto, keto"): cada plato es
@@ -1416,6 +1426,17 @@ export class PostgresOperationsService {
        * y los platos quedan para elegir a mano en el pedido.
        */
       const notices: string[] = [];
+      if (row.kind === 'email') {
+        for (const [index, item] of row.items.entries()) {
+          if (!emailMenuFamily(item.variety)) continue;
+          const id = itemMatches[index];
+          notices.push(
+            id
+              ? `El correo dice «${item.variety ?? ''}»: se toma como ${etiquetaDe(id)}.`
+              : `No encontramos a qué corresponde «${item.variety ?? ''} ${item.size ?? ''}» en el menú de esta ciudad: elegí la variedad.`,
+          );
+        }
+      }
       const itemDishes = row.items.map((item) => {
         if (!item.slotVarieties) return null;
         const platos = item.slotVarieties.map((variedad, posicion) => {
@@ -1594,6 +1615,7 @@ export class PostgresOperationsService {
           rowNumber: coincidencia.rowNumber,
         };
       }),
+      menuId: menu?.id ?? null,
       /*
        * Lo que se puede elegir a mano cuando una variedad no se reconoce.
        *

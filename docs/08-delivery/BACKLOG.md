@@ -3,6 +3,13 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Importador de correos (2026-11-02) — [norma](../03-features/ORDERS_AND_SALES_CYCLES.md)
+
+- [x] Ciudad por pedido en la vista previa: sugerida por el asunto del mail, o la elegida arriba; si no, se elige en el pedido o con "Ciudad para todos". Antes, con "Todas las ciudades", fallaba al importar ("Un cliente necesita una ciudad") sin forma de elegirla. La vista previa se calcula para cada ciudad (`bySite`), porque cada una puede tener su menú y sus ofertas; el servidor valida la ciudad contra la sesión.
+- [x] Menús del formulario (`matchEmailOffering`, sólo mails): Vegetariano → Real, Paleo & Keto → Keto, Antiage & Detox → Anti-Age, con aviso por pedido. Si esa variedad no está publicada se elige a mano; no cae en otra.
+- [x] "Importar" ya no queda muerto: el botón sólo se deshabilita mientras trabaja y dice lo que falta (ciudad, variedad, medio de pago). Un corte de red se avisa, en vez de quedar en "Importando…".
+- [x] Varios mails pegados sin encabezado de reenvío se separan por "Celular:"; antes salían como un solo pedido a nombre del último.
+
 ## Temas: Verano y Calabaza (2026-11-01) — [plan](../03-features/TEMAS_TEMPORADA_PLAN.md)
 
 - [x] Halloween termina el 31-oct a las 23:59; sus colores quedan como tema "Calabaza" (oscuro, sin telarañas ni calabaza).

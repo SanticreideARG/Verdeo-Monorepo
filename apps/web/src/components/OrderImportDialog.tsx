@@ -1,7 +1,7 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 
 import { apiRequest } from '../lib/api.js';
-import { DeliveryDayPicker, useDeliveryOptions, weekdayName } from './DeliveryDayPicker.js';
+import { DeliveryDayPicker, weekdayName } from './DeliveryDayPicker.js';
 import { formatDay } from '../lib/dates.js';
 import { errorMessage } from '../lib/operations.js';
 import { whatsappHref } from '../lib/phone.js';
@@ -47,6 +47,25 @@ interface PreviewRow {
   warnings: string[];
   /** Lo que el lector interpretó y conviene mirar, sin que sea un problema. */
   notices?: string[];
+  /** La ciudad sugerida (la del mail o la elegida arriba); null si hay que elegirla. */
+  operatingSiteId?: string | null;
+  /** Lo que depende de la ciudad: cada una puede tener su menú y sus ofertas. */
+  bySite?: Record<string, SiteView>;
+}
+
+interface SiteView {
+  duplicateOf: string | null;
+  existingOrders: { publicNumber: string; summary: string }[];
+  items: { dishes: string[]; offeringId: string | null }[];
+  notices: string[];
+}
+
+interface ImportSite {
+  deliveryDefault: string;
+  deliveryOptions: { date: string; weekday: number }[];
+  id: string;
+  name: string;
+  offerings: { id: string; label: string }[];
 }
 
 /** Cómo quedó cada fila después de importar. */
@@ -71,8 +90,11 @@ interface Preview {
   inquiries: Inquiry[];
   items: PreviewRow[];
   offerings: { id: string; label: string }[];
+  sites?: ImportSite[];
   unreadable: number;
 }
+
+const NO_CONNECTION = 'No pudimos conectar con el servidor. Revisá la conexión y probá de nuevo.';
 
 const FIELD_LABELS: Record<string, string> = {
   customerName: 'el nombre del cliente',
@@ -206,12 +228,19 @@ export function OrderImportDialog({
     >
   >({});
   /*
-   * El día de reparto: uno para todos, que se puede cambiar pedido por pedido. Las opciones son
-   * los días de reparto de la ciudad para el menú publicado; con uno solo no se elige nada.
+   * La ciudad de cada pedido. Viene sugerida (la que dice el mail o la elegida arriba) y se puede
+   * cambiar; si no hay ninguna hay que elegirla: un pedido no puede existir sin ciudad, y antes eso
+   * se descubría recién al importar, sin forma de decidirlo acá.
    */
-  const deliveryChoices = useDeliveryOptions(null);
+  const [cities, setCities] = useState<Record<number, string>>({});
+  const [cityForAll, setCityForAll] = useState('');
+  /*
+   * El día de reparto: uno para todos, que se puede cambiar pedido por pedido. Las opciones son
+   * los días de reparto de la ciudad de cada pedido; con uno solo no se elige nada.
+   */
   const [deliveryForAll, setDeliveryForAll] = useState('');
-  const defaultDelivery = deliveryForAll || deliveryChoices.defaultDate;
+  // Se tocó "Importar" con algo sin resolver: lo que falta se muestra como aviso, no como nota.
+  const [triedBlocked, setTriedBlocked] = useState(false);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   // La conciliación después de importar: qué pedido quedó de cada fila.
   const [outcome, setOutcome] = useState<ImportOutcome[] | null>(null);
@@ -257,6 +286,9 @@ export function OrderImportDialog({
     );
     setChoices({});
     setEdits({});
+    setCities({});
+    setCityForAll('');
+    setTriedBlocked(false);
     setQuantities({});
     setOutcome(null);
     /*
@@ -280,43 +312,91 @@ export function OrderImportDialog({
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    setBusy(true);
-    setMessage('');
     const body = new FormData();
     body.set('file', file);
     // `notify: false`: la vista previa no escribe nada, así que el aviso de "guardado" sería mentira.
-    const response = await apiRequest('/api/v1/orders/import/preview', {
-      body,
-      method: 'POST',
-      notify: false,
-    });
-    setBusy(false);
-    if (!response.ok) {
-      setMessage(await errorMessage(response));
-      return;
-    }
-    load((await response.json()) as Preview);
+    await readPreview('/api/v1/orders/import/preview', body);
   }
 
   async function readEmails() {
+    await readPreview('/api/v1/orders/import/preview-email', JSON.stringify({ text }));
+  }
+
+  /*
+   * Un corte de red también tiene que decirse: sin esto el botón quedaba en "Leyendo…" o
+   * "Importando…" para siempre y parecía que no pasaba nada.
+   */
+  async function readPreview(path: string, body: BodyInit) {
     setBusy(true);
     setMessage('');
-    const response = await apiRequest('/api/v1/orders/import/preview-email', {
-      body: JSON.stringify({ text }),
-      method: 'POST',
-      notify: false,
-    });
-    setBusy(false);
-    if (!response.ok) {
-      setMessage(await errorMessage(response));
-      return;
+    try {
+      const response = await apiRequest(path, { body, method: 'POST', notify: false });
+      if (!response.ok) {
+        setMessage(await errorMessage(response));
+        return;
+      }
+      load((await response.json()) as Preview);
+    } catch {
+      setMessage(NO_CONNECTION);
+    } finally {
+      setBusy(false);
     }
-    load((await response.json()) as Preview);
   }
 
   const itemKey = (row: PreviewRow, index: number) => `${String(row.rowNumber)}:${String(index)}`;
+  const sites = preview?.sites ?? [];
+  const siteIdFor = (row: PreviewRow): string | null =>
+    cities[row.rowNumber] ?? row.operatingSiteId ?? (cityForAll || null);
+  const siteFor = (row: PreviewRow) => sites.find((site) => site.id === siteIdFor(row)) ?? null;
+  /** Lo de este pedido en su ciudad; sin ciudades que elegir, lo que vino en la fila. */
+  const viewOf = (row: PreviewRow): SiteView => {
+    const siteId = siteIdFor(row);
+    const view = siteId ? row.bySite?.[siteId] : undefined;
+    if (view) return view;
+    return {
+      duplicateOf: row.duplicateOf,
+      existingOrders: row.existingOrders ?? [],
+      items: row.items.map((item) => ({
+        dishes: item.dishes,
+        offeringId: sites.length > 0 ? null : item.offeringId,
+      })),
+      notices: [],
+    };
+  };
   const offeringFor = (row: PreviewRow, index: number): string | null =>
-    choices[itemKey(row, index)] ?? row.items[index]?.offeringId ?? null;
+    choices[itemKey(row, index)] ?? viewOf(row).items[index]?.offeringId ?? null;
+  const offeringsFor = (row: PreviewRow) => siteFor(row)?.offerings ?? preview?.offerings ?? [];
+  const deliveryOptionsFor = (row: PreviewRow) => siteFor(row)?.deliveryOptions ?? [];
+  const deliveryFor = (row: PreviewRow): string => {
+    const own = edits[row.rowNumber]?.deliveryDate;
+    if (own) return own;
+    const site = siteFor(row);
+    if (!site) return '';
+    return site.deliveryOptions.some((option) => option.date === deliveryForAll)
+      ? deliveryForAll
+      : site.deliveryDefault;
+  };
+  /** Cambiar la ciudad cambia el menú: lo elegido a mano para la anterior ya no aplica. */
+  const chooseCity = (row: PreviewRow, siteId: string) => {
+    setCities((current) => ({ ...current, [row.rowNumber]: siteId }));
+    setChoices((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([key]) => !key.startsWith(`${String(row.rowNumber)}:`)),
+      ),
+    );
+    setEdits((current) => {
+      const own = { ...current[row.rowNumber] };
+      delete own.deliveryDate;
+      return { ...current, [row.rowNumber]: own };
+    });
+    const view = row.bySite?.[siteId];
+    if (view) {
+      setIncluded((current) => ({
+        ...current,
+        [row.rowNumber]: view.duplicateOf === null && row.warnings.length === 0,
+      }));
+    }
+  };
   const quantityFor = (row: PreviewRow, index: number): number =>
     quantities[itemKey(row, index)] ?? row.items[index]?.quantityUnits ?? 1;
   const edited = (row: PreviewRow) => ({
@@ -339,12 +419,23 @@ export function OrderImportDialog({
       ...current,
       [row.rowNumber]: { ...current[row.rowNumber], ...change },
     }));
-  const resolved = (row: PreviewRow) => row.items.every((_, index) => offeringFor(row, index));
+  const hasCity = (row: PreviewRow) => sites.length === 0 || siteIdFor(row) !== null;
+  const resolved = (row: PreviewRow) =>
+    hasCity(row) && row.items.every((_, index) => offeringFor(row, index));
 
   const rows = preview?.items ?? [];
   const selected = rows.filter((row) => included[row.rowNumber]);
   const ready = selected.filter(resolved);
-  const blocking = selected.length - ready.length;
+  const withoutCity = selected.filter((row) => !hasCity(row)).length;
+  const withoutVariety = selected.filter((row) => hasCity(row) && !resolved(row)).length;
+  // Las que no traen ciudad propia: a esas les aplica la de "para todos".
+  const needsCityForAll =
+    sites.length > 1 && rows.some((row) => !cities[row.rowNumber] && !row.operatingSiteId);
+  const selectedSites = [...new Set(selected.map(siteIdFor))];
+  const footerSite =
+    selectedSites.length === 1
+      ? (sites.find((site) => site.id === selectedSites[0]) ?? null)
+      : null;
   /** Lo que trae la planilla si es un medio parametrizado; si no, el que se eligió arriba. */
   const paymentFor = (row: PreviewRow): string =>
     edits[row.rowNumber]?.paymentExpectation ||
@@ -352,45 +443,72 @@ export function OrderImportDialog({
       ? paymentSelectValue(row.paymentExpectation, paymentMethods)
       : payment);
   const missingPayment = ready.some((row) => paymentFor(row) === '');
+  /*
+   * Lo que falta para poder importar, dicho.
+   *
+   * Antes el botón quedaba deshabilitado sin explicación —el medio de pago arranca sin elegir en
+   * todo mail, y no lo trae— y tocarlo no hacía nada: parecía que el importador estaba roto.
+   */
+  const pedidos = (count: number) => (count === 1 ? 'un pedido' : `${String(count)} pedidos`);
+  const blockers = [
+    selected.length === 0 ? 'Tildá al menos un pedido.' : null,
+    withoutCity > 0 ? `Elegí la ciudad de ${pedidos(withoutCity)}.` : null,
+    withoutVariety > 0 ? `Elegí la variedad de ${pedidos(withoutVariety)} o destildalos.` : null,
+    missingPayment ? 'Elegí el medio de pago.' : null,
+  ].filter((text): text is string => text !== null);
 
   async function confirm(confirmNow = false) {
-    if (ready.length === 0 || blocking > 0 || missingPayment) return;
+    if (blockers.length > 0) {
+      setTriedBlocked(true);
+      return;
+    }
     setBusy(true);
     setMessage('');
     const path = inbound ? `/api/v1/inbound-emails/${inbound.id}/approve` : '/api/v1/orders/import';
-    const response = await apiRequest(path, {
-      body: JSON.stringify({
-        batchId,
-        ...(confirmNow ? { confirm: true } : {}),
-        rows: ready.map((row) => {
-          const decision = decisions[row.rowNumber] ?? 'nuevo';
-          return {
-            customerId: decision === 'nuevo' ? null : decision,
-            customerName: edited(row).customerName.trim() || row.customerName,
-            ...(decision === 'nuevo' && notNew.has(row.rowNumber) ? { customerIsNew: false } : {}),
-            deliveryAddress: edited(row).deliveryAddress?.trim() || null,
-            deliveryAddressLine2: edited(row).deliveryAddressLine2?.trim() || null,
-            ...((edits[row.rowNumber]?.deliveryDate ?? defaultDelivery)
-              ? { deliveryDate: edits[row.rowNumber]?.deliveryDate ?? defaultDelivery }
-              : {}),
-            email: row.email,
-            items: row.items.map((item, index) => ({
-              // Los platos van con la variedad que los trajo: si se eligió otra, no aplican.
-              dishes: offeringFor(row, index) === item.offeringId ? item.dishes : [],
-              offeringId: offeringFor(row, index),
-              quantityUnits: quantityFor(row, index),
-            })),
-            kind: row.kind,
-            notes: row.notes,
-            paymentExpectation: paymentFor(row),
-            phone: row.phone,
-            rowNumber: row.rowNumber,
-          };
+    let response: Response;
+    try {
+      response = await apiRequest(path, {
+        body: JSON.stringify({
+          batchId,
+          ...(confirmNow ? { confirm: true } : {}),
+          rows: ready.map((row) => {
+            const decision = decisions[row.rowNumber] ?? 'nuevo';
+            return {
+              customerId: decision === 'nuevo' ? null : decision,
+              customerName: edited(row).customerName.trim() || row.customerName,
+              ...(decision === 'nuevo' && notNew.has(row.rowNumber)
+                ? { customerIsNew: false }
+                : {}),
+              deliveryAddress: edited(row).deliveryAddress?.trim() || null,
+              deliveryAddressLine2: edited(row).deliveryAddressLine2?.trim() || null,
+              ...(deliveryFor(row) ? { deliveryDate: deliveryFor(row) } : {}),
+              email: row.email,
+              items: row.items.map((_, index) => ({
+                // Los platos van con la variedad que los trajo: si se eligió otra, no aplican.
+                dishes:
+                  offeringFor(row, index) === viewOf(row).items[index]?.offeringId
+                    ? (viewOf(row).items[index]?.dishes ?? [])
+                    : [],
+                offeringId: offeringFor(row, index),
+                quantityUnits: quantityFor(row, index),
+              })),
+              kind: row.kind,
+              notes: row.notes,
+              ...(siteIdFor(row) ? { operatingSiteId: siteIdFor(row) } : {}),
+              paymentExpectation: paymentFor(row),
+              phone: row.phone,
+              rowNumber: row.rowNumber,
+            };
+          }),
         }),
-      }),
-      method: 'POST',
-      notify: false,
-    });
+        method: 'POST',
+        notify: false,
+      });
+    } catch {
+      setBusy(false);
+      setMessage(NO_CONNECTION);
+      return;
+    }
     setBusy(false);
     if (!response.ok) {
       setMessage(await importErrorText(response, ready));
@@ -474,11 +592,18 @@ export function OrderImportDialog({
   async function discard() {
     if (!inbound) return;
     setBusy(true);
-    const response = await apiRequest(`/api/v1/inbound-emails/${inbound.id}/discard`, {
-      method: 'POST',
-      notify: false,
-    });
-    setBusy(false);
+    let response: Response;
+    try {
+      response = await apiRequest(`/api/v1/inbound-emails/${inbound.id}/discard`, {
+        method: 'POST',
+        notify: false,
+      });
+    } catch {
+      setMessage(NO_CONNECTION);
+      return;
+    } finally {
+      setBusy(false);
+    }
     if (!response.ok) {
       setMessage(await errorMessage(response));
       return;
@@ -517,12 +642,6 @@ export function OrderImportDialog({
         </header>
 
         <div className="order-import-body">
-          {message ? (
-            <p className="screen-notice" role="alert">
-              {message}
-            </p>
-          ) : null}
-
           {inbound && preview === null ? (
             <p className="text-sm text-ink-muted">
               El lector no reconoció un pedido en este correo. Revisá el texto original abajo: si es
@@ -660,6 +779,24 @@ export function OrderImportDialog({
                       {row.locality ? ` · ${row.locality}` : ''}
                     </p>
                     <div className="order-import-edit">
+                      {sites.length > 1 ? (
+                        <label className="field">
+                          Ciudad
+                          <select
+                            onChange={(event) => chooseCity(row, event.target.value)}
+                            value={siteIdFor(row) ?? ''}
+                          >
+                            <option disabled value="">
+                              Elegir…
+                            </option>
+                            {sites.map((site) => (
+                              <option key={site.id} value={site.id}>
+                                {site.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
                       {(decisions[row.rowNumber] ?? 'nuevo') === 'nuevo' ? (
                         <label className="field">
                           Nombre del cliente nuevo
@@ -706,14 +843,14 @@ export function OrderImportDialog({
                           value={edited(row).deliveryAddressLine2 ?? ''}
                         />
                       </label>
-                      {deliveryChoices.options.length > 1 ? (
+                      {deliveryOptionsFor(row).length > 1 ? (
                         <label className="field">
                           Día de reparto
                           <select
                             onChange={(event) => editRow(row, { deliveryDate: event.target.value })}
-                            value={edits[row.rowNumber]?.deliveryDate ?? defaultDelivery}
+                            value={deliveryFor(row)}
                           >
-                            {deliveryChoices.options.map((option) => (
+                            {deliveryOptionsFor(row).map((option) => (
                               <option key={option.date} value={option.date}>
                                 {weekdayName(option.weekday)} {option.date.slice(8, 10)}/
                                 {option.date.slice(5, 7)}
@@ -743,12 +880,15 @@ export function OrderImportDialog({
                     <ul className="order-import-items">
                       {row.items.map((item, index) => {
                         const offeringId = offeringFor(row, index);
+                        const matched = viewOf(row).items[index];
                         return (
                           <li key={`${String(row.rowNumber)}-${String(index)}`}>
                             <span>
                               {[item.variety, item.size].filter(Boolean).join(' ') ||
                                 'Sin variedad'}
-                              {item.dishes.length > 0 ? ` (${item.dishes.join(', ')})` : ''}
+                              {(matched?.dishes.length ?? 0) > 0
+                                ? ` (${matched?.dishes.join(', ') ?? ''})`
+                                : ''}
                             </span>
                             <label className="order-import-qty">
                               ×
@@ -769,7 +909,9 @@ export function OrderImportDialog({
                                 value={quantityFor(row, index)}
                               />
                             </label>
-                            {item.offeringId === null || choices[itemKey(row, index)] ? (
+                            {!hasCity(row) ? (
+                              <span className="order-import-foot-note">Elegí la ciudad</span>
+                            ) : !matched?.offeringId || choices[itemKey(row, index)] ? (
                               /*
                                * Una variedad que no se reconoce se elige a mano, y es obligatorio.
                                * No se adivina: elegir la equivocada es cargar el pedido de otra
@@ -787,7 +929,7 @@ export function OrderImportDialog({
                                 value={offeringId ?? ''}
                               >
                                 <option value="">No está en el menú: elegir…</option>
-                                {preview.offerings.map((oferta) => (
+                                {offeringsFor(row).map((oferta) => (
                                   <option key={oferta.id} value={oferta.id}>
                                     {oferta.label}
                                   </option>
@@ -799,7 +941,7 @@ export function OrderImportDialog({
                                 onClick={() =>
                                   setChoices((current) => ({
                                     ...current,
-                                    [itemKey(row, index)]: item.offeringId ?? '',
+                                    [itemKey(row, index)]: matched.offeringId ?? '',
                                   }))
                                 }
                                 type="button"
@@ -814,10 +956,10 @@ export function OrderImportDialog({
 
                     {row.notes ? <p className="order-import-note">«{row.notes}»</p> : null}
 
-                    {row.duplicateOf ? (
+                    {viewOf(row).duplicateOf ? (
                       <p className="order-import-row-blocked">
-                        Ya hay un pedido igual de este cliente: {row.duplicateOf}. Por eso arranca
-                        destildado.
+                        Ya hay un pedido igual de este cliente: {viewOf(row).duplicateOf}. Por eso
+                        arranca destildado.
                       </p>
                     ) : null}
                     {row.warnings.map((warning) => (
@@ -825,13 +967,16 @@ export function OrderImportDialog({
                         {warning}
                       </p>
                     ))}
-                    {(row.existingOrders ?? []).length > 0 && !row.duplicateOf ? (
+                    {viewOf(row).existingOrders.length > 0 && !viewOf(row).duplicateOf ? (
                       <p className="order-import-row-existing">
                         Ya tiene en este período:{' '}
-                        {(row.existingOrders ?? []).map((order) => order.summary).join('; ')}.
+                        {viewOf(row)
+                          .existingOrders.map((order) => order.summary)
+                          .join('; ')}
+                        .
                       </p>
                     ) : null}
-                    {(row.notices ?? []).map((notice) => (
+                    {[...(row.notices ?? []), ...viewOf(row).notices].map((notice) => (
                       <p className="order-import-row-notice" key={notice}>
                         {notice}
                       </p>
@@ -945,7 +1090,7 @@ export function OrderImportDialog({
                 {busy ? 'Leyendo la planilla…' : 'Elegir planilla'}
               </label>
             )
-          ) : (
+          ) : rows.length === 0 ? null : (
             <>
               <label className="order-import-payment">
                 <input
@@ -955,13 +1100,35 @@ export function OrderImportDialog({
                 />
                 <span>Ubicar las direcciones</span>
               </label>
-              {deliveryChoices.options.length > 1 ? (
+              {needsCityForAll ? (
+                <label className="order-import-payment">
+                  <span>Ciudad para todos</span>
+                  <select
+                    onChange={(event) => setCityForAll(event.target.value)}
+                    value={cityForAll}
+                  >
+                    <option disabled value="">
+                      Elegir…
+                    </option>
+                    {sites.map((site) => (
+                      <option key={site.id} value={site.id}>
+                        {site.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {footerSite && footerSite.deliveryOptions.length > 1 ? (
                 <div className="order-import-foot-message">
                   <DeliveryDayPicker
                     label="Día de reparto para todos"
                     onChange={setDeliveryForAll}
-                    options={deliveryChoices.options}
-                    value={defaultDelivery}
+                    options={footerSite.deliveryOptions}
+                    value={
+                      footerSite.deliveryOptions.some((option) => option.date === deliveryForAll)
+                        ? deliveryForAll
+                        : footerSite.deliveryDefault
+                    }
                   />
                 </div>
               ) : null}
@@ -978,10 +1145,12 @@ export function OrderImportDialog({
                   ))}
                 </select>
               </label>
-              {blocking > 0 ? (
-                <span className="order-import-foot-note">
-                  Elegí la variedad de{' '}
-                  {blocking === 1 ? 'un pedido' : `${String(blocking)} pedidos`} o destildalos.
+              {blockers.length > 0 ? (
+                <span
+                  className={`order-import-foot-note${triedBlocked ? ' is-tried' : ''}`}
+                  role={triedBlocked ? 'alert' : undefined}
+                >
+                  {blockers.join(' ')}
                 </span>
               ) : null}
               {inbound ? (
@@ -989,7 +1158,7 @@ export function OrderImportDialog({
                   {canConfirm ? (
                     <button
                       className="button button-primary"
-                      disabled={busy || ready.length === 0 || blocking > 0 || missingPayment}
+                      disabled={busy}
                       onClick={() => void confirm(true)}
                       type="button"
                     >
@@ -998,7 +1167,7 @@ export function OrderImportDialog({
                   ) : null}
                   <button
                     className={`button ${canConfirm ? 'button-secondary' : 'button-primary'}`}
-                    disabled={busy || ready.length === 0 || blocking > 0 || missingPayment}
+                    disabled={busy}
                     onClick={() => void confirm(false)}
                     type="button"
                   >
@@ -1008,13 +1177,13 @@ export function OrderImportDialog({
               ) : (
                 <button
                   className="button button-primary"
-                  disabled={busy || ready.length === 0 || blocking > 0 || missingPayment}
+                  disabled={busy}
                   onClick={() => void confirm()}
                   type="button"
                 >
                   {busy
                     ? 'Importando…'
-                    : `Importar ${String(ready.length)} pedido${ready.length === 1 ? '' : 's'}`}
+                    : `Importar ${String(selected.length)} pedido${selected.length === 1 ? '' : 's'}`}
                 </button>
               )}
             </>

@@ -151,6 +151,14 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-02-importador-correos',
+    body: `Importar pedidos de los correos, corregido:
+• Cada pedido tiene su ciudad: se sugiere la que dice el correo y se puede cambiar. Si no se sabe, se elige ahí mismo, también con "Todas las ciudades" arriba.
+• Los menús del formulario se reconocen: "Vegetariano" se toma como Real, "Paleo & Keto" como Keto y "Antiage & Detox" como Anti-Age. Cada pedido avisa cómo lo tomó.
+• Si falta algo para importar (ciudad, variedad, medio de pago), el botón lo dice en vez de no hacer nada.
+• Varios correos pegados de corrido, sin encabezado de reenvío, ya no se juntan en un solo pedido.`,
+  },
+  {
     key: '2026-11-01-tema-verano',
     body: `☀️ Llegó el verano: hasta el 28 de febrero el panel se viste claro, celeste arriba y blanco abajo, con letras negras, íconos verdes y un brillo naranja al pasar el mouse. Si no lo querés, sacalo en "Aa" → Temporada.
 🎃 Halloween se despide, pero sus colores se quedan: elegí el tema "Calabaza" en Apariencia (sin telarañas ni calabaza). "Verano" también queda como tema para todo el año.`,

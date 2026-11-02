@@ -1,3 +1,5 @@
+import { familyRank } from './product-order.js';
+
 /**
  * Reconocer a qué oferta del menú se refiere un texto como "Menú Paleo & Keto  400".
  *
@@ -8,6 +10,8 @@
  */
 
 export interface MatchableOffering {
+  /** El Intuitivo: nunca es el destino de un nombre del formulario. */
+  composable?: boolean;
   familyName: string;
   id: string;
   sizeName: string;
@@ -72,6 +76,50 @@ export function matchOffering(
     );
   });
   return close.length === 1 ? (close[0]?.id ?? null) : null;
+}
+
+/**
+ * Los menús del formulario del sitio que en el catálogo se llaman de otra forma.
+ *
+ * El formulario sigue diciendo "Paleo & Keto" o "Vegetariano", y comparar por el nombre no alcanza:
+ * "Vegetariano" coincidiría con la variedad Vegetariano, y la regla es que es Real. Vale sólo para
+ * los mails: en una planilla "vegetariano" quiere decir Vegetariano.
+ */
+const EMAIL_MENU_FAMILIES: Readonly<Record<string, string>> = {
+  'anti age y detox': 'antiage',
+  'antiage y detox': 'antiage',
+  'paleo keto': 'keto',
+  'paleo y keto': 'keto',
+  vegetariano: 'real',
+};
+
+/** A qué variedad del catálogo corresponde un menú del mail, si se llama distinto. */
+export function emailMenuFamily(variety: string | null): string | null {
+  return variety ? (EMAIL_MENU_FAMILIES[normalizeName(variety)] ?? null) : null;
+}
+
+/**
+ * Lo mismo que `matchOffering`, para una línea de un mail del formulario.
+ *
+ * Un menú con otro nombre va a su variedad del catálogo, se llame como se llame esa semana ("Menú
+ * Nuevo Keto"). Si esa variedad no está publicada en ese tamaño, o hay más de una, es `null`: una
+ * persona elige, no se cae en otra variedad parecida.
+ */
+export function matchEmailOffering(
+  variety: string | null,
+  size: string | null,
+  offerings: readonly MatchableOffering[],
+): string | null {
+  const family = emailMenuFamily(variety);
+  if (!family) return matchOffering(variety, size, offerings);
+  if (!size) return null;
+  const wantedSize = sizeKey(size);
+  const candidates = offerings.filter(
+    (offering) =>
+      sizeKey(offering.sizeName) === wantedSize &&
+      familyRank(offering.familyName, offering.composable ?? false) === familyRank(family),
+  );
+  return candidates.length === 1 ? (candidates[0]?.id ?? null) : null;
 }
 
 /** Cuántas letras hay que cambiar, agregar o sacar para pasar de un texto al otro. */
