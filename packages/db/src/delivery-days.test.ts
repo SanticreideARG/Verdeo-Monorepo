@@ -146,6 +146,41 @@ describe('días de reparto', () => {
   });
 });
 
+describe('la plata del reparto', () => {
+  it('rinde el efectivo del día: sin cancelados, sin otros días, sin transferencias', async () => {
+    const { client, service } = await base();
+    await service.updateDeliverySettings(SITE, { defaultWeekday: 0, weekdays: [6, 0] }, contexto);
+    const efectivo = (await service.createOrder(pedido('2026-10-18'), contexto)) as { id: string };
+    const cancelado = (await service.createOrder(pedido('2026-10-18'), contexto)) as { id: string };
+    await service.createOrder(pedido('2026-10-24'), contexto);
+    const transferencia = (await service.createOrder(pedido('2026-10-18'), contexto)) as {
+      id: string;
+    };
+    await client.exec(
+      `update orders set status = 'CANCELLED' where id = '${cancelado.id}';
+       update orders set payment_expectation = 'Transferencia' where id = '${transferencia.id}';
+       update orders set paid_at = now() where id = '${efectivo.id}';`,
+    );
+    const { rows } = await client.query<{ total_minor: number }>(
+      `select total_minor from orders where id = '${efectivo.id}'`,
+    );
+    const importe = Number(rows[0]?.total_minor);
+
+    const plata = await service.dispatchMoney('2026-10-18', SITE);
+    expect(plata.cash).toEqual({
+      count: 1,
+      draftCount: 1,
+      paidCount: 1,
+      totalMinor: importe,
+    });
+    expect(plata.byMethod.map((row) => [row.method, row.isCash, row.count])).toEqual([
+      [expect.stringMatching(/efectivo/i), true, 1],
+      ['Transferencia', false, 1],
+    ]);
+    expect((await service.dispatchMoney('2026-10-17', SITE)).cash.count).toBe(0);
+  });
+});
+
 describe('fecha elegida a mano al crear', () => {
   it('se respeta aunque no sea día de reparto, como al editar', async () => {
     const { service } = await base();

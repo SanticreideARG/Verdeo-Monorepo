@@ -56,7 +56,7 @@ describe('el búho del Workbench', () => {
 
   it('saluda, piensa con el texto pegado y responde con "Copiar"', async () => {
     render(<BuhoAssistant permissions={['ai.use']} />);
-    await screen.findByRole('button', { name: 'Analizar mensaje' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Analizar mensaje' }));
     expect(owl().src).toContain('HowlHi.png');
 
     fireEvent.click(screen.getByRole('button', { name: 'Pegar el texto' }));
@@ -80,6 +80,48 @@ describe('el búho del Workbench', () => {
     expect(body.message).not.toContain('3515551234');
   });
 
+  it('se le pregunta directo, sin elegir modo, y los modos de pregunta no son botones', async () => {
+    vi.mocked(apiRequest).mockImplementation((path: string) => {
+      if (path === '/api/v1/ai/assistant/modes') {
+        return json({
+          items: [
+            ...MODES,
+            {
+              group: 'Preguntas',
+              input: null,
+              key: 'buho_preguntar',
+              label: 'Preguntar sobre la operación',
+              starter: null,
+              summary: 'Preguntá.',
+            },
+          ],
+        });
+      }
+      if (path === '/api/v1/ai/assistant/messages') {
+        return json({
+          context: { cycleAlias: 'Noviembre 1', omitted: [], siteName: 'Córdoba' },
+          reply: '8 pedidos en efectivo: $ 412.000.',
+        });
+      }
+      return json({ items: [] });
+    });
+    render(<BuhoAssistant permissions={['ai.use']} />);
+    await screen.findByRole('button', { name: 'Analizar mensaje' });
+    expect(screen.queryByRole('button', { name: 'Preguntar sobre la operación' })).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Tu pregunta o pedido'), {
+      target: { value: '¿Cuánto hay que rendir hoy?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Preguntar' }));
+
+    await screen.findByText('8 pedidos en efectivo: $ 412.000.');
+    expect(screen.getByText(/Consulta directa · Noviembre 1 · Córdoba/)).toBeTruthy();
+    const call = vi
+      .mocked(apiRequest)
+      .mock.calls.find(([path]) => path === '/api/v1/ai/assistant/messages');
+    expect((JSON.parse(call?.[1]?.body as string) as { mode: string }).mode).toBe('buho_preguntar');
+  });
+
   it('un modo sin texto se genera con un clic, y la conversación sigue', async () => {
     render(<BuhoAssistant permissions={['ai.use']} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Análisis del período' }));
@@ -89,7 +131,7 @@ describe('el búho del Workbench', () => {
     fireEvent.change(screen.getByLabelText('Tu pregunta o pedido'), {
       target: { value: 'Más corto' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Preguntar' }));
 
     await waitFor(() => {
       const calls = vi

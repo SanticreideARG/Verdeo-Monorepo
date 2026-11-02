@@ -24,6 +24,8 @@ interface Turn {
 }
 
 const CONVERSATION_KEY = 'verdeo-buho-conversacion';
+/** Lo que se escribe en el cuadro de arriba: el modo con todos los datos, sin elegir nada. */
+const DIRECT_QUERY = { key: 'buho_preguntar', label: 'Consulta directa' } as const;
 const OWL = {
   answer: '/brand/HOWL/Howl.png',
   hello: '/brand/HOWL/HowlHi.png',
@@ -67,9 +69,9 @@ async function copyText(text: string) {
 }
 
 /**
- * El búho del Workbench de IA (BUHO_WORKBENCH_PLAN.md, 2026-10-30): los modos, el cuadro para pegar
- * un mensaje, la conversación y "Copiar" en cada respuesta. Los datos del período y la ciudad los
- * arma el servidor; acá sólo se elige el período.
+ * El búho del Workbench de IA (BUHO_WORKBENCH_PLAN.md, 2026-10-30): la consulta directa, las tareas
+ * armadas, el cuadro para pegar un mensaje y "Copiar" en cada respuesta. Los datos del período y la
+ * ciudad los arma el servidor; acá sólo se elige el período.
  */
 export function BuhoAssistant({ permissions }: { permissions: readonly string[] }) {
   const [modes, setModes] = useState<AssistantModeSummary[]>([]);
@@ -92,7 +94,6 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
         if (!response.ok) return;
         const items = ((await response.json()) as { items?: AssistantModeSummary[] }).items ?? [];
         setModes(items);
-        setModeKey((current) => current || items[0]?.key || '');
       })
       .catch(() => undefined);
   }, []);
@@ -127,7 +128,8 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
   const mode = modes.find((candidate) => candidate.key === modeKey) ?? null;
   const groups = useMemo(() => {
     const byGroup = new Map<string, AssistantModeSummary[]>();
-    for (const candidate of modes) {
+    // Preguntar y "cómo se hace" no son tareas: los contesta el cuadro de arriba.
+    for (const candidate of modes.filter((item) => item.group !== 'Preguntas')) {
       byGroup.set(candidate.group, [...(byGroup.get(candidate.group) ?? []), candidate]);
     }
     return [...byGroup.entries()];
@@ -140,8 +142,8 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
         ? { alt: 'El búho saluda', src: OWL.hello }
         : { alt: 'El búho', src: OWL.answer };
 
-  async function send(content: string, pasted?: string) {
-    if (!mode || sending) return;
+  async function send(content: string, target: { key: string; label: string }, pasted?: string) {
+    if (sending) return;
     setFailure('');
     const history = turns.slice(-20).map(({ content: text, role }) => ({ content: text, role }));
     const userTurn: Turn = { content, role: 'user', ...(pasted ? { pasted } : {}) };
@@ -151,7 +153,7 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
       body: JSON.stringify({
         history,
         message: content,
-        mode: mode.key,
+        mode: target.key,
         ...(cycleId ? { cycleId } : {}),
       }),
       method: 'POST',
@@ -173,7 +175,7 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
       .filter(Boolean)
       .join(' · ');
     const footnote = [
-      `${mode.label}${where ? ` · ${where}` : ''}`,
+      `${target.label}${where ? ` · ${where}` : ''}`,
       body.context.omitted.length > 0 ? `sin ${body.context.omitted.join(', ')}` : null,
     ]
       .filter(Boolean)
@@ -188,14 +190,14 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
     setPasteOpen(false);
     setPasteText('');
     setPasteNote('');
-    void send(`${mode.input.label}:\n${text}${note ? `\n\nIndicación: ${note}` : ''}`, text);
+    void send(`${mode.input.label}:\n${text}${note ? `\n\nIndicación: ${note}` : ''}`, mode, text);
   }
 
   function submitDraft() {
     const text = draft.trim();
     if (!text) return;
     setDraft('');
-    void send(text);
+    void send(text, DIRECT_QUERY);
   }
 
   return (
@@ -224,6 +226,92 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
       </aside>
 
       <section className="buho-main" aria-label="Conversación con el búho">
+        <div className="buho-dialog">
+          <form
+            className="buho-composer"
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitDraft();
+            }}
+          >
+            <textarea
+              aria-label="Tu pregunta o pedido"
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  submitDraft();
+                }
+              }}
+              placeholder="Ej.: ¿cuánto efectivo hay que rendir hoy? También podés pedir un cambio a la última respuesta."
+              rows={2}
+              value={draft}
+            />
+            <div className="buho-composer-actions">
+              <button
+                className="button button-primary"
+                disabled={sending || !draft.trim()}
+                type="submit"
+              >
+                Preguntar
+              </button>
+              {turns.length > 0 ? (
+                <button
+                  className="button button-secondary"
+                  disabled={sending}
+                  onClick={() => {
+                    setTurns([]);
+                    setFailure('');
+                  }}
+                  type="button"
+                >
+                  Empezar de nuevo
+                </button>
+              ) : null}
+            </div>
+          </form>
+          <div aria-live="polite" className="buho-chat">
+            {turns.length === 0 ? (
+              <p className="buho-empty">
+                ¡Hola! Preguntame lo que quieras sobre la operación, o elegí una tarea armada de acá
+                abajo.
+              </p>
+            ) : null}
+            {turns.map((turn, index) => (
+              <article className={`buho-turn is-${turn.role}`} key={index}>
+                {turn.pasted ? (
+                  <details>
+                    <summary>Texto pegado</summary>
+                    <p>{turn.pasted}</p>
+                  </details>
+                ) : (
+                  <p>{turn.content}</p>
+                )}
+                {turn.role === 'assistant' ? (
+                  <footer>
+                    {turn.footnote ? <small>{turn.footnote}</small> : null}
+                    <button
+                      className="button button-secondary"
+                      onClick={() => void copyText(turn.content)}
+                      type="button"
+                    >
+                      Copiar
+                    </button>
+                  </footer>
+                ) : null}
+              </article>
+            ))}
+            {sending ? <p className="buho-typing">El búho está pensando…</p> : null}
+            {failure ? (
+              <p className="buho-failure" role="alert">
+                {failure}
+              </p>
+            ) : null}
+            <div ref={endRef} />
+          </div>
+        </div>
+
+        <h3 className="buho-tasks-title">Tareas armadas</h3>
         <div aria-label="Modos del búho" className="buho-modes" role="group">
           {groups.map(([group, items]) => (
             <div className="buho-mode-group" key={group}>
@@ -233,7 +321,9 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
                   <button
                     aria-pressed={candidate.key === modeKey}
                     key={candidate.key}
-                    onClick={() => setModeKey(candidate.key)}
+                    onClick={() =>
+                      setModeKey((current) => (current === candidate.key ? '' : candidate.key))
+                    }
                     title={candidate.summary}
                     type="button"
                   >
@@ -263,7 +353,7 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
               <button
                 className="button button-primary"
                 disabled={sending}
-                onClick={() => void send(mode.starter ?? '')}
+                onClick={() => void send(mode.starter ?? '', mode)}
                 type="button"
               >
                 Generar
@@ -271,90 +361,6 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
             ) : null}
           </div>
         ) : null}
-
-        <div aria-live="polite" className="buho-chat">
-          {turns.length === 0 ? (
-            <p className="buho-empty">
-              ¡Hola! Elegí qué hacemos: pegá un mensaje para analizarlo, generá el análisis del
-              período o preguntame lo que quieras sobre la operación.
-            </p>
-          ) : null}
-          {turns.map((turn, index) => (
-            <article className={`buho-turn is-${turn.role}`} key={index}>
-              {turn.pasted ? (
-                <details>
-                  <summary>Texto pegado</summary>
-                  <p>{turn.pasted}</p>
-                </details>
-              ) : (
-                <p>{turn.content}</p>
-              )}
-              {turn.role === 'assistant' ? (
-                <footer>
-                  {turn.footnote ? <small>{turn.footnote}</small> : null}
-                  <button
-                    className="button button-secondary"
-                    onClick={() => void copyText(turn.content)}
-                    type="button"
-                  >
-                    Copiar
-                  </button>
-                </footer>
-              ) : null}
-            </article>
-          ))}
-          {sending ? <p className="buho-typing">El búho está pensando…</p> : null}
-          {failure ? (
-            <p className="buho-failure" role="alert">
-              {failure}
-            </p>
-          ) : null}
-          <div ref={endRef} />
-        </div>
-
-        <form
-          className="buho-composer"
-          onSubmit={(event) => {
-            event.preventDefault();
-            submitDraft();
-          }}
-        >
-          <textarea
-            aria-label="Tu pregunta o pedido"
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                submitDraft();
-              }
-            }}
-            placeholder="Preguntá algo o pedí un cambio a la última respuesta…"
-            rows={2}
-            value={draft}
-          />
-          <div className="buho-composer-actions">
-            <button
-              className="button button-primary"
-              disabled={sending || !draft.trim() || !mode}
-              type="submit"
-            >
-              Enviar
-            </button>
-            {turns.length > 0 ? (
-              <button
-                className="button button-secondary"
-                disabled={sending}
-                onClick={() => {
-                  setTurns([]);
-                  setFailure('');
-                }}
-                type="button"
-              >
-                Empezar de nuevo
-              </button>
-            ) : null}
-          </div>
-        </form>
       </section>
 
       {pasteOpen && mode?.input ? (

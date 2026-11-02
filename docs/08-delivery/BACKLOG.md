@@ -3,6 +3,12 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Búho: consulta directa y total a rendir (2026-11-02) — [plan](../03-features/BUHO_WORKBENCH_PLAN.md)
+
+- [x] Cuadro de diálogo arriba del Workbench: se pregunta directo, sin elegir modo ni prompt maestro. Las tareas armadas quedan debajo.
+- [x] Total a rendir del reparto de hoy, calculado por el servidor: pedidos en efectivo, sin cancelados. Con `payments.read` (operador y superadmin).
+- [ ] Fase 4: que el búho pida datos con filtros propios (herramientas), para preguntas por otra fecha, otra ciudad o por repartidor. Antes, probar el proveedor configurado.
+
 ## "Menú", no "vianda" (2026-11-02) — [glosario](../02-domain/DOMAIN_MODEL.md)
 
 - [x] 1 menú = 5 viandas. Pantallas, mensajes del servidor, planilla del período, asistentes y ayuda cuentan menús. "Vianda" queda para el plato suelto.

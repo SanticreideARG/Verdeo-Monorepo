@@ -375,7 +375,7 @@ import {
   type OrderImportRow,
 } from './integrations/order-import.js';
 import { ASSISTANT_MODES, BUHO_BASE_PROMPT, findAssistantMode } from '@verdeo/ai';
-import { buildAssistantContext } from './assistant-context.js';
+import { buildAssistantContext, type DispatchMoney } from './assistant-context.js';
 import { buildKitchenLabelsPrintHtml } from './kitchen-labels-export.js';
 import { renderLabelDocument } from '@verdeo/labels';
 import { RequestStats } from './request-stats.js';
@@ -726,6 +726,7 @@ interface OperationsEngine {
     operatingSiteId: string,
   ): Promise<{ defaultDate: string; options: { date: string; weekday: number }[] }>;
   dispatchSummary?(date: string, operatingSiteId: string | null): Promise<unknown>;
+  dispatchMoney?(date: string, operatingSiteId: string | null): Promise<DispatchMoney>;
   listDeliveryRuns?(operatingSiteId: string | null, fromDate: string): Promise<unknown>;
   createDeliveryRun?(
     operatingSiteId: string,
@@ -8506,6 +8507,12 @@ export function createApp(options: CreateAppOptions) {
           ? {
               dispatchSummary: (date: string, site: string | null) =>
                 operations.dispatchSummary!(date, site),
+            }
+          : {}),
+        ...(operations.dispatchMoney
+          ? {
+              dispatchMoney: (date: string, site: string | null) =>
+                operations.dispatchMoney!(date, site),
             }
           : {}),
         getStatsPeriods: (filters) => operations.getStatsPeriods(filters),

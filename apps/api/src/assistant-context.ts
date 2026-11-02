@@ -9,8 +9,20 @@ import type { AssistantDataSource, AssistantMode } from '@verdeo/ai';
  * contacto, un domicilio, una nota o un identificador, y lo que falta cobrar viaja sumado, nunca
  * por cliente.
  */
+export interface DispatchMoney {
+  byMethod: {
+    count: number;
+    isCash: boolean;
+    method: string;
+    totalMinor: number;
+  }[];
+  cash: { count: number; draftCount: number; paidCount: number; totalMinor: number };
+  date: string;
+}
+
 export interface AssistantDataPort {
   cycleReport(cycleId: string, operatingSiteId?: string | null): Promise<unknown>;
+  dispatchMoney?(date: string, operatingSiteId: string | null): Promise<DispatchMoney>;
   dispatchSummary?(date: string, operatingSiteId: string | null): Promise<unknown>;
   getStatsPeriods(filters: {
     from?: string | undefined;
@@ -134,6 +146,30 @@ export function summarizeReceivables(raw: unknown) {
     porMedioDePago: Object.fromEntries(byMethod),
     porPeriodo: Object.fromEntries(byCycle),
     total,
+  };
+}
+
+/**
+ * El total a rendir, ya calculado: el modelo lo lee, no lo suma. La definición viaja con el número
+ * para que valga con cualquier versión del prompt que esté activa.
+ */
+export function summarizeDispatchMoney(money: DispatchMoney) {
+  return {
+    definicion:
+      'Pedidos en efectivo del reparto de hoy, sin cancelados. Incluye los que están en borrador o ya marcados como cobrados.',
+    fecha: money.date,
+    pedidos: money.cash.count,
+    total: money.cash.totalMinor / 100,
+    deEsos: {
+      enBorrador: money.cash.draftCount,
+      yaMarcadosComoCobrados: money.cash.paidCount,
+    },
+    porMedioDePago: money.byMethod.map((row) => ({
+      efectivo: row.isCash,
+      importe: row.totalMinor / 100,
+      medio: row.method,
+      pedidos: row.count,
+    })),
   };
 }
 
@@ -287,6 +323,14 @@ export async function buildAssistantContext(input: {
           data.repartoDeHoy = port.dispatchSummary
             ? clean(await port.dispatchSummary(input.today, siteId))
             : 'no disponible';
+          // Los importes, con el mismo permiso que los cobros: el operador no tiene estadísticas.
+          if (!permissions.includes('payments.read')) {
+            omitted.push('los importes del reparto');
+          } else if (port.dispatchMoney) {
+            data.aRendirDeHoy = summarizeDispatchMoney(
+              await port.dispatchMoney(input.today, siteId),
+            );
+          }
           break;
         case 'help': {
           const articles = (await port.listHelp()) as HelpArticle[];

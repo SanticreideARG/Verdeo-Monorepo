@@ -4,6 +4,8 @@ Estado: **fases 1 a 3 hechas (2026-10-30)**, con 22 modos. La fase 4 (herramient
 
 **As built:** los modos están en `packages/ai/src/assistant-modes.ts` (tareas `buho_*` del catálogo, con prompt de fábrica y versionables desde "Prompts maestros"); la identidad común del búho es `BUHO_BASE_PROMPT`, que no se edita. Los datos los arma `apps/api/src/assistant-context.ts` (`clean` saca nombres, contactos, domicilios, notas e identificadores y pasa los importes a pesos; lo que falta cobrar va sumado). Rutas: `GET /api/v1/ai/assistant/modes` y `POST /api/v1/ai/assistant/messages` (tope de 150 consultas por persona y por día, `ASSISTANT_DAILY_LIMIT`). La pantalla es `BuhoAssistant`; el editor de antes es `AIPromptsAdmin`. La Ayuda quedó con un "?" y un acceso al búho.
 
+**Consulta directa y total a rendir (2026-11-02):** arriba de la pantalla hay un cuadro de diálogo que siempre pregunta con `buho_preguntar`, sin elegir modo; las tareas armadas quedan debajo, y el grupo "Preguntas" ya no se muestra como botones (ese modo ahora recibe también la ayuda y lo que falta cobrar). El dato `dispatch` suma `aRendirDeHoy` (`dispatchMoney`): **total a rendir = los pedidos con medio de pago efectivo del reparto de hoy, sin cancelados**; incluye borradores y ya cobrados, que se informan aparte. Lo calcula el servidor y se manda con `payments.read` (operador y superadmin): sin ese permiso, el búho responde sin importes y lo dice. La ciudad sigue siendo la elegida arriba. La fase 4 (herramientas) sigue pendiente: el adaptador no las admite y falta probarlas con el proveedor.
+
 ## 1. Qué cambia
 
 Hoy el Workbench de IA es una herramienta de administración: elegir una tarea, editar su prompt,

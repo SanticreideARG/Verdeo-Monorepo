@@ -54,7 +54,11 @@ export const BUHO_BASE_PROMPT = [
   '- Usá SÓLO los números del bloque DATOS. Si algo no está, decí que no lo tenés; nunca lo inventes.',
   '- Podés sumar, restar y sacar porcentajes de esos números; aclaralo cuando lo hagas.',
   '- Los importes están en pesos argentinos. Escribilos como $ 12.345.',
+  '- Si DATOS trae un total ya calculado (como aRendirDeHoy), usalo tal cual: no lo recalcules.',
+  '- No des por hecho que dos cantidades son los mismos pedidos: 2 sin ubicación y 2 sin hoja de ruta pueden ser distintos.',
+  '- Si no tenés un dato, decí en qué pantalla verlo; no le pidas al equipo que te lo pase.',
   '- Decí siempre de qué período y de qué ciudad hablás (vienen en DATOS).',
+  '- Si la pregunta nombra otra ciudad que la de DATOS, avisá de cuál son los datos y que se cambia arriba de todo; no respondas como si fueran de la que nombró.',
   '- No inventes precios, platos, horarios ni disponibilidad: salen del menú en DATOS o no se dicen.',
   'Formato: respuestas que se puedan copiar y pegar. Para WhatsApp, mensajes cortos y sin markdown.',
   'Para análisis internos podés usar títulos cortos y viñetas con "-".',
@@ -349,10 +353,11 @@ export const ASSISTANT_MODES: readonly AssistantMode[] = [
     prompt: [
       'Resumís el reparto de hoy para quien lo coordina: cuántos pedidos salen y qué falta para que salgan',
       '(sin hoja de ruta, en borrador, sin ubicación). Si hoy no hay reparto, decí cuándo es el próximo.',
+      'Si DATOS trae aRendirDeHoy, agregá una línea con los pedidos en efectivo y el total a rendir.',
       'Cerrá con los pasos en orden.',
     ],
     starter: '¿Cómo está el reparto de hoy?',
-    summary: 'Cuántos salen hoy y qué falta para que salgan.',
+    summary: 'Cuántos salen hoy, qué falta y cuánto efectivo hay que rendir.',
     temperature: 0.2,
   }),
   mode({
@@ -462,7 +467,8 @@ export const ASSISTANT_MODES: readonly AssistantMode[] = [
   }),
   // ---- Preguntas libres -------------------------------------------------------------------
   mode({
-    data: ['period', 'kitchen', 'comparison', 'stock', 'dispatch', 'menu'],
+    // Lo más pedido primero: los datos tienen un tope y lo que no entra se recorta por el final.
+    data: ['dispatch', 'help', 'receivables', 'period', 'stock', 'kitchen', 'menu', 'comparison'],
     group: 'Preguntas',
     input: null,
     key: 'buho_preguntar',
@@ -471,6 +477,8 @@ export const ASSISTANT_MODES: readonly AssistantMode[] = [
     prompt: [
       'Contestás preguntas del equipo sobre la operación con los DATOS del sistema.',
       'Respuesta directa primero, con el número; después el detalle si suma.',
+      'Si preguntan cómo se hace algo, contestá con los artículos de ayuda de DATOS y su enlace.',
+      'Si piden cambiar una respuesta anterior ("más corto", "agregá el precio"), hacelo.',
       'Si la pregunta necesita un dato que no está en DATOS, decilo y sugerí en qué pantalla verlo.',
     ],
     starter: null,

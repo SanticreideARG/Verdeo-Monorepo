@@ -50,4 +50,58 @@ describe('los datos del búho', () => {
     expect(context.omitted).toContain('la comparación con otros períodos');
     expect(context.text).toContain('Todas las ciudades');
   });
+
+  describe('el total a rendir del reparto', () => {
+    const plata = {
+      byMethod: [
+        { count: 8, isCash: true, method: 'Efectivo', totalMinor: 41_200_000 },
+        { count: 12, isCash: false, method: 'Transferencia', totalMinor: 60_000_000 },
+      ],
+      cash: { count: 8, draftCount: 1, paidCount: 3, totalMinor: 41_200_000 },
+      date: '2026-11-02',
+    };
+    const consulta = (permissions: string[]) => {
+      const dispatchMoney = vi.fn(() => Promise.resolve(plata));
+      return {
+        dispatchMoney,
+        run: buildAssistantContext({
+          mode: findAssistantMode('buho_reparto')!,
+          now: new Date('2026-11-02T12:00:00.000Z'),
+          permissions,
+          port: {
+            cycleReport: vi.fn(),
+            dispatchMoney,
+            dispatchSummary: () => Promise.resolve({ total: 20 }),
+            getStatsPeriods: vi.fn(),
+            kitchenSummary: vi.fn(),
+            listHelp: vi.fn(),
+            listMenus: () => Promise.resolve([]),
+            listReceivables: vi.fn(),
+            listStockLots: vi.fn(),
+          },
+          question: '¿cuánto hay que rendir?',
+          siteId: 'cordoba',
+          today: '2026-11-02',
+        }),
+      };
+    };
+
+    it('quien ve cobros lo recibe ya sumado y en pesos, sin tener estadísticas', async () => {
+      const { dispatchMoney, run } = consulta(['orders.read', 'payments.read']);
+      const context = await run;
+      expect(dispatchMoney).toHaveBeenCalledWith('2026-11-02', 'cordoba');
+      expect(context.omitted).toEqual([]);
+      expect(context.text).toContain('"pedidos":8,"total":412000');
+      expect(context.text).toContain('"yaMarcadosComoCobrados":3');
+    });
+
+    it('sin permiso de cobros van las cantidades, no los importes, y lo dice', async () => {
+      const { dispatchMoney, run } = consulta(['orders.read']);
+      const context = await run;
+      expect(dispatchMoney).not.toHaveBeenCalled();
+      expect(context.text).toContain('"total":20');
+      expect(context.text).not.toContain('aRendirDeHoy');
+      expect(context.omitted).toContain('los importes del reparto');
+    });
+  });
 });

@@ -442,6 +442,9 @@ export function isNewCustomer(override: boolean | null, activeOrders: number): b
  */
 const notStockCustomer = sql`${orders.customerId} not in (select id from customers where upper(trim(display_name)) = 'STOCK')`;
 
+/** Si el medio de pago del pedido es efectivo: el catálogo manda; sin renglón, por el nombre. */
+const orderIsCash = sql<boolean>`coalesce((select pm.is_cash from payment_methods pm where lower(pm.display_name) = lower(${orders.paymentExpectation}) or lower(pm.code) = lower(${orders.paymentExpectation}) limit 1), lower(${orders.paymentExpectation}) like '%efectivo%')`;
+
 /** Para deshacer una transacción a propósito: una vista previa calcula todo y no guarda nada. */
 class PreviewRollback extends Error {}
 
@@ -3731,6 +3734,55 @@ export class PostgresOperationsService {
       total: today?.total ?? 0,
       unlocated: today?.unlocated ?? 0,
       unrouted: today?.unrouted ?? 0,
+    };
+  }
+
+  /**
+   * La plata del reparto de un día, por medio de pago. Lo que se rinde son los pedidos en efectivo
+   * del reparto, sin cancelados. Los que están en borrador o ya marcados como cobrados cuentan y se
+   * informan aparte. El pedido del cliente STOCK no se entrega ni se cobra.
+   */
+  public async dispatchMoney(date: string, operatingSiteId?: string | null) {
+    const rows = await this.database
+      .select({
+        count: sql<number>`count(*)::int`,
+        draftCount: sql<number>`count(*) filter (where ${orders.status} = 'DRAFT')::int`,
+        isCash: orderIsCash,
+        method: orders.paymentExpectation,
+        paidCount: sql<number>`count(*) filter (where ${orders.paidAt} is not null)::int`,
+        totalMinor: sql<string>`coalesce(sum(${orders.totalMinor}), 0)::bigint`,
+      })
+      .from(orders)
+      .where(
+        and(
+          ne(orders.status, 'CANCELLED'),
+          eq(orders.deliveryDate, date),
+          notStockCustomer,
+          ...(operatingSiteId ? [eq(orders.operatingSiteId, operatingSiteId)] : []),
+        ),
+      )
+      .groupBy(orders.paymentExpectation)
+      .orderBy(asc(orders.paymentExpectation));
+    const byMethod = rows.map((row) => ({
+      count: row.count,
+      draftCount: row.draftCount,
+      isCash: Boolean(row.isCash),
+      method: row.method,
+      paidCount: row.paidCount,
+      totalMinor: Number(row.totalMinor),
+    }));
+    const cash = byMethod.filter((row) => row.isCash);
+    const sum = (key: 'count' | 'draftCount' | 'paidCount' | 'totalMinor') =>
+      cash.reduce((total, row) => total + row[key], 0);
+    return {
+      byMethod,
+      cash: {
+        count: sum('count'),
+        draftCount: sum('draftCount'),
+        paidCount: sum('paidCount'),
+        totalMinor: sum('totalMinor'),
+      },
+      date,
     };
   }
 
@@ -7066,7 +7118,7 @@ export class PostgresOperationsService {
     const byMethod = await this.database
       .select({
         count: sql<number>`count(*)::int`,
-        isCash: sql<boolean>`coalesce((select pm.is_cash from payment_methods pm where lower(pm.display_name) = lower(${orders.paymentExpectation}) or lower(pm.code) = lower(${orders.paymentExpectation}) limit 1), lower(${orders.paymentExpectation}) like '%efectivo%')`,
+        isCash: orderIsCash,
         method: orders.paymentExpectation,
         paidMinor: sql<number>`coalesce(sum(${orders.totalMinor}) filter (where ${orders.paidAt} is not null), 0)::int`,
         totalMinor: sql<number>`coalesce(sum(${orders.totalMinor}), 0)::int`,
