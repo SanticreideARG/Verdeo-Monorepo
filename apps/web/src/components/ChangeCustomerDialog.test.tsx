@@ -76,7 +76,7 @@ describe('cambiar el cliente de un pedido', () => {
   const statusCalls = () =>
     vi.mocked(apiRequest).mock.calls.filter(([path]) => path === '/api/v1/orders/pedido/status');
 
-  it('"Enviar a stock" pide una confirmación y cancela pasando las viandas a stock', async () => {
+  it('"Enviar a stock" pide una confirmación y cancela pasando los menús a stock', async () => {
     const onSentToStock = vi.fn();
     render(
       <ChangeCustomerDialog

@@ -341,7 +341,7 @@ export async function parseOrderImport(file: File): Promise<OrderImportRow[]> {
       const filled = filledSlots(unit);
       if (slotMode && filled > 0 && filled < slotColumns.length) {
         row.warnings.push(
-          `La vianda de la fila ${String(unit.rowNumber)} tiene ${String(filled)} de ${String(slotColumns.length)} platos.`,
+          `El menú de la fila ${String(unit.rowNumber)} tiene ${String(filled)} de ${String(slotColumns.length)} platos.`,
         );
       }
     }
@@ -491,7 +491,7 @@ export async function parseOrderImport(file: File): Promise<OrderImportRow[]> {
       const pending = unit.slots.filter(Boolean);
       previous.slots = previous.slots.map((slot) => slot || (pending.shift() ?? ''));
       (current.notices ??= []).push(
-        `La fila ${String(rowNumber)} completa la vianda de la fila ${String(previous.rowNumber)}.`,
+        `La fila ${String(rowNumber)} completa el menú de la fila ${String(previous.rowNumber)}.`,
       );
     } else {
       current.units.push(unit);

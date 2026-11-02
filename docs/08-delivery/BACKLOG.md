@@ -3,6 +3,11 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## "Menú", no "vianda" (2026-11-02) — [glosario](../02-domain/DOMAIN_MODEL.md)
+
+- [x] 1 menú = 5 viandas. Pantallas, mensajes del servidor, planilla del período, asistentes y ayuda cuentan menús. "Vianda" queda para el plato suelto.
+- [ ] Términos y Privacidad siguen diciendo "vianda": son textos legales, para que los revise el responsable.
+
 ## Medio de pago "Sin pago" (2026-11-02) — [plan](../03-features/STOCK_COMO_PEDIDO_PLAN.md)
 
 - [x] Fase 3.0. Elegido en el panel, el pedido da $0 y pide motivo, que queda en las notas. Se guarda por código (`sin_pago`), así el nombre se puede cambiar. Entrar o salir recalcula los precios de los mismos renglones, y al entrar se borra el cobro.

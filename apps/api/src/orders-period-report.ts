@@ -278,7 +278,7 @@ function buildSheet(title: string, report: PeriodReport, layout: Layout): WorkSh
   // Una tabla de viandas por producto con su total, a la derecha, desde la fila `top`.
   const summaryTable = (top: number, lines: { label: string; units: number }[]) => {
     put(top, summaryColumn, text('Producto', HEADER));
-    put(top, summaryColumn + 1, text('Viandas', HEADER));
+    put(top, summaryColumn + 1, text('Menús', HEADER));
     lines.forEach((line, index) => {
       put(top + 1 + index, summaryColumn, text(line.label));
       put(top + 1 + index, summaryColumn + 1, count(line.units));

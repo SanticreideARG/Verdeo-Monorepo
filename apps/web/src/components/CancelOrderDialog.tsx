@@ -28,7 +28,7 @@ export function CancelOrderDialog({
 }: {
   /** Para saber si ya salió en una planilla de cocina (2026-10-28). */
   orderId?: string;
-  /** Ya se cocinó (confirmado, listo o entregado): se ofrece pasar sus viandas al stock. */
+  /** Ya se cocinó (confirmado, listo o entregado): se ofrece pasar sus menús al stock. */
   cooked?: boolean;
   onCancel: () => void;
   onConfirm: (input: { notes: string; reasonId: string; toStock: boolean }) => Promise<void>;
@@ -199,9 +199,9 @@ export function CancelOrderDialog({
                   type="checkbox"
                 />
                 <span>
-                  <strong>Pasar las viandas a stock.</strong> Ya están cocinadas: quedan para
-                  venderse desde Nuevo pedido (un Intuitivo, con sus platos). Si se reactiva el
-                  pedido, vuelven.
+                  <strong>Pasar los menús a stock.</strong> Ya están cocinados: quedan para venderse
+                  desde Nuevo pedido (un Intuitivo, con sus platos). Si se reactiva el pedido,
+                  vuelven.
                 </span>
               </label>
             ) : null}

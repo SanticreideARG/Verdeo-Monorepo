@@ -64,7 +64,7 @@ const FIELD_OPTIONS = [
   { key: 'plato', label: 'Plato (con etiqueta por plato)' },
   { key: 'tamano', label: 'Tamaño (250 / 400)' },
   { key: 'variedad', label: 'Variedad' },
-  { key: 'platos', label: 'Platos de la vianda (la lista)' },
+  { key: 'platos', label: 'Platos del menú (la lista)' },
   { key: 'unidad', label: 'Unidad (1 de 3)' },
   { key: 'zona', label: 'Zona de entrega' },
   { key: 'entrega', label: 'Fecha de entrega' },

@@ -26,7 +26,7 @@ function storedOpen(): boolean {
 }
 
 const shortFamily = (value: string) => value.replace(/^men[uú]\s+/i, '');
-const viandas = (count: number) => `${String(count)} ${count === 1 ? 'vianda' : 'viandas'}`;
+const countMenus = (count: number) => `${String(count)} ${count === 1 ? 'menú' : 'menús'}`;
 
 /** "18/11", sin pasar por la zona horaria del navegador. */
 function shortDate(value: string): string {
@@ -145,7 +145,7 @@ export function StockAvailablePanel({
     <section className={`stock-available${open ? ' is-open' : ''}`}>
       <button aria-expanded={open} className="stock-available-head" onClick={toggle} type="button">
         <strong>Stock disponible</strong>
-        <span>{total === 0 ? 'no hay nada para vender' : viandas(total)}</span>
+        <span>{total === 0 ? 'no hay nada para vender' : countMenus(total)}</span>
         <span aria-hidden="true" className="stock-available-caret">
           ▸
         </span>

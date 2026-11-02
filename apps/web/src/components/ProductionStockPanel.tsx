@@ -65,7 +65,7 @@ export function ProductionStockPanel({
     if (stockLots.ok) setLots(((await stockLots.json()) as { items: StockLot[] }).items);
   }, [cycleId]);
 
-  /** Corregir un lote: una vianda más o menos, o dar de baja lo que queda. Se guarda en el acto. */
+  /** Corregir un lote: un menú más o menos, o dar de baja lo que queda. Se guarda en el acto. */
   async function patchLot(lot: StockLot, body: Record<string, unknown>) {
     setSaving(true);
     setMessage('');
@@ -163,7 +163,7 @@ export function ProductionStockPanel({
           {total === 0 ? 'Nada para cocinar de más' : `${String(total)} para cocinar de más`} ·{' '}
           {lotsTotal === 0
             ? 'sin stock de períodos anteriores'
-            : `${String(lotsTotal)} ${lotsTotal === 1 ? 'vianda' : 'viandas'} de períodos anteriores`}
+            : `${String(lotsTotal)} ${lotsTotal === 1 ? 'menú' : 'menús'} de períodos anteriores`}
         </span>
       </summary>
       <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2">
@@ -237,7 +237,7 @@ export function ProductionStockPanel({
         <span className="text-sm text-ink-muted">
           {lotsTotal === 0
             ? 'Sin stock de períodos anteriores.'
-            : `${String(lotsTotal)} ${lotsTotal === 1 ? 'vianda' : 'viandas'} para vender`}
+            : `${String(lotsTotal)} ${lotsTotal === 1 ? 'menú' : 'menús'} para vender`}
         </span>
       </div>
       <p className="mt-1 text-sm text-ink-muted">
@@ -376,7 +376,7 @@ export function ProductionStockPanel({
       {writingOff ? (
         <ConfirmDialog
           confirmLabel="Dar de baja"
-          detail={`Las ${String(writingOff.available)} viandas de ${writingOff.familyName} ${writingOff.variantName} de ${writingOff.cycleAlias} que quedan dejan de estar a la venta.`}
+          detail={`Los ${String(writingOff.available)} menús de ${writingOff.familyName} ${writingOff.variantName} de ${writingOff.cycleAlias} que quedan dejan de estar a la venta.`}
           onCancel={() => setWritingOff(null)}
           onConfirm={async () => {
             await patchLot(writingOff, { writeOffRemaining: true });

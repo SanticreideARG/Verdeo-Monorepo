@@ -228,7 +228,7 @@ export function OrderDetailPage() {
     });
     if (!response.ok) throw new Error(await errorMessage(response));
     setCancelOpen(false);
-    showToast(toStock ? 'Pedido cancelado. Sus viandas pasaron al stock.' : 'Pedido cancelado.');
+    showToast(toStock ? 'Pedido cancelado. Sus menús pasaron al stock.' : 'Pedido cancelado.');
     await load();
   }
 
@@ -244,7 +244,7 @@ export function OrderDetailPage() {
       setMessage(await errorMessage(response));
       return;
     }
-    showToast('Sus viandas pasaron al stock de períodos anteriores.');
+    showToast('Sus menús pasaron al stock de períodos anteriores.');
     await load();
   }
 
@@ -442,7 +442,7 @@ export function OrderDetailPage() {
               onClick={() => setConfirmToStock(true)}
               type="button"
             >
-              Pasar sus viandas a stock
+              Pasar sus menús a stock
             </button>
           ) : null}
           {['DRAFT', 'CONFIRMED'].includes(order.status) && canCancel ? (
@@ -831,10 +831,10 @@ export function OrderDetailPage() {
         {confirmToStock ? (
           <ConfirmDialog
             confirmLabel="Pasar a stock"
-            detail="Sus viandas quedan en el stock de períodos anteriores, para venderse desde Nuevo pedido. Usalo si el pedido ya estaba cocinado cuando se canceló."
+            detail="Sus menús quedan en el stock de períodos anteriores, para venderse desde Nuevo pedido. Usalo si el pedido ya estaba cocinado cuando se canceló."
             onCancel={() => setConfirmToStock(false)}
             onConfirm={sendToStock}
-            title="¿Pasar sus viandas a stock?"
+            title="¿Pasar sus menús a stock?"
           />
         ) : null}
 
@@ -880,7 +880,7 @@ export function OrderDetailPage() {
           onClose={() => setChangingCustomer(false)}
           onSentToStock={() => {
             setChangingCustomer(false);
-            showToast('Pedido enviado a stock. Sus viandas están en Stock disponible.');
+            showToast('Pedido enviado a stock. Sus menús están en Stock disponible.');
             void load();
           }}
           orderId={order.id}

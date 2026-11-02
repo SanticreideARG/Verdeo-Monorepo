@@ -167,7 +167,7 @@ describe('parseOrderImport con una fila por vianda', () => {
       slotVarieties: ['keto', 'keto', 'vegerariano', 'keto', 'keto'],
       variety: 'Intuitivo',
     });
-    expect(beto?.notices).toEqual(['La fila 6 completa la vianda de la fila 5.']);
+    expect(beto?.notices).toEqual(['La fila 6 completa el menú de la fila 5.']);
     // El producto suelto al costado.
     expect(beto?.items[1]).toEqual({
       dishes: [],

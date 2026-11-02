@@ -54,7 +54,7 @@ const DEFAULT_OPTIONS = [
     needsCity: true,
     options: [],
     reply:
-      'El precio depende del tamaño de la vianda. Cada una trae cinco comidas listas para tu semana:',
+      'El precio depende del tamaño del menú. Cada uno trae cinco comidas listas para tu semana:',
   },
   {
     behaviour: 'responder',

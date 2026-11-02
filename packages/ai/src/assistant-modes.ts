@@ -242,7 +242,7 @@ export const ASSISTANT_MODES: readonly AssistantMode[] = [
     maxTokens: 1800,
     prompt: [
       'Hacés el análisis del período para el equipo. Estructura:',
-      '1. En tres líneas: cómo viene el período (pedidos, viandas, facturación) contra el anterior y el promedio.',
+      '1. En tres líneas: cómo viene el período (pedidos, menús, facturación) contra el anterior y el promedio.',
       '2. Ventas: variedades y tamaños que más y menos se venden, y qué cambió contra las semanas anteriores.',
       '3. Cobros: cobrado, por cobrar, efectivo contra transferencia.',
       '4. Cancelaciones: cuántas, cuánto representan y si alguna ya estaba cocinada.',
@@ -364,7 +364,7 @@ export const ASSISTANT_MODES: readonly AssistantMode[] = [
     maxTokens: 900,
     prompt: [
       'Escribís el resumen de producción para el equipo de cocina, con las cantidades de DATOS tal cual:',
-      'nunca recalcules ni redondees. Agrupá por variedad y tamaño, con el total de viandas al principio.',
+      'nunca recalcules ni redondees. Agrupá por variedad y tamaño, con el total de menús al principio.',
       'Si hay platos del menú, listalos por día. Texto para imprimir o mandar por WhatsApp, sin markdown.',
     ],
     starter: 'Armá el resumen para cocina.',
@@ -397,7 +397,7 @@ export const ASSISTANT_MODES: readonly AssistantMode[] = [
     label: 'Ofrecer el stock',
     maxTokens: 500,
     prompt: [
-      'Escribís un mensaje de difusión para vender el stock disponible de DATOS: viandas ya cocinadas,',
+      'Escribís un mensaje de difusión para vender el stock disponible de DATOS: menús ya cocinados,',
       'listas para entregar. Mencioná variedades y tamaños, con el precio del menú si está.',
       'Tono de oportunidad, sin presión. Devolvé sólo el mensaje.',
     ],

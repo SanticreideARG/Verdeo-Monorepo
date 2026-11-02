@@ -21,7 +21,7 @@ const OTHER = 'otra';
  * período, precio y cobro, sin cancelarlo ni cargarlo de nuevo. Se busca el cliente o se crea en el
  * momento, y se elige a qué domicilio suyo va; sin domicilio, se escribe la dirección.
  *
- * O, si todavía no es de nadie, "Enviar a stock": se cancela y sus viandas quedan en Stock
+ * O, si todavía no es de nadie, "Enviar a stock": se cancela y sus menús quedan en Stock
  * disponible para venderlas a otro cliente. Pide confirmar, y dos veces si el pedido figura cobrado.
  */
 export function ChangeCustomerDialog({
@@ -189,7 +189,7 @@ export function ChangeCustomerDialog({
             </p>
           ) : (
             <p className="text-sm">
-              El pedido se cancela y sus viandas quedan en <strong>Stock disponible</strong>, en
+              El pedido se cancela y sus menús quedan en <strong>Stock disponible</strong>, en
               Pedidos, para venderlas a otro cliente con "Vender".
               {stock?.paid ? ' Figura como cobrado: te lo vamos a preguntar otra vez.' : ''}
             </p>

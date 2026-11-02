@@ -1173,7 +1173,7 @@ export function OrderIntakePage() {
     });
     setCancelling(null);
     showToast(
-      `Pedido de ${order.customer.displayName} cancelado${toStock ? '; sus viandas pasaron al stock' : ''}.`,
+      `Pedido de ${order.customer.displayName} cancelado${toStock ? '; sus menús pasaron al stock' : ''}.`,
     );
     await loadData();
   }

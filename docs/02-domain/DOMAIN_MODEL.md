@@ -93,6 +93,10 @@ no, no quedaría quién dice qué se borró ni con qué nombre.
 
 ## Catálogo
 
+**1 menú = 5 viandas.** Lo que se vende, se carga en un pedido y se cuenta en stock y en producción
+(`quantity_units`) es el **menú**. Una **vianda** es un plato suelto: lo que cuentan las columnas de
+la hoja de cocina y las etiquetas de plato (`mealsPerUnit` da cuántas trae cada menú).
+
 ### ProductFamily
 
 Configurable. Inicial:

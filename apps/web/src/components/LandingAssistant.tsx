@@ -144,7 +144,7 @@ function MenuBlock({
       <ul className="assistant-block">
         {[...bySize.entries()].map(([size, { currency, price }]) => (
           <li key={size}>
-            <span>Vianda de {size}</span>
+            <span>Menú de {size}</span>
             <strong>{formatMoney(price, currency)}</strong>
           </li>
         ))}

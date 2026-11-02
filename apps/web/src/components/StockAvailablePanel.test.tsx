@@ -57,7 +57,7 @@ describe('StockAvailablePanel', () => {
     render(<StockAvailablePanel canSell menus={[menu]} onSell={vi.fn()} version={0} />);
 
     const head = await screen.findByRole('button', { name: /Stock disponible/ });
-    expect(head.textContent).toContain('5 viandas');
+    expect(head.textContent).toContain('5 menús');
     expect(screen.queryByText('Del período')).toBeNull();
 
     fireEvent.click(head);

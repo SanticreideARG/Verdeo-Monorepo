@@ -170,7 +170,7 @@ export function MenuCatalogSettingsPage() {
                 {canManage && site.intuitivoEnabled ? (
                   <div className="catalog-pricing">
                     <p>
-                      Intuitivo de más platos: hasta <b>{site.intuitivoMaxDishes}</b> por vianda. El
+                      Intuitivo de más platos: hasta <b>{site.intuitivoMaxDishes}</b> por menú. El
                       precio del tamaño no se toca; lo que pasa de ahí se propone así.
                     </p>
                     <div className="catalog-pricing-fields">

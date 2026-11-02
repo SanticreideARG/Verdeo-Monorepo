@@ -182,9 +182,7 @@ export function IntuitivoDishPicker({
         </div>
       ))}
       {total >= maxDishes ? (
-        <p className="intuitivo-picker-limit">
-          Llegaste al máximo de {maxDishes} platos por vianda.
-        </p>
+        <p className="intuitivo-picker-limit">Llegaste al máximo de {maxDishes} platos por menú.</p>
       ) : null}
       {groups.length === 0 ? (
         <p className="text-sm text-ink-muted">

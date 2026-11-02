@@ -9243,7 +9243,7 @@ export class PostgresOperationsService {
       if (current.status !== 'CANCELLED')
         throw new OperationsConflictError('Sólo un pedido cancelado pasa al stock.');
       if (current.cancelledToStock)
-        throw new OperationsConflictError('Las viandas de este pedido ya están en el stock.');
+        throw new OperationsConflictError('Los menús de este pedido ya están en el stock.');
       await transaction
         .update(orders)
         .set({ cancelledToStock: true, updatedAt: new Date() })
@@ -10536,7 +10536,7 @@ export class PostgresOperationsService {
       const lot = lotRow ? await this.lotAvailability(transaction, lotRow.id) : null;
       if (!lot || lot.available < item.quantityUnits)
         throw new OperationsConflictError(
-          `Las viandas de ${item.familyName} ${item.variantName} de este pedido ya se vendieron del stock: no se puede reactivar.`,
+          `Los menús de ${item.familyName} ${item.variantName} de este pedido ya se vendieron del stock: no se puede reactivar.`,
         );
       await transaction
         .update(stockLots)
