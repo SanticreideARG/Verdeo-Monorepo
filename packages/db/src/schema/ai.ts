@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigserial,
   boolean,
   check,
   index,
@@ -96,5 +97,46 @@ export const aiExecutions = pgTable(
   (table) => [
     index('ai_executions_task_created_idx').on(table.taskKey, table.createdAt),
     check('ai_executions_status_check', sql`${table.status} in ('completed', 'error')`),
+  ],
+);
+
+/**
+ * El historial de cada persona con Hera (BUHO_WORKBENCH_PLAN.md, 2026-11-02). Cada conversación es
+ * de quien la tuvo: no hay permiso ni pantalla para ver la de otro. Se borra con su usuario.
+ */
+export const aiConversations = pgTable(
+  'ai_conversations',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index('ai_conversations_user_updated_idx').on(table.userId, table.updatedAt)],
+);
+
+export const aiConversationMessages = pgTable(
+  'ai_conversation_messages',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => aiConversations.id, { onDelete: 'cascade' }),
+    // La pregunta y la respuesta se guardan juntas, con la misma hora: esto es lo que las ordena.
+    ordinal: bigserial('ordinal', { mode: 'number' }).notNull(),
+    role: text('role').notNull(),
+    content: text('content').notNull(),
+    /** El texto pegado, que se muestra plegado; lo que se le mandó a Hera es `content`. */
+    pasted: text('pasted'),
+    /** Debajo de la respuesta: de qué período y ciudad son los datos, y qué no tuvo. */
+    footnote: text('footnote'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('ai_conversation_messages_conversation_idx').on(table.conversationId, table.ordinal),
+    check('ai_conversation_messages_role_check', sql`${table.role} in ('assistant', 'user')`),
   ],
 );
