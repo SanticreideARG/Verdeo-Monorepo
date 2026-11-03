@@ -85,10 +85,25 @@ export function AppearanceMenu({
         aria-label="Apariencia"
         className="appearance-trigger"
         onClick={() => setOpen((value) => !value)}
-        title="Apariencia"
         type="button"
       >
-        <span aria-hidden="true">Aa</span>
+        <svg
+          aria-hidden="true"
+          fill="none"
+          height="18"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.8"
+          viewBox="0 0 24 24"
+          width="18"
+        >
+          <path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.3-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8Z" />
+          <circle cx="7.5" cy="11.5" fill="currentColor" r="1" stroke="none" />
+          <circle cx="10.5" cy="7.5" fill="currentColor" r="1" stroke="none" />
+          <circle cx="15.5" cy="7.5" fill="currentColor" r="1" stroke="none" />
+        </svg>
+        <span>Apariencia</span>
       </button>
 
       {open ? (

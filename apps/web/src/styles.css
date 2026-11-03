@@ -852,14 +852,6 @@ a {
 .dashboard-brand > span strong {
   color: var(--db-accent);
 }
-.dashboard-brand > small {
-  margin-left: auto;
-  color: var(--db-muted);
-  font-family: 'Barlow Condensed', sans-serif;
-  font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-}
 
 .dashboard-navigation {
   flex: 1;
@@ -2934,7 +2926,6 @@ a {
   padding-inline: 0;
 }
 .dashboard-shell.has-collapsed-sidebar .dashboard-brand > span,
-.dashboard-shell.has-collapsed-sidebar .dashboard-brand > small,
 .dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > a > span,
 .dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > a > i,
 .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar-collapse > span,
@@ -5455,10 +5446,11 @@ main .operation-card {
   position: relative;
 }
 .appearance-trigger {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
+  display: inline-flex;
+  height: 34px;
+  align-items: center;
+  gap: 0.4rem;
+  padding-inline: 0.7rem;
   border: 1px solid var(--db-border-soft);
   border-radius: 999px;
   background: color-mix(in srgb, var(--db-bg-2) 65%, transparent);
@@ -5659,7 +5651,6 @@ main .operation-card {
     padding-inline: 1rem;
   }
   .dashboard-shell.has-collapsed-sidebar .dashboard-brand > span,
-  .dashboard-shell.has-collapsed-sidebar .dashboard-brand > small,
   .dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > a > span,
   .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar-collapse > span,
   .dashboard-shell.has-collapsed-sidebar .dashboard-sidebar-user > div {
@@ -12688,4 +12679,130 @@ label.field:has(> input[type='radio']) {
 }
 .production-stock[open] > summary::after {
   content: '▴';
+}
+
+/* Desde tablet para arriba: la marca, los íconos y los avatares, más grandes. */
+@media (min-width: 681px) {
+  .dashboard-brand img {
+    width: 40px;
+    height: 40px;
+  }
+  .dashboard-brand > span {
+    font-size: 1.5rem;
+  }
+  .dashboard-nav-icon {
+    width: 21px;
+    height: 21px;
+  }
+  .dashboard-sidebar-user > span,
+  .dashboard-sidebar-user > img,
+  .dashboard-topbar-avatar {
+    width: 40px;
+    height: 40px;
+    font-size: 1.05rem;
+  }
+
+  /* Con el menú contraído, el contador flota sobre la esquina del ícono: si ocupara lugar al lado,
+     correría el ícono y dejaría de estar alineado con los demás. */
+  .dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > a > .nav-badge,
+  .dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > a > .nav-dot {
+    position: absolute;
+    top: 1px;
+    right: calc(50% - 19px);
+    margin: 0;
+  }
+  .dashboard-shell.has-collapsed-sidebar .dashboard-nav-cluster > a > .nav-badge {
+    min-width: 1rem;
+    padding: 0 0.22rem;
+    box-shadow: 0 0 0 2px var(--db-surface-solid);
+    font-size: 0.6rem;
+    line-height: 1rem;
+  }
+}
+/* Con poco ancho, la barra no da para la palabra: queda el ícono. */
+@media (min-width: 681px) and (max-width: 1100px) {
+  .dashboard-topbar .appearance-trigger > span {
+    display: none;
+  }
+}
+
+/* En qué estamos trabajando: una sombra suave en la sección bajo el cursor, o con el foco adentro
+   (en el teléfono, la que se tocó). Sólo la más interna, para que no se prendan todas las que la
+   contienen. Va con el acento del tema porque una sombra negra no se ve en los temas oscuros. */
+.dashboard-content
+  :is(
+    .dashboard-panel,
+    .operation-card,
+    .crm-panel,
+    .crm-profile-card,
+    .crm-address-card,
+    .offering-card,
+    .order-card,
+    .step-card,
+    .settings-card,
+    .tip-card,
+    .feed-card,
+    .catalog-site-card,
+    .confirmation-card,
+    .buho-mode-card,
+    .buho-dialog,
+    .rounded-2xl.border,
+    .inbound-panel,
+    section,
+    form
+  ) {
+  transition: box-shadow 150ms ease;
+}
+/* Sin especificidad: redondea lo que no define su borde y no pisa a lo que sí. */
+:where(.dashboard-content) :where(form, section) {
+  border-radius: 0.75rem;
+}
+.dashboard-content
+  :is(
+    .dashboard-panel,
+    .operation-card,
+    .crm-panel,
+    .crm-profile-card,
+    .crm-address-card,
+    .offering-card,
+    .order-card,
+    .step-card,
+    .settings-card,
+    .tip-card,
+    .feed-card,
+    .catalog-site-card,
+    .confirmation-card,
+    .buho-mode-card,
+    .buho-dialog,
+    .rounded-2xl.border,
+    .inbound-panel,
+    section,
+    form
+  ):is(:hover, :focus-within):not(
+    :has(
+      :is(
+        .operation-card,
+        .crm-panel,
+        .crm-profile-card,
+        .crm-address-card,
+        .offering-card,
+        .order-card,
+        .step-card,
+        .settings-card,
+        .tip-card,
+        .feed-card,
+        .catalog-site-card,
+        .confirmation-card,
+        .buho-mode-card,
+        .buho-dialog,
+        .rounded-2xl.border,
+        .inbound-panel,
+        section,
+        form
+      ):is(:hover, :focus-within)
+    )
+  ) {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--db-accent) 22%, transparent),
+    0 4px 16px color-mix(in srgb, var(--db-accent) 16%, transparent);
 }

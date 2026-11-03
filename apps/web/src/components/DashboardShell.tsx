@@ -758,7 +758,7 @@ export function DashboardShell({
           type="button"
         />
         <aside className={`dashboard-sidebar ${menuOpen ? 'is-open' : ''}`}>
-          <Link className="dashboard-brand" to="/app" aria-label="Verdeo SCA, dashboard">
+          <Link className="dashboard-brand" to="/app" aria-label="Verdeo, inicio">
             <img src="/brand/verdeo-icon-128.webp" alt="" width="38" height="38" />
             {seasonOn && season?.key === 'halloween' ? (
               <img
@@ -772,7 +772,6 @@ export function DashboardShell({
             <span>
               verdeo<strong>.</strong>
             </span>
-            <small>SCA</small>
           </Link>
 
           <nav className="dashboard-navigation" aria-label="Navegación del dashboard">

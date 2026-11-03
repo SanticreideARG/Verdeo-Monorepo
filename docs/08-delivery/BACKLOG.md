@@ -3,6 +3,12 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Barra y secciones (2026-11-02)
+
+- [x] Desde tablet para arriba: logo, íconos del menú y avatares más grandes; sale "SCA"; el botón "Aa" pasa a "Apariencia", con ícono.
+- [x] Con el menú contraído, el contador flota sobre la esquina del ícono y no lo corre.
+- [x] Sombra suave en la sección bajo el cursor o con el foco adentro; sólo la más interna.
+
 ## "Es nuevo" por período (2026-11-02)
 
 - [x] "NUEVO" en un pedido vale sólo en el primer período del cliente (`isNewOrder`): en el siguiente deja de salir, y al volver a elegir aquel período sigue saliendo. Vale para la lista y el informe del período.
