@@ -565,6 +565,7 @@ export function LandingAssistant() {
   function chooseCity(site: Site) {
     setCitySlug(site.slug);
     say({ de: 'yo', text: site.displayName });
+    setThinking(true);
     const pending = awaitingCity;
     setAwaitingCity(null);
     if (pending === 'inicio') {

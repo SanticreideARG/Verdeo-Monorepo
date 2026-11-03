@@ -3,6 +3,10 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Contenidos: selector arriba (2026-11-02)
+
+- [x] El selector de página pasa arriba; el editor y la vista previa quedan lado a lado, con la vista previa abierta de entrada en pantallas anchas.
+
 ## Hera (2026-11-02)
 
 - [x] El asistente se llama Hera y el "Workbench de IA" pasa a "Hera IA" (ruta y claves internas sin cambios).

@@ -12908,3 +12908,36 @@ label.field:has(> input[type='radio']) {
     animation: none;
   }
 }
+
+/* Contenidos: el selector de página arriba, y abajo el editor con la vista previa al lado. */
+.cms-page-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+  margin-top: 1.25rem;
+}
+.cms-page-bar .field {
+  min-width: min(100%, 20rem);
+}
+.cms-page-bar-status {
+  display: flex;
+  flex-wrap: wrap;
+  flex: 1;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+.cms-workspace {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+.cms-workspace > * {
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .cms-workspace.has-preview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

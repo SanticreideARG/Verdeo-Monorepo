@@ -132,7 +132,10 @@ export function CmsPagesAdminPage() {
   const [loading, setLoading] = useState(true);
   const [pageFormOpen, setPageFormOpen] = useState(false);
   const [addingType, setAddingType] = useState<string>('HERO');
-  const [previewOpen, setPreviewOpen] = useState(false);
+  // Con ancho, abierta de entrada: para eso está el lugar. En el teléfono, se pide.
+  const [previewOpen, setPreviewOpen] = useState(
+    () => window.matchMedia?.('(min-width: 1024px)').matches ?? false,
+  );
   const [draggedId, setDraggedId] = useState<string | null>(null);
 
   const canEdit = profile?.permissions.includes('cms.edit') ?? false;
@@ -167,10 +170,19 @@ export function CmsPagesAdminPage() {
     }
   }, []);
 
-  async function selectPage(slug: string) {
-    setSelectedSlug(slug);
-    await loadDetail(slug);
-  }
+  const selectPage = useCallback(
+    async (slug: string) => {
+      setSelectedSlug(slug);
+      await loadDetail(slug);
+    },
+    [loadDetail],
+  );
+
+  // Se entra editando: elegir la única página que hay sería un paso de más.
+  const firstSlug = pages[0]?.slug;
+  useEffect(() => {
+    if (firstSlug && !selectedSlug) void selectPage(firstSlug);
+  }, [firstSlug, selectPage, selectedSlug]);
 
   async function createPage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -301,267 +313,261 @@ export function CmsPagesAdminPage() {
         {loading ? (
           <p className="mt-6 text-ink-muted">Cargando…</p>
         ) : (
-          <div
-            className={
-              previewOpen
-                ? 'mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.6fr)_minmax(0,1.4fr)] xl:grid-cols-[minmax(0,0.5fr)_minmax(0,1fr)_minmax(0,1fr)]'
-                : 'mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.6fr)_minmax(0,1.4fr)]'
-            }
-          >
-            <div>
-              <div className="grid gap-2">
-                {pages.map((page) => (
-                  <button
-                    className={`operation-card text-left ${page.slug === selectedSlug ? 'border-forest' : ''}`}
-                    key={page.id}
-                    onClick={() => void selectPage(page.slug)}
-                    type="button"
+          <>
+            {/* Arriba y no en una columna: el ancho es del editor y de la vista previa. */}
+            <div className="cms-page-bar">
+              {pages.length > 0 ? (
+                <label className="field">
+                  Página
+                  <select
+                    onChange={(event) => void selectPage(event.target.value)}
+                    value={selectedSlug ?? ''}
                   >
-                    <strong className="block">{page.title}</strong>
-                    <small className="text-ink-muted">
-                      /{page.slug} · {page.publishedAt ? 'publicada' : 'sin publicar'}
-                    </small>
-                  </button>
-                ))}
-                {pages.length === 0 ? <p className="empty-state">Sin páginas todavía.</p> : null}
-              </div>
-
-              {canEdit ? (
-                <>
-                  <button
-                    className="button button-secondary mt-4"
-                    onClick={() => setPageFormOpen((current) => !current)}
-                    type="button"
-                  >
-                    {pageFormOpen ? 'Cerrar' : '+ Nueva página'}
-                  </button>
-                  {pageFormOpen ? (
-                    <form
-                      className="mt-3 grid gap-3 rounded-xl border border-forest/10 p-4"
-                      onSubmit={(event) => void createPage(event)}
-                    >
-                      <label className="field">
-                        Título
-                        <input name="title" required />
-                      </label>
-                      <label className="field">
-                        Slug
-                        <input name="slug" placeholder="home" required />
-                      </label>
-                      <button className="button button-primary" type="submit">
-                        Crear
-                      </button>
-                    </form>
-                  ) : null}
-                </>
-              ) : null}
-            </div>
-
-            <div>
-              {!detail ? (
-                <p className="empty-state">Elegí una página para editar su contenido.</p>
-              ) : (
-                <>
-                  <div className="operation-card flex items-center justify-between gap-3">
-                    <div>
-                      <h2 className="text-xl font-semibold text-forest">{detail.title}</h2>
-                      <p className="text-sm text-ink-muted">
-                        Borrador: revisión #{detail.draft.revision} · Publicado:{' '}
-                        {detail.published ? `revisión #${detail.published.revision}` : 'nunca'}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        className="button button-secondary"
-                        onClick={() => setPreviewOpen((current) => !current)}
-                        type="button"
-                      >
-                        {previewOpen ? 'Ocultar vista previa' : 'Vista previa'}
-                      </button>
-                      {canEdit ? (
-                        <ActionButton
-                          className="button button-secondary"
-                          onClick={saveDraft}
-                          pendingLabel="Guardando…"
-                        >
-                          Guardar borrador
-                        </ActionButton>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid gap-3">
-                    {sections.map((section, index) => (
-                      <article
-                        className={`operation-card ${draggedId === section.id ? 'is-dragging' : ''} ${section.hidden === true ? 'is-hidden-section' : ''}`}
-                        draggable={canEdit}
-                        key={section.id}
-                        onDragEnd={() => setDraggedId(null)}
-                        onDragOver={(event: DragEvent<HTMLElement>) => {
-                          if (canEdit) event.preventDefault();
-                        }}
-                        onDragStart={() => setDraggedId(section.id)}
-                        onDrop={(event: DragEvent<HTMLElement>) => {
-                          event.preventDefault();
-                          if (draggedId) reorderSection(draggedId, section.id);
-                        }}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="flex items-center gap-2">
-                            {canEdit ? (
-                              <span
-                                aria-hidden="true"
-                                className="cms-drag-handle"
-                                title="Arrastrar"
-                              >
-                                ⠿
-                              </span>
-                            ) : null}
-                            <strong>{section.type}</strong>
-                            {section.hidden === true ? (
-                              <span className="status-chip">Oculta</span>
-                            ) : null}
-                          </span>
-                          {canEdit ? (
-                            <div className="flex gap-2">
-                              <button
-                                className="button button-secondary"
-                                disabled={index === 0}
-                                onClick={() => moveSection(section.id, -1)}
-                                type="button"
-                              >
-                                ↑
-                              </button>
-                              <button
-                                className="button button-secondary"
-                                disabled={index === sections.length - 1}
-                                onClick={() => moveSection(section.id, 1)}
-                                type="button"
-                              >
-                                ↓
-                              </button>
-                              {/* Apagar no es quitar: la sección se queda con su contenido y su
-                                  lugar, fuera del sitio, hasta que vuelva a hacer falta. */}
-                              <button
-                                className="button button-secondary"
-                                onClick={() =>
-                                  updateSection(section.id, { hidden: section.hidden !== true })
-                                }
-                                type="button"
-                              >
-                                {section.hidden === true ? 'Mostrar' : 'Ocultar'}
-                              </button>
-                              <button
-                                className="button button-secondary"
-                                onClick={() => removeSection(section.id)}
-                                type="button"
-                              >
-                                Quitar
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
-                        <label className="field mt-3 text-xs">
-                          Ancla para el navbar (opcional — p.ej. section-menu)
-                          <input
-                            disabled={!canEdit}
-                            onChange={(event) =>
-                              updateSection(section.id, { anchorId: event.target.value.trim() })
-                            }
-                            placeholder="section-nosotros"
-                            value={typeof section.anchorId === 'string' ? section.anchorId : ''}
-                          />
-                        </label>
-                        <SectionFields
-                          disabled={!canEdit}
-                          onChange={(patch) => updateSection(section.id, patch)}
-                          section={section}
-                        />
-                      </article>
+                    {pages.map((page) => (
+                      <option key={page.id} value={page.slug}>
+                        {page.title} · /{page.slug} ·{' '}
+                        {page.publishedAt ? 'publicada' : 'sin publicar'}
+                      </option>
                     ))}
-                    {sections.length === 0 ? (
-                      <EmptyState
-                        body="Se agregan abajo, eligiendo el tipo. El orden en que quedan es el orden en que se ven."
-                        title="Esta página todavía no tiene secciones"
-                      />
+                  </select>
+                </label>
+              ) : (
+                <p className="empty-state">Sin páginas todavía.</p>
+              )}
+              {canEdit ? (
+                <button
+                  className="button button-secondary"
+                  onClick={() => setPageFormOpen((current) => !current)}
+                  type="button"
+                >
+                  {pageFormOpen ? 'Cerrar' : '+ Nueva página'}
+                </button>
+              ) : null}
+              {detail ? (
+                <div className="cms-page-bar-status">
+                  <p className="text-sm text-ink-muted">
+                    Borrador: revisión #{detail.draft.revision} · Publicado:{' '}
+                    {detail.published ? `revisión #${detail.published.revision}` : 'nunca'}
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      className="button button-secondary"
+                      onClick={() => setPreviewOpen((current) => !current)}
+                      type="button"
+                    >
+                      {previewOpen ? 'Ocultar vista previa' : 'Vista previa'}
+                    </button>
+                    {canEdit ? (
+                      <ActionButton
+                        className="button button-secondary"
+                        onClick={saveDraft}
+                        pendingLabel="Guardando…"
+                      >
+                        Guardar borrador
+                      </ActionButton>
                     ) : null}
                   </div>
-
-                  {canEdit ? (
-                    <div className="mt-4 flex flex-wrap items-end gap-3">
-                      <label className="field">
-                        Nueva sección
-                        <select
-                          onChange={(event) => setAddingType(event.target.value)}
-                          value={addingType}
-                        >
-                          {SECTION_TYPES.map((type) => (
-                            <option key={type} value={type}>
-                              {type}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <button
-                        className="button button-secondary"
-                        onClick={addSection}
-                        type="button"
-                      >
-                        Agregar sección
-                      </button>
-                    </div>
-                  ) : null}
-
-                  {canPublish ? (
-                    <div className="mt-6 operation-card">
-                      <h3 className="font-semibold text-forest">Historial y publicación</h3>
-                      <div className="mt-3 grid gap-2">
-                        {revisions.map((revision) => (
-                          <div
-                            className="flex items-center justify-between gap-3 rounded-xl border border-forest/10 p-3 text-sm"
-                            key={revision.id}
-                          >
-                            <span>
-                              #{revision.revision} · {timeLabel(revision.createdAt)} ·{' '}
-                              {revision.createdByDisplayName ?? 'Sistema'}
-                              {detail.published?.id === revision.id ? ' · publicada' : ''}
-                            </span>
-                            <ActionButton
-                              className="button button-secondary"
-                              disabled={detail.published?.id === revision.id}
-                              onClick={() => publishRevision(revision.id)}
-                              pendingLabel="Publicando…"
-                            >
-                              {detail.published?.id === revision.id ? 'Publicada' : 'Publicar'}
-                            </ActionButton>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </>
-              )}
+                </div>
+              ) : null}
             </div>
+            {canEdit && pageFormOpen ? (
+              <form
+                className="mt-3 grid max-w-xl gap-3 rounded-xl border border-forest/10 p-4"
+                onSubmit={(event) => void createPage(event)}
+              >
+                <label className="field">
+                  Título
+                  <input name="title" required />
+                </label>
+                <label className="field">
+                  Slug
+                  <input name="slug" placeholder="home" required />
+                </label>
+                <button className="button button-primary" type="submit">
+                  Crear
+                </button>
+              </form>
+            ) : null}
 
-            {/* Its own column, rendered with the same CmsSection components the live landing uses —
+            <div className={previewOpen && detail ? 'cms-workspace has-preview' : 'cms-workspace'}>
+              <div>
+                {!detail ? (
+                  <p className="empty-state">Elegí una página para editar su contenido.</p>
+                ) : (
+                  <>
+                    <div className="grid gap-3">
+                      {sections.map((section, index) => (
+                        <article
+                          className={`operation-card ${draggedId === section.id ? 'is-dragging' : ''} ${section.hidden === true ? 'is-hidden-section' : ''}`}
+                          draggable={canEdit}
+                          key={section.id}
+                          onDragEnd={() => setDraggedId(null)}
+                          onDragOver={(event: DragEvent<HTMLElement>) => {
+                            if (canEdit) event.preventDefault();
+                          }}
+                          onDragStart={() => setDraggedId(section.id)}
+                          onDrop={(event: DragEvent<HTMLElement>) => {
+                            event.preventDefault();
+                            if (draggedId) reorderSection(draggedId, section.id);
+                          }}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="flex items-center gap-2">
+                              {canEdit ? (
+                                <span
+                                  aria-hidden="true"
+                                  className="cms-drag-handle"
+                                  title="Arrastrar"
+                                >
+                                  ⠿
+                                </span>
+                              ) : null}
+                              <strong>{section.type}</strong>
+                              {section.hidden === true ? (
+                                <span className="status-chip">Oculta</span>
+                              ) : null}
+                            </span>
+                            {canEdit ? (
+                              <div className="flex gap-2">
+                                <button
+                                  className="button button-secondary"
+                                  disabled={index === 0}
+                                  onClick={() => moveSection(section.id, -1)}
+                                  type="button"
+                                >
+                                  ↑
+                                </button>
+                                <button
+                                  className="button button-secondary"
+                                  disabled={index === sections.length - 1}
+                                  onClick={() => moveSection(section.id, 1)}
+                                  type="button"
+                                >
+                                  ↓
+                                </button>
+                                {/* Apagar no es quitar: la sección se queda con su contenido y su
+                                  lugar, fuera del sitio, hasta que vuelva a hacer falta. */}
+                                <button
+                                  className="button button-secondary"
+                                  onClick={() =>
+                                    updateSection(section.id, { hidden: section.hidden !== true })
+                                  }
+                                  type="button"
+                                >
+                                  {section.hidden === true ? 'Mostrar' : 'Ocultar'}
+                                </button>
+                                <button
+                                  className="button button-secondary"
+                                  onClick={() => removeSection(section.id)}
+                                  type="button"
+                                >
+                                  Quitar
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                          <label className="field mt-3 text-xs">
+                            Ancla para el navbar (opcional — p.ej. section-menu)
+                            <input
+                              disabled={!canEdit}
+                              onChange={(event) =>
+                                updateSection(section.id, { anchorId: event.target.value.trim() })
+                              }
+                              placeholder="section-nosotros"
+                              value={typeof section.anchorId === 'string' ? section.anchorId : ''}
+                            />
+                          </label>
+                          <SectionFields
+                            disabled={!canEdit}
+                            onChange={(patch) => updateSection(section.id, patch)}
+                            section={section}
+                          />
+                        </article>
+                      ))}
+                      {sections.length === 0 ? (
+                        <EmptyState
+                          body="Se agregan abajo, eligiendo el tipo. El orden en que quedan es el orden en que se ven."
+                          title="Esta página todavía no tiene secciones"
+                        />
+                      ) : null}
+                    </div>
+
+                    {canEdit ? (
+                      <div className="mt-4 flex flex-wrap items-end gap-3">
+                        <label className="field">
+                          Nueva sección
+                          <select
+                            onChange={(event) => setAddingType(event.target.value)}
+                            value={addingType}
+                          >
+                            {SECTION_TYPES.map((type) => (
+                              <option key={type} value={type}>
+                                {type}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button
+                          className="button button-secondary"
+                          onClick={addSection}
+                          type="button"
+                        >
+                          Agregar sección
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {canPublish ? (
+                      <div className="mt-6 operation-card">
+                        <h3 className="font-semibold text-forest">Historial y publicación</h3>
+                        <div className="mt-3 grid gap-2">
+                          {revisions.map((revision) => (
+                            <div
+                              className="flex items-center justify-between gap-3 rounded-xl border border-forest/10 p-3 text-sm"
+                              key={revision.id}
+                            >
+                              <span>
+                                #{revision.revision} · {timeLabel(revision.createdAt)} ·{' '}
+                                {revision.createdByDisplayName ?? 'Sistema'}
+                                {detail.published?.id === revision.id ? ' · publicada' : ''}
+                              </span>
+                              <ActionButton
+                                className="button button-secondary"
+                                disabled={detail.published?.id === revision.id}
+                                onClick={() => publishRevision(revision.id)}
+                                pendingLabel="Publicando…"
+                              >
+                                {detail.published?.id === revision.id ? 'Publicada' : 'Publicar'}
+                              </ActionButton>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </div>
+
+              {/* Its own column, rendered with the same CmsSection components the live landing uses —
                 so this is the page, not an approximation of it. Sticky, because the value is
                 watching it change while editing rather than scrolling back to check. */}
-            {previewOpen && detail ? (
-              <div className="cms-preview-column">
-                <p className="cms-preview-label">
-                  Vista previa del borrador — con lo cargado hasta ahora, sin publicar.
-                </p>
-                <div className="cms-preview-frame">
-                  {sections.map((section) => (
-                    <CmsSection key={section.id} section={section} />
-                  ))}
-                  {sections.length === 0 ? (
-                    <p className="p-8 text-center text-ink-muted">Sin secciones todavía.</p>
-                  ) : null}
+              {previewOpen && detail ? (
+                <div className="cms-preview-column">
+                  <p className="cms-preview-label">
+                    Vista previa del borrador — con lo cargado hasta ahora, sin publicar.
+                  </p>
+                  <div className="cms-preview-frame">
+                    {sections.map((section) => (
+                      <CmsSection key={section.id} section={section} />
+                    ))}
+                    {sections.length === 0 ? (
+                      <p className="p-8 text-center text-ink-muted">Sin secciones todavía.</p>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-            ) : null}
-          </div>
+              ) : null}
+            </div>
+          </>
         )}
       </section>
     </DashboardShell>

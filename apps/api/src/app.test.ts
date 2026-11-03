@@ -4212,7 +4212,7 @@ describe('API foundation', () => {
       ];
       expect(taskKey).toBe('buho_analisis_periodo');
       expect(options.userPrompt).toBe('Hacé el análisis.');
-      expect(options.systemPrefix).toContain('búho de Verdeo');
+      expect(options.systemPrefix).toContain('Sos Hera');
       expect(options.systemSuffix).toContain('Octubre 5');
       expect(options.systemSuffix).toContain('"total":170000');
       expect(options.systemSuffix).not.toContain('Ana Secreta');
