@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-02-hera',
+    body: `Nuestra asistente ahora se llama Hera, y el Workbench de IA pasa a ser Hera IA. Saluda cada tanto desde su rincón y cambia de cara mientras te ayuda. Además, la sombra de la sección activa ahora marca siempre la tarjeta completa.`,
+  },
+  {
     key: '2026-11-02-barra-y-secciones',
     body: `Barra más clara: logo, íconos y avatares más grandes, y un botón "Apariencia" en lugar de "Aa". La sección en la que estás trabajando ahora se resalta con una sombra suave.`,
   },

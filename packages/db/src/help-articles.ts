@@ -7,7 +7,7 @@ import type { helpArticles } from './schema/index.js';
  * escribe permisos, roles y concesiones: correrlo en producción sólo para corregir un texto de
  * ayuda arriesga pisar configuración que alguien ajustó a mano.
  *
- * Cómo se escriben (los lee la lechuza del panel, `OperatorAssistant.tsx`):
+ * Cómo se escriben (los lee Hera en el panel, `OperatorAssistant.tsx`):
  * - La categoría es una ruta: "Pedidos / Editar y cancelar" cuelga de Pedidos.
  * - `[[clave]]` enlaza otro artículo; `[texto](/app/ruta)` lleva a la pantalla.
  * - Cada artículo se gatea con el mismo permiso que la pantalla de la que habla.
@@ -15,7 +15,7 @@ import type { helpArticles } from './schema/index.js';
 export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
   // --- General ---------------------------------------------------------------------------------
   {
-    body: 'Verdeo se organiza por secciones en el menú lateral: cada una corresponde a una parte de la operación (pedidos, cocina, clientes, reparto). Sólo ves las secciones para las que tenés permiso; si te falta acceso a algo, pedíselo a un administrador.\n\nEsta ayuda está siempre en la lechuza de abajo a la derecha. Podés navegarla por temas o buscar una palabra arriba.\n\nSi recién empezás, lo mejor es leer [[ciclo-vista-general]].',
+    body: 'Verdeo se organiza por secciones en el menú lateral: cada una corresponde a una parte de la operación (pedidos, cocina, clientes, reparto). Sólo ves las secciones para las que tenés permiso; si te falta acceso a algo, pedíselo a un administrador.\n\nEsta ayuda está siempre en Hera, la búho de abajo a la derecha. Podés navegarla por temas o buscar una palabra arriba.\n\nSi recién empezás, lo mejor es leer [[ciclo-vista-general]].',
     category: 'General',
     key: 'general-bienvenida',
     ordinal: 0,
@@ -283,7 +283,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Intuitivo e indicaciones por ciudad',
   },
   {
-    body: 'La lechuza de la web pública se configura en [Ajustes → Asistente de la web](/app/ajustes/asistente): qué opciones ofrece, qué responde cada una y a qué WhatsApp deriva.\n\nLos cambios quedan en borrador hasta que los publicás. Ahí mismo se ve cuántas veces se tocó cada opción.',
+    body: 'Hera, en la web pública, se configura en [Ajustes → Asistente de la web](/app/ajustes/asistente): qué opciones ofrece, qué responde cada una y a qué WhatsApp deriva.\n\nLos cambios quedan en borrador hasta que los publicás. Ahí mismo se ve cuántas veces se tocó cada opción.',
     category: 'Ajustes',
     key: 'ajustes-asistente-web',
     ordinal: 3,
@@ -292,7 +292,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
   },
 
   {
-    body: 'El búho está en [Workbench de IA](/app/ia/workbench), para todos los que tienen permiso de IA. Arriba está el cuadro para **preguntarle directo**, sin elegir nada: por ejemplo, "¿cuánto efectivo hay que rendir hoy?" o "¿cómo paso un pedido a stock?". Debajo están las tareas armadas:\n\n- **Mensajes:** pegás el mensaje de un cliente en el cuadro grande ("Pegar el texto") y el búho lo analiza, arma la respuesta, lo pasa a la ficha del pedido, responde un reclamo o resume una conversación.\n- **Período:** con un clic en "Generar" arma el análisis del período, la lista de pendientes antes del cierre, las tendencias, los cobros, las cancelaciones, el stock, el reparto de hoy o el resumen para cocina.\n- **Comunicación:** el texto del menú, una oferta del stock, un aviso de cambio, un recordatorio de pago o mejorar un texto.\n\nEl **total a rendir** son los pedidos en efectivo del reparto de hoy, sin cancelados, en la ciudad elegida arriba de todo. Los importes los ve quien tiene permiso de cobros, como operadores y superadmins.\n\nCada respuesta tiene **Copiar**, y abajo dice de qué período y ciudad son los datos que usó. Podés seguir la conversación ("más corto", "agregá el precio") y cambiar de modo en el medio. La ciudad es la elegida arriba de todo; el período se elige al costado del búho.\n\nAl búho no le llegan nombres, teléfonos ni domicilios de los clientes: los datos del sistema van sumados. Al pegar un mensaje, la opción "Ocultar teléfonos, correos y documentos" viene marcada; los nombres no se detectan, así que si no hacen falta, sacalos.\n\nLa conversación dura mientras la pestaña esté abierta. Cada persona tiene 150 consultas por día.',
+    body: 'Hera está en [Hera IA](/app/ia/workbench), para todos los que tienen permiso de IA. Arriba está el cuadro para **preguntarle directo**, sin elegir nada: por ejemplo, "¿cuánto efectivo hay que rendir hoy?" o "¿cómo paso un pedido a stock?". Debajo están las tareas armadas:\n\n- **Mensajes:** pegás el mensaje de un cliente en el cuadro grande ("Pegar el texto") y Hera lo analiza, arma la respuesta, lo pasa a la ficha del pedido, responde un reclamo o resume una conversación.\n- **Período:** con un clic en "Generar" arma el análisis del período, la lista de pendientes antes del cierre, las tendencias, los cobros, las cancelaciones, el stock, el reparto de hoy o el resumen para cocina.\n- **Comunicación:** el texto del menú, una oferta del stock, un aviso de cambio, un recordatorio de pago o mejorar un texto.\n\nEl **total a rendir** son los pedidos en efectivo del reparto de hoy, sin cancelados, en la ciudad elegida arriba de todo. Los importes los ve quien tiene permiso de cobros, como operadores y superadmins.\n\nCada respuesta tiene **Copiar**, y abajo dice de qué período y ciudad son los datos que usó. Podés seguir la conversación ("más corto", "agregá el precio") y cambiar de modo en el medio. La ciudad es la elegida arriba de todo; el período se elige al costado del búho.\n\nAl búho no le llegan nombres, teléfonos ni domicilios de los clientes: los datos del sistema van sumados. Al pegar un mensaje, la opción "Ocultar teléfonos, correos y documentos" viene marcada; los nombres no se detectan, así que si no hacen falta, sacalos.\n\nLa conversación dura mientras la pestaña esté abierta. Cada persona tiene 150 consultas por día.',
     category: 'Inteligencia',
     key: 'ia-buho',
     ordinal: 1,

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 import { apiRequest } from '../lib/api.js';
+import { HeraFace, HeraLauncher, useHeraPanelPose } from './HeraLauncher.js';
 
 interface HelpArticle {
   body: string;
@@ -146,7 +147,7 @@ function readStored(): StoredState {
 const INLINE_LINK = /\[\[([a-z0-9-]+)\]\]|\[([^\]]+)\]\((\/[^)\s]*)\)/g;
 
 interface OperatorAssistantProps {
-  /** Tiene permiso de IA: se le ofrece preguntarle al búho del Workbench. */
+  /** Tiene permiso de IA: se le ofrece preguntarle a Hera con los datos del sistema. */
   canAskOwl?: boolean;
   canManage: boolean;
   displayName: string;
@@ -304,6 +305,7 @@ export function OperatorAssistant({
       .map((paragraph, index) => <p key={index}>{renderInline(paragraph)}</p>);
   }
 
+  const heraPose = useHeraPanelPose(open, searching || (!articles && !failed));
   const firstName = displayName.trim().split(/\s+/)[0] ?? '';
   const atRoot = path.length === 0 && !article && !searching;
   const children = sortedChildren(branch, path.length === 0);
@@ -311,35 +313,24 @@ export function OperatorAssistant({
 
   return (
     <>
-      <button
-        aria-expanded={open}
-        aria-label={open ? 'Cerrar la ayuda' : 'Abrir la ayuda'}
-        className={`assistant-launcher is-operator ${open ? 'is-open' : ''}`}
+      <HeraLauncher
+        bubble="Ayuda"
+        label={open ? 'Cerrar la ayuda' : 'Abrir la ayuda'}
         onClick={() => setOpen((value) => !value)}
-        type="button"
-      >
-        {open ? null : (
-          <span aria-hidden="true" className="assistant-launcher-bubble">
-            Ayuda
-          </span>
-        )}
-        <span className="assistant-launcher-avatar">
-          {open ? (
-            <span aria-hidden="true" className="assistant-launcher-close">
-              ×
-            </span>
-          ) : (
-            <img alt="" height="56" src="/brand/verdeo-buho-112.webp" width="56" />
-          )}
-        </span>
-      </button>
+        open={open}
+        operator
+      />
 
       {open ? (
-        <div aria-label="Ayuda de Verdeo" className="assistant-panel is-operator" role="dialog">
+        <div
+          aria-label="Hera, ayuda de Verdeo"
+          className="assistant-panel is-operator"
+          role="dialog"
+        >
           <header className="assistant-header">
             <div className="assistant-header-identity">
-              <img alt="" height="32" src="/brand/verdeo-buho-112.webp" width="32" />
-              <p>Ayuda de Verdeo</p>
+              <HeraFace pose={heraPose} size={48} />
+              <p>Hera · Ayuda</p>
             </div>
             <div className="assistant-header-actions">
               <button
@@ -430,22 +421,21 @@ export function OperatorAssistant({
               <>
                 {atRoot ? (
                   <div className="assistant-bot-row">
-                    <img alt="" height="28" src="/brand/verdeo-buho-112.webp" width="28" />
+                    <HeraFace pose="answer" size={28} />
                     <p className="assistant-turn is-bot">
                       Hola{firstName ? `, ${firstName}` : ''}. ¿Con qué te doy una mano? Elegí un
                       tema o buscá arriba.
                     </p>
                   </div>
                 ) : null}
-                {/* El búho vive en los dos lados: acá con la ayuda, y en el Workbench con los datos. */}
+                {/* Hera vive en los dos lados: acá con la ayuda, y en Hera IA con los datos. */}
                 {atRoot && canAskOwl ? (
                   <Link
                     className="assistant-owl-link"
                     onClick={() => setOpen(false)}
                     to="/app/ia/workbench"
                   >
-                    También podés preguntarme en el Workbench de IA: ahí te contesto con los datos
-                    del sistema.
+                    También podés preguntarme en Hera IA: ahí te contesto con los datos del sistema.
                   </Link>
                 ) : null}
                 {children.length === 0 && branchArticles.length === 0 ? (

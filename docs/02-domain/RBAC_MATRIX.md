@@ -168,7 +168,7 @@ operador sigue leyendo zonas, días y métodos de pago desde las pantallas donde
 Todas esas secciones requieren además `settings.access`. Fuera del panel, el operador conserva
 Pedidos, Clientes, Periodos, Cocina, Etiquetas, Rutas y repartos, Mensajes, Avisos, Encuestas,
 Calendario y chat. Las **estadísticas de ventas** (`stats.read`) son sólo del superadmin
-(decisión del 2026-10-15); los cobros (`payments.record`, `payments.settle`) siguen en el operador. Workbench de IA (`ai.prompts.manage`) es del administrador.
+(decisión del 2026-10-15); los cobros (`payments.record`, `payments.settle`) siguen en el operador. Hera IA, antes Workbench de IA (`ai.prompts.manage`) es del administrador.
 
 Para dársela a alguien que no es superadmin: una excepción `allow` de `settings.access` desde
 Usuarios. En una base en uso, el permiso aparece y se le concede al superadmin con

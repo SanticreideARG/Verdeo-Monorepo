@@ -3,6 +3,12 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Hera (2026-11-02)
+
+- [x] El asistente se llama Hera y el "Workbench de IA" pasa a "Hera IA" (ruta y claves internas sin cambios).
+- [x] Lanzador único para la landing y el panel: mejor hover, saludo esporádico y caras que cambian con el panel abierto.
+- [x] La sombra de la sección activa va siempre en la tarjeta de afuera, no en sus formularios.
+
 ## Barra y secciones (2026-11-02)
 
 - [x] Desde tablet para arriba: logo, íconos del menú y avatares más grandes; sale "SCA"; el botón "Aa" pasa a "Apariencia", con ícono.

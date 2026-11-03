@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { apiRequest } from '../lib/api.js';
+import { HeraFace, HeraLauncher, useHeraPanelPose } from './HeraLauncher.js';
 import { brandingKey, useMenuBranding } from '../lib/menuBranding.js';
 import { formatMoney, type WeeklyMenu } from '../lib/operations.js';
 import { deliveryDateLabel } from '../lib/dates.js';
@@ -396,6 +397,15 @@ export function LandingAssistant() {
   const nextId = useRef(1);
   const threadRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  /** Un instante pensando después de cada toque: se nota que la elección llegó. */
+  const [thinking, setThinking] = useState(false);
+  const heraPose = useHeraPanelPose(open, thinking || !flow);
+
+  useEffect(() => {
+    if (!thinking) return;
+    const timer = window.setTimeout(() => setThinking(false), 900);
+    return () => window.clearTimeout(timer);
+  }, [thinking]);
 
   useEffect(() => {
     const stored = readSession();
@@ -540,6 +550,7 @@ export function LandingAssistant() {
 
   function choose(option: AssistantOption) {
     say({ de: 'yo', text: option.label });
+    setThinking(true);
     countHit(option.key);
     setBranch(null);
 
@@ -585,40 +596,24 @@ export function LandingAssistant() {
        * cualquier cosa—, y se esconde con el panel abierto, cuando la lechuza ya se presentó adentro.
        * Todo el conjunto es un solo botón: el globo no es decoración que haya que apuntar aparte.
        */}
-      <button
-        aria-expanded={open}
-        aria-label={open ? 'Cerrar el asistente' : 'Abrir el asistente'}
-        className={`assistant-launcher ${open ? 'is-open' : ''}`}
+      <HeraLauncher
+        bubble="¿Te ayudo?"
+        label={open ? 'Cerrar a Hera' : 'Abrir a Hera'}
         onClick={() => setOpen((value) => !value)}
-        type="button"
-      >
-        {open ? null : (
-          <span aria-hidden="true" className="assistant-launcher-bubble">
-            ¿Te ayudo?
-          </span>
-        )}
-        <span className="assistant-launcher-avatar">
-          {open ? (
-            <span aria-hidden="true" className="assistant-launcher-close">
-              ×
-            </span>
-          ) : (
-            <img alt="" height="56" src="/brand/verdeo-buho-112.webp" width="56" />
-          )}
-        </span>
-      </button>
+        open={open}
+      />
 
       {open ? (
         <div
-          aria-label="Asistente de Verdeo"
+          aria-label="Hera, asistente de Verdeo"
           className="assistant-panel"
           ref={panelRef}
           role="dialog"
         >
           <header className="assistant-header">
             <div className="assistant-header-identity">
-              <img alt="" height="32" src="/brand/verdeo-buho-112.webp" width="32" />
-              <p>Asistente de Verdeo</p>
+              <HeraFace pose={heraPose} size={48} />
+              <p>Hera</p>
             </div>
             <div className="assistant-header-actions">
               {turns.length > 0 ? (
@@ -640,7 +635,7 @@ export function LandingAssistant() {
           <div className="assistant-thread" ref={threadRef}>
             {flow ? (
               <div className="assistant-bot-row">
-                <img alt="" height="28" src="/brand/verdeo-buho-112.webp" width="28" />
+                <HeraFace pose="answer" size={28} />
                 <p className="assistant-turn is-bot">{flow.greeting}</p>
               </div>
             ) : null}
@@ -648,7 +643,7 @@ export function LandingAssistant() {
               <div key={turn.id}>
                 {turn.text && turn.de === 'bot' ? (
                   <div className="assistant-bot-row">
-                    <img alt="" height="28" src="/brand/verdeo-buho-112.webp" width="28" />
+                    <HeraFace pose="answer" size={28} />
                     <p className="assistant-turn is-bot">{turn.text}</p>
                   </div>
                 ) : null}

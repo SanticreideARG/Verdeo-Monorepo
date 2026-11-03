@@ -293,7 +293,7 @@ mismo teléfono se formatee distinto según desde dónde se mire.
 esta operación la primera es la que se usa: casi todo pedido se termina de acordar por chat.
 
 **`DeskWorkNotice`** avisa, en pantalla angosta, en las ocho pantallas que son trabajo de escritorio
-(menú semanal, contenidos, workbench de IA, usuarios, estadísticas, auditoría, encuestas, ajustes).
+(menú semanal, contenidos, Hera IA, usuarios, estadísticas, auditoría, encuestas, ajustes).
 Dice qué **sí** se puede hacer desde el teléfono en cada una, en vez de un genérico.
 
 No bloquea, a propósito. Bloquear sería decidir por alguien que quizás está en la calle y sin otra

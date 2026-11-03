@@ -69,7 +69,7 @@ async function copyText(text: string) {
 }
 
 /**
- * El búho del Workbench de IA (BUHO_WORKBENCH_PLAN.md, 2026-10-30): la consulta directa, las tareas
+ * Hera, en la pantalla Hera IA (BUHO_WORKBENCH_PLAN.md, 2026-10-30): la consulta directa, las tareas
  * armadas, el cuadro para pegar un mensaje y "Copiar" en cada respuesta. Los datos del período y la
  * ciudad los arma el servidor; acá sólo se elige el período.
  */
@@ -137,10 +137,10 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
 
   const owl =
     sending || pasteOpen || draft.trim()
-      ? { alt: 'El búho pensando', src: OWL.thinking }
+      ? { alt: 'Hera pensando', src: OWL.thinking }
       : turns.length === 0
-        ? { alt: 'El búho saluda', src: OWL.hello }
-        : { alt: 'El búho', src: OWL.answer };
+        ? { alt: 'Hera saluda', src: OWL.hello }
+        : { alt: 'Hera', src: OWL.answer };
 
   async function send(content: string, target: { key: string; label: string }, pasted?: string) {
     if (sending) return;
@@ -225,7 +225,7 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
         </p>
       </aside>
 
-      <section className="buho-main" aria-label="Conversación con el búho">
+      <section className="buho-main" aria-label="Conversación con Hera">
         <div className="buho-dialog">
           <form
             className="buho-composer"
@@ -301,7 +301,7 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
                 ) : null}
               </article>
             ))}
-            {sending ? <p className="buho-typing">El búho está pensando…</p> : null}
+            {sending ? <p className="buho-typing">Hera está pensando…</p> : null}
             {failure ? (
               <p className="buho-failure" role="alert">
                 {failure}
@@ -312,7 +312,7 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
         </div>
 
         <h3 className="buho-tasks-title">Tareas armadas</h3>
-        <div aria-label="Modos del búho" className="buho-modes" role="group">
+        <div aria-label="Modos de Hera" className="buho-modes" role="group">
           {groups.map(([group, items]) => (
             <div className="buho-mode-group" key={group}>
               <span>{group}</span>
@@ -378,7 +378,7 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
               />
             </label>
             <label className="field">
-              Indicación para el búho (opcional)
+              Indicación para Hera (opcional)
               <input
                 onChange={(event) => setPasteNote(event.target.value)}
                 placeholder="Ej.: más corto, tono formal, ofrecele el Real"

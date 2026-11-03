@@ -184,7 +184,7 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
       {
         href: '/app/ia/workbench',
         icon: 'ai',
-        label: 'Workbench de IA',
+        label: 'Hera IA',
         // Lo usan todos los que tienen permiso de IA (BUHO_WORKBENCH_PLAN.md).
         permission: 'ai.use',
       },

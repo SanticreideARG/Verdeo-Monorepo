@@ -29,7 +29,7 @@ const MODES = [
   },
 ];
 
-const owl = () => screen.getByRole<HTMLImageElement>('img', { name: /búho/ });
+const owl = () => screen.getByRole<HTMLImageElement>('img', { name: /Hera/ });
 
 beforeEach(() => {
   window.sessionStorage.clear();
@@ -47,7 +47,7 @@ beforeEach(() => {
   });
 });
 
-describe('el búho del Workbench', () => {
+describe('Hera, en Hera IA', () => {
   it('oculta teléfonos, correos y documentos de un texto pegado', () => {
     expect(maskPersonal('Soy Ana, 351 555-1234, ana@mail.com, DNI 30.123.456')).toBe(
       'Soy Ana, [teléfono], [correo], DNI [documento]',

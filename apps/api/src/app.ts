@@ -8510,7 +8510,7 @@ export function createApp(options: CreateAppOptions) {
     );
     if (!input.success) return badRequest(context, 'Revisá la pregunta.', input.error.issues);
     const assistantMode = findAssistantMode(input.data.mode);
-    if (!assistantMode) return badRequest(context, 'Ese modo del búho no existe.');
+    if (!assistantMode) return badRequest(context, 'Ese modo de Hera no existe.');
 
     const operations = requireOperations();
     const siteId = context.get('scope')?.operatingSiteId ?? null;

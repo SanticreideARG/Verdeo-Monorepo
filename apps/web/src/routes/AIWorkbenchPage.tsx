@@ -7,7 +7,7 @@ import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 /**
- * El Workbench de IA (BUHO_WORKBENCH_PLAN.md, 2026-10-30): la mesa de trabajo con el búho al
+ * Hera IA (BUHO_WORKBENCH_PLAN.md, 2026-10-30): la mesa de trabajo con Hera al
  * centro, para todos los que tienen permiso de IA, y los prompts maestros de cada modo, para quien
  * los administra.
  */
@@ -15,7 +15,7 @@ export function AIWorkbenchPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const [tab, setTab] = useState<'buho' | 'prompts'>('buho');
 
-  if (failed) return <DashboardFailed label="el workbench de IA" />;
+  if (failed) return <DashboardFailed label="Hera IA" />;
   if (!profile) return <DashboardLoading />;
 
   const canUse = profile.permissions.includes('ai.use');
@@ -28,7 +28,7 @@ export function AIWorkbenchPage() {
         <header className="buho-header">
           <div>
             <p className="dashboard-kicker">Inteligencia</p>
-            <h1 className="text-2xl font-semibold text-forest">Workbench de IA</h1>
+            <h1 className="text-2xl font-semibold text-forest">Hera IA</h1>
           </div>
           {canUse && canManage ? (
             <div aria-label="Sección" className="buho-tabs" role="tablist">
@@ -38,7 +38,7 @@ export function AIWorkbenchPage() {
                 role="tab"
                 type="button"
               >
-                El búho
+                Hera
               </button>
               <button
                 aria-selected={showing === 'prompts'}

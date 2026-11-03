@@ -86,7 +86,7 @@ describe('workbench de IA', () => {
       </MemoryRouter>,
     );
 
-    // Con permiso de IA arranca en el búho; los prompts están en su pestaña.
+    // Con permiso de IA arranca en Hera; los prompts están en su pestaña.
     fireEvent.click(screen.getByRole('tab', { name: 'Prompts maestros' }));
     fireEvent.click(await screen.findByRole('button', { name: /Reescribir mensaje/ }));
     await waitFor(() => {
