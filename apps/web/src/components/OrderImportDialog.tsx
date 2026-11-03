@@ -704,7 +704,8 @@ export function OrderImportDialog({
                     También entiende la planilla armada por viandas: el tamaño en «Pedido» (250 o
                     400) y una columna por plato con la variedad. Las filas seguidas del mismo
                     cliente van al mismo pedido, una vianda con variedades mezcladas se carga como
-                    Intuitivo, y la forma de pago pegada a la dirección y la venta se toman solas.
+                    Menú especial, y la forma de pago pegada a la dirección y la venta se toman
+                    solas.
                   </p>
                 </div>
               )}

@@ -74,7 +74,7 @@ export function planRepeat(
       plan.missing.push(`${item.productName} ${item.variantName}`);
     } else if (offering.composable) {
       if (plan.composable)
-        plan.missing.push(`${item.productName} ${item.variantName} (otro Intuitivo)`);
+        plan.missing.push(`${item.productName} ${item.variantName} (otro Menú especial)`);
       else plan.composable = { offering, quantityUnits: item.quantityUnits };
     } else {
       plan.lines.push({ offering, quantityUnits: item.quantityUnits });

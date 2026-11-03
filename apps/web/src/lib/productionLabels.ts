@@ -69,7 +69,7 @@ export function plateGroups(
       kind: 'plato' as const,
       labels: [],
       title: ofOrder
-        ? `Platos de ${row.orderCustomer ?? 'un Intuitivo'}`
+        ? `Platos de ${row.orderCustomer ?? 'un Menú especial'}`
         : `Platos ${row.abbreviation}${size ? ` ${size}` : ''}`,
     };
     groups.set(groupId, group);
@@ -116,7 +116,7 @@ export function menuGroups(rows: readonly LabelData[]): LabelGroup[] {
       : `menu:${row.familyName}:${row.variantName}`;
     const featured = row.composable || (familyRank(row.familyName) === 0 && size === '400');
     const title = row.composable
-      ? `${row.customerDisplayName} · Intuitivo ${size}`
+      ? `${row.customerDisplayName} · Menú especial ${size}`
       : `${familyShortName(row.familyName)} ${size}`;
     const group = groups.get(groupId) ?? {
       featured,

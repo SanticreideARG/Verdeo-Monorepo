@@ -768,7 +768,7 @@ export function OrderIntakePage() {
     );
     setFormField('source', lastOrder.source);
     const notes = [
-      plan.composable ? 'Elegí los platos del Intuitivo de esta semana.' : '',
+      plan.composable ? 'Elegí los platos del Menú especial de esta semana.' : '',
       plan.missing.length > 0
         ? `No está en el menú de esta semana: ${plan.missing.join(', ')}.`
         : '',
@@ -1930,7 +1930,7 @@ export function OrderIntakePage() {
                 </div>
                 {selectedOffering?.composable ? (
                   <div className="field field-wide mt-4">
-                    Platos de Intuitivo
+                    Platos del Menú especial
                     <IntuitivoDishPicker
                       maxDishes={selectedMenu?.intuitivoMaxDishes ?? DISHES_PER_INTUITIVO}
                       minDishes={selectedOffering.mealsPerUnit}

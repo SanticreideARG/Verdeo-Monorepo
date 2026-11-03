@@ -415,6 +415,7 @@ export function StatsPage() {
               {periods ? (
                 <StatsAccountingTable
                   currency={currency}
+                  deliveryDays={periods.deliveryDays}
                   onDownload={() => void downloadAccounting()}
                   rows={periods.rows}
                 />

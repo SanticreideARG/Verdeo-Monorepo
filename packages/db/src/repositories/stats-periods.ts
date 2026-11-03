@@ -60,8 +60,25 @@ export interface StatsPeriodRow {
   units: number;
 }
 
+/** Una fila por día de reparto y ciudad: lo que hay que rendir y lo que falta cobrar. */
+export interface StatsDeliveryDay {
+  cashCount: number;
+  /** Todo el efectivo de ese reparto: es lo que hay que rendir. */
+  cashMinor: number;
+  deliveryDate: string;
+  operatingSiteId: string;
+  operatingSiteName: string;
+  orderCount: number;
+  totalMinor: number;
+  transferPaidCount: number;
+  transferPaidMinor: number;
+  transferPendingCount: number;
+  transferPendingMinor: number;
+}
+
 export interface StatsPeriods {
   currency: string;
+  deliveryDays: StatsDeliveryDay[];
   /** La mezcla de menús por período, para el gráfico del carrusel. */
   mix: { familyName: string; salesCycleId: string; units: number }[];
   rows: StatsPeriodRow[];
@@ -93,7 +110,7 @@ export async function statsPeriods(
   filters: StatsFilters,
 ): Promise<StatsPeriods> {
   const scope = scopeOf(filters);
-  const [totals, items, methods, mix, firsts] = await Promise.all([
+  const [totals, items, methods, mix, firsts, deliveryDays] = await Promise.all([
     rows(
       database,
       sql`select o.sales_cycle_id, o.operating_site_id, s.alias, s.open_at, s.close_at,
@@ -166,6 +183,24 @@ export async function statsPeriods(
                           and ${scope})
           group by f.sales_cycle_id, f.operating_site_id`,
     ),
+    // "Transferencia" es todo lo que no es efectivo. Sin pago no es una venta: no entra.
+    rows(
+      database,
+      sql`select o.delivery_date::text as delivery_date, o.operating_site_id, os.display_name as site_name,
+                 count(*)::int as order_count,
+                 coalesce(sum(o.total_minor), 0)::bigint as total,
+                 count(*) filter (where ${IS_CASH})::int as cash_count,
+                 coalesce(sum(o.total_minor) filter (where ${IS_CASH}), 0)::bigint as cash,
+                 count(*) filter (where not ${IS_CASH} and o.paid_at is not null)::int as transfer_paid_count,
+                 coalesce(sum(o.total_minor) filter (where not ${IS_CASH} and o.paid_at is not null), 0)::bigint as transfer_paid,
+                 count(*) filter (where not ${IS_CASH} and o.paid_at is null)::int as transfer_pending_count,
+                 coalesce(sum(o.total_minor) filter (where not ${IS_CASH} and o.paid_at is null), 0)::bigint as transfer_pending
+          from orders o
+          join operating_sites os on os.id = o.operating_site_id
+          where ${scope} and o.status <> 'CANCELLED' and o.payment_expectation <> 'sin_pago'
+          group by o.delivery_date, o.operating_site_id, os.display_name
+          order by o.delivery_date desc, os.display_name`,
+    ),
   ]);
 
   const itemsByKey = new Map(items.map((row) => [key(row), row]));
@@ -232,6 +267,19 @@ export async function statsPeriods(
   const currency = totals.find((row) => typeof row.currency === 'string')?.currency;
   return {
     currency: typeof currency === 'string' ? currency : 'ARS',
+    deliveryDays: deliveryDays.map((row) => ({
+      cashCount: num(row.cash_count),
+      cashMinor: num(row.cash),
+      deliveryDate: String(row.delivery_date),
+      operatingSiteId: String(row.operating_site_id),
+      operatingSiteName: String(row.site_name),
+      orderCount: num(row.order_count),
+      totalMinor: num(row.total),
+      transferPaidCount: num(row.transfer_paid_count),
+      transferPaidMinor: num(row.transfer_paid),
+      transferPendingCount: num(row.transfer_pending_count),
+      transferPendingMinor: num(row.transfer_pending),
+    })),
     mix: [...mixByKey.values()].sort((left, right) => right.units - left.units),
     rows: periodRows,
   };

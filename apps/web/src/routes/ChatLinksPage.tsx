@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { DashboardShell, type DashboardProfile } from '../components/DashboardShell.js';
 import { SettingsTabs } from '../components/SettingsTabs.js';
 import { BrandLoading } from '../components/BrandLoading.js';
+import { fetchAllUsers } from '../lib/allUsers.js';
 import { apiRequest } from '../lib/api.js';
 import { cachedProfile, rememberProfile } from '../lib/useDashboardProfile.js';
 import { errorMessage } from '../lib/operations.js';
@@ -77,13 +78,9 @@ export function ChatLinksPage() {
   useEffect(() => {
     if (!canManage) return;
     void load();
-    void apiRequest('/api/v1/users?limit=100')
-      .then(async (response) => {
-        if (!response.ok) return;
-        const body = (await response.json()) as {
-          items: { displayName: string; id: string }[];
-        };
-        setUsers(body.items);
+    void fetchAllUsers<{ displayName: string; id: string }>()
+      .then((all) => {
+        if (all) setUsers(all);
       })
       .catch(() => setUsers([]));
   }, [canManage, load]);

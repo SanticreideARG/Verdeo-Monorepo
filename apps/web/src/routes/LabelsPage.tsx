@@ -816,7 +816,7 @@ export function LabelsPage() {
                         onChange={(event) => setIntuitivoCustomerName(event.target.checked)}
                         type="checkbox"
                       />{' '}
-                      Nombre del cliente en los Intuitivo
+                      Nombre del cliente en los Menús especiales
                     </label>
                   </>
                 ) : null}
@@ -871,15 +871,15 @@ export function LabelsPage() {
                     onChange={(event) => setNameOnlyForComposable(event.target.checked)}
                     type="checkbox"
                   />
-                  Nombre sólo en las Intuitivo
+                  Nombre sólo en las de Menú especial
                 </label>
                 <p className="field-hint">
                   {/* Dos interruptores que se combinan, y la combinación no es obvia: conviene
                       decir qué va a salir en vez de dejar que se descubra imprimiendo. */}
                   {nameOnlyForComposable
                     ? hideSurname
-                      ? 'Las Intuitivo salen con nombre e iniciales; el resto, sin nombre.'
-                      : 'Las Intuitivo salen con el nombre completo; el resto, sin nombre.'
+                      ? 'Las de Menú especial salen con nombre e iniciales; el resto, sin nombre.'
+                      : 'Las de Menú especial salen con el nombre completo; el resto, sin nombre.'
                     : hideSurname
                       ? 'Todas salen con nombre e iniciales.'
                       : 'Todas salen con el nombre completo.'}

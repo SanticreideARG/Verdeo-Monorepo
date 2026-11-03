@@ -39,6 +39,8 @@ beforeEach(() => {
     if (path === '/api/v1/ai/assistant/messages')
       return json({
         context: { cycleAlias: 'Octubre 5', omitted: [], siteName: 'Córdoba' },
+        conversationId: 'c1',
+        footnote: 'Analizar mensaje · Octubre 5 · Córdoba',
         model: 'deepseek-chat',
         providerKey: 'deepseek',
         reply: 'Quiere 2 Keto 400.',
@@ -100,6 +102,8 @@ describe('Hera, en Hera IA', () => {
       if (path === '/api/v1/ai/assistant/messages') {
         return json({
           context: { cycleAlias: 'Noviembre 1', omitted: [], siteName: 'Córdoba' },
+          conversationId: 'c1',
+          footnote: 'Consulta directa · Noviembre 1 · Córdoba',
           reply: '8 pedidos en efectivo: $ 412.000.',
         });
       }
@@ -120,6 +124,48 @@ describe('Hera, en Hera IA', () => {
       .mocked(apiRequest)
       .mock.calls.find(([path]) => path === '/api/v1/ai/assistant/messages');
     expect((JSON.parse(call?.[1]?.body as string) as { mode: string }).mode).toBe('buho_preguntar');
+  });
+
+  it('el historial abre una conversación guardada, con su texto pegado plegado, y la borra', async () => {
+    const CONVERSATION = {
+      id: 'c9',
+      title: 'Analizar mensaje',
+      updatedAt: '2026-11-02T12:00:00Z',
+    };
+    let stored = [CONVERSATION];
+    vi.mocked(apiRequest).mockImplementation((path: string, init?: RequestInit) => {
+      if (path === '/api/v1/ai/assistant/conversations') return json({ items: stored });
+      if (path === '/api/v1/ai/assistant/conversations/c9') {
+        if (init?.method === 'DELETE') {
+          stored = [];
+          return json({ ok: true });
+        }
+        return json({
+          ...CONVERSATION,
+          turns: [
+            { content: 'Todo el pedido', footnote: null, pasted: 'Contenido pegado', role: 'user' },
+            {
+              content: 'Respuesta vieja',
+              footnote: 'Analizar mensaje',
+              pasted: null,
+              role: 'assistant',
+            },
+          ],
+        });
+      }
+      return json({ items: [] });
+    });
+    render(<BuhoAssistant permissions={['ai.use']} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /^Analizar mensaje\s*\d/ }));
+    await screen.findByText('Respuesta vieja');
+    expect(screen.getByText('Contenido pegado')).toBeTruthy();
+    expect(screen.queryByText('Todo el pedido')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Borrar la conversación/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Borrar' }));
+    await waitFor(() => expect(screen.queryByText('Respuesta vieja')).toBeNull());
+    expect(screen.getByText('Todavía no hay conversaciones guardadas.')).toBeTruthy();
   });
 
   it('un modo sin texto se genera con un clic, y la conversación sigue', async () => {

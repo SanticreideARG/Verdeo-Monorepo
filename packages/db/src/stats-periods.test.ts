@@ -141,6 +141,33 @@ describe('statsPeriods', () => {
     expect(result.mix).toContainEqual({ familyName: 'Keto', salesCycleId: C(2), units: 2 });
   });
 
+  it('separa por día de reparto lo que hay que rendir y lo que falta cobrar', async () => {
+    const orders = [
+      order({ customer: 1, cycle: 2, method: 'efectivo', total: 10_000 }),
+      order({ customer: 2, cycle: 2, method: 'efectivo', paid: true, total: 5_000 }),
+      order({ customer: 3, cycle: 2, paid: true, total: 20_000 }),
+      order({ customer: 4, cycle: 2, total: 30_000 }),
+      order({ customer: 1, cycle: 2, status: 'CANCELLED', total: 7_000 }),
+      order({ customer: 9, cycle: 2, total: 99_000 }),
+    ];
+    const db = await seeded(base + orders.map((item) => item.sql).join('\n'));
+
+    const { deliveryDays } = await statsPeriods(db, {});
+
+    expect(deliveryDays).toHaveLength(1);
+    expect(deliveryDays[0]).toMatchObject({
+      cashCount: 2,
+      cashMinor: 15_000,
+      operatingSiteName: 'Córdoba',
+      orderCount: 4,
+      totalMinor: 65_000,
+      transferPaidCount: 1,
+      transferPaidMinor: 20_000,
+      transferPendingCount: 1,
+      transferPendingMinor: 30_000,
+    });
+  });
+
   it('respeta la ciudad y no vuelve nuevo a un cliente viejo al achicar las fechas', async () => {
     const orders = [
       order({ customer: 1, cycle: 1, total: 10_000 }),

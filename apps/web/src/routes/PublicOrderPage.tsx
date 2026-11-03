@@ -259,7 +259,7 @@ export function PublicOrderPage() {
      * cinco, y el selector ya dejaba elegir hasta quince.
      */
     if (offering.composable && selectedDishes.length < offering.mealsPerUnit) {
-      return `Elegí al menos ${String(offering.mealsPerUnit)} platos para tu Intuitivo.`;
+      return `Elegí al menos ${String(offering.mealsPerUnit)} platos para tu Menú especial.`;
     }
     if (offering.composable && menu && selectedDishes.length > menu.intuitivoMaxDishes) {
       return `Un Intuitivo lleva hasta ${String(menu.intuitivoMaxDishes)} platos.`;
@@ -497,7 +497,7 @@ export function PublicOrderPage() {
           </h1>
           <p className="mt-4 max-w-lg leading-7 text-ink-muted">
             {step === 'pedido'
-              ? 'Cada unidad incluye cinco comidas. Elegí una variedad del menú de la semana, o armá un Intuitivo con los platos que quieras (podés repetir).'
+              ? 'Cada unidad incluye cinco comidas. Elegí una variedad del menú de la semana, o armá un Menú especial con los platos que quieras (podés repetir).'
               : 'Completá tus datos para la entrega. Un representante de Verdeo se comunica con vos para confirmar el pedido.'}
           </p>
           {offering ? (

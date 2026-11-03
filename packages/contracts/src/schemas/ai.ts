@@ -81,6 +81,8 @@ export const AITaskRunRequestSchema = z.object({
 
 /** Una pregunta al búho del Workbench (BUHO_WORKBENCH_PLAN.md). */
 export const AIAssistantMessageRequestSchema = z.object({
+  /** La conversación del historial que sigue; sin esto, y con `save`, empieza una. */
+  conversationId: UuidSchema.optional(),
   cycleId: UuidSchema.optional(),
   /** Lo conversado antes, para seguir el hilo; el navegador lo guarda mientras dure la pestaña. */
   history: z
@@ -94,6 +96,10 @@ export const AIAssistantMessageRequestSchema = z.object({
     .default([]),
   message: z.string().trim().min(1).max(16_000),
   mode: z.string().trim().min(1).max(80),
+  /** El texto pegado, para mostrarlo plegado en el historial. */
+  pasted: z.string().max(16_000).optional(),
+  /** Si queda en el historial de quien pregunta. */
+  save: z.boolean().default(false),
 });
 
 export const AIAssistantMessageResponseSchema = z.object({
@@ -103,6 +109,10 @@ export const AIAssistantMessageResponseSchema = z.object({
     omitted: z.array(z.string()),
     siteName: z.string().nullable(),
   }),
+  /** Dónde quedó en el historial; null si no se guardó. */
+  conversationId: UuidSchema.nullable(),
+  /** Lo que va debajo de la respuesta: de qué son los datos y qué no tuvo. */
+  footnote: z.string(),
   model: z.string(),
   providerKey: z.string(),
   reply: z.string(),

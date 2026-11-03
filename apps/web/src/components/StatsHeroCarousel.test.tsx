@@ -80,6 +80,7 @@ describe('periodPoints y mixSegments', () => {
   it('junta las ciudades de un período y ordena del más viejo al más nuevo', () => {
     const periods = {
       currency: 'ARS',
+      deliveryDays: [],
       mix: [
         { familyName: 'Keto', salesCycleId: 'p2', units: 5 },
         { familyName: 'Real', salesCycleId: 'p2', units: 1 },

@@ -4521,7 +4521,7 @@ a {
   margin: 0;
   font-size: 0.92rem;
   line-height: 1.5;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .order-facts a {
   color: var(--db-accent);
@@ -6840,14 +6840,14 @@ a.order-card-phone:focus-visible {
  * En el teléfono se apilan, con el mapa debajo: los datos son lo primero que se lee y el mapa lo
  * que se mira cuando ya se decidió salir a entregar.
  */
-.order-detail-body {
+.order-page-body {
   display: grid;
   gap: 1.5rem;
   align-items: start;
 }
 
 @media (min-width: 900px) {
-  .order-detail-body {
+  .order-page-body {
     /* El mapa no crece más de lo que aporta: pasado cierto ancho ya se ve la misma esquina. */
     grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
   }
@@ -8696,10 +8696,8 @@ textarea.sr-only {
   white-space: nowrap;
 }
 /*
- * `.order-detail-body` también es la clase del cuerpo de la PÁGINA del pedido, que a partir de
- * 900 px reparte datos y mapa en dos columnas. El modal usa la misma clase, así que heredaba ese
- * reparto dentro de 34 rem: la columna de datos quedaba aplastada, las letras se apilaban una
- * debajo de otra y el cuerpo se volvía larguísimo. Dentro del modal siempre es una sola columna.
+ * El cuerpo del modal del pedido. La página del pedido tiene su propia clase, `.order-page-body`:
+ * cuando compartían ésta, cada una heredaba las reglas de la otra y los datos se veían cortados.
  */
 .modal-panel.order-detail .order-detail-body {
   grid-template-columns: minmax(0, 1fr);
@@ -12940,4 +12938,174 @@ label.field:has(> input[type='radio']) {
   .cms-workspace.has-preview {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* La página del pedido: el mensaje y lo pedido lado a lado, y abajo el pie con el historial. */
+.order-page-columns {
+  display: grid;
+  gap: 1.5rem;
+  align-items: start;
+  margin-top: 2rem;
+}
+.order-page-columns > * {
+  min-width: 0;
+  margin-top: 0;
+}
+@media (min-width: 1100px) {
+  .order-page-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.order-payment {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem 1.5rem;
+  margin: 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--db-border-soft);
+}
+.order-payment dt {
+  color: var(--db-text-soft);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.order-payment dd {
+  display: grid;
+  gap: 0.2rem;
+  justify-items: start;
+  margin: 0.15rem 0 0;
+  font-size: 0.92rem;
+}
+.order-payment small {
+  color: var(--db-text-soft);
+  font-size: 0.78rem;
+}
+.order-payment-status {
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  background: var(--db-border-soft);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.order-payment-status.is-paid {
+  background: color-mix(in srgb, #1a8f4c 16%, transparent);
+  color: #157a40;
+}
+.order-payment-status.is-pending {
+  background: color-mix(in srgb, #c77700 18%, transparent);
+  color: #9a5c00;
+}
+.order-page-footer {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--db-border-soft);
+}
+@media (min-width: 900px) {
+  .order-page-footer {
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  }
+}
+.order-page-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-content: start;
+  justify-content: flex-end;
+}
+.confirmation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.confirmation-failure {
+  margin: 0;
+  color: #b42318;
+  font-size: 0.85rem;
+}
+
+/* Análisis contable: por período o por día de reparto. */
+.stats-accounting-segment {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--db-border);
+  border-radius: 999px;
+}
+.stats-accounting-segment button {
+  padding: 0.4rem 0.85rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.stats-accounting-segment button[aria-pressed='true'] {
+  background: var(--db-accent);
+  color: #fff;
+}
+
+/* El historial con Hera, al costado. */
+.buho-history {
+  width: 100%;
+  grid-column: 1 / -1;
+}
+.buho-history > summary {
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.buho-history ul {
+  display: grid;
+  gap: 0.25rem;
+  max-height: 18rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.buho-history li {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid transparent;
+  border-radius: 0.55rem;
+}
+.buho-history li:hover,
+.buho-history li.is-current {
+  border-color: var(--db-border);
+  background: color-mix(in srgb, var(--db-accent) 7%, transparent);
+}
+.buho-history li button {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.buho-history li > button:first-child {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+}
+.buho-history strong {
+  overflow: hidden;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.buho-history small {
+  color: var(--db-muted, #6b7280);
+  font-size: 0.72rem;
+}
+.buho-history-delete {
+  padding: 0 0.55rem;
+  color: var(--db-muted, #6b7280);
+  font-size: 1.1rem;
 }

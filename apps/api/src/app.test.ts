@@ -4125,6 +4125,57 @@ describe('API foundation', () => {
      * El búho del Workbench (BUHO_WORKBENCH_PLAN.md): los datos del período viajan al modelo, pero
      * nunca el nombre ni el teléfono de un cliente, y lo que falta cobrar va sumado.
      */
+    it('no sigue ni muestra la conversación de otro, y sin permiso de IA no da el historial', async () => {
+      const runTask = vi.fn();
+      const aiConversations = {
+        append: vi.fn(),
+        get: vi.fn(() => Promise.resolve(null)),
+        list: vi.fn(() => Promise.resolve([])),
+        remove: vi.fn(() => Promise.resolve(false)),
+      };
+      const app = buildAIApp(
+        {
+          aiConversations,
+          aiTasks: { runTask },
+          geography: {
+            resolveScope: () =>
+              Promise.resolve({ canSelectGlobal: true, defaultSiteId: null, sites: [] }),
+          },
+          operations: {},
+        } as never,
+        ['ai.use'],
+      );
+      const conversationId = '8a2f7d6c-5b4a-4c3d-9e2f-1a0b9c8d7e6f';
+
+      const followUp = await app.request('/api/v1/ai/assistant/messages', {
+        body: JSON.stringify({
+          conversationId,
+          message: 'Seguí',
+          mode: 'buho_mejorar_texto',
+          save: true,
+        }),
+        headers: { cookie, 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(followUp.status).toBe(404);
+      expect(runTask).not.toHaveBeenCalled();
+      expect(aiConversations.append).not.toHaveBeenCalled();
+
+      for (const method of ['GET', 'DELETE']) {
+        const response = await app.request(`/api/v1/ai/assistant/conversations/${conversationId}`, {
+          headers: { cookie },
+          method,
+        });
+        expect(response.status).toBe(404);
+      }
+
+      const denied = buildAIApp({ aiConversations } as never, []);
+      const list = await denied.request('/api/v1/ai/assistant/conversations', {
+        headers: { cookie },
+      });
+      expect(list.status).toBe(403);
+    });
+
     it('answers the owl with period data and without personal data', async () => {
       const runTask = vi.fn(() =>
         Promise.resolve({

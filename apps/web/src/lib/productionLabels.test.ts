@@ -106,7 +106,7 @@ describe('menuGroups', () => {
 
     expect(groups.map((group) => [group.title, group.labels.length, group.featured])).toEqual([
       ['KETO 400', 2, true],
-      ['Juan Manuel Brandan · Intuitivo 400', 1, true],
+      ['Juan Manuel Brandan · Menú especial 400', 1, true],
     ]);
     // Sólo el nombre y el tamaño: nunca la palabra Intuitivo.
     expect(groups[1]?.labels[0]).toMatchObject({ line: 'Juan Manuel Brandan', size: '400' });

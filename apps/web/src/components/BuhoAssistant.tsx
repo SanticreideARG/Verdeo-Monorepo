@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiRequest } from '../lib/api.js';
 import { errorMessage, type WeeklyMenu } from '../lib/operations.js';
 import { currentPeriod, periodsFromMenus, type Period } from '../lib/periods.js';
 import { showToast } from '../lib/toast.js';
+import { ConfirmDialog } from './ConfirmDialog.js';
 
 export interface AssistantModeSummary {
   group: string;
@@ -23,7 +24,11 @@ interface Turn {
   role: 'assistant' | 'user';
 }
 
-const CONVERSATION_KEY = 'verdeo-buho-conversacion';
+/** Sólo cuál se está viendo: las conversaciones están en la base, y son de quien las tuvo. */
+const CONVERSATION_KEY = 'verdeo-hera-conversacion';
+/** Acá se guardaban los mensajes enteros; se limpia para no dejar textos pegados en el navegador. */
+const OLD_CONVERSATION_KEY = 'verdeo-buho-conversacion';
+const HISTORY_OPEN_FROM = '(min-width: 960px)';
 /** Lo que se escribe en el cuadro de arriba: el modo con todos los datos, sin elegir nada. */
 const DIRECT_QUERY = { key: 'buho_preguntar', label: 'Consulta directa' } as const;
 const OWL = {
@@ -32,14 +37,25 @@ const OWL = {
   thinking: '/brand/HOWL/HowlThink.png',
 } as const;
 
-/** La conversación dura lo que la pestaña (BUHO_WORKBENCH_PLAN.md): `sessionStorage`, no la base. */
-function storedConversation(): Turn[] {
+interface ConversationSummary {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
+
+function storedConversationId(): string | null {
   try {
-    const raw = window.sessionStorage.getItem(CONVERSATION_KEY);
-    return raw ? (JSON.parse(raw) as Turn[]) : [];
+    window.sessionStorage.removeItem(OLD_CONVERSATION_KEY);
+    return window.sessionStorage.getItem(CONVERSATION_KEY);
   } catch {
-    return [];
+    return null;
   }
+}
+
+function historyDate(iso: string): string {
+  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(
+    new Date(iso),
+  );
 }
 
 /**
@@ -76,7 +92,11 @@ async function copyText(text: string) {
 export function BuhoAssistant({ permissions }: { permissions: readonly string[] }) {
   const [modes, setModes] = useState<AssistantModeSummary[]>([]);
   const [modeKey, setModeKey] = useState('');
-  const [turns, setTurns] = useState<Turn[]>(storedConversation);
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [conversationId, setConversationId] = useState<string | null>(storedConversationId);
+  const [history, setHistory] = useState<ConversationSummary[]>([]);
+  const [deleting, setDeleting] = useState<ConversationSummary | null>(null);
+  const [historyOpen] = useState(() => window.matchMedia?.(HISTORY_OPEN_FROM).matches ?? false);
   const [draft, setDraft] = useState('');
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState('');
@@ -115,12 +135,60 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
       .catch(() => undefined);
   }, [canChoosePeriod]);
 
+  const loadHistory = useCallback(async () => {
+    const response = await apiRequest('/api/v1/ai/assistant/conversations', {
+      notify: false,
+    }).catch(() => null);
+    if (!response?.ok) return;
+    setHistory(((await response.json()) as { items?: ConversationSummary[] }).items ?? []);
+  }, []);
+
+  const openConversation = useCallback(async (id: string) => {
+    setFailure('');
+    const response = await apiRequest(`/api/v1/ai/assistant/conversations/${id}`, {
+      notify: false,
+    }).catch(() => null);
+    if (!response?.ok) {
+      // Se borró en otra pestaña, o era de otro usuario en este navegador: se arranca de cero.
+      setConversationId(null);
+      setTurns([]);
+      return;
+    }
+    const detail = (await response.json()) as {
+      turns: {
+        content: string;
+        footnote: string | null;
+        pasted: string | null;
+        role: Turn['role'];
+      }[];
+    };
+    setConversationId(id);
+    setTurns(
+      detail.turns.map(({ content, footnote, pasted, role }) => ({
+        content,
+        role,
+        ...(footnote ? { footnote } : {}),
+        ...(pasted ? { pasted } : {}),
+      })),
+    );
+  }, []);
+
+  useEffect(() => {
+    void loadHistory();
+    const stored = storedConversationId();
+    if (stored) void openConversation(stored);
+  }, [loadHistory, openConversation]);
+
   useEffect(() => {
     try {
-      window.sessionStorage.setItem(CONVERSATION_KEY, JSON.stringify(turns));
+      if (conversationId) window.sessionStorage.setItem(CONVERSATION_KEY, conversationId);
+      else window.sessionStorage.removeItem(CONVERSATION_KEY);
     } catch {
-      // Sin almacenamiento, la conversación vale hasta recargar.
+      // Sin almacenamiento, al recargar se arranca de cero; el historial sigue a mano.
     }
+  }, [conversationId]);
+
+  useEffect(() => {
     // jsdom no tiene scrollIntoView: se pregunta antes de llamarlo.
     endRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'end' });
   }, [turns]);
@@ -154,7 +222,10 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
         history,
         message: content,
         mode: target.key,
+        save: true,
+        ...(conversationId ? { conversationId } : {}),
         ...(cycleId ? { cycleId } : {}),
+        ...(pasted ? { pasted } : {}),
       }),
       method: 'POST',
       notify: false,
@@ -165,22 +236,39 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
       return;
     }
     const body = (await response.json()) as {
-      context: { cycleAlias: string | null; omitted: string[]; siteName: string | null };
+      conversationId: string | null;
+      footnote: string;
       reply: string;
     };
-    const where = [
-      body.context.cycleAlias,
-      body.context.siteName ?? (body.context.cycleAlias ? 'todas las ciudades' : null),
-    ]
-      .filter(Boolean)
-      .join(' · ');
-    const footnote = [
-      `${target.label}${where ? ` · ${where}` : ''}`,
-      body.context.omitted.length > 0 ? `sin ${body.context.omitted.join(', ')}` : null,
-    ]
-      .filter(Boolean)
-      .join(' · ');
-    setTurns((current) => [...current, { content: body.reply, footnote, role: 'assistant' }]);
+    setTurns((current) => [
+      ...current,
+      { content: body.reply, footnote: body.footnote, role: 'assistant' },
+    ]);
+    if (body.conversationId) {
+      setConversationId(body.conversationId);
+      void loadHistory();
+    } else {
+      showToast('La respuesta no se pudo guardar en tu historial.', 'error');
+    }
+  }
+
+  function startNewConversation() {
+    setConversationId(null);
+    setTurns([]);
+    setFailure('');
+  }
+
+  async function deleteConversation(target: ConversationSummary) {
+    const response = await apiRequest(`/api/v1/ai/assistant/conversations/${target.id}`, {
+      method: 'DELETE',
+    }).catch(() => null);
+    setDeleting(null);
+    if (!response?.ok) {
+      showToast('No se pudo borrar la conversación.', 'error');
+      return;
+    }
+    if (target.id === conversationId) startNewConversation();
+    void loadHistory();
   }
 
   function submitPaste() {
@@ -223,6 +311,37 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
           La ciudad es la elegida arriba. Los datos del sistema viajan sin nombres, teléfonos ni
           domicilios.
         </p>
+        <details className="buho-history" open={historyOpen}>
+          <summary>Tu historial{history.length > 0 ? ` (${history.length})` : ''}</summary>
+          <p className="buho-side-note">Lo ves sólo vos. Podés borrar lo que quieras.</p>
+          {history.length === 0 ? (
+            <p className="buho-side-note">Todavía no hay conversaciones guardadas.</p>
+          ) : (
+            <ul>
+              {history.map((item) => (
+                <li className={item.id === conversationId ? 'is-current' : ''} key={item.id}>
+                  <button
+                    disabled={sending}
+                    onClick={() => void openConversation(item.id)}
+                    type="button"
+                  >
+                    <strong>{item.title}</strong>
+                    <small>{historyDate(item.updatedAt)}</small>
+                  </button>
+                  <button
+                    aria-label={`Borrar la conversación: ${item.title}`}
+                    className="buho-history-delete"
+                    disabled={sending}
+                    onClick={() => setDeleting(item)}
+                    type="button"
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </details>
       </aside>
 
       <section className="buho-main" aria-label="Conversación con Hera">
@@ -259,13 +378,10 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
                 <button
                   className="button button-secondary"
                   disabled={sending}
-                  onClick={() => {
-                    setTurns([]);
-                    setFailure('');
-                  }}
+                  onClick={startNewConversation}
                   type="button"
                 >
-                  Empezar de nuevo
+                  Nueva conversación
                 </button>
               ) : null}
             </div>
@@ -363,6 +479,17 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
         ) : null}
       </section>
 
+      {deleting ? (
+        <ConfirmDialog
+          confirmLabel="Borrar"
+          detail="Se borra para siempre, con todos sus mensajes."
+          onCancel={() => setDeleting(null)}
+          onConfirm={() => deleteConversation(deleting)}
+          title={`¿Borrar "${deleting.title}"?`}
+          tone="destructivo"
+        />
+      ) : null}
+
       {pasteOpen && mode?.input ? (
         <div aria-label={mode.label} aria-modal="true" className="modal-backdrop" role="dialog">
           <div className="modal-panel buho-paste">
@@ -393,7 +520,8 @@ export function BuhoAssistant({ permissions }: { permissions: readonly string[] 
               />
               <span>
                 Ocultar teléfonos, correos y documentos antes de mandarlo. Los nombres no se
-                detectan: si no hacen falta, sacalos.
+                detectan: si no hacen falta, sacalos. El texto queda en tu historial hasta que lo
+                borres.
               </span>
             </label>
             <div className="form-actions mt-4">

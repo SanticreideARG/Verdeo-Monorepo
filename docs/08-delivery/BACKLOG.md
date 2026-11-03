@@ -3,6 +3,25 @@
 Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese documento y la sección
 "As built" de cada feature doc para el detalle de qué exactamente quedó construido en cada V1/esqueleto.
 
+## Historial con Hera (2026-11-03)
+
+- [x] Cada persona ve y retoma sus conversaciones en Hera IA, y puede borrarlas. Migración 0080.
+- [ ] Decidir cuánto tiempo se guardan: hoy quedan hasta que alguien las borre, con los textos pegados incluidos.
+
+## Pantalla del pedido y reparto (2026-11-03)
+
+- [x] Análisis contable por día de reparto: efectivo a rendir, transferencia cobrada y pendiente; también en el Excel.
+- [x] Pedido: historial, "Cambiar cliente" y "Mover a otra ciudad" en el pie; datos sin líneas cortadas (la página heredaba reglas del modal).
+- [x] Pedido: medio de pago y estado debajo de los ítems. El efectivo se lee como cobrado al terminar el día de entrega y la transferencia con el tilde. Es una lectura: Estadísticas y Por cobrar siguen mirando sólo el tilde.
+- [x] Hera escribe otras versiones del mensaje de confirmación, sin recibir el nombre ni la dirección del cliente.
+- [x] Corrige el enlace para llamar y el de WhatsApp en el pedido, que dejaban el número mal armado.
+- [x] Usuarios y enlaces de chat traen todas las cuentas, no las primeras cien.
+
+## Intuitivo pasa a Menú especial en la web (2026-11-02)
+
+- [x] Textos de pedido público, carga de pedidos, armado del menú, cocina, stock y etiquetas.
+- [ ] Sin tocar: el nombre guardado sigue "Intuitivo" (decisión del 2026-11-02), igual que API, backend, Excel, hojas de ruta y nombres internos. Por eso las pantallas que muestran el nombre guardado todavía dicen "Intuitivo".
+
 ## Contenidos: selector arriba (2026-11-02)
 
 - [x] El selector de página pasa arriba; el editor y la vista previa quedan lado a lado, con la vista previa abierta de entrada en pantallas anchas.

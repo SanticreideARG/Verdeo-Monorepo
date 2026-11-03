@@ -30,6 +30,11 @@ export function itemsLine(
     .join(' + ');
 }
 
+export type ConfirmationOrder = Pick<
+  OrderSummary,
+  'customer' | 'deliveryAddress' | 'deliveryDate' | 'items' | 'totalMinor'
+>;
+
 /**
  * El mensaje con el que se confirma un pedido por WhatsApp.
  *
@@ -37,13 +42,7 @@ export function itemsLine(
  * dirección y el día de entrega. La franja horaria no está en el pedido —es una franja general,
  * "tentativa a confirmar el sábado"—, así que llega como parámetro; vacía, el mensaje sale sin ella.
  */
-export function confirmationMessage(
-  order: Pick<
-    OrderSummary,
-    'customer' | 'deliveryAddress' | 'deliveryDate' | 'items' | 'totalMinor'
-  >,
-  timeWindow: string,
-): string {
+export function confirmationMessage(order: ConfirmationOrder, timeWindow: string): string {
   const firstName = order.customer.displayName.trim().split(/\s+/)[0] ?? '';
   const window = timeWindow.trim();
   return [
@@ -51,4 +50,45 @@ export function confirmationMessage(
     `${itemsLine(order.items)} = ${plainMoney(order.totalMinor)} a ${order.deliveryAddress.trim()}.`,
     `Entrega: ${deliveryDayLabel(order.deliveryDate)}${window ? ` ${window}` : ''} (horario tentativo a confirmar el sábado), te viene bien? Gracias!`,
   ].join(' ');
+}
+
+const firstNameOf = (order: ConfirmationOrder) =>
+  order.customer.displayName.trim().split(/\s+/)[0] ?? '';
+
+/** El mensaje como le llega a Hera: sin el nombre ni la dirección del cliente. */
+export function confirmationDraft(order: ConfirmationOrder): string {
+  return confirmationMessage(
+    {
+      ...order,
+      customer: { ...order.customer, displayName: '{nombre}' },
+      deliveryAddress: '{direccion}',
+    },
+    '{franja}',
+  );
+}
+
+/** Lo que Hera escribió, con los datos del cliente y la franja de ahora. */
+export function fillConfirmationDraft(
+  draft: string,
+  order: ConfirmationOrder,
+  timeWindow: string,
+): string {
+  return draft
+    .replaceAll('{nombre}', firstNameOf(order))
+    .replaceAll('{direccion}', order.deliveryAddress.trim())
+    .replaceAll('{franja}', timeWindow.trim())
+    .replace(/ {2,}/g, ' ');
+}
+
+/** Lo que no puede faltar en una versión de Hera: sin eso, confirmaría otro pedido. */
+export function missingConfirmationFacts(draft: string, order: ConfirmationOrder): string[] {
+  const text = draft.toLocaleLowerCase('es-AR');
+  return [
+    text.includes('{nombre}') ? null : 'el nombre',
+    text.includes('{direccion}') ? null : 'la dirección',
+    text.includes(plainMoney(order.totalMinor).toLocaleLowerCase('es-AR')) ? null : 'el importe',
+    text.includes(deliveryDayLabel(order.deliveryDate).toLocaleLowerCase('es-AR'))
+      ? null
+      : 'el día',
+  ].filter((fact): fact is string => fact !== null);
 }

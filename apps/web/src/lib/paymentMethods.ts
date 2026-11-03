@@ -6,6 +6,7 @@ import { apiRequest } from './api.js';
 export interface PaymentChoice {
   code: string;
   displayName: string;
+  isCash?: boolean;
 }
 
 const normalize = (value: string) => value.trim().toLowerCase();

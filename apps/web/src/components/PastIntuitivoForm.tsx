@@ -117,9 +117,9 @@ export function PastIntuitivoForm({
 
   return (
     <details className="past-intuitivo mt-4">
-      <summary>Cargar un Intuitivo de un período anterior</summary>
+      <summary>Cargar un Menú especial de un período anterior</summary>
       <p className="mt-2 text-sm text-ink-muted">
-        Para un Intuitivo ya cocinado que no llegó al stock solo. Se elige el período (hasta{' '}
+        Para un Menú especial ya cocinado que no llegó al stock solo. Se elige el período (hasta{' '}
         {MONTHS_BACK} meses atrás) y los platos de su menú; se vende como los demás y vence un mes
         después de cargarlo.
       </p>
@@ -179,7 +179,7 @@ export function PastIntuitivoForm({
           <input
             maxLength={80}
             onChange={(event) => setName(event.target.value)}
-            placeholder="Ej. Intuitivo sin lácteos"
+            placeholder="Ej. Menú especial sin lácteos"
             required
             value={name}
           />
@@ -207,7 +207,7 @@ export function PastIntuitivoForm({
           </div>
         ) : cycleId ? (
           <p className="field-wide text-sm text-ink-muted">
-            Ese período no tenía Intuitivo en el menú.
+            Ese período no tenía Menú especial en el menú.
           </p>
         ) : null}
         {message ? (

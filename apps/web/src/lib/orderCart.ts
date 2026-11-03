@@ -66,11 +66,11 @@ export function pendingCartLine(
   if (!offering) return null;
   if (offering.composable && dishes.length < offering.mealsPerUnit) {
     return {
-      reason: `Elegí al menos ${String(offering.mealsPerUnit)} platos del Intuitivo antes de agregarlo.`,
+      reason: `Elegí al menos ${String(offering.mealsPerUnit)} platos del Menú especial antes de agregarlo.`,
     };
   }
   if (offering.composable && dishes.length > limits.maxDishes) {
-    return { reason: `Un Intuitivo admite hasta ${String(limits.maxDishes)} platos.` };
+    return { reason: `Un Menú especial admite hasta ${String(limits.maxDishes)} platos.` };
   }
   return {
     line: {

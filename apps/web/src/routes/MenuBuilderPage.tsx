@@ -650,9 +650,9 @@ export function MenuBuilderPage() {
                 onChange={(event) => setIncludeIntuitivo(event.target.checked)}
                 type="checkbox"
               />
-              Incluir Intuitivo esta semana (el cliente elige cinco platos del universo publicado
-              para su tamaño; el nombre y la existencia de esta variedad no se editan acá). Qué
-              operaciones lo ofrecen se decide por ciudad en{' '}
+              Incluir Menú especial esta semana (el cliente elige cinco platos del universo
+              publicado para su tamaño; el nombre y la existencia de esta variedad no se editan
+              acá). Qué operaciones lo ofrecen se decide por ciudad en{' '}
               <Link className="underline" to="/app/ajustes/menu">
                 Ajustes → Menú personalizado
               </Link>
@@ -660,11 +660,11 @@ export function MenuBuilderPage() {
             </label>
             {includeIntuitivo ? (
               <label className="field mt-3 max-w-xs">
-                Abreviatura del Intuitivo
+                Abreviatura del Menú especial
                 <input
                   maxLength={16}
                   onChange={(event) => setIntuitivoAbbreviation(event.target.value.toUpperCase())}
-                  placeholder="INTUITIVO"
+                  placeholder="ESPECIAL"
                   value={intuitivoAbbreviation}
                 />
               </label>

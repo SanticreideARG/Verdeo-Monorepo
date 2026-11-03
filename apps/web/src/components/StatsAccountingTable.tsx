@@ -1,6 +1,7 @@
 import { Fragment, useState } from 'react';
 
-import { formatMoney, type StatsPeriodRow } from '../lib/operations.js';
+import { formatDayLong } from '../lib/dates.js';
+import { formatMoney, type StatsDeliveryDay, type StatsPeriodRow } from '../lib/operations.js';
 
 type Totals = Omit<
   StatsPeriodRow,
@@ -45,14 +46,17 @@ export function totalsOf(rows: readonly StatsPeriodRow[]): Totals {
  */
 export function StatsAccountingTable({
   currency,
+  deliveryDays,
   onDownload,
   rows,
 }: {
   currency: string;
+  deliveryDays: readonly StatsDeliveryDay[];
   onDownload: () => void;
   rows: StatsPeriodRow[];
 }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [segment, setSegment] = useState<'days' | 'periods'>('periods');
   const money = (minor: number) => formatMoney(minor, currency);
   const totals = totalsOf(rows);
   const show = {
@@ -92,9 +96,26 @@ export function StatsAccountingTable({
         <div>
           <h2 className="text-lg font-semibold text-forest">Análisis contable</h2>
           <p className="text-xs text-ink-muted">
-            Por período y ciudad. Neto vendido sin cancelados ni pedidos de stock, igual que el
-            informe del período. Los cancelados no suman.
+            {segment === 'periods'
+              ? 'Por período y ciudad. Neto vendido sin cancelados ni pedidos de stock, igual que el informe del período. Los cancelados no suman.'
+              : 'Por día de reparto y ciudad, sin cancelados ni pedidos de stock o sin pago. El efectivo es lo que hay que rendir; todo lo que no es efectivo cuenta como transferencia.'}
           </p>
+        </div>
+        <div aria-label="Ver el análisis" className="stats-accounting-segment" role="group">
+          <button
+            aria-pressed={segment === 'periods'}
+            onClick={() => setSegment('periods')}
+            type="button"
+          >
+            Por período
+          </button>
+          <button
+            aria-pressed={segment === 'days'}
+            onClick={() => setSegment('days')}
+            type="button"
+          >
+            Por día de reparto
+          </button>
         </div>
         <button
           className="button button-secondary"
@@ -105,7 +126,9 @@ export function StatsAccountingTable({
           Descargar Excel
         </button>
       </header>
-      {rows.length === 0 ? (
+      {segment === 'days' ? (
+        <DeliveryDaysTable currency={currency} days={deliveryDays} />
+      ) : rows.length === 0 ? (
         <p className="data-table-empty mt-3">Sin pedidos con estos filtros.</p>
       ) : (
         <div className="data-table-scroll mt-3">
@@ -222,5 +245,87 @@ export function StatsAccountingTable({
         </div>
       )}
     </article>
+  );
+}
+
+/** Lo que se pregunta después de cada reparto: cuánto hay que rendir y cuánto falta cobrar. */
+function DeliveryDaysTable({
+  currency,
+  days,
+}: {
+  currency: string;
+  days: readonly StatsDeliveryDay[];
+}) {
+  if (days.length === 0) {
+    return <p className="data-table-empty mt-3">Sin repartos con estos filtros.</p>;
+  }
+  const money = (minor: number) => formatMoney(minor, currency);
+  const total = (pick: (day: StatsDeliveryDay) => number) =>
+    days.reduce((sum, day) => sum + pick(day), 0);
+  const counted = (minor: number, count: number) => (
+    <>
+      {money(minor)}
+      <small> ({count})</small>
+    </>
+  );
+  return (
+    <div className="data-table-scroll mt-3">
+      <table className="data-table stats-accounting-table">
+        <thead>
+          <tr>
+            <th>Día de reparto · ciudad</th>
+            <th className="is-number">Pedidos</th>
+            <th className="is-number">Efectivo a rendir</th>
+            <th className="is-number">Transferencia cobrada</th>
+            <th className="is-number">Transferencia pendiente</th>
+            <th className="is-number">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {days.map((day) => (
+            <tr key={`${day.deliveryDate}|${day.operatingSiteId}`}>
+              <td>
+                <strong>{formatDayLong(day.deliveryDate)}</strong>
+                <span className="text-ink-muted"> · {day.operatingSiteName}</span>
+              </td>
+              <td className="is-number">{day.orderCount}</td>
+              <td className="is-number is-emphasis">{counted(day.cashMinor, day.cashCount)}</td>
+              <td className="is-number">{counted(day.transferPaidMinor, day.transferPaidCount)}</td>
+              <td className={`is-number ${day.transferPendingMinor > 0 ? 'is-pending' : ''}`}>
+                {counted(day.transferPendingMinor, day.transferPendingCount)}
+              </td>
+              <td className="is-number">{money(day.totalMinor)}</td>
+            </tr>
+          ))}
+        </tbody>
+        {days.length > 1 ? (
+          <tfoot>
+            <tr className="stats-accounting-total">
+              <td>Total</td>
+              <td className="is-number">{total((day) => day.orderCount)}</td>
+              <td className="is-number is-emphasis">
+                {counted(
+                  total((day) => day.cashMinor),
+                  total((day) => day.cashCount),
+                )}
+              </td>
+              <td className="is-number">
+                {counted(
+                  total((day) => day.transferPaidMinor),
+                  total((day) => day.transferPaidCount),
+                )}
+              </td>
+              <td className="is-number">
+                {counted(
+                  total((day) => day.transferPendingMinor),
+                  total((day) => day.transferPendingCount),
+                )}
+              </td>
+              <td className="is-number">{money(total((day) => day.totalMinor))}</td>
+            </tr>
+          </tfoot>
+        ) : null}
+      </table>
+    </div>
   );
 }

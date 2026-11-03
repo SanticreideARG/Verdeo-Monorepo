@@ -104,8 +104,23 @@ export const StatsPeriodRowSchema = z.object({
   units: z.number().int(),
 });
 
+export const StatsDeliveryDaySchema = z.object({
+  cashCount: z.number().int(),
+  cashMinor: z.number().int(),
+  deliveryDate: z.string(),
+  operatingSiteId: UuidSchema,
+  operatingSiteName: z.string(),
+  orderCount: z.number().int(),
+  totalMinor: z.number().int(),
+  transferPaidCount: z.number().int(),
+  transferPaidMinor: z.number().int(),
+  transferPendingCount: z.number().int(),
+  transferPendingMinor: z.number().int(),
+});
+
 export const StatsPeriodsResponseSchema = z.object({
   currency: z.string(),
+  deliveryDays: z.array(StatsDeliveryDaySchema).default([]),
   mix: z.array(
     z.object({ familyName: z.string(), salesCycleId: UuidSchema, units: z.number().int() }),
   ),

@@ -520,8 +520,23 @@ export interface StatsPeriodRow {
   units: number;
 }
 
+export interface StatsDeliveryDay {
+  cashCount: number;
+  cashMinor: number;
+  deliveryDate: string;
+  operatingSiteId: string;
+  operatingSiteName: string;
+  orderCount: number;
+  totalMinor: number;
+  transferPaidCount: number;
+  transferPaidMinor: number;
+  transferPendingCount: number;
+  transferPendingMinor: number;
+}
+
 export interface StatsPeriods {
   currency: string;
+  deliveryDays: StatsDeliveryDay[];
   mix: { familyName: string; salesCycleId: string; units: number }[];
   rows: StatsPeriodRow[];
 }

@@ -49,7 +49,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
       {
         description: 'Cómo se arma y se cobra el menú personalizado en cada ciudad.',
         href: '/app/ajustes/menu',
-        keywords: ['intuitivo', 'menú', 'precio', 'platos', 'personalizado'],
+        keywords: ['intuitivo', 'especial', 'menú', 'precio', 'platos', 'personalizado'],
         label: 'Menú personalizado',
         permission: 'production.read',
       },

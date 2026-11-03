@@ -7,7 +7,7 @@
 - **SalesCycle**: ronda comercial semanal.
 - **WeeklyMenu**: composición publicada para un ciclo.
 - **Unit**: pack comercial de cinco comidas.
-- **Intuitivo**: pack de cinco comidas seleccionadas por el cliente.
+- **Menú especial** (antes Intuitivo; el nombre guardado y el código siguen diciendo "Intuitivo"): pack de cinco comidas seleccionadas por el cliente.
 - **Kitchen Snapshot**: foto inmutable de requerimientos de cocina en un corte.
 - **Surplus**: producción real disponible por encima de demanda asignada.
 - **Opportunity Sale**: pedido creado para vender excedente de la semana.

@@ -19,6 +19,7 @@ import {
   PostgresAIConfigurationService,
   PostgresAIPromptService,
   PostgresAITaskService,
+  PostgresAIConversationService,
   PostgresAuditQueryService,
   PostgresDeliveryService,
   PostgresGeographyService,
@@ -488,6 +489,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
 
   const app = createApp({
     aiConfiguration,
+    aiConversations: new PostgresAIConversationService(database.db),
     aiPrompts,
     aiTasks,
     appOrigin: env.APP_URL,

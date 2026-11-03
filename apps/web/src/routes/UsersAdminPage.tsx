@@ -6,6 +6,7 @@ import { DashboardShell } from '../components/DashboardShell.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { SettingsTabs } from '../components/SettingsTabs.js';
+import { fetchAllUsers } from '../lib/allUsers.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage } from '../lib/operations.js';
 import { showToast } from '../lib/toast.js';
@@ -213,10 +214,8 @@ export function UsersAdminPage() {
   const canIssueTokens = profile?.permissions.includes('access_tokens.manage') ?? false;
 
   const loadUsers = useCallback(async () => {
-    const response = await apiRequest('/api/v1/users?limit=100');
-    if (response.ok) {
-      setUsers(((await response.json()) as { items: UserRow[] }).items);
-    }
+    const all = await fetchAllUsers<UserRow>();
+    if (all) setUsers(all);
   }, []);
 
   const loadTokens = useCallback(async () => {

@@ -1141,6 +1141,21 @@ interface AIPromptEngine {
   listPrompts(): Promise<unknown>;
 }
 
+interface AIConversationEngine {
+  append(exchange: {
+    conversationId?: string | undefined;
+    footnote: string;
+    message: string;
+    pasted?: string | undefined;
+    reply: string;
+    title: string;
+    userId: string;
+  }): Promise<string | null>;
+  get(userId: string, id: string): Promise<unknown>;
+  list(userId: string): Promise<unknown>;
+  remove(userId: string, id: string): Promise<boolean>;
+}
+
 interface AITaskEngine {
   testProvider(providerKey: string): Promise<unknown>;
   listExecutions(taskKey?: string): Promise<unknown>;
@@ -1420,6 +1435,7 @@ interface BackupEngine {
 
 interface CreateAppOptions {
   aiConfiguration?: AIConfigurationEngine;
+  aiConversations?: AIConversationEngine;
   aiPrompts?: AIPromptEngine;
   aiTasks?: AITaskEngine;
   appOrigin: string;
@@ -2159,12 +2175,18 @@ export function createApp(options: CreateAppOptions) {
       active: boolean;
       code: string;
       displayName: string;
+      isCash: boolean;
       sortOrder: number;
     }[];
     return context.json({
       items: items
         .filter((method) => method.active && (withInternal || !isNoCharge(method.code)))
-        .map(({ code, displayName, sortOrder }) => ({ code, displayName, sortOrder })),
+        .map(({ code, displayName, isCash, sortOrder }) => ({
+          code,
+          displayName,
+          isCash,
+          sortOrder,
+        })),
     });
   });
 
@@ -8502,6 +8524,48 @@ export function createApp(options: CreateAppOptions) {
     });
   });
 
+  /*
+   * El historial con Hera: cada persona ve sólo el suyo (BUHO_WORKBENCH_PLAN.md, 2026-11-02). La
+   * conversación de otro se responde igual que una que no existe.
+   */
+  const conversationNotFound = (context: Context) => {
+    const code: ApiErrorCode = 'NOT_FOUND';
+    return context.json(
+      {
+        error: {
+          code,
+          message: 'Esa conversación no existe.',
+          requestId: context.get('requestId') as string,
+        },
+      },
+      statusForCode(code),
+    );
+  };
+
+  app.get('/api/v1/ai/assistant/conversations', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('ai.use')) return forbidden(context);
+    return context.json({ items: (await options.aiConversations?.list(session.userId)) ?? [] });
+  });
+
+  app.get('/api/v1/ai/assistant/conversations/:id', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('ai.use')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return conversationNotFound(context);
+    const conversation = await options.aiConversations?.get(session.userId, params.data.id);
+    return conversation ? context.json(conversation) : conversationNotFound(context);
+  });
+
+  app.delete('/api/v1/ai/assistant/conversations/:id', async (context) => {
+    const session = context.get('session');
+    if (!session.permissions.includes('ai.use')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return conversationNotFound(context);
+    const removed = await options.aiConversations?.remove(session.userId, params.data.id);
+    return removed ? context.json({ ok: true }) : conversationNotFound(context);
+  });
+
   app.post('/api/v1/ai/assistant/messages', async (context) => {
     const session = context.get('session');
     if (!session.permissions.includes('ai.use')) return forbidden(context);
@@ -8511,6 +8575,14 @@ export function createApp(options: CreateAppOptions) {
     if (!input.success) return badRequest(context, 'Revisá la pregunta.', input.error.issues);
     const assistantMode = findAssistantMode(input.data.mode);
     if (!assistantMode) return badRequest(context, 'Ese modo de Hera no existe.');
+    // Antes de armar los datos y de gastar en el proveedor.
+    if (input.data.save && input.data.conversationId) {
+      const existing = await options.aiConversations?.get(
+        session.userId,
+        input.data.conversationId,
+      );
+      if (!existing) return conversationNotFound(context);
+    }
 
     const operations = requireOperations();
     const siteId = context.get('scope')?.operatingSiteId ?? null;
@@ -8559,12 +8631,50 @@ export function createApp(options: CreateAppOptions) {
           userPrompt: input.data.message,
         },
       );
+      const reply =
+        typeof result.output === 'string' ? result.output : JSON.stringify(result.output);
+      const where = [
+        data.cycleAlias,
+        data.siteName ?? (data.cycleAlias ? 'todas las ciudades' : null),
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      const direct = assistantMode.key === 'buho_preguntar';
+      const footnote = [
+        `${direct ? 'Consulta directa' : assistantMode.label}${where ? ` · ${where}` : ''}`,
+        data.omitted.length > 0 ? `sin ${data.omitted.join(', ')}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      let conversationId: string | null = null;
+      if (input.data.save && options.aiConversations) {
+        // La respuesta ya está pagada y es lo que se pidió: si no se guarda, igual se entrega.
+        try {
+          conversationId = await options.aiConversations.append({
+            conversationId: input.data.conversationId,
+            footnote,
+            message: input.data.message,
+            pasted: input.data.pasted,
+            reply,
+            // El título sale del pedido sólo en una consulta directa: un texto pegado trae datos
+            // de un cliente, que no tienen que quedar a la vista en la lista.
+            title: direct
+              ? (input.data.message.split('\n')[0] ?? '').slice(0, 80)
+              : assistantMode.label,
+            userId: session.userId,
+          });
+        } catch (error) {
+          options.logger.error({ error, message: 'No se pudo guardar la conversación con Hera' });
+        }
+      }
       return context.json(
         AIAssistantMessageResponseSchema.parse({
           context: { cycleAlias: data.cycleAlias, omitted: data.omitted, siteName: data.siteName },
+          conversationId,
+          footnote,
           model: result.model,
           providerKey: result.providerKey,
-          reply: typeof result.output === 'string' ? result.output : JSON.stringify(result.output),
+          reply,
         }),
       );
     } catch (error) {

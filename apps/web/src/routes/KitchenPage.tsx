@@ -313,8 +313,8 @@ export function KitchenPage() {
                       <p>
                         <strong>
                           {pending.length === 1
-                            ? '1 Intuitivo tiene platos sin menú de origen.'
-                            : `${String(pending.length)} Intuitivos tienen platos sin menú de origen.`}
+                            ? '1 Menú especial tiene platos sin menú de origen.'
+                            : `${String(pending.length)} Menús especiales tienen platos sin menú de origen.`}
                         </strong>{' '}
                         En la planilla salen en "SIN MENÚ DE ORIGEN". Abrí cada pedido, editá los
                         platos y elegilos de nuevo desde su menú.
@@ -410,7 +410,7 @@ export function KitchenPage() {
                   {kitchen.dishTally.length > 0 ? (
                     <article className="operation-card lg:col-span-2">
                       <h3 className="text-xl font-semibold text-forest">
-                        Platos a preparar (Intuitivos)
+                        Platos a preparar (Menús especiales)
                       </h3>
                       <div className="dish-tally mt-4">
                         {kitchen.dishTally.map((entry) => (

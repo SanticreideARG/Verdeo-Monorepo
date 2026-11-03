@@ -176,7 +176,7 @@ export function ProductionStockPanel({
       </div>
       <p className="mt-1 text-sm text-ink-muted">
         Los menús que se piden para tener a mano y vender después. Se cocinan con el resto y salen
-        en la planilla, pero no cuentan como ventas. Los Intuitivos no van acá.
+        en la planilla, pero no cuentan como ventas. Los Menús especiales no van acá.
       </p>
       {canEdit && !siteId ? (
         <p className="screen-notice mt-3">
@@ -243,8 +243,8 @@ export function ProductionStockPanel({
       <p className="mt-1 text-sm text-ink-muted">
         Lo que sobró al cerrar cada período pasa solo acá, con su período y su ciudad. Ya está
         cocinado: se vende desde Nuevo pedido, a precio normal, hasta un mes después de su período,
-        y no suma a lo que hay que cocinar. Si contaste distinto, corregilo con − y +. Un Intuitivo
-        que no llegó solo se carga abajo.
+        y no suma a lo que hay que cocinar. Si contaste distinto, corregilo con − y +. Un Menú
+        especial que no llegó solo se carga abajo.
       </p>
       {liveLots.length > 0 ? (
         <ul className="stock-steppers mt-3" aria-busy={saving}>

@@ -200,7 +200,7 @@ export function CancelOrderDialog({
                 />
                 <span>
                   <strong>Pasar los menús a stock.</strong> Ya están cocinados: quedan para venderse
-                  desde Nuevo pedido (un Intuitivo, con sus platos). Si se reactiva el pedido,
+                  desde Nuevo pedido (un Menú especial, con sus platos). Si se reactiva el pedido,
                   vuelven.
                 </span>
               </label>

@@ -151,6 +151,14 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-03-historial-hera',
+    body: `En Hera IA ahora queda tu historial: podés retomar una conversación cuando quieras o borrarla. Tu historial lo ves sólo vos.`,
+  },
+  {
+    key: '2026-11-03-pedido-y-reparto',
+    body: `Estadísticas ahora muestra el análisis contable por día de reparto: efectivo a rendir, transferencias cobradas y pendientes. En cada pedido, el medio de pago y si está cobrado quedan junto a los ítems, el historial pasa al pie, y Hera puede proponerte otras versiones del mensaje de confirmación.`,
+  },
+  {
     key: '2026-11-02-hera',
     body: `Nuestra asistente ahora se llama Hera, y el Workbench de IA pasa a ser Hera IA. Saluda cada tanto desde su rincón y cambia de cara mientras te ayuda. Además, la sombra de la sección activa ahora marca siempre la tarjeta completa.`,
   },

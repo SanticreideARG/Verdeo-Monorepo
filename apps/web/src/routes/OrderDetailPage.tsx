@@ -10,7 +10,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { DeliveryMap } from '../components/DeliveryMap.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
-import { formatDayLong, formatMoment } from '../lib/dates.js';
+import { formatDayLong, formatMoment, todayInOperation } from '../lib/dates.js';
 import {
   OrderItemsEditor,
   itemsFromOrder,
@@ -43,6 +43,7 @@ import {
   usePaymentMethods,
   isNoChargeChoice,
 } from '../lib/paymentMethods.js';
+import { paymentStatus } from '../lib/paymentStatus.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { useOrderFormSettings } from '../lib/useOrderFormSettings.js';
 
@@ -298,7 +299,7 @@ export function OrderDetailPage() {
           !incomplete.offeringId
             ? 'Hay un ítem sin variedad elegida.'
             : rango
-              ? `Un Intuitivo tiene que llevar entre ${String(rango.desde)} y ${String(rango.hasta)} platos.`
+              ? `Un Menú especial tiene que llevar entre ${String(rango.desde)} y ${String(rango.hasta)} platos.`
               : 'Revisá los ítems.',
         );
         return;
@@ -363,6 +364,7 @@ export function OrderDetailPage() {
   }
 
   const canEdit = profile.permissions.includes('orders.edit');
+  const payment = paymentStatus(order, paymentMethods, todayInOperation());
   const neighbours = neighboursOf(order.id);
   // De READY en adelante el servidor rechaza cambios en lo que se cocina.
   const compositionEditable = order.status === 'DRAFT' || order.status === 'CONFIRMED';
@@ -460,26 +462,6 @@ export function OrderDetailPage() {
               type="button"
             >
               {editing ? 'Cerrar edición' : 'Editar pedido'}
-            </button>
-          ) : null}
-          {/* Cargado a nombre de otro (un "nn", un stock): pasa al cliente real sin rehacerlo. */}
-          {canEdit && order.status !== 'CANCELLED' ? (
-            <button
-              className="button button-secondary"
-              onClick={() => setChangingCustomer(true)}
-              type="button"
-            >
-              Cambiar cliente
-            </button>
-          ) : null}
-          {/* Cargado en la ciudad que no era: se mueve con número, precio y día de la otra. */}
-          {canEdit && ['DRAFT', 'CONFIRMED', 'READY'].includes(order.status) ? (
-            <button
-              className="button button-secondary"
-              onClick={() => setMoving(true)}
-              type="button"
-            >
-              Mover a otra ciudad
             </button>
           ) : null}
           {/* Las etiquetas salen en lote desde Etiquetas (por zona); acá, ubicar la dirección. */}
@@ -663,7 +645,7 @@ export function OrderDetailPage() {
          * la puerta y llamar al cliente son las dos acciones que siguen a abrir un pedido, y las dos
          * significaban salir de la pantalla.
          */}
-        <div className="order-detail-body mt-8">
+        <div className="order-page-body mt-8">
           <dl className="order-facts">
             <div>
               <dt>Cliente</dt>
@@ -680,7 +662,7 @@ export function OrderDetailPage() {
                   {/* tel: and wa.me so a click dials or opens the chat, rather than being text to
                     copy by hand. */}
                   {order.customer.phone ? (
-                    <a href={`tel:${order.customer.phone.replace(/[^+d]/g, '')}`}>
+                    <a href={`tel:${order.customer.phone.replace(/[^+\d]/g, '')}`}>
                       {order.customer.phone}
                     </a>
                   ) : null}
@@ -688,7 +670,7 @@ export function OrderDetailPage() {
                     <>
                       {order.customer.phone ? ' · ' : ''}
                       <a
-                        href={`https://wa.me/${order.customer.whatsapp.replace(/D/g, '')}`}
+                        href={`https://wa.me/${order.customer.whatsapp.replace(/\D/g, '')}`}
                         rel="noreferrer"
                         target="_blank"
                       >
@@ -747,10 +729,6 @@ export function OrderDetailPage() {
               </div>
             ) : null}
             <div>
-              <dt>Medio de pago</dt>
-              <dd>{paymentMethodLabel(order.paymentExpectation, paymentMethods)}</dd>
-            </div>
-            <div>
               <dt>Origen</dt>
               <dd>{sourceLabel(order.source)}</dd>
             </div>
@@ -788,34 +766,51 @@ export function OrderDetailPage() {
           />
         </div>
 
-        {/* El mensaje con que se confirma el pedido por WhatsApp, listo para copiar. */}
-        <ConfirmationMessageCard order={order} />
-
-        <div className="mt-8 grid gap-3">
-          <h2 className="text-sm font-bold text-forest">Ítems</h2>
-          {order.items.map((item) => (
-            <article className="operation-card" key={item.id}>
-              <div className="flex items-center justify-between gap-3">
-                <strong>
-                  {item.productName} {item.variantName} × {item.quantityUnits}
-                  {item.stockLot ? ` · stock de ${item.stockLot.cycleAlias}` : ''}
-                </strong>
-                <span>{formatMoney(item.totalMinor, order.currency)}</span>
+        <div className="order-page-columns">
+          {/* El mensaje con que se confirma el pedido por WhatsApp, listo para copiar. */}
+          <ConfirmationMessageCard
+            canUseHera={profile.permissions.includes('ai.use')}
+            order={order}
+          />
+          <div className="grid gap-3">
+            <h2 className="text-sm font-bold text-forest">Ítems</h2>
+            {order.items.map((item) => (
+              <article className="operation-card" key={item.id}>
+                <div className="flex items-center justify-between gap-3">
+                  <strong>
+                    {item.productName} {item.variantName} × {item.quantityUnits}
+                    {item.stockLot ? ` · stock de ${item.stockLot.cycleAlias}` : ''}
+                  </strong>
+                  <span>{formatMoney(item.totalMinor, order.currency)}</span>
+                </div>
+                {/* Uno por línea: cinco platos separados por comas se leen como una frase larga, y lo
+                    que hace falta es contarlos y ubicar uno. */}
+                {item.dishSelections.length > 0 ? (
+                  <ul className="dish-selections mt-1">
+                    {pickedDishes(item).map((dish, index) => (
+                      <li key={`${dishLabel(dish)}-${String(index)}`}>{dishLabel(dish)}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </article>
+            ))}
+            <p className="text-right font-semibold">
+              {formatMoney(order.totalMinor, order.currency)}
+            </p>
+            <dl className="order-payment">
+              <div>
+                <dt>Medio de pago</dt>
+                <dd>{paymentMethodLabel(order.paymentExpectation, paymentMethods)}</dd>
               </div>
-              {/* Uno por línea: cinco platos separados por comas se leen como una frase larga, y lo
-                  que hace falta es contarlos y ubicar uno. */}
-              {item.dishSelections.length > 0 ? (
-                <ul className="dish-selections mt-1">
-                  {pickedDishes(item).map((dish, index) => (
-                    <li key={`${dishLabel(dish)}-${String(index)}`}>{dishLabel(dish)}</li>
-                  ))}
-                </ul>
-              ) : null}
-            </article>
-          ))}
-          <p className="text-right font-semibold">
-            {formatMoney(order.totalMinor, order.currency)}
-          </p>
+              <div>
+                <dt>Estado</dt>
+                <dd>
+                  <span className={`order-payment-status is-${payment.tone}`}>{payment.label}</span>
+                  {payment.hint ? <small>{payment.hint}</small> : null}
+                </dd>
+              </div>
+            </dl>
+          </div>
         </div>
 
         {cancelOpen && order ? (
@@ -838,35 +833,59 @@ export function OrderDetailPage() {
           />
         ) : null}
 
-        <div className="mt-8 grid gap-2">
-          <h2 className="text-sm font-bold text-forest">Historial de estado</h2>
-          {history.map((entry) => {
-            const actor = historyActor(entry);
-            return (
-              <p className="text-sm text-ink-muted" key={entry.id}>
-                {formatMoment(entry.createdAt)} · {statusLabel(entry.fromStatus)} →{' '}
-                {orderStatusLabel(entry.toStatus)}
-                {/* Quién y cuándo: lo que hace que un cambio se pueda atribuir sin ir a la auditoría. */}
-                {actor ? ` · por ${actor}` : ''}
-                {entry.reason ? ` · ${entry.reason}` : ''}
-              </p>
-            );
-          })}
-          {history.length === 0 ? <p className="text-sm text-ink-muted">Sin registros.</p> : null}
-        </div>
-
-        {revisions.length > 0 ? (
-          <div className="mt-8 grid gap-2">
-            <h2 className="text-sm font-bold text-forest">Historial de ediciones</h2>
-            {revisions.map((revision) => (
-              <p className="text-sm text-ink-muted" key={revision.id}>
-                {formatMoment(revision.createdAt)} · revisión #{revision.revision} ·{' '}
-                {historyActor(revision) ? `por ${historyActor(revision) ?? ''} · ` : ''}
-                {revision.reason}
-              </p>
-            ))}
+        {/* Lo que se consulta o se usa de vez en cuando: abajo, sin empujar lo de todos los días. */}
+        <footer className="order-page-footer">
+          <div className="grid gap-2 content-start">
+            <h2 className="text-sm font-bold text-forest">Historial de estado</h2>
+            {history.map((entry) => {
+              const actor = historyActor(entry);
+              return (
+                <p className="text-sm text-ink-muted" key={entry.id}>
+                  {formatMoment(entry.createdAt)} · {statusLabel(entry.fromStatus)} →{' '}
+                  {orderStatusLabel(entry.toStatus)}
+                  {/* Quién y cuándo: lo que hace que un cambio se pueda atribuir sin ir a la auditoría. */}
+                  {actor ? ` · por ${actor}` : ''}
+                  {entry.reason ? ` · ${entry.reason}` : ''}
+                </p>
+              );
+            })}
+            {history.length === 0 ? <p className="text-sm text-ink-muted">Sin registros.</p> : null}
           </div>
-        ) : null}
+          {revisions.length > 0 ? (
+            <div className="grid gap-2 content-start">
+              <h2 className="text-sm font-bold text-forest">Historial de ediciones</h2>
+              {revisions.map((revision) => (
+                <p className="text-sm text-ink-muted" key={revision.id}>
+                  {formatMoment(revision.createdAt)} · revisión #{revision.revision} ·{' '}
+                  {historyActor(revision) ? `por ${historyActor(revision) ?? ''} · ` : ''}
+                  {revision.reason}
+                </p>
+              ))}
+            </div>
+          ) : null}
+          <div className="order-page-footer-actions">
+            {/* Cargado a nombre de otro (un "nn", un stock): pasa al cliente real sin rehacerlo. */}
+            {canEdit && order.status !== 'CANCELLED' ? (
+              <button
+                className="button button-secondary"
+                onClick={() => setChangingCustomer(true)}
+                type="button"
+              >
+                Cambiar cliente
+              </button>
+            ) : null}
+            {/* Cargado en la ciudad que no era: se mueve con número, precio y día de la otra. */}
+            {canEdit && ['DRAFT', 'CONFIRMED', 'READY'].includes(order.status) ? (
+              <button
+                className="button button-secondary"
+                onClick={() => setMoving(true)}
+                type="button"
+              >
+                Mover a otra ciudad
+              </button>
+            ) : null}
+          </div>
+        </footer>
       </section>
       {changingCustomer && order ? (
         <ChangeCustomerDialog

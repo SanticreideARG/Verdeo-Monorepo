@@ -88,5 +88,34 @@ export function buildStatsPeriodsExcel(periods: StatsPeriods, title: string): Ar
     'Por medio de pago',
   );
 
+  XLSX.utils.book_append_sheet(
+    workbook,
+    sheet(
+      'Por día de reparto',
+      [
+        'Día de reparto',
+        'Ciudad',
+        'Pedidos',
+        'Pedidos en efectivo',
+        'Efectivo a rendir',
+        'Transferencia cobrada',
+        'Transferencia pendiente',
+        'Total',
+      ],
+      periods.deliveryDays.map((day): Cell[] => [
+        day.deliveryDate,
+        day.operatingSiteName,
+        day.orderCount,
+        day.cashCount,
+        money(day.cashMinor),
+        money(day.transferPaidMinor),
+        money(day.transferPendingMinor),
+        money(day.totalMinor),
+      ]),
+      [14, 18, 10, 12, 14, 14, 14, 14],
+    ),
+    'Por día de reparto',
+  );
+
   return XLSX.write(workbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
 }

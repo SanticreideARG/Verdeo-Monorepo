@@ -151,7 +151,7 @@ export function OrderItemsEditor({
             {offering?.composable ? (
               <div className="items-editor-dishes">
                 <p className="text-sm text-ink-muted">
-                  Platos del Intuitivo — {item.selectedDishes.length} de{' '}
+                  Platos del Menú especial — {item.selectedDishes.length} de{' '}
                   {offering?.mealsPerUnit ?? 5}
                 </p>
                 <IntuitivoDishPicker
