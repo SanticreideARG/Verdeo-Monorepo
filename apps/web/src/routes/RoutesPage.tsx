@@ -45,6 +45,17 @@ interface RouteSummary {
   stopCount: number;
 }
 
+/** Un pedido del día sin hoja (`GET /delivery/routes/:id/available-orders`). */
+interface AvailableOrder {
+  customerDisplayName: string;
+  deliveryAddress: string | null;
+  id: string;
+  located: boolean;
+  neighborhood: string | null;
+  publicNumber: string;
+  zone: string | null;
+}
+
 interface RouteStop {
   customerDisplayName: string;
   deliveryAddress: string;
@@ -140,10 +151,21 @@ export function RoutesPage() {
    * hoja al teléfono del repartidor. Descartar usaba dos toques del mismo botón, que es un cuarto
    * patrón para lo mismo.
    */
-  const [pending, setPending] = useState<{
-    kind: 'descartar' | 'publicar';
-    routeId: string;
-  } | null>(null);
+  const [pending, setPending] = useState<
+    | {
+        kind: 'descartar' | 'publicar';
+        routeId: string;
+      }
+    | { kind: 'sacar'; name: string; routeId: string; stopId: string }
+    | null
+  >(null);
+  /*
+   * Sumar pedidos a la hoja (2026-11-05): los del día que no están en ninguna. Una hoja nunca es
+   * definitiva, publicada o no.
+   */
+  const [adding, setAdding] = useState<AvailableOrder[] | null>(null);
+  const [addPick, setAddPick] = useState<string[]>([]);
+  const [addBusy, setAddBusy] = useState(false);
   /* El enlace recién generado. Se muestra una vez: el token no se puede volver a leer, sólo
      generar otro — y generar otro da de baja el anterior. */
   const [issuedLink, setIssuedLink] = useState<{ expiresAt: string; url: string } | null>(null);
@@ -451,6 +473,51 @@ export function RoutesPage() {
     return response.ok;
   }
 
+  async function openAdd(routeId: string) {
+    setAddPick([]);
+    const response = await apiRequest(`/api/v1/delivery/routes/${routeId}/available-orders`);
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    setAdding(((await response.json()) as { orders: AvailableOrder[] }).orders);
+  }
+
+  async function confirmAdd(routeId: string) {
+    if (addPick.length === 0) return;
+    setAddBusy(true);
+    const response = await apiRequest(`/api/v1/delivery/routes/${routeId}/stops`, {
+      body: JSON.stringify({ orderIds: addPick }),
+      method: 'POST',
+    });
+    setAddBusy(false);
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    setSelectedRoute((await response.json()) as RouteDetail);
+    setAdding(null);
+    setDatesVersion((version) => version + 1);
+    showToast(
+      addPick.length === 1
+        ? 'Pedido sumado al final de la hoja. Acomodalo arrastrándolo.'
+        : `${String(addPick.length)} pedidos sumados al final de la hoja. Acomodalos arrastrándolos.`,
+    );
+  }
+
+  async function removeStop(routeId: string, stopId: string) {
+    const response = await apiRequest(`/api/v1/delivery/routes/${routeId}/stops/${stopId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    setSelectedRoute((await response.json()) as RouteDetail);
+    setDatesVersion((version) => version + 1);
+    showToast('Parada sacada. El pedido queda libre para otra hoja.');
+  }
+
   async function saveManualOrder() {
     if (!selectedRoute || !manualOrder) return;
     const { pending, picked } = splitManualOrder(selectedRoute.stops, manualOrder);
@@ -499,6 +566,7 @@ export function RoutesPage() {
   const selectedRouteId = selectedRoute?.id;
   useEffect(() => {
     setManualOrder(null);
+    setAdding(null);
   }, [selectedRouteId]);
 
   if (failed) return <DashboardFailed label="las rutas" />;
@@ -809,7 +877,7 @@ export function RoutesPage() {
                       {manualOrder ? null : (
                         <div className="flex flex-wrap gap-2">
                           {canManage &&
-                          selectedRoute.status === 'draft' &&
+                          selectedRoute.status !== 'completed' &&
                           selectedRoute.stops.length > 1 ? (
                             <button
                               className="button button-secondary"
@@ -817,6 +885,17 @@ export function RoutesPage() {
                               type="button"
                             >
                               Establecer orden manualmente
+                            </button>
+                          ) : null}
+                          {canManage && selectedRoute.status !== 'completed' ? (
+                            <button
+                              className="button button-secondary"
+                              onClick={() =>
+                                adding ? setAdding(null) : void openAdd(selectedRoute.id)
+                              }
+                              type="button"
+                            >
+                              {adding ? 'Cerrar' : 'Sumar pedidos'}
                             </button>
                           ) : null}
                           {/* Lo que faltaba: poder sacar la ruta de la pantalla. */}
@@ -836,9 +915,9 @@ export function RoutesPage() {
                               >
                                 Descargar planilla
                               </button>
-                              {/* El enlace del repartidor. Sólo con la ruta publicada: un borrador se
-                              puede reordenar, y una hoja que cambia debajo de quien ya salió es
-                              peor que no tener hoja. */}
+                              {/* El enlace del repartidor, sólo con la ruta publicada. La hoja se
+                              sigue pudiendo editar (2026-11-05): el enlace la lee en vivo, así que
+                              quien reparte ve los cambios al recargar. */}
                               {canPublish && selectedRoute.status === 'published' ? (
                                 <button
                                   className="button button-primary"
@@ -876,6 +955,67 @@ export function RoutesPage() {
                         </div>
                       )}
                     </div>
+                    {adding && !manualOrder ? (
+                      <div className="routes-add-panel">
+                        {adding.length === 0 ? (
+                          <p className="text-ink-muted">
+                            No hay pedidos de este día sin hoja: todos ya están en alguna.
+                          </p>
+                        ) : (
+                          <>
+                            <p className="routes-add-hint">
+                              Pedidos de este día que no están en ninguna hoja. Van al final;
+                              después los acomodás arrastrándolos.
+                            </p>
+                            <ul className="routes-add-list">
+                              {adding.map((order) => (
+                                <li key={order.id}>
+                                  <label className={order.located ? '' : 'is-disabled'}>
+                                    <input
+                                      checked={addPick.includes(order.id)}
+                                      disabled={!order.located}
+                                      onChange={(event) =>
+                                        setAddPick((current) =>
+                                          event.target.checked
+                                            ? [...current, order.id]
+                                            : current.filter((id) => id !== order.id),
+                                        )
+                                      }
+                                      type="checkbox"
+                                    />
+                                    <span>
+                                      <strong>{order.customerDisplayName}</strong>{' '}
+                                      <small>{order.publicNumber}</small>
+                                      <br />
+                                      <small>
+                                        {[order.deliveryAddress, order.neighborhood, order.zone]
+                                          .filter(Boolean)
+                                          .join(' · ')}
+                                        {order.located
+                                          ? ''
+                                          : ' · Sin ubicación: confirmala en la ficha del cliente'}
+                                      </small>
+                                    </span>
+                                  </label>
+                                </li>
+                              ))}
+                            </ul>
+                            <button
+                              className="button button-primary"
+                              disabled={addBusy || addPick.length === 0}
+                              onClick={() => void confirmAdd(selectedRoute.id)}
+                              type="button"
+                            >
+                              {addBusy
+                                ? 'Sumando…'
+                                : addPick.length === 0
+                                  ? 'Elegí los pedidos'
+                                  : `Sumar ${String(addPick.length)} a la hoja`}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    ) : null}
                     {manualOrder ? (
                       <RouteManualOrderBar
                         onCancel={() => setManualOrder(null)}
@@ -1001,6 +1141,23 @@ export function RoutesPage() {
                                   ) : null}
                                   {stop.status === 'delivered' ? (
                                     <span className="routes-stop-done">Entregada</span>
+                                  ) : canManage && selectedRoute.status !== 'completed' ? (
+                                    <button
+                                      aria-label={`Sacar de la hoja a ${stop.customerDisplayName}`}
+                                      className="routes-stop-remove"
+                                      onClick={() =>
+                                        setPending({
+                                          kind: 'sacar',
+                                          name: stop.customerDisplayName,
+                                          routeId: selectedRoute.id,
+                                          stopId: stop.id,
+                                        })
+                                      }
+                                      title="Sacar de la hoja"
+                                      type="button"
+                                    >
+                                      Sacar
+                                    </button>
                                   ) : null}
                                 </div>
                               </li>
@@ -1034,21 +1191,36 @@ export function RoutesPage() {
 
       {pending ? (
         <ConfirmDialog
-          confirmLabel={pending.kind === 'publicar' ? 'Publicar la ruta' : 'Descartar'}
+          confirmLabel={
+            pending.kind === 'publicar'
+              ? 'Publicar la ruta'
+              : pending.kind === 'sacar'
+                ? 'Sacar de la hoja'
+                : 'Descartar'
+          }
           detail={
             pending.kind === 'publicar'
               ? `La hoja pasa a la aplicación de reparto y el repartidor la ve en su teléfono. ${String(selectedRoute?.stops.length ?? 0)} paradas.`
-              : 'La propuesta se borra y sus pedidos vuelven a estar disponibles para otra hoja. No afecta a ningún pedido.'
+              : pending.kind === 'sacar'
+                ? `${pending.name} sale de esta hoja. El pedido no cambia: queda libre para sumarlo a otra.`
+                : 'La propuesta se borra y sus pedidos vuelven a estar disponibles para otra hoja. No afecta a ningún pedido.'
           }
           onCancel={() => setPending(null)}
           onConfirm={async () => {
             const target = pending;
             setPending(null);
             if (target.kind === 'publicar') await publish(target.routeId);
+            else if (target.kind === 'sacar') await removeStop(target.routeId, target.stopId);
             else await discard(target.routeId);
           }}
-          tone={pending.kind === 'descartar' ? 'destructivo' : 'normal'}
-          title={pending.kind === 'publicar' ? '¿Publicar esta ruta?' : '¿Descartar la propuesta?'}
+          tone={pending.kind === 'publicar' ? 'normal' : 'destructivo'}
+          title={
+            pending.kind === 'publicar'
+              ? '¿Publicar esta ruta?'
+              : pending.kind === 'sacar'
+                ? '¿Sacar esta parada?'
+                : '¿Descartar la propuesta?'
+          }
         />
       ) : null}
     </DashboardShell>

@@ -102,6 +102,8 @@ export function CustomersPage() {
   const [message, setMessage] = useState('');
   // Eliminar es a un clic de distancia y no vuelve: se pregunta antes.
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // El domicilio a eliminar, mientras se confirma (2026-11-05).
+  const [removingAddress, setRemovingAddress] = useState<CustomerAddress | null>(null);
   const [geocoding, setGeocoding] = useState<Record<string, AddressGeocodingRequest>>({});
 
   const [debt, setDebt] = useState<{ count: number; currency: string; totalMinor: number } | null>(
@@ -518,6 +520,26 @@ export function CustomersPage() {
       showToast('Domicilio agregado. Confirmá su ubicación antes de usarlo operativamente.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos agregar el domicilio.');
+    }
+  }
+
+  /*
+   * Eliminar un domicilio. Se da de baja (`active: false`) y no se borra: los pedidos que ya
+   * salieron a esa dirección la siguen nombrando. Deja de aparecer en la ficha y al cargar pedidos.
+   */
+  async function removeAddress(address: CustomerAddress) {
+    if (!detail) return;
+    try {
+      await responseJson<CustomerAddress>(
+        await apiRequest(`/api/v1/customers/${detail.id}/addresses/${address.id}`, {
+          body: JSON.stringify({ active: false }),
+          method: 'PATCH',
+        }),
+      );
+      await loadCustomer(detail.id);
+      showToast('Domicilio eliminado.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'No pudimos eliminar el domicilio.');
     }
   }
 
@@ -1074,187 +1096,203 @@ export function CustomersPage() {
                     </div>
                   </div>
                   <div className="crm-address-grid">
-                    {detail.addresses?.map((address) => {
-                      const request = geocoding[address.id];
-                      return (
-                        <article className="crm-address-card" key={address.id}>
-                          <div className="crm-address-top">
-                            <div>
-                              <span>{address.label}</span>
-                              {address.primary ? <small>Principal</small> : null}
-                              {/* Whether the customer wrote this address themselves changes how
+                    {detail.addresses
+                      ?.filter((address) => address.active)
+                      .map((address) => {
+                        const request = geocoding[address.id];
+                        return (
+                          <article className="crm-address-card" key={address.id}>
+                            <div className="crm-address-top">
+                              <div>
+                                <span>{address.label}</span>
+                                {address.primary ? <small>Principal</small> : null}
+                                {/* Whether the customer wrote this address themselves changes how
                                   much an operator should second-guess it before correcting. */}
-                              {address.source === 'customer' ? (
-                                <small>La cargó el cliente</small>
-                              ) : null}
+                                {address.source === 'customer' ? (
+                                  <small>La cargó el cliente</small>
+                                ) : null}
+                              </div>
+                              <i data-status={address.geocodingStatus}>
+                                {addressStatusLabel(address.geocodingStatus)}
+                              </i>
                             </div>
-                            <i data-status={address.geocodingStatus}>
-                              {addressStatusLabel(address.geocodingStatus)}
-                            </i>
-                          </div>
-                          <h3>{address.writtenAddress}</h3>
-                          {/* Un renglón vacío no se anuncia: decía "Sin datos territoriales
+                            <h3>{address.writtenAddress}</h3>
+                            {/* Un renglón vacío no se anuncia: decía "Sin datos territoriales
                               adicionales", que informa la ausencia de un campo opcional. Lo que sí
                               importa —un domicilio sin geocodificar, que deja el pedido afuera del
                               reparto— ya lo dice el estado de arriba. */}
-                          {[address.unit, address.city, address.sector, address.operationalZone]
-                            .filter(Boolean)
-                            .join(' · ') ? (
-                            <p>
-                              {[address.unit, address.city, address.sector, address.operationalZone]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </p>
-                          ) : null}
-                          {address.accessNotes ? (
-                            <p className="crm-address-note">Acceso: {address.accessNotes}</p>
-                          ) : null}
-                          {address.deliveryWindow ? (
-                            <p className="crm-address-note">Recibe: {address.deliveryWindow}</p>
-                          ) : null}
-                          {address.latitude !== null && address.longitude !== null ? (
-                            <>
-                              <code>
-                                {address.latitude.toFixed(6)}, {address.longitude.toFixed(6)}
-                              </code>
-                              <AddressMap
-                                label={address.writtenAddress}
-                                latitude={address.latitude}
-                                longitude={address.longitude}
-                              />
-                            </>
-                          ) : null}
-                          <div className="crm-address-actions">
-                            {address.locationUrl ? (
-                              <a href={address.locationUrl} rel="noreferrer" target="_blank">
-                                Abrir mapa
-                              </a>
+                            {[address.unit, address.city, address.sector, address.operationalZone]
+                              .filter(Boolean)
+                              .join(' · ') ? (
+                              <p>
+                                {[
+                                  address.unit,
+                                  address.city,
+                                  address.sector,
+                                  address.operationalZone,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </p>
                             ) : null}
-                            {canEdit && address.geocodingStatus !== 'CONFIRMED' ? (
-                              <button
-                                className="is-primary"
-                                onClick={() => void startGeocoding(address)}
-                                type="button"
-                              >
-                                {/* "Validar" no decía qué pasaba al tocarlo. Busca la dirección,
+                            {address.accessNotes ? (
+                              <p className="crm-address-note">Acceso: {address.accessNotes}</p>
+                            ) : null}
+                            {address.deliveryWindow ? (
+                              <p className="crm-address-note">Recibe: {address.deliveryWindow}</p>
+                            ) : null}
+                            {address.latitude !== null && address.longitude !== null ? (
+                              <>
+                                <code>
+                                  {address.latitude.toFixed(6)}, {address.longitude.toFixed(6)}
+                                </code>
+                                <AddressMap
+                                  label={address.writtenAddress}
+                                  latitude={address.latitude}
+                                  longitude={address.longitude}
+                                />
+                              </>
+                            ) : null}
+                            <div className="crm-address-actions">
+                              {address.locationUrl ? (
+                                <a href={address.locationUrl} rel="noreferrer" target="_blank">
+                                  Abrir mapa
+                                </a>
+                              ) : null}
+                              {canEdit && address.geocodingStatus !== 'CONFIRMED' ? (
+                                <button
+                                  className="is-primary"
+                                  onClick={() => void startGeocoding(address)}
+                                  type="button"
+                                >
+                                  {/* "Validar" no decía qué pasaba al tocarlo. Busca la dirección,
                                     propone la ubicación y, al aceptarla, deja la dirección escrita
                                     como corresponde. */}
-                                Actualizar ubicación
-                              </button>
-                            ) : null}
-                          </div>
-                          {request ? (
-                            <div className="crm-geocoding-box">
-                              <strong>
-                                {request.status === 'CANDIDATES'
-                                  ? 'Ubicaciones encontradas'
-                                  : 'Corrección manual'}
-                              </strong>
-                              {request.status === 'CANDIDATES' ? (
-                                <p className="crm-geocoding-hint">
-                                  Al elegir una queda la ubicación cargada y la dirección escrita
-                                  como figura acá.
-                                </p>
+                                  Actualizar ubicación
+                                </button>
                               ) : null}
-                              {request.candidates.map((candidate) => (
-                                <div className="crm-candidate" key={candidate.id}>
-                                  <div>
-                                    <span>{candidate.formattedAddress}</span>
-                                    <code>
-                                      {candidate.latitude.toFixed(6)},{' '}
-                                      {candidate.longitude.toFixed(6)}
-                                    </code>
-                                    {/* Seeing the candidate on a map is the whole point of this
+                              {canEdit ? (
+                                <button
+                                  className="is-danger"
+                                  onClick={() => setRemovingAddress(address)}
+                                  type="button"
+                                >
+                                  Eliminar
+                                </button>
+                              ) : null}
+                            </div>
+                            {request ? (
+                              <div className="crm-geocoding-box">
+                                <strong>
+                                  {request.status === 'CANDIDATES'
+                                    ? 'Ubicaciones encontradas'
+                                    : 'Corrección manual'}
+                                </strong>
+                                {request.status === 'CANDIDATES' ? (
+                                  <p className="crm-geocoding-hint">
+                                    Al elegir una queda la ubicación cargada y la dirección escrita
+                                    como figura acá.
+                                  </p>
+                                ) : null}
+                                {request.candidates.map((candidate) => (
+                                  <div className="crm-candidate" key={candidate.id}>
+                                    <div>
+                                      <span>{candidate.formattedAddress}</span>
+                                      <code>
+                                        {candidate.latitude.toFixed(6)},{' '}
+                                        {candidate.longitude.toFixed(6)}
+                                      </code>
+                                      {/* Seeing the candidate on a map is the whole point of this
                                         screen: two candidates for the same street differ by digits
                                         nobody can eyeball, but they are obvious on a map. */}
-                                    <AddressMap
-                                      label={candidate.formattedAddress}
-                                      latitude={candidate.latitude}
-                                      longitude={candidate.longitude}
-                                    />
+                                      <AddressMap
+                                        label={candidate.formattedAddress}
+                                        latitude={candidate.latitude}
+                                        longitude={candidate.longitude}
+                                      />
+                                    </div>
+                                    <button
+                                      onClick={() =>
+                                        void confirmCandidate(
+                                          address,
+                                          candidate.id,
+                                          candidate.formattedAddress,
+                                        )
+                                      }
+                                      type="button"
+                                    >
+                                      Usar esta
+                                    </button>
                                   </div>
-                                  <button
-                                    onClick={() =>
-                                      void confirmCandidate(
-                                        address,
-                                        candidate.id,
-                                        candidate.formattedAddress,
-                                      )
-                                    }
-                                    type="button"
+                                ))}
+                                {request.status !== 'CANDIDATES' ||
+                                request.candidates.length === 0 ? (
+                                  <form
+                                    className="crm-manual-location"
+                                    onSubmit={(event) => void confirmManualLocation(event, address)}
                                   >
-                                    Usar esta
-                                  </button>
-                                </div>
-                              ))}
-                              {request.status !== 'CANDIDATES' ||
-                              request.candidates.length === 0 ? (
-                                <form
-                                  className="crm-manual-location"
-                                  onSubmit={(event) => void confirmManualLocation(event, address)}
+                                    <label className="field">
+                                      Latitud
+                                      <input
+                                        name="latitude"
+                                        step="any"
+                                        type="number"
+                                        min="-90"
+                                        max="90"
+                                        required
+                                      />
+                                    </label>
+                                    <label className="field">
+                                      Longitud
+                                      <input
+                                        name="longitude"
+                                        step="any"
+                                        type="number"
+                                        min="-180"
+                                        max="180"
+                                        required
+                                      />
+                                    </label>
+                                    <label className="field">
+                                      Ciudad
+                                      <input defaultValue={address.city ?? ''} name="city" />
+                                    </label>
+                                    <label className="field">
+                                      Sector
+                                      <input defaultValue={address.sector ?? ''} name="sector" />
+                                    </label>
+                                    <label className="field">
+                                      Zona operativa
+                                      <input
+                                        defaultValue={address.operationalZone ?? ''}
+                                        name="operationalZone"
+                                      />
+                                    </label>
+                                    <label className="field">
+                                      Enlace
+                                      <input
+                                        defaultValue={address.locationUrl ?? ''}
+                                        name="locationUrl"
+                                        type="url"
+                                      />
+                                    </label>
+                                    <button className="button button-primary" type="submit">
+                                      Confirmar corrección
+                                    </button>
+                                  </form>
+                                ) : null}
+                                <button
+                                  className="crm-reject"
+                                  onClick={() => void rejectGeocoding(address)}
+                                  type="button"
                                 >
-                                  <label className="field">
-                                    Latitud
-                                    <input
-                                      name="latitude"
-                                      step="any"
-                                      type="number"
-                                      min="-90"
-                                      max="90"
-                                      required
-                                    />
-                                  </label>
-                                  <label className="field">
-                                    Longitud
-                                    <input
-                                      name="longitude"
-                                      step="any"
-                                      type="number"
-                                      min="-180"
-                                      max="180"
-                                      required
-                                    />
-                                  </label>
-                                  <label className="field">
-                                    Ciudad
-                                    <input defaultValue={address.city ?? ''} name="city" />
-                                  </label>
-                                  <label className="field">
-                                    Sector
-                                    <input defaultValue={address.sector ?? ''} name="sector" />
-                                  </label>
-                                  <label className="field">
-                                    Zona operativa
-                                    <input
-                                      defaultValue={address.operationalZone ?? ''}
-                                      name="operationalZone"
-                                    />
-                                  </label>
-                                  <label className="field">
-                                    Enlace
-                                    <input
-                                      defaultValue={address.locationUrl ?? ''}
-                                      name="locationUrl"
-                                      type="url"
-                                    />
-                                  </label>
-                                  <button className="button button-primary" type="submit">
-                                    Confirmar corrección
-                                  </button>
-                                </form>
-                              ) : null}
-                              <button
-                                className="crm-reject"
-                                onClick={() => void rejectGeocoding(address)}
-                                type="button"
-                              >
-                                Descartar solicitud
-                              </button>
-                            </div>
-                          ) : null}
-                        </article>
-                      );
-                    })}
+                                  Descartar solicitud
+                                </button>
+                              </div>
+                            ) : null}
+                          </article>
+                        );
+                      })}
                   </div>
                   {canEdit ? (
                     <details className="crm-inline-form">
@@ -1428,6 +1466,21 @@ export function CustomersPage() {
 
         {showExport ? (
           <CustomerExportDialog onClose={() => setShowExport(false)} search={search} />
+        ) : null}
+
+        {removingAddress ? (
+          <ConfirmDialog
+            confirmLabel="Eliminar domicilio"
+            detail={`${removingAddress.writtenAddress}. Deja de aparecer en la ficha y al cargar pedidos. Los pedidos que ya tienen esta dirección no cambian.`}
+            onCancel={() => setRemovingAddress(null)}
+            onConfirm={async () => {
+              const target = removingAddress;
+              setRemovingAddress(null);
+              await removeAddress(target);
+            }}
+            tone="destructivo"
+            title={`¿Eliminar el domicilio "${removingAddress.label}"?`}
+          />
         ) : null}
 
         {confirmDelete && detail ? (

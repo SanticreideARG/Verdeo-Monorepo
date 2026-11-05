@@ -8301,6 +8301,10 @@ textarea.sr-only {
   background: color-mix(in srgb, var(--db-accent) 14%, transparent);
   font-weight: 700;
 }
+.crm-address-actions button.is-danger {
+  margin-left: auto;
+  color: var(--db-danger, #b3261e);
+}
 
 /* Avisos al cliente y motivo de entrega fallida, dentro de la parada abierta. */
 .delivery-sheet-notify {
@@ -11938,6 +11942,62 @@ label.field:has(> input[type='radio']) {
 }
 .routes-stop-handle:active {
   cursor: grabbing;
+}
+/* Sacar una parada de la hoja: chico y discreto, al lado de la manija. */
+.routes-stop-remove {
+  border: 1px solid var(--db-border);
+  border-radius: 0.5rem;
+  padding: 0.2rem 0.5rem;
+  background: none;
+  color: var(--db-muted);
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.routes-stop-remove:hover {
+  border-color: var(--db-danger, #b42318);
+  color: var(--db-danger, #b42318);
+}
+/* Los pedidos del día sin hoja, para sumarlos. */
+.routes-add-panel {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+  border: 1px solid var(--db-border);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+}
+.routes-add-panel > .button {
+  justify-self: start;
+}
+.routes-add-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--db-muted);
+}
+.routes-add-list {
+  display: grid;
+  gap: 0.25rem;
+  max-height: 18rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.routes-add-list label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  padding: 0.35rem 0.25rem;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.routes-add-list label.is-disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.routes-add-list small {
+  color: var(--db-muted);
 }
 .routes-stop.is-dragging {
   opacity: 0.5;

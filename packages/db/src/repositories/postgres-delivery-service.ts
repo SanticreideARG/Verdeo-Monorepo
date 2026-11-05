@@ -835,6 +835,185 @@ export class PostgresDeliveryService {
   }
 
   /**
+   * Una hoja de ruta nunca es definitiva (2026-11-05): borrador o publicada, se le suman pedidos y
+   * se le sacan paradas. Una ruta completada ya pasó y no se toca.
+   */
+  private async editableRoute(transaction: DatabaseTransaction, routeId: string) {
+    const [route] = await transaction
+      .select({
+        deliveryDate: deliveryRoutes.deliveryDate,
+        operatingSiteId: deliveryRoutes.operatingSiteId,
+        status: deliveryRoutes.status,
+      })
+      .from(deliveryRoutes)
+      .where(eq(deliveryRoutes.id, routeId))
+      .limit(1);
+    if (!route) throw new DeliveryNotFoundError('No se encontró la ruta');
+    if (route.status !== 'draft' && route.status !== 'published')
+      throw new DeliveryConflictError('Esta ruta ya terminó: no se puede cambiar.');
+    return route;
+  }
+
+  /** Los pedidos de ese día y esa ciudad, ruteables y sin hoja: los que se le pueden sumar. */
+  private async freeOrders(
+    database: Database | DatabaseTransaction,
+    route: { deliveryDate: string; operatingSiteId: string },
+  ) {
+    const routed = database
+      .select({ orderId: deliveryStops.orderId })
+      .from(deliveryStops)
+      .innerJoin(deliveryRoutes, eq(deliveryRoutes.id, deliveryStops.routeId))
+      .where(inArray(deliveryRoutes.status, ['draft', 'published']));
+    return database
+      .select({
+        customerDisplayName: customers.displayName,
+        deliveryAddress: orders.deliveryAddressSnapshot,
+        id: orders.id,
+        latitude: customerAddresses.latitude,
+        longitude: customerAddresses.longitude,
+        neighborhood: neighborhoods.displayName,
+        publicNumber: orders.publicNumber,
+        zone: geographicZones.displayName,
+      })
+      .from(orders)
+      .innerJoin(customers, eq(customers.id, orders.customerId))
+      .innerJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+      .leftJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
+      .leftJoin(neighborhoods, eq(neighborhoods.id, customerAddresses.neighborhoodId))
+      .where(
+        and(
+          eq(orders.operatingSiteId, route.operatingSiteId),
+          eq(orders.deliveryDate, route.deliveryDate),
+          inArray(orders.status, ROUTABLE_STATUSES),
+          notInArray(orders.id, routed),
+        ),
+      )
+      .orderBy(asc(customers.displayName));
+  }
+
+  /** Lo que se le puede sumar a una hoja. Los que no tienen ubicación se dicen, pero no entran. */
+  public async availableOrders(routeId: string) {
+    return this.database.transaction(async (transaction) => {
+      const route = await this.editableRoute(transaction, routeId);
+      const free = await this.freeOrders(transaction, route);
+      return free.map(({ latitude, longitude, ...order }) => ({
+        ...order,
+        located: latitude !== null && longitude !== null,
+      }));
+    });
+  }
+
+  /**
+   * Sumar pedidos a una hoja, también publicada. Van al final: quien arma la ruta los acomoda
+   * arrastrando o con el orden manual. El enlace del repartidor lee la hoja en vivo, así que los ve
+   * al recargar.
+   */
+  public async addStops(routeId: string, orderIds: readonly string[], context: DeliveryContext) {
+    return this.database.transaction(async (transaction) => {
+      const route = await this.editableRoute(transaction, routeId);
+      const free = await this.freeOrders(transaction, route);
+      const byId = new Map(free.map((order) => [order.id, order]));
+      const wanted = [...new Set(orderIds)];
+      const missing = wanted.filter((id) => !byId.has(id));
+      if (missing.length > 0)
+        throw new DeliveryConflictError(
+          'Algún pedido ya no se puede sumar: cambió de día, de estado o ya está en otra hoja.',
+        );
+      if (wanted.some((id) => byId.get(id)?.latitude === null))
+        throw new DeliveryConflictError(
+          'Algún pedido no tiene la ubicación confirmada. Confirmala en la ficha del cliente.',
+        );
+
+      const [last] = await transaction
+        .select({ sequence: sql<number>`coalesce(max(${deliveryStops.sequence}), 0)` })
+        .from(deliveryStops)
+        .where(eq(deliveryStops.routeId, routeId));
+      const start = Number(last?.sequence ?? 0);
+      await transaction
+        .insert(deliveryStops)
+        .values(
+          wanted.map((orderId, index) => ({ orderId, routeId, sequence: start + index + 1 })),
+        );
+      await transaction
+        .update(deliveryRoutes)
+        .set({ updatedAt: new Date() })
+        .where(eq(deliveryRoutes.id, routeId));
+
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: 'delivery.route_stops_added',
+        actor: context.actorUserId
+          ? { type: 'user', userId: context.actorUserId }
+          : { type: 'system' },
+        after: { orderIds: wanted, status: route.status },
+        correlationId: context.correlationId,
+        entityId: routeId,
+        entityType: 'delivery_route',
+        requestId: context.requestId,
+        source: context.source,
+      });
+      return this.loadRouteDetail(transaction, routeId);
+    });
+  }
+
+  /**
+   * Sacar una parada de la hoja. El pedido no se toca: queda libre para otra hoja. Una parada
+   * entregada es parte de lo que pasó ese día y no se saca.
+   */
+  public async removeStop(routeId: string, stopId: string, context: DeliveryContext) {
+    return this.database.transaction(async (transaction) => {
+      const route = await this.editableRoute(transaction, routeId);
+      const [stop] = await transaction
+        .select({ orderId: deliveryStops.orderId, status: deliveryStops.status })
+        .from(deliveryStops)
+        .where(and(eq(deliveryStops.id, stopId), eq(deliveryStops.routeId, routeId)))
+        .limit(1);
+      if (!stop) throw new DeliveryNotFoundError('No se encontró la parada');
+      if (stop.status === 'delivered')
+        throw new DeliveryConflictError('Esa parada ya se entregó: no se puede sacar de la hoja.');
+
+      await transaction.delete(deliveryStops).where(eq(deliveryStops.id, stopId));
+      // Los números de parada quedan seguidos (1, 2, 3…), en dos pasos por el índice único.
+      const rest = await transaction
+        .select({ id: deliveryStops.id })
+        .from(deliveryStops)
+        .where(eq(deliveryStops.routeId, routeId))
+        .orderBy(asc(deliveryStops.sequence));
+      for (const [index, row] of rest.entries()) {
+        await transaction
+          .update(deliveryStops)
+          .set({ sequence: index + 1 + 100_000 })
+          .where(eq(deliveryStops.id, row.id));
+      }
+      for (const [index, row] of rest.entries()) {
+        await transaction
+          .update(deliveryStops)
+          .set({ sequence: index + 1, updatedAt: new Date() })
+          .where(eq(deliveryStops.id, row.id));
+      }
+      await transaction
+        .update(deliveryRoutes)
+        .set({ updatedAt: new Date() })
+        .where(eq(deliveryRoutes.id, routeId));
+
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: 'delivery.route_stop_removed',
+        actor: context.actorUserId
+          ? { type: 'user', userId: context.actorUserId }
+          : { type: 'system' },
+        before: { orderId: stop.orderId, status: route.status, stopStatus: stop.status },
+        correlationId: context.correlationId,
+        entityId: routeId,
+        entityType: 'delivery_route',
+        requestId: context.requestId,
+        source: context.source,
+      });
+      return this.loadRouteDetail(transaction, routeId);
+    });
+  }
+
+  /**
    * Qué lleva cada pedido, ya escrito y listo para mostrar.
    *
    * Una consulta para todas las paradas y no una por parada: una hoja de ruta de veinte paradas

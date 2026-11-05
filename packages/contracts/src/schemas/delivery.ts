@@ -109,6 +109,26 @@ export const DeliveryStopReorderRequestSchema = z.object({
   stopIds: z.array(UuidSchema).min(1),
 });
 
+/** Sumar pedidos a una hoja, borrador o publicada (2026-11-05). */
+export const DeliveryAddStopsRequestSchema = z.object({
+  orderIds: z.array(UuidSchema).min(1).max(200),
+});
+
+/** Un pedido del día, sin hoja, que se le puede sumar a una. */
+export const DeliveryAvailableOrderSchema = z.object({
+  customerDisplayName: z.string(),
+  deliveryAddress: z.string().nullable(),
+  id: UuidSchema,
+  located: z.boolean(),
+  neighborhood: z.string().nullable(),
+  publicNumber: z.string(),
+  zone: z.string().nullable(),
+});
+
+export const DeliveryAvailableOrdersResponseSchema = z.object({
+  orders: z.array(DeliveryAvailableOrderSchema),
+});
+
 export const DeliveryTriggerRequestSchema = z.object({
   action: DeliveryTriggerActionSchema,
 });

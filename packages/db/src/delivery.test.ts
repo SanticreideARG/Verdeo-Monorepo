@@ -220,6 +220,39 @@ describe('reorderStops', () => {
   });
 });
 
+describe('editar una hoja publicada', () => {
+  it('saca una parada, la ofrece de nuevo y la vuelve a sumar al final', async () => {
+    const { service } = await seededService();
+    const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
+    await service.publishRoute(route!.id, CONTEXT);
+    const [first] = route!.stops;
+
+    const without = await service.removeStop(route!.id, first!.id, CONTEXT);
+    expect(without?.stops.map((stop) => [stop.orderId, stop.sequence])).toEqual([[ORDER_A, 1]]);
+
+    const available = await service.availableOrders(route!.id);
+    expect(available.map((order) => [order.id, order.located])).toEqual([[ORDER_B, true]]);
+
+    const back = await service.addStops(route!.id, [ORDER_B], CONTEXT);
+    expect(back?.status).toBe('published');
+    expect(back?.stops.map((stop) => [stop.orderId, stop.sequence])).toEqual([
+      [ORDER_A, 1],
+      [ORDER_B, 2],
+    ]);
+    await expect(service.addStops(route!.id, [ORDER_B], CONTEXT)).rejects.toThrow(/otra hoja/);
+  });
+
+  it('no saca una parada entregada', async () => {
+    const { service } = await seededService();
+    const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
+    await service.publishRoute(route!.id, CONTEXT);
+    const stop = route!.stops[0]!;
+    await service.updateStopStatus(stop.id, 'delivered', USER_REPARTIDOR, CONTEXT);
+
+    await expect(service.removeStop(route!.id, stop.id, CONTEXT)).rejects.toThrow(/entregó/);
+  });
+});
+
 describe('triggerMessage', () => {
   it('sends the configured template for the action', async () => {
     const { db, messaging, service } = await seededService();

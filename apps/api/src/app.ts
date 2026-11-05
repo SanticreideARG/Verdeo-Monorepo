@@ -101,6 +101,8 @@ import {
   DeliveryRouteDetailSchema,
   DeliveryRouteListResponseSchema,
   DeliveryStopReorderRequestSchema,
+  DeliveryAddStopsRequestSchema,
+  DeliveryAvailableOrdersResponseSchema,
   DeliveryTriggerRequestSchema,
   DeliveryTriggerResponseSchema,
   HealthResponseSchema,
@@ -1343,6 +1345,13 @@ interface DeliveryEngine {
     context: DeliveryContext,
   ): Promise<unknown>;
   reorderStops(routeId: string, orderedStopIds: readonly string[]): Promise<unknown>;
+  availableOrders?(routeId: string): Promise<unknown>;
+  addStops?(
+    routeId: string,
+    orderIds: readonly string[],
+    context: DeliveryContext,
+  ): Promise<unknown>;
+  removeStop?(routeId: string, stopId: string, context: DeliveryContext): Promise<unknown>;
   routeSite?(routeId: string): Promise<string>;
   setRouteEndpoints?(
     routeId: string,
@@ -6024,6 +6033,54 @@ export function createApp(options: CreateAppOptions) {
           (!input.success ? input.error.issues : undefined),
       );
     const route = await requireDelivery().reorderStops(params.data.id, input.data.stopIds);
+    return context.json(DeliveryRouteDetailSchema.parse(contractValue(route)));
+  });
+
+  /*
+   * Editar una hoja, también publicada (2026-11-05): una hoja de ruta nunca es definitiva. Se le
+   * suman pedidos del día que no están en ninguna y se le sacan paradas que no se entregaron.
+   */
+  app.get('/api/v1/delivery/routes/:id/available-orders', async (context) => {
+    if (!context.get('session').permissions.includes('routes.manage')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    if (!params.success) return badRequest(context, 'Ruta inválida.', params.error.issues);
+    const delivery = requireDelivery();
+    if (!delivery.availableOrders) throw new Error('Route editing is not configured');
+    const orders = await delivery.availableOrders(params.data.id);
+    return context.json(DeliveryAvailableOrdersResponseSchema.parse(contractValue({ orders })));
+  });
+
+  app.post('/api/v1/delivery/routes/:id/stops', async (context) => {
+    if (!context.get('session').permissions.includes('routes.manage')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = DeliveryAddStopsRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success)
+      return badRequest(
+        context,
+        'Elegí qué pedidos sumar.',
+        (!params.success ? params.error.issues : undefined) ??
+          (!input.success ? input.error.issues : undefined),
+      );
+    const delivery = requireDelivery();
+    if (!delivery.addStops) throw new Error('Route editing is not configured');
+    const route = await delivery.addStops(
+      params.data.id,
+      input.data.orderIds,
+      deliveryContext(context),
+    );
+    return context.json(DeliveryRouteDetailSchema.parse(contractValue(route)));
+  });
+
+  app.delete('/api/v1/delivery/routes/:id/stops/:stopId', async (context) => {
+    if (!context.get('session').permissions.includes('routes.manage')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const stop = IdParamSchema.safeParse({ id: context.req.param('stopId') });
+    if (!params.success || !stop.success) return badRequest(context, 'Parada inválida.');
+    const delivery = requireDelivery();
+    if (!delivery.removeStop) throw new Error('Route editing is not configured');
+    const route = await delivery.removeStop(params.data.id, stop.data.id, deliveryContext(context));
     return context.json(DeliveryRouteDetailSchema.parse(contractValue(route)));
   });
 

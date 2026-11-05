@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-05-hojas-y-domicilios',
+    body: `Las hojas de ruta se pueden editar también después de publicarlas: "Sumar pedidos" agrega los del día que no están en ninguna hoja, "Sacar" quita una parada sin tocar el pedido, y el orden manual funciona en cualquier hoja. Además, los domicilios de un cliente ahora se pueden eliminar desde su ficha.`,
+  },
+  {
     key: '2026-11-05-importar-repetidos',
     body: `Importar contactos: los que vienen sin teléfono ni correo ahora se reconocen por nombre y dirección. Si la misma persona está varias veces en la planilla se marca "Repetido", y si ya estaba cargada, "Ya existe": ninguno de los dos se crea de nuevo.`,
   },

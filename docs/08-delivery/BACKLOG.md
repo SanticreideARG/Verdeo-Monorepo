@@ -74,6 +74,11 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [x] El mensaje y la planilla de la ruta no dicen "nuevo": ni una marca escrita en el nombre ni el "Nuevo" de "Menú Nuevo Keto".
 - [x] Barrio: en el mensaje, en cada parada al lado de la dirección (reemplaza al encabezado por tandas); columna "Barrio" en la hoja Reparto del informe del período.
 
+## Hojas de ruta editables y domicilios eliminables (2026-11-05)
+
+- [x] Una hoja nunca es definitiva: borrador o publicada, se le suman pedidos del día sin hoja (`GET /delivery/routes/:id/available-orders`, `POST /delivery/routes/:id/stops`, al final de la hoja) y se le sacan paradas no entregadas (`DELETE /delivery/routes/:id/stops/:stopId`, el pedido queda libre y la numeración se rehace). "Establecer orden manualmente" también en publicadas. Una ruta completada no se toca. Auditoría `delivery.route_stops_added` y `delivery.route_stop_removed`.
+- [x] Eliminar un domicilio desde la ficha del cliente: se da de baja (`active: false`, el PATCH que ya existía), no se borra, porque los pedidos lo siguen nombrando. La ficha muestra sólo los activos.
+
 ## Importar contactos: repetidos sin teléfono (2026-11-05)
 
 - [x] Una fila sin teléfono ni correo se concilia por nombre y dirección, sin mayúsculas, tildes ni signos: "Repetido" si ya apareció en la planilla, "Ya existe" si coincide con un cliente cargado (`matchedBy` `address`, o `name` si la fila no trae dirección). Antes sólo se comparaban teléfonos y correos, y la misma persona cargada tres veces entraba tres veces.

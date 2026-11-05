@@ -181,7 +181,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
 
   // --- Reparto ---------------------------------------------------------------------------------
   {
-    body: 'En "Rutas", con la ciudad elegida arriba, elegís la zona y la fecha y tocás "+ Proponer ruta". El sistema levanta los pedidos confirmados o listos de ese día y esa zona, con dirección geocodificada, y los ordena solo.\n\nSi aparece "Ruta creada, pero sin paradas", es por una de dos: no hay pedidos por repartir ese día en esa zona, o sus direcciones no están geocodificadas (se resuelve en la ficha del cliente).\n\nPodés reordenar las paradas a mano. Nada llega a la app del repartidor hasta que tocás "Publicar la ruta".\n\n[Ir a Rutas](/app/reparto/rutas)',
+    body: 'En "Rutas", con la ciudad elegida arriba, elegís la zona y la fecha y tocás "+ Proponer ruta". El sistema levanta los pedidos confirmados o listos de ese día y esa zona, con dirección geocodificada, y los ordena solo.\n\nSi aparece "Ruta creada, pero sin paradas", es por una de dos: no hay pedidos por repartir ese día en esa zona, o sus direcciones no están geocodificadas (se resuelve en la ficha del cliente).\n\nPodés reordenar las paradas a mano. Nada llega a la app del repartidor hasta que tocás "Publicar la ruta".\n\n**Una hoja nunca es definitiva**: borrador o publicada, se puede seguir editando. "Sumar pedidos" muestra los pedidos de ese día que no están en ninguna hoja; los elegís y van al final, para acomodarlos arrastrándolos o con "Establecer orden manualmente". "Sacar" en una parada la quita de la hoja sin tocar el pedido, que queda libre para otra. Una parada ya entregada no se saca. Si la hoja está publicada, quien reparte ve los cambios al recargar su enlace.\n\n[Ir a Rutas](/app/reparto/rutas)',
     category: 'Reparto / Rutas',
     key: 'reparto-proponer',
     ordinal: 0,
@@ -200,7 +200,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     body:
       'La ruta publicada tiene un botón "Enlace para el repartidor". Genera una dirección web que abre la hoja del día en cualquier teléfono, sin usuario ni contraseña: se la mandás por WhatsApp a quien reparte y listo.' +
       '\n\nNo hay cuentas de repartidor. Quien reparte hoy puede no ser quien reparte mañana, así que lo que se entrega es el acceso a una ruta, no a un usuario del sistema. El enlace vence en 24 horas, y generar uno nuevo da de baja el anterior — si se lo pasaste a la persona equivocada, generá otro y el primero deja de abrir. "Dar de baja el enlace" lo corta sin tocar la ruta.' +
-      '\n\nSólo se puede generar sobre una ruta publicada: un borrador todavía se puede reordenar, y una hoja que cambia debajo de quien ya salió es peor que no tener hoja.' +
+      '\n\nSólo se puede generar sobre una ruta publicada. La hoja se puede seguir editando después de publicarla: el enlace la muestra siempre como está, así que si cambiás algo avisale a quien reparte que recargue.' +
       '\n\nVer [[reparto-sitio]] para qué ve y qué puede hacer desde ahí.\n\nEn la hoja del repartidor, en el mensaje para WhatsApp y en la planilla de la ruta sólo aparece lo que se cobra en efectivo: de un pedido por transferencia no se muestra ni el monto ni el medio. El mensaje lleva también la segunda línea de la dirección (piso, depto, timbre).',
     category: 'Reparto / Rutas',
     key: 'reparto-mensaje',
@@ -225,7 +225,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
 
   // --- Clientes --------------------------------------------------------------------------------
   {
-    body: 'La ficha de cada cliente guarda direcciones, restricciones alimentarias e historial de pedidos.\n\nCada domicilio lleva una zona, y la zona es la que decide de qué ciudad es el pedido. Por eso un domicilio sin zona no se puede usar para entregar.\n\n[Ir a Clientes](/app/clientes)',
+    body: 'La ficha de cada cliente guarda direcciones, restricciones alimentarias e historial de pedidos.\n\nCada domicilio lleva una zona, y la zona es la que decide de qué ciudad es el pedido. Por eso un domicilio sin zona no se puede usar para entregar.\n\nUn domicilio que ya no sirve se quita con "Eliminar" en su tarjeta. Deja de aparecer en la ficha y al cargar pedidos; los pedidos que ya tienen esa dirección no cambian.\n\n[Ir a Clientes](/app/clientes)',
     category: 'Clientes',
     key: 'clientes-ficha',
     ordinal: 0,
