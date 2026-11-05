@@ -5,7 +5,7 @@ export interface CustomerImportRow {
   match: {
     customerId: string;
     displayName: string;
-    matchedBy: 'email' | 'phone' | 'whatsapp';
+    matchedBy: 'address' | 'email' | 'name' | 'phone' | 'whatsapp';
     status: string;
   } | null;
   neighborhood: string | null;
@@ -23,7 +23,9 @@ const STATUS_LABELS: Record<CustomerImportRow['status'], string> = {
 };
 
 const MATCH_LABELS: Record<NonNullable<CustomerImportRow['match']>['matchedBy'], string> = {
+  address: 'el nombre y la dirección',
   email: 'el correo',
+  name: 'el nombre',
   phone: 'el teléfono',
   whatsapp: 'el WhatsApp',
 };

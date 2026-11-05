@@ -111,6 +111,31 @@ describe('reconcileCustomerImport', () => {
     expect(filas[1]).toMatchObject({ match: null, status: 'new' });
     expect(filas[2]).toMatchObject({ repeatedOf: 1, status: 'repeated' });
   });
+
+  // Planilla real: la misma persona sin teléfono, cargada varias veces con la misma dirección.
+  it('sin teléfono ni correo, reconoce por nombre y dirección', async () => {
+    const { service } = await base();
+    const sinTelefono = (nombre: string, direccion: string): CustomerInput => {
+      const base = cliente(nombre, '');
+      return {
+        addresses: base.addresses?.map((address) => ({ ...address, writtenAddress: direccion })),
+        displayName: base.displayName,
+        operatingSiteId: base.operatingSiteId,
+      };
+    };
+    await service.importCustomers([sinTelefono('Lucía Paz', 'Ruta 151 km 3')], contexto);
+
+    const filas = await service.reconcileCustomerImport([
+      sinTelefono('Ricardo Sanchez', 'por ruta 151, tranquera azul'),
+      sinTelefono('ricardo  sánchez', 'Por ruta 151 tranquera azul'),
+      sinTelefono('Ricardo Sanchez', 'Otra casa 200'),
+      sinTelefono('LUCIA PAZ', 'ruta 151 km 3'),
+    ]);
+
+    expect(filas.map((fila) => fila.status)).toEqual(['new', 'repeated', 'new', 'existing']);
+    expect(filas[1]).toMatchObject({ repeatedOf: 0 });
+    expect(filas[3]?.match).toMatchObject({ displayName: 'Lucía Paz', matchedBy: 'address' });
+  });
 });
 
 describe('barrios', () => {

@@ -609,7 +609,7 @@ interface OperationsEngine {
       match: {
         customerId: string;
         displayName: string;
-        matchedBy: 'email' | 'phone' | 'whatsapp';
+        matchedBy: 'address' | 'email' | 'name' | 'phone' | 'whatsapp';
         status: string;
       } | null;
       repeatedOf: number | null;

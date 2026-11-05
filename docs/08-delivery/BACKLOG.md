@@ -74,6 +74,10 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [x] El mensaje y la planilla de la ruta no dicen "nuevo": ni una marca escrita en el nombre ni el "Nuevo" de "Menú Nuevo Keto".
 - [x] Barrio: en el mensaje, en cada parada al lado de la dirección (reemplaza al encabezado por tandas); columna "Barrio" en la hoja Reparto del informe del período.
 
+## Importar contactos: repetidos sin teléfono (2026-11-05)
+
+- [x] Una fila sin teléfono ni correo se concilia por nombre y dirección, sin mayúsculas, tildes ni signos: "Repetido" si ya apareció en la planilla, "Ya existe" si coincide con un cliente cargado (`matchedBy` `address`, o `name` si la fila no trae dirección). Antes sólo se comparaban teléfonos y correos, y la misma persona cargada tres veces entraba tres veces.
+
 ## Pedidos: ordenar por entrega (2026-11-02)
 
 - [x] Tilde "Ordenar por entrega" en la lista de Pedidos: un renglón destacado por fecha de entrega (día de la semana, fecha y cantidad) con sus pedidos abajo, en tabla y en tarjetas. Ordenar por una columna ordena adentro de cada fecha. Se recuerda por equipo.

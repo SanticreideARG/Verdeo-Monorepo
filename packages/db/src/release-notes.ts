@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-05-importar-repetidos',
+    body: `Importar contactos: los que vienen sin teléfono ni correo ahora se reconocen por nombre y dirección. Si la misma persona está varias veces en la planilla se marca "Repetido", y si ya estaba cargada, "Ya existe": ninguno de los dos se crea de nuevo.`,
+  },
+  {
     key: '2026-11-03-historial-hera',
     body: `En Hera IA ahora queda tu historial: podés retomar una conversación cuando quieras o borrarla. Tu historial lo ves sólo vos.`,
   },

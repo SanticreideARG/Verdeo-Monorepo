@@ -1665,6 +1665,10 @@ export class PostgresOperationsService {
    * "+54 9 11 5638-0959" son la misma línea. Se compara contra todas las identidades activas,
    * también las de clientes archivados: siguen ocupando el número, y antes eso hacía fallar la
    * importación entera con un "ya existe" sin decir quién.
+   *
+   * Una fila sin teléfono ni correo se reconoce por nombre y dirección (sin mayúsculas, tildes ni
+   * espacios de más): la misma persona cargada varias veces en la planilla, o que ya está cargada.
+   * Si tampoco tiene dirección, alcanza con el nombre.
    */
   public async reconcileCustomerImport(inputs: readonly CustomerInput[]) {
     const phonesOf = (input: CustomerInput) =>
@@ -1687,6 +1691,19 @@ export class PostgresOperationsService {
         input.email ?? input.identities?.find((identity) => identity.type === 'email')?.value;
       return email ? email.trim().toLocaleLowerCase('es-AR') : null;
     };
+
+    const plain = (value: string | null | undefined) =>
+      (value ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase('es-AR')
+        .replace(/[^a-z0-9ñ]+/g, ' ')
+        .trim();
+    const addressOf = (input: CustomerInput) =>
+      plain(
+        input.addresses?.find((address) => address.primary)?.writtenAddress ??
+          input.addresses?.[0]?.writtenAddress,
+      );
 
     const keys = new Set(inputs.flatMap((input) => phonesOf(input).map((phone) => phone.key)));
     const emails = [...new Set(inputs.map(emailOf).filter((email): email is string => !!email))];
@@ -1748,17 +1765,59 @@ export class PostgresOperationsService {
       for (const row of rows) existingEmails.set(row.value, row);
     }
 
+    // Sólo hace falta para las filas que no traen teléfono ni correo.
+    const byName = new Map<
+      string,
+      { address: string; customerId: string; displayName: string; status: string }[]
+    >();
+    if (inputs.some((input) => phonesOf(input).length === 0 && !emailOf(input))) {
+      const rows = await this.database
+        .select({
+          address: customerAddresses.writtenAddress,
+          customerId: customers.id,
+          displayName: customers.displayName,
+          status: customers.status,
+        })
+        .from(customers)
+        .leftJoin(customerAddresses, eq(customerAddresses.customerId, customers.id));
+      for (const row of rows) {
+        const name = plain(row.displayName);
+        if (!name) continue;
+        const list = byName.get(name) ?? [];
+        list.push({ ...row, address: plain(row.address) });
+        byName.set(name, list);
+      }
+    }
+
     const seen = new Map<string, number>();
     return inputs.map((input, index) => {
       const phones = phonesOf(input);
       const email = emailOf(input);
+      const name = plain(input.displayName);
+      const address = addressOf(input);
+      const reachable = phones.length > 0 || !!email;
       const phoneMatch = phones.map((phone) => existingPhones.get(phone.key)).find(Boolean);
       const emailMatch = email ? existingEmails.get(email) : undefined;
+      const sameName = !reachable && name ? (byName.get(name) ?? []) : [];
+      const nameMatch = address
+        ? sameName.find((candidate) => candidate.address === address)
+        : sameName[0];
       const match =
-        phoneMatch ?? (emailMatch ? { ...emailMatch, matchedBy: 'email' as const } : undefined);
+        phoneMatch ??
+        (emailMatch
+          ? { ...emailMatch, matchedBy: 'email' as const }
+          : nameMatch
+            ? {
+                customerId: nameMatch.customerId,
+                displayName: nameMatch.displayName,
+                matchedBy: address ? ('address' as const) : ('name' as const),
+                status: nameMatch.status,
+              }
+            : undefined);
       const ownKeys = [
         ...phones.map((phone) => `t:${phone.key}`),
         ...(email ? [`e:${email}`] : []),
+        ...(!reachable && name ? [`n:${name}|${address}`] : []),
       ];
       const repeatedOf = ownKeys.map((key) => seen.get(key)).find((row) => row !== undefined);
       for (const key of ownKeys) if (!seen.has(key)) seen.set(key, index);

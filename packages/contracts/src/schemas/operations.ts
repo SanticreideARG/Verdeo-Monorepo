@@ -183,7 +183,7 @@ export const CustomerImportRowSchema = z.object({
     .object({
       customerId: UuidSchema,
       displayName: z.string(),
-      matchedBy: z.enum(['email', 'phone', 'whatsapp']),
+      matchedBy: z.enum(['address', 'email', 'name', 'phone', 'whatsapp']),
       status: z.string(),
     })
     .nullable(),
