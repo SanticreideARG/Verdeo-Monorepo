@@ -57,6 +57,14 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Importar pedidos desde los emails de la página',
   },
   {
+    body: 'Los pedidos del formulario de la web que llegan al Gmail del negocio entran solos cada 5 minutos y quedan en "Pedidos" → **Pedidos por correo para revisar**. Ninguno se crea sin que una persona lo vea.\n\n**Ciudad.** Cada correo dice su ciudad, sacada del asunto ("de NQN" es Neuquén, "Capital Federal" es Buenos Aires). Con una ciudad elegida arriba se ven sólo los de esa ciudad; uno cuyo asunto no dice una ciudad reconocible aparece en todas, como "Sin ciudad".\n\n**Pedido:** Revisar · Aprobar · Borrar. "Aprobar" lo crea directo si no hay nada que revisar: cliente y variedad reconocidos, ciudad, medio de pago (el del último que aprobaste) y ningún pedido igual de ese cliente en el período. Si falta algo, se abre la revisión diciendo qué. Un correo que llegó dos veces se marca "Repetido" y sólo se puede revisar o borrar.\n\n**Consulta:** Revisar · Borrar. Al revisarla, "Responder con Hera" arma una respuesta con lo que escribió el cliente y el menú del período (a Hera no le llegan el nombre ni el contacto). Se corrige si hace falta, y se copia, se manda por WhatsApp con el texto escrito o se responde por email.\n\n"Borrar" saca el correo de la lista sin crear nada; el mail sigue en Gmail.',
+    category: 'Pedidos / Tomar pedidos',
+    key: 'pedidos-por-correo',
+    ordinal: 3,
+    requiredPermission: 'orders.create',
+    title: 'Pedidos por correo para revisar',
+  },
+  {
     body: 'En "Conciliar ubicaciones" (desde el Dashboard), la sección "Separar el detalle de la dirección" muestra los domicilios cargados antes de que la dirección tuviera dos líneas y que tienen el piso, el depto o el barrio mezclados con la calle ("Santa Rosa 31 Piso 12 Dpto C").\n\nPara cada uno se ve la propuesta: en la primera línea, la calle y el número (lo que se busca en el mapa); en la segunda, el detalle (para quien reparte). Se destildan los que no estén bien y "Separar" aplica el resto. También corrige los pedidos abiertos con esa misma dirección. La ubicación ya encontrada no cambia.',
     category: 'Clientes',
     key: 'clientes-separar-direcciones',

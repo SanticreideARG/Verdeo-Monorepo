@@ -97,6 +97,103 @@ interface Preview {
 
 const NO_CONNECTION = 'No pudimos conectar con el servidor. Revisá la conexión y probá de nuevo.';
 
+/**
+ * Contestar una consulta del formulario con Hera (2026-11-05).
+ *
+ * El mensaje del cliente va a Hera con el modo "Responder a cliente", que usa el menú del período
+ * como datos; el nombre y el contacto no viajan. La respuesta se puede corregir antes de mandarla,
+ * copiar, abrir en WhatsApp con el texto escrito, o en el correo con el asunto de la consulta.
+ */
+function InquiryReply({
+  canUseHera,
+  inquiry,
+  subject,
+}: {
+  canUseHera: boolean;
+  inquiry: Inquiry;
+  subject: string | undefined;
+}) {
+  const [reply, setReply] = useState('');
+  const [asking, setAsking] = useState(false);
+  const [failure, setFailure] = useState('');
+
+  async function askHera() {
+    setAsking(true);
+    setFailure('');
+    const response = await apiRequest('/api/v1/ai/assistant/messages', {
+      body: JSON.stringify({
+        message: `Consulta que llegó por el formulario de la web:\n${inquiry.message}`,
+        mode: 'buho_responder_cliente',
+      }),
+      method: 'POST',
+      notify: false,
+    }).catch(() => null);
+    setAsking(false);
+    if (!response?.ok) {
+      setFailure(response ? await errorMessage(response) : NO_CONNECTION);
+      return;
+    }
+    setReply(((await response.json()) as { reply: string }).reply.trim());
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(reply);
+      showToast('Respuesta copiada.');
+    } catch {
+      showToast('No se pudo copiar: seleccioná el texto y copialo a mano.', 'error');
+    }
+  }
+
+  const mailto = inquiry.email
+    ? `mailto:${inquiry.email}?subject=${encodeURIComponent(`Re: ${subject ?? 'Tu consulta a Verdeo'}`)}&body=${encodeURIComponent(reply)}`
+    : null;
+
+  return (
+    <div className="inquiry-reply">
+      {canUseHera && inquiry.message ? (
+        <button
+          className="button button-secondary"
+          disabled={asking}
+          onClick={() => void askHera()}
+          type="button"
+        >
+          {asking ? 'Hera está escribiendo…' : reply ? 'Pedirle otra a Hera' : 'Responder con Hera'}
+        </button>
+      ) : null}
+      {failure ? <p className="text-sm text-ink-muted">{failure}</p> : null}
+      {reply ? (
+        <>
+          <label className="field">
+            Respuesta (podés corregirla antes de mandarla)
+            <textarea onChange={(event) => setReply(event.target.value)} rows={5} value={reply} />
+          </label>
+          <div className="order-import-inquiry-actions">
+            <button className="button button-secondary" onClick={() => void copy()} type="button">
+              Copiar
+            </button>
+            {inquiry.phone ? (
+              <a
+                className="button button-primary"
+                href={whatsappHref(inquiry.phone, reply)}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                Enviar por WhatsApp
+              </a>
+            ) : null}
+            {mailto ? (
+              <a className="button button-secondary" href={mailto}>
+                Responder por email
+              </a>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 const FIELD_LABELS: Record<string, string> = {
   customerName: 'el nombre del cliente',
   deliveryAddress: 'la dirección',
@@ -181,12 +278,32 @@ export interface InboundEmailDetail {
   subject: string;
 }
 
+/** El medio de pago del último pedido por correo aprobado: los mails no lo traen. */
+const PAYMENT_KEY = 'verdeo-importar-medio-de-pago';
+function rememberedPayment(): string {
+  try {
+    return window.localStorage.getItem(PAYMENT_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
 export function OrderImportDialog({
+  autoApprove = false,
   canConfirm = false,
+  canUseHera = false,
   inbound,
   onClose,
   onImported,
 }: {
+  /**
+   * "Aprobar" desde la lista (2026-11-05): si el pedido no tiene nada que revisar —cliente y
+   * variedad reconocidos, ciudad, medio de pago, y ningún pedido igual en el período— se aprueba
+   * solo. Si algo falta, el diálogo queda abierto diciendo qué.
+   */
+  autoApprove?: boolean;
+  /** Con permiso de IA, las consultas se contestan con Hera. */
+  canUseHera?: boolean;
   /** Quien puede confirmar ve "Aprobar y confirmar" como acción principal. */
   canConfirm?: boolean;
   /**
@@ -260,7 +377,8 @@ export function OrderImportDialog({
    * que no es un medio de pago y rompía los filtros y las hojas de ruta. Se elige acá, de los
    * parametrizados, y se puede cambiar pedido por pedido en la lista después.
    */
-  const [payment, setPayment] = useState('');
+  const [payment, setPayment] = useState(() => (inbound ? rememberedPayment() : ''));
+  const [autoTried, setAutoTried] = useState(false);
   /*
    * Ubicar las direcciones apenas se importa, para que los pedidos lleguen listos para la hoja de
    * ruta: un pedido de email trae la dirección como texto, sin ubicación, y quedaba afuera de la
@@ -459,6 +577,38 @@ export function OrderImportDialog({
     missingPayment ? 'Elegí el medio de pago.' : null,
   ].filter((text): text is string => text !== null);
 
+  /*
+   * Aprobar directo: una sola vez, cuando ya cargaron la vista previa y los medios de pago. Un
+   * pedido destildado (igual a uno del período, o con una línea sin leer) nunca se aprueba solo.
+   */
+  const paymentsLoaded = paymentMethods.length > 0;
+  const rememberedOk =
+    payment === '' || paymentMethods.some((method) => method.displayName === payment);
+  const pendingReview = [
+    ...rows
+      .filter((row) => !included[row.rowNumber])
+      .map((row) =>
+        viewOf(row).duplicateOf
+          ? `ya hay un pedido igual de este cliente en el período (${String(viewOf(row).duplicateOf)})`
+          : 'una línea del pedido no se pudo leer',
+      ),
+    ...(rememberedOk ? [] : ['elegí el medio de pago']),
+    ...blockers,
+  ];
+  useEffect(() => {
+    if (!autoApprove || autoTried || !preview || !paymentsLoaded) return;
+    setAutoTried(true);
+    if (!rememberedOk) setPayment('');
+    if (rows.length > 0 && pendingReview.length === 0) {
+      void confirm(canConfirm);
+    } else {
+      setMessage(
+        `No se aprobó solo: ${[...new Set(pendingReview)].join('; ').replace(/\.(?=;|$)/g, '')}. Revisalo acá.`,
+      );
+    }
+    // Una sola vez por apertura: no depende de cada cambio que haga la persona después.
+  }, [autoApprove, autoTried, preview, paymentsLoaded]);
+
   async function confirm(confirmNow = false) {
     if (blockers.length > 0) {
       setTriedBlocked(true);
@@ -528,6 +678,11 @@ export function OrderImportDialog({
       return;
     }
     if (inbound) {
+      try {
+        window.localStorage.setItem(PAYMENT_KEY, payment);
+      } catch {
+        // Sin almacenamiento: la próxima vez se elige de nuevo.
+      }
       showToast(confirmNow ? 'Pedido aprobado y confirmado.' : 'Pedido aprobado como borrador.');
       void locateOrders(payload.orderIds ?? []);
       onClose();
@@ -1043,6 +1198,11 @@ export function OrderImportDialog({
                           ) : null}
                           {inquiry.email ? <small>{inquiry.email}</small> : null}
                         </div>
+                        <InquiryReply
+                          canUseHera={canUseHera}
+                          inquiry={inquiry}
+                          subject={inbound?.subject}
+                        />
                       </li>
                     ))}
                   </ul>

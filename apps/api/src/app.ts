@@ -370,6 +370,7 @@ import { renderEmail, type EmailSender } from '@verdeo/email';
 import { ContactImportError, parseContactImportRows } from './integrations/contact-import.js';
 import {
   matchLocalityToSite,
+  subjectLocality,
   parseOrderEmails,
   type OrderInquiry,
 } from './integrations/order-email.js';
@@ -4627,18 +4628,48 @@ export function createApp(options: CreateAppOptions) {
         ? (['pending', 'inquiry', 'unreadable', 'approved', 'discarded'] as const)
         : (['pending', 'inquiry', 'unreadable'] as const);
     const rows = await requireInbound().list(statuses, 50);
-    return context.json(
-      InboundEmailListResponseSchema.parse({
-        items: rows.map((row) => ({
+    /*
+     * Cada correo con su ciudad, sacada del asunto (2026-11-06): la lista muestra sólo los de la
+     * ciudad elegida arriba, y los de ciudades a las que la persona no tiene acceso no salen. Uno
+     * cuyo asunto no dice una ciudad reconocible sale en todas, para que no se pierda.
+     */
+    const session = context.get('session');
+    const scope = await requireGeography().resolveScope(
+      session.userId,
+      session.permissions.includes('sites.access_all'),
+    );
+    const allSites = (
+      (await requireGeography().listSites()) as readonly {
+        displayName: string | null;
+        id: string;
+      }[]
+    ).map((site) => ({ id: site.id, name: site.displayName ?? '' }));
+    const allowed = new Set(scope.sites.map((site) => site.id));
+    const current = context.get('scope')?.operatingSiteId ?? null;
+    const items = rows
+      .map((row) => {
+        const parsed = row.parsed as Partial<ReturnType<typeof parseOrderEmails>> | null;
+        const siteId = matchLocalityToSite(
+          subjectLocality(row.subject) ?? parsed?.rows?.[0]?.locality ?? null,
+          allSites,
+        );
+        return {
           fromAddress: row.fromAddress,
           id: row.id,
+          operatingSiteId: siteId,
           receivedAt: row.receivedAt,
+          siteName: allSites.find((site) => site.id === siteId)?.name ?? null,
           status: row.status,
           subject: row.subject,
           ...inboundSummary(row.parsed),
-        })),
-      }),
-    );
+        };
+      })
+      .filter(
+        (item) =>
+          item.operatingSiteId === null ||
+          (allowed.has(item.operatingSiteId) && (!current || item.operatingSiteId === current)),
+      );
+    return context.json(InboundEmailListResponseSchema.parse({ items }));
   });
 
   /*

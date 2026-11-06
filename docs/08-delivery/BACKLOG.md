@@ -74,6 +74,12 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [x] El mensaje y la planilla de la ruta no dicen "nuevo": ni una marca escrita en el nombre ni el "Nuevo" de "Menú Nuevo Keto".
 - [x] Barrio: en el mensaje, en cada parada al lado de la dirección (reemplaza al encabezado por tandas); columna "Barrio" en la hoja Reparto del informe del período.
 
+## Pedidos por correo: ciudad, aprobar, borrar y consultas con Hera (2026-11-06)
+
+- [x] La lista de "Pedidos por correo para revisar" respeta la ciudad elegida arriba: la ciudad sale del asunto (`subjectLocality` + `matchLocalityToSite`, con alias "NQN" → Neuquén, "Capital Federal"/"CABA" → Buenos Aires, "MZA", "CBA"), se muestra en cada correo, y los de ciudades sin acceso no salen. Sin ciudad reconocible, aparece en todas. No guarda nada nuevo: se calcula al listar.
+- [x] Pedido: Revisar · Aprobar · Borrar. "Aprobar" abre la revisión con `autoApprove` y aprueba sola si no hay nada pendiente (destildados por igual en el período o línea sin leer, ciudad, variedad, medio de pago recordado en el navegador). Correo repetido (mismo cliente y contenido en la semana): sin Aprobar. Consulta: Revisar · Borrar. Borrar = descartar, con confirmación.
+- [x] Consultas: "Responder con Hera" (modo `buho_responder_cliente`, sólo el mensaje, sin nombre ni contacto), editable, Copiar, WhatsApp con el texto, email con el asunto.
+
 ## Importar por operación y hojas con varias zonas (2026-11-05)
 
 - [x] Importar contactos con una operación entera (`operatingSiteId` en la planilla): cada domicilio va a la zona que nombra su columna Zona o, si no, Localidad/Ciudad (`zoneForCity`: exacta, parcial o ignorando letras dobles; "Este" y "Oeste" no se confunden), o a la primera zona activa de la operación, con aviso si la columna Zona nombra una que no existe. Plan de zonas: [ZONAS_PLAN.md](../07-operations/ZONAS_PLAN.md). La vista previa dice la zona de cada fila. Los clientes quedan en esa operación.

@@ -203,6 +203,11 @@ function splitPastedTogether(block: string): string[] {
   return starts.map((start, index) => block.slice(index === 0 ? 0 : start, starts[index + 1]));
 }
 
+/** "Pedido online Capital Federal" → "Capital Federal": la ciudad que dice el asunto, si la dice. */
+export function subjectLocality(subject: string): string | null {
+  return /Pedido online\s+(.+)$/i.exec(subject.trim())?.[1]?.trim() ?? null;
+}
+
 /** La ciudad que dice el asunto, entre las que se pueden elegir. Si no es una sola, ninguna. */
 export function matchLocalityToSite(
   locality: string | null,
@@ -215,13 +220,29 @@ export function matchLocalityToSite(
       .toLocaleLowerCase('es-AR')
       .replace(/[^a-z0-9]+/g, ' ')
       .trim();
-  const wanted = locality ? clean(locality) : '';
-  if (!wanted) return null;
-  const found = sites.filter((site) => {
-    const name = clean(site.name);
-    return name.length > 0 && (name.includes(wanted) || wanted.includes(name));
-  });
-  return found.length === 1 ? (found[0]?.id ?? null) : null;
+  /*
+   * Cómo la escriben los asuntos reales (2026-11-06): "de Congelados de NQN", "Capital Federal".
+   * Sin esto ninguno coincidía con "Neuquén" ni con "Buenos Aires", y el pedido no tenía ciudad.
+   */
+  const ALIASES: readonly [RegExp, string][] = [
+    [/\bnqn\b/g, 'neuquen'],
+    [/\b(capital federal|cap fed|caba|bs as|bsas|ciudad de buenos aires)\b/g, 'buenos aires'],
+    [/\bmza\b/g, 'mendoza'],
+    [/\bcba\b/g, 'cordoba'],
+  ];
+  const raw = locality ? clean(locality) : '';
+  if (!raw) return null;
+  const only = (wanted: string) => {
+    const found = sites.filter((site) => {
+      const name = clean(site.name);
+      return name.length > 0 && (name.includes(wanted) || wanted.includes(name));
+    });
+    return found.length === 1 ? (found[0]?.id ?? null) : null;
+  };
+  // Primero como vino (una ciudad puede llamarse "Capital Federal"); después con los alias.
+  let aliased = raw;
+  for (const [pattern, name] of ALIASES) aliased = aliased.replace(pattern, name);
+  return only(raw) ?? (aliased === raw ? null : only(aliased));
 }
 
 /**

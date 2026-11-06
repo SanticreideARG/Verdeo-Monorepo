@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { matchLocalityToSite, parseOrderEmails } from './order-email.js';
+import { matchLocalityToSite, parseOrderEmails, subjectLocality } from './order-email.js';
 
 /*
  * Los emails de abajo reproducen la forma de los que manda el formulario del sitio. Los nombres,
@@ -378,5 +378,24 @@ describe('matchLocalityToSite', () => {
         { id: 'b', name: 'Norte Grande' },
       ]),
     ).toBeNull();
+  });
+});
+
+// Los asuntos reales y las ciudades de producción (2026-11-06): ninguno coincidía.
+describe('la ciudad de los asuntos reales', () => {
+  const ciudades = [
+    { id: 'baires', name: 'Buenos Aires' },
+    { id: 'cordoba', name: 'Cordoba' },
+    { id: 'mendoza', name: 'Mendoza' },
+    { id: 'neuquen', name: 'Neuquén' },
+    { id: 'rionegro', name: 'Rio Negro' },
+  ];
+  const ciudadDe = (asunto: string) => matchLocalityToSite(subjectLocality(asunto), ciudades);
+
+  it('reconoce NQN, Capital Federal y Córdoba', () => {
+    expect(ciudadDe('Pedido online de Congelados de NQN')).toBe('neuquen');
+    expect(ciudadDe('Pedido online Capital Federal')).toBe('baires');
+    expect(ciudadDe('Pedido online de Congelados de CORDOBA')).toBe('cordoba');
+    expect(ciudadDe('Consulta suelta')).toBeNull();
   });
 });

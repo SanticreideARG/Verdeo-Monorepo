@@ -2319,7 +2319,10 @@ export const InboundEmailSummarySchema = z.object({
   fromAddress: z.string(),
   id: UuidSchema,
   itemsSummary: z.string(),
+  /** La ciudad que dice el asunto; null si no dice una reconocible. */
+  operatingSiteId: UuidSchema.nullable().optional(),
   receivedAt: IsoDateTimeSchema,
+  siteName: z.string().nullable().optional(),
   status: InboundEmailStatusSchema,
   subject: z.string(),
 });

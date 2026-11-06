@@ -1535,7 +1535,11 @@ export function OrderIntakePage() {
         ) : null}
         {/* Los pedidos que llegaron solos por correo, esperando revisión. */}
         {permissions.includes('orders.create') ? (
-          <InboundEmailsPanel canConfirm={canConfirm} onChanged={() => void loadData()} />
+          <InboundEmailsPanel
+            canConfirm={canConfirm}
+            canUseHera={permissions.includes('ai.use')}
+            onChanged={() => void loadData()}
+          />
         ) : null}
         {/* Los pedidos repetidos del período, para corregirlos. */}
         {permissions.includes('orders.read') ? (

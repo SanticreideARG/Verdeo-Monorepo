@@ -94,6 +94,33 @@ describe('InboundEmailsPanel', () => {
     expect(screen.getByRole('button', { name: 'Descartar correo' })).toBeTruthy();
   });
 
+  // Pedido: Revisar · Aprobar · Borrar. Consulta: Revisar · Borrar. Repetido: sin Aprobar.
+  it('ofrece aprobar sólo los pedidos, y marca los repetidos y la ciudad', async () => {
+    const consulta = {
+      ...resumen,
+      customerName: 'Bea Consulta',
+      id: '0b000000-0000-4000-8000-000000000002',
+      itemsSummary: 'Consulta',
+      status: 'inquiry',
+    };
+    const repetido = {
+      ...resumen,
+      id: '0b000000-0000-4000-8000-000000000003',
+      receivedAt: '2026-10-12T14:15:00.000Z',
+    };
+    vi.mocked(apiRequest).mockImplementation(() =>
+      json({ items: [{ ...resumen, siteName: 'Buenos Aires' }, consulta, repetido] }),
+    );
+    render(<InboundEmailsPanel canConfirm onChanged={vi.fn()} />);
+
+    expect(await screen.findByText('Bea Consulta')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Revisar' })).toHaveLength(3);
+    expect(screen.getAllByRole('button', { name: 'Aprobar' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Borrar' })).toHaveLength(3);
+    expect(screen.getByText(/^Repetido del de las/)).toBeTruthy();
+    expect(screen.getByText('Buenos Aires')).toBeTruthy();
+  });
+
   describe('con varias ciudades', () => {
     const CABA = '90000000-0000-4000-8000-00000000000a';
     const NQN = '90000000-0000-4000-8000-00000000000b';

@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-06-pedidos-por-correo',
+    body: `Pedidos por correo: cada uno muestra su ciudad y la lista respeta la ciudad elegida arriba. Los pedidos tienen "Aprobar" directo y "Borrar", y los que llegaron dos veces se marcan como repetidos. En las consultas, Hera arma la respuesta para mandarla por WhatsApp o por email.`,
+  },
+  {
     key: '2026-11-05-importar-por-operacion',
     body: `Importar contactos: ahora se puede elegir la operación entera, y cada domicilio va a la zona de su localidad. Los celulares con dígitos de más o de menos se cargan igual y quedan marcados para revisar. Y en Rutas, una hoja puede juntar varias zonas que salen en el mismo reparto, como Neuquén y Plottier.`,
   },

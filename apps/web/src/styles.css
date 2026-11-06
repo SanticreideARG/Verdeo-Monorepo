@@ -9902,6 +9902,28 @@ textarea.sr-only {
 }
 
 /* --- Pedidos por correo para revisar ------------------------------------------------------------ */
+/* Aprobar, Revisar y Borrar, juntos a la derecha de cada correo (2026-11-05). */
+.inbound-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+.inbound-actions .is-danger {
+  color: var(--db-danger, #b3261e);
+}
+.inbound-kind.is-repeat {
+  color: var(--db-warning, #9a6700);
+}
+/* La respuesta a una consulta, armada con Hera. */
+.inquiry-reply {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.inquiry-reply > .button {
+  justify-self: start;
+}
 .inbound-panel {
   display: grid;
   gap: 0.6rem;
