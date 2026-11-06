@@ -630,7 +630,10 @@ export function DashboardShell({
     day: 'numeric',
     month: 'long',
     weekday: 'long',
-  }).format(now);
+  })
+    .format(now)
+    // Sólo la primera letra: con text-transform salía «6 De Noviembre».
+    .replace(/^./, (letter) => letter.toLocaleUpperCase('es-AR'));
   const timeLabel = new Intl.DateTimeFormat('es-AR', {
     hour: '2-digit',
     minute: '2-digit',

@@ -1196,7 +1196,6 @@ a {
 }
 .dashboard-clock small {
   margin-top: 0.12rem;
-  text-transform: capitalize;
 }
 .dashboard-menu-button {
   display: none;
