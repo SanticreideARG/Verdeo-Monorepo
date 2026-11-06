@@ -28,6 +28,7 @@ No usar `if role === ...` como autorización.
 - `customers.unmerge`
 - `customers.restrict`
 - `customers.view_sensitive`
+- `customers.view_archived` — sin rol por defecto: ver los clientes archivados (Panel de control → Clientes archivados). Los archivados no salen en ninguna otra lista.
 
 ### Operaciones y zonas
 
@@ -163,6 +164,7 @@ operador sigue leyendo zonas, días y métodos de pago desde las pantallas donde
 | Estado del sistema  | `audit.read`                | —                              | no                                        |
 | Direcciones         | `sites.read`                | `sites.manage`                 | no                                        |
 | Respaldos           | `backups.manage`            | ídem                           | no                                        |
+| Clientes archivados | `customers.view_archived`   | reactivar: `customers.edit`    | no                                        |
 | Apariencia          | —                           | la propia                      | **sí** (también desde la barra)           |
 
 Todas esas secciones requieren además `settings.access`. Fuera del panel, el operador conserva

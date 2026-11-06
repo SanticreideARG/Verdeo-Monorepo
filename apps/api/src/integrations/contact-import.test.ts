@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractPayment, parseContactImport, type ContactImportError } from './contact-import.js';
+import {
+  extractPayment,
+  importPhone,
+  parseContactImport,
+  type ContactImportError,
+} from './contact-import.js';
 
 function csvFile(contents: string, name = 'contactos.csv'): File {
   return new File([contents], name, { type: 'text/csv' });
@@ -38,7 +43,7 @@ describe('parseContactImport', () => {
       parseContactImport(
         csvFile(['nombre_completo,direccion', 'María Pérez,Av. Siempre Viva 123'].join('\n')),
       ),
-    ).rejects.toThrowError(/zona de operaciones/);
+    ).rejects.toThrowError(/operación o la zona/);
   });
 
   it('rejects a sheet without the required name column', async () => {
@@ -144,5 +149,58 @@ describe('extractPayment', () => {
       payment: 'Mercado Pago',
       text: 'Gorriti 300',
     });
+  });
+});
+
+// Importar una operación entera (2026-11-05): la zona de cada domicilio sale de su localidad.
+describe('parseContactImport con una operación entera', () => {
+  const NEUQUEN = '90000000-0000-4000-8000-0000000000b1';
+  const PLOTTIER = '90000000-0000-4000-8000-0000000000b2';
+  const CIPOLLETI = '90000000-0000-4000-8000-0000000000b3';
+  const zones = [
+    { displayName: 'Neuquén', id: NEUQUEN },
+    { displayName: 'Plottier', id: PLOTTIER },
+    { displayName: 'Cipolleti', id: CIPOLLETI },
+  ];
+  const planilla = [
+    'Nombre,Dirección,Localidad',
+    'Ana,Calle 1,PLOTTIER',
+    'Beto,Calle 2,Cipolletti',
+    'Carla,Calle 3,',
+    'Dora,Calle 4,Centenario',
+  ].join('\n');
+
+  it('cada domicilio va a la zona de su localidad, o a la primera', async () => {
+    const rows = await parseContactImport(csvFile(planilla), { zones });
+    expect(rows.map((row) => row.addresses?.[0]?.geographicZoneId)).toEqual([
+      PLOTTIER,
+      CIPOLLETI,
+      NEUQUEN,
+      NEUQUEN,
+    ]);
+  });
+
+  it('una operación sin zonas no puede recibir domicilios', async () => {
+    await expect(parseContactImport(csvFile(planilla), { zones: [] })).rejects.toThrow(/zonas/);
+  });
+});
+
+// Un celular con dígitos de más o de menos se carga como vino, con aviso (2026-11-05).
+describe('importPhone', () => {
+  it('diez dígitos: como siempre', () => {
+    expect(importPhone('299 15 411-7822')).toEqual({ value: '+5492994117822' });
+  });
+  it('dígitos de más o de menos: se carga como vino y avisa', () => {
+    const largo = importPhone('11417004070');
+    expect(largo.value).toBe('11417004070');
+    expect(largo.warning).toContain('11 dígitos');
+    const corto = importPhone('261709976');
+    expect(corto.value).toBe('261709976');
+    expect(corto.warning).toContain('9 dígitos');
+  });
+  it('muy corto: va a las notas, con aviso', () => {
+    const muyCorto = importPhone('4411');
+    expect(muyCorto.note).toBe('4411');
+    expect(muyCorto.warning).toContain('notas');
   });
 });

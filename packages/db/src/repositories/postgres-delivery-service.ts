@@ -65,6 +65,12 @@ type StopStatus = 'pending' | 'en_route' | 'at_address' | 'delivered' | 'skipped
  */
 const ROUTABLE_STATUSES = ['CONFIRMED', 'READY'] as const;
 
+/** Una zona, varias o ninguna (la ciudad entera), como lista. */
+function zoneList(zones: string | readonly string[] | undefined): string[] {
+  if (!zones) return [];
+  return typeof zones === 'string' ? [zones] : [...new Set(zones)];
+}
+
 /** El origen de la ciudad, si lo tiene: desde ahí arranca el recorrido. */
 function siteOrigin(site: {
   originLatitude: string | null;
@@ -172,8 +178,10 @@ export class PostgresDeliveryService {
      * sale el repartidor—, así que una hoja por zona es una hoja que se puede seguir; una sola con
      * todas las paradas mezcladas obliga a cruzar la ciudad de ida y vuelta.
      */
-    geographicZoneId?: string,
+    geographicZoneId?: string | readonly string[],
   ) {
+    // Una o varias zonas (2026-11-05): Neuquén y Plottier salen en la misma hoja.
+    const zoneIds = zoneList(geographicZoneId);
     return this.database.transaction(async (transaction) => {
       const [site] = await transaction
         .select({
@@ -206,7 +214,7 @@ export class PostgresDeliveryService {
             inArray(orders.status, ROUTABLE_STATUSES),
             // La zona se filtra por la dirección de entrega y no por el cliente: manda dónde se
             // entrega (ADR-031), que es lo mismo que decide de qué ciudad es el pedido.
-            ...(geographicZoneId ? [eq(customerAddresses.geographicZoneId, geographicZoneId)] : []),
+            ...(zoneIds.length > 0 ? [inArray(customerAddresses.geographicZoneId, zoneIds)] : []),
             ...(alreadyRoutedOrderIds.length > 0
               ? [
                   notInArray(
@@ -239,7 +247,8 @@ export class PostgresDeliveryService {
         context,
         deliveryDate,
         deliveryRunId: reparto?.id ?? null,
-        geographicZoneId: geographicZoneId ?? null,
+        geographicZoneId: zoneIds.length === 1 ? (zoneIds[0] ?? null) : null,
+        geographicZoneIds: zoneIds,
         label: label ?? null,
         operatingSiteId,
         orders: geocoded,
@@ -261,6 +270,7 @@ export class PostgresDeliveryService {
       deliveryDate: string;
       deliveryRunId: string | null;
       geographicZoneId: string | null;
+      geographicZoneIds?: readonly string[];
       label: string | null;
       operatingSiteId: string;
       orders: readonly { id: string; latitude: string; longitude: string }[];
@@ -308,6 +318,9 @@ export class PostgresDeliveryService {
       after: {
         deliveryRunId: args.deliveryRunId,
         geographicZoneId: args.geographicZoneId,
+        ...(args.geographicZoneIds && args.geographicZoneIds.length > 1
+          ? { geographicZoneIds: [...args.geographicZoneIds] }
+          : {}),
         stopCount: args.orders.length,
       },
       correlationId: args.context.correlationId,
@@ -450,7 +463,11 @@ export class PostgresDeliveryService {
    * tiene dos causas muy distintas: sin geocodificar (hay que resolver el domicilio) o ya ruteado
    * (está en otra hoja). Sin esa distinción no hay forma de saber qué hacer al respecto.
    */
-  public async routableDates(operatingSiteId: string, geographicZoneId?: string) {
+  public async routableDates(
+    operatingSiteId: string,
+    geographicZoneId?: string | readonly string[],
+  ) {
+    const zoneIds = zoneList(geographicZoneId);
     const alreadyRouted = this.database
       .select({ orderId: deliveryStops.orderId })
       .from(deliveryStops)
@@ -474,7 +491,7 @@ export class PostgresDeliveryService {
         and(
           eq(orders.operatingSiteId, operatingSiteId),
           inArray(orders.status, ROUTABLE_STATUSES),
-          ...(geographicZoneId ? [eq(customerAddresses.geographicZoneId, geographicZoneId)] : []),
+          ...(zoneIds.length > 0 ? [inArray(customerAddresses.geographicZoneId, zoneIds)] : []),
         ),
       )
       .groupBy(orders.deliveryDate)

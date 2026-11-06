@@ -187,6 +187,51 @@ export function extractPayment(text: string): { payment?: string; text: string }
   return { payment, text: cleaned };
 }
 
+/**
+ * Un teléfono de la planilla, sin perder nada (2026-11-05).
+ *
+ * Con diez dígitos significativos se guarda como "+549" y los diez. Con dígitos de más o de menos
+ * se guarda como vino y se avisa: antes uno de once dígitos se recortaba a los últimos diez y
+ * quedaba otro número, sin aviso. Con menos de seis no es un teléfono que el sistema acepte: va a
+ * las notas del cliente, también con aviso, en vez de rechazar la planilla entera.
+ */
+export function importPhone(cell: string): { note?: string; value?: string; warning?: string } {
+  const trimmed = cell.trim();
+  let digits = trimmed.replace(/\D/g, '');
+  if (trimmed.startsWith('+') && !digits.startsWith('54')) {
+    return digits.length >= 6 && digits.length <= 18
+      ? { value: `+${digits}` }
+      : {
+          note: trimmed,
+          warning: `El teléfono "${trimmed}" no se pudo cargar: quedó en las notas.`,
+        };
+  }
+  if (digits.startsWith('54')) {
+    digits = digits.slice(2);
+    if (digits.startsWith('9')) digits = digits.slice(1);
+  }
+  if (digits.startsWith('0')) digits = digits.slice(1);
+  if (digits.length === 12) {
+    const positions = [2, 3, 4].filter((position) => digits.slice(position, position + 2) === '15');
+    const [position] = positions;
+    if (positions.length === 1 && position !== undefined) {
+      digits = digits.slice(0, position) + digits.slice(position + 2);
+    }
+  }
+  if (digits.length === 10) return { value: canonicalArgentinePhone(trimmed) };
+  const written = trimmed.replace(/\D/g, '');
+  if (written.length >= 6 && written.length <= 18) {
+    return {
+      value: trimmed,
+      warning: `El teléfono "${trimmed}" tiene ${String(digits.length)} dígitos en vez de 10: se carga igual, revisalo.`,
+    };
+  }
+  return {
+    note: trimmed,
+    warning: `El teléfono "${trimmed}" no se pudo cargar (muy corto): quedó en las notas.`,
+  };
+}
+
 export class ContactImportError extends Error {
   public constructor(
     message: string,
@@ -206,18 +251,73 @@ function findHeaderRow(rows: unknown[][]): number {
   return -1;
 }
 
+/**
+ * Dónde van los domicilios de la planilla: una zona para todos, o una operación entera
+ * (2026-11-05). Con la operación, cada domicilio va a la zona que nombra su columna de localidad o
+ * ciudad ("Plottier", "Cipolletti"); si no nombra ninguna, a la primera zona de la operación.
+ */
+export type ImportZoneChoice = string | { zones: readonly { displayName: string; id: string }[] };
+
+/** La zona de la operación que nombra la localidad de la fila, o la primera. */
+export function zoneForCity(
+  zones: readonly { displayName: string; id: string }[],
+  city: string | undefined,
+): string | undefined {
+  const wanted = normalizeHeader(city ?? '');
+  if (wanted) {
+    const exact = zones.find((zone) => normalizeHeader(zone.displayName) === wanted);
+    if (exact) return exact.id;
+    const partial = zones.find((zone) => {
+      const name = normalizeHeader(zone.displayName);
+      return name.length >= 4 && (wanted.includes(name) || name.includes(wanted));
+    });
+    if (partial) return partial.id;
+    // Una letra de más o de menos ("Cipolleti" y "Cipolletti") es la misma localidad.
+    const close = zones.find((zone) => {
+      const name = normalizeHeader(zone.displayName);
+      return name.length >= 5 && oneEditApart(name, wanted);
+    });
+    if (close) return close.id;
+  }
+  return zones[0]?.id;
+}
+
+/** Si dos palabras difieren en a lo sumo una letra (de más, de menos o cambiada). */
+function oneEditApart(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  let j = 0;
+  let edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      i += 1;
+      j += 1;
+      continue;
+    }
+    edits += 1;
+    if (edits > 1) return false;
+    if (a.length > b.length) i += 1;
+    else if (b.length > a.length) j += 1;
+    else {
+      i += 1;
+      j += 1;
+    }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
+}
+
 export async function parseContactImport(
   file: File,
-  geographicZoneId?: string,
+  zone?: ImportZoneChoice,
 ): Promise<CustomerCreateRequest[]> {
-  return (await parseContactImportRows(file, geographicZoneId)).map(({ customer }) => customer);
+  return (await parseContactImportRows(file, zone)).map(({ customer }) => customer);
 }
 
 /** Cada cliente de la planilla con la fila de la hoja de la que salió, para conciliar. */
 export async function parseContactImportRows(
   file: File,
-  geographicZoneId?: string,
-): Promise<{ customer: CustomerCreateRequest; rowNumber: number }[]> {
+  zone?: ImportZoneChoice,
+): Promise<{ customer: CustomerCreateRequest; rowNumber: number; warnings: string[] }[]> {
   if (file.size === 0) throw new ContactImportError('El archivo está vacío.');
   if (file.size > MAX_FILE_BYTES) {
     throw new ContactImportError('El archivo supera el límite de 5 MB.');
@@ -272,9 +372,11 @@ export async function parseContactImportRows(
   if (dataRows.length > MAX_ROWS) {
     throw new ContactImportError(`La importación admite hasta ${MAX_ROWS} contactos por archivo.`);
   }
-  if (columns.has('address') && !geographicZoneId) {
+  if (columns.has('address') && (!zone || (typeof zone !== 'string' && zone.zones.length === 0))) {
     throw new ContactImportError(
-      'La planilla trae domicilios: elegí la zona de operaciones a la que pertenecen.',
+      typeof zone === 'object'
+        ? 'Esa operación no tiene zonas: creá una en Panel de control → Zonas antes de importar domicilios.'
+        : 'La planilla trae domicilios: elegí la operación o la zona a la que pertenecen.',
     );
   }
 
@@ -301,6 +403,8 @@ export async function parseContactImportRows(
 
     const sector = read('sector');
     const city = read('city');
+    const geographicZoneId =
+      typeof zone === 'string' ? zone : zone ? zoneForCity(zone.zones, city) : undefined;
     // Un enlace puede venir en la columna de dirección ("Ubicación") y texto en la de enlace.
     const isLink = (value: string | undefined) =>
       value !== undefined && /^https?:\/\//i.test(value);
@@ -323,19 +427,29 @@ export async function parseContactImportRows(
     // número no queda escrito de dos formas.
     const whatsappCell = read('whatsapp') ?? mobile;
     const phoneCell = read('phone') ?? mobile;
-    const whatsapp = whatsappCell ? canonicalArgentinePhone(whatsappCell) : undefined;
-    const phone = phoneCell ? canonicalArgentinePhone(phoneCell) : undefined;
+    const whatsappRead = whatsappCell ? importPhone(whatsappCell) : {};
+    const phoneRead = phoneCell ? importPhone(phoneCell) : {};
+    const whatsapp = whatsappRead.value;
+    const phone = phoneRead.value;
+    // El mismo celular suele venir en las dos columnas: un aviso y una nota, no dos.
+    const warnings = [
+      ...new Set([whatsappRead.warning, phoneRead.warning].filter(Boolean)),
+    ] as string[];
+    const unreadable = [...new Set([whatsappRead.note, phoneRead.note].filter(Boolean))];
 
     const internalNotes = [
       notes.text || undefined,
+      ...unreadable.map(
+        (value) => `Teléfono de la planilla que no se pudo cargar: ${String(value)}.`,
+      ),
       payment ? `Forma de pago preferida: ${payment}.` : undefined,
     ]
       .filter(Boolean)
       .join('\n');
 
     const parsed = CustomerCreateRequestSchema.safeParse({
-      // A sheet carries no zone, so the operator picks one for the whole import. Without it an
-      // address cannot be persisted, and the row would silently lose its address.
+      // La zona la elige quien importa: una para todas, o la operación y sale de la localidad.
+      // Sin zona un domicilio no se puede guardar, y la fila perdería su dirección sin avisar.
       ...(writtenAddress && geographicZoneId
         ? {
             addresses: [
@@ -378,6 +492,6 @@ export async function parseContactImportRows(
         { issues: parsed.error.issues, row: sheetRow },
       );
     }
-    return { customer: parsed.data, rowNumber: sheetRow };
+    return { customer: parsed.data, rowNumber: sheetRow, warnings };
   });
 }

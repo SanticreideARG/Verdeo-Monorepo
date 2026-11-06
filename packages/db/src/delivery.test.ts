@@ -170,6 +170,23 @@ describe('createRoute', () => {
     expect(route?.stops).toHaveLength(2);
   });
 
+  // Neuquén y Plottier salen en el mismo reparto (2026-11-05): una hoja junta varias zonas.
+  it('arma una hoja con varias zonas juntas', async () => {
+    const { client, service } = await seededService();
+    await client.exec(
+      `update customer_addresses set geographic_zone_id = '${ZONE_SUR}' where id = '${ADDRESS_B}';`,
+    );
+
+    const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT, [
+      ZONE,
+      ZONE_SUR,
+    ]);
+    expect(route?.stops).toHaveLength(2);
+    expect(await service.routableDates(SITE, [ZONE, ZONE_SUR])).toEqual([
+      { deliveryDate: '2026-08-26', geocoded: 0, routed: 2, total: 2 },
+    ]);
+  });
+
   it('excludes an order already on an active route', async () => {
     const { service } = await seededService();
     await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);

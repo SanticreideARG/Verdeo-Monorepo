@@ -151,6 +151,14 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-05-importar-por-operacion',
+    body: `Importar contactos: ahora se puede elegir la operación entera, y cada domicilio va a la zona de su localidad. Los celulares con dígitos de más o de menos se cargan igual y quedan marcados para revisar. Y en Rutas, una hoja puede juntar varias zonas que salen en el mismo reparto, como Neuquén y Plottier.`,
+  },
+  {
+    key: '2026-11-05-clientes-archivados',
+    body: `Los clientes archivados ya no aparecen en la lista de Clientes ni en los buscadores. Si un teléfono "ya es de otro cliente" y no lo encontrás, puede estar archivado: pedile a quien administra que lo reactive.`,
+  },
+  {
     key: '2026-11-05-hojas-y-domicilios',
     body: `Las hojas de ruta se pueden editar también después de publicarlas: "Sumar pedidos" agrega los del día que no están en ninguna hoja, "Sacar" quita una parada sin tocar el pedido, y el orden manual funciona en cualquier hoja. Además, los domicilios de un cliente ahora se pueden eliminar desde su ficha.`,
   },

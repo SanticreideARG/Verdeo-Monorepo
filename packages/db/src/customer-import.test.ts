@@ -176,3 +176,19 @@ describe('barrios', () => {
     expect(rows[0]?.neighborhood_id).toBeNull();
   });
 });
+
+// Cambio de política (2026-11-05): los archivados no salen en las listas, sólo pidiéndolos.
+describe('clientes archivados', () => {
+  it('no salen en la lista ni en la búsqueda por teléfono, sí pidiéndolos por estado', async () => {
+    const { client, service } = await base();
+    await client.exec(`insert into customers (display_name) values ('Ana Activa');`);
+
+    const lista = await service.listCustomers({ limit: 30 }, true);
+    expect(lista.items.map((cliente) => cliente.displayName)).toEqual(['Ana Activa']);
+    const porTelefono = await service.listCustomers({ limit: 30, search: '1155550101' }, true);
+    expect(porTelefono.items).toEqual([]);
+
+    const archivados = await service.listCustomers({ limit: 30, status: 'archived' }, true);
+    expect(archivados.items.map((cliente) => cliente.id)).toEqual([ARCHIVADO]);
+  });
+});

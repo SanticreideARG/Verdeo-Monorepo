@@ -5187,6 +5187,23 @@ describe('API foundation', () => {
      */
     // Conciliar la planilla antes de importar: la vista previa no crea nada, y al importar se
     // saltean los que ya existen en vez de que la tanda entera falle.
+    // Los archivados sólo con su permiso, que no viene con ningún rol (2026-11-05).
+    it('pide customers.view_archived para listar los archivados', async () => {
+      const listCustomers = vi.fn(() => Promise.resolve({ items: [], nextCursor: null }));
+      const sin = buildApp({ listCustomers }, ['customers.read']);
+      const denied = await sin.request('/api/v1/customers?status=archived', {
+        headers: { cookie },
+      });
+      expect(denied.status).toBe(403);
+      expect(listCustomers).not.toHaveBeenCalled();
+
+      const con = buildApp({ listCustomers }, ['customers.read', 'customers.view_archived']);
+      const allowed = await con.request('/api/v1/customers?status=archived', {
+        headers: { cookie },
+      });
+      expect(allowed.status).toBe(200);
+    });
+
     it('concilia la planilla de clientes y al importar saltea los que ya existen', async () => {
       const planilla = () => {
         const body = new FormData();

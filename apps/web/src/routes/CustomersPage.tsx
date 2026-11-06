@@ -219,6 +219,20 @@ export function CustomersPage() {
     };
   }, []);
 
+  // Las operaciones, para importar una entera (2026-11-05). Sólo las que tienen zonas.
+  const [allSites, setAllSites] = useState<{ displayName: string; id: string }[]>([]);
+  useEffect(() => {
+    void apiRequest('/api/v1/scope').then(async (response) => {
+      if (!response.ok) return;
+      setAllSites(
+        ((await response.json()) as { sites: { displayName: string; id: string }[] }).sites,
+      );
+    });
+  }, []);
+  const importSites = allSites.filter((site) =>
+    zones.some((zone) => zone.operatingSiteId === site.id),
+  );
+
   // The ciudad picker defaults to whatever the top bar has selected — asking again would be
   // redundant for the common case — but still lists every zone so a domicilio in another city
   // doesn't require switching the ambient scope first.
@@ -357,8 +371,9 @@ export function CustomersPage() {
   function importBody(zoneId: string) {
     const body = new FormData();
     if (importFile) body.set('file', importFile);
-    // Una planilla con direcciones necesita la zona: sin ella el servidor la rechaza.
-    if (zoneId) body.set('geographicZoneId', zoneId);
+    // Una planilla con direcciones necesita la operación o la zona: sin eso el servidor la rechaza.
+    if (zoneId.startsWith('site:')) body.set('operatingSiteId', zoneId.slice('site:'.length));
+    else if (zoneId) body.set('geographicZoneId', zoneId);
     if (importAsNew) body.set('areNew', 'true');
     return body;
   }
@@ -1608,18 +1623,43 @@ export function CustomersPage() {
                   <span className="crm-import-file">Seleccionado: {importFile.name}</span>
                 ) : null}
                 <label className="field field-wide">
-                  Zona de reparto de las direcciones
+                  Operación o zona de las direcciones
+                  {/* Toda una operación (2026-11-05): cada domicilio va a la zona que nombra su
+                      columna de localidad, o a la primera de la operación. */}
                   <select
-                    defaultValue={defaultZoneId}
+                    defaultValue={
+                      importSites.some((site) => site.id === storedOperatingSiteId())
+                        ? `site:${storedOperatingSiteId() ?? ''}`
+                        : defaultZoneId
+                    }
+                    key={importSites.length}
                     name="geographicZoneId"
                     onChange={() => setImportReview(null)}
                   >
                     <option value="">Sin direcciones</option>
-                    {zones.map((zone) => (
-                      <option key={zone.id} value={zone.id}>
-                        {zone.displayName}
-                      </option>
+                    {importSites.map((site) => (
+                      <optgroup key={site.id} label={site.displayName}>
+                        <option value={`site:${site.id}`}>
+                          Toda la operación {site.displayName} (zona según la localidad)
+                        </option>
+                        {zones
+                          .filter((zone) => zone.operatingSiteId === site.id)
+                          .map((zone) => (
+                            <option key={zone.id} value={zone.id}>
+                              Sólo {zone.displayName}
+                            </option>
+                          ))}
+                      </optgroup>
                     ))}
+                    {zones
+                      .filter(
+                        (zone) => !importSites.some((site) => site.id === zone.operatingSiteId),
+                      )
+                      .map((zone) => (
+                        <option key={zone.id} value={zone.id}>
+                          {zone.displayName}
+                        </option>
+                      ))}
                   </select>
                 </label>
                 {/* La cartera de siempre no es "nueva": sin tildar, no se pintan como nuevos. */}

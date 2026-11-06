@@ -38,6 +38,13 @@ export const initialPermissionCatalog: readonly PermissionDefinition[] = [
   { key: 'customers.unmerge', group: 'customers', description: 'Revertir fusiones' },
   { key: 'customers.restrict', group: 'customers', description: 'Restringir clientes' },
   { key: 'customers.view_sensitive', group: 'customers', description: 'Ver datos sensibles' },
+  // Sin rol por defecto (2026-11-05): los archivados salen de todas las listas y sólo los ve quien
+  // tiene este permiso, en Panel de control → Clientes archivados.
+  {
+    key: 'customers.view_archived',
+    group: 'customers',
+    description: 'Ver clientes archivados',
+  },
   { key: 'orders.read', group: 'orders', description: 'Ver pedidos' },
   { key: 'orders.create', group: 'orders', description: 'Crear pedidos' },
   { key: 'orders.edit', group: 'orders', description: 'Editar pedidos' },

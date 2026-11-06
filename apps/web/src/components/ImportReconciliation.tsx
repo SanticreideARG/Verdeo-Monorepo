@@ -14,6 +14,8 @@ export interface CustomerImportRow {
   repeatedOfRow: number | null;
   rowNumber: number;
   status: 'existing' | 'new' | 'repeated';
+  zone?: string | null;
+  warnings?: string[];
 }
 
 const STATUS_LABELS: Record<CustomerImportRow['status'], string> = {
@@ -58,6 +60,7 @@ export function ImportReconciliation({
   const nuevos = count('new');
   const existentes = count('existing');
   const repetidos = count('repeated');
+  const conAvisos = rows.filter((row) => (row.warnings?.length ?? 0) > 0).length;
 
   return (
     <section className="crm-import-review" aria-live="polite">
@@ -70,6 +73,7 @@ export function ImportReconciliation({
         {existentes > 0 ? `${String(existentes)} ya existen. ` : ''}
         {repetidos > 0 ? `${String(repetidos)} repetidos en la planilla. ` : ''}
         {existentes + repetidos > 0 ? (done ? 'Se saltearon.' : 'No se van a crear.') : ''}
+        {conAvisos > 0 ? ` ${String(conAvisos)} con avisos para revisar (⚠).` : ''}
       </p>
       <ol className="crm-import-rows">
         {rows.map((row) => (
@@ -82,12 +86,22 @@ export function ImportReconciliation({
               </span>
             </div>
             <p className="crm-import-row-facts">
-              {[row.phone, row.address, row.neighborhood ? `Barrio: ${row.neighborhood}` : null]
+              {[
+                row.phone,
+                row.address,
+                row.neighborhood ? `Barrio: ${row.neighborhood}` : null,
+                row.zone ? `Zona: ${row.zone}` : null,
+              ]
                 .filter(Boolean)
                 .join(' · ')}
             </p>
             {row.notes ? <p className="crm-import-row-notes">{row.notes}</p> : null}
             {why(row) ? <p className="crm-import-row-why">{why(row)}</p> : null}
+            {row.warnings?.map((warning) => (
+              <p className="crm-import-row-warning" key={warning} role="note">
+                ⚠ {warning}
+              </p>
+            ))}
           </li>
         ))}
       </ol>

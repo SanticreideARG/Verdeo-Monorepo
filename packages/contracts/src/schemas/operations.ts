@@ -193,6 +193,10 @@ export const CustomerImportRowSchema = z.object({
   repeatedOfRow: z.number().int().positive().nullable(),
   rowNumber: z.number().int().positive(),
   status: z.enum(['existing', 'new', 'repeated']),
+  /** La zona del domicilio, cuando se importa una operación entera. */
+  zone: z.string().nullable().optional(),
+  /** Lo que se cargó igual pero conviene revisar: un celular con dígitos de más o de menos. */
+  warnings: z.array(z.string()).optional(),
 });
 
 export const CustomerImportPreviewResponseSchema = z.object({

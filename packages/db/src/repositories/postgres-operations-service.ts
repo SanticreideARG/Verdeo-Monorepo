@@ -680,6 +680,9 @@ function postgresConflictInfo(error: unknown): PgConflictInfo | undefined {
 // gets the safe generic fallback rather than leaking the raw constraint name.
 const CONFLICT_MESSAGES_BY_CONSTRAINT: Record<string, string> = {
   sales_cycles_alias_unique: 'Ya existe una semana con ese alias — elegí uno distinto.',
+  // Puede ser de un cliente archivado, que ya no sale en las listas.
+  customer_identities_active_value_unique:
+    'Ese teléfono o correo ya es de otro cliente. Si no lo encontrás, puede estar archivado: pedile a quien administra que lo reactive.',
 };
 
 function translateDatabaseConflict(error: unknown): never {
@@ -740,7 +743,8 @@ export class PostgresOperationsService {
     const conditions = [
       ...scopeConditions,
       ...(input.cursor ? [gt(customers.id, input.cursor)] : []),
-      ...(input.status ? [eq(customers.status, input.status)] : []),
+      // Los archivados no salen en las listas (2026-11-05): sólo pidiéndolos por estado.
+      ...(input.status ? [eq(customers.status, input.status)] : [ne(customers.status, 'archived')]),
       ...(input.search ? [ilike(customers.displayName, `%${input.search}%`)] : []),
     ];
     let rows = await this.database
@@ -795,7 +799,9 @@ export class PostgresOperationsService {
               // Contact search must respect the same scope as the name search above.
               ...scopeConditions,
               ...(input.cursor ? [gt(customers.id, input.cursor)] : []),
-              ...(input.status ? [eq(customers.status, input.status)] : []),
+              ...(input.status
+                ? [eq(customers.status, input.status)]
+                : [ne(customers.status, 'archived')]),
             ),
           );
         rows = [...new Map([...rows, ...identityRows].map((row) => [row.id, row])).values()]

@@ -24,6 +24,8 @@ export const DeliveryRouteCreateRequestSchema = z.object({
    * repartidor— en vez de una sola con todas las paradas mezcladas.
    */
   geographicZoneId: UuidSchema.optional(),
+  /** Varias zonas en la misma hoja (2026-11-05): Neuquén y Plottier salen juntas. */
+  geographicZoneIds: z.array(UuidSchema).min(1).max(20).optional(),
   label: z.string().trim().max(120).optional(),
   operatingSiteId: UuidSchema,
 });

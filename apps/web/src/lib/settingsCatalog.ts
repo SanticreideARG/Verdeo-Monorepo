@@ -160,6 +160,14 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         permission: 'sites.read',
       },
       {
+        // El permiso no viene con ningún rol: los archivados no salen en ninguna otra lista.
+        description: 'Los clientes archivados: buscarlos, abrir su ficha y reactivarlos.',
+        href: '/app/ajustes/clientes-archivados',
+        keywords: ['archivados', 'clientes', 'baja', 'reactivar', 'inactivos', 'eliminados'],
+        label: 'Clientes archivados',
+        permission: 'customers.view_archived',
+      },
+      {
         // El permiso no viene con ningún rol: la descarga se lleva los datos de todos los clientes.
         description: 'Descargar una copia de todos los datos y restaurarla.',
         href: '/app/respaldos',

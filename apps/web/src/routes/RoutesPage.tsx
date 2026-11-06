@@ -128,7 +128,11 @@ export function RoutesPage() {
   const activeDate = routableDates.some((date) => date.deliveryDate === selectedDate)
     ? selectedDate
     : (routableDates[0]?.deliveryDate ?? '');
-  const [zoneId, setZoneId] = useState('');
+  /*
+   * Las zonas de la hoja (2026-11-05): una o varias. Neuquén y Plottier salen en el mismo reparto,
+   * así que una hoja tiene que poder juntarlas. Ninguna tildada es la ciudad entera.
+   */
+  const [zoneIds, setZoneIds] = useState<string[]>([]);
   // "?reparto=<id>" abre ese reparto (la alerta del día lleva al de hoy); "?vista=hojas", las hojas.
   const [searchParams] = useSearchParams();
   const runToOpen = searchParams.get('reparto');
@@ -256,14 +260,16 @@ export function RoutesPage() {
 
   useEffect(() => {
     if (!canRead) return;
-    const params = new URLSearchParams(zoneId ? { geographicZoneId: zoneId } : {});
+    const params = new URLSearchParams(
+      zoneIds.length > 0 ? { geographicZoneId: zoneIds.join(',') } : {},
+    );
     void apiRequest(`/api/v1/delivery/routable-dates?${params.toString()}`)
       .then(async (response) => {
         if (!response.ok) return;
         setRoutableDates(((await response.json()) as { items: RoutableDate[] }).items);
       })
       .catch(() => setRoutableDates([]));
-  }, [canRead, datesVersion, zoneId]);
+  }, [canRead, datesVersion, zoneIds]);
 
   async function createRoute(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -276,15 +282,18 @@ export function RoutesPage() {
      */
     const formEl = event.currentTarget;
     const form = new FormData(formEl);
-    const zoneId = formText(form, 'geographicZoneId');
     /*
-     * Sin etiqueta escrita, la etiqueta es la zona.
+     * Sin etiqueta escrita, la etiqueta son las zonas ("Neuquén + Plottier").
      *
      * Con varias hojas del mismo día la lista las muestra sólo por fecha, y quedaban tres "2026-09-10"
      * indistinguibles. El nombre de la zona es exactamente lo que las separa.
      */
     const label =
-      formText(form, 'label').trim() || zones.find((zone) => zone.id === zoneId)?.displayName || '';
+      formText(form, 'label').trim() ||
+      zones
+        .filter((zone) => zoneIds.includes(zone.id))
+        .map((zone) => zone.displayName)
+        .join(' + ');
     const operatingSiteId = storedOperatingSiteId();
     if (!operatingSiteId) {
       setMessage('Elegí una ciudad en el selector de arriba antes de proponer una ruta.');
@@ -295,7 +304,7 @@ export function RoutesPage() {
         deliveryDate: formText(form, 'deliveryDate'),
         // La ciudad sale del selector de la barra, que es el que manda en toda la pantalla.
         operatingSiteId,
-        ...(zoneId ? { geographicZoneId: zoneId } : {}),
+        ...(zoneIds.length > 0 ? { geographicZoneIds: zoneIds } : {}),
         ...(label ? { label } : {}),
       }),
       method: 'POST',
@@ -657,21 +666,26 @@ export function RoutesPage() {
               ciudad distinta de la que se está mirando. Lo que sí hace falta elegir es la zona: el
               reparto sale por zona, y una hoja por zona es una hoja que se puede seguir.
             */}
-              <label className="field">
-                Zona
-                <select
-                  name="geographicZoneId"
-                  onChange={(event) => setZoneId(event.target.value)}
-                  value={zoneId}
-                >
-                  <option value="">Toda la ciudad</option>
-                  {zones.map((zone) => (
-                    <option key={zone.id} value={zone.id}>
-                      {zone.displayName}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <fieldset className="field routes-zone-picker">
+                <legend>Zonas</legend>
+                <small>Sin tildar, toda la ciudad. Podés juntar varias en la misma hoja.</small>
+                {zones.map((zone) => (
+                  <label className="label-switch" key={zone.id}>
+                    <input
+                      checked={zoneIds.includes(zone.id)}
+                      onChange={(event) =>
+                        setZoneIds((current) =>
+                          event.target.checked
+                            ? [...current, zone.id]
+                            : current.filter((id) => id !== zone.id),
+                        )
+                      }
+                      type="checkbox"
+                    />
+                    {zone.displayName}
+                  </label>
+                ))}
+              </fieldset>
               <label className="field">
                 Fecha de entrega
                 {/*
@@ -715,8 +729,13 @@ export function RoutesPage() {
               {routableDates.length === 0 ? (
                 <p className="text-sm text-ink-muted sm:col-span-3">
                   No hay pedidos por repartir en esta ciudad
-                  {zoneId ? ' y esta zona' : ''}. Un pedido entra en una hoja de ruta cuando está
-                  confirmado o listo, y su domicilio está geocodificado.
+                  {zoneIds.length === 1
+                    ? ' y esta zona'
+                    : zoneIds.length > 1
+                      ? ' y estas zonas'
+                      : ''}
+                  . Un pedido entra en una hoja de ruta cuando está confirmado o listo, y su
+                  domicilio está geocodificado.
                 </p>
               ) : (
                 <>

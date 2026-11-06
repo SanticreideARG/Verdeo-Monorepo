@@ -181,7 +181,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
 
   // --- Reparto ---------------------------------------------------------------------------------
   {
-    body: 'En "Rutas", con la ciudad elegida arriba, elegís la zona y la fecha y tocás "+ Proponer ruta". El sistema levanta los pedidos confirmados o listos de ese día y esa zona, con dirección geocodificada, y los ordena solo.\n\nSi aparece "Ruta creada, pero sin paradas", es por una de dos: no hay pedidos por repartir ese día en esa zona, o sus direcciones no están geocodificadas (se resuelve en la ficha del cliente).\n\nPodés reordenar las paradas a mano. Nada llega a la app del repartidor hasta que tocás "Publicar la ruta".\n\n**Una hoja nunca es definitiva**: borrador o publicada, se puede seguir editando. "Sumar pedidos" muestra los pedidos de ese día que no están en ninguna hoja; los elegís y van al final, para acomodarlos arrastrándolos o con "Establecer orden manualmente". "Sacar" en una parada la quita de la hoja sin tocar el pedido, que queda libre para otra. Una parada ya entregada no se saca. Si la hoja está publicada, quien reparte ve los cambios al recargar su enlace.\n\n[Ir a Rutas](/app/reparto/rutas)',
+    body: 'En "Rutas", con la ciudad elegida arriba, tildás las zonas y elegís la fecha y tocás "+ Proponer ruta". El sistema levanta los pedidos confirmados o listos de ese día y esas zonas, con dirección geocodificada, y los ordena solo. Se pueden tildar varias zonas que salen en el mismo reparto (por ejemplo Neuquén y Plottier): van en una sola hoja. Sin tildar ninguna, toma toda la ciudad.\n\nSi aparece "Ruta creada, pero sin paradas", es por una de dos: no hay pedidos por repartir ese día en esa zona, o sus direcciones no están geocodificadas (se resuelve en la ficha del cliente).\n\nPodés reordenar las paradas a mano. Nada llega a la app del repartidor hasta que tocás "Publicar la ruta".\n\n**Una hoja nunca es definitiva**: borrador o publicada, se puede seguir editando. "Sumar pedidos" muestra los pedidos de ese día que no están en ninguna hoja; los elegís y van al final, para acomodarlos arrastrándolos o con "Establecer orden manualmente". "Sacar" en una parada la quita de la hoja sin tocar el pedido, que queda libre para otra. Una parada ya entregada no se saca. Si la hoja está publicada, quien reparte ve los cambios al recargar su enlace.\n\n[Ir a Rutas](/app/reparto/rutas)',
     category: 'Reparto / Rutas',
     key: 'reparto-proponer',
     ordinal: 0,
@@ -233,12 +233,20 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Ficha de cliente',
   },
   {
-    body: 'Un cliente sin pedidos se borra del todo. Uno que ya tiene pedidos no se borra: se archiva, para que su historial y los números de la semana no cambien: sus pedidos siguen ahí.\n\nEn los dos casos queda registrado en la auditoría quién lo hizo.',
+    body: 'Un cliente sin pedidos se borra del todo. Uno que ya tiene pedidos no se borra: se archiva, para que su historial y los números de la semana no cambien: sus pedidos siguen ahí. Un archivado deja de aparecer en la lista de Clientes y en los buscadores de pedidos, chat y encuestas; sólo se ve en Panel de control → Clientes archivados, con un permiso aparte. Desde ahí se abre su ficha y se reactiva cambiándole el estado.\n\nEn los dos casos queda registrado en la auditoría quién lo hizo.',
     category: 'Clientes',
     key: 'clientes-eliminar',
     ordinal: 1,
     requiredPermission: 'customers.delete',
     title: 'Eliminar un cliente',
+  },
+  {
+    body: 'En Clientes, "Importar contactos" carga una planilla CSV o Excel (.xlsx): la primera hoja, hasta 500 filas. Reconoce las columnas por su nombre aunque no sean exactos: Nombre, Celular o WhatsApp, Teléfono, Email, Dirección, Barrio, Localidad, Forma de pago y Notas.\n\n**Dónde van los domicilios.** Elegís la operación entera ("Toda la operación Neuquén") o una sola zona. Con la operación, cada domicilio va a la zona que nombra su columna Localidad o Ciudad (Plottier, Cipolletti…; se toleran mayúsculas, tildes y una letra de diferencia); si no nombra ninguna, a la primera zona de la operación. Los clientes quedan en esa operación aunque arriba esté elegida otra ciudad.\n\n**Primero se revisa.** "Revisar planilla" muestra fila por fila qué se va a crear, a qué zona va cada domicilio, y qué no se crea: "Ya existe" si coincide con un cliente cargado (por teléfono, correo, o por nombre y dirección si no trae teléfono), "Repetido" si la misma persona está más de una vez en la planilla.\n\n**Nada se pierde.** Un celular con dígitos de más o de menos se carga tal como vino y la fila lo marca con ⚠ para revisarlo. Uno demasiado corto para ser un teléfono queda en las notas del cliente, también con aviso.\n\nSin tildar "Son clientes nuevos", entran como clientes de siempre.\n\n[Ir a Clientes](/app/clientes)',
+    category: 'Clientes',
+    key: 'clientes-importar',
+    ordinal: 2,
+    requiredPermission: 'customers.create',
+    title: 'Importar clientes desde una planilla',
   },
   {
     body: 'En "Encuestas" armás un cuestionario con preguntas de texto libre o de opciones. Se puede mandar de dos formas:\n\n- A un cliente puntual: un enlace y un QR de un solo uso.\n- Con un enlace abierto: cualquiera que lo tenga responde una vez, sin iniciar sesión, y termina en una página de agradecimiento.\n\nLos resultados agregados, sin identificar quién respondió qué, están en "Resultados" de cada encuesta. Una encuesta que ya no sirve se puede eliminar.\n\n[Ir a Encuestas](/app/encuestas)',

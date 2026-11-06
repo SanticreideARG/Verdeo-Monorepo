@@ -11943,6 +11943,21 @@ label.field:has(> input[type='radio']) {
 .routes-stop-handle:active {
   cursor: grabbing;
 }
+/* Las zonas de una hoja, tildables: una hoja puede juntar varias (Neuquén + Plottier). */
+.routes-zone-picker {
+  display: grid;
+  gap: 0.3rem;
+  align-content: start;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.routes-zone-picker legend {
+  padding: 0;
+}
+.routes-zone-picker small {
+  color: var(--db-muted);
+}
 /* Sacar una parada de la hoja: chico y discreto, al lado de la manija. */
 .routes-stop-remove {
   border: 1px solid var(--db-border);
@@ -13168,4 +13183,35 @@ label.field:has(> input[type='radio']) {
   padding: 0 0.55rem;
   color: var(--db-muted, #6b7280);
   font-size: 1.1rem;
+}
+
+/* Panel de control → Clientes archivados: una lista simple, nombre y alta. */
+.archived-customers {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.archived-customers li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  align-items: baseline;
+  border-bottom: 1px solid var(--db-border);
+  padding: 0.5rem 0;
+}
+.archived-customers a {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.archived-customers small {
+  color: var(--db-muted);
+}
+
+/* Un dato que se cargó igual pero conviene revisar (un celular con dígitos de más o de menos). */
+.crm-import-row-warning {
+  margin: 0.15rem 0 0;
+  font-size: 0.82rem;
+  color: var(--db-warning, #9a6700);
 }

@@ -1303,7 +1303,7 @@ interface DeliveryEngine {
     deliveryDate: string,
     label: string | undefined,
     context: DeliveryContext,
-    geographicZoneId?: string,
+    geographicZoneId?: string | readonly string[],
   ): Promise<unknown>;
   deleteRoute(routeId: string, context: DeliveryContext): Promise<unknown>;
   createRoutesFromRun?(
@@ -1313,7 +1313,7 @@ interface DeliveryEngine {
   ): Promise<unknown>;
   routableDates(
     operatingSiteId: string,
-    geographicZoneId?: string,
+    geographicZoneId?: string | readonly string[],
   ): Promise<{ deliveryDate: string; geocoded: number; routed: number; total: number }[]>;
   getRouteDetail(routeId: string): Promise<unknown>;
   listRoutes(operatingSiteId?: string): Promise<unknown>;
@@ -4032,6 +4032,12 @@ export function createApp(options: CreateAppOptions) {
     const query = CustomerListQuerySchema.safeParse(context.req.query());
     if (!query.success)
       return badRequest(context, 'Los filtros de clientes no son válidos.', query.error.issues);
+    // Los archivados sólo con su permiso (2026-11-05); sin estado pedido, no salen.
+    if (
+      query.data.status === 'archived' &&
+      !session.permissions.includes('customers.view_archived')
+    )
+      return forbidden(context);
     const page = await requireOperations().listCustomers(
       scoped(context, query.data),
       session.permissions.includes('customers.view_sensitive'),
@@ -4054,6 +4060,11 @@ export function createApp(options: CreateAppOptions) {
     const query = CustomerExportQuerySchema.safeParse(context.req.query());
     if (!query.success)
       return badRequest(context, 'Los filtros de exportación no son válidos.', query.error.issues);
+    if (
+      query.data.status === 'archived' &&
+      !session.permissions.includes('customers.view_archived')
+    )
+      return forbidden(context);
 
     // Internal notes are staff annotation about the customer, so exporting them needs the same
     // gate that shows them on screen.
@@ -4739,17 +4750,40 @@ export function createApp(options: CreateAppOptions) {
     }
     try {
       const zoneField = body?.geographicZoneId;
+      const siteField = body?.operatingSiteId;
+      /*
+       * Toda una operación (2026-11-05): la zona de cada domicilio sale de su localidad. Los
+       * clientes quedan en esa operación aunque arriba esté elegida otra o "Todas las ciudades".
+       */
+      const siteId =
+        typeof siteField === 'string' && /^[0-9a-f-]{36}$/i.test(siteField) ? siteField : null;
+      const siteZones = siteId
+        ? (
+            (await requireGeography().listActiveZones(siteId)) as readonly {
+              displayName: string;
+              id: string;
+              operatingSiteId: string;
+            }[]
+          ).filter((zone) => zone.operatingSiteId === siteId)
+        : [];
       const parsedRows = await parseContactImportRows(
         file,
-        typeof zoneField === 'string' && zoneField ? zoneField : undefined,
+        siteId
+          ? { zones: siteZones }
+          : typeof zoneField === 'string' && zoneField
+            ? zoneField
+            : undefined,
       );
       const operations = requireOperations();
       if (!operations.importCustomers || !operations.reconcileCustomerImport) {
         throw new Error('Customer import is not configured');
       }
-      const scopedRows = parsedRows.map(({ customer }) => scoped(context, customer));
+      const scopedRows = parsedRows.map(({ customer }) =>
+        siteId ? { ...customer, operatingSiteId: siteId } : scoped(context, customer),
+      );
+      const zoneNames = new Map(siteZones.map((zone) => [zone.id, zone.displayName]));
       const checks = await operations.reconcileCustomerImport(scopedRows);
-      const rows = parsedRows.map(({ customer, rowNumber }, index) => {
+      const rows = parsedRows.map(({ customer, rowNumber, warnings }, index) => {
         const check = checks[index];
         const address = customer.addresses[0];
         return {
@@ -4763,6 +4797,9 @@ export function createApp(options: CreateAppOptions) {
             check?.repeatedOf != null ? (parsedRows[check.repeatedOf]?.rowNumber ?? null) : null,
           rowNumber,
           status: check?.status ?? 'new',
+          // Con una operación entera, a qué zona va cada domicilio: se revisa antes de importar.
+          zone: address ? (zoneNames.get(address.geographicZoneId) ?? null) : null,
+          warnings,
         };
       });
       if (dryRun) return context.json(CustomerImportPreviewResponseSchema.parse({ rows }));
@@ -5416,8 +5453,15 @@ export function createApp(options: CreateAppOptions) {
     if (!context.get('session').permissions.includes('routes.read')) return forbidden(context);
     const operatingSiteId = context.get('scope')?.operatingSiteId;
     if (!operatingSiteId) return context.json({ items: [] });
-    const zone = context.req.query('geographicZoneId');
-    const items = await requireDelivery().routableDates(operatingSiteId, zone || undefined);
+    // Una o varias zonas, separadas por coma (2026-11-05).
+    const zones = (context.req.query('geographicZoneId') ?? '')
+      .split(',')
+      .map((zone) => zone.trim())
+      .filter((zone) => /^[0-9a-f-]{36}$/i.test(zone));
+    const items = await requireDelivery().routableDates(
+      operatingSiteId,
+      zones.length > 0 ? zones : undefined,
+    );
     return context.json({ items });
   });
 
@@ -5920,7 +5964,7 @@ export function createApp(options: CreateAppOptions) {
       input.data.deliveryDate,
       input.data.label,
       deliveryContext(context),
-      input.data.geographicZoneId,
+      input.data.geographicZoneIds ?? input.data.geographicZoneId,
     );
     return context.json(DeliveryRouteDetailSchema.parse(contractValue(route)), 201);
   });

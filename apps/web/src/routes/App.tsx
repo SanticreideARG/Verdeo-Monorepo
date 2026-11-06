@@ -27,6 +27,7 @@ import { ChatPage } from './ChatPage.js';
 import { CustomersPage } from './CustomersPage.js';
 import { DeliverySheetPage } from './DeliverySheetPage.js';
 import { AuditLogPage } from './AuditLogPage.js';
+import { ArchivedCustomersPage } from './ArchivedCustomersPage.js';
 import { SystemPage } from './SystemPage.js';
 import { AddressSettingsPage } from './AddressSettingsPage.js';
 import { DeliverySettingsPage } from './DeliverySettingsPage.js';
@@ -485,6 +486,14 @@ export function App() {
           element={
             <SettingsGate>
               <AuditLogPage />
+            </SettingsGate>
+          }
+        />
+        <Route
+          path="/app/ajustes/clientes-archivados"
+          element={
+            <SettingsGate>
+              <ArchivedCustomersPage />
             </SettingsGate>
           }
         />

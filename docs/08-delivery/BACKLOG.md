@@ -74,6 +74,18 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 - [x] El mensaje y la planilla de la ruta no dicen "nuevo": ni una marca escrita en el nombre ni el "Nuevo" de "Menú Nuevo Keto".
 - [x] Barrio: en el mensaje, en cada parada al lado de la dirección (reemplaza al encabezado por tandas); columna "Barrio" en la hoja Reparto del informe del período.
 
+## Importar por operación y hojas con varias zonas (2026-11-05)
+
+- [x] Importar contactos con una operación entera (`operatingSiteId` en la planilla): cada domicilio va a la zona que nombra su columna Localidad/Ciudad (`zoneForCity`: exacta, parcial o a una letra de distancia), o a la primera zona activa de la operación. La vista previa dice la zona de cada fila. Los clientes quedan en esa operación.
+- [x] Teléfonos de la planilla sin pérdida (`importPhone`): diez dígitos significativos → `+549…`; con dígitos de más o de menos se guarda como vino y la fila trae un aviso (`warnings` en la vista previa, sin columna nueva); con menos de seis va a las notas. Antes uno de once dígitos se recortaba a los últimos diez sin aviso.
+- [x] Una hoja de ruta con varias zonas: "Proponer ruta" tilda zonas (`geographicZoneIds`), y los días ruteables se calculan para esas zonas. Neuquén y Plottier, o zonas de Mendoza, salen en la misma hoja. "Armar las rutas por zona" de un reparto sigue haciendo una por zona.
+
+## Clientes archivados fuera de las listas (2026-11-05)
+
+- [x] Política: un cliente archivado no sale en la lista de Clientes, la exportación ni los buscadores (pedidos, cambiar cliente, chat, encuestas). `listCustomers` sin estado excluye `archived`; pedirlos con `status=archived` exige `customers.view_archived`, permiso sin rol por defecto. La ficha se sigue abriendo por enlace (un pedido viejo la nombra).
+- [x] Panel de control → Clientes archivados (`/app/ajustes/clientes-archivados`): buscar, abrir la ficha y reactivar cambiando el estado.
+- [x] Un teléfono o correo que ya es de un archivado dice qué pasa en vez del "ya existe" genérico (`customer_identities_active_value_unique`).
+
 ## Hojas de ruta editables y domicilios eliminables (2026-11-05)
 
 - [x] Una hoja nunca es definitiva: borrador o publicada, se le suman pedidos del día sin hoja (`GET /delivery/routes/:id/available-orders`, `POST /delivery/routes/:id/stops`, al final de la hoja) y se le sacan paradas no entregadas (`DELETE /delivery/routes/:id/stops/:stopId`, el pedido queda libre y la numeración se rehace). "Establecer orden manualmente" también en publicadas. Una ruta completada no se toca. Auditoría `delivery.route_stops_added` y `delivery.route_stop_removed`.
