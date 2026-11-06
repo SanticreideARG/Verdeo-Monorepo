@@ -21,7 +21,8 @@ type Field =
   | 'payment'
   | 'phone'
   | 'sector'
-  | 'whatsapp';
+  | 'whatsapp'
+  | 'zone';
 
 /**
  * Cómo se reconoce cada columna, sobre el encabezado normalizado (minúsculas, sin tildes ni signos).
@@ -65,6 +66,8 @@ const FIELD_RULES: readonly { contains?: RegExp; exact: RegExp; field: Field }[]
     field: 'address',
   },
   { exact: /^(barrio|barrios)$/, contains: /barrio/, field: 'sector' },
+  // La zona de reparto, cuando la planilla la trae: manda sobre la localidad para elegir la zona.
+  { exact: /^(zona|zona de reparto|zona de entrega)$/, field: 'zone' },
   { exact: /^(localidad|ciudad|partido|municipio)$/, contains: /localidad|ciudad/, field: 'city' },
   {
     exact: /^(forma de pago|medio de pago|metodo de pago|pago|forma pago|medio pago)$/,
@@ -258,7 +261,7 @@ function findHeaderRow(rows: unknown[][]): number {
  */
 export type ImportZoneChoice = string | { zones: readonly { displayName: string; id: string }[] };
 
-/** La zona de la operación que nombra la localidad de la fila, o la primera. */
+/** La zona de la operación que nombra el texto (la columna Zona o la localidad), si alguna. */
 export function zoneForCity(
   zones: readonly { displayName: string; id: string }[],
   city: string | undefined,
@@ -272,38 +275,15 @@ export function zoneForCity(
       return name.length >= 4 && (wanted.includes(name) || name.includes(wanted));
     });
     if (partial) return partial.id;
-    // Una letra de más o de menos ("Cipolleti" y "Cipolletti") es la misma localidad.
-    const close = zones.find((zone) => {
-      const name = normalizeHeader(zone.displayName);
-      return name.length >= 5 && oneEditApart(name, wanted);
-    });
+    // Una letra doble de más o de menos ("Cipolleti" y "Cipolletti") es la misma localidad. Nada
+    // más suelto: "Este" y "Oeste" están a una letra y son zonas distintas.
+    const single = (value: string) => value.replace(/(.)\1+/g, '$1');
+    const close = zones.find(
+      (zone) => single(normalizeHeader(zone.displayName)) === single(wanted),
+    );
     if (close) return close.id;
   }
-  return zones[0]?.id;
-}
-
-/** Si dos palabras difieren en a lo sumo una letra (de más, de menos o cambiada). */
-function oneEditApart(a: string, b: string): boolean {
-  if (Math.abs(a.length - b.length) > 1) return false;
-  let i = 0;
-  let j = 0;
-  let edits = 0;
-  while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) {
-      i += 1;
-      j += 1;
-      continue;
-    }
-    edits += 1;
-    if (edits > 1) return false;
-    if (a.length > b.length) i += 1;
-    else if (b.length > a.length) j += 1;
-    else {
-      i += 1;
-      j += 1;
-    }
-  }
-  return edits + (a.length - i) + (b.length - j) <= 1;
+  return undefined;
 }
 
 export async function parseContactImport(
@@ -403,8 +383,19 @@ export async function parseContactImportRows(
 
     const sector = read('sector');
     const city = read('city');
+    const zoneCell = read('zone');
+    /*
+     * Con la operación entera: la columna Zona si la hay, si no la localidad; si ninguna nombra una
+     * zona de la operación, la primera, y si la planilla decía una zona que no existe se avisa.
+     */
+    const namedZone =
+      typeof zone === 'object' ? zoneForCity(zone.zones, zoneCell ?? city) : undefined;
     const geographicZoneId =
-      typeof zone === 'string' ? zone : zone ? zoneForCity(zone.zones, city) : undefined;
+      typeof zone === 'string' ? zone : zone ? (namedZone ?? zone.zones[0]?.id) : undefined;
+    const zoneWarning =
+      typeof zone === 'object' && zoneCell && !namedZone && read('address')
+        ? `La zona "${zoneCell}" no existe en la operación: el domicilio va a ${zone.zones[0]?.displayName ?? 'la primera zona'}.`
+        : undefined;
     // Un enlace puede venir en la columna de dirección ("Ubicación") y texto en la de enlace.
     const isLink = (value: string | undefined) =>
       value !== undefined && /^https?:\/\//i.test(value);
@@ -433,6 +424,7 @@ export async function parseContactImportRows(
     const phone = phoneRead.value;
     // El mismo celular suele venir en las dos columnas: un aviso y una nota, no dos.
     const warnings = [
+      ...(zoneWarning ? [zoneWarning] : []),
       ...new Set([whatsappRead.warning, phoneRead.warning].filter(Boolean)),
     ] as string[];
     const unreadable = [...new Set([whatsappRead.note, phoneRead.note].filter(Boolean))];

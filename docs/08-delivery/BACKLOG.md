@@ -76,7 +76,7 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 
 ## Importar por operación y hojas con varias zonas (2026-11-05)
 
-- [x] Importar contactos con una operación entera (`operatingSiteId` en la planilla): cada domicilio va a la zona que nombra su columna Localidad/Ciudad (`zoneForCity`: exacta, parcial o a una letra de distancia), o a la primera zona activa de la operación. La vista previa dice la zona de cada fila. Los clientes quedan en esa operación.
+- [x] Importar contactos con una operación entera (`operatingSiteId` en la planilla): cada domicilio va a la zona que nombra su columna Zona o, si no, Localidad/Ciudad (`zoneForCity`: exacta, parcial o ignorando letras dobles; "Este" y "Oeste" no se confunden), o a la primera zona activa de la operación, con aviso si la columna Zona nombra una que no existe. Plan de zonas: [ZONAS_PLAN.md](../07-operations/ZONAS_PLAN.md). La vista previa dice la zona de cada fila. Los clientes quedan en esa operación.
 - [x] Teléfonos de la planilla sin pérdida (`importPhone`): diez dígitos significativos → `+549…`; con dígitos de más o de menos se guarda como vino y la fila trae un aviso (`warnings` en la vista previa, sin columna nueva); con menos de seis va a las notas. Antes uno de once dígitos se recortaba a los últimos diez sin aviso.
 - [x] Una hoja de ruta con varias zonas: "Proponer ruta" tilda zonas (`geographicZoneIds`), y los días ruteables se calculan para esas zonas. Neuquén y Plottier, o zonas de Mendoza, salen en la misma hoja. "Armar las rutas por zona" de un reparto sigue haciendo una por zona.
 

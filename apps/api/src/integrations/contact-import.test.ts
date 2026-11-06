@@ -4,6 +4,7 @@ import {
   extractPayment,
   importPhone,
   parseContactImport,
+  parseContactImportRows,
   type ContactImportError,
 } from './contact-import.js';
 
@@ -202,5 +203,32 @@ describe('importPhone', () => {
     const muyCorto = importPhone('4411');
     expect(muyCorto.note).toBe('4411');
     expect(muyCorto.warning).toContain('notas');
+  });
+});
+
+// La columna Zona manda sobre la localidad (2026-11-05): "Neuquén" es la ciudad, "Neuquén Oeste" la zona.
+describe('parseContactImport con columna Zona', () => {
+  const OESTE = '90000000-0000-4000-8000-0000000000c1';
+  const CENTRO = '90000000-0000-4000-8000-0000000000c2';
+  const zones = [
+    { displayName: 'Neuquén Centro', id: CENTRO },
+    { displayName: 'Neuquén Oeste', id: OESTE },
+  ];
+
+  it('elige por la zona y avisa si la zona no existe', async () => {
+    const rows = await parseContactImportRows(
+      csvFile(
+        [
+          'Nombre,Dirección,Localidad,Zona',
+          'Ana,Calle 1,Neuquén,Neuquén Oeste',
+          'Beto,Calle 2,Neuquén,Neuquén Este',
+        ].join('\n'),
+      ),
+      { zones },
+    );
+    expect(rows.map((row) => row.customer.addresses[0]?.geographicZoneId)).toEqual([OESTE, CENTRO]);
+    expect(rows.map((row) => row.customer.addresses[0]?.city)).toEqual(['Neuquén', 'Neuquén']);
+    expect(rows[0]?.warnings).toEqual([]);
+    expect(rows[1]?.warnings[0]).toContain('Neuquén Este');
   });
 });
