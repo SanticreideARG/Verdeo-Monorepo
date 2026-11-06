@@ -109,6 +109,7 @@ export function ProfilePage() {
             <div>
               <input
                 accept="image/jpeg,image/png,image/webp"
+                aria-label="Elegir una foto de perfil"
                 className="sr-only"
                 onChange={(event) => void uploadAvatar(event)}
                 ref={fileInputRef}

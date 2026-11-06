@@ -368,7 +368,7 @@ export function AIProvidersPage() {
       <section className="dashboard-panel mt-6">
         <header>
           <p className="dashboard-kicker">Integraciones</p>
-          <h1 className="text-2xl font-semibold text-forest">Mapas y geocodificación</h1>
+          <h2 className="text-2xl font-semibold text-forest">Mapas y geocodificación</h2>
           <p className="mt-3 max-w-3xl leading-7 text-ink-muted">
             Con una API key de Google Maps, &quot;Validar ubicación&quot; busca la dirección escrita
             y devuelve candidatos reales con sus coordenadas. Sin clave, el sistema sigue

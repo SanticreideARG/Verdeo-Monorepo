@@ -260,9 +260,8 @@ export function StatsPage() {
           <p className="dashboard-kicker">Decisiones</p>
           <h1 className="text-2xl font-semibold text-forest">Estadísticas</h1>
           <p className="mt-2 max-w-3xl text-sm text-ink-muted">
-            Pedidos cancelados quedan afuera de todo lo que ves acá — nunca fueron demanda real. Sin
-            filtro de fechas, es todo el historial; con desde y hasta, cada indicador se compara con
-            el mismo largo de tiempo justo antes.
+            Sin los pedidos cancelados. Con fechas, cada número se compara con el mismo tiempo justo
+            antes.
           </p>
         </header>
 

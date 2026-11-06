@@ -23,6 +23,22 @@ export function TrendChart({ currency, points }: { currency: string; points: Tre
   if (points.length === 0) {
     return <p className="mt-3 text-sm text-ink-muted">Sin datos en este período.</p>;
   }
+  // Con uno o dos días un área se dibuja como un triángulo que no dice nada: van los números.
+  if (points.length < 3) {
+    return (
+      <ul className="stats-chart-few">
+        {points.map((point) => (
+          <li key={point.day}>
+            <small>{dayLabel(point.day)}</small>
+            <strong>{formatMoney(point.revenueMinor, currency)}</strong>
+            <span>
+              {point.orderCount} pedido{point.orderCount === 1 ? '' : 's'}
+            </span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
 
   const width = 640;
   const height = 200;

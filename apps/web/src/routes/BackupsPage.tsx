@@ -366,6 +366,7 @@ export function BackupsPage() {
               <div>
                 <input
                   accept="application/json,.json"
+                  aria-label="Elegir el archivo de respaldo"
                   className="sr-only"
                   onChange={cargarArchivo}
                   ref={archivoRef}

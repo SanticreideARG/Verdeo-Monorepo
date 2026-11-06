@@ -345,6 +345,7 @@ export function DataTable<T>({
                           : 'descending'
                         : 'none'
                     }
+                    data-col={column.key}
                     key={column.key}
                     scope="col"
                   >
@@ -362,7 +363,7 @@ export function DataTable<T>({
                     </button>
                   </th>
                 ) : (
-                  <th key={column.key} scope="col">
+                  <th data-col={column.key} key={column.key} scope="col">
                     {column.label}
                   </th>
                 ),
@@ -400,7 +401,11 @@ export function DataTable<T>({
                     }
                   >
                     {columns.map((column) => (
-                      <td className={column.emphasis ? 'is-emphasis' : undefined} key={column.key}>
+                      <td
+                        className={column.emphasis ? 'is-emphasis' : undefined}
+                        data-col={column.key}
+                        key={column.key}
+                      >
                         {column.render(row)}
                       </td>
                     ))}

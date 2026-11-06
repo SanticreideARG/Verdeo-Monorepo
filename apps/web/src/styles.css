@@ -610,7 +610,7 @@ a {
   --db-topbar: rgb(5 13 23 / 84%);
   --db-text: #f2f6f1;
   --db-text-soft: rgb(242 246 241 / 76%);
-  --db-muted: rgb(242 246 241 / 52%);
+  --db-muted: rgb(242 246 241 / 70%);
   --db-muted-2: rgb(242 246 241 / 32%);
   --db-border: rgb(78 158 90 / 26%);
   --db-border-soft: rgb(255 255 255 / 8%);
@@ -638,7 +638,7 @@ a {
   --db-topbar: rgb(244 248 242 / 88%);
   --db-text: #18351f;
   --db-text-soft: rgb(24 53 31 / 76%);
-  --db-muted: rgb(24 53 31 / 54%);
+  --db-muted: rgb(24 53 31 / 70%);
   --db-muted-2: rgb(24 53 31 / 34%);
   --db-border: rgb(58 125 68 / 20%);
   --db-border-soft: rgb(24 53 31 / 9%);
@@ -659,7 +659,7 @@ a {
   --db-topbar: rgb(243 247 252 / 88%);
   --db-text: #10223f;
   --db-text-soft: rgb(16 34 63 / 75%);
-  --db-muted: rgb(16 34 63 / 52%);
+  --db-muted: rgb(16 34 63 / 70%);
   --db-muted-2: rgb(16 34 63 / 32%);
   --db-border: rgb(37 99 235 / 20%);
   --db-border-soft: rgb(16 34 63 / 9%);
@@ -680,7 +680,7 @@ a {
   --db-topbar: rgb(8 5 19 / 86%);
   --db-text: #f3efff;
   --db-text-soft: rgb(243 239 255 / 76%);
-  --db-muted: rgb(243 239 255 / 52%);
+  --db-muted: rgb(243 239 255 / 70%);
   --db-muted-2: rgb(243 239 255 / 32%);
   --db-border: rgb(168 85 247 / 28%);
   --db-border-soft: rgb(255 255 255 / 8%);
@@ -701,7 +701,7 @@ a {
   --db-topbar: rgb(8 12 20 / 86%);
   --db-text: #f3f4f6;
   --db-text-soft: rgb(243 244 246 / 76%);
-  --db-muted: rgb(243 244 246 / 52%);
+  --db-muted: rgb(243 244 246 / 70%);
   --db-muted-2: rgb(243 244 246 / 32%);
   --db-border: rgb(107 114 128 / 30%);
   --db-border-soft: rgb(255 255 255 / 8%);
@@ -724,7 +724,7 @@ a {
   --db-topbar: rgb(250 245 235 / 88%);
   --db-text: #3a2c1c;
   --db-text-soft: rgb(58 44 28 / 76%);
-  --db-muted: rgb(58 44 28 / 54%);
+  --db-muted: rgb(58 44 28 / 70%);
   --db-muted-2: rgb(58 44 28 / 34%);
   --db-border: rgb(180 120 52 / 24%);
   --db-border-soft: rgb(58 44 28 / 10%);
@@ -747,7 +747,7 @@ a {
   --db-topbar: rgb(248 248 247 / 96%);
   --db-text: #15150f;
   --db-text-soft: rgb(17 17 17 / 82%);
-  --db-muted: rgb(17 17 17 / 62%);
+  --db-muted: rgb(17 17 17 / 74%);
   --db-muted-2: rgb(17 17 17 / 42%);
   --db-border: rgb(17 17 17 / 26%);
   --db-border-soft: rgb(17 17 17 / 13%);
@@ -768,7 +768,7 @@ a {
   --db-topbar: rgb(13 9 7 / 86%);
   --db-text: #f6efe6;
   --db-text-soft: rgb(246 239 230 / 76%);
-  --db-muted: rgb(246 239 230 / 52%);
+  --db-muted: rgb(246 239 230 / 70%);
   --db-muted-2: rgb(246 239 230 / 32%);
   --db-border: rgb(214 158 92 / 26%);
   --db-border-soft: rgb(255 255 255 / 8%);
@@ -790,7 +790,7 @@ a {
   --db-topbar: rgb(3 14 17 / 86%);
   --db-text: #e8f6f5;
   --db-text-soft: rgb(232 246 245 / 76%);
-  --db-muted: rgb(232 246 245 / 52%);
+  --db-muted: rgb(232 246 245 / 70%);
   --db-muted-2: rgb(232 246 245 / 32%);
   --db-border: rgb(45 178 172 / 26%);
   --db-border-soft: rgb(255 255 255 / 8%);
@@ -2286,11 +2286,7 @@ a {
   border-bottom: 1px solid var(--db-border-soft);
 }
 .crm-heading h1 {
-  margin: 0.35rem 0 0;
-  color: var(--db-text);
-  font-family: 'Barlow Condensed', sans-serif;
-  font-size: 2.7rem;
-  line-height: 1;
+  margin: 0;
 }
 .crm-heading p:last-child {
   margin: 0.45rem 0 0;
@@ -12065,7 +12061,7 @@ label.field:has(> input[type='radio']) {
   --db-topbar: rgb(10 10 11 / 88%);
   --db-text: #f5efe6;
   --db-text-soft: rgb(245 239 230 / 78%);
-  --db-muted: rgb(245 239 230 / 54%);
+  --db-muted: rgb(245 239 230 / 70%);
   --db-muted-2: rgb(245 239 230 / 34%);
   --db-border: rgb(123 192 67 / 26%);
   --db-border-soft: rgb(255 255 255 / 8%);
@@ -12172,7 +12168,7 @@ label.field:has(> input[type='radio']) {
   --db-topbar: rgb(255 255 255 / 82%);
   --db-text: #0b0b0b;
   --db-text-soft: rgb(11 11 11 / 76%);
-  --db-muted: rgb(11 11 11 / 60%);
+  --db-muted: rgb(11 11 11 / 72%);
   --db-muted-2: rgb(11 11 11 / 38%);
   --db-border: rgb(14 116 144 / 24%);
   --db-border-soft: rgb(11 11 11 / 9%);
@@ -13235,4 +13231,194 @@ label.field:has(> input[type='radio']) {
   margin: 0.15rem 0 0;
   font-size: 0.82rem;
   color: var(--db-warning, #9a6700);
+}
+
+/* =================================================================================================
+   Pulido de UI (auditoría del 2026-10-31: docs/03-features/AUDITORIA_UI_2026-10-31.md)
+   Al final a propósito: corrige lo de arriba sin tocar cada regla vieja.
+   ================================================================================================= */
+
+/* Barra superior. En Ciudad y Estado la etiqueta queda arriba, pero el selector ocupa toda la caja:
+   se toca en cualquier punto de los 40 px, no sólo en el renglón de 18 px del texto. */
+.dashboard-scope,
+.dashboard-presence {
+  position: relative;
+  min-height: 40px;
+  padding: 0;
+}
+.dashboard-scope > span,
+.dashboard-presence > span {
+  position: absolute;
+  top: 0.3rem;
+  left: 0.7rem;
+  font-size: 0.6875rem;
+  line-height: 1;
+  pointer-events: none;
+}
+.dashboard-scope select,
+.dashboard-presence select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0.95rem 0.7rem 0.25rem;
+}
+.dashboard-topbar-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+.appearance-trigger {
+  height: 40px;
+}
+@media (max-width: 680px) {
+  .dashboard-topbar-avatar {
+    width: 40px;
+    height: 40px;
+  }
+}
+/* En tablet no entran el nombre y el reloj: el nombre se partía en dos renglones. El nombre está en
+   el menú y la hora en el teléfono de cualquiera. */
+@media (min-width: 681px) and (max-width: 1100px) {
+  .dashboard-topbar-welcome,
+  .dashboard-clock {
+    display: none;
+  }
+}
+
+/* Ningún texto por debajo de 11 px. */
+.dashboard-sidebar-user small {
+  font-size: 0.75rem;
+}
+.dashboard-bottom-nav > a,
+.dashboard-bottom-nav > button {
+  font-size: 0.6875rem;
+}
+.status-chip,
+.feed-tag,
+.new-badge,
+.stats-feed-kind,
+.mobile-dashboard h2 {
+  font-size: 0.75rem;
+}
+
+/* Cocina en el teléfono: un botón por renglón, sin partir el texto. "Cerrar período" se distingue:
+   es lo último de la semana y no se deshace. */
+@media (max-width: 42.49rem) {
+  .kitchen-toolbar-actions {
+    grid-template-columns: 1fr;
+  }
+  .kitchen-toolbar-actions .button {
+    white-space: nowrap;
+  }
+}
+/* Mezclado con el color del texto: rojo oscuro en los temas claros, rojo claro en los oscuros. */
+.kitchen-toolbar-actions .kitchen-close {
+  border-color: color-mix(in srgb, #d93025 50%, transparent);
+  color: color-mix(in srgb, #d93025 70%, var(--db-text));
+}
+
+/* El búho flota sobre la barra de abajo: el contenido deja lugar para los dos, así la última
+   tarjeta y su botón se pueden subir por encima. */
+@media (max-width: 680px) {
+  .dashboard-content {
+    padding-bottom: calc(9rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Detalle de pedido en el teléfono: "← Pedidos" chico arriba y las acciones en dos columnas, en
+   vez de seis botones sueltos que ocupaban media pantalla. */
+@media (max-width: 680px) {
+  .order-detail-back {
+    min-height: 40px;
+    padding-inline: 0.8rem;
+  }
+  .order-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .order-actions > .button,
+  .order-actions > button,
+  .order-actions > * {
+    min-width: 0;
+    justify-content: center;
+    white-space: nowrap;
+  }
+  .order-actions > .button-primary {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Stock disponible: en una línea. */
+.stock-available-head strong,
+.stock-available-head span {
+  white-space: nowrap;
+}
+
+/* Ayuda y fichas plegables: 40 px para el dedo. */
+.help-article-toggle,
+.crm-workspace summary {
+  min-height: 40px;
+}
+.crm-workspace summary {
+  display: flex;
+  align-items: center;
+}
+
+/* Gráfico con uno o dos días: los números. */
+.stats-chart-few {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.stats-chart-few li {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 9rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--db-border-soft);
+  border-radius: 0.75rem;
+}
+.stats-chart-few small,
+.stats-chart-few span {
+  color: var(--db-muted);
+  font-size: 0.8rem;
+}
+.stats-chart-few strong {
+  color: var(--db-text);
+  font-size: 1.35rem;
+}
+/* En el teléfono el selector suma su relleno al ancho que ya tenía, para no cortar "Todas las
+   ciudades". */
+@media (max-width: 27.5rem) {
+  .dashboard-scope select {
+    max-width: 9.9rem;
+  }
+}
+
+/* Botones con forma de enlace y selectores sueltos: 32 px para el dedo, aunque se vean como texto. */
+.crm-directory-meta button,
+.crm-address-actions button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+}
+.orders-footer-ready select,
+.stats-accounting-toggle {
+  min-height: 36px;
+}
+/* El teléfono y el estado de cada cliente de la lista, legibles. */
+.crm-customer-list button small,
+.crm-customer-list button i {
+  font-size: 0.75rem;
+}
+
+/* Pedidos en tablet: con 8 columnas el nombre, el pedido y la fecha se partían en tres renglones.
+   Entre 681 y 1023 px se esconden WhatsApp y Entrega (la fecha ya agrupa con "Ordenar por
+   entrega"); se pueden volver a ver en una pantalla más ancha. */
+@media (min-width: 681px) and (max-width: 1023px) {
+  .data-table [data-col='whatsapp'],
+  .data-table [data-col='entrega'] {
+    display: none;
+  }
 }

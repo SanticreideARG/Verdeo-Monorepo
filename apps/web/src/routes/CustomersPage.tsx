@@ -720,8 +720,8 @@ export function CustomersPage() {
       <div className="crm-workspace">
         <header className="crm-heading">
           <div>
-            <p className="eyebrow">CRM operativo</p>
-            <h1>Clientes</h1>
+            <p className="dashboard-kicker">CRM operativo</p>
+            <h1 className="text-2xl font-semibold text-forest">Clientes</h1>
             <p>Contactos, domicilios y pedidos en una única ficha trazable.</p>
           </div>
           <div className="crm-heading-actions">

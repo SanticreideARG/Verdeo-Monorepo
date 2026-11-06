@@ -415,8 +415,12 @@ export function OrderDetailPage() {
                 ) : null}
               </span>
             ) : null}
-            <Link className="button button-secondary" to="/app/pedidos">
-              Volver a Ver pedidos
+            <Link
+              aria-label="Volver a Ver pedidos"
+              className="button button-secondary order-detail-back"
+              to="/app/pedidos"
+            >
+              ← Pedidos
             </Link>
           </div>
         </header>

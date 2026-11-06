@@ -241,7 +241,7 @@ export function MenuBuilderPage() {
    * una vez por localidad. Al publicarla se lleva sola a todas las activas, en el modo que sólo
    * crea lo que falta: nada de lo que una ciudad haya personalizado se pisa.
    *
-   * Si esto falla, la semana igual quedó publicada: se avisa y se puede repartir desde "Periodos",
+   * Si esto falla, la semana igual quedó publicada: se avisa y se puede repartir desde "Períodos",
    * que es donde vive el alcance. No es motivo para tirar abajo un guardado que sí funcionó.
    */
   async function spreadToEveryCity(menuId: string): Promise<void> {
@@ -265,7 +265,7 @@ export function MenuBuilderPage() {
         method: 'POST',
       });
       if (!response.ok) {
-        showToast('La semana se publicó, pero no llegó a las localidades. Revisá "Periodos".');
+        showToast('La semana se publicó, pero no llegó a las localidades. Revisá "Períodos".');
         return;
       }
 
@@ -291,11 +291,11 @@ export function MenuBuilderPage() {
       }
       if (failed.length > 0) {
         showToast(
-          `La semana llegó a las localidades, pero ${String(failed.length)} quedó sin publicar. Publicala desde "Periodos".`,
+          `La semana llegó a las localidades, pero ${String(failed.length)} quedó sin publicar. Publicala desde "Períodos".`,
         );
       }
     } catch {
-      showToast('La semana se publicó, pero no llegó a las localidades. Revisá "Periodos".');
+      showToast('La semana se publicó, pero no llegó a las localidades. Revisá "Períodos".');
     }
   }
 
@@ -373,7 +373,7 @@ export function MenuBuilderPage() {
           // The draft did save — say so plainly instead of only reporting the publish failure,
           // so a retry doesn't look like it needs to redo the whole form.
           throw new Error(
-            `El borrador se guardó, pero no pudimos publicarlo: ${await errorMessage(publishResponse)} Podés publicarlo desde "Periodos".`,
+            `El borrador se guardó, pero no pudimos publicarlo: ${await errorMessage(publishResponse)} Podés publicarlo desde "Períodos".`,
           );
         }
         await spreadToEveryCity(created.id);
@@ -460,7 +460,7 @@ export function MenuBuilderPage() {
             </h1>
           </div>
           <Link className="button button-secondary" to="/app/menus">
-            Periodos
+            Períodos
           </Link>
         </header>
 

@@ -138,7 +138,7 @@ export function PriceByLocationPage() {
             <h1 className="text-2xl font-semibold text-forest">Precios por ubicación</h1>
           </div>
           <Link className="button button-secondary" to="/app/menus">
-            Periodos
+            Períodos
           </Link>
         </header>
 

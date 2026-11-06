@@ -65,3 +65,17 @@ No se revisaron: la vista de repartidor (`/reparto/:token`), el sitio público, 
 5. El resto (7–13 y 15) en una pasada de detalles.
 
 Cada paso se mide de nuevo con el mismo chequeo y las mismas capturas antes de darlo por cerrado.
+
+## 5. Estado (2026-11-06)
+
+Aplicado y medido de nuevo con la base de prueba local en 375, 768 y 1440 px, con el mismo chequeo automático.
+
+- 1 Contraste: `--db-muted` a 70–74 % en los 11 temas.
+- 2 Barra: Ciudad y Estado tocables en toda su caja de 40 px; avatar, calendario y "Aa" de 40 px; etiquetas de 11 px; en tablet sin nombre ni reloj.
+- 3 Cocina: un botón por renglón en el teléfono y "Cerrar período" en rojo. Nuevo pedido ya es un diálogo y no tiene esos botones.
+- 4 El contenido deja lugar abajo para la barra y el búho.
+- 5 Clientes usa el encabezado común. Las otras pantallas con `eyebrow` son de error a pantalla completa o públicas.
+- 6 Detalle de pedido: "← Pedidos" y acciones en dos columnas (no en "···": "Ubicar dirección" tiene estado propio).
+- 7–15: "Períodos", Pedidos en tablet sin WhatsApp ni Entrega (`data-col` en `DataTable`), Stock disponible en una línea, un `h1` por pantalla, gráfico de uno o dos días como números, encabezado de Estadísticas corto, títulos de Ayuda y plegables de 40 px, campos de archivo con nombre. El 13 (selector del Workbench) ya no existe.
+
+Quedan: los puntos del carrusel de Estadísticas (9 px, se puede deslizar) y las casillas de 13 px de las listas.

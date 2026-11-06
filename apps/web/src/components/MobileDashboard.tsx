@@ -75,6 +75,8 @@ export function MobileDashboard({ data }: { data: MobileDashboardData }) {
 
   return (
     <div className="mobile-dashboard">
+      {/* Cada pantalla tiene su título para los lectores de pantalla; acá no hace falta verlo. */}
+      <h1 className="sr-only">Tablero</h1>
       <section aria-labelledby="esperando-titulo">
         <h2 id="esperando-titulo">Esperando por vos</h2>
         {!data.loaded ? (

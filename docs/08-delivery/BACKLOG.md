@@ -148,17 +148,30 @@ Pedidos cargados a nombre de "nn" (como stock) que había que pasar a los client
 - [x] Ayuda (`pedidos-cambiar-cliente`) y novedad.
 - [x] "Enviar a stock" en el mismo diálogo (pedidos confirmados, permiso `orders.cancel`): cancela con `toStock` y las viandas quedan como lote en Stock disponible. Una confirmación; dos si el pedido figura cobrado.
 
+## Calendario 2 (plan, 2026-11-06) — [plan](../03-features/CALENDARIO_PLAN.md)
+
+Volver a tener un calendario de verdad: Día · Semana · Mes · Agenda en todos los tamaños, con recordatorios, la franja de cada semana enlazada a su período, repartos, pedidos a entregar y feriados. Librería propuesta: FullCalendar 7.1.3 (plan B Schedule-X).
+
+- [ ] Fase 0: prueba de la librería (peso, temas, 375/768/1440). No va a producción.
+- [ ] Fase 1: endpoint `/api/v1/calendar/overview` y las cuatro vistas con recordatorios, cierres, parciales y la franja del período.
+- [ ] Fase 2: repartos, pedidos a entregar y feriados, con chips de filtro.
+- [ ] Fase 3: mover y editar recordatorios; Hecho del feed = Hecho del recordatorio; enlaces al día exacto.
+- [ ] Fase 4 (opcional, con migración): hora y repetición semanal.
+
 ## Pulido de UI del panel (2026-10-31) — [auditoría](../03-features/AUDITORIA_UI_2026-10-31.md)
 
 Auditoría de 40 pantallas en celular, tablet y escritorio. Sin scroll horizontal en ninguna; lo que falta es pulido.
 
-- [ ] Contraste: `--db-muted` de 52–54 % a ~70 % en todos los temas (hoy 3,2:1, por debajo de AA).
-- [ ] Barra superior: controles tocables de 40 px, etiquetas de 11 px o más; en tablet, sin nombre ni reloj en la barra.
-- [ ] Botones que se parten en celular (Cocina, Nuevo pedido); "Cerrar período" con estilo propio.
-- [ ] Botones flotantes ("?" y logo de la barra inferior) que tapan la última tarjeta y "Limpiar".
-- [ ] Un solo `PageHeader` (hoy conviven `dashboard-kicker` y `eyebrow`; 11 pantallas a migrar).
-- [ ] Detalle de pedido en celular: volver como flecha, una acción visible y el resto en "···".
-- [ ] Detalles: "Períodos" con tilde, tabla de Pedidos en tablet, Stock disponible vacío, `h1` de `/app/ia` y del tablero de celular, gráfico con un día, textos largos de encabezado, selector del Workbench en celular, títulos de Ayuda, campos de archivo sin etiqueta.
+Aplicado el 2026-11-06 (ver "Estado" al final de la auditoría). Se midió de nuevo con la base de prueba local en 375, 768 y 1440 px.
+
+- [x] Contraste: `--db-muted` de 52–62 % a 70–74 % en los 11 temas.
+- [x] Barra superior: Ciudad y Estado se tocan en toda su caja de 40 px, avatar y botones de 40 px, etiquetas de 11 px; en tablet, sin nombre ni reloj. La fecha con mayúscula sólo al principio ("Viernes, 6 de noviembre").
+- [x] Cocina en celular: un botón por renglón sin partir el texto; "Cerrar período" en rojo. (Nuevo pedido ya no tiene esos botones: es un diálogo.)
+- [x] El búho no tapa la última tarjeta: el contenido deja lugar para la barra y el búho.
+- [x] Encabezado único: Clientes pasó a `dashboard-kicker` + título como las demás. Las otras pantallas con `eyebrow` son las de error a pantalla completa y las públicas, que quedan así.
+- [x] Detalle de pedido en celular: "← Pedidos" en vez de "Volver a Ver pedidos", y las acciones en dos columnas. No se pasaron a "···": "Ubicar dirección" tiene su propio estado y conviene a la vista.
+- [x] Detalles: "Períodos" con tilde, Pedidos en tablet sin WhatsApp ni Entrega, Stock disponible vacío en una línea ("sin stock"), un solo `h1` en `/app/ia` y uno (oculto) en el tablero de celular, gráfico con uno o dos días como números, encabezado de Estadísticas más corto, títulos de Ayuda y plegables de Clientes de 40 px, campos de archivo con nombre, textos de 11 px o más (chips, barra de abajo, usuario).
+- [ ] Quedan: puntos del carrusel de Estadísticas (9 px; se pueden deslizar) y las casillas de 13 px de las listas.
 
 ## Movimiento: GSAP, Lenis y React Bits (2026-10-31) — [plan](../03-features/MOVIMIENTO_PLAN.md)
 

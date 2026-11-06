@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-06-pulido-de-pantallas',
+    body: `Pantallas más prolijas y fáciles de tocar: los textos grises se leen mejor; en el teléfono, los selectores de Ciudad y Estado, el avatar y los botones son más grandes, y el búho ya no tapa el final de las listas. En Cocina, "Cerrar período" se distingue del resto. El detalle de un pedido ocupa menos lugar arriba, y Estadísticas con uno o dos días muestra los números en vez de un gráfico vacío. La fecha de la barra dice "6 de noviembre" y no "6 De Noviembre".`,
+  },
+  {
     key: '2026-11-06-pedidos-por-correo',
     body: `Pedidos por correo: cada uno muestra su ciudad y la lista respeta la ciudad elegida arriba. Los pedidos tienen "Aprobar" directo y "Borrar", y los que llegaron dos veces se marcan como repetidos. En las consultas, Hera arma la respuesta para mandarla por WhatsApp o por email.`,
   },

@@ -118,10 +118,10 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
   {
     label: 'Menús',
     items: [
-      // Sin entrada a "Configurar la semana": el botón para armarla vive dentro de Periodos, que es
+      // Sin entrada a "Configurar la semana": el botón para armarla vive dentro de Períodos, que es
       // donde se mira qué semanas hay antes de crear una nueva. Dos accesos a lo mismo, uno al lado
       // del otro, sólo obligan a elegir.
-      { href: '/app/menus', icon: 'menus', label: 'Periodos', permission: 'production.read' },
+      { href: '/app/menus', icon: 'menus', label: 'Períodos', permission: 'production.read' },
     ],
   },
   // "Operación" used to be one seven-item cluster — everything from Clientes to Mensajes.

@@ -145,7 +145,7 @@ export function StockAvailablePanel({
     <section className={`stock-available${open ? ' is-open' : ''}`}>
       <button aria-expanded={open} className="stock-available-head" onClick={toggle} type="button">
         <strong>Stock disponible</strong>
-        <span>{total === 0 ? 'no hay nada para vender' : countMenus(total)}</span>
+        <span>{total === 0 ? 'sin stock' : countMenus(total)}</span>
         <span aria-hidden="true" className="stock-available-caret">
           ▸
         </span>

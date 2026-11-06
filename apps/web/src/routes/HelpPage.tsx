@@ -339,7 +339,7 @@ export function HelpPage() {
                       key={article.id}
                     >
                       <button
-                        className="flex w-full items-center justify-between gap-3 text-left"
+                        className="help-article-toggle flex w-full items-center justify-between gap-3 text-left"
                         onClick={() =>
                           setExpandedId((current) => (current === article.id ? null : article.id))
                         }

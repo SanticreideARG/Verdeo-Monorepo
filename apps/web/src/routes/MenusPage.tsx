@@ -89,7 +89,7 @@ function weekStatus(week: WeekRow, siteCount: number): string {
 }
 
 /**
- * "Periodos": una fila por semana, con publicación y alcance por localidad.
+ * "Períodos": una fila por semana, con publicación y alcance por localidad.
  *
  * Crear una semana nueva es "Configurar la semana"; los precios de cada ciudad viven en "Precios
  * por ubicación".
@@ -291,7 +291,7 @@ export function MenusPage() {
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="dashboard-kicker">Menús</p>
-            <h1 className="text-2xl font-semibold text-forest">Periodos</h1>
+            <h1 className="text-2xl font-semibold text-forest">Períodos</h1>
           </div>
           {canEdit ? (
             <Link className="button button-primary" to="/app/menus/nuevo">
