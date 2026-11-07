@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-07-clientes-orden-filtros-columnas',
+    body: `Clientes: ahora se pueden ordenar por nombre, último pedido, más pedidos, más gastado o alta, y filtrar por zona, nuevos, con deuda, sin ubicar y los que no piden hace semanas. Cada cliente muestra su zona y cuánto hace de su último pedido. Y hay vista Columnas: una tabla con pedidos, gastado y deuda de cada uno, con totales al pie; doble clic abre la ficha al costado.`,
+  },
+  {
     key: '2026-11-07-clientes-lista-completa',
     body: `Clientes: arriba dice el total del padrón y la lista se carga sola al bajar, sin tope de 100. En la ficha, el teléfono y el WhatsApp del mismo número van en una sola tarjeta, con un enlace para abrir el chat.`,
   },

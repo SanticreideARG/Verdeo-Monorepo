@@ -155,11 +155,13 @@ Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", f
 - [ ] Fase 1: lista y columnas.
   - [x] Total del padrón en la primera página (`total` en `GET /customers`, sin búsqueda) y carga al bajar (por scroll de la lista o de la página).
   - [x] Teléfono y WhatsApp del mismo número en una tarjeta (`phoneKey`), con enlace a WhatsApp.
-  - [ ] Orden (nombre, último pedido, pedidos, gastado, alta), filtros y columnas nuevas en la API (paginación por desplazamiento).
-  - [ ] Vista Columnas con `DataTable`.
+  - [x] Orden (nombre —por defecto—, último pedido, pedidos, gastado, alta), filtros (zona, barrio, nuevos, con deuda, sin pedir hace N semanas, sin ubicar) y columnas nuevas por fila: `GET /customers` con `sort` u `offset` usa `browseCustomers` (desplazamiento, total exacto de lo filtrado, búsqueda por contacto en la misma consulta). Sin `sort`/`offset`, la lista por cursor de siempre (exportación, archivados, buscadores).
+  - [x] Barra de Clientes: buscar, "Ordenar" (se recuerda), "Filtros" con contador, "Tarjetas · Columnas" (se recuerda). Tarjetas con zona, último pedido, deuda y "sin ubicar".
+  - [x] Vista Columnas con `DataTable` (`CustomerTable`): selector de columnas, totales al pie, doble clic abre la ficha como panel lateral (Escape cierra), carga al bajar.
+  - [ ] Filtro por barrio en la pantalla (la API ya lo acepta; falta un listado de barrios para elegir).
 - [ ] Fase 2: ficha con pestañas, acciones rápidas, métricas e historial; pantalla completa en el teléfono.
 - [ ] Fase 3: encabezado con "Más", Importar como diálogo, "Exportar lo que veo".
-- [ ] Fase 4: análisis de frecuentes (segmentos, cohortes, mejores clientes, alertas). Definiciones a confirmar.
+- [ ] Fase 4: análisis de frecuentes (segmentos, cohortes, mejores clientes, alertas). "Frecuente" = pidió en 3 o más de las últimas 6 semanas (confirmado 2026-11-07). Sin etiquetas propias.
 
 ## Buscar sin importar las tildes (2026-11-07)
 

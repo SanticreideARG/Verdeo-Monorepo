@@ -234,11 +234,28 @@ export const CustomerDeleteResponseSchema = z.object({
   outcome: z.enum(['ARCHIVED', 'DELETED']),
 });
 
+const QueryFlagSchema = z
+  .enum(['true', 'false'])
+  .transform((value) => value === 'true')
+  .optional();
+
 export const CustomerListQuerySchema = z.object({
   cursor: UuidSchema.optional(),
   limit: z.coerce.number().int().min(1).max(100).default(30),
   search: z.string().trim().max(200).optional(),
   status: ConfigurableKeySchema.optional(),
+  /*
+   * Clientes 2 (2026-11-07): con `sort` u `offset` la lista pagina por desplazamiento, ordena,
+   * filtra y trae por fila pedidos, último pedido, gastado, deuda, zona, barrio y domicilio.
+   */
+  sort: z.enum(['name', 'last_order', 'orders', 'spent', 'created']).optional(),
+  offset: z.coerce.number().int().min(0).max(1_000_000).optional(),
+  zoneId: UuidSchema.optional(),
+  neighborhoodId: UuidSchema.optional(),
+  isNew: QueryFlagSchema,
+  withDebt: QueryFlagSchema,
+  unlocated: QueryFlagSchema,
+  inactiveWeeks: z.coerce.number().int().min(1).max(104).optional(),
 });
 
 /** Same filters as the list, minus paging (an export walks every page) plus the column choice. */
@@ -258,12 +275,26 @@ export const CustomerSummarySchema = z.object({
   phone: z.string().nullable().optional(),
   whatsapp: z.string().nullable().optional(),
   status: z.string(),
+  // Sólo en la lista de Clientes 2 (con `sort` u `offset`).
+  currency: z.string().nullable().optional(),
+  debtMinor: z.number().optional(),
+  isNew: z.boolean().optional(),
+  lastOrderDate: z.string().nullable().optional(),
+  located: z.boolean().nullable().optional(),
+  neighborhoodName: z.string().nullable().optional(),
+  orderCount: z.number().int().optional(),
+  primaryAddress: z.string().nullable().optional(),
+  siteName: z.string().nullable().optional(),
+  spentMinor: z.number().optional(),
+  zoneName: z.string().nullable().optional(),
 });
 
 export const CustomerListResponseSchema = z.object({
   items: z.array(CustomerSummarySchema),
   nextCursor: UuidSchema.nullable().default(null),
-  /** Cuántos hay en total; sólo en la primera página sin búsqueda, si no null. */
+  /** Desde dónde sigue la lista de Clientes 2; null si no hay más. */
+  nextOffset: z.number().int().nonnegative().nullable().default(null),
+  /** Cuántos hay en total; con cursor, sólo en la primera página sin búsqueda. */
   total: z.number().int().nonnegative().nullable().default(null),
 });
 

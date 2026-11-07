@@ -21,6 +21,18 @@ export interface CustomerSummary {
   phone?: string | null;
   status: string;
   whatsapp?: string | null;
+  // Clientes 2 (2026-11-07): lo que la lista trae por fila cuando se pide ordenada.
+  currency?: string | null;
+  debtMinor?: number;
+  isNew?: boolean;
+  lastOrderDate?: string | null;
+  located?: boolean | null;
+  neighborhoodName?: string | null;
+  orderCount?: number;
+  primaryAddress?: string | null;
+  siteName?: string | null;
+  spentMinor?: number;
+  zoneName?: string | null;
 }
 
 export interface CustomerIdentity {

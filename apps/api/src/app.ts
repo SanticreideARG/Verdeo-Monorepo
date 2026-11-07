@@ -842,6 +842,10 @@ interface OperationsEngine {
     deliveryRunId?: string,
   ): Promise<unknown>;
   listCustomers(input: ScopedInput<CustomerListQuery>, includeSensitive: boolean): Promise<unknown>;
+  browseCustomers(
+    input: ScopedInput<CustomerListQuery>,
+    includeSensitive: boolean,
+  ): Promise<unknown>;
   listMessageTemplates(): Promise<unknown>;
   listMenus(onlyPublished?: boolean): Promise<unknown>;
   listOrders(input: ScopedInput<OrderListQuery>): Promise<unknown>;
@@ -4039,10 +4043,12 @@ export function createApp(options: CreateAppOptions) {
       !session.permissions.includes('customers.view_archived')
     )
       return forbidden(context);
-    const page = await requireOperations().listCustomers(
-      scoped(context, query.data),
-      session.permissions.includes('customers.view_sensitive'),
-    );
+    const includeSensitive = session.permissions.includes('customers.view_sensitive');
+    // Con orden o desplazamiento, la lista de Clientes 2; si no, la de siempre (por cursor).
+    const browsing = query.data.sort !== undefined || query.data.offset !== undefined;
+    const page = browsing
+      ? await requireOperations().browseCustomers(scoped(context, query.data), includeSensitive)
+      : await requireOperations().listCustomers(scoped(context, query.data), includeSensitive);
     return context.json(CustomerListResponseSchema.parse(contractValue(page)));
   });
 

@@ -5,6 +5,7 @@ import { AddressMap } from '../components/AddressMap.js';
 import { AfterSaveDialog } from '../components/AfterSaveDialog.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { CustomerExportDialog } from '../components/CustomerExportDialog.js';
+import { CustomerTable } from '../components/CustomerTable.js';
 import { MergeCustomersDialog } from '../components/MergeCustomersDialog.js';
 import { DraftNotice } from '../components/DraftNotice.js';
 import {
@@ -15,6 +16,20 @@ import { DashboardShell, type DashboardProfile } from '../components/DashboardSh
 import { BrandLoading } from '../components/BrandLoading.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { cachedProfile, rememberProfile } from '../lib/useDashboardProfile.js';
+import {
+  CUSTOMER_SORTS,
+  NO_FILTERS,
+  activeFilterCount,
+  customerListParams,
+  readCustomerSort,
+  readCustomerView,
+  sinceLabel,
+  writeCustomerSort,
+  writeCustomerView,
+  type CustomerFilters,
+  type CustomerSort,
+  type CustomerView,
+} from '../lib/customerBrowse.js';
 import { formatArgentinePhone, phoneKey, whatsappHref } from '../lib/phone.js';
 import { showToast } from '../lib/toast.js';
 import { MoveSiteDialog } from '../components/MoveSiteDialog.js';
@@ -119,9 +134,19 @@ export function CustomersPage() {
   const [showImport, setShowImport] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  // El total del padrón (sin búsqueda); con búsqueda, null hasta tener todas las páginas.
+  // Desde dónde sigue la lista; null si ya está toda (Clientes 2 pagina por desplazamiento).
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
+  // Cuántos clientes hay con la búsqueda y los filtros puestos.
   const [total, setTotal] = useState<number | null>(null);
+  // Clientes 2 (2026-11-07): orden, filtros y vista. El orden y la vista se recuerdan.
+  const [sort, setSort] = useState<CustomerSort>(readCustomerSort);
+  const [filters, setFilters] = useState<CustomerFilters>(NO_FILTERS);
+  const [showFilters, setShowFilters] = useState(false);
+  const [view, setView] = useState<CustomerView>(readCustomerView);
+  // En la vista Columnas la ficha se abre como panel lateral, a pedido.
+  const [detailOpen, setDetailOpen] = useState(false);
+  const browseRef = useRef({ filters, sort });
+  browseRef.current = { filters, sort };
   const listEndRef = useRef<HTMLDivElement>(null);
   const loadedCount = customers.length;
   const [loadingMore, setLoadingMore] = useState(false);
@@ -197,17 +222,21 @@ export function CustomersPage() {
 
   const loadDirectory = useCallback(
     async (query: string, preferredId = '') => {
-      const params = new URLSearchParams({ limit: '100' });
-      if (query.trim()) params.set('search', query.trim());
+      const params = customerListParams({
+        ...browseRef.current,
+        limit: 100,
+        offset: 0,
+        search: query,
+      });
       const response = await apiRequest(`/api/v1/customers?${params.toString()}`);
       const page = await responseJson<{
         items: CustomerSummary[];
-        nextCursor: string | null;
+        nextOffset: number | null;
         total?: number | null;
       }>(response);
       setCustomers(page.items);
-      setNextCursor(page.nextCursor);
-      setTotal(page.total ?? (page.nextCursor ? null : page.items.length));
+      setNextOffset(page.nextOffset);
+      setTotal(page.total ?? (page.nextOffset === null ? page.items.length : null));
       const nextSelected = page.items.some(({ id }) => id === preferredId)
         ? preferredId
         : (page.items[0]?.id ?? '');
@@ -224,50 +253,87 @@ export function CustomersPage() {
    * which walks every page.
    */
   const loadMore = useCallback(async () => {
-    if (!nextCursor || loadingMore) return;
+    if (nextOffset === null || loadingMore) return;
     setLoadingMore(true);
     try {
-      const params = new URLSearchParams({ cursor: nextCursor, limit: '100' });
-      if (search.trim()) params.set('search', search.trim());
+      const params = customerListParams({
+        ...browseRef.current,
+        limit: 100,
+        offset: nextOffset,
+        search,
+      });
       const response = await apiRequest(`/api/v1/customers?${params.toString()}`);
-      const page = await responseJson<{ items: CustomerSummary[]; nextCursor: string | null }>(
+      const page = await responseJson<{ items: CustomerSummary[]; nextOffset: number | null }>(
         response,
       );
       setCustomers((current) => [...current, ...page.items]);
-      // Con búsqueda, el total se sabe al llegar a la última página.
-      if (!page.nextCursor) setTotal((known) => known ?? loadedCount + page.items.length);
-      setNextCursor(page.nextCursor);
+      if (page.nextOffset === null) setTotal((known) => known ?? loadedCount + page.items.length);
+      setNextOffset(page.nextOffset);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos cargar más clientes.');
     } finally {
       setLoadingMore(false);
     }
-  }, [loadedCount, loadingMore, nextCursor, search]);
+  }, [loadedCount, loadingMore, nextOffset, search]);
 
   /*
    * La lista completa, cargándose sola al bajar (2026-11-07): cuando el final de la lista asoma,
-   * pide la página siguiente. Mira el scroll de la lista (escritorio) y el de la página
-   * (teléfono), y no un IntersectionObserver, que en una pestaña en segundo plano no avisa. El
-   * botón "Cargar más" queda igual.
+   * pide la página siguiente. Escucha cualquier scroll de la página (la lista en escritorio, la
+   * página en el teléfono, la tabla en Columnas) y no un IntersectionObserver, que en una pestaña
+   * en segundo plano no avisa. El botón "Cargar más" queda igual.
    */
   useEffect(() => {
-    if (!nextCursor) return;
-    const list = listEndRef.current?.closest('.crm-customer-list');
+    if (nextOffset === null) return;
     const check = () => {
       const end = listEndRef.current;
       if (!end) return;
+      const list = end.closest('.crm-customer-list');
       const scrolls = list && list.scrollHeight > list.clientHeight;
       const bottom = scrolls ? list.getBoundingClientRect().bottom : window.innerHeight;
       if (end.getBoundingClientRect().top < bottom + 400) void loadMore();
     };
-    list?.addEventListener('scroll', check, { passive: true });
-    window.addEventListener('scroll', check, { passive: true });
+    document.addEventListener('scroll', check, { capture: true, passive: true });
     check();
-    return () => {
-      list?.removeEventListener('scroll', check);
-      window.removeEventListener('scroll', check);
+    return () => document.removeEventListener('scroll', check, { capture: true });
+  }, [loadMore, nextOffset, view]);
+
+  // Cambiar el orden o un filtro vuelve a pedir la lista desde el principio.
+  const browseKey = `${sort}|${JSON.stringify(filters)}`;
+  const firstBrowse = useRef(browseKey);
+  useEffect(() => {
+    if (firstBrowse.current === browseKey) return;
+    firstBrowse.current = browseKey;
+    void loadDirectory(search, selectedId).catch((error: unknown) =>
+      setMessage(error instanceof Error ? error.message : 'No pudimos cargar clientes.'),
+    );
+    // Sólo cuando cambian el orden o los filtros; la búsqueda se manda con "Buscar".
+  }, [browseKey]);
+
+  // La ficha lateral de Columnas se cierra con Escape, como un diálogo.
+  useEffect(() => {
+    if (!detailOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !document.querySelector('.modal-backdrop'))
+        setDetailOpen(false);
     };
-  }, [loadMore, nextCursor]);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [detailOpen]);
+
+  function chooseSort(next: CustomerSort) {
+    setSort(next);
+    writeCustomerSort(next);
+  }
+
+  function chooseView(next: CustomerView) {
+    setView(next);
+    setDetailOpen(false);
+    writeCustomerView(next);
+  }
+
+  function setFilter<K extends keyof CustomerFilters>(key: K, value: CustomerFilters[K]) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
 
   useEffect(() => {
     let active = true;
@@ -817,53 +883,160 @@ export function CustomersPage() {
           </p>
         ) : null}
 
-        <div className="crm-layout">
-          <aside className="crm-directory">
-            <form className="crm-search" onSubmit={(event) => void submitSearch(event)}>
+        <div className="crm-browse-bar">
+          <form className="crm-search" onSubmit={(event) => void submitSearch(event)}>
+            <input
+              aria-label="Buscar clientes"
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar nombre, teléfono o correo"
+              type="search"
+              value={search}
+            />
+            <button type="submit">Buscar</button>
+          </form>
+          <label className="crm-browse-sort">
+            <span>Ordenar</span>
+            <select
+              onChange={(event) => chooseSort(event.target.value as CustomerSort)}
+              value={sort}
+            >
+              {CUSTOMER_SORTS.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            aria-expanded={showFilters}
+            className="crm-browse-filters-toggle"
+            onClick={() => setShowFilters((open) => !open)}
+            type="button"
+          >
+            Filtros
+            {activeFilterCount(filters) > 0 ? <b>{activeFilterCount(filters)}</b> : null}
+          </button>
+          <div aria-label="Cómo ver los clientes" className="crm-view-switch" role="group">
+            <button
+              aria-pressed={view === 'cards'}
+              onClick={() => chooseView('cards')}
+              type="button"
+            >
+              Tarjetas
+            </button>
+            <button
+              aria-pressed={view === 'columns'}
+              onClick={() => chooseView('columns')}
+              type="button"
+            >
+              Columnas
+            </button>
+          </div>
+        </div>
+        {showFilters ? (
+          <div className="crm-browse-filters">
+            <label>
+              <span>Zona</span>
+              <select
+                onChange={(event) => setFilter('zoneId', event.target.value)}
+                value={filters.zoneId}
+              >
+                <option value="">Todas</option>
+                {zones
+                  .filter(
+                    (zone) =>
+                      !storedOperatingSiteId() || zone.operatingSiteId === storedOperatingSiteId(),
+                  )
+                  .map((zone) => (
+                    <option key={zone.id} value={zone.id}>
+                      {zone.displayName}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label>
+              <span>Nuevos</span>
+              <select
+                onChange={(event) =>
+                  setFilter('isNew', event.target.value as CustomerFilters['isNew'])
+                }
+                value={filters.isNew}
+              >
+                <option value="">Todos</option>
+                <option value="true">Sólo nuevos</option>
+                <option value="false">Sin los nuevos</option>
+              </select>
+            </label>
+            <label>
+              <span>Sin pedir hace</span>
+              <select
+                onChange={(event) => setFilter('inactiveWeeks', Number(event.target.value))}
+                value={filters.inactiveWeeks}
+              >
+                <option value={0}>Cualquier momento</option>
+                <option value={2}>Más de 2 semanas</option>
+                <option value={4}>Más de 4 semanas</option>
+                <option value={8}>Más de 8 semanas</option>
+              </select>
+            </label>
+            <label className="crm-browse-check">
               <input
-                aria-label="Buscar clientes"
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar nombre o contacto"
-                type="search"
-                value={search}
+                checked={filters.withDebt}
+                onChange={(event) => setFilter('withDebt', event.target.checked)}
+                type="checkbox"
               />
-              <button type="submit">Buscar</button>
-            </form>
-            <div className="crm-directory-meta">
-              <span>
-                {total !== null
-                  ? `${String(total)} cliente${total === 1 ? '' : 's'}${
-                      nextCursor ? ` · ${String(customers.length)} cargados` : ''
-                    }`
-                  : `${String(customers.length)} encontrados (hay más)`}
-              </span>
-              <button onClick={() => void loadDirectory(search, selectedId)} type="button">
-                Actualizar
+              Con deuda
+            </label>
+            <label className="crm-browse-check">
+              <input
+                checked={filters.unlocated}
+                onChange={(event) => setFilter('unlocated', event.target.checked)}
+                type="checkbox"
+              />
+              Falta ubicar
+            </label>
+            {activeFilterCount(filters) > 0 ? (
+              <button onClick={() => setFilters(NO_FILTERS)} type="button">
+                Quitar filtros
               </button>
-            </div>
-            <div className="crm-customer-list">
-              {/* La espera del padrón, acá adentro y no tapando la pantalla. */}
+            ) : null}
+          </div>
+        ) : null}
+        <div className="crm-directory-meta crm-browse-meta">
+          <span>
+            {total !== null
+              ? `${String(total)} cliente${total === 1 ? '' : 's'}${
+                  nextOffset !== null ? ` · ${String(customers.length)} cargados` : ''
+                }`
+              : `${String(customers.length)} encontrados (hay más)`}
+          </span>
+          <button onClick={() => void loadDirectory(search, selectedId)} type="button">
+            Actualizar
+          </button>
+        </div>
+
+        <div
+          className={`crm-layout${view === 'columns' ? ' is-columns' : ''}${
+            view === 'columns' && detailOpen ? ' is-detail-open' : ''
+          }`}
+        >
+          {view === 'columns' ? (
+            <div className="crm-table-area">
               {loading && customers.length === 0 ? (
                 <p className="crm-list-loading">Cargando el padrón…</p>
-              ) : null}
-              {customers.map((customer) => (
-                <button
-                  className={selectedId === customer.id && !showCreate ? 'is-active' : ''}
-                  key={customer.id}
-                  onClick={() => void selectCustomer(customer.id)}
-                  type="button"
-                >
-                  <span>{customer.displayName.slice(0, 1).toLocaleUpperCase('es-AR')}</span>
-                  <div>
-                    <strong>{customer.displayName}</strong>
-                    <small>{contactLabel(customer)}</small>
-                  </div>
-                  <i>{customerStatusLabel(customer.status)}</i>
-                </button>
-              ))}
-              {customers.length === 0 ? <p>No hay clientes para esta búsqueda.</p> : null}
+              ) : (
+                <CustomerTable
+                  customers={customers}
+                  empty="No hay clientes con esta búsqueda o estos filtros."
+                  onOpen={(customer) => {
+                    setDetailOpen(true);
+                    void selectCustomer(customer.id);
+                  }}
+                  selectedId={detailOpen ? selectedId : ''}
+                />
+              )}
               <div aria-hidden="true" ref={listEndRef} />
-              {nextCursor ? (
+              {nextOffset !== null ? (
                 <button
                   className="crm-load-more"
                   disabled={loadingMore}
@@ -874,9 +1047,75 @@ export function CustomersPage() {
                 </button>
               ) : null}
             </div>
-          </aside>
+          ) : (
+            <aside className="crm-directory">
+              <div className="crm-customer-list">
+                {/* La espera del padrón, acá adentro y no tapando la pantalla. */}
+                {loading && customers.length === 0 ? (
+                  <p className="crm-list-loading">Cargando el padrón…</p>
+                ) : null}
+                {customers.map((customer) => (
+                  <button
+                    className={selectedId === customer.id && !showCreate ? 'is-active' : ''}
+                    key={customer.id}
+                    onClick={() => void selectCustomer(customer.id)}
+                    type="button"
+                  >
+                    <span>{customer.displayName.slice(0, 1).toLocaleUpperCase('es-AR')}</span>
+                    <div>
+                      <strong>
+                        {customer.displayName}
+                        {customer.isNew ? <em className="new-badge">Nuevo</em> : null}
+                      </strong>
+                      <small>{contactLabel(customer)}</small>
+                      {/* Zona y último pedido: lo que se mira para decidir a quién escribir. */}
+                      <small className="crm-customer-facts">
+                        {[customer.zoneName, sinceLabel(customer.lastOrderDate)]
+                          .filter(Boolean)
+                          .join(' · ')}
+                        {customer.debtMinor ? (
+                          <b className="crm-flag is-debt" title="Tiene deuda">
+                            debe {formatMoney(customer.debtMinor, customer.currency ?? 'ARS')}
+                          </b>
+                        ) : null}
+                        {customer.located === false ? (
+                          <b className="crm-flag" title="Algún domicilio no está ubicado">
+                            sin ubicar
+                          </b>
+                        ) : null}
+                      </small>
+                    </div>
+                    <i>{customerStatusLabel(customer.status)}</i>
+                  </button>
+                ))}
+                {customers.length === 0 && !loading ? (
+                  <p>No hay clientes con esta búsqueda o estos filtros.</p>
+                ) : null}
+                <div aria-hidden="true" ref={listEndRef} />
+                {nextOffset !== null ? (
+                  <button
+                    className="crm-load-more"
+                    disabled={loadingMore}
+                    onClick={() => void loadMore()}
+                    type="button"
+                  >
+                    {loadingMore ? 'Cargando…' : 'Cargar más clientes'}
+                  </button>
+                ) : null}
+              </div>
+            </aside>
+          )}
 
           <section className="crm-detail">
+            {view === 'columns' && detailOpen ? (
+              <button
+                className="crm-detail-close"
+                onClick={() => setDetailOpen(false)}
+                type="button"
+              >
+                ← Volver a la tabla
+              </button>
+            ) : null}
             {showCreate ? (
               <form
                 className="crm-panel"

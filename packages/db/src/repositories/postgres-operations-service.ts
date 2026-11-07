@@ -17,6 +17,7 @@ import {
   notInArray,
   or,
   sql,
+  type SQL,
 } from 'drizzle-orm';
 
 import { AuditService, type JsonValue } from '@verdeo/audit';
@@ -257,6 +258,24 @@ export interface CustomerListInput {
   limit: number;
   search?: string | undefined;
   status?: string | undefined;
+}
+
+/** Clientes 2 (2026-11-07): la lista con orden, filtros y lo que cada cliente lleva pedido. */
+export type CustomerBrowseSort = 'created' | 'last_order' | 'name' | 'orders' | 'spent';
+
+export interface CustomerBrowseInput {
+  inactiveWeeks?: number | undefined;
+  isNew?: boolean | undefined;
+  limit: number;
+  neighborhoodId?: string | undefined;
+  offset?: number | undefined;
+  operatingSiteId?: string | null | undefined;
+  search?: string | undefined;
+  sort?: CustomerBrowseSort | undefined;
+  status?: string | undefined;
+  unlocated?: boolean | undefined;
+  withDebt?: boolean | undefined;
+  zoneId?: string | undefined;
 }
 
 export interface MessageTemplateInput {
@@ -877,6 +896,190 @@ export class PostgresOperationsService {
           )?.value ?? null,
       })),
       nextCursor: hasMore ? (pageRows.at(-1)?.id ?? null) : null,
+      total,
+    };
+  }
+
+  /*
+   * La lista de Clientes 2 (2026-11-07): ordenable por nombre, último pedido, cantidad, gastado o
+   * alta, con filtros (zona, barrio, nuevos, con deuda, dormidos, sin ubicar) y, por fila, lo que
+   * cada cliente lleva pedido. Con otro orden que el id el cursor no sirve, así que pagina por
+   * desplazamiento. La búsqueda por contacto va en la misma consulta, así el total es exacto.
+   * `listCustomers` queda para la exportación y quien pagina por cursor.
+   *
+   * Los números salen de los pedidos no cancelados (de la ciudad elegida, si hay una); la deuda,
+   * como en Por cobrar: no cobrados, con monto, de períodos cerrados.
+   */
+  public async browseCustomers(input: CustomerBrowseInput, includeSensitive: boolean) {
+    const site = input.operatingSiteId ?? null;
+    const live = sql`o.customer_id = ${customers.id} and o.status <> 'CANCELLED'${
+      site ? sql` and o.operating_site_id = ${site}` : sql``
+    }`;
+    const orderCount = sql<number>`(select count(*)::int from orders o where ${live})`;
+    const lastOrderDate = sql<
+      string | null
+    >`(select max(o.delivery_date)::text from orders o where ${live})`;
+    const spentMinor = sql<number>`(select coalesce(sum(o.total_minor), 0)::float8 from orders o where ${live})`;
+    const debtMinor = sql<number>`(select coalesce(sum(o.total_minor), 0)::float8 from orders o join sales_cycles sc on sc.id = o.sales_cycle_id where ${live} and sc.status = 'CLOSED' and o.paid_at is null and o.total_minor > 0)`;
+    const currency = sql<string | null>`(select max(o.currency) from orders o where ${live})`;
+    const isNew = sql<boolean>`coalesce(${customers.isNewOverride}, ${orderCount} <= 1)`;
+    const activeAddress = (condition: SQL) =>
+      sql`exists (select 1 from customer_addresses a where a.customer_id = ${customers.id} and a.active and ${condition})`;
+
+    const conditions: SQL[] = [
+      ...(site
+        ? [
+            inArray(
+              customers.id,
+              this.database
+                .select({ id: customerOperatingSites.customerId })
+                .from(customerOperatingSites)
+                .where(
+                  and(
+                    eq(customerOperatingSites.operatingSiteId, site),
+                    eq(customerOperatingSites.status, 'active'),
+                  ),
+                ),
+            ),
+          ]
+        : []),
+      input.status ? eq(customers.status, input.status) : ne(customers.status, 'archived'),
+    ];
+    if (input.search) {
+      const byName = ilikeIgnoringAccents(customers.displayName, input.search);
+      if (includeSensitive) {
+        const phoneKey = /^[\d\s+().-]+$/.test(input.search)
+          ? argentinePhoneKey(input.search)
+          : null;
+        const like = `%${input.search.toLowerCase()}%`;
+        conditions.push(
+          or(
+            byName,
+            sql`exists (select 1 from customer_identities i where i.customer_id = ${customers.id} and i.active and (i.value_normalized ilike ${like}${
+              phoneKey ? sql` or i.value_normalized ilike ${`%${phoneKey}%`}` : sql``
+            }))`,
+          ) ?? byName,
+        );
+      } else conditions.push(byName);
+    }
+    if (input.zoneId) conditions.push(activeAddress(sql`a.geographic_zone_id = ${input.zoneId}`));
+    if (input.neighborhoodId)
+      conditions.push(activeAddress(sql`a.neighborhood_id = ${input.neighborhoodId}`));
+    if (input.unlocated) conditions.push(activeAddress(sql`a.latitude is null`));
+    if (input.isNew !== undefined) conditions.push(input.isNew ? isNew : sql`not ${isNew}`);
+    if (input.withDebt) conditions.push(sql`${debtMinor} > 0`);
+    // Dormidos: pidieron alguna vez y no en las últimas N semanas.
+    if (input.inactiveWeeks)
+      conditions.push(sql`${lastOrderDate}::date < current_date - ${input.inactiveWeeks * 7}::int`);
+
+    const byName = sql`lower(translate(${customers.displayName}, 'ÁÉÍÓÚÜÑáéíóúüñ', 'AEIOUUNaeiouun'))`;
+    const order = {
+      created: [sql`${customers.createdAt} desc`],
+      last_order: [sql`${lastOrderDate} desc nulls last`],
+      name: [],
+      orders: [sql`${orderCount} desc`],
+      spent: [sql`${spentMinor} desc`],
+    }[input.sort ?? 'name'];
+    const offset = input.offset ?? 0;
+    const where = and(...conditions);
+
+    const rows = await this.database
+      .select({
+        createdAt: customers.createdAt,
+        currency,
+        debtMinor,
+        displayName: customers.displayName,
+        id: customers.id,
+        isNew,
+        lastOrderDate,
+        orderCount,
+        spentMinor,
+        status: customers.status,
+      })
+      .from(customers)
+      .where(where)
+      .orderBy(...order, sql`${byName} asc`, asc(customers.id))
+      .limit(input.limit + 1)
+      .offset(offset);
+    const hasMore = rows.length > input.limit;
+    const pageRows = hasMore ? rows.slice(0, input.limit) : rows;
+
+    let total: number | null = hasMore ? null : offset + pageRows.length;
+    if (hasMore && offset === 0) {
+      const [counted] = await this.database
+        .select({ count: sql<number>`count(*)::int` })
+        .from(customers)
+        .where(where);
+      total = counted?.count ?? null;
+    }
+
+    const ids = pageRows.map(({ id }) => id);
+    const [addressRows, identities] = await Promise.all([
+      ids.length === 0
+        ? []
+        : this.database
+            .select({
+              createdAt: customerAddresses.createdAt,
+              customerId: customerAddresses.customerId,
+              latitude: customerAddresses.latitude,
+              neighborhoodName: neighborhoods.displayName,
+              primary: customerAddresses.primary,
+              siteId: geographicZones.operatingSiteId,
+              siteName: operatingSites.displayName,
+              writtenAddress: customerAddresses.writtenAddress,
+              zoneName: geographicZones.displayName,
+            })
+            .from(customerAddresses)
+            .leftJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
+            .leftJoin(operatingSites, eq(operatingSites.id, geographicZones.operatingSiteId))
+            .leftJoin(neighborhoods, eq(neighborhoods.id, customerAddresses.neighborhoodId))
+            .where(
+              and(inArray(customerAddresses.customerId, ids), eq(customerAddresses.active, true)),
+            ),
+      ids.length === 0 || !includeSensitive
+        ? []
+        : this.database
+            .select({
+              customerId: customerIdentities.customerId,
+              type: customerIdentities.type,
+              value: customerIdentities.valueDisplay,
+            })
+            .from(customerIdentities)
+            .where(
+              and(inArray(customerIdentities.customerId, ids), eq(customerIdentities.active, true)),
+            ),
+    ]);
+
+    return {
+      items: pageRows.map((row) => {
+        const addresses = addressRows.filter((address) => address.customerId === row.id);
+        // El principal manda; con una ciudad elegida, primero los domicilios de esa ciudad.
+        const main = [...addresses].sort(
+          (left, right) =>
+            Number(right.siteId === site) - Number(left.siteId === site) ||
+            Number(right.primary) - Number(left.primary) ||
+            right.createdAt.getTime() - left.createdAt.getTime(),
+        )[0];
+        const contact = (type: string) =>
+          identities.find((identity) => identity.customerId === row.id && identity.type === type)
+            ?.value ?? null;
+        return {
+          ...row,
+          debtMinor: Number(row.debtMinor),
+          email: includeSensitive ? contact('email') : undefined,
+          located:
+            addresses.length === 0 ? null : addresses.every((address) => address.latitude !== null),
+          neighborhoodName: main?.neighborhoodName ?? null,
+          phone: includeSensitive ? contact('phone') : undefined,
+          primaryAddress: includeSensitive ? (main?.writtenAddress ?? null) : null,
+          siteName: main?.siteName ?? null,
+          spentMinor: Number(row.spentMinor),
+          whatsapp: includeSensitive ? contact('whatsapp') : undefined,
+          zoneName: main?.zoneName ?? null,
+        };
+      }),
+      nextCursor: null,
+      nextOffset: hasMore ? offset + pageRows.length : null,
       total,
     };
   }

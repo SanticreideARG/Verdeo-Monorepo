@@ -13521,3 +13521,191 @@ body:has(.modal-backdrop) .assistant-launcher.is-operator.is-saying {
   display: table;
   margin: 0.2rem 0 0;
 }
+
+/* --- Clientes 2 (2026-11-07): barra de búsqueda, orden, filtros y vista; tabla Columnas ------- */
+.crm-browse-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+  border: 1px solid var(--db-border);
+  border-radius: 0.65rem;
+  padding: 0.35rem 0.5rem;
+  background: var(--db-surface);
+}
+.crm-browse-bar .crm-search {
+  flex: 1 1 18rem;
+  border-bottom: 0;
+  padding: 0;
+}
+.crm-browse-sort,
+.crm-browse-filters label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--db-muted);
+  font-size: 0.75rem;
+}
+.crm-browse-sort select,
+.crm-browse-filters select {
+  min-height: 36px;
+  border: 1px solid var(--db-border-soft);
+  border-radius: 0.45rem;
+  padding-inline: 0.5rem;
+  background: var(--db-bg-2);
+  color: var(--db-text);
+  font: inherit;
+  font-size: 0.78rem;
+}
+.crm-browse-filters-toggle,
+.crm-view-switch button,
+.crm-browse-filters > button,
+.crm-detail-close {
+  min-height: 36px;
+  border: 1px solid var(--db-border-soft);
+  border-radius: 0.45rem;
+  padding-inline: 0.7rem;
+  background: transparent;
+  color: var(--db-text);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.crm-browse-filters-toggle[aria-expanded='true'] {
+  border-color: var(--db-accent);
+  color: var(--db-accent);
+}
+.crm-browse-filters-toggle b {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  margin-left: 0.35rem;
+  border-radius: 999px;
+  background: var(--db-accent);
+  color: var(--db-bg);
+  font-size: 0.68rem;
+}
+.crm-view-switch {
+  display: inline-flex;
+}
+.crm-view-switch button {
+  border-radius: 0;
+}
+.crm-view-switch button:first-child {
+  border-radius: 0.45rem 0 0 0.45rem;
+}
+.crm-view-switch button:last-child {
+  margin-left: -1px;
+  border-radius: 0 0.45rem 0.45rem 0;
+}
+.crm-view-switch button[aria-pressed='true'] {
+  border-color: var(--db-accent);
+  background: color-mix(in srgb, var(--db-accent) 16%, transparent);
+  color: var(--db-accent);
+  font-weight: 600;
+}
+.crm-browse-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-top: 0.4rem;
+  border: 1px solid var(--db-border-soft);
+  border-radius: 0.65rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--db-surface);
+}
+.crm-browse-filters .crm-browse-check {
+  min-height: 36px;
+  color: var(--db-text);
+}
+.crm-browse-meta {
+  padding-inline: 0.25rem;
+}
+.crm-customer-list button strong .new-badge {
+  margin-left: 0.35rem;
+  font-style: normal;
+  vertical-align: middle;
+}
+.crm-customer-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.4rem;
+}
+.crm-flag {
+  border-radius: 999px;
+  padding: 0 0.35rem;
+  background: color-mix(in srgb, var(--db-muted) 18%, transparent);
+  font-weight: 600;
+}
+.crm-flag.is-debt,
+.crm-table-debt {
+  color: color-mix(in srgb, #d93025 75%, var(--db-text));
+}
+.crm-flag.is-debt {
+  background: color-mix(in srgb, #d93025 14%, transparent);
+}
+/* Columnas: la tabla a todo el ancho; la ficha, como panel lateral cuando se abre. */
+.crm-layout.is-columns {
+  grid-template-columns: minmax(0, 1fr);
+}
+.crm-layout.is-columns .crm-detail {
+  display: none;
+}
+.crm-layout.is-columns.is-detail-open .crm-detail {
+  display: block;
+  position: fixed;
+  inset: 0 0 0 auto;
+  z-index: 70;
+  width: min(46rem, 100vw);
+  overflow-y: auto;
+  border-left: 1px solid var(--db-border);
+  padding: 1rem;
+  background: var(--db-bg);
+  box-shadow: -18px 0 40px rgb(0 0 0 / 28%);
+}
+.crm-detail-close {
+  margin-bottom: 0.75rem;
+}
+.crm-table-area {
+  min-width: 0;
+}
+.crm-table-tools {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  color: var(--db-muted);
+  font-size: 0.75rem;
+}
+.crm-table-phone {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.5rem;
+  white-space: nowrap;
+}
+@media (max-width: 760px) {
+  .crm-browse-bar .crm-search {
+    flex-basis: 100%;
+  }
+  .crm-browse-sort {
+    flex: 1 1 auto;
+  }
+  .crm-browse-sort select {
+    flex: 1;
+    min-width: 0;
+  }
+  .crm-table-tools > span {
+    display: none;
+  }
+  .crm-layout.is-columns.is-detail-open .crm-detail {
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+  }
+}
+/* En el teléfono, el orden lo da "Ordenar" de arriba (el servidor), no el de la tabla. */
+.crm-table .data-cards-sort {
+  display: none;
+}

@@ -220,8 +220,18 @@ Cada fase va en su propio commit, con pruebas, Ayuda, novedades y BACKLOG.
 3. **Encabezado y diálogos:** menú "Más", Importar como diálogo, "Exportar lo que veo", vacíos con indicaciones, pulido de teléfono y tablet.
 4. **Análisis de frecuentes:** sección 4.
 
-## 6. Preguntas
+## 6. Decisiones (2026-11-07)
 
-1. ¿El orden por defecto es Nombre A–Z, o Último pedido (los activos arriba)?
-2. Para la fase 4: ¿"frecuente" es 3 de las últimas 6 semanas? ¿Cuántas semanas sin pedir lo vuelven "en riesgo"?
-3. ¿Hace falta marcar clientes con etiquetas propias ("oficina", "celíaco", "mayorista")? Si sí, es una tabla nueva: una migración, en la fase 2 o la 3.
+1. **Orden por defecto:** Nombre A–Z. Cada persona puede elegir otro y queda recordado.
+2. **Frecuente:** pidió en 3 o más de las últimas 6 semanas. "En riesgo" queda como en la tabla de la sección 4 (era frecuente y no pide hace 2 semanas) hasta verlo con datos.
+3. **Etiquetas propias:** no por ahora. Sin migración en las fases 1 a 3.
+
+## 7. Hecho
+
+- **Fase 1** (2026-11-07): total y carga al bajar; contactos unificados con WhatsApp; orden, filtros y columnas en la API (`browseCustomers`); barra de orden y filtros; Tarjetas con zona, último pedido, deuda y "sin ubicar"; vista Columnas con ficha lateral. Falta sólo elegir barrio en la pantalla (la API ya filtra por barrio).
+
+Notas de lo construido:
+
+- Los números de cada cliente cuentan los pedidos no cancelados de la ciudad elegida arriba (todas, si no hay una). La deuda se calcula como en Por cobrar.
+- "Sin pedir hace más de N semanas" incluye sólo a quien pidió alguna vez. Quien nunca pidió se ve ordenando por último pedido (quedan al final) o con 0 en Pedidos.
+- La búsqueda por teléfono o correo va en la misma consulta que la del nombre, así el total de lo buscado es exacto.

@@ -227,3 +227,104 @@ describe('total de clientes', () => {
     expect(todas.total).toBe(4);
   });
 });
+
+// Clientes 2 (2026-11-07): orden, filtros y lo que cada cliente lleva pedido.
+describe('lista de Clientes 2', () => {
+  const CICLO = 'b0000000-0000-4000-8000-000000000001';
+  const MENU = 'b0000000-0000-4000-8000-000000000002';
+  async function conPedidos() {
+    const { client, service } = await base();
+    await client.exec(`
+      insert into customers (id, display_name, created_at) values
+        ('c1000000-0000-4000-8000-000000000001', 'Zoe Frecuente', '2026-01-01T00:00:00Z'),
+        ('c1000000-0000-4000-8000-000000000002', 'Ángel Deudor', '2026-02-01T00:00:00Z'),
+        ('c1000000-0000-4000-8000-000000000003', 'Beto Sin Pedidos', '2026-03-01T00:00:00Z');
+      insert into customer_operating_sites (customer_id, operating_site_id)
+      select id, '${SITE}' from customers where id::text like 'c1%';
+    `);
+    await client.exec(`
+      insert into customer_addresses (customer_id, geographic_zone_id, label, written_address, "primary", latitude, longitude)
+      values ('c1000000-0000-4000-8000-000000000001', '${ZONE}', 'Casa', 'Calle Zoe 1', true, -34.6, -58.4),
+             ('c1000000-0000-4000-8000-000000000002', '${ZONE}', 'Casa', 'Calle Ángel 2', true, null, null);
+      insert into sales_cycles (id, alias, open_at, partial_kitchen_cutoff_at, close_at, status)
+      values ('${CICLO}', 'Semana 36', '2026-09-01T12:00:00Z', '2026-09-05T23:00:00Z', '2026-09-06T22:00:00Z', 'CLOSED');
+      insert into weekly_menus (id, sales_cycle_id, status) values ('${MENU}', '${CICLO}', 'PUBLISHED');
+      insert into orders (public_number, customer_id, sales_cycle_id, weekly_menu_id, source, status,
+                          delivery_date, delivery_address_snapshot, payment_expectation, total_minor,
+                          operating_site_id, paid_at)
+      values
+        ('T-1', 'c1000000-0000-4000-8000-000000000001', '${CICLO}', '${MENU}', 'manual', 'DELIVERED', '2026-09-08', 'x', 'efectivo', 1000, '${SITE}', now()),
+        ('T-2', 'c1000000-0000-4000-8000-000000000001', '${CICLO}', '${MENU}', 'manual', 'DELIVERED', '2026-09-15', 'x', 'efectivo', 1000, '${SITE}', now()),
+        ('T-3', 'c1000000-0000-4000-8000-000000000001', '${CICLO}', '${MENU}', 'manual', 'CANCELLED', '2026-09-22', 'x', 'efectivo', 9000, '${SITE}', null),
+        ('T-4', 'c1000000-0000-4000-8000-000000000002', '${CICLO}', '${MENU}', 'manual', 'DELIVERED', '2026-09-01', 'x', 'efectivo', 5000, '${SITE}', null);
+    `);
+    return service;
+  }
+  const nombres = (page: { items: { displayName: string }[] }) =>
+    page.items.map((cliente) => cliente.displayName);
+
+  it('ordena por nombre sin tildes y trae los números de cada uno', async () => {
+    const service = await conPedidos();
+    const page = await service.browseCustomers({ limit: 30, operatingSiteId: SITE }, true);
+    expect(nombres(page)).toEqual(['Ángel Deudor', 'Beto Sin Pedidos', 'Zoe Frecuente']);
+    expect(page.total).toBe(3);
+    const zoe = page.items.find((cliente) => cliente.displayName === 'Zoe Frecuente');
+    expect(zoe).toMatchObject({
+      debtMinor: 0,
+      isNew: false,
+      lastOrderDate: '2026-09-15',
+      located: true,
+      orderCount: 2,
+      primaryAddress: 'Calle Zoe 1',
+      siteName: 'CABA',
+      spentMinor: 2000,
+      zoneName: 'Zona General',
+    });
+    const angel = page.items.find((cliente) => cliente.displayName === 'Ángel Deudor');
+    expect(angel).toMatchObject({ debtMinor: 5000, isNew: true, located: false });
+  });
+
+  it('ordena por último pedido, cantidad y gastado', async () => {
+    const service = await conPedidos();
+    const por = async (sort: 'last_order' | 'orders' | 'spent' | 'created') =>
+      nombres(await service.browseCustomers({ limit: 30, sort }, false));
+    expect(await por('last_order')).toEqual(['Zoe Frecuente', 'Ángel Deudor', 'Beto Sin Pedidos']);
+    expect(await por('orders')).toEqual(['Zoe Frecuente', 'Ángel Deudor', 'Beto Sin Pedidos']);
+    expect(await por('spent')).toEqual(['Ángel Deudor', 'Zoe Frecuente', 'Beto Sin Pedidos']);
+    expect((await por('created'))[0]).toBe('Beto Sin Pedidos');
+  });
+
+  it('filtra con deuda, sin ubicar, nuevos y dormidos', async () => {
+    const service = await conPedidos();
+    const con = async (filtro: Parameters<typeof service.browseCustomers>[0]) =>
+      nombres(await service.browseCustomers(filtro, false));
+    expect(await con({ limit: 30, withDebt: true })).toEqual(['Ángel Deudor']);
+    expect(await con({ limit: 30, unlocated: true })).toEqual(['Ángel Deudor']);
+    expect(await con({ limit: 30, isNew: false })).toEqual(['Zoe Frecuente']);
+    expect(await con({ limit: 30, inactiveWeeks: 4 })).toEqual(['Ángel Deudor', 'Zoe Frecuente']);
+    expect(await con({ limit: 30, zoneId: ZONE })).toEqual(['Ángel Deudor', 'Zoe Frecuente']);
+  });
+
+  it('pagina por desplazamiento con el total en la primera página', async () => {
+    const service = await conPedidos();
+    const primera = await service.browseCustomers({ limit: 2 }, false);
+    expect(nombres(primera)).toEqual(['Ángel Deudor', 'Beto Sin Pedidos']);
+    expect(primera.total).toBe(3);
+    expect(primera.nextOffset).toBe(2);
+    const segunda = await service.browseCustomers({ limit: 2, offset: 2 }, false);
+    expect(nombres(segunda)).toEqual(['Zoe Frecuente']);
+    expect(segunda.nextOffset).toBeNull();
+  });
+
+  it('busca también por teléfono en la misma consulta', async () => {
+    const { client, service } = await base();
+    await client.exec(`
+      insert into customers (id, display_name) values ('c2000000-0000-4000-8000-000000000001', 'Carla');
+      insert into customer_identities (customer_id, type, value_display, value_normalized, "primary")
+      values ('c2000000-0000-4000-8000-000000000001', 'phone', '11 5555-0202', '+5491155550202', true);
+    `);
+    const page = await service.browseCustomers({ limit: 30, search: '(011) 15 5555-0202' }, true);
+    expect(nombres(page)).toEqual(['Carla']);
+    expect(page.total).toBe(1);
+  });
+});
