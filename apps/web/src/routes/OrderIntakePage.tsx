@@ -266,6 +266,9 @@ export function OrderIntakePage() {
     };
   }, []);
   const [addressHint, setAddressHint] = useState('');
+  const [zoneHint, setZoneHint] = useState('');
+  /** La zona que se completó sola: si se cambia de cliente sin tocarla, se reemplaza por la del nuevo. */
+  const autoZone = useRef('');
 
   const loadedOnce = useRef(false);
   const [loading, setLoading] = useState(true);
@@ -717,6 +720,26 @@ export function OrderIntakePage() {
     if (!response.ok) return;
     const items = ((await response.json()) as { items: OrderSummary[] }).items;
     setLastOrder(items.find((order) => order.status !== 'CANCELLED') ?? null);
+    /*
+     * La "Zona" que se escribe a mano (Palermo, Recoleta, "Centro") se guardaba en cada pedido pero
+     * no volvía al cargar el siguiente: el domicilio sí, la zona no (pedido 2026-11-07). Se completa
+     * con la del pedido más reciente que la tenga, en todas las ciudades. No pisa lo que se escribió:
+     * sólo completa un campo vacío o uno que se completó solo para otro cliente.
+     */
+    const zone = items.find(
+      (order) => order.status !== 'CANCELLED' && order.deliveryDayText?.trim(),
+    )?.deliveryDayText;
+    const zoneField = formRef.current?.elements.namedItem('deliveryDayText');
+    if (!(zoneField instanceof HTMLInputElement)) return;
+    const untouched = !zoneField.value.trim() || zoneField.value === autoZone.current;
+    if (!untouched) return;
+    autoZone.current = zone?.trim() ?? '';
+    zoneField.value = autoZone.current;
+    if (zone) {
+      setZoneHint('La del último pedido. Podés cambiarla para esta entrega.');
+    } else {
+      setZoneHint('');
+    }
   }
 
   /*
@@ -767,6 +790,8 @@ export function OrderIntakePage() {
       paymentSelectValue(lastOrder.paymentExpectation, paymentMethods),
     );
     setFormField('source', lastOrder.source);
+    if (lastOrder.deliveryDayText) setFormField('deliveryDayText', lastOrder.deliveryDayText);
+    if (lastOrder.deliveryTimeSlot) setFormField('deliveryTimeSlot', lastOrder.deliveryTimeSlot);
     const notes = [
       plan.composable ? 'Elegí los platos del Menú especial de esta semana.' : '',
       plan.missing.length > 0
@@ -1818,7 +1843,16 @@ export function OrderIntakePage() {
                   <label className="field">
                     {/* Se llamaba "Día de reparto"; se usa para anotar la zona que guía el armado. */}
                     Zona
-                    <input maxLength={80} name="deliveryDayText" placeholder="Ej. Centro" />
+                    <input
+                      maxLength={80}
+                      name="deliveryDayText"
+                      onInput={() => {
+                        autoZone.current = '';
+                        setZoneHint('');
+                      }}
+                      placeholder="Ej. Centro"
+                    />
+                    {zoneHint ? <small className="field-hint">{zoneHint}</small> : null}
                   </label>
                   <label className="field">
                     Franja horaria
@@ -2133,6 +2167,8 @@ export function OrderIntakePage() {
                   setAddressZoneId('');
                   setOtherDate(false);
                   setAddressHint('');
+                  setZoneHint('');
+                  autoZone.current = '';
                   setCustomerQuery('');
                   setCustomerResults([]);
                   setSelectedOfferingId('');

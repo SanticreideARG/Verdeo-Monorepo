@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-07-pedido-zona-recordada',
+    body: `Nuevo pedido: la "Zona" que escriben a mano (Palermo, Recoleta, Centro…) ahora se completa sola al elegir un cliente que ya pidió, con la de su último pedido. Funciona en todas las ciudades y se puede cambiar. "Repetir lo de la última vez" también copia la zona y la franja horaria.`,
+  },
+  {
     key: '2026-11-07-clientes-orden-filtros-columnas',
     body: `Clientes: ahora se pueden ordenar por nombre, último pedido, más pedidos, más gastado o alta, y filtrar por zona, nuevos, con deuda, sin ubicar y los que no piden hace semanas. Cada cliente muestra su zona y cuánto hace de su último pedido. Y hay vista Columnas: una tabla con pedidos, gastado y deuda de cada uno, con totales al pie; doble clic abre la ficha al costado.`,
   },
