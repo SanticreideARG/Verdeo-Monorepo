@@ -29,6 +29,7 @@ import {
   usePaymentMethods,
   isNoChargeChoice,
 } from '../lib/paymentMethods.js';
+import { isCashMethod } from '../lib/paymentStatus.js';
 import { orderRowActions, type OrderRowActionKey } from '../lib/orderRowActions.js';
 import {
   matchMenuOffering,
@@ -2261,6 +2262,26 @@ export function OrderIntakePage() {
                         </small>
                       </>
                     ),
+                    /*
+                     * Al final de cada día, la plata del día y cuánto de eso es efectivo: lo que
+                     * tiene que volver con quien reparte (pedido 2026-11-07). Los cancelados no
+                     * suman, como en el total del pie.
+                     */
+                    footer: (_day: string, group: readonly OrderSummary[]) => {
+                      const vigentes = group.filter((order) => order.status !== 'CANCELLED');
+                      const currency = vigentes[0]?.currency ?? 'ARS';
+                      const total = vigentes.reduce((sum, order) => sum + order.totalMinor, 0);
+                      const cash = vigentes
+                        .filter((order) => isCashMethod(order.paymentExpectation, paymentMethods))
+                        .reduce((sum, order) => sum + order.totalMinor, 0);
+                      return (
+                        <>
+                          Total <strong>{formatMoney(total, currency)}</strong>
+                          <span aria-hidden="true"> · </span>
+                          Total efectivo <strong>{formatMoney(cash, currency)}</strong>
+                        </>
+                      );
+                    },
                   },
                 }
               : {})}

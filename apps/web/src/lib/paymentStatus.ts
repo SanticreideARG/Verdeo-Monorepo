@@ -9,7 +9,7 @@ export interface PaymentStatus {
   tone: 'none' | 'paid' | 'pending';
 }
 
-function isCashMethod(value: string, methods: readonly PaymentChoice[]): boolean {
+export function isCashMethod(value: string, methods: readonly PaymentChoice[]): boolean {
   const key = value.trim().toLowerCase();
   const found = methods.find(
     (method) => method.code.toLowerCase() === key || method.displayName.toLowerCase() === key,

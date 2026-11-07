@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-07-pedidos-totales-por-dia',
+    body: `Pedidos: con "Ordenar por entrega", cada fecha termina con un renglón con el total del día y el total en efectivo. Los cancelados no suman.`,
+  },
+  {
     key: '2026-11-07-planillas-zona',
     body: `Planillas: la columna Zona de la hoja "Reparto" (Informe del período) y de "Exportar Excel" salía vacía. Ahora muestra la "Zona" que escriben al cargar el pedido (y, si no tiene, la del domicilio), igual que la columna Zona de Pedidos.`,
   },

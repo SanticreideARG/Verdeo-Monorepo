@@ -13709,3 +13709,25 @@ body:has(.modal-backdrop) .assistant-launcher.is-operator.is-saying {
 .crm-table .data-cards-sort {
   display: none;
 }
+
+/* El renglón que cierra un grupo (un día de entrega) con sus totales: total y total efectivo. */
+.data-table tbody tr.data-table-group-foot > td {
+  padding: 0.45rem 0.75rem 0.7rem;
+  background: var(--db-bg-2, #eef2ef);
+  color: var(--db-text, inherit);
+  font-size: 0.88rem;
+  text-align: left;
+}
+.data-table-group-foot > td > span {
+  position: sticky;
+  left: 0.75rem;
+}
+.data-cards > li.data-cards-group-foot {
+  padding: 0.45rem 0.75rem;
+  background: var(--db-bg-2, #eef2ef);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--db-text, inherit);
+  font-size: 0.88rem;
+}

@@ -118,6 +118,8 @@ export function DataTable<T>({
   groupBy?: {
     key: (row: T) => string;
     label: (key: string, rows: readonly T[]) => ReactNode;
+    /** Un renglón al final de cada grupo, para sus totales (por ejemplo, los de un día). */
+    footer?: (key: string, rows: readonly T[]) => ReactNode;
   };
   /**
    * Qué pasa al tocar la tarjeta, en el teléfono.
@@ -320,6 +322,9 @@ export function DataTable<T>({
                   ) : null}
                 </li>
               ))}
+              {groupBy?.footer ? (
+                <li className="data-cards-group-foot">{groupBy.footer(group.key, group.rows)}</li>
+              ) : null}
             </Fragment>
           ))}
         </ul>
@@ -411,6 +416,13 @@ export function DataTable<T>({
                     ))}
                   </tr>
                 ))}
+                {groupBy?.footer ? (
+                  <tr className="data-table-group-foot">
+                    <td colSpan={columns.length}>
+                      <span>{groupBy.footer(group.key, group.rows)}</span>
+                    </td>
+                  </tr>
+                ) : null}
               </Fragment>
             ))}
           </tbody>

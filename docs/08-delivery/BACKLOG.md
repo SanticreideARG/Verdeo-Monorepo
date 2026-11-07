@@ -104,6 +104,7 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 ## Pedidos: ordenar por entrega (2026-11-02)
 
 - [x] Tilde "Ordenar por entrega" en la lista de Pedidos: un renglón destacado por fecha de entrega (día de la semana, fecha y cantidad) con sus pedidos abajo, en tabla y en tarjetas. Ordenar por una columna ordena adentro de cada fecha. Se recuerda por equipo.
+- [x] Al final de cada fecha de "Ordenar por entrega", un renglón con "Total" y "Total efectivo" del día (sin cancelados; efectivo según el medio de pago marcado como efectivo, `isCashMethod`). `DataTable` acepta `groupBy.footer`, en tabla y tarjetas (pedido 2026-11-07).
 
 ## Importador de correos (2026-11-02) — [norma](../03-features/ORDERS_AND_SALES_CYCLES.md)
 
