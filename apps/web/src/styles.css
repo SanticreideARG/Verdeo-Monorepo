@@ -13293,7 +13293,6 @@ label.field:has(> input[type='radio']) {
 }
 .status-chip,
 .feed-tag,
-.new-badge,
 .stats-feed-kind,
 .mobile-dashboard h2 {
   font-size: 0.75rem;
@@ -13421,4 +13420,17 @@ label.field:has(> input[type='radio']) {
   .data-table [data-col='entrega'] {
     display: none;
   }
+}
+
+/* "NUEVO" junto al nombre: chico y siempre en su propio renglón, alineado con el nombre. En
+   mayúsculas, negrita y sobre el color del tema se lee bien a 10 px; más chico ya cuesta. */
+.new-badge {
+  padding: 0.05rem 0.4rem;
+  font-size: 0.625rem;
+  line-height: 1.35;
+  letter-spacing: 0.06em;
+}
+.data-table [data-col='cliente'] .new-badge-inline {
+  display: table;
+  margin: 0.2rem 0 0;
 }
