@@ -491,6 +491,19 @@ export function CustomersPage() {
       );
       createDraft.discard();
       setSearch('');
+      /*
+       * Con domicilio, se busca en el mapa enseguida: al abrir la ficha ya están los lugares
+       * encontrados para confirmar (pedido 2026-11-07). Si falla, queda "Actualizar ubicación".
+       */
+      if (writtenAddress) {
+        await apiRequest(`/api/v1/customers/${created.id}`, { notify: false })
+          .then((response) => responseJson<CustomerDetail>(response))
+          .then((loaded) => {
+            const address = (loaded.addresses ?? []).find((item) => item.active);
+            return address ? requestLocation(created.id, address.id) : null;
+          })
+          .catch(() => null);
+      }
       await loadDirectory('', created.id);
       showToast('Cliente registrado.');
       /*
@@ -647,7 +660,7 @@ export function CustomersPage() {
     const target = event.currentTarget;
     const form = new FormData(target);
     try {
-      await responseJson<CustomerAddress>(
+      const created = await responseJson<CustomerAddress>(
         await apiRequest(`/api/v1/customers/${detail.id}/addresses`, {
           body: JSON.stringify({
             accessNotes: optional(formText(form, 'accessNotes')),
@@ -667,8 +680,17 @@ export function CustomersPage() {
         }),
       );
       target.reset();
+      /*
+       * La búsqueda en el mapa arranca sola (pedido 2026-11-07): antes había que tocar "Actualizar
+       * ubicación" después de guardar. Si falla, el domicilio queda guardado igual y el botón sigue.
+       */
+      const located = await requestLocation(detail.id, created.id).catch(() => null);
       await loadCustomer(detail.id);
-      showToast('Domicilio agregado. Confirmá su ubicación antes de usarlo operativamente.');
+      showToast(
+        located?.status === 'CANDIDATES'
+          ? 'Domicilio agregado. Abajo está en el mapa: confirmá la ubicación.'
+          : 'Domicilio agregado. No lo encontramos en el mapa: podés ubicarlo a mano.',
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos agregar el domicilio.');
     }
@@ -694,17 +716,23 @@ export function CustomersPage() {
     }
   }
 
+  /** Busca la dirección en el mapa y deja los lugares encontrados a la vista, para aceptar uno. */
+  async function requestLocation(customerId: string, addressId: string) {
+    const request = await responseJson<AddressGeocodingRequest>(
+      await apiRequest(`/api/v1/customers/${customerId}/addresses/${addressId}/geocoding`, {
+        body: JSON.stringify({ idempotencyKey: `web-${addressId}-${crypto.randomUUID()}` }),
+        method: 'POST',
+      }),
+    );
+    setGeocoding((current) => ({ ...current, [addressId]: request }));
+    return request;
+  }
+
   async function startGeocoding(address: CustomerAddress) {
     if (!detail) return;
     setMessage('');
     try {
-      const request = await responseJson<AddressGeocodingRequest>(
-        await apiRequest(`/api/v1/customers/${detail.id}/addresses/${address.id}/geocoding`, {
-          body: JSON.stringify({ idempotencyKey: `web-${address.id}-${crypto.randomUUID()}` }),
-          method: 'POST',
-        }),
-      );
-      setGeocoding((current) => ({ ...current, [address.id]: request }));
+      const request = await requestLocation(detail.id, address.id);
       await loadCustomer(detail.id);
       setMessage(
         request.status === 'CANDIDATES'

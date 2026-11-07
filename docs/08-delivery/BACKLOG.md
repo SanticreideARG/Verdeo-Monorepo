@@ -105,6 +105,8 @@ Marcado a partir de IMPLEMENTATION_ROADMAP.md's "Estado (as built)" — ver ese 
 
 - [x] Tilde "Ordenar por entrega" en la lista de Pedidos: un renglón destacado por fecha de entrega (día de la semana, fecha y cantidad) con sus pedidos abajo, en tabla y en tarjetas. Ordenar por una columna ordena adentro de cada fecha. Se recuerda por equipo.
 - [x] Al final de cada fecha de "Ordenar por entrega", un renglón con "Total" y "Total efectivo" del día (sin cancelados; efectivo según el medio de pago marcado como efectivo, `isCashMethod`). `DataTable` acepta `groupBy.footer`, en tabla y tarjetas (pedido 2026-11-07).
+- [x] Mapa al cargar (pedido 2026-11-07): al guardar un domicilio nuevo (alta de cliente o "Agregar domicilio") se pide la búsqueda en el mapa sola (`requestLocation` en `CustomersPage`); la ficha muestra los candidatos para confirmar. Si falla, queda guardado y sigue "Actualizar ubicación". En Nuevo pedido, `AddressMap` chico con el domicilio del cliente elegido si tiene coordenadas, mientras la dirección escrita sea ésa.
+- [ ] Nuevo pedido: "Ver en el mapa" para una dirección escrita a mano (sin domicilio guardado). Necesita buscarla en el momento.
 
 ## Importador de correos (2026-11-02) — [norma](../03-features/ORDERS_AND_SALES_CYCLES.md)
 

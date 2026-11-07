@@ -3,6 +3,7 @@ import { useCallback, useContext, useEffect, useRef, useState, type FormEvent } 
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { ActionButton } from '../components/ActionButton.js';
+import { AddressMap } from '../components/AddressMap.js';
 import { AfterSaveDialog } from '../components/AfterSaveDialog.js';
 import { CancelOrderDialog } from '../components/CancelOrderDialog.js';
 import { ColumnPicker } from '../components/ColumnPicker.js';
@@ -268,6 +269,12 @@ export function OrderIntakePage() {
   }, []);
   const [addressHint, setAddressHint] = useState('');
   const [zoneHint, setZoneHint] = useState('');
+  /** Dónde queda el domicilio del cliente elegido, si está ubicado: se muestra en un mapa chico. */
+  const [addressPoint, setAddressPoint] = useState<{
+    address: string;
+    latitude: number;
+    longitude: number;
+  } | null>(null);
   /** La zona que se completó sola: si se cambia de cliente sin tocarla, se reemplaza por la del nuevo. */
   const autoZone = useRef('');
 
@@ -678,11 +685,14 @@ export function OrderIntakePage() {
    */
   async function fillAddressFor(customerId: string) {
     setAddressHint('');
+    setAddressPoint(null);
     const response = await apiRequest(`/api/v1/customers/${customerId}`);
     if (!response.ok) return;
     const detail = (await response.json()) as {
       addresses?: {
         active: boolean;
+        latitude: number | null;
+        longitude: number | null;
         primary: boolean;
         unit: string | null;
         writtenAddress: string;
@@ -697,6 +707,13 @@ export function OrderIntakePage() {
     setDeliveryAddress(chosen.writtenAddress);
     setDeliveryAddressLine2(chosen.unit ?? '');
     setAddressHint('Domicilio del cliente. Podés cambiarlo para esta entrega.');
+    if (chosen.latitude !== null && chosen.longitude !== null) {
+      setAddressPoint({
+        address: chosen.writtenAddress,
+        latitude: chosen.latitude,
+        longitude: chosen.longitude,
+      });
+    }
   }
 
   /** Elegir un cliente: su domicilio, su último pedido, y el foco a la variedad para seguir. */
@@ -1812,6 +1829,19 @@ export function OrderIntakePage() {
                       {addressHint || 'Sólo calle, número y ciudad: es lo que se busca en el mapa.'}
                     </small>
                   </label>
+                  {/*
+                   * El domicilio del cliente en el mapa, si está ubicado (pedido 2026-11-07). Sólo
+                   * mientras la dirección sea ésa: si se escribe otra, el punto ya no corresponde.
+                   */}
+                  {addressPoint && selectedCustomer && addressPoint.address === deliveryAddress ? (
+                    <div className="field field-wide intake-address-map">
+                      <AddressMap
+                        label={addressPoint.address}
+                        latitude={addressPoint.latitude}
+                        longitude={addressPoint.longitude}
+                      />
+                    </div>
+                  ) : null}
                   <label className="field field-wide">
                     Dirección, línea 2
                     <input

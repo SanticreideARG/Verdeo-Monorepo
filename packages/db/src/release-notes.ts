@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-07-mapa-al-cargar',
+    body: `Mapa: al guardar un domicilio nuevo (en el alta del cliente o en su ficha) se busca solo en el mapa, y en la ficha aparecen los lugares encontrados para confirmar; ya no hace falta tocar "Actualizar ubicación". Y en Nuevo pedido, si el domicilio del cliente ya está ubicado, se ve en un mapa chico debajo de la dirección.`,
+  },
+  {
     key: '2026-11-07-pedidos-totales-por-dia',
     body: `Pedidos: con "Ordenar por entrega", cada fecha termina con un renglón con el total del día y el total en efectivo. Los cancelados no suman.`,
   },
