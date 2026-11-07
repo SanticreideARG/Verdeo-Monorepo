@@ -80,8 +80,10 @@ export function GeographySettingsPage() {
   const [siteFormOpen, setSiteFormOpen] = useState(false);
   const [siteDraft, setSiteDraft] = useState(emptySiteDraft);
   const [zoneDraft, setZoneDraft] = useState(emptyZoneDraft);
+  const [renamingSite, setRenamingSite] = useState<{ id: string; name: string } | null>(null);
   const [zoneEdit, setZoneEdit] = useState({
     coverageDescription: '',
+    displayName: '',
     managerName: '',
     publicPhoneOverride: '',
   });
@@ -160,6 +162,7 @@ export function GeographySettingsPage() {
     if (!selectedZone) return;
     setZoneEdit({
       coverageDescription: selectedZone.coverageDescription ?? '',
+      displayName: selectedZone.displayName,
       managerName: selectedZone.managerName ?? '',
       publicPhoneOverride: selectedZone.publicPhoneOverride ?? '',
     });
@@ -167,11 +170,30 @@ export function GeographySettingsPage() {
 
   async function saveZoneDetails() {
     if (!selectedZone) return;
+    /*
+     * Renombrar (2026-11-06): el nombre es lo que se ve y con lo que el importador reconoce la
+     * columna Zona; el identificador (slug) no cambia, así no se rompen enlaces ni URLs públicas.
+     */
+    const name = zoneEdit.displayName.trim();
+    if (name.length < 2) {
+      setMessage('El nombre de la zona necesita al menos 2 letras.');
+      return;
+    }
+    const taken = zones.some(
+      (zone) =>
+        zone.id !== selectedZone.id &&
+        zone.displayName.trim().toLocaleLowerCase('es-AR') === name.toLocaleLowerCase('es-AR'),
+    );
+    if (taken) {
+      setMessage(`Ya hay otra zona "${name}" en esta operación.`);
+      return;
+    }
     setBusy(true);
     setMessage(null);
     const response = await apiRequest(`/api/v1/zones/${selectedZone.id}`, {
       body: JSON.stringify({
         coverageDescription: zoneEdit.coverageDescription.trim() || undefined,
+        ...(name === selectedZone.displayName ? {} : { displayName: name }),
         managerName: zoneEdit.managerName.trim() || undefined,
         publicPhoneOverride: zoneEdit.publicPhoneOverride.trim() || undefined,
       }),
@@ -217,6 +239,30 @@ export function GeographySettingsPage() {
     setSiteDraft(emptySiteDraft);
     setSelectedSiteId(created.id);
     showToast(`Operación "${created.displayName}" creada.`);
+    await loadSites();
+  }
+
+  /** Cambia sólo el nombre visible; el prefijo de pedidos y el identificador quedan. */
+  async function renameSite() {
+    if (!renamingSite) return;
+    const name = renamingSite.name.trim();
+    if (name.length < 2) {
+      setMessage('El nombre de la operación necesita al menos 2 letras.');
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    const response = await apiRequest(`/api/v1/operating-sites/${renamingSite.id}`, {
+      body: JSON.stringify({ displayName: name }),
+      method: 'PATCH',
+    });
+    setBusy(false);
+    if (!response.ok) {
+      setMessage(await readError(response, 'No pudimos renombrar la operación.'));
+      return;
+    }
+    setRenamingSite(null);
+    showToast(`Operación renombrada a "${name}".`);
     await loadSites();
   }
 
@@ -373,24 +419,65 @@ export function GeographySettingsPage() {
               {sites.map((site) => (
                 <li key={site.id}>
                   <div
-                    className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
+                    className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
                       site.id === selectedSiteId
                         ? 'border-forest bg-forest/5'
                         : 'border-[var(--db-border)] bg-[var(--db-surface)]'
                     }`}
                   >
-                    <button
-                      className="flex-1 text-left"
-                      onClick={() => setSelectedSiteId(site.id)}
-                      type="button"
-                    >
-                      <strong className="block text-forest">{site.displayName}</strong>
-                      <small className="text-ink-muted">
-                        {site.orderPrefix} · {site.zoneCount}{' '}
-                        {site.zoneCount === 1 ? 'zona' : 'zonas'} ·{' '}
-                        {site.active ? 'activa' : 'inactiva'}
-                      </small>
-                    </button>
+                    {renamingSite?.id === site.id ? (
+                      <form
+                        className="flex flex-1 flex-wrap items-center gap-2"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void renameSite();
+                        }}
+                      >
+                        <input
+                          aria-label={`Nuevo nombre de ${site.displayName}`}
+                          autoFocus
+                          className="min-w-0 flex-1 rounded-lg border border-forest/10 px-3 py-2"
+                          maxLength={120}
+                          onChange={(event) =>
+                            setRenamingSite({ id: site.id, name: event.target.value })
+                          }
+                          value={renamingSite.name}
+                        />
+                        <button className="button button-primary" disabled={busy} type="submit">
+                          Guardar
+                        </button>
+                        <button
+                          className="button button-secondary"
+                          onClick={() => setRenamingSite(null)}
+                          type="button"
+                        >
+                          Cancelar
+                        </button>
+                      </form>
+                    ) : (
+                      <button
+                        className="min-w-[9rem] flex-1 text-left"
+                        onClick={() => setSelectedSiteId(site.id)}
+                        type="button"
+                      >
+                        <strong className="block text-forest">{site.displayName}</strong>
+                        <small className="text-ink-muted">
+                          {site.orderPrefix} · {site.zoneCount}{' '}
+                          {site.zoneCount === 1 ? 'zona' : 'zonas'} ·{' '}
+                          {site.active ? 'activa' : 'inactiva'}
+                        </small>
+                      </button>
+                    )}
+                    {canManageSites && renamingSite?.id !== site.id ? (
+                      <button
+                        className="button button-secondary"
+                        disabled={busy}
+                        onClick={() => setRenamingSite({ id: site.id, name: site.displayName })}
+                        type="button"
+                      >
+                        Renombrar
+                      </button>
+                    ) : null}
                     {canManageSites ? (
                       <button
                         className="button button-secondary"
@@ -558,6 +645,21 @@ export function GeographySettingsPage() {
                     <li className="rounded-xl border border-forest/10 bg-forest/5 p-4">
                       <h3 className="font-semibold text-forest">{selectedZone.displayName}</h3>
                       <div className="mt-3 grid gap-3">
+                        <label className="block text-sm">
+                          Nombre
+                          <input
+                            className="mt-1 w-full rounded-lg border border-forest/10 px-3 py-2"
+                            disabled={!canManageZones}
+                            maxLength={120}
+                            onChange={(event) =>
+                              setZoneEdit((current) => ({
+                                ...current,
+                                displayName: event.target.value,
+                              }))
+                            }
+                            value={zoneEdit.displayName}
+                          />
+                        </label>
                         <label className="block text-sm">
                           Número de teléfono
                           <input

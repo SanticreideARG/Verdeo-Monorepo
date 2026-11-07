@@ -148,6 +148,11 @@ Pedidos cargados a nombre de "nn" (como stock) que había que pasar a los client
 - [x] Ayuda (`pedidos-cambiar-cliente`) y novedad.
 - [x] "Enviar a stock" en el mismo diálogo (pedidos confirmados, permiso `orders.cancel`): cancela con `toStock` y las viandas quedan como lote en Stock disponible. Una confirmación; dos si el pedido figura cobrado.
 
+## Renombrar ciudades y zonas (2026-11-06)
+
+- [x] Zonas geográficas: "Renombrar" en cada ciudad y "Nombre" en los datos de cada zona. La API ya lo aceptaba (`PATCH /operating-sites/:id` y `/zones/:id` con `displayName`); faltaba en la pantalla. El slug y el prefijo de pedidos no cambian. Avisa si otra zona de la ciudad ya tiene ese nombre.
+- [ ] Unificar Neuquén y Río Negro: ver la propuesta en la conversación del 2026-11-06 (pasar zonas de una operación a otra sin tocar el historial). Pendiente de decisión.
+
 ## Calendario 2 (plan, 2026-11-06) — [plan](../03-features/CALENDARIO_PLAN.md)
 
 Volver a tener un calendario de verdad: Día · Semana · Mes · Agenda en todos los tamaños, con recordatorios, la franja de cada semana enlazada a su período, repartos, pedidos a entregar y feriados. Librería propuesta: FullCalendar 7.1.3 (plan B Schedule-X).

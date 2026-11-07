@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-06-renombrar-zonas',
+    body: `Ciudades y zonas se pueden renombrar desde Panel de control → Zonas geográficas: "Renombrar" en la tarjeta de la ciudad, y "Nombre" en los datos de cada zona. Cambia sólo el nombre que se ve; los números de pedido y los enlaces quedan como estaban.`,
+  },
+  {
     key: '2026-11-06-pulido-de-pantallas',
     body: `Pantallas más prolijas y fáciles de tocar: los textos grises se leen mejor; en el teléfono, los selectores de Ciudad y Estado, el avatar y los botones son más grandes, y el búho ya no tapa el final de las listas. En Cocina, "Cerrar período" se distingue del resto. El detalle de un pedido ocupa menos lugar arriba, y Estadísticas con uno o dos días muestra los números en vez de un gráfico vacío. La fecha de la barra dice "6 de noviembre" y no "6 De Noviembre".`,
   },
