@@ -427,6 +427,19 @@ interface ResolvedOrderItem {
 }
 
 /** "Menú Nuevo Keto" y "NUEVO KETO" son la misma variedad: sin acentos, sin "Menú", sin signos. */
+/**
+ * La zona de un pedido para las planillas: la "Zona" que se escribe en el pedido
+ * (`deliveryDayText`) y, si no hay, la del domicilio. Las exportaciones leían sólo la del domicilio,
+ * que casi nunca está cargada, y la columna salía vacía (reportado 2026-11-07). Es la misma regla
+ * que la columna Zona de Pedidos (`zoneOf` en `orderColumns.tsx`).
+ */
+function zoneOfOrder(order: {
+  deliveryDayText: string | null;
+  deliveryZone: string | null;
+}): string | null {
+  return order.deliveryDayText?.trim() || order.deliveryZone?.trim() || null;
+}
+
 function sameFamily(left: string, right: string): boolean {
   const key = (value: string) =>
     value
@@ -7909,7 +7922,7 @@ export class PostgresOperationsService {
           run: runId ? (runOf.get(runId) ?? null) : null,
           timeSlot: order.deliveryTimeSlot,
           totalMinor: order.totalMinor,
-          zone: order.deliveryZone,
+          zone: zoneOfOrder(order),
         };
       }),
     };
@@ -7971,7 +7984,7 @@ export class PostgresOperationsService {
         customerWhatsapp: order.customer.whatsapp ?? order.customer.phone,
         deliveryAddress: order.deliveryAddress,
         deliveryDate: order.deliveryDate,
-        deliveryZone: order.deliveryZone,
+        deliveryZone: zoneOfOrder(order),
         dietaryInstructions: order.dietaryInstructions,
         items: order.items.map((item) => ({
           dishSelections: item.dishSelections,

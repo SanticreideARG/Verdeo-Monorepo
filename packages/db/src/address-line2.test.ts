@@ -446,3 +446,18 @@ describe('separar el detalle de los domicilios viejos', () => {
     expect(await service.listAddressDetailProposals(SITE)).toEqual([]);
   });
 });
+
+describe('la zona en las planillas', () => {
+  it('sale la "Zona" escrita en el pedido, no la vacía del domicilio', async () => {
+    const { client, service } = await base();
+    await service.createOrder({ ...pedido('2026-10-18'), deliveryDayText: 'Palermo' }, contexto);
+    await service.createOrder(pedido('2026-10-18'), contexto);
+    await client.exec(`update orders set status = 'CONFIRMED'`);
+
+    const exported = await service.exportOrders({ cycleId: CYCLE }, contexto, 'xlsx');
+    expect(exported.rows.map((row) => row.deliveryZone).sort()).toEqual(['Palermo', null]);
+
+    const report = await service.periodOrdersReport({ cycleId: CYCLE });
+    expect(report.orders.map((order) => order.zone).sort()).toEqual(['Palermo', null]);
+  });
+});

@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-07-planillas-zona',
+    body: `Planillas: la columna Zona de la hoja "Reparto" (Informe del período) y de "Exportar Excel" salía vacía. Ahora muestra la "Zona" que escriben al cargar el pedido (y, si no tiene, la del domicilio), igual que la columna Zona de Pedidos.`,
+  },
+  {
     key: '2026-11-07-pedido-zona-recordada',
     body: `Nuevo pedido: la "Zona" que escriben a mano (Palermo, Recoleta, Centro…) ahora se completa sola al elegir un cliente que ya pidió, con la de su último pedido. Funciona en todas las ciudades y se puede cambiar. "Repetir lo de la última vez" también copia la zona y la franja horaria.`,
   },

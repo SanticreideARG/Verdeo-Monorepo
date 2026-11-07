@@ -919,6 +919,7 @@ Detalle en `docs/03-features/LABELS_AND_QR.md`.
 
 - [x] En Nuevo pedido, "Día de reparto" pasa a llamarse "Zona" (se usa para anotar la zona que guía el armado; el dato es el mismo).
 - [x] Corregido (2026-11-07, reportado en Córdoba y Buenos Aires): la "Zona" escrita a mano (`deliveryDayText`) se guardaba en el pedido pero no volvía al cargar el siguiente del mismo cliente, a diferencia del domicilio. Ahora, al elegir el cliente, se completa con la del pedido no cancelado más reciente que la tenga (entre los últimos 5), con el aviso "La del último pedido". No pisa lo escrito; si se cambia de cliente sin tocarla, se reemplaza. "Repetir lo de la última vez" copia también zona y franja. Sin migración: sale de los pedidos.
+- [x] Corregido (2026-11-07): la columna Zona de la hoja "Reparto" del Informe del período y de "Exportar Excel" (y su hoja "Por zona") salía vacía: leían la zona del domicilio (`operationalZone`, casi nunca cargada). Ahora usan la "Zona" del pedido con la del domicilio de respaldo (`zoneOfOrder`, la misma regla que `zoneOf` en la columna de Pedidos).
 - [x] La franja horaria del pedido aparece en cada parada de la ruta y en la hoja del repartidor (si el pedido no tiene, la del domicilio).
 - [x] Chat: sin conversaciones con uno mismo; las que se quedan sin otros participantes se pueden archivar.
 - [x] Salida y llegada de las rutas: por defecto por ciudad (Ajustes → Reparto) y cambiables en cada ruta, con hora de salida; tiempos estimados por parada y total; el recorrido en Google Maps (en tramos de nueve paradas). Migración 0072.
