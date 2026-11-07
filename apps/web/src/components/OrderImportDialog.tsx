@@ -3,6 +3,7 @@ import { useEffect, useState, type ChangeEvent } from 'react';
 
 import { apiRequest } from '../lib/api.js';
 import { DeliveryDayPicker, weekdayName } from './DeliveryDayPicker.js';
+import { heraSay } from './HeraLauncher.js';
 import { formatDay } from '../lib/dates.js';
 import { errorMessage } from '../lib/operations.js';
 import { whatsappHref } from '../lib/phone.js';
@@ -323,6 +324,13 @@ export function OrderImportDialog({
   // "no se reconoció un pedido" hasta que corría el efecto de abajo.
   const [preview, setPreview] = useState<Preview | null>(() => inbound?.preview ?? null);
   const [decisions, setDecisions] = useState<Record<number, string>>({});
+  // Qué es una consulta lo dice Hera en su globo, una vez por correo: un párrafo fijo ocupaba
+  // media pantalla del teléfono para algo que se lee una sola vez.
+  const hasInquiries = (preview?.inquiries.length ?? 0) > 0;
+  useEffect(() => {
+    if (hasInquiries)
+      heraSay('Esto es una consulta, no un pedido: no se importa. Contestala desde acá.');
+  }, [hasInquiries]);
   // Las filas cuyo cliente nuevo ya compraba antes (destildado "Es cliente nuevo").
   const [notNew, setNotNew] = useState<Set<number>>(new Set());
   // Las variedades que se eligieron a mano, por pedido y posición.
@@ -1171,10 +1179,6 @@ export function OrderImportDialog({
               {preview.inquiries.length > 0 ? (
                 <section className="order-import-inquiries">
                   <h3>Consultas</h3>
-                  <p>
-                    Estos mensajes llegaron por el formulario sin ninguna cantidad: no son pedidos,
-                    son preguntas. No se importan, y quedan acá para contestarlos.
-                  </p>
                   <ul>
                     {preview.inquiries.map((inquiry) => (
                       <li key={inquiry.rowNumber}>

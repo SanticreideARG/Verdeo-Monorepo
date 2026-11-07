@@ -10,6 +10,19 @@ const HERA_FACES: Record<HeraPose, string> = {
 };
 
 const GREETING_MS = 3_000;
+/** Lo que Hera dice en su globo queda a la vista lo suficiente para leer dos renglones. */
+const SAYING_MS = 9_000;
+
+/** El evento con el que cualquier pantalla del panel le hace decir algo a Hera en su globo. */
+export const HERA_SAYS = 'verdeo:hera-dice';
+
+/**
+ * Hera lo dice en su globo, al lado del búho (2026-11-06): para las aclaraciones que hacen falta
+ * una vez y no merecen un párrafo fijo en la pantalla. Corto: dos renglones como mucho.
+ */
+export function heraSay(text: string): void {
+  window.dispatchEvent(new CustomEvent<string>(HERA_SAYS, { detail: text }));
+}
 const GREETING_MIN_WAIT_MS = 30_000;
 const GREETING_MAX_WAIT_MS = 75_000;
 
@@ -125,42 +138,67 @@ export function HeraLauncher({
 }) {
   const greeting = useHeraGreeting(!open);
   const [hovered, setHovered] = useState(false);
+  const [saying, setSaying] = useState<string | null>(null);
   usePreloadedFaces();
+
+  useEffect(() => {
+    if (!operator) return;
+    let timer: number | undefined;
+    const say = (event: Event) => {
+      const text = (event as CustomEvent<unknown>).detail;
+      if (typeof text !== 'string' || !text) return;
+      window.clearTimeout(timer);
+      setSaying(text);
+      timer = window.setTimeout(() => setSaying(null), SAYING_MS);
+    };
+    window.addEventListener(HERA_SAYS, say);
+    return () => {
+      window.removeEventListener(HERA_SAYS, say);
+      window.clearTimeout(timer);
+    };
+  }, [operator]);
 
   const classes = [
     'assistant-launcher',
     operator ? 'is-operator' : '',
     open ? 'is-open' : '',
     greeting ? 'is-greeting' : '',
+    saying && !open ? 'is-saying' : '',
   ]
     .filter(Boolean)
     .join(' ');
 
   return (
-    <button
-      aria-expanded={open}
-      aria-label={label}
-      className={classes}
-      onClick={onClick}
-      // Sólo con mouse: en una pantalla táctil, el "hover" queda pegado después del toque.
-      onPointerEnter={(event) => setHovered(event.pointerType === 'mouse')}
-      onPointerLeave={() => setHovered(false)}
-      type="button"
-    >
-      {open ? null : (
-        <span aria-hidden="true" className="assistant-launcher-bubble">
-          {greeting ? '¡Hola! Soy Hera' : bubble}
-        </span>
-      )}
-      <span className="assistant-launcher-avatar">
-        {open ? (
-          <span aria-hidden="true" className="assistant-launcher-close">
-            ×
+    <>
+      <button
+        aria-expanded={open}
+        aria-label={label}
+        className={classes}
+        onClick={onClick}
+        // Sólo con mouse: en una pantalla táctil, el "hover" queda pegado después del toque.
+        onPointerEnter={(event) => setHovered(event.pointerType === 'mouse')}
+        onPointerLeave={() => setHovered(false)}
+        type="button"
+      >
+        {open ? null : (
+          <span aria-hidden="true" className="assistant-launcher-bubble">
+            {saying ?? (greeting ? '¡Hola! Soy Hera' : bubble)}
           </span>
-        ) : (
-          <HeraFace pose={hovered || greeting ? 'hello' : 'answer'} size={56} />
         )}
+        <span className="assistant-launcher-avatar">
+          {open ? (
+            <span aria-hidden="true" className="assistant-launcher-close">
+              ×
+            </span>
+          ) : (
+            <HeraFace pose={hovered || greeting || saying ? 'hello' : 'answer'} size={56} />
+          )}
+        </span>
+      </button>
+      {/* El globo es decorado para el lector de pantalla; esto lo lee una vez. */}
+      <span className="sr-only" role="status">
+        {saying ?? ''}
       </span>
-    </button>
+    </>
   );
 }

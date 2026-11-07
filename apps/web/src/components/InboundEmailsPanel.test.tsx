@@ -121,6 +121,23 @@ describe('InboundEmailsPanel', () => {
     expect(screen.getByText('Buenos Aires')).toBeTruthy();
   });
 
+  // Abierta no había forma de cerrarla: el título la pliega y el navegador lo recuerda.
+  it('se pliega desde el título y lo recuerda', async () => {
+    window.localStorage.removeItem('verdeo-correos-abierto');
+    vi.mocked(apiRequest).mockImplementation(() => json({ items: [resumen] }));
+    render(<InboundEmailsPanel canConfirm onChanged={vi.fn()} />);
+
+    const toggle = await screen.findByRole('button', { name: /Pedidos por correo para revisar/ });
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByText('Ana Prueba')).toBeTruthy();
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByText('Ana Prueba')).toBeNull();
+    expect(window.localStorage.getItem('verdeo-correos-abierto')).toBe('0');
+    window.localStorage.removeItem('verdeo-correos-abierto');
+  });
+
   describe('con varias ciudades', () => {
     const CABA = '90000000-0000-4000-8000-00000000000a';
     const NQN = '90000000-0000-4000-8000-00000000000b';

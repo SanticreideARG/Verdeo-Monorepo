@@ -148,6 +148,13 @@ Pedidos cargados a nombre de "nn" (como stock) que había que pasar a los client
 - [x] Ayuda (`pedidos-cambiar-cliente`) y novedad.
 - [x] "Enviar a stock" en el mismo diálogo (pedidos confirmados, permiso `orders.cancel`): cancela con `toStock` y las viandas quedan como lote en Stock disponible. Una confirmación; dos si el pedido figura cobrado.
 
+## Pedidos por correo en el teléfono (2026-11-06)
+
+- [x] Botones en una fila de tres debajo de cada correo. `.inbound-panel li > div` les daba `display: grid` y los apilaba (a veces a la derecha). Tipo, ciudad y repetido en un renglón de chips.
+- [x] La lista se pliega desde el título (`verdeo-correos-abierto` en el navegador); arranca abierta.
+- [x] `heraSay(texto)`: Hera dice algo en su globo 9 s (evento `verdeo:hera-dice`, con `role="status"` para lectores de pantalla). Lo usa la revisión de una consulta en vez del párrafo fijo. Sobre un diálogo, el búho se esconde mientras no habla y, cuando habla, sube por encima del pie.
+- [x] La ciudad de un correo se reconoce también por el slug y el prefijo de la operación: renombrar Neuquén a "Valle" no deja sin ciudad a "Pedido online NQN".
+
 ## Renombrar ciudades y zonas (2026-11-06)
 
 - [x] Zonas geográficas: "Renombrar" en cada ciudad y "Nombre" en los datos de cada zona. La API ya lo aceptaba (`PATCH /operating-sites/:id` y `/zones/:id` con `displayName`); faltaba en la pantalla. El slug y el prefijo de pedidos no cambian. Avisa si otra zona de la ciudad ya tiene ese nombre.

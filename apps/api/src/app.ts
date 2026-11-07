@@ -4187,7 +4187,15 @@ export function createApp(options: CreateAppOptions) {
         ? null
         : ((await operations.previewOrderImport(parsed.rows, currentSite)) as SitePreview);
     const onlySite = scope.sites.length === 1 ? (scope.sites[0]?.id ?? null) : null;
-    const siteOptions = scope.sites.map((site) => ({ id: site.id, name: site.displayName ?? '' }));
+    const siteOptions = scope.sites.map((site) => ({
+      // El servicio los devuelve aunque su tipo no los declare.
+      aliases: [
+        (site as { slug?: string }).slug ?? '',
+        (site as { orderPrefix?: string }).orderPrefix ?? '',
+      ],
+      id: site.id,
+      name: site.displayName ?? '',
+    }));
     const methods = await activePaymentMethods();
     return OrderImportPreviewResponseSchema.parse({
       inquiries: parsed.inquiries ?? [],
@@ -4642,8 +4650,14 @@ export function createApp(options: CreateAppOptions) {
       (await requireGeography().listSites()) as readonly {
         displayName: string | null;
         id: string;
+        orderPrefix: string;
+        slug: string;
       }[]
-    ).map((site) => ({ id: site.id, name: site.displayName ?? '' }));
+    ).map((site) => ({
+      aliases: [site.slug, site.orderPrefix],
+      id: site.id,
+      name: site.displayName ?? '',
+    }));
     const allowed = new Set(scope.sites.map((site) => site.id));
     const current = context.get('scope')?.operatingSiteId ?? null;
     const items = rows

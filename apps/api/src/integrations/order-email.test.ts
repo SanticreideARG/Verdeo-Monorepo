@@ -399,3 +399,18 @@ describe('la ciudad de los asuntos reales', () => {
     expect(ciudadDe('Consulta suelta')).toBeNull();
   });
 });
+
+describe('matchLocalityToSite con ciudades renombradas', () => {
+  const sites = [
+    { aliases: ['neuquen', 'NQN'], id: 'nqn', name: 'Valle' },
+    { aliases: ['mendoza', 'MZA'], id: 'mza', name: 'Mendoza' },
+  ];
+  // Renombrar Neuquén a "Valle" no puede dejar sin ciudad a los correos "de NQN".
+  it('reconoce la ciudad por su identificador y su prefijo', () => {
+    expect(matchLocalityToSite('de Congelados de NQN', sites)).toBe('nqn');
+    expect(matchLocalityToSite('Neuquén', sites)).toBe('nqn');
+    expect(matchLocalityToSite('Valle', sites)).toBe('nqn');
+    expect(matchLocalityToSite('MZA', sites)).toBe('mza');
+    expect(matchLocalityToSite('Bahía Blanca', sites)).toBeNull();
+  });
+});

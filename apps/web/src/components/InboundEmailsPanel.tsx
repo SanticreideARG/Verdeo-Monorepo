@@ -31,6 +31,16 @@ const KIND_LABELS: Partial<Record<InboundSummary['status'], string>> = {
  * La revisión (cliente, variedad, duplicados) se hace al abrir cada uno y no al recibirlo, con el
  * correo original al lado. No aparece si no hay nada esperando.
  */
+const EXPANDED_KEY = 'verdeo-correos-abierto';
+
+function readExpanded(): boolean {
+  try {
+    return window.localStorage.getItem(EXPANDED_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+
 export function InboundEmailsPanel({
   canConfirm,
   canUseHera = false,
@@ -46,6 +56,20 @@ export function InboundEmailsPanel({
   const [removing, setRemoving] = useState<InboundSummary | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  // Plegable (2026-11-06): abierta no había forma de cerrarla y ocupaba la pantalla de Pedidos.
+  // Arranca abierta (es trabajo pendiente) y recuerda en este navegador si se la plegó.
+  const [expanded, setExpanded] = useState(readExpanded);
+
+  function toggleExpanded() {
+    setExpanded((current) => {
+      try {
+        window.localStorage.setItem(EXPANDED_KEY, current ? '0' : '1');
+      } catch {
+        // Sin almacenamiento, vale hasta recargar.
+      }
+      return !current;
+    });
+  }
 
   const load = useCallback(async () => {
     const response = await apiRequest('/api/v1/inbound-emails', { notify: false });
@@ -111,60 +135,75 @@ export function InboundEmailsPanel({
   if (items.length === 0 && !detail) return null;
 
   return (
-    <section className="inbound-panel">
+    <section className={`inbound-panel${expanded ? ' is-open' : ''}`}>
       <h2>
-        Pedidos por correo para revisar <span className="status-chip">{items.length}</span>
+        <button
+          aria-expanded={expanded}
+          className="inbound-panel-toggle"
+          onClick={toggleExpanded}
+          type="button"
+        >
+          Pedidos por correo para revisar <span className="status-chip">{items.length}</span>
+          <span aria-hidden="true" className="inbound-panel-caret">
+            ▸
+          </span>
+        </button>
       </h2>
       {message ? <p className="text-sm text-ink-muted">{message}</p> : null}
-      <ul>
-        {items.map((item) => (
-          <li key={item.id}>
-            <div>
-              <strong>{item.customerName ?? item.fromAddress}</strong>
-              <span className="inbound-kind">{KIND_LABELS[item.status] ?? item.status}</span>
-              {/* La ciudad del asunto: con una ciudad elegida arriba sólo salen las de esa. */}
-              <span className="inbound-kind">{item.siteName ?? 'Sin ciudad'}</span>
-              {repeatOf.get(item.id) ? (
-                <span className="inbound-kind is-repeat">
-                  Repetido del de las {formatMoment(repeatOf.get(item.id)?.receivedAt ?? '')}
+      {expanded ? (
+        <ul>
+          {items.map((item) => (
+            <li key={item.id}>
+              <div>
+                <strong>{item.customerName ?? item.fromAddress}</strong>
+                {/* Tipo, ciudad y repetido en un solo renglón: en el teléfono eran tres. */}
+                <span className="inbound-tags">
+                  <span className="inbound-kind">{KIND_LABELS[item.status] ?? item.status}</span>
+                  {/* La ciudad del asunto: con una ciudad elegida arriba sólo salen las de esa. */}
+                  <span className="inbound-kind">{item.siteName ?? 'Sin ciudad'}</span>
+                  {repeatOf.get(item.id) ? (
+                    <span className="inbound-kind is-repeat">
+                      Repetido del de las {formatMoment(repeatOf.get(item.id)?.receivedAt ?? '')}
+                    </span>
+                  ) : null}
                 </span>
-              ) : null}
-              <small>
-                {formatMoment(item.receivedAt)} · {item.itemsSummary}
-              </small>
-            </div>
-            <div className="inbound-actions">
-              <button
-                className="button button-secondary"
-                disabled={opening !== null}
-                onClick={() => void open(item.id)}
-                type="button"
-              >
-                {opening === item.id ? 'Abriendo…' : 'Revisar'}
-              </button>
-              {item.status === 'pending' && !repeatOf.get(item.id) ? (
+                <small>
+                  {formatMoment(item.receivedAt)} · {item.itemsSummary}
+                </small>
+              </div>
+              <div className="inbound-actions">
                 <button
-                  className="button button-primary"
+                  className="button button-secondary"
                   disabled={opening !== null}
-                  onClick={() => void open(item.id, true)}
-                  title="Se aprueba solo si no hay nada que revisar; si falta algo, se abre."
+                  onClick={() => void open(item.id)}
                   type="button"
                 >
-                  Aprobar
+                  {opening === item.id ? 'Abriendo…' : 'Revisar'}
                 </button>
-              ) : null}
-              <button
-                className="button button-secondary is-danger"
-                disabled={opening !== null}
-                onClick={() => setRemoving(item)}
-                type="button"
-              >
-                Borrar
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+                {item.status === 'pending' && !repeatOf.get(item.id) ? (
+                  <button
+                    className="button button-primary"
+                    disabled={opening !== null}
+                    onClick={() => void open(item.id, true)}
+                    title="Se aprueba solo si no hay nada que revisar; si falta algo, se abre."
+                    type="button"
+                  >
+                    Aprobar
+                  </button>
+                ) : null}
+                <button
+                  className="button button-secondary is-danger"
+                  disabled={opening !== null}
+                  onClick={() => setRemoving(item)}
+                  type="button"
+                >
+                  Borrar
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {detail ? (
         <OrderImportDialog
           autoApprove={autoApprove}

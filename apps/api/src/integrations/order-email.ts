@@ -211,7 +211,11 @@ export function subjectLocality(subject: string): string | null {
 /** La ciudad que dice el asunto, entre las que se pueden elegir. Si no es una sola, ninguna. */
 export function matchLocalityToSite(
   locality: string | null,
-  sites: readonly { id: string; name: string }[],
+  /*
+   * `aliases`: el identificador y el prefijo de pedidos de la ciudad (2026-11-06). No cambian al
+   * renombrarla, así que "Neuquén" renombrada a "Valle" sigue reconociendo "Pedido online NQN".
+   */
+  sites: readonly { aliases?: readonly string[]; id: string; name: string }[],
 ): string | null {
   const clean = (value: string) =>
     value
@@ -233,9 +237,15 @@ export function matchLocalityToSite(
   const raw = locality ? clean(locality) : '';
   if (!raw) return null;
   const only = (wanted: string) => {
+    const words = wanted.split(' ');
     const found = sites.filter((site) => {
       const name = clean(site.name);
-      return name.length > 0 && (name.includes(wanted) || wanted.includes(name));
+      if (name.length > 0 && (name.includes(wanted) || wanted.includes(name))) return true;
+      // Un alias va por palabra entera: "nqn" en "de nqn", nunca "ba" dentro de "bahia".
+      return (site.aliases ?? []).some((alias) => {
+        const value = clean(alias);
+        return value.length > 0 && (value === wanted || words.includes(value));
+      });
     });
     return found.length === 1 ? (found[0]?.id ?? null) : null;
   };

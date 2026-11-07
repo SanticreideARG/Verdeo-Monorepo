@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-06-correos-en-el-telefono',
+    body: `Pedidos por correo, más cómodo en el teléfono: Revisar, Aprobar y Borrar en una fila debajo de cada correo, y el tipo y la ciudad en un renglón. La lista se pliega tocando su título. En una consulta, Hera explica en su globo qué es, en vez del párrafo fijo, y el búho ya no tapa "Cerrar".`,
+  },
+  {
     key: '2026-11-06-renombrar-zonas',
     body: `Ciudades y zonas se pueden renombrar desde Panel de control → Zonas geográficas: "Renombrar" en la tarjeta de la ciudad, y "Nombre" en los datos de cada zona. Cambia sólo el nombre que se ve; los números de pedido y los enlaces quedan como estaban.`,
   },
