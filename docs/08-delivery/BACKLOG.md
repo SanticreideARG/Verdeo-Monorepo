@@ -148,6 +148,12 @@ Pedidos cargados a nombre de "nn" (como stock) que había que pasar a los client
 - [x] Ayuda (`pedidos-cambiar-cliente`) y novedad.
 - [x] "Enviar a stock" en el mismo diálogo (pedidos confirmados, permiso `orders.cancel`): cancela con `toStock` y las viandas quedan como lote en Stock disponible. Una confirmación; dos si el pedido figura cobrado.
 
+## Buscar sin importar las tildes (2026-11-07)
+
+- [x] Base: `ilikeIgnoringAccents` (`packages/db/src/repositories/accent-search.ts`) con `translate`, sin la extensión `unaccent` (no hace falta migración). En la búsqueda de clientes y en la de pedidos por nombre.
+- [x] Panel: `foldText` (`apps/web/src/lib/text.ts`) en el buscador del chat, en Usuarios y al avisar de un nombre de zona repetido.
+- Ya ignoraban tildes: el importador de clientes (zonas, encabezados), la ciudad de los correos, las variedades de los pedidos importados, la Ayuda y el índice del Panel de control.
+
 ## Pedidos por correo en el teléfono (2026-11-06)
 
 - [x] Botones en una fila de tres debajo de cada correo. `.inbound-panel li > div` les daba `display: grid` y los apilaba (a veces a la derecha). Tipo, ciudad y repetido en un renglón de chips.

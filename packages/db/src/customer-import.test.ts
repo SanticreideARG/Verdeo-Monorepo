@@ -192,3 +192,22 @@ describe('clientes archivados', () => {
     expect(archivados.items.map((cliente) => cliente.id)).toEqual([ARCHIVADO]);
   });
 });
+
+// Buscar sin importar las tildes (2026-11-06), en los dos sentidos y en mayúsculas.
+describe('búsqueda de clientes', () => {
+  it('encuentra con o sin tilde', async () => {
+    const { client, service } = await base();
+    await client.exec(
+      `insert into customers (display_name) values ('Martín Núñez'), ('JOSÉ PÉREZ'), ('Maria Lopez');`,
+    );
+    const nombres = async (search: string) =>
+      (await service.listCustomers({ limit: 30, search }, false)).items
+        .map((cliente) => cliente.displayName)
+        .sort();
+
+    expect(await nombres('nunez')).toEqual(['Martín Núñez']);
+    expect(await nombres('Martin')).toEqual(['Martín Núñez']);
+    expect(await nombres('jose perez')).toEqual(['JOSÉ PÉREZ']);
+    expect(await nombres('maría lópez')).toEqual(['Maria Lopez']);
+  });
+});

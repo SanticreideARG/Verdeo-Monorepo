@@ -127,6 +127,7 @@ import {
   kitchenSheets,
   type KitchenSheetOrder,
 } from '../schema/index.js';
+import { ilikeIgnoringAccents } from './accent-search.js';
 import { findMergeCandidates, mergeCustomers } from './customer-merge.js';
 import { assignOrderToRun, dropEmptyAutoRun, leaveRun, runLabel } from './delivery-runs.js';
 import { PostgresAuditSink } from './postgres-audit-sink.js';
@@ -745,7 +746,7 @@ export class PostgresOperationsService {
       ...(input.cursor ? [gt(customers.id, input.cursor)] : []),
       // Los archivados no salen en las listas (2026-11-05): sólo pidiéndolos por estado.
       ...(input.status ? [eq(customers.status, input.status)] : [ne(customers.status, 'archived')]),
-      ...(input.search ? [ilike(customers.displayName, `%${input.search}%`)] : []),
+      ...(input.search ? [ilikeIgnoringAccents(customers.displayName, input.search)] : []),
     ];
     let rows = await this.database
       .select({
@@ -7423,7 +7424,7 @@ export class PostgresOperationsService {
         ? [
             or(
               ilike(orders.publicNumber, `%${input.search}%`),
-              ilike(customers.displayName, `%${input.search}%`),
+              ilikeIgnoringAccents(customers.displayName, input.search),
             )!,
           ]
         : []),

@@ -7,6 +7,7 @@ import { EmptyState } from '../components/EmptyState.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { SettingsTabs } from '../components/SettingsTabs.js';
 import { fetchAllUsers } from '../lib/allUsers.js';
+import { foldText } from '../lib/text.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage } from '../lib/operations.js';
 import { showToast } from '../lib/toast.js';
@@ -37,9 +38,9 @@ function shortDate(iso: string): string {
  * the wrong answer. Users with no role at all get their own group rather than disappearing.
  */
 function groupUsersByRole(users: readonly UserRow[], search: string): [string, UserRow[]][] {
-  const needle = search.trim().toLocaleLowerCase('es-AR');
+  const needle = foldText(search);
   const matching = needle
-    ? users.filter((user) => user.displayName.toLocaleLowerCase('es-AR').includes(needle))
+    ? users.filter((user) => foldText(user.displayName).includes(needle))
     : users;
 
   const groups = new Map<string, UserRow[]>();

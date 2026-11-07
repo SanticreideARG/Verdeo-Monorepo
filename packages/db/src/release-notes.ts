@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-07-busqueda-sin-tildes',
+    body: `Las búsquedas no dependen de las tildes: "Nunez" encuentra a "Núñez" y "Jose" a "José", en clientes, pedidos, el chat y los usuarios. El importador de clientes ya reconocía las zonas con o sin tilde ("Neuquen Centro" y "Neuquén Centro" son la misma).`,
+  },
+  {
     key: '2026-11-06-correos-en-el-telefono',
     body: `Pedidos por correo, más cómodo en el teléfono: Revisar, Aprobar y Borrar en una fila debajo de cada correo, y el tipo y la ciudad en un renglón. La lista se pliega tocando su título. En una consulta, Hera explica en su globo qué es, en vez del párrafo fijo, y el búho ya no tapa "Cerrar".`,
   },

@@ -11,6 +11,7 @@ import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 
 import { apiRequest } from '../lib/api.js';
+import { foldText } from '../lib/text.js';
 import {
   CHAT_POLL_ACTIVE_MS,
   CHAT_POLL_HIDDEN_MS,
@@ -229,15 +230,15 @@ export function ChatDock({
   }, [panelOpen]);
 
   const unread = unreadTotal(conversations);
-  const needle = search.trim().toLocaleLowerCase('es-AR');
+  const needle = foldText(search);
   const visibleConversations = needle
     ? conversations.filter((conversation) =>
-        conversationName(conversation).toLocaleLowerCase('es-AR').includes(needle),
+        foldText(conversationName(conversation)).includes(needle),
       )
     : conversations;
   const visibleContacts = needle
     ? contactsWithoutConversation(contacts, conversations).filter((contact) =>
-        contact.displayName.toLocaleLowerCase('es-AR').includes(needle),
+        foldText(contact.displayName).includes(needle),
       )
     : contactsWithoutConversation(contacts, conversations);
 

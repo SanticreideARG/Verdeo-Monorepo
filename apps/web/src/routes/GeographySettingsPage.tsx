@@ -7,6 +7,7 @@ import { DashboardShell, type DashboardProfile } from '../components/DashboardSh
 import { SettingsTabs } from '../components/SettingsTabs.js';
 import { BrandLoading } from '../components/BrandLoading.js';
 import { apiRequest } from '../lib/api.js';
+import { foldText } from '../lib/text.js';
 import { cachedProfile, rememberProfile } from '../lib/useDashboardProfile.js';
 import { showToast } from '../lib/toast.js';
 
@@ -180,9 +181,7 @@ export function GeographySettingsPage() {
       return;
     }
     const taken = zones.some(
-      (zone) =>
-        zone.id !== selectedZone.id &&
-        zone.displayName.trim().toLocaleLowerCase('es-AR') === name.toLocaleLowerCase('es-AR'),
+      (zone) => zone.id !== selectedZone.id && foldText(zone.displayName) === foldText(name),
     );
     if (taken) {
       setMessage(`Ya hay otra zona "${name}" en esta operación.`);
