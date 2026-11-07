@@ -211,3 +211,19 @@ describe('búsqueda de clientes', () => {
     expect(await nombres('maría lópez')).toEqual(['Maria Lopez']);
   });
 });
+
+// "100 clientes (hay más)" no decía el padrón (2026-11-07): la primera página trae el total.
+describe('total de clientes', () => {
+  it('viene en la primera página sin búsqueda, y sin más páginas es lo que vino', async () => {
+    const { client, service } = await base();
+    await client.exec(
+      `insert into customers (display_name) values ('Uno'), ('Dos'), ('Tres'), ('Cuatro');`,
+    );
+    const primera = await service.listCustomers({ limit: 2 }, false);
+    expect(primera.items).toHaveLength(2);
+    expect(primera.total).toBe(4);
+
+    const todas = await service.listCustomers({ limit: 30 }, false);
+    expect(todas.total).toBe(4);
+  });
+});

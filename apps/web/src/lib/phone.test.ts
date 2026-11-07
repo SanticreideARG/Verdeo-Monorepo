@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatArgentinePhone } from './phone.js';
+import { formatArgentinePhone, phoneKey } from './phone.js';
 
 describe('formatArgentinePhone', () => {
   /**
@@ -35,5 +35,15 @@ describe('formatArgentinePhone', () => {
   it('devuelve tal cual lo que es demasiado corto para ser un número', () => {
     expect(formatArgentinePhone('1234')).toBe('1234');
     expect(formatArgentinePhone('sin teléfono')).toBe('sin teléfono');
+  });
+});
+
+// Teléfono y WhatsApp del mismo número se muestran en una sola tarjeta (2026-11-07).
+describe('phoneKey', () => {
+  it('da lo mismo para el mismo número escrito de distintas formas', () => {
+    const key = phoneKey('+5491161761296');
+    expect(phoneKey('(011) 15 6176 1296')).toBe(key);
+    expect(phoneKey('11 6176-1296')).toBe(key);
+    expect(phoneKey('+5492994556677')).not.toBe(key);
   });
 });

@@ -263,6 +263,8 @@ export const CustomerSummarySchema = z.object({
 export const CustomerListResponseSchema = z.object({
   items: z.array(CustomerSummarySchema),
   nextCursor: UuidSchema.nullable().default(null),
+  /** Cuántos hay en total; sólo en la primera página sin búsqueda, si no null. */
+  total: z.number().int().nonnegative().nullable().default(null),
 });
 
 export const CustomerIdentitySchema = z.object({

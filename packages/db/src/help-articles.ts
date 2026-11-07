@@ -233,7 +233,7 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
 
   // --- Clientes --------------------------------------------------------------------------------
   {
-    body: 'La ficha de cada cliente guarda direcciones, restricciones alimentarias e historial de pedidos.\n\nCada domicilio lleva una zona, y la zona es la que decide de qué ciudad es el pedido. Por eso un domicilio sin zona no se puede usar para entregar.\n\nUn domicilio que ya no sirve se quita con "Eliminar" en su tarjeta. Deja de aparecer en la ficha y al cargar pedidos; los pedidos que ya tienen esa dirección no cambian.\n\n[Ir a Clientes](/app/clientes)',
+    body: 'La ficha de cada cliente guarda direcciones, restricciones alimentarias e historial de pedidos.\n\nLa lista de Clientes dice arriba cuántos hay en total y se va cargando sola a medida que bajás. En los contactos, el teléfono y el WhatsApp del mismo número van en una sola tarjeta, con "WhatsApp ↗" para abrir el chat (en la computadora, WhatsApp Web).\n\nCada domicilio lleva una zona, y la zona es la que decide de qué ciudad es el pedido. Por eso un domicilio sin zona no se puede usar para entregar.\n\nUn domicilio que ya no sirve se quita con "Eliminar" en su tarjeta. Deja de aparecer en la ficha y al cargar pedidos; los pedidos que ya tienen esa dirección no cambian.\n\n[Ir a Clientes](/app/clientes)',
     category: 'Clientes',
     key: 'clientes-ficha',
     ordinal: 0,

@@ -2567,6 +2567,22 @@ a {
   color: var(--db-muted);
   font-size: 0.65rem;
 }
+/* El enlace a WhatsApp de cada número: discreto, abajo a la derecha de la tarjeta. */
+.crm-contact-grid article {
+  position: relative;
+}
+.crm-contact-whatsapp {
+  justify-self: end;
+  margin-top: 0.15rem;
+  color: var(--db-accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.crm-contact-whatsapp:hover,
+.crm-contact-whatsapp:focus-visible {
+  text-decoration: underline;
+}
 .crm-inline-form {
   margin-top: 0.75rem;
   border-top: 1px solid var(--db-border-soft);

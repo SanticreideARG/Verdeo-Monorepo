@@ -148,6 +148,19 @@ Pedidos cargados a nombre de "nn" (como stock) que había que pasar a los client
 - [x] Ayuda (`pedidos-cambiar-cliente`) y novedad.
 - [x] "Enviar a stock" en el mismo diálogo (pedidos confirmados, permiso `orders.cancel`): cancela con `toStock` y las viandas quedan como lote en Stock disponible. Una confirmación; dos si el pedido figura cobrado.
 
+## Clientes 2 (plan, 2026-11-07) — [plan](../03-features/CLIENTES_2_PLAN.md)
+
+Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", filtros y orden, vistas Tarjetas y Columnas, ficha con acciones rápidas, métricas y pestañas; después, el análisis de clientes frecuentes.
+
+- [ ] Fase 1: lista y columnas.
+  - [x] Total del padrón en la primera página (`total` en `GET /customers`, sin búsqueda) y carga al bajar (por scroll de la lista o de la página).
+  - [x] Teléfono y WhatsApp del mismo número en una tarjeta (`phoneKey`), con enlace a WhatsApp.
+  - [ ] Orden (nombre, último pedido, pedidos, gastado, alta), filtros y columnas nuevas en la API (paginación por desplazamiento).
+  - [ ] Vista Columnas con `DataTable`.
+- [ ] Fase 2: ficha con pestañas, acciones rápidas, métricas e historial; pantalla completa en el teléfono.
+- [ ] Fase 3: encabezado con "Más", Importar como diálogo, "Exportar lo que veo".
+- [ ] Fase 4: análisis de frecuentes (segmentos, cohortes, mejores clientes, alertas). Definiciones a confirmar.
+
 ## Buscar sin importar las tildes (2026-11-07)
 
 - [x] Base: `ilikeIgnoringAccents` (`packages/db/src/repositories/accent-search.ts`) con `translate`, sin la extensión `unaccent` (no hace falta migración). En la búsqueda de clientes y en la de pedidos por nombre.

@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-07-clientes-lista-completa',
+    body: `Clientes: arriba dice el total del padrón y la lista se carga sola al bajar, sin tope de 100. En la ficha, el teléfono y el WhatsApp del mismo número van en una sola tarjeta, con un enlace para abrir el chat.`,
+  },
+  {
     key: '2026-11-07-busqueda-sin-tildes',
     body: `Las búsquedas no dependen de las tildes: "Nunez" encuentra a "Núñez" y "Jose" a "José", en clientes, pedidos, el chat y los usuarios. El importador de clientes ya reconocía las zonas con o sin tilde ("Neuquen Centro" y "Neuquén Centro" son la misma).`,
   },

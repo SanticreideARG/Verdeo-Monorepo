@@ -814,10 +814,34 @@ export class PostgresOperationsService {
     const hasMore = rows.length > input.limit;
     const pageRows = hasMore ? rows.slice(0, input.limit) : rows;
 
+    /*
+     * Cuántos clientes hay en total (2026-11-07): la lista decía "100 clientes (hay más)" y no
+     * había forma de saber el padrón. Sólo en la primera página y sin búsqueda —con búsqueda,
+     * los que coinciden por contacto se suman aparte y el número no sería exacto—; sin más
+     * páginas, el total es lo que vino.
+     */
+    let total: number | null = hasMore ? null : pageRows.length;
+    if (hasMore && !input.cursor && !input.search) {
+      const [counted] = await this.database
+        .select({ count: sql<number>`count(*)::int` })
+        .from(customers)
+        .where(
+          and(
+            ...scopeConditions,
+            ...(input.status
+              ? [eq(customers.status, input.status)]
+              : [ne(customers.status, 'archived')]),
+          ),
+        );
+      total = counted?.count ?? null;
+    }
+    if (input.cursor && !hasMore) total = null;
+
     if (!includeSensitive || pageRows.length === 0) {
       return {
         items: pageRows,
         nextCursor: hasMore ? (pageRows.at(-1)?.id ?? null) : null,
+        total,
       };
     }
 
@@ -853,6 +877,7 @@ export class PostgresOperationsService {
           )?.value ?? null,
       })),
       nextCursor: hasMore ? (pageRows.at(-1)?.id ?? null) : null,
+      total,
     };
   }
 

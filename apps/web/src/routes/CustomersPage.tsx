@@ -15,7 +15,7 @@ import { DashboardShell, type DashboardProfile } from '../components/DashboardSh
 import { BrandLoading } from '../components/BrandLoading.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { cachedProfile, rememberProfile } from '../lib/useDashboardProfile.js';
-import { formatArgentinePhone } from '../lib/phone.js';
+import { formatArgentinePhone, phoneKey, whatsappHref } from '../lib/phone.js';
 import { showToast } from '../lib/toast.js';
 import { MoveSiteDialog } from '../components/MoveSiteDialog.js';
 import { useFormDraft } from '../lib/useFormDraft.js';
@@ -62,6 +62,42 @@ async function responseJson<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
+type ContactIdentity = NonNullable<CustomerDetail['identities']>[number];
+
+const CONTACT_TYPE_LABELS: Record<string, string> = {
+  email: 'Correo',
+  phone: 'Teléfono',
+  whatsapp: 'WhatsApp',
+};
+const contactTypeLabel = (type: string) => CONTACT_TYPE_LABELS[type] ?? type;
+
+/**
+ * Teléfono y WhatsApp del mismo número, en una sola tarjeta (2026-11-07): el importador guarda los
+ * dos y la ficha mostraba el mismo número dos veces. Sólo se juntan en pantalla; en la base siguen
+ * siendo dos contactos, así nada se pierde. La tarjeta muestra el principal si alguno lo es.
+ */
+function contactCards(
+  identities: readonly ContactIdentity[],
+): { identity: ContactIdentity; types: string[] }[] {
+  const cards: { identity: ContactIdentity; key: string | null; types: string[] }[] = [];
+  for (const identity of identities) {
+    const key =
+      identity.type === 'phone' || identity.type === 'whatsapp' ? phoneKey(identity.value) : null;
+    const same = key ? cards.find((card) => card.key === key) : undefined;
+    if (!same) {
+      cards.push({ identity, key, types: [identity.type] });
+      continue;
+    }
+    if (!same.types.includes(identity.type)) same.types.push(identity.type);
+    if (identity.primary && !same.identity.primary) same.identity = identity;
+  }
+  // Teléfono antes que WhatsApp en el rótulo, siempre en el mismo orden.
+  return cards.map(({ identity, types }) => ({
+    identity,
+    types: [...types].sort((a, b) => (a === 'phone' ? -1 : b === 'phone' ? 1 : 0)),
+  }));
+}
+
 export function CustomersPage() {
   const navigate = useNavigate();
   // Deep-links a shared customer reference from chat straight to that customer's detail.
@@ -84,6 +120,10 @@ export function CustomersPage() {
   const [showExport, setShowExport] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  // El total del padrón (sin búsqueda); con búsqueda, null hasta tener todas las páginas.
+  const [total, setTotal] = useState<number | null>(null);
+  const listEndRef = useRef<HTMLDivElement>(null);
+  const loadedCount = customers.length;
   const [loadingMore, setLoadingMore] = useState(false);
   const createFormRef = useRef<HTMLFormElement>(null);
   const createDraft = useFormDraft(createFormRef, 'customer-create', showCreate);
@@ -160,11 +200,14 @@ export function CustomersPage() {
       const params = new URLSearchParams({ limit: '100' });
       if (query.trim()) params.set('search', query.trim());
       const response = await apiRequest(`/api/v1/customers?${params.toString()}`);
-      const page = await responseJson<{ items: CustomerSummary[]; nextCursor: string | null }>(
-        response,
-      );
+      const page = await responseJson<{
+        items: CustomerSummary[];
+        nextCursor: string | null;
+        total?: number | null;
+      }>(response);
       setCustomers(page.items);
       setNextCursor(page.nextCursor);
+      setTotal(page.total ?? (page.nextCursor ? null : page.items.length));
       const nextSelected = page.items.some(({ id }) => id === preferredId)
         ? preferredId
         : (page.items[0]?.id ?? '');
@@ -181,7 +224,7 @@ export function CustomersPage() {
    * which walks every page.
    */
   const loadMore = useCallback(async () => {
-    if (!nextCursor) return;
+    if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
     try {
       const params = new URLSearchParams({ cursor: nextCursor, limit: '100' });
@@ -191,13 +234,40 @@ export function CustomersPage() {
         response,
       );
       setCustomers((current) => [...current, ...page.items]);
+      // Con búsqueda, el total se sabe al llegar a la última página.
+      if (!page.nextCursor) setTotal((known) => known ?? loadedCount + page.items.length);
       setNextCursor(page.nextCursor);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos cargar más clientes.');
     } finally {
       setLoadingMore(false);
     }
-  }, [nextCursor, search]);
+  }, [loadedCount, loadingMore, nextCursor, search]);
+
+  /*
+   * La lista completa, cargándose sola al bajar (2026-11-07): cuando el final de la lista asoma,
+   * pide la página siguiente. Mira el scroll de la lista (escritorio) y el de la página
+   * (teléfono), y no un IntersectionObserver, que en una pestaña en segundo plano no avisa. El
+   * botón "Cargar más" queda igual.
+   */
+  useEffect(() => {
+    if (!nextCursor) return;
+    const list = listEndRef.current?.closest('.crm-customer-list');
+    const check = () => {
+      const end = listEndRef.current;
+      if (!end) return;
+      const scrolls = list && list.scrollHeight > list.clientHeight;
+      const bottom = scrolls ? list.getBoundingClientRect().bottom : window.innerHeight;
+      if (end.getBoundingClientRect().top < bottom + 400) void loadMore();
+    };
+    list?.addEventListener('scroll', check, { passive: true });
+    window.addEventListener('scroll', check, { passive: true });
+    check();
+    return () => {
+      list?.removeEventListener('scroll', check);
+      window.removeEventListener('scroll', check);
+    };
+  }, [loadMore, nextCursor]);
 
   useEffect(() => {
     let active = true;
@@ -761,8 +831,11 @@ export function CustomersPage() {
             </form>
             <div className="crm-directory-meta">
               <span>
-                {customers.length} cliente{customers.length === 1 ? '' : 's'}
-                {nextCursor ? ' (hay más)' : ''}
+                {total !== null
+                  ? `${String(total)} cliente${total === 1 ? '' : 's'}${
+                      nextCursor ? ` · ${String(customers.length)} cargados` : ''
+                    }`
+                  : `${String(customers.length)} encontrados (hay más)`}
               </span>
               <button onClick={() => void loadDirectory(search, selectedId)} type="button">
                 Actualizar
@@ -789,6 +862,7 @@ export function CustomersPage() {
                 </button>
               ))}
               {customers.length === 0 ? <p>No hay clientes para esta búsqueda.</p> : null}
+              <div aria-hidden="true" ref={listEndRef} />
               {nextCursor ? (
                 <button
                   className="crm-load-more"
@@ -1049,9 +1123,9 @@ export function CustomersPage() {
                     </div>
                   </div>
                   <div className="crm-contact-grid">
-                    {detail.identities?.map((identity) => (
+                    {contactCards(detail.identities ?? []).map(({ identity, types }) => (
                       <article key={identity.id}>
-                        <span>{identity.type}</span>
+                        <span>{types.map(contactTypeLabel).join(' · ')}</span>
                         {/*
                          * El mismo número que la tabla de pedidos muestra como
                          * "(011) 15 5573 4841" aparecía acá como "+54926155720045": quince
@@ -1067,6 +1141,18 @@ export function CustomersPage() {
                           {identity.primary ? 'Principal' : 'Alternativo'} ·{' '}
                           {identity.verified ? 'verificado' : 'sin verificar'}
                         </small>
+                        {/* Abre el chat con ese número: en la computadora, WhatsApp Web. */}
+                        {identity.type === 'phone' || identity.type === 'whatsapp' ? (
+                          <a
+                            className="crm-contact-whatsapp"
+                            href={whatsappHref(identity.value)}
+                            rel="noopener noreferrer"
+                            target="_blank"
+                            title="Abrir el chat en WhatsApp"
+                          >
+                            WhatsApp ↗
+                          </a>
+                        ) : null}
                       </article>
                     ))}
                   </div>

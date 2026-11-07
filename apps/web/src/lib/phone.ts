@@ -16,6 +16,15 @@ const AREA_CODES = ['11', '221', '223', '261', '264', '299', '341', '351', '381'
  * vienen con 54 adelante; a los que no, se les asume Argentina móvil (549) y se les saca el 0 del
  * código de área y el 15 del abonado, que son notación local y sobran en el formato internacional.
  */
+/**
+ * Los diez dígitos que identifican un teléfono argentino, escriba como se escriba: "+5491155550101",
+ * "(011) 15 5555-0101" y "11 5555 0101" dan lo mismo. Para saber si dos contactos son el mismo número.
+ */
+export function phoneKey(raw: string): string {
+  const digits = raw.replace(/\D/g, '').replace(/^54/, '').replace(/^9/, '').replace(/^0/, '');
+  return digits.replace(/^(\d{2,4})15(\d{6,8})$/, '$1$2').slice(-10);
+}
+
 export function whatsappHref(raw: string, message?: string): string {
   const digits = raw.replace(/\D/g, '');
   /*
