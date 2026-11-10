@@ -575,6 +575,13 @@
       "when": 1793675640083,
       "tag": "0081_sin_estado_listo",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1793675700083,
+      "tag": "0082_area_del_valle",
+      "breakpoints": true
     }
   ]
 }
