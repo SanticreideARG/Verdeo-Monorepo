@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-09-cocina-especiales',
+    body: `Cocina: el bloque de Intuitivos ahora se llama "Especiales" y sale como lo usa cocina: tamaño y cliente de título ("400 Armando Arce"), un plato por renglón y un renglón en blanco antes del siguiente. Ya no lleva número.`,
+  },
+  {
     key: '2026-11-07-mapa-al-cargar',
     body: `Mapa: al guardar un domicilio nuevo (en el alta del cliente o en su ficha) se busca solo en el mapa, y en la ficha aparecen los lugares encontrados para confirmar; ya no hace falta tocar "Actualizar ubicación". Y en Nuevo pedido, si el domicilio del cliente ya está ubicado, se ve en un mapa chico debajo de la dirección.`,
   },

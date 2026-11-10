@@ -374,20 +374,22 @@ export function KitchenPage() {
                     </div>
                   </article>
                   <article className="operation-card">
-                    <h3 className="text-xl font-semibold text-forest">Intuitivos</h3>
-                    <div className="mt-4 grid gap-4">
+                    <h3 className="text-xl font-semibold text-forest">Especiales</h3>
+                    {/*
+                     * El formato que usa cocina (pedido 2026-11-09): de título el tamaño y el
+                     * cliente, abajo un plato por renglón, y un renglón en blanco antes del
+                     * siguiente. Sin número. La cantidad se dice sólo si son dos o más.
+                     */}
+                    <div className="kitchen-specials mt-4">
                       {kitchen.custom.map((item) => (
-                        <div
-                          className="border-b border-forest/10 pb-4"
-                          key={`${item.orderPublicNumber}-${item.sequence}`}
-                        >
+                        <div key={`${item.orderPublicNumber}-${item.sequence}`}>
                           <strong>
-                            #{item.sequence} · {item.variantName} × {item.quantityUnits}
+                            {item.variantName} {item.customerDisplayName}
+                            {item.quantityUnits > 1 ? ` × ${String(item.quantityUnits)}` : ''}
                           </strong>
-                          <p className="mt-1 text-sm">{item.customerDisplayName}</p>
                           {/* Uno por línea: en cocina esto se lee de reojo mientras se arma, y una
                               tira de cinco platos separados por puntos obliga a leerla entera. */}
-                          <ul className="dish-selections mt-1">
+                          <ul>
                             {pickedDishes(item).map((dish, index) => (
                               <li key={`${dishLabel(dish)}-${String(index)}`}>{dishLabel(dish)}</li>
                             ))}

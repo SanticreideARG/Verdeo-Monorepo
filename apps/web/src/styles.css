@@ -13731,3 +13731,15 @@ body:has(.modal-backdrop) .assistant-launcher.is-operator.is-saying {
   color: var(--db-text, inherit);
   font-size: 0.88rem;
 }
+
+/* Los Especiales en Cocina: tamaño y cliente de título, un plato por renglón, renglón en blanco. */
+.kitchen-specials {
+  display: grid;
+  gap: 1.4em;
+}
+.kitchen-specials ul {
+  margin: 0.15rem 0 0;
+  padding-left: 1.25rem;
+  list-style: disc;
+  font-size: 0.9rem;
+}
