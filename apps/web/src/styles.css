@@ -2169,6 +2169,27 @@ a {
 .dashboard-clock {
   min-width: 132px;
 }
+/* Clima y fecha con los mismos 40 px que el resto de la barra: con el padding y el alto de línea
+   heredado se iban a 44 y 52 px, casi el alto entero de la barra. */
+.dashboard-weather,
+.dashboard-clock {
+  height: 40px;
+  min-height: 40px;
+  padding-block: 0;
+  line-height: 1.2;
+}
+.dashboard-clock {
+  display: grid;
+  align-content: center;
+  min-width: max-content;
+  white-space: nowrap;
+}
+.dashboard-weather {
+  align-content: center;
+}
+a.dashboard-clock:hover {
+  border-color: var(--db-accent);
+}
 
 .dashboard-content {
   width: min(100%, 1400px);

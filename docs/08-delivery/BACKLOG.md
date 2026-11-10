@@ -196,6 +196,7 @@ Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", f
 
 Volver a tener un calendario de verdad: Día · Semana · Mes · Agenda en todos los tamaños, con recordatorios, la franja de cada semana enlazada a su período, repartos, pedidos a entregar y feriados. Librería propuesta: FullCalendar 7.1.3 (plan B Schedule-X).
 
+- [x] Acceso desde la barra (2026-11-10): tocar la fecha y hora abre `/app/calendario`, que por ahora es la agenda actual. Sin segundero; hora y clima a 40 px como el resto de la barra.
 - [ ] Fase 0: prueba de la librería (peso, temas, 375/768/1440). No va a producción.
 - [ ] Fase 1: endpoint `/api/v1/calendar/overview` y las cuatro vistas con recordatorios, cierres, parciales y la franja del período.
 - [ ] Fase 2: repartos, pedidos a entregar y feriados, con chips de filtro.

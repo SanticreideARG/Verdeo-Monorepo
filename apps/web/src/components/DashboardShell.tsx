@@ -484,7 +484,8 @@ export function DashboardShell({
   const [newCustomerIsNew, setNewCustomerIsNew] = useState(false);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 1_000);
+    // Sin segundero alcanza con mirar cada tanto: no vale la pena repintar el panel cada segundo.
+    const timer = window.setInterval(() => setNow(new Date()), 10_000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -638,7 +639,6 @@ export function DashboardShell({
   const timeLabel = new Intl.DateTimeFormat('es-AR', {
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit',
   }).format(now);
   const initial = profile.user.displayName.trim().slice(0, 1).toLocaleUpperCase('es-AR') || 'V';
   // The selected operation drives the weather city; with no selection (global view or nothing
@@ -923,10 +923,17 @@ export function DashboardShell({
                 />
               ) : null}
               <WeatherWidget cityName={weatherCityName} />
-              <div className="dashboard-clock">
-                <span>{timeLabel}</span>
-                <small>{dateLabel}</small>
-              </div>
+              {profile.permissions.includes('calendar.use') ? (
+                <Link className="dashboard-clock" title="Abrir el calendario" to="/app/calendario">
+                  <span>{timeLabel}</span>
+                  <small>{dateLabel}</small>
+                </Link>
+              ) : (
+                <div className="dashboard-clock">
+                  <span>{timeLabel}</span>
+                  <small>{dateLabel}</small>
+                </div>
+              )}
               <Link
                 aria-label="Mi perfil"
                 className="dashboard-topbar-avatar"

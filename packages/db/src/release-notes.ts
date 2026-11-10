@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-10-fecha-abre-calendario',
+    body: `Barra de arriba: tocando la fecha y la hora se abre el Calendario. El reloj ya no muestra los segundos, y las cajas de la hora y del clima tienen la misma altura que el resto de la barra.`,
+  },
+  {
     key: '2026-11-10-ficha-cliente-pestanas',
     body: `Clientes: la ficha se ordenó en pestañas (Resumen, Pedidos, Domicilios, Contactos y Datos). Arriba están WhatsApp, Llamar y Nuevo pedido, y los números del cliente: gastado, último pedido, frecuencia y deuda. Las notas se editan en el Resumen, y en Datos está el historial de cambios. En el teléfono la ficha ocupa toda la pantalla.`,
   },
