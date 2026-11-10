@@ -95,7 +95,7 @@ export class GeorefGeocodingProvider implements GeocodingProvider {
 
     let candidates: GeocodingCandidate[];
     try {
-      candidates = await this.search(street, input.origin);
+      candidates = await this.search(street, input.origin, input.area);
     } catch {
       // Georef caído o lento: no frena la ubicación, sigue el buscador siguiente.
       candidates = [];
@@ -106,18 +106,34 @@ export class GeorefGeocodingProvider implements GeocodingProvider {
   private async search(
     street: string,
     origin: GeocodingInput['origin'],
+    area?: GeocodingInput['area'],
   ): Promise<GeocodingCandidate[]> {
-    const place = origin ? await this.placeFor(origin) : null;
-    const url = new URL(`${BASE_URL}/direcciones`);
-    url.searchParams.set('direccion', street);
-    url.searchParams.set('max', '10');
-    if (place) {
-      url.searchParams.set('provincia', place.provinceId);
-      if (place.departmentId) url.searchParams.set('departamento', place.departmentId);
-    }
-    const body = (await this.getJson(url)) as { direcciones?: GeorefAddress[] };
+    const points = area?.points ?? (origin ? [origin] : []);
+    const reach = area?.radiusKm ?? MAX_DISTANCE_KM;
+    const nearest = (row: { latitude: number; longitude: number }) =>
+      Math.min(...points.map((point) => distanceKm(point, row)));
+    // Una búsqueda por departamento: una región como el Alto Valle cae en más de uno.
+    const resolved = await Promise.all(points.map((point) => this.placeFor(point)));
+    const places = new Map(
+      resolved.flatMap((place) =>
+        place ? [[`${place.provinceId}|${place.departmentId ?? ''}`, place] as const] : [],
+      ),
+    );
+    const bodies = await Promise.all(
+      [...(places.size > 0 ? places.values() : [null])].map(async (place) => {
+        const url = new URL(`${BASE_URL}/direcciones`);
+        url.searchParams.set('direccion', street);
+        url.searchParams.set('max', '10');
+        if (place) {
+          url.searchParams.set('provincia', place.provinceId);
+          if (place.departmentId) url.searchParams.set('departamento', place.departmentId);
+        }
+        return (await this.getJson(url)) as { direcciones?: GeorefAddress[] };
+      }),
+    );
 
-    const found = (body.direcciones ?? [])
+    const found = bodies
+      .flatMap((body) => body.direcciones ?? [])
       .map((address) => ({
         address,
         latitude: Number(address.ubicacion?.lat),
@@ -128,9 +144,9 @@ export class GeorefGeocodingProvider implements GeocodingProvider {
           Number.isFinite(row.latitude) &&
           Number.isFinite(row.longitude) &&
           row.address.ubicacion?.lat != null &&
-          (!origin || distanceKm(origin, row) <= MAX_DISTANCE_KM),
+          (points.length === 0 || nearest(row) <= reach),
       )
-      .sort((a, b) => (origin ? distanceKm(origin, a) - distanceKm(origin, b) : 0));
+      .sort((a, b) => (points.length > 0 ? nearest(a) - nearest(b) : 0));
 
     // Dos calles distintas con la misma altura ("Rivadavia" y "Comodoro Martín Rivadavia"): gana
     // la que se llama exactamente como se escribió. Si no hay una sola así, va a revisión.
@@ -140,7 +156,7 @@ export class GeorefGeocodingProvider implements GeocodingProvider {
     // ciudad y la otra lejos, es esa.
     const [closest, second] = found;
     const clearlyClosest =
-      origin && closest && second
+      origin && !area && closest && second
         ? distanceKm(origin, closest) <= 10 && distanceKm(origin, second) >= 20
         : false;
     const sure =
@@ -211,5 +227,102 @@ export class GeorefGeocodingProvider implements GeocodingProvider {
       );
     }
     return response.json();
+  }
+}
+
+/** Dónde queda un lugar, sabiendo sólo cómo se llama. */
+export interface PlaceFinder {
+  /** El primero de los nombres que no deja dudas. */
+  find(names: readonly string[]): Promise<{ latitude: number; longitude: number } | null>;
+  /** Todos los que se pudieron ubicar, para una región de varias localidades. */
+  findAll(names: readonly string[]): Promise<{ latitude: number; longitude: number }[]>;
+}
+
+function placeWords(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * El centro de una ciudad a partir de su nombre, con las localidades de Georef.
+ *
+ * Es para acotar la búsqueda de direcciones cuando la ciudad no tiene origen cargado. Prueba los
+ * nombres en orden y se queda con el primero que no deja dudas: el nombre exacto y una sola
+ * provincia. "General Roca" existe en Río Negro y en Córdoba, así que sin provincia se saltea, y
+ * "Cipolletti, Río Negro" vale tal cual. Si no llega a una certeza devuelve null: un área
+ * equivocada es peor que decir que no se sabe.
+ */
+export class GeorefPlaceFinder implements PlaceFinder {
+  private readonly known = new Map<string, { latitude: number; longitude: number } | null>();
+
+  public constructor(private readonly fetchImpl: typeof fetch = fetch) {}
+
+  public async find(
+    names: readonly string[],
+  ): Promise<{ latitude: number; longitude: number } | null> {
+    for (const name of [...new Set(names)].slice(0, 8)) {
+      const point = await this.lookup(name);
+      if (point) return point;
+    }
+    return null;
+  }
+
+  public async findAll(names: readonly string[]) {
+    const points = await Promise.all([...new Set(names)].map((name) => this.lookup(name)));
+    return points.filter((point) => point !== null);
+  }
+
+  private async lookup(name: string) {
+    const key = placeWords(name);
+    if (this.known.has(key)) return this.known.get(key) ?? null;
+    const [place, province] = name
+      .split(',')
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0 && placeWords(part) !== 'argentina');
+    if (!place) return null;
+
+    const url = new URL(`${BASE_URL}/localidades`);
+    url.searchParams.set('nombre', place);
+    url.searchParams.set('campos', 'nombre,provincia.nombre,centroide');
+    url.searchParams.set('max', '20');
+    if (province) url.searchParams.set('provincia', province);
+
+    let body: {
+      localidades?: {
+        centroide?: { lat?: number | null; lon?: number | null } | null;
+        nombre?: string | null;
+        provincia?: { nombre?: string | null } | null;
+      }[];
+    };
+    try {
+      const response = await this.fetchImpl(url, {
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (!response.ok) return null;
+      body = (await response.json()) as typeof body;
+    } catch {
+      // Sin respuesta no se recuerda: la próxima búsqueda vuelve a preguntar.
+      return null;
+    }
+
+    const exact = (body.localidades ?? []).filter(
+      (row) =>
+        placeWords(row.nombre ?? '') === placeWords(place) &&
+        row.centroide?.lat != null &&
+        row.centroide.lon != null,
+    );
+    const provinces = new Set(exact.map((row) => row.provincia?.nombre));
+    const center = provinces.size === 1 ? exact[0]?.centroide : undefined;
+    const point =
+      center?.lat != null && center.lon != null
+        ? { latitude: center.lat, longitude: center.lon }
+        : null;
+    this.known.set(key, point);
+    return point;
   }
 }

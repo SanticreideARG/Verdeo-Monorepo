@@ -20,6 +20,12 @@ export interface GeocodingInput {
   origin?: { latitude: number; longitude: number } | undefined;
   /** Hasta dónde llega la ciudad desde el origen: lo que cae más lejos no es de acá. */
   radiusKm?: number | undefined;
+  /**
+   * Una región de varias localidades (el Alto Valle, que cruza dos provincias): vale lo que cae
+   * cerca de alguna de ellas. `origin` y `radiusKm` quedan como el recuadro que las contiene.
+   */
+  area?:
+    { points: readonly { latitude: number; longitude: number }[]; radiusKm: number } | undefined;
   requestId: string;
   writtenAddress: string;
 }
@@ -41,6 +47,9 @@ export class GeocodingProviderError extends Error {
 
 /** El radio de una ciudad cuando no se configuró otro (el mismo que usan las reglas). */
 export const DEFAULT_CITY_RADIUS_KM = 60;
+
+/** Hasta dónde llega cada localidad de una región: el pueblo y sus chacras, no el de al lado. */
+export const LOCALITY_RADIUS_KM = 15;
 
 /** El recuadro de `radiusKm` alrededor de un punto, para acotar la búsqueda a la ciudad. */
 export function boundingBox(

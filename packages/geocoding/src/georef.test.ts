@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   GeorefGeocodingProvider,
+  GeorefPlaceFinder,
   LinkExpandingGeocodingProvider,
   LocationLinkGeocodingProvider,
   parseCoordinatesFromLocationUrl,
@@ -193,5 +194,108 @@ describe('GeorefGeocodingProvider', () => {
     );
     expect(await provider.geocode(entrada())).toEqual([]);
     expect(next.geocode).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('GeorefGeocodingProvider en una región', () => {
+  it('busca en cada departamento y descarta lo que no cae cerca de una localidad', async () => {
+    const neuquen = { latitude: -38.952, longitude: -68.059 };
+    const regina = { latitude: -39.095, longitude: -67.082 };
+    const direccion = (nomenclatura: string, lat: number, lon: number) => ({
+      altura: { valor: 855 },
+      calle: { nombre: 'TUCUMAN' },
+      nomenclatura,
+      ubicacion: { lat, lon },
+    });
+    const fetchImpl = vi.fn((url: URL) => {
+      if (url.pathname.endsWith('/ubicacion')) {
+        const enNeuquen = url.searchParams.get('lon')?.startsWith('-68');
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ubicacion: {
+                departamento: { id: enNeuquen ? '58035' : '62042' },
+                provincia: { id: enNeuquen ? '58' : '62' },
+              },
+            }),
+          ),
+        );
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            direcciones:
+              url.searchParams.get('provincia') === '58'
+                ? [direccion('TUCUMAN 855, Neuquén', -38.95, -68.06)]
+                : [
+                    direccion('TUCUMAN 855, Villa Regina', -39.1, -67.08),
+                    direccion('TUCUMAN 855, Bariloche', -41.13, -71.3),
+                  ],
+          }),
+        ),
+      );
+    });
+    const next = { geocode: vi.fn(() => Promise.resolve([])), key: 'siguiente' };
+    const provider = new GeorefGeocodingProvider(next, fetchImpl as unknown as typeof fetch);
+
+    const found = await provider.geocode({
+      area: { points: [neuquen, regina], radiusKm: 15 },
+      idempotencyKey: 'k',
+      origin: { latitude: -39.02, longitude: -67.57 },
+      radiusKm: 60,
+      requestId: 'r',
+      writtenAddress: 'Tucumán 855',
+    });
+
+    expect(found.map((row) => row.formattedAddress).sort()).toEqual([
+      'TUCUMAN 855, Neuquén',
+      'TUCUMAN 855, Villa Regina',
+    ]);
+    // Con la misma calle en dos localidades no se puede estar seguro: elige una persona.
+    expect(found.every((row) => row.confidence < 0.9)).toBe(true);
+  });
+});
+
+describe('GeorefPlaceFinder', () => {
+  const localidades = (rows: unknown[]) =>
+    vi.fn(() => Promise.resolve(new Response(JSON.stringify({ localidades: rows }))));
+  const fila = (nombre: string, provincia: string, lat: number, lon: number) => ({
+    centroide: { lat, lon },
+    nombre,
+    provincia: { nombre: provincia },
+  });
+
+  it('saltea un nombre que existe en dos provincias', async () => {
+    const fetchImpl = vi.fn((url: URL) =>
+      localidades(
+        url.searchParams.get('nombre') === 'General Roca'
+          ? [
+              fila('General Roca', 'Río Negro', -39, -67.5),
+              fila('General Roca', 'Córdoba', -32, -61),
+            ]
+          : [fila('Cipolletti', 'Río Negro', -38.9, -68)],
+      )(),
+    );
+    const finder = new GeorefPlaceFinder(fetchImpl as unknown as typeof fetch);
+
+    expect(await finder.find(['General Roca', 'Cipolletti'])).toEqual({
+      latitude: -38.9,
+      longitude: -68,
+    });
+  });
+
+  it('con la provincia escrita la pregunta acotada, y no toma nombres parecidos', async () => {
+    const fetchImpl = localidades([fila('Colonia General Roca', 'Río Negro', -39, -67)]);
+    const finder = new GeorefPlaceFinder(fetchImpl);
+
+    expect(await finder.find(['General Roca, Río Negro, Argentina'])).toBeNull();
+    const url = (fetchImpl.mock.calls[0] as unknown as [URL])[0];
+    expect(url.searchParams.get('provincia')).toBe('Río Negro');
+  });
+
+  it('si Georef está caído no decide nada', async () => {
+    const fetchImpl = vi.fn(() => Promise.reject(new Error('caído')));
+    const finder = new GeorefPlaceFinder(fetchImpl);
+    expect(await finder.find(['Cipolletti'])).toBeNull();
   });
 });

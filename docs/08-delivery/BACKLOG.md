@@ -192,6 +192,13 @@ Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", f
 - [x] Zonas geográficas: "Renombrar" en cada ciudad y "Nombre" en los datos de cada zona. La API ya lo aceptaba (`PATCH /operating-sites/:id` y `/zones/:id` con `displayName`); faltaba en la pantalla. El slug y el prefijo de pedidos no cambian. Avisa si otra zona de la ciudad ya tiene ese nombre.
 - [ ] Unificar Neuquén y Río Negro: ver la propuesta en la conversación del 2026-11-06 (pasar zonas de una operación a otra sin tocar el historial). Pendiente de decisión.
 
+## Búsqueda de direcciones limitada a la ciudad (2026-11-10)
+
+- [x] Ningún camino ofrece direcciones fuera del área de la ciudad; si no se sabe dónde queda, no se ofrece nada y se dice qué cargar.
+- [x] "Referencia de la ciudad" admite una región: localidades separadas por `;`, 15 km alrededor de cada una, y Georef busca en cada departamento. Valle se carga con la migración 0082.
+- [x] Sin origen ni referencia, el área sale del nombre de las zonas (`GeorefPlaceFinder`), salteando los nombres que existen en más de una provincia.
+- [x] Celular: los resultados de "Ubicar dirección" ya no ensanchan la página.
+
 ## Calendario 2 (plan, 2026-11-06) — [plan](../03-features/CALENDARIO_PLAN.md)
 
 Volver a tener un calendario de verdad: Día · Semana · Mes · Agenda en todos los tamaños, con recordatorios, la franja de cada semana enlazada a su período, repartos, pedidos a entregar y feriados. Librería propuesta: FullCalendar 7.1.3 (plan B Schedule-X).

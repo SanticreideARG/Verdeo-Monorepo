@@ -199,7 +199,8 @@ export function AddressSettingsPage() {
                 value={settings.cityContext ?? ''}
               />
               <small className="text-ink-muted">
-                Orienta la búsqueda cuando la dirección no dice la ciudad.
+                Limita la búsqueda a esta ciudad. Si es una región, escribí sus localidades
+                separadas por punto y coma: Plottier; Neuquén; Cipolletti.
               </small>
             </label>
 

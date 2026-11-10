@@ -49,6 +49,7 @@ import {
 import {
   ConfigurableGeocodingProvider,
   GeorefGeocodingProvider,
+  GeorefPlaceFinder,
   LinkExpandingGeocodingProvider,
   NominatimGeocodingProvider,
   NormalizedAddressSchema,
@@ -200,6 +201,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions) {
         addressNormalizer,
       ),
     ),
+    new GeorefPlaceFinder(),
   );
   const avatarStorage = env.VERDEO_READ_WRITE_TOKEN
     ? new VercelBlobAvatarStorage(env.VERDEO_READ_WRITE_TOKEN, env.VERDEO_STORE_ID)

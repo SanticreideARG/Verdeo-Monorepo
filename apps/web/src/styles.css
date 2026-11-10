@@ -9744,8 +9744,14 @@ textarea.sr-only {
 .order-actions .locate-control {
   display: contents;
 }
-.order-actions .locate-control > :not(button) {
+/* En el teléfono la barra es una grilla de dos columnas: sin esto, una dirección larga estiraba la
+   segunda columna y la página entera se corría de costado. */
+.order-actions .locate-control > :not(button),
+.order-actions .locate-control > .locate-retry-open {
   flex-basis: 100%;
+  grid-column: 1 / -1;
+  min-width: 0;
+  white-space: normal;
 }
 .locate-candidates {
   display: grid;

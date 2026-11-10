@@ -35,12 +35,14 @@ import {
   decideAutoAccept,
   distanceKm,
   GeocodingProviderError,
+  LOCALITY_RADIUS_KM,
   parseCoordinatesFromLocationUrl,
   parsePastedCoordinates,
   validateGeocodingCandidates,
   zoneNamedInAddress,
   type AutoAcceptRules,
   type GeocodingProvider,
+  type PlaceFinder,
 } from '@verdeo/geocoding';
 import { LABEL_FIELDS, LABEL_LAYOUTS, NAME_POSITIONS } from '@verdeo/labels';
 import {
@@ -752,10 +754,35 @@ async function appendDomainEvent(
   });
 }
 
+interface GeoPoint {
+  latitude: number;
+  longitude: number;
+}
+
+interface CityArea {
+  /** Las localidades de una región; null cuando la ciudad es un punto con su radio. */
+  localities: GeoPoint[] | null;
+  origin: GeoPoint;
+  radiusKm: number;
+}
+
+function isInCity(area: CityArea, point: GeoPoint): boolean {
+  return area.localities
+    ? area.localities.some((locality) => distanceKm(locality, point) <= LOCALITY_RADIUS_KM)
+    : distanceKm(area.origin, point) <= area.radiusKm;
+}
+
+const OUTSIDE_CITY_REASON =
+  'Sólo encontró lugares lejos de la ciudad (de otras zonas o provincias). Pegá la ubicación de Google Maps o corregí la dirección.';
+const CITY_UNKNOWN_REASON =
+  'No sabemos dónde queda esta ciudad y no vamos a buscar en todo el país. Cargá su "Referencia de la ciudad" en Ajustes de direcciones (por ejemplo "Cipolletti, Río Negro") o pegá la ubicación de Google Maps.';
+
 export class PostgresOperationsService {
   public constructor(
     private readonly database: Database,
     private readonly geocodingProvider: GeocodingProvider,
+    /** Dónde queda una ciudad sin origen cargado, por su nombre. */
+    private readonly placeFinder: PlaceFinder | null = null,
   ) {}
 
   public async listCustomers(input: CustomerListInput, includeSensitive: boolean) {
@@ -2737,6 +2764,14 @@ export class PostgresOperationsService {
           ...(geocodingSettings.origin
             ? { origin: geocodingSettings.origin, radiusKm: geocodingSettings.radiusKm }
             : {}),
+          ...(geocodingSettings.area?.localities
+            ? {
+                area: {
+                  points: geocodingSettings.area.localities,
+                  radiusKm: LOCALITY_RADIUS_KM,
+                },
+              }
+            : {}),
           ...((geocodingSettings.cityContext ?? initialized.address.city)
             ? { cityHint: geocodingSettings.cityContext ?? initialized.address.city ?? undefined }
             : {}),
@@ -2781,6 +2816,18 @@ export class PostgresOperationsService {
       return this.loadAddressGeocodingRequest(customerId, addressId, initialized.requestId);
     }
 
+    /*
+     * Sólo lugares de la ciudad, en cualquier camino que llegue hasta acá (el pedido, la ficha, el
+     * asistente). Sin saber dónde queda la ciudad no se ofrece nada: la alternativa era listar la
+     * misma calle en todo el país. Un enlace o coordenadas los eligió alguien mirando el mapa.
+     */
+    const found = candidates.length;
+    if (!initialized.address.locationUrl) {
+      const { area } = geocodingSettings;
+      candidates = area ? candidates.filter((candidate) => isInCity(area, candidate)) : [];
+    }
+    const outsideCity = found - candidates.length;
+
     const status = candidates.length > 0 ? 'CANDIDATES' : 'NO_MATCH';
     await this.database.transaction(async (transaction) => {
       if (candidates.length > 0) {
@@ -2821,13 +2868,18 @@ export class PostgresOperationsService {
             addressId,
             candidateCount: candidates.length,
             geocodingRequestId: initialized.requestId,
+            outsideCity,
             providerKey: this.geocodingProvider.key,
           },
         },
       );
     });
 
-    return this.loadAddressGeocodingRequest(customerId, addressId, initialized.requestId);
+    return {
+      ...(await this.loadAddressGeocodingRequest(customerId, addressId, initialized.requestId)),
+      cityUnknown: !geocodingSettings.origin,
+      outsideCity,
+    };
   }
 
   public async getAddressGeocodingRequest(
@@ -3227,14 +3279,11 @@ export class PostgresOperationsService {
         geographicZoneId: orders.geographicZoneId,
         id: orders.id,
         locationUrl: orders.deliveryLocationUrlSnapshot,
-        originLatitude: operatingSites.originLatitude,
-        originLongitude: operatingSites.originLongitude,
         operatingSiteId: orders.operatingSiteId,
         snapshot: orders.deliveryAddressSnapshot,
         line2: orders.deliveryAddressLine2,
       })
       .from(orders)
-      .innerJoin(operatingSites, eq(operatingSites.id, orders.operatingSiteId))
       .where(eq(orders.id, orderId))
       .limit(1);
     if (!order) throw new OperationsNotFoundError('No se encontró el pedido');
@@ -3385,7 +3434,6 @@ export class PostgresOperationsService {
       order.customerId,
       addressId,
       order.operatingSiteId,
-      { latitude: order.originLatitude, longitude: order.originLongitude },
       rules,
       context,
       `locate:${orderId}:${String(Date.now())}`,
@@ -3402,7 +3450,6 @@ export class PostgresOperationsService {
     customerId: string,
     addressId: string,
     operatingSiteId: string,
-    siteOrigin: { latitude: string | null; longitude: string | null },
     rules: Pick<AutoAcceptRules, 'radiusKm' | 'threshold'>,
     context: OperationsContext,
     idempotencyKey: string,
@@ -3445,10 +3492,17 @@ export class PostgresOperationsService {
       };
     }
     if (request.candidates.length === 0) {
+      const reason =
+        'cityUnknown' in request && request.cityUnknown
+          ? CITY_UNKNOWN_REASON
+          : 'outsideCity' in request && request.outsideCity > 0
+            ? OUTSIDE_CITY_REASON
+            : undefined;
       return {
         addressId,
         candidates: [],
         customerId: customerId,
+        ...(reason ? { reason } : {}),
         requestId: request.id,
         status: 'no_match',
       };
@@ -3477,39 +3531,34 @@ export class PostgresOperationsService {
     }
 
     const stored = await this.storedGeocodingSettings(operatingSiteId);
-    /*
-     * Contra qué se mide la distancia.
-     *
-     * El origen de la ciudad si lo tiene. Si no, el centro de las direcciones que ya están
-     * confirmadas: así no hace falta cargar un origen para empezar. La primera dirección de una
-     * ciudad sin origen no tiene contra qué compararse y queda para que la confirme una persona;
-     * desde ahí, las siguientes se comparan con ella y con las que se vayan confirmando.
-     */
-    const origin =
-      siteOrigin.latitude !== null && siteOrigin.longitude !== null
-        ? { latitude: Number(siteOrigin.latitude), longitude: Number(siteOrigin.longitude) }
-        : await this.confirmedAddressesCenter(operatingSiteId);
-    const radiusKm = stored?.radiusKm ?? rules.radiusKm;
+    const area = await this.cityArea(operatingSiteId, stored?.radiusKm ?? rules.radiusKm);
+    if (!area) {
+      return {
+        addressId,
+        candidates: [],
+        customerId,
+        reason: CITY_UNKNOWN_REASON,
+        requestId: request.id,
+        status: 'no_match',
+      };
+    }
+    const { origin, radiusKm } = area;
     /*
      * Sólo se ofrecen los lugares de la ciudad. Un candidato a cientos de kilómetros (la misma
      * calle en otra provincia) no es una opción: mostrarlo invitaba a elegirlo.
      */
-    const nearby = origin
-      ? request.candidates.filter(
-          (candidate) =>
-            distanceKm(origin, {
-              latitude: Number(candidate.latitude),
-              longitude: Number(candidate.longitude),
-            }) <= radiusKm,
-        )
-      : request.candidates;
+    const nearby = request.candidates.filter((candidate) =>
+      isInCity(area, {
+        latitude: Number(candidate.latitude),
+        longitude: Number(candidate.longitude),
+      }),
+    );
     if (nearby.length === 0) {
       return {
         addressId,
         candidates: [],
         customerId,
-        reason:
-          'Sólo encontró lugares lejos de la ciudad (de otras zonas o provincias). Pegá la ubicación de Google Maps o corregí la dirección.',
+        reason: OUTSIDE_CITY_REASON,
         requestId: request.id,
         status: 'no_match',
       };
@@ -3588,12 +3637,9 @@ export class PostgresOperationsService {
         latitude: customerAddresses.latitude,
         longitude: customerAddresses.longitude,
         operatingSiteId: geographicZones.operatingSiteId,
-        originLatitude: operatingSites.originLatitude,
-        originLongitude: operatingSites.originLongitude,
       })
       .from(customerAddresses)
       .innerJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
-      .innerJoin(operatingSites, eq(operatingSites.id, geographicZones.operatingSiteId))
       .where(and(eq(customerAddresses.id, addressId), eq(customerAddresses.customerId, customerId)))
       .limit(1);
     if (!address) throw new OperationsNotFoundError('No se encontró el domicilio');
@@ -3636,7 +3682,6 @@ export class PostgresOperationsService {
       customerId,
       addressId,
       address.operatingSiteId,
-      { latitude: address.originLatitude, longitude: address.originLongitude },
       rules,
       context,
       `locate-address:${addressId}:${String(Date.now())}`,
@@ -3817,6 +3862,81 @@ export class PostgresOperationsService {
    * La mediana de cada coordenada y no el promedio: una dirección mal confirmada, lejos de las
    * demás, mueve un promedio pero no una mediana.
    */
+  /**
+   * El área donde se buscan las direcciones de una ciudad.
+   *
+   * Una "Referencia de la ciudad" con varias localidades separadas por punto y coma manda sobre
+   * todo lo demás: es una región que un solo círculo no describe (el Alto Valle mide cien
+   * kilómetros de punta a punta y cruza dos provincias). Vale lo que cae cerca de alguna de ellas.
+   */
+  private async cityArea(operatingSiteId: string, radiusKm: number): Promise<CityArea | null> {
+    const stored = await this.storedGeocodingSettings(operatingSiteId);
+    const names = (stored?.cityContext ?? '')
+      .split(';')
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0);
+    if (names.length > 1 && this.placeFinder) {
+      const localities = await this.placeFinder.findAll(names);
+      if (localities.length > 0) {
+        const mean = (values: number[]) =>
+          values.reduce((sum, value) => sum + value, 0) / values.length;
+        const origin = {
+          latitude: mean(localities.map((point) => point.latitude)),
+          longitude: mean(localities.map((point) => point.longitude)),
+        };
+        return {
+          localities,
+          origin,
+          radiusKm:
+            Math.ceil(Math.max(...localities.map((point) => distanceKm(origin, point)))) +
+            LOCALITY_RADIUS_KM,
+        };
+      }
+    }
+    const origin = await this.cityOrigin(operatingSiteId);
+    return origin ? { localities: null, origin, radiusKm } : null;
+  }
+
+  /**
+   * Dónde queda la ciudad, para no buscar direcciones en todo el país.
+   *
+   * Primero el origen cargado. Después la "Referencia de la ciudad", que alguien escribió a
+   * propósito. Después el centro de las direcciones ya confirmadas. Y si no hay nada de eso, los
+   * nombres de sus zonas y el de la ciudad: así una ciudad nueva queda acotada sin configurar nada.
+   */
+  private async cityOrigin(
+    operatingSiteId: string,
+  ): Promise<{ latitude: number; longitude: number } | null> {
+    const [site] = await this.database
+      .select({
+        displayName: operatingSites.displayName,
+        latitude: operatingSites.originLatitude,
+        longitude: operatingSites.originLongitude,
+      })
+      .from(operatingSites)
+      .where(eq(operatingSites.id, operatingSiteId))
+      .limit(1);
+    if (!site) return null;
+    if (site.latitude !== null && site.longitude !== null) {
+      return { latitude: Number(site.latitude), longitude: Number(site.longitude) };
+    }
+    const stored = await this.storedGeocodingSettings(operatingSiteId);
+    if (stored?.cityContext && !stored.cityContext.includes(';')) {
+      const referenced = await this.placeFinder?.find([stored.cityContext]);
+      if (referenced) return referenced;
+    }
+    const center = await this.confirmedAddressesCenter(operatingSiteId);
+    if (center || !this.placeFinder) return center;
+    const zones = await this.database
+      .select({ displayName: geographicZones.displayName })
+      .from(geographicZones)
+      .where(
+        and(eq(geographicZones.operatingSiteId, operatingSiteId), eq(geographicZones.active, true)),
+      )
+      .orderBy(asc(geographicZones.sortOrder), asc(geographicZones.displayName));
+    return this.placeFinder.find([...zones.map((zone) => zone.displayName), site.displayName]);
+  }
+
   private async confirmedAddressesCenter(operatingSiteId: string) {
     const rows = await this.database
       .select({ latitude: customerAddresses.latitude, longitude: customerAddresses.longitude })
@@ -3863,29 +3983,19 @@ export class PostgresOperationsService {
     const [zone] = await this.database
       .select({
         operatingSiteId: geographicZones.operatingSiteId,
-        originLatitude: operatingSites.originLatitude,
-        originLongitude: operatingSites.originLongitude,
       })
       .from(geographicZones)
-      .innerJoin(operatingSites, eq(operatingSites.id, geographicZones.operatingSiteId))
       .where(eq(geographicZones.id, zoneId))
       .limit(1);
     const stored = zone ? await this.storedGeocodingSettings(zone.operatingSiteId) : null;
-    /*
-     * El origen de la ciudad le dice al buscador en qué provincia y en qué recuadro buscar. Sin
-     * origen cargado, el centro de las direcciones ya confirmadas: alcanza para no ofrecer lugares
-     * de otra provincia.
-     */
-    const origin =
-      zone?.originLatitude != null && zone.originLongitude != null
-        ? { latitude: Number(zone.originLatitude), longitude: Number(zone.originLongitude) }
-        : zone
-          ? await this.confirmedAddressesCenter(zone.operatingSiteId)
-          : null;
+    // Le dice al buscador en qué provincia y en qué recuadro buscar.
+    const area = zone ? await this.cityArea(zone.operatingSiteId, stored?.radiusKm ?? 60) : null;
     return {
-      cityContext: stored?.cityContext ?? null,
-      origin,
-      radiusKm: stored?.radiusKm ?? 60,
+      area,
+      // Una lista de localidades no orienta al normalizador: no dice en cuál de ellas está.
+      cityContext: stored?.cityContext?.includes(';') ? null : (stored?.cityContext ?? null),
+      origin: area?.origin ?? null,
+      radiusKm: area?.radiusKm ?? stored?.radiusKm ?? 60,
       useAi: stored?.useAi ?? true,
     };
   }

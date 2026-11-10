@@ -366,14 +366,68 @@ describe('ciudad sin punto de origen', () => {
     return ctx;
   };
 
-  // Sin origen ni direcciones confirmadas no hay contra qué comparar: la primera la confirma una persona.
-  it('deja la primera dirección para revisar a mano', async () => {
+  // La misma calle en cuatro provincias era lo que se ofrecía antes.
+  it('sin saber dónde queda la ciudad no ofrece nada y dice qué cargar', async () => {
     const { service } = await sinOrigen(proveedor([candidato(-34.5998, -58.44, 1)]));
 
     const result = await service.locateOrderAddress(ORDER, reglas, contexto);
 
+    expect(result.status).toBe('no_match');
+    expect(result.candidates).toHaveLength(0);
+    expect(result.reason).toContain('Referencia de la ciudad');
+  });
+
+  it('con varias localidades en la referencia, sólo vale lo que cae cerca de alguna', async () => {
+    const geocode = vi.fn<GeocodingProvider['geocode']>(() =>
+      Promise.resolve([
+        { ...candidato(-38.951, -68.06, 0.75), providerCandidateId: 'neuquen' },
+        { ...candidato(-39.096, -67.081, 0.75), providerCandidateId: 'regina' },
+        { ...candidato(-39.02, -67.4, 0.75), providerCandidateId: 'en-el-medio' },
+        { ...candidato(-31.42, -64.18, 0.75), providerCandidateId: 'cordoba' },
+      ]),
+    );
+    const provider: GeocodingProvider = { geocode, key: 'prueba' };
+    const ctx = await base(provider);
+    await ctx.client.exec(
+      `insert into site_geocoding_settings (operating_site_id, city_context)
+       select id, 'Neuquén; Villa Regina' from operating_sites`,
+    );
+    const points = [
+      { latitude: -38.952, longitude: -68.059 },
+      { latitude: -39.095, longitude: -67.082 },
+    ];
+    const service = new PostgresOperationsService(ctx.db, provider, {
+      find: () => Promise.resolve(null),
+      findAll: () => Promise.resolve(points),
+    });
+
+    const result = await service.locateOrderAddress(ORDER, reglas, contexto);
+
     expect(result.status).toBe('review');
-    expect(result.reason).toContain('primeras direcciones');
+    expect(result.candidates.map((candidate) => candidate.latitude).sort()).toEqual([
+      -38.951, -39.096,
+    ]);
+    expect(geocode.mock.calls[0]?.[0].area?.points).toEqual(points);
+    expect(geocode.mock.calls[0]?.[0].cityHint).toBeUndefined();
+  });
+
+  it('sin origen ni confirmadas, acota por el nombre de sus zonas', async () => {
+    const provider = proveedor([
+      candidato(-34.5998, -58.44, 0.75),
+      { ...candidato(-31.42, -64.18, 0.75), providerCandidateId: 'lejos' },
+    ]);
+    const ctx = await sinOrigen(provider);
+    const find = vi.fn(() => Promise.resolve({ latitude: -34.6, longitude: -58.44 }));
+    const service = new PostgresOperationsService(ctx.db, provider, {
+      find,
+      findAll: () => Promise.resolve([]),
+    });
+
+    const result = await service.locateOrderAddress(ORDER, reglas, contexto);
+
+    expect(find).toHaveBeenCalled();
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]?.latitude).toBe(-34.5998);
   });
 
   it('usa de referencia las direcciones ya confirmadas y acepta la que cae cerca', async () => {
