@@ -21,7 +21,7 @@ describe('orderRowActions', () => {
   it('uno confirmado no tiene botón a la vista: marcar listo va al menú', () => {
     const { menu, primary } = orderRowActions({ status: 'CONFIRMED' }, todos);
     expect(primary).toBeNull();
-    expect(claves(menu)).toEqual(['view', 'edit', 'ready', 'cancel', 'delete']);
+    expect(claves(menu)).toEqual(['view', 'edit', 'deliver', 'cancel', 'delete']);
   });
 
   // Revertir es una excepción: va al menú, no a la vista.

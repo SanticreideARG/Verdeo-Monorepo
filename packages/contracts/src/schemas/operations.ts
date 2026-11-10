@@ -862,17 +862,6 @@ export const CancellationReasonsUpdateRequestSchema = z.object({
  * Ids explícitos y no un filtro: el servidor transiciona exactamente lo que el operador tenía a la
  * vista, en vez de volver a resolver una condición que podría barrer más de lo que se vio.
  */
-export const OrderReadyBatchRequestSchema = z.object({
-  orderIds: z.array(UuidSchema).min(1).max(200),
-});
-
-/** Uno por pedido: un fallo suelto no invalida la tanda, pero tiene que poder verse cuál fue. */
-export const OrderReadyBatchResponseSchema = z.object({
-  results: z.array(
-    z.object({ error: z.string().optional(), orderId: UuidSchema, ready: z.boolean() }),
-  ),
-});
-
 /**
  * Cerrar o reabrir un período.
  *
@@ -1669,7 +1658,6 @@ export type Order = z.infer<typeof OrderSchema>;
 export type OrderTransitionRequest = z.infer<typeof OrderTransitionRequestSchema>;
 export type OrderPaidRequest = z.infer<typeof OrderPaidRequestSchema>;
 export type OrderNewRequest = z.infer<typeof OrderNewRequestSchema>;
-export type OrderReadyBatchRequest = z.infer<typeof OrderReadyBatchRequestSchema>;
 export type OrderUpdateRequest = z.infer<typeof OrderUpdateRequestSchema>;
 export type OrderListQuery = z.infer<typeof OrderListQuerySchema>;
 export type KitchenSummaryResponse = z.infer<typeof KitchenSummaryResponseSchema>;

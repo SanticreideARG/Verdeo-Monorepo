@@ -60,7 +60,7 @@ type StopStatus = 'pending' | 'en_route' | 'at_address' | 'delivered' | 'skipped
 /**
  * Qué estados de un pedido pueden entrar en una hoja de ruta.
  *
- * CONFIRMED es un pedido en firme; READY es uno que cocina ya produjo. Los dos hay que repartirlos.
+ * CONFIRMED es un pedido en firme. READY ya no se usa (2026-11-09); queda hasta que no haya ninguno.
  * Un borrador todavía no está vendido, un cancelado no se reparte y un entregado ya salió.
  */
 const ROUTABLE_STATUSES = ['CONFIRMED', 'READY'] as const;
@@ -408,7 +408,7 @@ export class PostgresDeliveryService {
       };
       if (ruteables.length === 0) {
         throw new DeliveryConflictError(
-          'No hay pedidos para armar hojas: tienen que estar confirmados o listos, con ubicación y sin hoja.',
+          'No hay pedidos para armar hojas: tienen que estar confirmados, con ubicación y sin hoja.',
         );
       }
 
@@ -736,11 +736,8 @@ export class PostgresDeliveryService {
         .where(eq(deliveryRoutes.id, routeId))
         .limit(1);
       if (!current) throw new DeliveryNotFoundError('No se encontró la ruta');
-      if (current.status !== 'draft')
-        throw new DeliveryConflictError(
-          'Sólo se puede borrar una ruta en borrador. Una ruta publicada ya salió a la calle.',
-        );
-
+      // Se puede borrar siempre: una hoja es orden interno, no un documento (2026-11-09). Los
+      // pedidos no se tocan: los entregados siguen entregados.
       const [stopCount] = await transaction
         .select({ total: sql<number>`count(*)` })
         .from(deliveryStops)
@@ -1108,15 +1105,29 @@ export class PostgresDeliveryService {
   ): Promise<{ expiresAt: Date; token: string }> {
     return this.database.transaction(async (transaction) => {
       const [route] = await transaction
-        .select({ deliveryDate: deliveryRoutes.deliveryDate, status: deliveryRoutes.status })
+        .select({
+          deliveryDate: deliveryRoutes.deliveryDate,
+          deliveryRunId: deliveryRoutes.deliveryRunId,
+          status: deliveryRoutes.status,
+        })
         .from(deliveryRoutes)
         .where(eq(deliveryRoutes.id, routeId))
         .limit(1);
       if (!route) throw new DeliveryNotFoundError('No se encontró la ruta');
-      if (route.status !== 'published') {
-        throw new DeliveryConflictError(
-          'La ruta todavía es un borrador. Publicala antes de pasarle el enlace a alguien.',
-        );
+      if (route.status === 'completed') {
+        throw new DeliveryConflictError('Esta ruta ya terminó.');
+      }
+      // Ya no hay "publicar": pasarle el enlace a alguien es lo que la pone en la calle.
+      if (route.deliveryRunId) {
+        await transaction
+          .update(deliveryRuns)
+          .set({ status: 'dispatched', updatedAt: new Date() })
+          .where(
+            and(
+              eq(deliveryRuns.id, route.deliveryRunId),
+              inArray(deliveryRuns.status, ['planned', 'consolidated']),
+            ),
+          );
       }
 
       await transaction

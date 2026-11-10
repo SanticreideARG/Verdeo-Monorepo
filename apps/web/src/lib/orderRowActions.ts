@@ -1,5 +1,5 @@
 export type OrderRowActionKey =
-  'cancel' | 'confirm' | 'delete' | 'edit' | 'ready' | 'revert' | 'view';
+  'cancel' | 'confirm' | 'deliver' | 'delete' | 'edit' | 'revert' | 'view';
 
 export interface OrderRowAction {
   key: OrderRowActionKey;
@@ -14,10 +14,8 @@ export interface OrderRowAction {
  * cada fila medía 138 px y entraban cinco pedidos por pantalla. A la vista queda sólo **el paso que
  * sigue** —confirmar un borrador—, que es lo que se hace con la lista; el resto va al menú "⋯".
  *
- * Marcar listo pasó al menú (2026-10-19): todos los pedidos quedan listos a la vez, y para eso está
- * "Marcar listos por zona". Como botón ocupaba media tarjeta en el teléfono para algo que no se hace
- * pedido por pedido. Revertir, cancelar y eliminar son excepciones: que cuesten un clic más
- * también evita tocarlas sin querer.
+ * Marcar entregado va al menú: lo normal es que lo marque quien reparte, desde su enlace. Revertir,
+ * cancelar y eliminar son excepciones: que cuesten un clic más también evita tocarlas sin querer.
  *
  * "Ver detalle" está siempre en el menú porque el doble clic sobre la fila no se ve: es la forma de
  * descubrir que el detalle existe. "Editar" va al lado (2026-10-28): abre el pedido ya en edición,
@@ -37,7 +35,7 @@ export function orderRowActions(
   const menu: OrderRowAction[] = [{ key: 'view', label: 'Ver detalle' }];
   if (can('orders.edit')) menu.push({ key: 'edit', label: 'Editar' });
   if (order.status === 'CONFIRMED' && can('orders.edit')) {
-    menu.push({ key: 'ready', label: 'Marcar listo' });
+    menu.push({ key: 'deliver', label: 'Marcar entregado' });
   }
   if (['READY', 'DELIVERED'].includes(order.status) && can('orders.revert_status')) {
     menu.push({ key: 'revert', label: 'Revertir estado' });

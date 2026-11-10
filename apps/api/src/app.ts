@@ -167,8 +167,6 @@ import {
   OrderNewRequestSchema,
   OrderNewResponseSchema,
   OrderPaidRequestSchema,
-  OrderReadyBatchRequestSchema,
-  OrderReadyBatchResponseSchema,
   CustomerOrderCreateRequestSchema,
   OrderListQuerySchema,
   OrderPageResponseSchema,
@@ -7306,53 +7304,6 @@ export function createApp(options: CreateAppOptions) {
       },
     );
     return context.json(OrderSchema.parse(contractValue(order)));
-  });
-
-  /**
-   * Marcar varios pedidos como listos de una.
-   *
-   * Cocina produce por lote —toda una zona junta—, así que pasarlos de a uno es repetir el mismo
-   * clic veinte veces sobre una decisión que ya se tomó para todo el grupo.
-   *
-   * Recibe ids explícitos y no un filtro. Un filtro lo volvería a resolver el servidor, y podría
-   * barrer más pedidos que los que el operador tenía a la vista cuando decidió; con ids, se
-   * transiciona exactamente lo que se vio.
-   *
-   * Cada pedido pasa por la misma transición de siempre, que valida el estado de origen y audita.
-   * Uno que falle no cancela al resto: se informa por pedido y los demás quedan listos igual, que es
-   * lo que se espera de una acción de lote — lo contrario obligaría a adivinar cuál fue el que
-   * arruinó la tanda.
-   */
-  app.post('/api/v1/orders/ready-batch', async (context) => {
-    const session = context.get('session');
-    if (!session.permissions.includes('orders.edit')) return forbidden(context);
-    const input = OrderReadyBatchRequestSchema.safeParse(
-      await context.req.json().catch(() => null),
-    );
-    if (!input.success) return badRequest(context, 'Revisá los pedidos.', input.error.issues);
-
-    const results: { error?: string; orderId: string; ready: boolean }[] = [];
-    for (const orderId of input.data.orderIds) {
-      try {
-        await requireOperations().transitionOrder(
-          orderId,
-          'READY',
-          undefined,
-          false,
-          session.permissions.includes('orders.override_cycle_lock'),
-          operationsContext(context),
-        );
-        results.push({ orderId, ready: true });
-      } catch (error) {
-        results.push({
-          error: error instanceof Error ? error.message : 'No pudimos marcarlo listo.',
-          orderId,
-          ready: false,
-        });
-      }
-    }
-
-    return context.json(OrderReadyBatchResponseSchema.parse({ results }));
   });
 
   /** `?reparto=<id>`: la cocina y las etiquetas de una sola salida (DELIVERY_RUNS_PLAN.md, fase 3). */

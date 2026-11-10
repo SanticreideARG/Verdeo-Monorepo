@@ -134,10 +134,10 @@ describe('rutas desde un reparto', () => {
     );
   });
 
-  it('al publicar una hoja, el reparto pasa a estar en la calle', async () => {
+  it('al generar el enlace de una hoja, el reparto pasa a estar en la calle', async () => {
     const { client, service } = await base();
     const result = await service.createRoutesFromRun(RUN, { mode: 'single' }, contexto);
-    await service.publishRoute(result.routes[0]?.id ?? '', contexto);
+    await service.issueRouteLink(result.routes[0]?.id ?? '', 24, contexto);
     const { rows } = await client.query<{ status: string }>('select status from delivery_runs');
     expect(rows).toEqual([{ status: 'dispatched' }]);
   });

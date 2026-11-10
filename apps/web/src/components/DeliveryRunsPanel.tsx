@@ -539,8 +539,8 @@ export function DeliveryRunsPanel({
                       Armar
                     </button>
                     <small className="text-ink-muted">
-                      Entran los pedidos confirmados o listos, con ubicación y sin hoja. Las hojas
-                      quedan en borrador para revisarlas y publicarlas.
+                      Entran los pedidos confirmados, con ubicación y sin hoja. Las hojas quedan
+                      para revisarlas y editarlas cuando quieras.
                     </small>
                   </form>
                 ) : null}

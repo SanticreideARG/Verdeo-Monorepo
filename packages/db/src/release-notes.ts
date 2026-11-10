@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-09-estados-simplificados',
+    body: `Pedidos: sale el estado Listo. Ahora un pedido pasa de Confirmado a Entregado, y los que estaban en Listo volvieron a Confirmado. Hojas de ruta: ya no hay borrador ni publicada. Toda hoja se puede editar, borrar y pasar por enlace desde que se crea, y cada cambio se guarda en el momento.`,
+  },
+  {
     key: '2026-11-09-ubicar-direcciones',
     body: `Ubicar direcciones: si la dirección nombra la zona ("Neuquen 1466, General Roca"), se usa sola y el domicilio queda en la ficha del cliente. Si no, se elige la zona ahí mismo, en vez de tener que ir al cliente. Al registrar un pedido sin ubicar se ofrece ubicarlo en la misma ventana, los lugares encontrados se ven en el mapa, y la ficha del cliente muestra las direcciones de pedidos que no estaban guardadas.`,
   },

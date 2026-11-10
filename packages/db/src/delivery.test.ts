@@ -321,14 +321,13 @@ describe('deleteRoute', () => {
     expect(second?.stops).toHaveLength(2);
   });
 
-  it('se niega a borrar una ruta publicada', async () => {
+  it('borra también una ruta publicada, sin tocar sus pedidos', async () => {
     const { service } = await seededService();
     const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
     await service.publishRoute(route!.id, CONTEXT);
 
-    // Una publicada ya está en el teléfono de alguien, y sus paradas entregadas son parte de lo que
-    // pasó ese día.
-    await expect(service.deleteRoute(route!.id, CONTEXT)).rejects.toThrow();
+    // Una hoja es orden interno, no un documento (2026-11-09).
+    await expect(service.deleteRoute(route!.id, CONTEXT)).resolves.toMatchObject({ deleted: true });
   });
 
   it('deja el rastro en auditoría antes de borrar', async () => {
@@ -428,12 +427,11 @@ describe('un pedido marcado listo sigue siendo ruteable', () => {
 });
 
 describe('el enlace de la ruta', () => {
-  it('no se genera para un borrador', async () => {
+  it('se genera desde que la hoja existe', async () => {
     const { service } = await seededService();
     const route = await service.createRoute(SITE, '2026-08-26', undefined, CONTEXT);
 
-    // Una hoja que cambia debajo de quien ya salió es peor que no tener hoja.
-    await expect(service.issueRouteLink(route!.id, 24, CONTEXT)).rejects.toThrow(/borrador/i);
+    await expect(service.issueRouteLink(route!.id, 24, CONTEXT)).resolves.toHaveProperty('token');
   });
 
   it('abre la hoja del día con lo que hace falta para entregar', async () => {

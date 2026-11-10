@@ -157,7 +157,7 @@ export function RoutesPage() {
    */
   const [pending, setPending] = useState<
     | {
-        kind: 'descartar' | 'publicar';
+        kind: 'descartar';
         routeId: string;
       }
     | { kind: 'sacar'; name: string; routeId: string; stopId: string }
@@ -225,9 +225,7 @@ export function RoutesPage() {
     // de una hoja mirando otra.
     setIssuedLink(null);
     setProgress(null);
-    if (detail.status !== 'published') return;
-    // Cómo va la ruta mientras alguien la está haciendo. Sólo para una ruta publicada: un borrador
-    // no lo está repartiendo nadie.
+    // Cómo va la ruta mientras alguien la está haciendo.
     const avance = await apiRequest(`/api/v1/delivery/routes/${routeId}/progress`);
     if (avance.ok) {
       setProgress(
@@ -401,7 +399,7 @@ export function RoutesPage() {
    * Descartar una propuesta.
    *
    * Proponer es barato y las propuestas se acumulan: la lista se llena de "0 paradas · Borrador" y
-   * deja de decir cuál es la ruta de mañana. Sólo borradores; una publicada ya salió a la calle.
+   * deja de decir cuál es la ruta de mañana. Se puede siempre: una hoja es orden interno.
    */
   async function discard(routeId: string) {
     const response = await apiRequest(`/api/v1/delivery/routes/${routeId}`, { method: 'DELETE' });
@@ -411,19 +409,7 @@ export function RoutesPage() {
     }
     if (selectedRoute?.id === routeId) setSelectedRoute(null);
     await loadRoutes();
-    showToast('Propuesta descartada.');
-  }
-
-  async function publish(routeId: string) {
-    const response = await apiRequest(`/api/v1/delivery/routes/${routeId}/publish`, {
-      method: 'POST',
-    });
-    if (!response.ok) {
-      setMessage(await errorMessage(response));
-      return;
-    }
-    await loadRoutes();
-    await loadRouteDetail(routeId);
+    showToast('Hoja borrada.');
   }
 
   async function issueLink(routeId: string) {
@@ -478,6 +464,7 @@ export function RoutesPage() {
       method: 'PUT',
     });
     if (!response.ok) setMessage(await errorMessage(response));
+    else showToast('Cambios guardados.');
     await loadRouteDetail(route.id);
     return response.ok;
   }
@@ -545,7 +532,6 @@ export function RoutesPage() {
     setSavingOrder(false);
     if (saved) {
       setManualOrder(null);
-      showToast('Orden guardado.');
     }
   }
 
@@ -795,14 +781,7 @@ export function RoutesPage() {
                       <p className="font-semibold text-forest">
                         {formatDay(route.deliveryDate)} {route.label ? `· ${route.label}` : ''}
                       </p>
-                      <p className="text-xs text-ink-muted">
-                        {route.stopCount} paradas ·{' '}
-                        {route.status === 'draft'
-                          ? 'Borrador'
-                          : route.status === 'published'
-                            ? 'Publicada'
-                            : 'Completada'}
-                      </p>
+                      <p className="text-xs text-ink-muted">{route.stopCount} paradas</p>
                     </button>
                   </li>
                 ))}
@@ -832,7 +811,7 @@ export function RoutesPage() {
                         </button>
                       ) : null
                     }
-                    body="Se arma con los pedidos por repartir de una zona y una fecha, y no sale a la app del repartidor hasta que la publiques."
+                    body="Se arma con los pedidos por repartir de una zona y una fecha, y quien reparte la ve cuando le pasás el enlace."
                     title="Todavía no hay ninguna ruta"
                   />
                 ) : null}
@@ -857,7 +836,7 @@ export function RoutesPage() {
 
                     {/* Cómo va la ruta: lo mismo que ve quien reparte. Que las dos pantallas
                       discrepen sobre cuánta plata hay en la calle sería peor que no mostrarlo. */}
-                    {progress && selectedRoute.status === 'published' ? (
+                    {progress ? (
                       <p className="route-progress">
                         <span>
                           {progress.deliveredCount} de {progress.stopCount} entregadas
@@ -943,10 +922,8 @@ export function RoutesPage() {
                               >
                                 Descargar planilla
                               </button>
-                              {/* El enlace del repartidor, sólo con la ruta publicada. La hoja se
-                              sigue pudiendo editar (2026-11-05): el enlace la lee en vivo, así que
-                              quien reparte ve los cambios al recargar. */}
-                              {canPublish && selectedRoute.status === 'published' ? (
+                              {/* El enlace la lee en vivo: quien reparte ve los cambios al recargar. */}
+                              {canPublish && selectedRoute.status !== 'completed' ? (
                                 <button
                                   className="button button-primary"
                                   disabled={linkBusy}
@@ -958,18 +935,7 @@ export function RoutesPage() {
                               ) : null}
                             </>
                           ) : null}
-                          {canPublish && selectedRoute.status === 'draft' ? (
-                            <button
-                              className="button button-primary"
-                              onClick={() =>
-                                setPending({ kind: 'publicar', routeId: selectedRoute.id })
-                              }
-                              type="button"
-                            >
-                              Publicar
-                            </button>
-                          ) : null}
-                          {canManage && selectedRoute.status === 'draft' ? (
+                          {canManage ? (
                             <button
                               className="button button-danger"
                               onClick={() =>
@@ -977,7 +943,7 @@ export function RoutesPage() {
                               }
                               type="button"
                             >
-                              Descartar propuesta
+                              Borrar hoja
                             </button>
                           ) : null}
                         </div>
@@ -1219,36 +1185,21 @@ export function RoutesPage() {
 
       {pending ? (
         <ConfirmDialog
-          confirmLabel={
-            pending.kind === 'publicar'
-              ? 'Publicar la ruta'
-              : pending.kind === 'sacar'
-                ? 'Sacar de la hoja'
-                : 'Descartar'
-          }
+          confirmLabel={pending.kind === 'sacar' ? 'Sacar de la hoja' : 'Borrar hoja'}
           detail={
-            pending.kind === 'publicar'
-              ? `La hoja pasa a la aplicación de reparto y el repartidor la ve en su teléfono. ${String(selectedRoute?.stops.length ?? 0)} paradas.`
-              : pending.kind === 'sacar'
-                ? `${pending.name} sale de esta hoja. El pedido no cambia: queda libre para sumarlo a otra.`
-                : 'La propuesta se borra y sus pedidos vuelven a estar disponibles para otra hoja. No afecta a ningún pedido.'
+            pending.kind === 'sacar'
+              ? `${pending.name} sale de esta hoja. El pedido no cambia: queda libre para sumarlo a otra.`
+              : 'La hoja se borra y su enlace deja de servir. Los pedidos no cambian: los entregados siguen entregados y el resto queda disponible para otra hoja.'
           }
           onCancel={() => setPending(null)}
           onConfirm={async () => {
             const target = pending;
             setPending(null);
-            if (target.kind === 'publicar') await publish(target.routeId);
-            else if (target.kind === 'sacar') await removeStop(target.routeId, target.stopId);
+            if (target.kind === 'sacar') await removeStop(target.routeId, target.stopId);
             else await discard(target.routeId);
           }}
-          tone={pending.kind === 'publicar' ? 'normal' : 'destructivo'}
-          title={
-            pending.kind === 'publicar'
-              ? '¿Publicar esta ruta?'
-              : pending.kind === 'sacar'
-                ? '¿Sacar esta parada?'
-                : '¿Descartar la propuesta?'
-          }
+          tone="destructivo"
+          title={pending.kind === 'sacar' ? '¿Sacar esta parada?' : '¿Borrar esta hoja?'}
         />
       ) : null}
     </DashboardShell>

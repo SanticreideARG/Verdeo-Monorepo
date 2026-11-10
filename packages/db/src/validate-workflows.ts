@@ -299,8 +299,8 @@ async function main() {
     await check('pedido', 'El pedido recorre su ciclo de estados', async () => {
       if (!orderId) return null;
       // The real lifecycle, taken from OrderStatus rather than invented: DRAFT and CONFIRMED are
-      // entry states, so a confirmed order advances READY → DELIVERED.
-      const path: OrderStatus[] = ['READY', 'DELIVERED'];
+      // entry states, so a confirmed order advances to DELIVERED.
+      const path: OrderStatus[] = ['DELIVERED'];
       const reached: string[] = [];
       for (const status of path) {
         try {

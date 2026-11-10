@@ -174,7 +174,7 @@ function formText(form: FormData, key: string): string {
  */
 const PENDING_STATUSES = 'DRAFT,CONFIRMED,READY';
 const PENDING_FILTER = 'PENDIENTES';
-const STATUS_OPTIONS = ['DRAFT', 'CONFIRMED', 'READY', 'DELIVERED', 'CANCELLED'] as const;
+const STATUS_OPTIONS = ['DRAFT', 'CONFIRMED', 'DELIVERED', 'CANCELLED'] as const;
 
 /**
  * "Pedidos": una sola pantalla para tomar, confirmar, buscar y cobrar.
@@ -310,19 +310,7 @@ export function OrderIntakePage() {
   const [viewing, setViewing] = useState<OrderSummary | null>(null);
   // La zona cuyo lote se está marcando: deshabilita todos los botones mientras corre, para que dos
   // clics seguidos no manden la misma tanda dos veces.
-  const [markingZone, setMarkingZone] = useState<string | null>(null);
   // La zona elegida en la barra del pie para marcar lista.
-  const [readyZone, setReadyZone] = useState('');
-  /*
-   * El lote que se está por marcar listo.
-   *
-   * Marcar listos veinte pedidos de una es la acción más difícil de deshacer de esta pantalla —hay
-   * que revertir uno por uno— y era la única que no preguntaba nada.
-   */
-  const [confirmingBatch, setConfirmingBatch] = useState<{
-    orders: OrderSummary[];
-    zone: string;
-  } | null>(null);
   /*
    * Sobre qué semana trabaja la cola.
    *
@@ -1182,7 +1170,7 @@ export function OrderIntakePage() {
     await loadData();
   }
   async function revert(order: OrderSummary, reason: string) {
-    const previous = order.status === 'DELIVERED' ? 'READY' : 'CONFIRMED';
+    const previous = 'CONFIRMED';
     try {
       await mutate(`/api/v1/orders/${order.id}/status`, {
         confirmedReversal: true,
@@ -1196,48 +1184,6 @@ export function OrderIntakePage() {
       await loadData();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos revertir el pedido.');
-    }
-  }
-
-  /**
-   * Pasa a "listo" todos los confirmados de una zona.
-   *
-   * Manda los ids que están a la vista y no un filtro: el servidor transiciona exactamente lo que
-   * se vio, en vez de volver a resolver una condición que entre medio pudo cambiar.
-   */
-  async function markZoneReady(zone: string, batch: readonly OrderSummary[]) {
-    setMarkingZone(zone);
-    try {
-      const response = await apiRequest('/api/v1/orders/ready-batch', {
-        body: JSON.stringify({ orderIds: batch.map((order) => order.id) }),
-        method: 'POST',
-      });
-      if (!response.ok) {
-        setMessage(await errorMessage(response));
-        return;
-      }
-      const body = (await response.json()) as {
-        results: { error?: string; orderId: string; ready: boolean }[];
-      };
-      const failed = body.results.filter((result) => !result.ready);
-      // Los que fallaron se nombran: "18 de 20" sin decir cuáles dos deja buscándolos a mano.
-      if (failed.length === 0) {
-        showToast(`${String(body.results.length)} pedidos de ${zone} marcados listos.`);
-      } else {
-        const names = failed
-          .map(
-            (result) =>
-              batch.find((order) => order.id === result.orderId)?.customer.displayName ??
-              result.orderId,
-          )
-          .join(', ');
-        setMessage(
-          `${String(body.results.length - failed.length)} de ${String(body.results.length)} marcados listos. Quedaron sin marcar: ${names}.`,
-        );
-      }
-      await loadData();
-    } finally {
-      setMarkingZone(null);
     }
   }
 
@@ -1333,19 +1279,6 @@ export function OrderIntakePage() {
    * Sólo los CONFIRMED: un borrador todavía no se produjo y uno ya listo no vuelve a marcarse. Sin
    * zona cargada caen juntos en su propio grupo en vez de desaparecer del lote.
    */
-  const readyBatches = [
-    ...orders
-      .filter((order) => order.status === 'CONFIRMED')
-      .reduce((groups, order) => {
-        const zone = order.deliveryZone ?? 'Sin zona';
-        groups.set(zone, [...(groups.get(zone) ?? []), order]);
-        return groups;
-      }, new Map<string, OrderSummary[]>())
-      .entries(),
-  ]
-    .map(([zone, zoneOrders]) => ({ orders: zoneOrders, zone }))
-    .sort((left, right) => left.zone.localeCompare(right.zone, 'es-AR'));
-
   /*
    * Qué dice el botón de filtros cuando está plegado.
    *
@@ -1379,7 +1312,7 @@ export function OrderIntakePage() {
 
   function runRowAction(order: OrderSummary, key: OrderRowActionKey) {
     if (key === 'confirm') void transition(order, 'CONFIRMED');
-    else if (key === 'ready') void transition(order, 'READY');
+    else if (key === 'deliver') void transition(order, 'DELIVERED');
     else if (key === 'cancel') void transition(order, 'CANCELLED');
     else if (key === 'revert') setReverting(order);
     else if (key === 'delete') setDeleting(order);
@@ -1448,8 +1381,6 @@ export function OrderIntakePage() {
       },
     },
   ];
-  const readyBatchToMark =
-    readyBatches.find((batch) => batch.zone === readyZone) ?? readyBatches[0] ?? null;
 
   return (
     <DashboardShell profile={profile} onLogout={() => void logout()}>
@@ -2239,15 +2170,6 @@ export function OrderIntakePage() {
          * La misma tabla configurable que "Ver pedidos", más la columna de acciones —que no se
          * puede apagar, porque esta pantalla existe para tocar esos botones.
          */}
-        {/*
-         * Marcar listos por zona.
-         *
-         * Cocina produce por lote: cuando termina una zona, termina entera. Pasar veinte pedidos de
-         * a uno es repetir el mismo clic sobre una decisión que ya se tomó para todo el grupo.
-         *
-         * Sólo aparecen las zonas que tienen algo que marcar, y el botón dice cuántos son: "Marcar
-         * listos" a secas obliga a contar las filas antes de animarse a tocarlo.
-         */}
         <div className="mt-6">
           {/* Cuántos pedidos hay en la cola: una lista sin número no dice si es un rato de
               trabajo o una tarde. */}
@@ -2455,42 +2377,11 @@ export function OrderIntakePage() {
             </button>
           ) : null}
           {/*
-            Al pie, en una línea: marcar listos por zona (cocina termina por lote) y lo que viene
-            después en el día —imprimir las etiquetas y armar el reparto—. Arriba ocupaba un bloque
-            entero para uno o dos botones.
+            Al pie, en una línea, lo que viene después en el día: imprimir las etiquetas y armar el
+            reparto. Arriba ocupaba un bloque entero para dos botones.
           */}
           {orders.length > 0 ? (
             <div className="orders-footer-bar">
-              {permissions.includes('orders.edit') && readyBatches.length > 0 ? (
-                <div className="orders-footer-ready">
-                  <label className="sr-only" htmlFor="ready-zone">
-                    Zona para marcar lista
-                  </label>
-                  <select
-                    id="ready-zone"
-                    onChange={(event) => setReadyZone(event.target.value)}
-                    value={readyBatchToMark?.zone ?? ''}
-                  >
-                    {readyBatches.map((batch) => (
-                      <option key={batch.zone} value={batch.zone}>
-                        {batch.zone} · {batch.orders.length}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    className="button button-secondary"
-                    disabled={markingZone !== null || !readyBatchToMark}
-                    onClick={() => {
-                      if (readyBatchToMark) setConfirmingBatch(readyBatchToMark);
-                    }}
-                    type="button"
-                  >
-                    {markingZone
-                      ? 'Marcando…'
-                      : `Marcar listos (${String(readyBatchToMark?.orders.length ?? 0)})`}
-                  </button>
-                </div>
-              ) : null}
               <div className="orders-footer-links">
                 {permissions.includes('production.read') ? (
                   <Link className="button button-secondary" to="/app/etiquetas">
@@ -2538,22 +2429,6 @@ export function OrderIntakePage() {
           }}
           title={paying.paidAt ? '¿Volver a pendiente?' : '¿Ya pagó?'}
           tone={paying.paidAt ? 'destructivo' : 'normal'}
-        />
-      ) : null}
-
-      {confirmingBatch ? (
-        <ConfirmDialog
-          confirmLabel={`Marcar listos ${String(confirmingBatch.orders.length)}`}
-          /* El texto dice qué va a pasar y a cuántas cosas: un "¿Estás seguro?" no le da a nadie
-             con qué decidir. */
-          detail={`Vas a marcar listos para entrega ${String(confirmingBatch.orders.length)} pedidos de ${confirmingBatch.zone}. Se revierte de a uno, así que conviene mirar la lista antes.`}
-          onCancel={() => setConfirmingBatch(null)}
-          onConfirm={async () => {
-            const batch = confirmingBatch;
-            setConfirmingBatch(null);
-            await markZoneReady(batch.zone, batch.orders);
-          }}
-          title={`¿Marcar listos los pedidos de ${confirmingBatch.zone}?`}
         />
       ) : null}
 

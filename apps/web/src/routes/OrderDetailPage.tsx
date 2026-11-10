@@ -438,8 +438,11 @@ export function OrderDetailPage() {
             </button>
           ) : null}
           {order.status === 'CONFIRMED' && canEdit ? (
-            <button className="button button-secondary" onClick={() => void transition('READY')}>
-              Marcar listo
+            <button
+              className="button button-secondary"
+              onClick={() => void transition('DELIVERED')}
+            >
+              Marcar entregado
             </button>
           ) : null}
           {canSendToStock ? (

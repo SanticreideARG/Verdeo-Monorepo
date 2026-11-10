@@ -30,7 +30,7 @@ describe('order engine', () => {
         allowCycleOverride: true,
         confirmedReversal: true,
         cycleLocked: true,
-        from: 'READY',
+        from: 'DELIVERED',
         reason: 'Corrección operativa',
         to: 'CONFIRMED',
       }),
@@ -40,7 +40,7 @@ describe('order engine', () => {
         allowCycleOverride: true,
         confirmedReversal: true,
         cycleLocked: false,
-        from: 'READY',
+        from: 'DELIVERED',
         to: 'CONFIRMED',
       }),
     ).toThrowError(/motivo/);
@@ -62,7 +62,7 @@ describe('order engine', () => {
         confirmedReversal: false,
         cycleLocked: true,
         from: 'CONFIRMED',
-        to: 'READY',
+        to: 'DELIVERED',
       }),
     ).not.toThrow();
   });
