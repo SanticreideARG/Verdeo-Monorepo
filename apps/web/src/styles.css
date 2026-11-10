@@ -13743,3 +13743,20 @@ body:has(.modal-backdrop) .assistant-launcher.is-operator.is-saying {
   list-style: disc;
   font-size: 0.9rem;
 }
+
+/* El aviso, en todas las pantallas, de que se está trabajando en un período que no es el corriente. */
+.working-period-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.5rem 1rem;
+  background: #fff4d6;
+  border-bottom: 1px solid #e3c674;
+  color: #5c4300;
+  font-size: 0.9rem;
+}
+.working-period-banner .button {
+  min-height: 40px;
+}

@@ -30,6 +30,7 @@ import { useFeedUnread } from '../lib/feedUnread.js';
 import { RequestProgressBar } from './RequestProgressBar.js';
 import { ToastHost } from './ToastHost.js';
 import { WeatherWidget } from './WeatherWidget.js';
+import { WorkingPeriodBanner } from './WorkingPeriodBanner.js';
 
 export interface DashboardProfile {
   permissions: string[];
@@ -937,6 +938,7 @@ export function DashboardShell({
             </div>
           </header>
           <RequestProgressBar />
+          <WorkingPeriodBanner />
           <main className="dashboard-content">{children}</main>
           <OperatorAssistant
             canAskOwl={profile.permissions.includes('ai.use')}

@@ -59,6 +59,11 @@ import {
 } from '../lib/orderColumns.js';
 import { PeriodPicker } from '../components/PeriodPicker.js';
 import { currentPeriod, periodsFromMenus, type Period } from '../lib/periods.js';
+import {
+  chooseWorkingPeriod,
+  startingPeriod,
+  useReturnToCurrentPeriod,
+} from '../lib/workingPeriod.js';
 import { showToast } from '../lib/toast.js';
 import { useNarrowViewport } from '../lib/useNarrowViewport.js';
 import {
@@ -394,7 +399,13 @@ export function OrderIntakePage() {
        * `?cycleId=` gana: se llega ahí desde un pedido para ver el resto de su semana, sea o no la
        * actual.
        */
-      queueCycleId ??= searchParams.get('cycleId') ?? currentPeriod(list)?.id ?? '';
+      if (queueCycleId === null) {
+        queueCycleId = searchParams.get('cycleId') ?? startingPeriod(list)?.id ?? '';
+        // Abrir en un período anterior es como elegirlo: ahí no hay cola de pendientes que mirar.
+        if (queueCycleId !== (currentPeriod(list)?.id ?? '')) {
+          setStatusFilter((filter) => (filter === PENDING_FILTER ? '' : filter));
+        }
+      }
       setPeriodId(queueCycleId);
     }
 
@@ -1298,6 +1309,8 @@ export function OrderIntakePage() {
     URL.revokeObjectURL(url);
   }
 
+  useReturnToCurrentPeriod(() => choosePeriod(currentPeriod(periods)?.id ?? ''));
+
   if (failed) return <DashboardFailed label="los pedidos" />;
   if (!profile) return <DashboardLoading />;
   if (loading) return <DashboardLoading />;
@@ -1351,6 +1364,7 @@ export function OrderIntakePage() {
    */
   function choosePeriod(cycleId: string) {
     setPeriodId(cycleId);
+    chooseWorkingPeriod(cycleId, periods);
     const current = currentPeriod(periods)?.id ?? '';
     if (cycleId !== current && statusFilter === PENDING_FILTER) setStatusFilter('');
     else if (cycleId === current && statusFilter === '') setStatusFilter(PENDING_FILTER);

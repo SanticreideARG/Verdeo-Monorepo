@@ -141,6 +141,21 @@ describe('rutas desde un reparto', () => {
     const { rows } = await client.query<{ status: string }>('select status from delivery_runs');
     expect(rows).toEqual([{ status: 'dispatched' }]);
   });
+
+  it('un pedido del reparto con otra fecha, al sacarlo de la hoja, se ofrece de nuevo', async () => {
+    const { client, service } = await base();
+    const pedido = '0a000000-0000-4000-8000-000000000001';
+    await client.exec(`update orders set delivery_date = '2026-10-19' where id = '${pedido}'`);
+    const result = await service.createRoutesFromRun(RUN, { mode: 'single' }, contexto);
+    const routeId = result.routes[0]?.id ?? '';
+    const detail = await service.getRouteDetail(routeId);
+    const stop = detail?.stops.find((item) => item.orderId === pedido);
+
+    await service.removeStop(routeId, stop?.id ?? '', contexto);
+
+    const available = await service.availableOrders(routeId);
+    expect(available.map((order) => order.id)).toContain(pedido);
+  });
 });
 
 describe('splitByProximity', () => {

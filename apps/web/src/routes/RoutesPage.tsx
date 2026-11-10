@@ -482,6 +482,13 @@ export function RoutesPage() {
     return response.ok;
   }
 
+  // La lista de "Sumar pedidos" es de una hoja: al pasar a otra se cierra, para no mostrar la vieja.
+  const openRouteId = selectedRoute?.id;
+  useEffect(() => {
+    setAdding(null);
+    setAddPick([]);
+  }, [openRouteId]);
+
   async function openAdd(routeId: string) {
     setAddPick([]);
     const response = await apiRequest(`/api/v1/delivery/routes/${routeId}/available-orders`);
@@ -524,6 +531,8 @@ export function RoutesPage() {
     }
     setSelectedRoute((await response.json()) as RouteDetail);
     setDatesVersion((version) => version + 1);
+    // Con "Sumar pedidos" abierto, el que se acaba de sacar tiene que aparecer ahí.
+    if (adding) await openAdd(routeId);
     showToast('Parada sacada. El pedido queda libre para otra hoja.');
   }
 

@@ -21,6 +21,11 @@ import { openPrintable } from '../lib/openPrintable.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage, type LabelSettings, type WeeklyMenu } from '../lib/operations.js';
 import { currentPeriod, periodsFromMenus, type Period } from '../lib/periods.js';
+import {
+  chooseWorkingPeriod,
+  startingPeriod,
+  useReturnToCurrentPeriod,
+} from '../lib/workingPeriod.js';
 import { todayInOperation } from '../lib/dates.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { showToast } from '../lib/toast.js';
@@ -231,10 +236,12 @@ export function LabelsPage() {
         ((await menusResponse.json()) as { items: WeeklyMenu[] }).items,
       );
       setPeriods(list);
-      setCycleId((current) => current || (currentPeriod(list)?.id ?? ''));
+      setCycleId((current) => current || (startingPeriod(list)?.id ?? ''));
     }
     setLoading(false);
   }, []);
+
+  useReturnToCurrentPeriod(() => setCycleId(currentPeriod(periods)?.id ?? ''));
 
   useEffect(() => {
     if (canRead) void load();
@@ -418,7 +425,14 @@ export function LabelsPage() {
             <div className="grid content-start gap-5">
               <div className="operation-card grid gap-4">
                 <p className="text-sm font-semibold text-forest">Qué imprimir</p>
-                <PeriodPicker onChange={setCycleId} periods={periods} value={cycleId} />
+                <PeriodPicker
+                  onChange={(id) => {
+                    setCycleId(id);
+                    chooseWorkingPeriod(id, periods);
+                  }}
+                  periods={periods}
+                  value={cycleId}
+                />
                 <label className="field">
                   Zona
                   {/* Cocina termina por zona: imprimir esa tanda es lo que hace falta, no las

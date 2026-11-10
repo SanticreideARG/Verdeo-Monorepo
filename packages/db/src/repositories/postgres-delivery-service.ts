@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 
 import { AuditService } from '@verdeo/audit';
 import { createAccessToken, hashAccessToken } from '@verdeo/auth';
@@ -859,6 +859,7 @@ export class PostgresDeliveryService {
     const [route] = await transaction
       .select({
         deliveryDate: deliveryRoutes.deliveryDate,
+        deliveryRunId: deliveryRoutes.deliveryRunId,
         operatingSiteId: deliveryRoutes.operatingSiteId,
         status: deliveryRoutes.status,
       })
@@ -871,10 +872,16 @@ export class PostgresDeliveryService {
     return route;
   }
 
-  /** Los pedidos de ese día y esa ciudad, ruteables y sin hoja: los que se le pueden sumar. */
+  /**
+   * Los pedidos de esa ciudad, ruteables y sin hoja, que son de ese día o del reparto de la hoja.
+   *
+   * Una hoja armada desde un reparto toma los pedidos del reparto sin mirar la fecha de cada uno.
+   * Filtrando sólo por fecha, uno cuya fecha no coincidía entraba en la hoja pero, al sacarlo, no
+   * volvía a ofrecerse en ninguna (2026-11-09).
+   */
   private async freeOrders(
     database: Database | DatabaseTransaction,
-    route: { deliveryDate: string; operatingSiteId: string },
+    route: { deliveryDate: string; deliveryRunId: string | null; operatingSiteId: string },
   ) {
     const routed = database
       .select({ orderId: deliveryStops.orderId })
@@ -900,7 +907,12 @@ export class PostgresDeliveryService {
       .where(
         and(
           eq(orders.operatingSiteId, route.operatingSiteId),
-          eq(orders.deliveryDate, route.deliveryDate),
+          route.deliveryRunId
+            ? or(
+                eq(orders.deliveryDate, route.deliveryDate),
+                eq(orders.deliveryRunId, route.deliveryRunId),
+              )
+            : eq(orders.deliveryDate, route.deliveryDate),
           inArray(orders.status, ROUTABLE_STATUSES),
           notInArray(orders.id, routed),
         ),

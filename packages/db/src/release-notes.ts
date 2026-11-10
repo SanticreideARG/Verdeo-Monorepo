@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-09-periodo-recordado-sumar-pedidos',
+    body: `Períodos: el que se elige en Pedidos, Cocina o Etiquetas ahora queda al cambiar de pantalla, y si no es el corriente arriba lo avisa, con un botón para volver. Hojas de ruta: un pedido que se saca de una hoja vuelve a aparecer en "Sumar pedidos".`,
+  },
+  {
     key: '2026-11-09-cocina-especiales',
     body: `Cocina: el bloque de Intuitivos ahora se llama "Especiales" y sale como lo usa cocina: tamaño y cliente de título ("400 Armando Arce"), un plato por renglón y un renglón en blanco antes del siguiente. Ya no lleva número.`,
   },

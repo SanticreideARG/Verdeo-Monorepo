@@ -24,6 +24,11 @@ import { todayInOperation } from '../lib/dates.js';
 import { errorMessage, type WeeklyMenu } from '../lib/operations.js';
 import { currentPeriod, periodsFromMenus, type Period } from '../lib/periods.js';
 import {
+  chooseWorkingPeriod,
+  startingPeriod,
+  useReturnToCurrentPeriod,
+} from '../lib/workingPeriod.js';
+import {
   adjustGroup,
   fillerLabels,
   looseLabels,
@@ -182,13 +187,15 @@ export function LabelsStudioPage() {
       .finally(() => setMakingPdf(false));
   }
 
+  useReturnToCurrentPeriod(() => setCycleId(currentPeriod(periods)?.id ?? ''));
+
   useEffect(() => {
     if (!canRead) return;
     void apiRequest('/api/v1/menus').then(async (response) => {
       if (!response.ok) return;
       const list = periodsFromMenus(((await response.json()) as { items: WeeklyMenu[] }).items);
       setPeriods(list);
-      setCycleId((current) => current || (currentPeriod(list)?.id ?? ''));
+      setCycleId((current) => current || (startingPeriod(list)?.id ?? ''));
     });
   }, [canRead]);
 
@@ -551,7 +558,14 @@ export function LabelsStudioPage() {
           <div className="grid content-start gap-5">
             <div className="operation-card grid gap-4">
               <p className="text-sm font-semibold text-forest">Período</p>
-              <PeriodPicker onChange={setCycleId} periods={periods} value={cycleId} />
+              <PeriodPicker
+                onChange={(id) => {
+                  setCycleId(id);
+                  chooseWorkingPeriod(id, periods);
+                }}
+                periods={periods}
+                value={cycleId}
+              />
               <RunFilter onChange={setRunId} value={runId} />
               <label className="field">
                 Fecha de elaboración

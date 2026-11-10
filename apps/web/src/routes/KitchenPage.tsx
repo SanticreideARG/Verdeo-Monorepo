@@ -17,6 +17,13 @@ import {
   pickedDishes,
 } from '../lib/operations.js';
 import { formatMoment } from '../lib/dates.js';
+import { currentPeriod, periodsFromMenus } from '../lib/periods.js';
+import {
+  chooseWorkingPeriod,
+  parseWorkingPeriod,
+  useReturnToCurrentPeriod,
+  workingPeriodSnapshot,
+} from '../lib/workingPeriod.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 
 function stockUnits(kitchen: KitchenSummary): number {
@@ -55,7 +62,16 @@ export function KitchenPage() {
         storedOperatingSiteId(),
       );
       setMenus(loadedMenus);
-      setSelectedMenuId((current) => current || loadedMenus[0]?.id || '');
+      const periods = periodsFromMenus(loadedMenus);
+      const stored = parseWorkingPeriod(workingPeriodSnapshot());
+      setSelectedMenuId(
+        (current) =>
+          current ||
+          (stored && loadedMenus.find((menu) => menu.cycle.id === stored.id)?.id) ||
+          loadedMenus.find((menu) => menu.cycle.id === currentPeriod(periods)?.id)?.id ||
+          loadedMenus[0]?.id ||
+          '',
+      );
     }
     setLoading(false);
   }, [profile]);
@@ -63,6 +79,11 @@ export function KitchenPage() {
   useEffect(() => {
     void loadMenus();
   }, [loadMenus]);
+
+  useReturnToCurrentPeriod(() => {
+    const current = currentPeriod(periodsFromMenus(menus));
+    setSelectedMenuId(menus.find((menu) => menu.cycle.id === current?.id)?.id ?? '');
+  });
 
   const selectedMenu = menus.find((menu) => menu.id === selectedMenuId) ?? null;
 
@@ -243,7 +264,11 @@ export function KitchenPage() {
                 <label className="field kitchen-period">
                   Período
                   <select
-                    onChange={(event) => setSelectedMenuId(event.target.value)}
+                    onChange={(event) => {
+                      setSelectedMenuId(event.target.value);
+                      const chosen = menus.find((menu) => menu.id === event.target.value);
+                      chooseWorkingPeriod(chosen?.cycle.id ?? '', periodsFromMenus(menus));
+                    }}
                     value={selectedMenuId}
                   >
                     <option value="">Seleccionar</option>
