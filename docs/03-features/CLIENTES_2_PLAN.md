@@ -230,6 +230,8 @@ Cada fase va en su propio commit, con pruebas, Ayuda, novedades y BACKLOG.
 
 - **Fase 1** (2026-11-07): total y carga al bajar; contactos unificados con WhatsApp; orden, filtros y columnas en la API (`browseCustomers`); barra de orden y filtros; Tarjetas con zona, último pedido, deuda y "sin ubicar"; vista Columnas con ficha lateral. Falta sólo elegir barrio en la pantalla (la API ya filtra por barrio).
 
+- **Fase 2** (2026-11-10): ficha con pestañas Resumen, Pedidos, Domicilios, Contactos y Datos; cabecera con acciones rápidas y métricas; notas editables en el Resumen; filtro por período en Pedidos; historial de cambios sacado de la auditoría (`GET /customers/:id/history`); en el teléfono, ficha a pantalla completa con "← Clientes" y "atrás" del navegador. "Nuevo pedido" abre Pedidos con `?cliente=`. Las métricas se calculan con los últimos 100 pedidos que ya trae la ficha.
+
 Notas de lo construido:
 
 - Los números de cada cliente cuentan los pedidos no cancelados de la ciudad elegida arriba (todas, si no hay una). La deuda se calcula como en Por cobrar.

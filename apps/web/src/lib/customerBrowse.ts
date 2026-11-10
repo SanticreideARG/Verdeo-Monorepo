@@ -121,3 +121,41 @@ export function sinceLabel(value: string | null | undefined, today = new Date())
   if (days < 70) return `hace ${String(Math.floor(days / 7))} sem.`;
   return `hace ${String(Math.round(days / 30))} meses`;
 }
+
+/**
+ * Las métricas de la cabecera de la ficha, de los pedidos no cancelados.
+ *
+ * La frecuencia es el promedio entre fechas de entrega distintas: dos pedidos del mismo día son una
+ * sola vez que pidió. Con menos de dos fechas no hay frecuencia que decir.
+ */
+export function customerMetrics(
+  orders: readonly {
+    currency: string;
+    deliveryDate: string;
+    status: string;
+    totalMinor: number;
+  }[],
+) {
+  const live = orders.filter((order) => order.status !== 'CANCELLED');
+  const dates = [...new Set(live.map((order) => order.deliveryDate))].sort();
+  let frequency: string | null = null;
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  if (first && last && dates.length > 1) {
+    const days =
+      (new Date(`${last}T12:00:00`).getTime() - new Date(`${first}T12:00:00`).getTime()) /
+      86_400_000 /
+      (dates.length - 1);
+    frequency =
+      days < 7
+        ? `cada ${String(Math.round(days))} días`
+        : `cada ${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 }).format(days / 7)} sem.`;
+  }
+  return {
+    count: live.length,
+    currency: live[0]?.currency ?? 'ARS',
+    frequency,
+    lastOrderDate: last ?? null,
+    spentMinor: live.reduce((sum, order) => sum + order.totalMinor, 0),
+  };
+}

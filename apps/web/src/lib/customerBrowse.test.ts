@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   NO_FILTERS,
   activeFilterCount,
+  customerMetrics,
   customerListParams,
   shortDate,
   sinceLabel,
@@ -26,6 +27,33 @@ describe('lista de Clientes 2', () => {
       withDebt: 'true',
       zoneId: 'z1',
     });
+  });
+
+  it('calcula las métricas de la ficha sin los cancelados', () => {
+    const pedido = (deliveryDate: string, status = 'CONFIRMED') => ({
+      currency: 'ARS',
+      deliveryDate,
+      status,
+      totalMinor: 1000,
+    });
+    expect(customerMetrics([])).toMatchObject({ count: 0, frequency: null, lastOrderDate: null });
+    expect(
+      customerMetrics([
+        pedido('2026-10-01'),
+        pedido('2026-10-01'),
+        pedido('2026-10-22'),
+        pedido('2026-11-05', 'CANCELLED'),
+      ]),
+    ).toEqual({
+      count: 3,
+      currency: 'ARS',
+      frequency: 'cada 3 sem.',
+      lastOrderDate: '2026-10-22',
+      spentMinor: 3000,
+    });
+    expect(customerMetrics([pedido('2026-10-01'), pedido('2026-10-04')]).frequency).toBe(
+      'cada 3 días',
+    );
   });
 
   it('cuenta los filtros activos', () => {

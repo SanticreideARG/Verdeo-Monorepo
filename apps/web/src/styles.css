@@ -13793,3 +13793,90 @@ body:has(.modal-backdrop) .assistant-launcher.is-operator.is-saying {
   max-height: 50vh;
   overflow-y: auto;
 }
+
+/* Ficha del cliente con pestañas (Clientes 2, fase 2). */
+.crm-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: 0.5rem;
+}
+.crm-quick-actions .button {
+  min-height: 40px;
+}
+.crm-profile-metrics .is-debt strong {
+  color: color-mix(in srgb, #d93025 75%, var(--db-text));
+}
+.crm-tabs {
+  overflow-x: auto;
+}
+.crm-tabs button {
+  min-height: 40px;
+  white-space: nowrap;
+}
+.crm-summary {
+  display: grid;
+  gap: 1.25rem;
+}
+.crm-summary h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.crm-summary p {
+  margin: 0;
+}
+.crm-summary form {
+  display: grid;
+  justify-items: start;
+  gap: 0.5rem;
+}
+.crm-summary textarea {
+  width: 100%;
+}
+.crm-order-period {
+  max-width: 18rem;
+  margin-bottom: 0.75rem;
+}
+.crm-history {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.crm-history li {
+  display: grid;
+}
+.crm-history small {
+  color: var(--db-muted, var(--color-ink-muted));
+}
+.crm-detail-back {
+  display: none;
+}
+@media (max-width: 760px) {
+  .crm-profile-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .crm-profile-metrics strong {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  /* En el teléfono, la lista o la ficha; antes se apilaban. */
+  .crm-layout:not(.is-columns):not(.is-phone-detail) .crm-detail {
+    display: none;
+  }
+  .crm-layout.is-phone-detail .crm-directory {
+    display: none;
+  }
+  .crm-detail-back {
+    display: block;
+    min-height: 40px;
+    margin-bottom: 0.5rem;
+    border: 0;
+    background: none;
+    color: var(--db-text);
+    font-weight: 700;
+  }
+}

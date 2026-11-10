@@ -6,6 +6,7 @@ import { LocateOrderControl } from '../components/LocateAddress.js';
 import { AfterSaveDialog } from '../components/AfterSaveDialog.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { CustomerExportDialog } from '../components/CustomerExportDialog.js';
+import { CustomerHistory } from '../components/CustomerHistory.js';
 import { CustomerTable } from '../components/CustomerTable.js';
 import { MergeCustomersDialog } from '../components/MergeCustomersDialog.js';
 import { DraftNotice } from '../components/DraftNotice.js';
@@ -24,6 +25,7 @@ import {
   customerListParams,
   readCustomerSort,
   readCustomerView,
+  customerMetrics,
   sinceLabel,
   writeCustomerSort,
   writeCustomerView,
@@ -46,6 +48,51 @@ import {
   type CustomerDetail,
   type CustomerSummary,
 } from '../lib/operations.js';
+
+type CustomerTab = 'contactos' | 'datos' | 'domicilios' | 'pedidos' | 'resumen';
+
+const CUSTOMER_TABS: readonly (readonly [CustomerTab, string])[] = [
+  ['resumen', 'Resumen'],
+  ['pedidos', 'Pedidos'],
+  ['domicilios', 'Domicilios'],
+  ['contactos', 'Contactos'],
+  ['datos', 'Datos'],
+];
+
+const PHONE_QUERY = '(max-width: 760px)';
+
+/** Un pedido en la ficha: lo que llevó va abajo, porque el historial se lee por lo que pide. */
+function CustomerOrderCard({ order }: { order: CustomerDetail['orders'][number] }) {
+  return (
+    <article>
+      <strong>
+        <Link to={`/app/pedidos/${order.id}`}>Ver pedido</Link>
+      </strong>
+      <span className="status-chip">{orderStatusLabel(order.status)}</span>
+      <span>
+        {new Intl.DateTimeFormat('es-AR').format(new Date(`${order.deliveryDate}T12:00:00`))}
+      </span>
+      <b>{formatMoney(order.totalMinor, order.currency)}</b>
+      {order.items.length > 0 ? (
+        <ul className="crm-order-items">
+          {order.items.map((item, index) => (
+            <li key={`${item.familyName}-${item.variantName}-${String(index)}`}>
+              <b>{item.quantityUnits}×</b> {item.familyName} {item.variantName}
+              {item.dishes.length > 0 ? <small> ({item.dishes.join(', ')})</small> : null}
+            </li>
+          ))}
+          {order.cycleAlias || order.source === 'opportunity_sale' ? (
+            <li className="crm-order-meta">
+              {[order.cycleAlias, order.source === 'opportunity_sale' ? 'Del stock' : null]
+                .filter(Boolean)
+                .join(' · ')}
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
+    </article>
+  );
+}
 
 /** De los pedidos, las direcciones sin domicilio guardado: una por texto, la más reciente. */
 function unsavedOrderAddresses(orders: CustomerDetail['orders']) {
@@ -157,6 +204,9 @@ export function CustomersPage() {
   const [view, setView] = useState<CustomerView>(readCustomerView);
   // En la vista Columnas la ficha se abre como panel lateral, a pedido.
   const [detailOpen, setDetailOpen] = useState(false);
+  const [tab, setTab] = useState<CustomerTab>('resumen');
+  const [orderPeriod, setOrderPeriod] = useState('');
+  const detailInHistory = useRef(false);
   const browseRef = useRef({ filters, sort });
   browseRef.current = { filters, sort };
   const listEndRef = useRef<HTMLDivElement>(null);
@@ -322,11 +372,33 @@ export function CustomersPage() {
   }, [browseKey]);
 
   // La ficha lateral de Columnas se cierra con Escape, como un diálogo.
+  /*
+   * En el teléfono y en Columnas la ficha tapa la lista, así que "atrás" del navegador tiene que
+   * volver a la lista. Se repite el estado de la entrada actual para que el enrutador no lo tome
+   * como otra pantalla.
+   */
+  useEffect(() => {
+    if (!detailOpen) return;
+    if (view !== 'columns' && !window.matchMedia(PHONE_QUERY).matches) return;
+    window.history.pushState(window.history.state, '');
+    detailInHistory.current = true;
+    const onPop = () => {
+      detailInHistory.current = false;
+      setDetailOpen(false);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [detailOpen, view]);
+
+  function closeDetail() {
+    if (detailInHistory.current) window.history.back();
+    else setDetailOpen(false);
+  }
+
   useEffect(() => {
     if (!detailOpen) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !document.querySelector('.modal-backdrop'))
-        setDetailOpen(false);
+      if (event.key === 'Escape' && !document.querySelector('.modal-backdrop')) closeDetail();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -431,6 +503,8 @@ export function CustomersPage() {
   }
 
   async function selectCustomer(customerId: string) {
+    setTab('resumen');
+    setOrderPeriod('');
     setSelectedId(customerId);
     setShowCreate(false);
     setMessage('');
@@ -601,7 +675,6 @@ export function CustomersPage() {
           body: JSON.stringify({
             displayName: formText(form, 'displayName'),
             firstName: formText(form, 'firstName') || null,
-            internalNotes: formText(form, 'internalNotes') || null,
             lastName: formText(form, 'lastName') || null,
             status: formText(form, 'status'),
           }),
@@ -613,6 +686,30 @@ export function CustomersPage() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos actualizar el cliente.');
     }
+  }
+
+  /** Las notas se editan en el Resumen, sin pasar por el resto de los datos. */
+  async function saveNotes(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!detail) return;
+    const form = new FormData(event.currentTarget);
+    try {
+      await responseJson<CustomerDetail>(
+        await apiRequest(`/api/v1/customers/${detail.id}`, {
+          body: JSON.stringify({ internalNotes: formText(form, 'internalNotes') || null }),
+          method: 'PATCH',
+        }),
+      );
+      await loadCustomer(detail.id);
+      showToast('Notas guardadas.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'No pudimos guardar las notas.');
+    }
+  }
+
+  async function copyPhone(number: string) {
+    await navigator.clipboard.writeText(formatArgentinePhone(number));
+    showToast('Teléfono copiado.');
   }
 
   /**
@@ -877,6 +974,13 @@ export function CustomersPage() {
     return <BrandLoading message="Cargando tu espacio…" />;
   }
 
+  const metrics = detail ? customerMetrics(detail.orders) : null;
+  const mainNumber = detail ? detail.whatsapp || detail.phone || '' : '';
+  const activeAddresses = (detail?.addresses ?? []).filter((address) => address.active);
+  const mainAddress = activeAddresses.find((address) => address.primary) ?? activeAddresses[0];
+  const orderPeriods = [
+    ...new Set((detail?.orders ?? []).flatMap((order) => order.cycleAlias ?? [])),
+  ];
   const canCreate = profile.permissions.includes('customers.create');
   const canEdit =
     profile.permissions.includes('customers.edit') &&
@@ -1058,7 +1162,7 @@ export function CustomersPage() {
         <div
           className={`crm-layout${view === 'columns' ? ' is-columns' : ''}${
             view === 'columns' && detailOpen ? ' is-detail-open' : ''
-          }`}
+          }${view === 'cards' && (detailOpen || showCreate) ? ' is-phone-detail' : ''}`}
         >
           {view === 'columns' ? (
             <div className="crm-table-area">
@@ -1098,7 +1202,10 @@ export function CustomersPage() {
                   <button
                     className={selectedId === customer.id && !showCreate ? 'is-active' : ''}
                     key={customer.id}
-                    onClick={() => void selectCustomer(customer.id)}
+                    onClick={() => {
+                      setDetailOpen(true);
+                      void selectCustomer(customer.id);
+                    }}
                     type="button"
                   >
                     <span>{customer.displayName.slice(0, 1).toLocaleUpperCase('es-AR')}</span>
@@ -1148,12 +1255,13 @@ export function CustomersPage() {
 
           <section className="crm-detail">
             {view === 'columns' && detailOpen ? (
-              <button
-                className="crm-detail-close"
-                onClick={() => setDetailOpen(false)}
-                type="button"
-              >
+              <button className="crm-detail-close" onClick={closeDetail} type="button">
                 ← Volver a la tabla
+              </button>
+            ) : null}
+            {view === 'cards' && detailOpen ? (
+              <button className="crm-detail-back" onClick={closeDetail} type="button">
+                ← Clientes
               </button>
             ) : null}
             {showCreate ? (
@@ -1307,529 +1415,703 @@ export function CustomersPage() {
                   </div>
                   <div className="crm-profile-metrics">
                     <span>
-                      <strong>{detail.orders.length}</strong> pedidos
+                      <strong>{metrics?.count ?? 0}</strong> pedidos
                     </span>
                     <span>
                       <strong>
-                        {detail.addresses?.filter(({ active }) => active).length ?? 0}
+                        {formatMoney(metrics?.spentMinor ?? 0, metrics?.currency ?? 'ARS')}
                       </strong>{' '}
-                      domicilios
+                      gastado
                     </span>
                     <span>
-                      <strong>
-                        {detail.identities?.filter(({ active }) => active).length ?? 0}
-                      </strong>{' '}
-                      contactos
+                      <strong>{sinceLabel(metrics?.lastOrderDate ?? null)}</strong> último pedido
+                    </span>
+                    <span>
+                      <strong>{metrics?.frequency ?? '—'}</strong> frecuencia
+                    </span>
+                    <span className={debt ? 'is-debt' : undefined}>
+                      <strong>{debt ? formatMoney(debt.totalMinor, debt.currency) : '$ 0'}</strong>{' '}
+                      deuda
                     </span>
                   </div>
-                </section>
-
-                {canEdit ? (
-                  <details className="crm-panel crm-collapsible">
-                    <summary>Editar información general</summary>
-                    <form onSubmit={(event) => void updateCustomer(event)}>
-                      <div className="form-grid">
-                        <label className="field field-wide">
-                          Nombre visible
-                          <input defaultValue={detail.displayName} name="displayName" required />
-                        </label>
-                        <label className="field">
-                          Nombre
-                          <input defaultValue={detail.firstName ?? ''} name="firstName" />
-                        </label>
-                        <label className="field">
-                          Apellido
-                          <input defaultValue={detail.lastName ?? ''} name="lastName" />
-                        </label>
-                        <label className="field">
-                          Estado
-                          {/* Desplegable y no texto libre: un tipeo creaba un estado nuevo que
-                              ninguna otra pantalla sabe interpretar. */}
-                          <select defaultValue={detail.status} name="status" required>
-                            {CUSTOMER_STATUSES.map((status) => (
-                              <option key={status} value={status}>
-                                {customerStatusLabel(status)}
-                              </option>
-                            ))}
-                            {/* Un estado cargado a mano antes de esto sigue siendo elegible, para
-                                que guardar la ficha no lo cambie sin querer. */}
-                            {CUSTOMER_STATUSES.includes(detail.status) ? null : (
-                              <option value={detail.status}>{detail.status}</option>
-                            )}
-                          </select>
-                        </label>
-                        <label className="field field-wide">
-                          Notas internas
-                          <textarea
-                            defaultValue={detail.internalNotes ?? ''}
-                            name="internalNotes"
-                            rows={3}
-                          />
-                        </label>
-                      </div>
-                      <div className="form-actions">
-                        <button className="button button-primary" type="submit">
-                          Guardar cambios
+                  <div className="crm-quick-actions">
+                    {mainNumber ? (
+                      <>
+                        <a
+                          className="button button-secondary"
+                          href={whatsappHref(mainNumber)}
+                          rel="noopener noreferrer"
+                          target="_blank"
+                        >
+                          WhatsApp
+                        </a>
+                        <a className="button button-secondary" href={`tel:${mainNumber}`}>
+                          Llamar
+                        </a>
+                        <button
+                          className="button button-secondary"
+                          onClick={() => void copyPhone(mainNumber)}
+                          type="button"
+                        >
+                          Copiar teléfono
                         </button>
-                        {canMoveSite ? (
-                          <button
-                            className="button button-secondary"
-                            onClick={() => setMovingSite(true)}
-                            type="button"
-                          >
-                            Cambiar de ciudad
-                          </button>
-                        ) : null}
-                        {canDelete ? (
-                          <button
-                            className="button button-danger"
-                            onClick={() => setConfirmDelete(true)}
-                            type="button"
-                          >
-                            Eliminar cliente
-                          </button>
-                        ) : null}
-                      </div>
-                    </form>
-                  </details>
-                ) : null}
-
-                <section className="crm-panel">
-                  <div className="crm-panel-heading">
-                    <div>
-                      <small>Canales</small>
-                      <h2>Contactos</h2>
-                    </div>
-                  </div>
-                  <div className="crm-contact-grid">
-                    {contactCards(detail.identities ?? []).map(({ identity, types }) => (
-                      <article key={identity.id}>
-                        <span>{types.map(contactTypeLabel).join(' · ')}</span>
-                        {/*
-                         * El mismo número que la tabla de pedidos muestra como
-                         * "(011) 15 5573 4841" aparecía acá como "+54926155720045": quince
-                         * dígitos corridos no se leen, se descifran, y no hay forma de comparar
-                         * dos contactos ni de dictar uno.
-                         */}
-                        <strong>
-                          {identity.type === 'phone' || identity.type === 'whatsapp'
-                            ? formatArgentinePhone(identity.value)
-                            : identity.value}
-                        </strong>
-                        <small>
-                          {identity.primary ? 'Principal' : 'Alternativo'} ·{' '}
-                          {identity.verified ? 'verificado' : 'sin verificar'}
-                        </small>
-                        {/* Abre el chat con ese número: en la computadora, WhatsApp Web. */}
-                        {identity.type === 'phone' || identity.type === 'whatsapp' ? (
-                          <a
-                            className="crm-contact-whatsapp"
-                            href={whatsappHref(identity.value)}
-                            rel="noopener noreferrer"
-                            target="_blank"
-                            title="Abrir el chat en WhatsApp"
-                          >
-                            WhatsApp ↗
-                          </a>
-                        ) : null}
-                      </article>
-                    ))}
-                  </div>
-                  {canEdit ? (
-                    <details className="crm-inline-form">
-                      <summary>Agregar contacto</summary>
-                      <form onSubmit={(event) => void addIdentity(event)}>
-                        <label className="field">
-                          Tipo
-                          <input
-                            list="identity-types"
-                            name="type"
-                            placeholder="whatsapp"
-                            required
-                          />
-                          <datalist id="identity-types">
-                            <option value="whatsapp" />
-                            <option value="phone" />
-                            <option value="email" />
-                          </datalist>
-                        </label>
-                        <label className="field">
-                          Valor
-                          <input name="value" required />
-                        </label>
-                        <label className="crm-check">
-                          <input name="primary" type="checkbox" /> Contacto principal
-                        </label>
-                        <button className="button button-primary" type="submit">
-                          Agregar
-                        </button>
-                      </form>
-                    </details>
-                  ) : null}
-                </section>
-
-                <section className="crm-panel">
-                  <div className="crm-panel-heading">
-                    <div>
-                      <small>Logística CRM</small>
-                      <h2>Domicilios</h2>
-                    </div>
-                  </div>
-                  <div className="crm-address-grid">
-                    {detail.addresses
-                      ?.filter((address) => address.active)
-                      .map((address) => {
-                        const request = geocoding[address.id];
-                        return (
-                          <article className="crm-address-card" key={address.id}>
-                            <div className="crm-address-top">
-                              <div>
-                                <span>{address.label}</span>
-                                {address.primary ? <small>Principal</small> : null}
-                                {/* Whether the customer wrote this address themselves changes how
-                                  much an operator should second-guess it before correcting. */}
-                                {address.source === 'customer' ? (
-                                  <small>La cargó el cliente</small>
-                                ) : null}
-                              </div>
-                              <i data-status={address.geocodingStatus}>
-                                {addressStatusLabel(address.geocodingStatus)}
-                              </i>
-                            </div>
-                            <h3>{address.writtenAddress}</h3>
-                            {/* Un renglón vacío no se anuncia: decía "Sin datos territoriales
-                              adicionales", que informa la ausencia de un campo opcional. Lo que sí
-                              importa —un domicilio sin geocodificar, que deja el pedido afuera del
-                              reparto— ya lo dice el estado de arriba. */}
-                            {[address.unit, address.city, address.sector, address.operationalZone]
-                              .filter(Boolean)
-                              .join(' · ') ? (
-                              <p>
-                                {[
-                                  address.unit,
-                                  address.city,
-                                  address.sector,
-                                  address.operationalZone,
-                                ]
-                                  .filter(Boolean)
-                                  .join(' · ')}
-                              </p>
-                            ) : null}
-                            {address.accessNotes ? (
-                              <p className="crm-address-note">Acceso: {address.accessNotes}</p>
-                            ) : null}
-                            {address.deliveryWindow ? (
-                              <p className="crm-address-note">Recibe: {address.deliveryWindow}</p>
-                            ) : null}
-                            {address.latitude !== null && address.longitude !== null ? (
-                              <>
-                                <code>
-                                  {address.latitude.toFixed(6)}, {address.longitude.toFixed(6)}
-                                </code>
-                                <AddressMap
-                                  label={address.writtenAddress}
-                                  latitude={address.latitude}
-                                  longitude={address.longitude}
-                                />
-                              </>
-                            ) : null}
-                            <div className="crm-address-actions">
-                              {address.locationUrl ? (
-                                <a href={address.locationUrl} rel="noreferrer" target="_blank">
-                                  Abrir mapa
-                                </a>
-                              ) : null}
-                              {canEdit && address.geocodingStatus !== 'CONFIRMED' ? (
-                                <button
-                                  className="is-primary"
-                                  onClick={() => void startGeocoding(address)}
-                                  type="button"
-                                >
-                                  {/* "Validar" no decía qué pasaba al tocarlo. Busca la dirección,
-                                    propone la ubicación y, al aceptarla, deja la dirección escrita
-                                    como corresponde. */}
-                                  Actualizar ubicación
-                                </button>
-                              ) : null}
-                              {canEdit ? (
-                                <button
-                                  className="is-danger"
-                                  onClick={() => setRemovingAddress(address)}
-                                  type="button"
-                                >
-                                  Eliminar
-                                </button>
-                              ) : null}
-                            </div>
-                            {request ? (
-                              <div className="crm-geocoding-box">
-                                <strong>
-                                  {request.status === 'CANDIDATES'
-                                    ? 'Ubicaciones encontradas'
-                                    : 'Corrección manual'}
-                                </strong>
-                                {request.status === 'CANDIDATES' ? (
-                                  <p className="crm-geocoding-hint">
-                                    Al elegir una queda la ubicación cargada y la dirección escrita
-                                    como figura acá.
-                                  </p>
-                                ) : null}
-                                {request.candidates.map((candidate) => (
-                                  <div className="crm-candidate" key={candidate.id}>
-                                    <div>
-                                      <span>{candidate.formattedAddress}</span>
-                                      <code>
-                                        {candidate.latitude.toFixed(6)},{' '}
-                                        {candidate.longitude.toFixed(6)}
-                                      </code>
-                                      {/* Seeing the candidate on a map is the whole point of this
-                                        screen: two candidates for the same street differ by digits
-                                        nobody can eyeball, but they are obvious on a map. */}
-                                      <AddressMap
-                                        label={candidate.formattedAddress}
-                                        latitude={candidate.latitude}
-                                        longitude={candidate.longitude}
-                                      />
-                                    </div>
-                                    <button
-                                      onClick={() =>
-                                        void confirmCandidate(
-                                          address,
-                                          candidate.id,
-                                          candidate.formattedAddress,
-                                        )
-                                      }
-                                      type="button"
-                                    >
-                                      Usar esta
-                                    </button>
-                                  </div>
-                                ))}
-                                {request.status !== 'CANDIDATES' ||
-                                request.candidates.length === 0 ? (
-                                  <form
-                                    className="crm-manual-location"
-                                    onSubmit={(event) => void confirmManualLocation(event, address)}
-                                  >
-                                    <label className="field">
-                                      Latitud
-                                      <input
-                                        name="latitude"
-                                        step="any"
-                                        type="number"
-                                        min="-90"
-                                        max="90"
-                                        required
-                                      />
-                                    </label>
-                                    <label className="field">
-                                      Longitud
-                                      <input
-                                        name="longitude"
-                                        step="any"
-                                        type="number"
-                                        min="-180"
-                                        max="180"
-                                        required
-                                      />
-                                    </label>
-                                    <label className="field">
-                                      Ciudad
-                                      <input defaultValue={address.city ?? ''} name="city" />
-                                    </label>
-                                    <label className="field">
-                                      Sector
-                                      <input defaultValue={address.sector ?? ''} name="sector" />
-                                    </label>
-                                    <label className="field">
-                                      Zona operativa
-                                      <input
-                                        defaultValue={address.operationalZone ?? ''}
-                                        name="operationalZone"
-                                      />
-                                    </label>
-                                    <label className="field">
-                                      Enlace
-                                      <input
-                                        defaultValue={address.locationUrl ?? ''}
-                                        name="locationUrl"
-                                        type="url"
-                                      />
-                                    </label>
-                                    <button className="button button-primary" type="submit">
-                                      Confirmar corrección
-                                    </button>
-                                  </form>
-                                ) : null}
-                                <button
-                                  className="crm-reject"
-                                  onClick={() => void rejectGeocoding(address)}
-                                  type="button"
-                                >
-                                  Descartar solicitud
-                                </button>
-                              </div>
-                            ) : null}
-                          </article>
-                        );
-                      })}
-                  </div>
-                  {/*
-                   * El cruce con los pedidos (2026-11-09): una dirección que se usó en un pedido y
-                   * nunca quedó como domicilio. Se guarda y se ubica desde acá.
-                   */}
-                  {canEdit && unsavedOrderAddresses(detail.orders).length > 0 ? (
-                    <div className="crm-unsaved-addresses">
-                      <h4>Direcciones usadas en pedidos, sin guardar</h4>
-                      {unsavedOrderAddresses(detail.orders).map((order) => (
-                        <div key={order.id}>
-                          <strong>{order.unsavedAddress}</strong>
-                          <LocateOrderControl
-                            address={order.unsavedAddress ?? ''}
-                            onLocated={() => void loadCustomer(detail.id)}
-                            orderId={order.id}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                  {canEdit ? (
-                    <details className="crm-inline-form">
-                      <summary>Agregar domicilio</summary>
-                      <form onSubmit={(event) => void addAddress(event)}>
-                        <label className="field">
-                          Etiqueta
-                          <input name="label" placeholder="Casa, oficina…" required />
-                        </label>
-                        <label className="field field-wide">
-                          Dirección, línea 1
-                          <input
-                            minLength={4}
-                            name="writtenAddress"
-                            placeholder="Calle, número y ciudad"
-                            required
-                          />
-                          <small className="field-hint">Es lo que se busca en el mapa.</small>
-                        </label>
-                        <label className="field field-wide">
-                          Enlace de ubicación
-                          <input
-                            name="locationUrl"
-                            type="url"
-                            placeholder="https://maps.google.com/…"
-                          />
-                        </label>
-                        <label className="field">
-                          Sector
-                          <input name="sector" />
-                        </label>
-                        <label className="field">
-                          Ciudad
-                          <select defaultValue={defaultZoneId} name="geographicZoneId" required>
-                            <option value="">Elegí una ciudad</option>
-                            {zones.map((zone) => (
-                              <option key={zone.id} value={zone.id}>
-                                {zone.displayName}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="field">
-                          Tipo de propiedad
-                          <input name="propertyType" />
-                        </label>
-                        <label className="field">
-                          Dirección, línea 2
-                          <input
-                            maxLength={300}
-                            name="unit"
-                            placeholder="Piso, depto, timbre, barrio, detalles"
-                          />
-                        </label>
-                        <label className="field">
-                          Horario en que recibe
-                          {/* Texto libre: la realidad de cada cliente no entra en un selector de
-                              horas, y quien lo lee es una persona manejando. Va en la hoja de
-                              reparto, debajo de la dirección. */}
-                          <input name="deliveryWindow" placeholder="Después de las 18" />
-                        </label>
-                        <label className="field field-wide">
-                          Indicaciones de acceso
-                          <textarea name="accessNotes" rows={2} />
-                        </label>
-                        <label className="crm-check">
-                          <input defaultChecked name="primary" type="checkbox" /> Domicilio
-                          principal
-                        </label>
-                        <button className="button button-primary" type="submit">
-                          Agregar domicilio
-                        </button>
-                      </form>
-                    </details>
-                  ) : null}
-                </section>
-
-                <section className="crm-panel">
-                  <div className="crm-panel-heading">
-                    <div>
-                      <small>Historial comercial</small>
-                      <h2>Pedidos asociados</h2>
-                    </div>
-                    <span>{detail.orders.length}</span>
-                  </div>
-                  {debt ? (
-                    <p className="crm-debt">
-                      Debe <strong>{formatMoney(debt.totalMinor, debt.currency)}</strong> en{' '}
-                      {debt.count === 1 ? '1 pedido' : `${String(debt.count)} pedidos`} de períodos
-                      cerrados. <Link to="/app/por-cobrar">Ver en Por cobrar</Link>
-                    </p>
-                  ) : null}
-                  <div className="crm-orders">
-                    {detail.orders.map((order) => (
-                      <article key={order.id}>
-                        <strong>
-                          <Link to={`/app/pedidos/${order.id}`}>Ver pedido</Link>
-                        </strong>
-                        <span className="status-chip">{orderStatusLabel(order.status)}</span>
-                        <span>
-                          {new Intl.DateTimeFormat('es-AR').format(
-                            new Date(`${order.deliveryDate}T12:00:00`),
-                          )}
-                        </span>
-                        <b>{formatMoney(order.totalMinor, order.currency)}</b>
-                        {/*
-                         * Qué llevó, debajo de los datos de siempre: el historial de un cliente se
-                         * lee por lo que pide, no por el número de pedido.
-                         */}
-                        {order.items.length > 0 ? (
-                          <ul className="crm-order-items">
-                            {order.items.map((item, index) => (
-                              <li key={`${item.familyName}-${item.variantName}-${String(index)}`}>
-                                <b>{item.quantityUnits}×</b> {item.familyName} {item.variantName}
-                                {item.dishes.length > 0 ? (
-                                  <small> ({item.dishes.join(', ')})</small>
-                                ) : null}
-                              </li>
-                            ))}
-                            {order.cycleAlias || order.source === 'opportunity_sale' ? (
-                              <li className="crm-order-meta">
-                                {[
-                                  order.cycleAlias,
-                                  order.source === 'opportunity_sale' ? 'Del stock' : null,
-                                ]
-                                  .filter(Boolean)
-                                  .join(' · ')}
-                              </li>
-                            ) : null}
-                          </ul>
-                        ) : null}
-                      </article>
-                    ))}
-                    {detail.orders.length === 0 ? (
-                      <p>Este cliente todavía no tiene pedidos.</p>
+                      </>
+                    ) : null}
+                    {detail.email ? (
+                      <a className="button button-secondary" href={`mailto:${detail.email}`}>
+                        Correo
+                      </a>
+                    ) : null}
+                    {profile.permissions.includes('orders.create') ? (
+                      <Link
+                        className="button button-primary"
+                        to={`/app/pedidos?cliente=${detail.id}`}
+                      >
+                        Nuevo pedido
+                      </Link>
                     ) : null}
                   </div>
                 </section>
+
+                <div
+                  aria-label="Secciones de la ficha"
+                  className="order-import-tabs crm-tabs"
+                  role="tablist"
+                >
+                  {CUSTOMER_TABS.map(([key, label], index) => (
+                    <button
+                      aria-selected={tab === key}
+                      className={tab === key ? 'is-active' : ''}
+                      key={key}
+                      onClick={() => setTab(key)}
+                      onKeyDown={(event) => {
+                        const step =
+                          event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+                        if (!step) return;
+                        const next =
+                          CUSTOMER_TABS[
+                            (index + step + CUSTOMER_TABS.length) % CUSTOMER_TABS.length
+                          ];
+                        if (!next) return;
+                        setTab(next[0]);
+                        const buttons =
+                          event.currentTarget.parentElement?.querySelectorAll('button');
+                        buttons?.[CUSTOMER_TABS.indexOf(next)]?.focus();
+                      }}
+                      role="tab"
+                      tabIndex={tab === key ? 0 : -1}
+                      type="button"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {tab === 'resumen' ? (
+                  <section className="crm-panel crm-summary">
+                    <div>
+                      <h3>Contacto</h3>
+                      <p>
+                        {mainNumber ? formatArgentinePhone(mainNumber) : 'Sin teléfono cargado.'}
+                        {detail.email ? <small> · {detail.email}</small> : null}
+                      </p>
+                    </div>
+                    <div>
+                      <h3>Domicilio principal</h3>
+                      {mainAddress ? (
+                        <>
+                          <p>
+                            {mainAddress.writtenAddress}
+                            {mainAddress.unit ? <small> · {mainAddress.unit}</small> : null}
+                          </p>
+                          {mainAddress.latitude !== null && mainAddress.longitude !== null ? (
+                            <AddressMap
+                              label={mainAddress.writtenAddress}
+                              latitude={mainAddress.latitude}
+                              longitude={mainAddress.longitude}
+                            />
+                          ) : (
+                            <button
+                              className="locate-retry-open"
+                              onClick={() => setTab('domicilios')}
+                              type="button"
+                            >
+                              Falta ubicarlo en el mapa
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <p>
+                          Sin domicilios: agregá uno para poder repartir.{' '}
+                          <button
+                            className="locate-retry-open"
+                            onClick={() => setTab('domicilios')}
+                            type="button"
+                          >
+                            Ir a Domicilios
+                          </button>
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <h3>Notas internas</h3>
+                      {canEdit ? (
+                        <form
+                          key={`${detail.id}-${detail.internalNotes ?? ''}`}
+                          onSubmit={(event) => void saveNotes(event)}
+                        >
+                          <textarea
+                            aria-label="Notas internas"
+                            defaultValue={detail.internalNotes ?? ''}
+                            maxLength={5000}
+                            name="internalNotes"
+                            rows={3}
+                          />
+                          <button className="button button-secondary" type="submit">
+                            Guardar notas
+                          </button>
+                        </form>
+                      ) : (
+                        <p>{detail.internalNotes || 'Sin notas.'}</p>
+                      )}
+                    </div>
+                    <div>
+                      <h3>Últimos pedidos</h3>
+                      <div className="crm-orders">
+                        {detail.orders.slice(0, 3).map((order) => (
+                          <CustomerOrderCard key={order.id} order={order} />
+                        ))}
+                        {detail.orders.length === 0 ? <p>Todavía no tiene pedidos.</p> : null}
+                      </div>
+                      {detail.orders.length > 3 ? (
+                        <button
+                          className="locate-retry-open"
+                          onClick={() => setTab('pedidos')}
+                          type="button"
+                        >
+                          Ver los {detail.orders.length} pedidos
+                        </button>
+                      ) : null}
+                    </div>
+                  </section>
+                ) : null}
+
+                {tab === 'datos' ? (
+                  <>
+                    {canEdit ? (
+                      <section className="crm-panel">
+                        <form onSubmit={(event) => void updateCustomer(event)}>
+                          <div className="form-grid">
+                            <label className="field field-wide">
+                              Nombre visible
+                              <input
+                                defaultValue={detail.displayName}
+                                name="displayName"
+                                required
+                              />
+                            </label>
+                            <label className="field">
+                              Nombre
+                              <input defaultValue={detail.firstName ?? ''} name="firstName" />
+                            </label>
+                            <label className="field">
+                              Apellido
+                              <input defaultValue={detail.lastName ?? ''} name="lastName" />
+                            </label>
+                            <label className="field">
+                              Estado
+                              {/* Desplegable y no texto libre: un tipeo creaba un estado nuevo que
+                                  ninguna otra pantalla sabe interpretar. */}
+                              <select defaultValue={detail.status} name="status" required>
+                                {CUSTOMER_STATUSES.map((status) => (
+                                  <option key={status} value={status}>
+                                    {customerStatusLabel(status)}
+                                  </option>
+                                ))}
+                                {/* Un estado cargado a mano antes de esto sigue siendo elegible, para
+                                    que guardar la ficha no lo cambie sin querer. */}
+                                {CUSTOMER_STATUSES.includes(detail.status) ? null : (
+                                  <option value={detail.status}>{detail.status}</option>
+                                )}
+                              </select>
+                            </label>
+                          </div>
+                          <div className="form-actions">
+                            <button className="button button-primary" type="submit">
+                              Guardar cambios
+                            </button>
+                            {canMoveSite ? (
+                              <button
+                                className="button button-secondary"
+                                onClick={() => setMovingSite(true)}
+                                type="button"
+                              >
+                                Cambiar de ciudad
+                              </button>
+                            ) : null}
+                            {canMerge ? (
+                              <button
+                                className="button button-secondary"
+                                onClick={() => setShowMerge(true)}
+                                type="button"
+                              >
+                                Fusionar con otro
+                              </button>
+                            ) : null}
+                            {canDelete ? (
+                              <button
+                                className="button button-danger"
+                                onClick={() => setConfirmDelete(true)}
+                                type="button"
+                              >
+                                Eliminar cliente
+                              </button>
+                            ) : null}
+                          </div>
+                        </form>
+                      </section>
+                    ) : null}
+                    <section className="crm-panel">
+                      <div className="crm-panel-heading">
+                        <div>
+                          <small>Auditoría</small>
+                          <h2>Historial de cambios</h2>
+                        </div>
+                      </div>
+                      <CustomerHistory customerId={detail.id} />
+                    </section>
+                  </>
+                ) : null}
+
+                {tab === 'contactos' ? (
+                  <section className="crm-panel">
+                    <div className="crm-panel-heading">
+                      <div>
+                        <small>Canales</small>
+                        <h2>Contactos</h2>
+                      </div>
+                    </div>
+                    <div className="crm-contact-grid">
+                      {contactCards(detail.identities ?? []).map(({ identity, types }) => (
+                        <article key={identity.id}>
+                          <span>{types.map(contactTypeLabel).join(' · ')}</span>
+                          {/*
+                           * El mismo número que la tabla de pedidos muestra como
+                           * "(011) 15 5573 4841" aparecía acá como "+54926155720045": quince
+                           * dígitos corridos no se leen, se descifran, y no hay forma de comparar
+                           * dos contactos ni de dictar uno.
+                           */}
+                          <strong>
+                            {identity.type === 'phone' || identity.type === 'whatsapp'
+                              ? formatArgentinePhone(identity.value)
+                              : identity.value}
+                          </strong>
+                          <small>
+                            {identity.primary ? 'Principal' : 'Alternativo'} ·{' '}
+                            {identity.verified ? 'verificado' : 'sin verificar'}
+                          </small>
+                          {/* Abre el chat con ese número: en la computadora, WhatsApp Web. */}
+                          {identity.type === 'phone' || identity.type === 'whatsapp' ? (
+                            <a
+                              className="crm-contact-whatsapp"
+                              href={whatsappHref(identity.value)}
+                              rel="noopener noreferrer"
+                              target="_blank"
+                              title="Abrir el chat en WhatsApp"
+                            >
+                              WhatsApp ↗
+                            </a>
+                          ) : null}
+                        </article>
+                      ))}
+                    </div>
+                    {canEdit ? (
+                      <details className="crm-inline-form">
+                        <summary>Agregar contacto</summary>
+                        <form onSubmit={(event) => void addIdentity(event)}>
+                          <label className="field">
+                            Tipo
+                            <input
+                              list="identity-types"
+                              name="type"
+                              placeholder="whatsapp"
+                              required
+                            />
+                            <datalist id="identity-types">
+                              <option value="whatsapp" />
+                              <option value="phone" />
+                              <option value="email" />
+                            </datalist>
+                          </label>
+                          <label className="field">
+                            Valor
+                            <input name="value" required />
+                          </label>
+                          <label className="crm-check">
+                            <input name="primary" type="checkbox" /> Contacto principal
+                          </label>
+                          <button className="button button-primary" type="submit">
+                            Agregar
+                          </button>
+                        </form>
+                      </details>
+                    ) : null}
+                  </section>
+                ) : null}
+
+                {tab === 'domicilios' ? (
+                  <section className="crm-panel">
+                    <div className="crm-panel-heading">
+                      <div>
+                        <small>Logística CRM</small>
+                        <h2>Domicilios</h2>
+                      </div>
+                    </div>
+                    <div className="crm-address-grid">
+                      {detail.addresses
+                        ?.filter((address) => address.active)
+                        .map((address) => {
+                          const request = geocoding[address.id];
+                          return (
+                            <article className="crm-address-card" key={address.id}>
+                              <div className="crm-address-top">
+                                <div>
+                                  <span>{address.label}</span>
+                                  {address.primary ? <small>Principal</small> : null}
+                                  {/* Whether the customer wrote this address themselves changes how
+                                  much an operator should second-guess it before correcting. */}
+                                  {address.source === 'customer' ? (
+                                    <small>La cargó el cliente</small>
+                                  ) : null}
+                                </div>
+                                <i data-status={address.geocodingStatus}>
+                                  {addressStatusLabel(address.geocodingStatus)}
+                                </i>
+                              </div>
+                              <h3>{address.writtenAddress}</h3>
+                              {/* Un renglón vacío no se anuncia: decía "Sin datos territoriales
+                              adicionales", que informa la ausencia de un campo opcional. Lo que sí
+                              importa —un domicilio sin geocodificar, que deja el pedido afuera del
+                              reparto— ya lo dice el estado de arriba. */}
+                              {[address.unit, address.city, address.sector, address.operationalZone]
+                                .filter(Boolean)
+                                .join(' · ') ? (
+                                <p>
+                                  {[
+                                    address.unit,
+                                    address.city,
+                                    address.sector,
+                                    address.operationalZone,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </p>
+                              ) : null}
+                              {address.accessNotes ? (
+                                <p className="crm-address-note">Acceso: {address.accessNotes}</p>
+                              ) : null}
+                              {address.deliveryWindow ? (
+                                <p className="crm-address-note">Recibe: {address.deliveryWindow}</p>
+                              ) : null}
+                              {address.latitude !== null && address.longitude !== null ? (
+                                <>
+                                  <code>
+                                    {address.latitude.toFixed(6)}, {address.longitude.toFixed(6)}
+                                  </code>
+                                  <AddressMap
+                                    label={address.writtenAddress}
+                                    latitude={address.latitude}
+                                    longitude={address.longitude}
+                                  />
+                                </>
+                              ) : null}
+                              <div className="crm-address-actions">
+                                {address.locationUrl ? (
+                                  <a href={address.locationUrl} rel="noreferrer" target="_blank">
+                                    Abrir mapa
+                                  </a>
+                                ) : null}
+                                {canEdit && address.geocodingStatus !== 'CONFIRMED' ? (
+                                  <button
+                                    className="is-primary"
+                                    onClick={() => void startGeocoding(address)}
+                                    type="button"
+                                  >
+                                    {/* "Validar" no decía qué pasaba al tocarlo. Busca la dirección,
+                                    propone la ubicación y, al aceptarla, deja la dirección escrita
+                                    como corresponde. */}
+                                    Actualizar ubicación
+                                  </button>
+                                ) : null}
+                                {canEdit ? (
+                                  <button
+                                    className="is-danger"
+                                    onClick={() => setRemovingAddress(address)}
+                                    type="button"
+                                  >
+                                    Eliminar
+                                  </button>
+                                ) : null}
+                              </div>
+                              {request ? (
+                                <div className="crm-geocoding-box">
+                                  <strong>
+                                    {request.status === 'CANDIDATES'
+                                      ? 'Ubicaciones encontradas'
+                                      : 'Corrección manual'}
+                                  </strong>
+                                  {request.status === 'CANDIDATES' ? (
+                                    <p className="crm-geocoding-hint">
+                                      Al elegir una queda la ubicación cargada y la dirección
+                                      escrita como figura acá.
+                                    </p>
+                                  ) : null}
+                                  {request.candidates.map((candidate) => (
+                                    <div className="crm-candidate" key={candidate.id}>
+                                      <div>
+                                        <span>{candidate.formattedAddress}</span>
+                                        <code>
+                                          {candidate.latitude.toFixed(6)},{' '}
+                                          {candidate.longitude.toFixed(6)}
+                                        </code>
+                                        {/* Seeing the candidate on a map is the whole point of this
+                                        screen: two candidates for the same street differ by digits
+                                        nobody can eyeball, but they are obvious on a map. */}
+                                        <AddressMap
+                                          label={candidate.formattedAddress}
+                                          latitude={candidate.latitude}
+                                          longitude={candidate.longitude}
+                                        />
+                                      </div>
+                                      <button
+                                        onClick={() =>
+                                          void confirmCandidate(
+                                            address,
+                                            candidate.id,
+                                            candidate.formattedAddress,
+                                          )
+                                        }
+                                        type="button"
+                                      >
+                                        Usar esta
+                                      </button>
+                                    </div>
+                                  ))}
+                                  {request.status !== 'CANDIDATES' ||
+                                  request.candidates.length === 0 ? (
+                                    <form
+                                      className="crm-manual-location"
+                                      onSubmit={(event) =>
+                                        void confirmManualLocation(event, address)
+                                      }
+                                    >
+                                      <label className="field">
+                                        Latitud
+                                        <input
+                                          name="latitude"
+                                          step="any"
+                                          type="number"
+                                          min="-90"
+                                          max="90"
+                                          required
+                                        />
+                                      </label>
+                                      <label className="field">
+                                        Longitud
+                                        <input
+                                          name="longitude"
+                                          step="any"
+                                          type="number"
+                                          min="-180"
+                                          max="180"
+                                          required
+                                        />
+                                      </label>
+                                      <label className="field">
+                                        Ciudad
+                                        <input defaultValue={address.city ?? ''} name="city" />
+                                      </label>
+                                      <label className="field">
+                                        Sector
+                                        <input defaultValue={address.sector ?? ''} name="sector" />
+                                      </label>
+                                      <label className="field">
+                                        Zona operativa
+                                        <input
+                                          defaultValue={address.operationalZone ?? ''}
+                                          name="operationalZone"
+                                        />
+                                      </label>
+                                      <label className="field">
+                                        Enlace
+                                        <input
+                                          defaultValue={address.locationUrl ?? ''}
+                                          name="locationUrl"
+                                          type="url"
+                                        />
+                                      </label>
+                                      <button className="button button-primary" type="submit">
+                                        Confirmar corrección
+                                      </button>
+                                    </form>
+                                  ) : null}
+                                  <button
+                                    className="crm-reject"
+                                    onClick={() => void rejectGeocoding(address)}
+                                    type="button"
+                                  >
+                                    Descartar solicitud
+                                  </button>
+                                </div>
+                              ) : null}
+                            </article>
+                          );
+                        })}
+                    </div>
+                    {(detail.addresses ?? []).every((address) => !address.active) &&
+                    unsavedOrderAddresses(detail.orders).length === 0 ? (
+                      <p>Sin domicilios: agregá uno para poder repartir.</p>
+                    ) : null}
+                    {/*
+                     * El cruce con los pedidos (2026-11-09): una dirección que se usó en un pedido y
+                     * nunca quedó como domicilio. Se guarda y se ubica desde acá.
+                     */}
+                    {canEdit && unsavedOrderAddresses(detail.orders).length > 0 ? (
+                      <div className="crm-unsaved-addresses">
+                        <h4>Direcciones usadas en pedidos, sin guardar</h4>
+                        {unsavedOrderAddresses(detail.orders).map((order) => (
+                          <div key={order.id}>
+                            <strong>{order.unsavedAddress}</strong>
+                            <LocateOrderControl
+                              address={order.unsavedAddress ?? ''}
+                              onLocated={() => void loadCustomer(detail.id)}
+                              orderId={order.id}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    {canEdit ? (
+                      <details className="crm-inline-form">
+                        <summary>Agregar domicilio</summary>
+                        <form onSubmit={(event) => void addAddress(event)}>
+                          <label className="field">
+                            Etiqueta
+                            <input name="label" placeholder="Casa, oficina…" required />
+                          </label>
+                          <label className="field field-wide">
+                            Dirección, línea 1
+                            <input
+                              minLength={4}
+                              name="writtenAddress"
+                              placeholder="Calle, número y ciudad"
+                              required
+                            />
+                            <small className="field-hint">Es lo que se busca en el mapa.</small>
+                          </label>
+                          <label className="field field-wide">
+                            Enlace de ubicación
+                            <input
+                              name="locationUrl"
+                              type="url"
+                              placeholder="https://maps.google.com/…"
+                            />
+                          </label>
+                          <label className="field">
+                            Sector
+                            <input name="sector" />
+                          </label>
+                          <label className="field">
+                            Ciudad
+                            <select defaultValue={defaultZoneId} name="geographicZoneId" required>
+                              <option value="">Elegí una ciudad</option>
+                              {zones.map((zone) => (
+                                <option key={zone.id} value={zone.id}>
+                                  {zone.displayName}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="field">
+                            Tipo de propiedad
+                            <input name="propertyType" />
+                          </label>
+                          <label className="field">
+                            Dirección, línea 2
+                            <input
+                              maxLength={300}
+                              name="unit"
+                              placeholder="Piso, depto, timbre, barrio, detalles"
+                            />
+                          </label>
+                          <label className="field">
+                            Horario en que recibe
+                            {/* Texto libre: la realidad de cada cliente no entra en un selector de
+                              horas, y quien lo lee es una persona manejando. Va en la hoja de
+                              reparto, debajo de la dirección. */}
+                            <input name="deliveryWindow" placeholder="Después de las 18" />
+                          </label>
+                          <label className="field field-wide">
+                            Indicaciones de acceso
+                            <textarea name="accessNotes" rows={2} />
+                          </label>
+                          <label className="crm-check">
+                            <input defaultChecked name="primary" type="checkbox" /> Domicilio
+                            principal
+                          </label>
+                          <button className="button button-primary" type="submit">
+                            Agregar domicilio
+                          </button>
+                        </form>
+                      </details>
+                    ) : null}
+                  </section>
+                ) : null}
+
+                {tab === 'pedidos' ? (
+                  <section className="crm-panel">
+                    <div className="crm-panel-heading">
+                      <div>
+                        <small>Historial comercial</small>
+                        <h2>Pedidos asociados</h2>
+                      </div>
+                      <span>{detail.orders.length}</span>
+                    </div>
+                    {debt ? (
+                      <p className="crm-debt">
+                        Debe <strong>{formatMoney(debt.totalMinor, debt.currency)}</strong> en{' '}
+                        {debt.count === 1 ? '1 pedido' : `${String(debt.count)} pedidos`} de
+                        períodos cerrados. <Link to="/app/por-cobrar">Ver en Por cobrar</Link>
+                      </p>
+                    ) : null}
+                    {orderPeriods.length > 1 ? (
+                      <label className="field crm-order-period">
+                        Período
+                        <select
+                          onChange={(event) => setOrderPeriod(event.target.value)}
+                          value={orderPeriod}
+                        >
+                          <option value="">Todos</option>
+                          {orderPeriods.map((alias) => (
+                            <option key={alias} value={alias}>
+                              {alias}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                    <div className="crm-orders">
+                      {detail.orders
+                        .filter((order) => !orderPeriod || order.cycleAlias === orderPeriod)
+                        .map((order) => (
+                          <CustomerOrderCard key={order.id} order={order} />
+                        ))}
+                      {detail.orders.length === 0 ? (
+                        <p>Este cliente todavía no tiene pedidos.</p>
+                      ) : null}
+                    </div>
+                  </section>
+                ) : null}
               </div>
             ) : (
               <div className="crm-panel crm-panel-empty">

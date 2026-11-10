@@ -74,6 +74,7 @@ import {
 import { estimateRouteMinutes } from '@verdeo/routing';
 
 import type { Database } from '../index.js';
+import { auditEvents } from '../schema/audit.js';
 import { users } from '../schema/auth.js';
 import {
   cancellationReasons,
@@ -1300,6 +1301,22 @@ export class PostgresOperationsService {
         identities.find((identity) => identity.type === 'whatsapp' && identity.active)?.value ??
         null,
     };
+  }
+
+  /** Lo que le pasó a la ficha de un cliente, sacado de la auditoría: qué, cuándo y quién. */
+  public async customerHistory(customerId: string) {
+    const items = await this.database
+      .select({
+        action: auditEvents.action,
+        actorDisplayName: users.displayName,
+        occurredAt: auditEvents.occurredAt,
+      })
+      .from(auditEvents)
+      .leftJoin(users, eq(users.id, auditEvents.actorUserId))
+      .where(and(eq(auditEvents.entityType, 'customer'), eq(auditEvents.entityId, customerId)))
+      .orderBy(desc(auditEvents.occurredAt))
+      .limit(50);
+    return { items };
   }
 
   public async createCustomer(input: CustomerInput, context: OperationsContext) {

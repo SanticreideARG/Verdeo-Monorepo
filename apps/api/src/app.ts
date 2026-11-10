@@ -807,6 +807,9 @@ interface OperationsEngine {
     context: OperationsContext,
   ): Promise<{ orderCount: number; outcome: 'ARCHIVED' | 'DELETED' }>;
   getCustomer(customerId: string, includeSensitive: boolean): Promise<unknown>;
+  customerHistory(customerId: string): Promise<{
+    items: { action: string; actorDisplayName: string | null; occurredAt: Date }[];
+  }>;
   getAddressGeocodingRequest(
     customerId: string,
     addressId: string,
@@ -4900,6 +4903,14 @@ export function createApp(options: CreateAppOptions) {
       session.permissions.includes('customers.view_sensitive'),
     );
     return context.json(CustomerDetailSchema.parse(contractValue(customer)));
+  });
+
+  /* Qué le pasó a la ficha. Sólo la acción, la fecha y quién: nada de los valores cambiados. */
+  app.get('/api/v1/customers/:id/history', async (context) => {
+    if (!context.get('session').permissions.includes('customers.read')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    if (!params.success) return badRequest(context, 'El cliente indicado no es válido.');
+    return context.json(await requireOperations().customerHistory(params.data.id));
   });
 
   app.patch('/api/v1/customers/:id', async (context) => {

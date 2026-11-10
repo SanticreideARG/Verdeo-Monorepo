@@ -1264,6 +1264,18 @@ export function OrderIntakePage() {
 
   useReturnToCurrentPeriod(() => choosePeriod(currentPeriod(periods)?.id ?? ''));
 
+  // "Nuevo pedido" desde la ficha del cliente: abre el formulario con ese cliente elegido.
+  const customerFromLink = searchParams.get('cliente');
+  const customerFromLinkDone = useRef(false);
+  useEffect(() => {
+    if (!customerFromLink || !profile || loading || customerFromLinkDone.current) return;
+    customerFromLinkDone.current = true;
+    setFormOpen(true);
+    void apiRequest(`/api/v1/customers/${customerFromLink}`).then(async (response) => {
+      if (response.ok) chooseCustomer((await response.json()) as CustomerSummary);
+    });
+  }, [customerFromLink, profile, loading]);
+
   if (failed) return <DashboardFailed label="los pedidos" />;
   if (!profile) return <DashboardLoading />;
   if (loading) return <DashboardLoading />;
