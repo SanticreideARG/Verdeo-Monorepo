@@ -38,6 +38,7 @@ import {
   parseCoordinatesFromLocationUrl,
   parsePastedCoordinates,
   validateGeocodingCandidates,
+  zoneNamedInAddress,
   type AutoAcceptRules,
   type GeocodingProvider,
 } from '@verdeo/geocoding';
@@ -151,6 +152,8 @@ export interface LocateAddressResult {
   reason?: string;
   requestId: string | null;
   status: 'already_located' | 'failed' | 'located' | 'needs_zone' | 'no_match' | 'review';
+  /** Con `needs_zone`: las zonas de la ciudad, para elegir una ahí mismo. */
+  zones?: { displayName: string; id: string }[];
 }
 
 export interface OperationsContext {
@@ -1128,6 +1131,8 @@ export class PostgresOperationsService {
         createdAt: orders.createdAt,
         currency: orders.currency,
         cycleAlias: salesCycles.alias,
+        deliveryAddress: orders.deliveryAddressSnapshot,
+        deliveryAddressId: orders.deliveryAddressId,
         deliveryDate: orders.deliveryDate,
         id: orders.id,
         publicNumber: orders.publicNumber,
@@ -1181,8 +1186,10 @@ export class PostgresOperationsService {
       list.push(selection.dishName);
       dishesByItem.set(selection.orderItemId, list);
     }
-    const customerOrders = orderRows.map((order) => ({
+    const customerOrders = orderRows.map(({ deliveryAddress, deliveryAddressId, ...order }) => ({
       ...order,
+      // La dirección de un pedido que no quedó guardada en la ficha. Es un dato sensible.
+      unsavedAddress: includeSensitive && !deliveryAddressId ? deliveryAddress : null,
       items: itemRows
         .filter((item) => item.orderId === order.id)
         .map((item) => ({
@@ -3189,7 +3196,12 @@ export class PostgresOperationsService {
      * coordenadas). Se guarda en el pedido y en su domicilio, y el domicilio vuelve a buscarse
      * aunque ya tuviera coordenadas: es lo que se hace cuando la que encontró no era.
      */
-    retry?: { address?: string | undefined; locationUrl?: string | undefined },
+    retry?: {
+      address?: string | undefined;
+      /** La zona que eligió una persona, cuando la dirección no alcanzaba para deducirla. */
+      geographicZoneId?: string | undefined;
+      locationUrl?: string | undefined;
+    },
   ): Promise<LocateAddressResult> {
     const [order] = await this.database
       .select({
@@ -3284,16 +3296,38 @@ export class PostgresOperationsService {
           .where(eq(customerAddresses.id, addressId));
       }
     } else {
-      const zoneId = order.geographicZoneId ?? (await this.soleActiveZone(order.operatingSiteId));
+      /*
+       * La zona del pedido, la que acaba de elegir alguien, la única de la ciudad o la que nombra la
+       * dirección ("…, General Roca"). Antes, con varias zonas, esto mandaba a la ficha del cliente,
+       * donde el domicilio todavía no existía (2026-11-09).
+       */
+      const zones = await this.database
+        .select({ displayName: geographicZones.displayName, id: geographicZones.id })
+        .from(geographicZones)
+        .where(
+          and(
+            eq(geographicZones.operatingSiteId, order.operatingSiteId),
+            eq(geographicZones.active, true),
+          ),
+        )
+        .orderBy(asc(geographicZones.displayName));
+      if (retry?.geographicZoneId && !zones.some((zone) => zone.id === retry.geographicZoneId))
+        throw new OperationsConflictError('La zona elegida no es de la ciudad del pedido');
+      const zoneId =
+        order.geographicZoneId ??
+        retry?.geographicZoneId ??
+        (zones.length === 1
+          ? zones[0]?.id
+          : zoneNamedInAddress(zones, order.snapshot, order.line2));
       if (!zoneId) {
         return {
           addressId: null,
           candidates: [],
           customerId: order.customerId,
-          reason:
-            'La ciudad tiene más de una zona y el pedido no tiene ninguna: asignala desde el cliente.',
+          reason: 'La dirección no dice en qué zona está: abrí el pedido y elegila.',
           requestId: null,
           status: 'needs_zone',
+          zones,
         };
       }
       addressId = await this.database.transaction(async (transaction) => {
@@ -4833,16 +4867,20 @@ export class PostgresOperationsService {
       zoneId = zone.id;
     } else if (input.operatingSiteId) {
       const zones = await transaction
-        .select({ id: geographicZones.id })
+        .select({ displayName: geographicZones.displayName, id: geographicZones.id })
         .from(geographicZones)
         .where(
           and(
             eq(geographicZones.operatingSiteId, input.operatingSiteId),
             eq(geographicZones.active, true),
           ),
-        )
-        .limit(2);
-      zoneId = zones.length === 1 ? (zones[0]?.id ?? null) : null;
+        );
+      // Sin elegir zona, con varias en la ciudad: la que nombre la dirección. Si no, la dirección
+      // quedaba sólo en el pedido y la ficha del cliente no se enteraba (2026-11-09).
+      zoneId =
+        zones.length === 1
+          ? (zones[0]?.id ?? null)
+          : (zoneNamedInAddress(zones, input.writtenAddress, input.line2) ?? null);
     }
     if (!zoneId) return undefined;
 
@@ -6424,7 +6462,7 @@ export class PostgresOperationsService {
               line2: input.deliveryAddressLine2?.trim() || null,
               locationUrl: input.deliveryLocationUrl ?? null,
               operatingSiteId: current.operatingSiteId,
-              writtenAddress: input.deliveryAddress.trim().replace(/s+/g, ' '),
+              writtenAddress: input.deliveryAddress.trim().replace(/\s+/g, ' '),
               zoneId: null,
             })) ?? null;
         } else if (addressId === undefined) {

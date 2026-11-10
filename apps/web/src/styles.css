@@ -13760,3 +13760,36 @@ body:has(.modal-backdrop) .assistant-launcher.is-operator.is-saying {
 .working-period-banner .button {
   min-height: 40px;
 }
+
+/* Ubicar: elegir la zona ahí mismo, y las direcciones de pedidos que no están en la ficha. */
+.locate-zone {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+.locate-zone select {
+  min-height: 40px;
+  min-width: 12rem;
+}
+.locate-candidates .address-map {
+  flex-basis: 100%;
+}
+.crm-unsaved-addresses {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border: 1px dashed var(--db-border);
+  border-radius: 0.75rem;
+}
+.crm-unsaved-addresses h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.after-save-locate {
+  margin: 0.75rem 0;
+  max-height: 50vh;
+  overflow-y: auto;
+}

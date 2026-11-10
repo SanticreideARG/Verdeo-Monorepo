@@ -236,7 +236,42 @@ describe('locateOrderAddress', () => {
     const result = await service.locateOrderAddress(ORDER, reglas, contexto);
 
     expect(result.status).toBe('needs_zone');
+    expect(result.zones?.map((zone) => zone.displayName)).toContain('Norte');
     expect((await client.query(`select 1 from customer_addresses`)).rows).toHaveLength(0);
+  });
+
+  it('con la zona elegida en el momento, guarda el domicilio y lo ubica', async () => {
+    const { client, service } = await base(proveedor([candidato(-34.5998, -58.44, 1)]));
+    await client.exec(
+      `insert into geographic_zones (id, operating_site_id, slug, display_name) values ('b9000000-0000-4000-8000-000000000001', '${SITE}', 'norte', 'Norte')`,
+    );
+
+    const result = await service.locateOrderAddress(ORDER, reglas, contexto, {
+      geographicZoneId: 'b9000000-0000-4000-8000-000000000001',
+    });
+
+    expect(result.addressId).not.toBeNull();
+    const { rows } = await client.query<{ geographic_zone_id: string }>(
+      `select geographic_zone_id from customer_addresses`,
+    );
+    expect(rows).toEqual([{ geographic_zone_id: 'b9000000-0000-4000-8000-000000000001' }]);
+  });
+
+  it('deduce la zona de lo que sigue a la calle', async () => {
+    const { client, service } = await base(proveedor([candidato(-34.5998, -58.44, 1)]));
+    await client.exec(`
+      insert into geographic_zones (id, operating_site_id, slug, display_name) values
+        ('b9000000-0000-4000-8000-000000000002', '${SITE}', 'general-roca', 'General Roca');
+      update orders set delivery_address_snapshot = 'Neuquen 1466 , General roca';
+    `);
+
+    const result = await service.locateOrderAddress(ORDER, reglas, contexto);
+
+    expect(result.status).not.toBe('needs_zone');
+    const { rows } = await client.query<{ geographic_zone_id: string }>(
+      `select geographic_zone_id from customer_addresses`,
+    );
+    expect(rows).toEqual([{ geographic_zone_id: 'b9000000-0000-4000-8000-000000000002' }]);
   });
 });
 

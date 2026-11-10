@@ -387,6 +387,7 @@ export class LocationLinkGeocodingProvider implements GeocodingProvider {
 }
 
 export * from './sanitizer.js';
+export * from './zone-in-address.js';
 export * from './nominatim.js';
 export * from './address-query.js';
 export * from './georef.js';

@@ -89,6 +89,8 @@ export interface CustomerDetail extends CustomerSummary {
     source: string;
     status: OrderSummary['status'];
     totalMinor: number;
+    /** La dirección del pedido, si no quedó guardada como domicilio del cliente. */
+    unsavedAddress?: string | null;
   }>;
   preferences?: Array<{
     active: boolean;

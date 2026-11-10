@@ -442,6 +442,8 @@ export const CustomerOrderSummarySchema = z.object({
     .default([]),
   publicNumber: z.string(),
   source: z.string().default('manual'),
+  // La dirección del pedido cuando no quedó guardada como domicilio del cliente.
+  unsavedAddress: z.string().nullable().default(null),
   status: OrderStatusSchema,
   totalMinor: z.number().int(),
 });

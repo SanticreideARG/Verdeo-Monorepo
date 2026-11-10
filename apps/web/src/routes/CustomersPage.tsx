@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { AddressMap } from '../components/AddressMap.js';
+import { LocateOrderControl } from '../components/LocateAddress.js';
 import { AfterSaveDialog } from '../components/AfterSaveDialog.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { CustomerExportDialog } from '../components/CustomerExportDialog.js';
@@ -45,6 +46,17 @@ import {
   type CustomerDetail,
   type CustomerSummary,
 } from '../lib/operations.js';
+
+/** De los pedidos, las direcciones sin domicilio guardado: una por texto, la más reciente. */
+function unsavedOrderAddresses(orders: CustomerDetail['orders']) {
+  const seen = new Set<string>();
+  return orders.filter((order) => {
+    const key = order.unsavedAddress?.trim().toLowerCase();
+    if (!key || order.status === 'CANCELLED' || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 function formText(form: FormData, key: string): string {
   const value = form.get(key);
@@ -1662,6 +1674,25 @@ export function CustomersPage() {
                         );
                       })}
                   </div>
+                  {/*
+                   * El cruce con los pedidos (2026-11-09): una dirección que se usó en un pedido y
+                   * nunca quedó como domicilio. Se guarda y se ubica desde acá.
+                   */}
+                  {canEdit && unsavedOrderAddresses(detail.orders).length > 0 ? (
+                    <div className="crm-unsaved-addresses">
+                      <h4>Direcciones usadas en pedidos, sin guardar</h4>
+                      {unsavedOrderAddresses(detail.orders).map((order) => (
+                        <div key={order.id}>
+                          <strong>{order.unsavedAddress}</strong>
+                          <LocateOrderControl
+                            address={order.unsavedAddress ?? ''}
+                            onLocated={() => void loadCustomer(detail.id)}
+                            orderId={order.id}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                   {canEdit ? (
                     <details className="crm-inline-form">
                       <summary>Agregar domicilio</summary>

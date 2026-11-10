@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { AddressMap } from './AddressMap.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage } from '../lib/operations.js';
 
 export interface LocateResult {
   addressId: string | null;
-  candidates: { confidence: number; formattedAddress: string; id: string }[];
+  candidates: {
+    confidence: number;
+    formattedAddress: string;
+    id: string;
+    latitude?: number;
+    longitude?: number;
+  }[];
   customerId: string;
   reason?: string;
   requestId: string | null;
   status: 'already_located' | 'failed' | 'located' | 'needs_zone' | 'no_match' | 'review';
+  zones?: { displayName: string; id: string }[];
 }
 
 /** Lo que se le dice a quien armó la ruta de cada resultado, sin jerga de geocodificación. */
@@ -79,6 +87,13 @@ function CandidateChooser({
           >
             Usar esta
           </button>
+          {candidate.latitude !== undefined && candidate.longitude !== undefined ? (
+            <AddressMap
+              label={candidate.formattedAddress}
+              latitude={candidate.latitude}
+              longitude={candidate.longitude}
+            />
+          ) : null}
         </li>
       ))}
       {message ? <li className="text-sm text-ink-muted">{message}</li> : null}
@@ -110,8 +125,13 @@ export function LocateOrderControl({
   const [retrying, setRetrying] = useState(false);
   const [draftAddress, setDraftAddress] = useState(address);
   const [draftLocation, setDraftLocation] = useState('');
+  const [zoneId, setZoneId] = useState('');
 
-  async function locate(retry?: { address?: string; location?: string }) {
+  async function locate(retry?: {
+    address?: string;
+    geographicZoneId?: string;
+    location?: string;
+  }) {
     setBusy(true);
     setMessage('');
     setResult(null);
@@ -129,7 +149,7 @@ export function LocateOrderControl({
     setResult(body);
     if (body.status === 'located') setRetrying(false);
     // Con una dirección corregida el pedido cambió: se vuelve a leer aunque no se haya ubicado.
-    if (body.status === 'located' || retry) onLocated();
+    if (body.status === 'located' || retry?.address || retry?.location) onLocated();
   }
 
   const unresolved =
@@ -151,8 +171,36 @@ export function LocateOrderControl({
           <p className="text-sm text-ink-muted">
             {result.status === 'already_located'
               ? 'Ya tenía ubicación. Si no es ahí, corregila y buscá de nuevo.'
-              : locateStatusText(result)}
+              : result.status === 'needs_zone' && result.zones?.length
+                ? 'La dirección no dice en qué zona está. Elegila para seguir:'
+                : locateStatusText(result)}
           </p>
+          {result.status === 'needs_zone' && result.zones?.length ? (
+            <form
+              className="locate-zone"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (zoneId) void locate({ geographicZoneId: zoneId });
+              }}
+            >
+              <select
+                aria-label="Zona de la dirección"
+                onChange={(event) => setZoneId(event.target.value)}
+                required
+                value={zoneId}
+              >
+                <option value="">Elegir zona</option>
+                {result.zones.map((zone) => (
+                  <option key={zone.id} value={zone.id}>
+                    {zone.displayName}
+                  </option>
+                ))}
+              </select>
+              <button className="button button-primary" disabled={busy || !zoneId} type="submit">
+                {busy ? 'Buscando…' : 'Guardar y ubicar'}
+              </button>
+            </form>
+          ) : null}
           {result.status === 'review' ? (
             <CandidateChooser
               onConfirmed={() => {
@@ -169,6 +217,11 @@ export function LocateOrderControl({
         <button className="locate-retry-open" onClick={() => setRetrying(true)} type="button">
           Corregir la dirección o pegar la ubicación
         </button>
+      ) : null}
+      {unresolved ? (
+        <a className="locate-retry-open" href="/app/ubicaciones" rel="noreferrer" target="_blank">
+          Abrir Conciliar ubicaciones ↗
+        </a>
       ) : null}
       {retrying ? (
         <form

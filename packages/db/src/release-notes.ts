@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-09-ubicar-direcciones',
+    body: `Ubicar direcciones: si la dirección nombra la zona ("Neuquen 1466, General Roca"), se usa sola y el domicilio queda en la ficha del cliente. Si no, se elige la zona ahí mismo, en vez de tener que ir al cliente. Al registrar un pedido sin ubicar se ofrece ubicarlo en la misma ventana, los lugares encontrados se ven en el mapa, y la ficha del cliente muestra las direcciones de pedidos que no estaban guardadas.`,
+  },
+  {
     key: '2026-11-09-periodo-recordado-sumar-pedidos',
     body: `Períodos: el que se elige en Pedidos, Cocina o Etiquetas ahora queda al cambiar de pantalla, y si no es el corriente arriba lo avisa, con un botón para volver. Hojas de ruta: un pedido que se saca de una hoja vuelve a aparecer en "Sumar pedidos".`,
   },

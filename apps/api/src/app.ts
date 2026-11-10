@@ -686,7 +686,11 @@ interface OperationsEngine {
     orderId: string,
     rules: { radiusKm: number; threshold: number },
     context: OperationsContext,
-    retry?: { address?: string | undefined; locationUrl?: string | undefined },
+    retry?: {
+      address?: string | undefined;
+      geographicZoneId?: string | undefined;
+      locationUrl?: string | undefined;
+    },
   ): Promise<{
     addressId: string | null;
     candidates: { confidence: number; formattedAddress: string; id: string }[];
@@ -7180,17 +7184,23 @@ export function createApp(options: CreateAppOptions) {
      * Sin cuerpo, ubica con lo que tiene. Con cuerpo, busca de nuevo con una dirección corregida
      * o con una ubicación pegada: un enlace de Maps o coordenadas ("-34.58, -58.41").
      */
-    const retry = parseLocateRetry(await context.req.json().catch(() => null));
+    const body = (await context.req.json().catch(() => null)) as {
+      geographicZoneId?: unknown;
+    } | null;
+    const retry = parseLocateRetry(body);
     if ('error' in retry) return badRequest(context, retry.error);
     const { address, locationUrl } = retry;
+    // La zona elegida en la misma ventana, cuando la dirección no alcanzó para deducirla.
+    const zone = z.uuid().safeParse(body?.geographicZoneId);
+    const geographicZoneId = zone.success ? zone.data : undefined;
     const operations = requireOperations();
     const result =
-      address || locationUrl
+      address || locationUrl || geographicZoneId
         ? await operations.locateOrderAddress(
             params.data.id,
             LOCATE_RULES,
             operationsContext(context),
-            { address: address || undefined, locationUrl },
+            { address: address || undefined, geographicZoneId, locationUrl },
           )
         : await operations.locateOrderAddress(
             params.data.id,

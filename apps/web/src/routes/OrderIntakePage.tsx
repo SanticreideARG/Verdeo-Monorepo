@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { ActionButton } from '../components/ActionButton.js';
 import { AddressMap } from '../components/AddressMap.js';
+import { LocateOrderControl } from '../components/LocateAddress.js';
 import { AfterSaveDialog } from '../components/AfterSaveDialog.js';
 import { CancelOrderDialog } from '../components/CancelOrderDialog.js';
 import { ColumnPicker } from '../components/ColumnPicker.js';
@@ -274,6 +275,7 @@ export function OrderIntakePage() {
   }, []);
   const [addressHint, setAddressHint] = useState('');
   const [zoneHint, setZoneHint] = useState('');
+  const [savedToLocate, setSavedToLocate] = useState<{ address: string; id: string } | null>(null);
   /** Dónde queda el domicilio del cliente elegido, si está ubicado: se muestra en un mapa chico. */
   const [addressPoint, setAddressPoint] = useState<{
     address: string;
@@ -1111,7 +1113,12 @@ export function OrderIntakePage() {
        * no pasaba nada, y creó treinta y seis pedidos. Un paso que corta y obliga a elegir hace
        * imposible esa confusión.
        */
-      setSavedNumber(((await createdOrder.json()) as OrderSummary).publicNumber);
+      const saved = (await createdOrder.json()) as OrderSummary;
+      setSavedNumber(saved.publicNumber);
+      // Sin ubicación todavía: se ofrece resolverla ahí mismo, antes de cargar el siguiente.
+      setSavedToLocate(
+        saved.deliveryLatitude === null ? { address: saved.deliveryAddress, id: saved.id } : null,
+      );
       await loadData();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No pudimos crear el pedido.');
@@ -2607,7 +2614,18 @@ export function OrderIntakePage() {
             setSavedNumber(null);
           }}
           title="Pedido registrado"
-        />
+        >
+          {savedToLocate && permissions.includes('orders.edit') ? (
+            <div className="after-save-locate">
+              <p>Esta dirección todavía no está ubicada en el mapa.</p>
+              <LocateOrderControl
+                address={savedToLocate.address}
+                onLocated={() => undefined}
+                orderId={savedToLocate.id}
+              />
+            </div>
+          ) : null}
+        </AfterSaveDialog>
       ) : null}
 
       {viewing ? (

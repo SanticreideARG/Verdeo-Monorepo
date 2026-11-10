@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 /**
  * Qué hacer después de guardar.
@@ -16,6 +16,7 @@ import { useEffect, useRef } from 'react';
  * para quien cierra por reflejo.
  */
 export function AfterSaveDialog({
+  children,
   detail,
   keepLabel,
   newLabel,
@@ -23,6 +24,8 @@ export function AfterSaveDialog({
   onNew,
   title,
 }: {
+  /** Algo más para hacer sobre lo recién guardado, entre el texto y los botones. */
+  children?: ReactNode;
   detail?: string | undefined;
   /** Qué se conserva, dicho concretamente: "el mismo cliente y período". */
   keepLabel: string;
@@ -52,6 +55,7 @@ export function AfterSaveDialog({
       >
         <h2 id="after-save-title">{title}</h2>
         {detail ? <p>{detail}</p> : null}
+        {children}
 
         <div className="after-save-actions">
           <button className="button button-primary" onClick={onNew} ref={primary} type="button">
