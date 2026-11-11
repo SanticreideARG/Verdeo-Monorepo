@@ -108,6 +108,12 @@ describe('matchEmailOffering: los menús del formulario del sitio', () => {
     expect(matchEmailOffering('Menú Vegetariano', '250', catalogo)).toBe('real-250');
   });
 
+  it('"Vegan" también es Real', () => {
+    expect(matchEmailOffering('Menú Vegan', '400', catalogo)).toBe('real-400');
+    expect(matchEmailOffering('VEGAN', '250', catalogo)).toBe('real-250');
+    expect(matchEmailOffering('Menú Vegano', '400', catalogo)).toBe('real-400');
+  });
+
   it('"Paleo & Keto" es Keto, se llame como se llame esa semana', () => {
     expect(matchEmailOffering('Menú Paleo & Keto', '400', catalogo)).toBe('keto-400');
     expect(matchEmailOffering('Paleo y Keto', '250', catalogo)).toBe('keto-250');
@@ -130,7 +136,7 @@ describe('matchEmailOffering: los menús del formulario del sitio', () => {
 
   it('los demás nombres siguen la regla de siempre', () => {
     expect(matchEmailOffering('Menú Real', '400', catalogo)).toBe('real-400');
-    expect(matchEmailOffering('Menú Vegan', '400', catalogo)).toBeNull();
+    expect(matchEmailOffering('Menú Celíaco', '400', catalogo)).toBeNull();
   });
 
   // La regla es de los mails: en una planilla, vegetariano quiere decir Vegetariano.

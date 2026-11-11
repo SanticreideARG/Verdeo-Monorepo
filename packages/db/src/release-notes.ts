@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-10-vegan-es-real',
+    body: `Pedidos por correo: los que dicen «Vegan» se toman como Real, igual que «Vegetariano». «Paleo & Keto» se sigue tomando como Keto. El pedido avisa cómo lo tomó.`,
+  },
+  {
     key: '2026-11-10-busqueda-limitada-a-la-ciudad',
     body: `Ubicar direcciones: el buscador ya no ofrece la misma calle en todo el país, sólo lugares de la ciudad elegida. Valle busca en Plottier, Neuquén, Cipolletti, Fernández Oro, General Roca, Villa Regina y Allen; la lista se cambia en Panel de control → Direcciones. En el celular, la lista de resultados ya no corre la pantalla de costado.`,
   },
