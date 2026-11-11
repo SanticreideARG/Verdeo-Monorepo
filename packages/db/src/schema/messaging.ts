@@ -1,4 +1,13 @@
-import { boolean, index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { users } from './auth.js';
 import { operatingSites } from './geography.js';
@@ -201,3 +210,43 @@ export const inboundEmails = pgTable(
   },
   (table) => [index('inbound_emails_status_received_idx').on(table.status, table.receivedAt)],
 );
+
+/**
+ * Cada corrida del script de Gmail que reportó algo (2026-11-11).
+ *
+ * Sin esto, el script podía estar apagado o fallando y en Verdeo no se veía: sólo quedaba rastro de
+ * los mails nuevos que se aceptaban. El script reporta al terminar si mandó o falló algo, y si no,
+ * cada 30 minutos: reportar cada 5 mantendría la base despierta todo el día. Se guardan 30 días.
+ */
+export const inboundEmailRuns = pgTable(
+  'inbound_email_runs',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    /** Cuándo empezó la corrida, según el reloj de Google. */
+    ranAt: timestamp('ran_at', { withTimezone: true }).notNull(),
+    durationMs: integer('duration_ms').notNull(),
+    /** Mails de pedido que la corrida miró. */
+    found: integer('found').notNull(),
+    sentNew: integer('sent_new').notNull(),
+    duplicates: integer('duplicates').notNull(),
+    failed: integer('failed').notNull(),
+    /** El error que cortó la corrida o el último aviso de un envío fallado. */
+    error: text('error'),
+    scriptVersion: text('script_version').notNull(),
+    /** Desde la última corrida reportada: las que no tuvieron novedades no se reportan una por una. */
+    quietRuns: integer('quiet_runs').default(0).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index('inbound_email_runs_ran_at_idx').on(table.ranAt)],
+);
+
+/**
+ * Los pedidos al correo entrante que la API rechazó, contados por motivo: `firma` (secreto distinto)
+ * o `formato`. Un contador y no una fila por intento, para que alguien que manda basura sin el
+ * secreto no pueda llenar la base.
+ */
+export const inboundEmailRejections = pgTable('inbound_email_rejections', {
+  reason: text('reason').primaryKey(),
+  count: integer('count').default(0).notNull(),
+  lastAt: timestamp('last_at', { withTimezone: true }).notNull(),
+});
