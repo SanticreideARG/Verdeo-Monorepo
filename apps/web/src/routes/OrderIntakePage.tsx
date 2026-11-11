@@ -275,6 +275,7 @@ export function OrderIntakePage() {
   }, []);
   const [addressHint, setAddressHint] = useState('');
   const [zoneHint, setZoneHint] = useState('');
+  const [slotHint, setSlotHint] = useState('');
   const [savedToLocate, setSavedToLocate] = useState<{ address: string; id: string } | null>(null);
   /** Dónde queda el domicilio del cliente elegido, si está ubicado: se muestra en un mapa chico. */
   const [addressPoint, setAddressPoint] = useState<{
@@ -284,6 +285,8 @@ export function OrderIntakePage() {
   } | null>(null);
   /** La zona que se completó sola: si se cambia de cliente sin tocarla, se reemplaza por la del nuevo. */
   const autoZone = useRef('');
+  /** Lo mismo para la franja horaria. */
+  const autoSlot = useRef('');
 
   const loadedOnce = useRef(false);
   const [loading, setLoading] = useState(true);
@@ -745,20 +748,28 @@ export function OrderIntakePage() {
      * con la del pedido más reciente que la tenga, en todas las ciudades. No pisa lo que se escribió:
      * sólo completa un campo vacío o uno que se completó solo para otro cliente.
      */
-    const zone = items.find(
-      (order) => order.status !== 'CANCELLED' && order.deliveryDayText?.trim(),
-    )?.deliveryDayText;
-    const zoneField = formRef.current?.elements.namedItem('deliveryDayText');
-    if (!(zoneField instanceof HTMLInputElement)) return;
-    const untouched = !zoneField.value.trim() || zoneField.value === autoZone.current;
-    if (!untouched) return;
-    autoZone.current = zone?.trim() ?? '';
-    zoneField.value = autoZone.current;
-    if (zone) {
-      setZoneHint('La del último pedido. Podés cambiarla para esta entrega.');
-    } else {
-      setZoneHint('');
-    }
+    /*
+     * La franja horaria seguía el mismo camino que la zona antes del arreglo: se guardaba en el
+     * pedido pero el siguiente la mostraba vacía y parecía que no se había guardado (2026-11-10).
+     */
+    const fill = (
+      name: 'deliveryDayText' | 'deliveryTimeSlot',
+      auto: { current: string },
+      setHint: (hint: string) => void,
+    ) => {
+      const value = items.find((order) => order.status !== 'CANCELLED' && order[name]?.trim())?.[
+        name
+      ];
+      const field = formRef.current?.elements.namedItem(name);
+      if (!(field instanceof HTMLInputElement)) return;
+      const untouched = !field.value.trim() || field.value === auto.current;
+      if (!untouched) return;
+      auto.current = value?.trim() ?? '';
+      field.value = auto.current;
+      setHint(value ? 'La del último pedido. Podés cambiarla para esta entrega.' : '');
+    };
+    fill('deliveryDayText', autoZone, setZoneHint);
+    fill('deliveryTimeSlot', autoSlot, setSlotHint);
   }
 
   /*
@@ -1851,7 +1862,16 @@ export function OrderIntakePage() {
                   </label>
                   <label className="field">
                     Franja horaria
-                    <input maxLength={80} name="deliveryTimeSlot" placeholder="Ej. 9 a 12 hs" />
+                    <input
+                      maxLength={80}
+                      name="deliveryTimeSlot"
+                      onInput={() => {
+                        autoSlot.current = '';
+                        setSlotHint('');
+                      }}
+                      placeholder="Ej. 9 a 12 hs"
+                    />
+                    {slotHint ? <small className="field-hint">{slotHint}</small> : null}
                   </label>
                 </div>
               </fieldset>
@@ -2164,6 +2184,8 @@ export function OrderIntakePage() {
                   setAddressHint('');
                   setZoneHint('');
                   autoZone.current = '';
+                  setSlotHint('');
+                  autoSlot.current = '';
                   setCustomerQuery('');
                   setCustomerResults([]);
                   setSelectedOfferingId('');

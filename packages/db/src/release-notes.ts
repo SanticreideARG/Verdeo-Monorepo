@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-10-franja-del-ultimo-pedido',
+    body: `Cargar pedido: al elegir el cliente, la franja horaria se completa con la de su último pedido, igual que la zona. Se guardaba, pero el pedido siguiente la mostraba vacía.`,
+  },
+  {
     key: '2026-11-10-vegan-es-real',
     body: `Pedidos por correo: los que dicen «Vegan» se toman como Real, igual que «Vegetariano». «Paleo & Keto» se sigue tomando como Keto. El pedido avisa cómo lo tomó.`,
   },
