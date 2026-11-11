@@ -192,6 +192,14 @@ Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", f
 - [x] Zonas geográficas: "Renombrar" en cada ciudad y "Nombre" en los datos de cada zona. La API ya lo aceptaba (`PATCH /operating-sites/:id` y `/zones/:id` con `displayName`); faltaba en la pantalla. El slug y el prefijo de pedidos no cambian. Avisa si otra zona de la ciudad ya tiene ese nombre.
 - [ ] Unificar Neuquén y Río Negro: ver la propuesta en la conversación del 2026-11-06 (pasar zonas de una operación a otra sin tocar el historial). Pendiente de decisión.
 
+## Seguimiento del script de correo (2026-11-11)
+
+- [x] El script reporta cada corrida a `POST /api/v1/inbound/run`, firmado como los mails: enseguida si mandó o falló algo, si no cada 30 minutos (no despierta la base cada 5). Tabla `inbound_email_runs` (migración 0083), 30 días.
+- [x] Los rechazos de firma y de formato se cuentan por motivo en `inbound_email_rejections`: una fila por motivo, no por intento.
+- [x] Estado del sistema → Correo entrante: semáforo (Al día, Con errores, Sin señal a los 70 minutos, Sin reportes), qué hacer, totales de 24 horas y las últimas 20 corridas. Aviso en el tablero con `audit.read`.
+- [x] El script mira mail por mail lo llegado desde la corrida anterior: un pedido en una conversación ya etiquetada no se mandaba nunca.
+- [ ] Pegar `Code.gs` versión 2026-11-11 en Apps Script y correr la migración 0083 en producción.
+
 ## Búsqueda de direcciones limitada a la ciudad (2026-11-10)
 
 - [x] Ningún camino ofrece direcciones fuera del área de la ciudad; si no se sabe dónde queda, no se ofrece nada y se dice qué cargar.

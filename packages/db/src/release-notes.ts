@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-11-seguimiento-correo',
+    body: `Estado del sistema: el correo entrante muestra si el script de Gmail está al día, con errores o sin señal, sus últimas corridas y qué hacer en cada caso. Si deja de andar, aparece un aviso en el tablero. El script ahora también toma los pedidos que Gmail junta en una misma conversación.`,
+  },
+  {
     key: '2026-11-10-franja-del-ultimo-pedido',
     body: `Cargar pedido: al elegir el cliente, la franja horaria se completa con la de su último pedido, igual que la zona. Se guardaba, pero el pedido siguiente la mostraba vacía.`,
   },

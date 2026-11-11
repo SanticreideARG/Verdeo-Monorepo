@@ -349,6 +349,7 @@ import {
   type SurveySubmitRequest,
   type SurveyUpdateRequest,
   type UserPermissionOverridesUpdateRequest,
+  InboundEmailRunReportSchema,
   SystemStatusResponseSchema,
   SystemTableMapResponseSchema,
   type DeliverySettings,
@@ -1503,6 +1504,20 @@ interface CreateAppOptions {
           }[]
         >;
         overview: () => Promise<{ lastReceivedAt: string | null; pending: number }>;
+        /** El seguimiento del script de Gmail (2026-11-11). Opcionales: los tests viejos no los traen. */
+        recordRejection?: (reason: 'firma' | 'formato') => Promise<void>;
+        recordRun?: (input: {
+          durationMs: number;
+          duplicates: number;
+          error: string | null;
+          failed: number;
+          found: number;
+          quietRuns: number;
+          ranAt: Date;
+          scriptVersion: string;
+          sentNew: number;
+        }) => Promise<void>;
+        tracking?: () => Promise<z.infer<typeof SystemStatusResponseSchema>['inbound']>;
         release: (id: string) => Promise<void>;
         resolve: (
           id: string,
@@ -4560,27 +4575,44 @@ export function createApp(options: CreateAppOptions) {
    * No crea el pedido: lo lee con el mismo lector de "Pegar emails" y lo deja pendiente para que una
    * persona lo revise. Es idempotente por id de Gmail, así que el script puede reintentar.
    */
-  app.post('/api/v1/inbound/email', async (context) => {
+  /*
+   * La firma del script, para los mails y para el reporte de cada corrida. Un rechazo se cuenta
+   * (2026-11-11): un 403 no deja otro rastro, y un secreto distinto entre Vercel y el script se veía
+   * igual que un script apagado. Contar no puede fallar la respuesta.
+   */
+  const readSignedInbound = async (
+    context: Context<{ Variables: AppVariables }>,
+  ): Promise<{ json: unknown } | { response: Response }> => {
     const secret = options.inboundEmailSecret;
     const inbound = options.inboundEmails;
-    if (!secret || !inbound) return forbidden(context);
+    if (!secret || !inbound) return { response: forbidden(context) };
     const raw = await context.req.text();
     const provided = (context.req.header('x-verdeo-signature') ?? '').replace(/^sha256=/, '');
     const expected = createHmac('sha256', secret).update(raw).digest('hex');
     const valid =
       provided.length === expected.length &&
       timingSafeEqual(Buffer.from(provided, 'utf8'), Buffer.from(expected, 'utf8'));
-    if (!valid) return forbidden(context);
-
-    let json: unknown;
-    try {
-      json = JSON.parse(raw);
-    } catch {
-      json = null;
+    if (!valid) {
+      await inbound.recordRejection?.('firma').catch(() => undefined);
+      return { response: forbidden(context) };
     }
-    const input = InboundEmailIngestSchema.safeParse(json);
-    if (!input.success)
+    try {
+      return { json: JSON.parse(raw) as unknown };
+    } catch {
+      return { json: null };
+    }
+  };
+
+  app.post('/api/v1/inbound/email', async (context) => {
+    const signed = await readSignedInbound(context);
+    if ('response' in signed) return signed.response;
+    const inbound = options.inboundEmails;
+    if (!inbound) return forbidden(context);
+    const input = InboundEmailIngestSchema.safeParse(signed.json);
+    if (!input.success) {
+      await inbound.recordRejection?.('formato').catch(() => undefined);
       return badRequest(context, 'El mail no tiene el formato esperado.', input.error.issues);
+    }
 
     // El lector espera el mail con su encabezado, como cuando se pega uno reenviado.
     const text = [
@@ -4610,6 +4642,30 @@ export function createApp(options: CreateAppOptions) {
       status: result.stored ? status : 'duplicate',
     });
     return context.json({ id: result.id, status: result.stored ? status : 'duplicate' });
+  });
+
+  /*
+   * El reporte de una corrida del script de Gmail (2026-11-11), firmado igual que los mails. Lo
+   * manda al terminar si encontró o falló algo, y si no cada 30 minutos: con eso el estado del
+   * sistema distingue un script que anda sin pedidos de uno apagado.
+   */
+  app.post('/api/v1/inbound/run', async (context) => {
+    const signed = await readSignedInbound(context);
+    if ('response' in signed) return signed.response;
+    const inbound = options.inboundEmails;
+    if (!inbound?.recordRun) return forbidden(context);
+    const input = InboundEmailRunReportSchema.safeParse(signed.json);
+    if (!input.success) {
+      await inbound.recordRejection?.('formato').catch(() => undefined);
+      return badRequest(context, 'El reporte no tiene el formato esperado.', input.error.issues);
+    }
+    await inbound.recordRun({ ...input.data, ranAt: new Date(input.data.ranAt) });
+    (context.get('logger') ?? options.logger).info({
+      event: 'inbound.run',
+      failed: input.data.failed,
+      sentNew: input.data.sentNew,
+    });
+    return context.json({ ok: true });
   });
 
   const requireInbound = () => {
@@ -8583,8 +8639,8 @@ export function createApp(options: CreateAppOptions) {
         },
         errors: { last24h, recent },
         generatedAt: new Date().toISOString(),
-        inbound: options.inboundEmails
-          ? await options.inboundEmails.overview().catch(() => null)
+        inbound: options.inboundEmails?.tracking
+          ? await options.inboundEmails.tracking().catch(() => null)
           : null,
         mirror: {
           detail: mirrorState.detail,
@@ -8594,6 +8650,18 @@ export function createApp(options: CreateAppOptions) {
         probes: [neon, supabaseApi, supabaseDatabase],
       }),
     );
+  });
+
+  /*
+   * Sólo el seguimiento del correo entrante, para el aviso del tablero (2026-11-11): el estado
+   * completo mide tres servidores y no vale la pena en cada apertura del tablero.
+   */
+  app.get('/api/v1/system/inbound', async (context) => {
+    if (!context.get('session').permissions.includes('audit.read')) return forbidden(context);
+    const tracking = options.inboundEmails?.tracking
+      ? await options.inboundEmails.tracking().catch(() => null)
+      : null;
+    return context.json({ inbound: tracking });
   });
 
   app.get('/api/v1/system/tables', async (context) => {

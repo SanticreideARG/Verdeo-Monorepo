@@ -38,6 +38,8 @@ function inboundStore() {
     get: vi.fn(),
     list: vi.fn(() => Promise.resolve([])),
     overview: vi.fn(() => Promise.resolve({ lastReceivedAt: null, pending: 0 })),
+    recordRejection: vi.fn<(reason: string) => Promise<void>>(() => Promise.resolve()),
+    recordRun: vi.fn<(input: unknown) => Promise<void>>(() => Promise.resolve()),
     release: vi.fn(() => Promise.resolve()),
     resolve: vi.fn(() => Promise.resolve()),
     store: vi.fn<
@@ -429,5 +431,59 @@ describe('importar con "Todas las ciudades" arriba', () => {
     const body = (await response.json()) as { failed: { reason: string }[] };
 
     expect(body.failed[0]?.reason).toContain('menú publicado');
+  });
+});
+
+describe('reporte de las corridas del script', () => {
+  const OTRO = 'otro-secreto-cualquiera-largo';
+  const report = {
+    duplicates: 1,
+    durationMs: 900,
+    error: null,
+    failed: 0,
+    found: 2,
+    quietRuns: 5,
+    ranAt: '2026-11-11T12:00:00.000Z',
+    scriptVersion: '2026-11-11',
+    sentNew: 1,
+  };
+
+  it('guarda la corrida firmada', async () => {
+    const inbound = inboundStore();
+    const response = await buildApp(inbound).request('/api/v1/inbound/run', signed(report));
+    expect(response.status).toBe(200);
+    expect(inbound.recordRun).toHaveBeenCalledWith({
+      ...report,
+      ranAt: new Date('2026-11-11T12:00:00.000Z'),
+    });
+  });
+
+  it('una firma que no coincide se rechaza y se cuenta, en el reporte y en los mails', async () => {
+    const inbound = inboundStore();
+    const app = buildApp(inbound);
+    expect((await app.request('/api/v1/inbound/run', signed(report, OTRO))).status).toBe(403);
+    expect((await app.request('/api/v1/inbound/email', signed(mail, OTRO))).status).toBe(403);
+    expect(inbound.recordRun).not.toHaveBeenCalled();
+    expect(inbound.recordRejection.mock.calls).toEqual([['firma'], ['firma']]);
+  });
+
+  it('un reporte con otro formato se rechaza y se cuenta como formato', async () => {
+    const inbound = inboundStore();
+    const response = await buildApp(inbound).request(
+      '/api/v1/inbound/run',
+      signed({ ...report, found: -1 }),
+    );
+    expect(response.status).toBe(400);
+    expect(inbound.recordRejection).toHaveBeenCalledWith('formato');
+  });
+
+  it('sin secreto configurado rechaza sin contar: no hay con qué comparar', async () => {
+    const inbound = inboundStore();
+    const response = await buildApp(inbound, { secret: null }).request(
+      '/api/v1/inbound/run',
+      signed(report),
+    );
+    expect(response.status).toBe(403);
+    expect(inbound.recordRejection).not.toHaveBeenCalled();
   });
 });

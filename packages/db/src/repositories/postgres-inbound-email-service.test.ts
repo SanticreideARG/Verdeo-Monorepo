@@ -128,3 +128,68 @@ describe('PostgresInboundEmailService', () => {
     expect(resumen.lastReceivedAt).not.toBeNull();
   });
 });
+
+describe('seguimiento del script de Gmail', () => {
+  const run = (
+    ranAt: string,
+    extra: Partial<{ error: string; failed: number; sentNew: number }> = {},
+  ) => ({
+    duplicates: 1,
+    durationMs: 1200,
+    error: extra.error ?? null,
+    failed: extra.failed ?? 0,
+    found: 3,
+    quietRuns: 0,
+    ranAt: new Date(ranAt),
+    scriptVersion: '2026-11-11',
+    sentNew: extra.sentNew ?? 2,
+  });
+
+  it('guarda las corridas, suma las de 24 horas y borra las de más de 30 días', async () => {
+    const { service } = await base();
+    const now = Date.now();
+    const ago = (ms: number) => new Date(now - ms).toISOString();
+    await service.recordRun(run(ago(40 * 24 * 3600 * 1000)));
+    await service.recordRun(run(ago(2 * 24 * 3600 * 1000)));
+    await service.recordRun(run(ago(60 * 60 * 1000), { error: 'Verdeo respondió 500', failed: 1 }));
+    await service.recordRun(run(ago(5 * 60 * 1000), { sentNew: 4 }));
+
+    const tracking = await service.tracking();
+    // La de hace 40 días se borró; quedan tres, la más nueva primero.
+    expect(tracking.runs).toHaveLength(3);
+    expect(tracking.runs[0]?.sentNew).toBe(4);
+    expect(tracking.runs[1]?.error).toBe('Verdeo respondió 500');
+    // En 24 horas: las dos últimas.
+    expect(tracking.last24h).toEqual({
+      duplicates: 2,
+      failed: 1,
+      found: 6,
+      reports: 2,
+      sentNew: 6,
+    });
+  });
+
+  it('cuenta los rechazos por motivo en una sola fila', async () => {
+    const { service } = await base();
+    await service.recordRejection('firma');
+    await service.recordRejection('firma');
+    await service.recordRejection('formato');
+    const tracking = await service.tracking();
+    expect(tracking.rejections.map((r) => [r.reason, r.count]).sort()).toEqual([
+      ['firma', 2],
+      ['formato', 1],
+    ]);
+  });
+
+  it('para revisar suma pedidos, consultas y no reconocidos', async () => {
+    const { service } = await base();
+    await service.store(mail('a'), { rows: [] }, 'pending');
+    await service.store(mail('b'), { rows: [] }, 'inquiry');
+    await service.store(mail('c'), { rows: [] }, 'unreadable');
+    await service.store(mail('d'), { rows: [] }, 'discarded');
+    const tracking = await service.tracking();
+    expect(tracking.toReview).toBe(3);
+    expect(tracking.pending).toBe(1);
+    expect(tracking.runs).toEqual([]);
+  });
+});

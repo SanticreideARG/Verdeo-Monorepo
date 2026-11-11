@@ -9659,6 +9659,56 @@ textarea.sr-only {
 .system-table.is-dim {
   opacity: 0.45;
 }
+/* Seguimiento del script de Gmail (2026-11-11): título con su semáforo, el consejo y las corridas. */
+.system-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 1.75rem;
+}
+.system-section-head .system-section {
+  margin: 0;
+}
+.system-advice {
+  margin: 0.6rem 0 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.6rem;
+  background: var(--db-muted);
+  font-size: 0.9rem;
+  color: var(--db-text);
+}
+.system-runs-wrap {
+  margin-top: 0.75rem;
+  overflow-x: auto;
+}
+.system-runs {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  color: var(--db-text);
+}
+.system-runs th,
+.system-runs td {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--db-border-soft);
+  text-align: left;
+  white-space: nowrap;
+}
+.system-runs td:last-child {
+  white-space: normal;
+  min-width: 12rem;
+}
+.system-runs th {
+  font-weight: 600;
+  color: var(--db-text-soft);
+}
+.system-runs small {
+  color: var(--db-text-soft);
+}
+.system-runs tr.is-bad td {
+  color: var(--db-danger, #b3261e);
+}
 .system-errors {
   display: grid;
   gap: 0.6rem;

@@ -8,8 +8,13 @@ import { apiRequest } from '../lib/api.js';
 import {
   formatBytes,
   groupTables,
+  INBOUND_SILENCE_MINUTES,
+  inboundAdvice,
+  inboundTone,
+  inboundToneLabel,
   overallTone,
   toneLabel,
+  type InboundTracking,
   type SystemTable,
 } from '../lib/system.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
@@ -18,6 +23,119 @@ import { useSystemStatus } from '../lib/useSystemStatus.js';
 function moment(value: string): string {
   return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'medium' }).format(
     new Date(value),
+  );
+}
+
+const REJECTION_LABELS: Record<string, string> = {
+  firma: 'firma que no coincide',
+  formato: 'formato inesperado',
+};
+
+/** "hace 12 min", "hace 3 h": la hora sola no dice si es de recién o de ayer. */
+function ago(value: string): string {
+  const minutes = Math.max(0, Math.round((Date.now() - Date.parse(value)) / 60_000));
+  if (minutes < 60) return `hace ${String(minutes)} min`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `hace ${String(hours)} h`;
+  return `hace ${String(Math.round(hours / 24))} días`;
+}
+
+/**
+ * El seguimiento del script de Gmail (2026-11-11).
+ *
+ * Antes sólo se veía la hora del último mail aceptado, y un script apagado, uno con el secreto
+ * cambiado y una semana sin pedidos se veían igual. El script reporta cada corrida con novedades y,
+ * sin ellas, cada 30 minutos.
+ */
+function InboundSection({ tracking }: { tracking: InboundTracking }) {
+  const tone = inboundTone(tracking);
+  const advice = inboundAdvice(tone, tracking);
+  const last = tracking.runs[0];
+  return (
+    <>
+      <div className="system-section-head">
+        <h2 className="system-section">Correo entrante (Gmail)</h2>
+        <span className={`system-pill system-pill-${tone}`}>{inboundToneLabel(tone)}</span>
+      </div>
+      {advice ? <p className="system-advice">{advice}</p> : null}
+      <dl className="system-stats">
+        <div>
+          <dt>Última corrida</dt>
+          <dd>{last ? `${moment(last.ranAt)} · ${ago(last.ranAt)}` : '—'}</dd>
+        </div>
+        <div>
+          <dt>Último mail recibido</dt>
+          <dd>
+            {tracking.lastReceivedAt
+              ? `${moment(tracking.lastReceivedAt)} · ${ago(tracking.lastReceivedAt)}`
+              : '—'}
+          </dd>
+        </div>
+        <div>
+          <dt>Para revisar</dt>
+          <dd>{tracking.toReview}</dd>
+        </div>
+        <div>
+          <dt>Nuevos (24 h)</dt>
+          <dd>{tracking.last24h.sentNew}</dd>
+        </div>
+        <div>
+          <dt>Repetidos (24 h)</dt>
+          <dd>{tracking.last24h.duplicates}</dd>
+        </div>
+        <div>
+          <dt>Fallados (24 h)</dt>
+          <dd>{tracking.last24h.failed}</dd>
+        </div>
+      </dl>
+      <p className="system-modal-meta">
+        {last ? `Versión del script: ${last.scriptVersion}. ` : ''}
+        Corre cada 5 minutos; sin novedades reporta cada 30. &quot;Sin señal&quot; aparece si pasan{' '}
+        {INBOUND_SILENCE_MINUTES} minutos sin reporte. Repetidos son mails que Verdeo ya tenía: cada
+        corrida vuelve a mirar los últimos minutos por las dudas.
+        {tracking.rejections.length > 0
+          ? ` Rechazos: ${tracking.rejections
+              .map(
+                (rejection) =>
+                  `${String(rejection.count)} por ${REJECTION_LABELS[rejection.reason] ?? rejection.reason} (el último ${moment(rejection.lastAt)})`,
+              )
+              .join('; ')}.`
+          : ''}
+      </p>
+      {tracking.runs.length > 0 ? (
+        <div className="system-runs-wrap">
+          <table className="system-runs">
+            <thead>
+              <tr>
+                <th>Corrida</th>
+                <th>Encontrados</th>
+                <th>Nuevos</th>
+                <th>Repetidos</th>
+                <th>Fallados</th>
+                <th>Duración</th>
+                <th>Error</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tracking.runs.map((run) => (
+                <tr className={run.error || run.failed > 0 ? 'is-bad' : ''} key={run.ranAt}>
+                  <td>
+                    {moment(run.ranAt)}
+                    {run.quietRuns > 0 ? <small> (+{run.quietRuns} sin novedades)</small> : null}
+                  </td>
+                  <td>{run.found}</td>
+                  <td>{run.sentNew}</td>
+                  <td>{run.duplicates}</td>
+                  <td>{run.failed}</td>
+                  <td>{(run.durationMs / 1000).toFixed(1)} s</td>
+                  <td>{run.error ?? ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -159,14 +277,14 @@ export function SystemPage() {
                 : `No se pudo leer la copia: ${status.mirror.detail}. Falta crear la tabla audit_mirror en Supabase.`}
             </p>
 
-            <h2 className="system-section">Correo entrante (Gmail)</h2>
-            <p className="system-modal-meta">
-              {status.inbound
-                ? status.inbound.lastReceivedAt
-                  ? `Último mail recibido: ${moment(status.inbound.lastReceivedAt)}. Esperando revisión: ${String(status.inbound.pending)}.`
-                  : 'Todavía no llegó ningún mail. Si el script de Gmail ya está instalado, revisá su secreto y su dirección.'
-                : 'Sin configurar.'}
-            </p>
+            {status.inbound ? (
+              <InboundSection tracking={status.inbound} />
+            ) : (
+              <>
+                <h2 className="system-section">Correo entrante (Gmail)</h2>
+                <p className="system-modal-meta">Sin configurar.</p>
+              </>
+            )}
           </>
         ) : failed ? null : (
           <p className="mt-4 text-ink-muted">Midiendo…</p>

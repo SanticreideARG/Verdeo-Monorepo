@@ -181,7 +181,38 @@ izquierda): tiene que haber uno solo. Si hay dos, borrar uno.
   `importarPedidos` o esperar 5 minutos. En Gmail el mail queda con la etiqueta `verdeo-importado`.
 - En Verdeo aparece en **Pedidos → Pedidos por correo para revisar** y como alerta en el tablero.
 - [Panel de control → Estado del sistema](/app/sistema) → **Correo entrante (Gmail)**
-  muestra la hora del último recibido.
+  muestra la hora del último recibido y la última corrida del script, con su estado (ver B.7).
+
+### B.7 El seguimiento del script (2026-11-11)
+
+Desde la versión `2026-11-11` de `Code.gs`, el script le cuenta a Verdeo cómo le fue en cada
+corrida: enseguida si mandó un pedido nuevo o algo falló, y si no, una vez cada 30 minutos. Antes, un
+script apagado, uno con el secreto cambiado y una semana sin pedidos se veían igual.
+
+En **Estado del sistema → Correo entrante** se ve:
+
+| Estado           | Qué quiere decir                                                                   | Qué hacer                                                                                          |
+| ---------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| **Al día**       | Reportó hace menos de 70 minutos y la última corrida entregó todo                  | Nada                                                                                               |
+| **Con errores**  | Corre, pero la última corrida no pudo mandar algún mail, o la API rechazó la firma | Leer el error de la corrida; con firma rechazada, igualar `VERDEO_SECRET` e `INBOUND_EMAIL_SECRET` |
+| **Sin señal**    | Reportó alguna vez, pero hace más de 70 minutos que no                             | Apps Script → Activadores: tiene que haber uno de `importarPedidos` cada 5 minutos                 |
+| **Sin reportes** | Nunca reportó                                                                      | Pegar la versión nueva de `Code.gs`, o cargar `INBOUND_EMAIL_SECRET` en Vercel                     |
+
+Abajo, las últimas 20 corridas reportadas (encontrados, nuevos, repetidos, fallados, duración y
+error) y los rechazos contados por motivo. Si el estado no es "Al día", también aparece un aviso en el
+tablero para quien puede ver el estado del sistema.
+
+"Repetidos" son mails que Verdeo ya tenía: cada corrida vuelve a mirar los últimos minutos por las
+dudas, y la API los descarta sin duplicar nada.
+
+**Por qué mira mail por mail.** Gmail junta en una conversación los mails con el mismo asunto
+("Pedido online Capital Federal"), y la etiqueta queda en la conversación. La versión anterior buscaba
+sólo conversaciones sin etiqueta, así que un pedido nuevo que caía en una ya etiquetada podía no
+mandarse nunca. Ahora también busca todo lo que llegó desde la corrida anterior, con o sin etiqueta.
+
+**Actualizar el script.** En Apps Script, borrar todo el código y pegar el `Code.gs` nuevo → guardar.
+Las propiedades y el activador quedan como estaban. Correr `importarPedidos` una vez: si Google pide
+permisos de nuevo, aceptarlos. En unos segundos, Estado del sistema muestra la primera corrida.
 
 ### Qué mails toma
 
@@ -199,7 +230,8 @@ En Apps Script, **Ejecuciones** (a la izquierda) muestra cada corrida; al abrir 
 | `Verdeo respondió 403`               | El secreto no coincide entre Vercel y el script, o falta `INBOUND_EMAIL_SECRET`, o no se volvió a desplegar la API después de cargarlo |
 | `Verdeo respondió 400`               | Un mail con un formato que la API no esperaba: avisar con el asunto y la fecha del mail                                                |
 | `Faltan VERDEO_URL o VERDEO_SECRET…` | Faltan las propiedades del paso B.3                                                                                                    |
-| Corre sin errores pero no llega nada | No hay mails que cumplan la búsqueda: revisar el asunto y que no tengan ya la etiqueta                                                 |
+| Corre sin errores pero no llega nada | No hay mails que cumplan la búsqueda: revisar el asunto y que no estén en spam                                                         |
+| No corre nunca                       | Falta el activador: Activadores (el reloj) → uno solo, de `importarPedidos`, "Temporizador por minutos", cada 5 minutos                |
 
 Para volver a mandar un mail: sacarle la etiqueta `verdeo-importado` en Gmail. La API reconoce los
 repetidos por el id del mail y no duplica nada.
@@ -218,6 +250,7 @@ Entre un paso y el otro los envíos fallan con 403 y se reintentan solos en la c
 - [ ] `INBOUND_EMAIL_SECRET` cargado en la API de Vercel y API redesplegada
 - [ ] Script `Verdeo pedidos` en el Gmail del negocio, con `VERDEO_URL` y `VERDEO_SECRET`
 - [ ] Un solo activador cada 5 minutos
+- [ ] Estado del sistema → Correo entrante dice "Al día"
 - [ ] Un pedido de prueba apareció en "Pedidos por correo para revisar"
 - [ ] Estado del sistema muestra la hora del último correo recibido
 

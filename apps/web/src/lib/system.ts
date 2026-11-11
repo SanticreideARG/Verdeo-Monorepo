@@ -26,7 +26,7 @@ export interface SystemStatus {
     }[];
   };
   generatedAt: string;
-  inbound: { lastReceivedAt: string | null; pending: number } | null;
+  inbound: InboundTracking | null;
   mirror: { detail: string; lastMirroredAt: string | null; ok: boolean };
   probes: SystemProbe[];
 }
@@ -39,6 +39,100 @@ export interface SystemTable {
 }
 
 export type HealthTone = 'bien' | 'lento' | 'mal' | 'sin-dato';
+
+export interface InboundRun {
+  duplicates: number;
+  durationMs: number;
+  error: string | null;
+  failed: number;
+  found: number;
+  quietRuns: number;
+  ranAt: string;
+  scriptVersion: string;
+  sentNew: number;
+}
+
+/** El seguimiento del script de Gmail que devuelve el estado del sistema (2026-11-11). */
+export interface InboundTracking {
+  last24h: { duplicates: number; failed: number; found: number; reports: number; sentNew: number };
+  lastReceivedAt: string | null;
+  pending: number;
+  rejections: { count: number; lastAt: string; reason: string }[];
+  runs: InboundRun[];
+  toReview: number;
+}
+
+/**
+ * Cuánto puede pasar sin reporte antes de decir "sin señal". El script reporta cada 30 minutos aunque
+ * no haya novedades; 70 da margen para una corrida que Google atrasó.
+ */
+export const INBOUND_SILENCE_MINUTES = 70;
+
+/**
+ * Cómo anda el script de Gmail, con el mismo semáforo que las sondas.
+ *
+ * - `sin-dato`: nunca reportó (falta pegar la versión del script que reporta).
+ * - `mal`: reportó alguna vez pero hace más de 70 minutos que no: el activador no corre.
+ * - `lento`: corre, pero la última corrida tuvo un error o un mail que no se pudo mandar, o hubo un
+ *   rechazo de firma después de ella (el secreto no coincide).
+ * - `bien`: corre y entrega.
+ */
+export function inboundTone(tracking: InboundTracking, now: Date = new Date()): HealthTone {
+  const last = tracking.runs[0];
+  if (!last) return 'sin-dato';
+  const silence = now.getTime() - Date.parse(last.ranAt);
+  if (silence > INBOUND_SILENCE_MINUTES * 60 * 1000) return 'mal';
+  if (last.error || last.failed > 0 || signatureRejectedAfterLastRun(tracking)) return 'lento';
+  return 'bien';
+}
+
+/** Si la API rechazó una firma después de la última corrida reportada: el secreto no coincide. */
+function signatureRejectedAfterLastRun(tracking: InboundTracking): boolean {
+  const last = tracking.runs[0];
+  if (!last) return false;
+  return tracking.rejections.some(
+    (rejection) =>
+      rejection.reason === 'firma' && Date.parse(rejection.lastAt) > Date.parse(last.ranAt),
+  );
+}
+
+export function inboundToneLabel(tone: HealthTone): string {
+  return {
+    bien: 'Al día',
+    lento: 'Con errores',
+    mal: 'Sin señal',
+    'sin-dato': 'Sin reportes',
+  }[tone];
+}
+
+/** Qué hacer, en una frase, según el estado. Vacío si está al día. */
+export function inboundAdvice(
+  tone: HealthTone,
+  tracking: InboundTracking,
+  now: Date = new Date(),
+): string {
+  const last = tracking.runs[0];
+  if (tone === 'bien') return '';
+  /*
+   * Con el secreto cambiado tampoco llega el reporte de la corrida, así que el estado cae en "sin
+   * señal" o "sin reportes": un rechazo de firma reciente dice mejor qué pasa.
+   */
+  const recentSignature = tracking.rejections.some(
+    (rejection) =>
+      rejection.reason === 'firma' &&
+      now.getTime() - Date.parse(rejection.lastAt) < INBOUND_SILENCE_MINUTES * 60 * 1000,
+  );
+  if (recentSignature || signatureRejectedAfterLastRun(tracking)) {
+    return 'La API rechazó la firma: el secreto del script (VERDEO_SECRET) no coincide con INBOUND_EMAIL_SECRET de Vercel.';
+  }
+  if (tone === 'sin-dato') {
+    return 'El script de Gmail todavía no reportó ninguna corrida. Falta pegar la versión nueva de Code.gs en Apps Script, o falta INBOUND_EMAIL_SECRET en la API de Vercel.';
+  }
+  if (tone === 'mal') {
+    return 'El script dejó de correr. En Apps Script, revisá que en Activadores haya uno de importarPedidos cada 5 minutos, y mirá Ejecuciones.';
+  }
+  return `La última corrida tuvo problemas: ${last?.error ?? 'algún mail no se pudo mandar'}. Se reintenta sola en la próxima.`;
+}
 
 /**
  * Qué tan sana está una sonda, para pintarla.

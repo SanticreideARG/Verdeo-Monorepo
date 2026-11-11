@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   formatBytes,
+  inboundAdvice,
+  inboundTone,
+  type InboundTracking,
   groupTables,
   latencyPercent,
   overallTone,
@@ -81,5 +84,72 @@ describe('groupTables', () => {
   it('no pierde ninguna tabla', () => {
     const entrada = ['orders', 'route_stops', 'users', 'xyz'].map(tabla);
     expect(groupTables(entrada).flatMap((grupo) => grupo.tables)).toHaveLength(4);
+  });
+});
+
+describe('inboundTone: el semáforo del script de Gmail', () => {
+  const now = new Date('2026-11-11T12:00:00.000Z');
+  const run = (ranAt: string, extra: { error?: string; failed?: number } = {}) => ({
+    duplicates: 0,
+    durationMs: 800,
+    error: extra.error ?? null,
+    failed: extra.failed ?? 0,
+    found: 0,
+    quietRuns: 0,
+    ranAt,
+    scriptVersion: '2026-11-11',
+    sentNew: 0,
+  });
+  const tracking = (
+    runs: InboundTracking['runs'],
+    rejections: InboundTracking['rejections'] = [],
+  ): InboundTracking => ({
+    last24h: { duplicates: 0, failed: 0, found: 0, reports: runs.length, sentNew: 0 },
+    lastReceivedAt: null,
+    pending: 0,
+    rejections,
+    runs,
+    toReview: 0,
+  });
+
+  it('sin reportes nunca: falta el script nuevo', () => {
+    expect(inboundTone(tracking([]), now)).toBe('sin-dato');
+  });
+
+  it('al día si reportó hace menos de 70 minutos sin errores', () => {
+    const value = tracking([run('2026-11-11T11:30:00.000Z')]);
+    expect(inboundTone(value, now)).toBe('bien');
+    expect(inboundAdvice('bien', value, now)).toBe('');
+  });
+
+  it('sin señal pasados 70 minutos', () => {
+    const value = tracking([run('2026-11-11T10:40:00.000Z')]);
+    expect(inboundTone(value, now)).toBe('mal');
+    expect(inboundAdvice('mal', value, now)).toContain('Activadores');
+  });
+
+  it('con errores si la última corrida falló algo', () => {
+    const failed = tracking([run('2026-11-11T11:55:00.000Z', { failed: 1 })]);
+    expect(inboundTone(failed, now)).toBe('lento');
+    const value = tracking([run('2026-11-11T11:55:00.000Z', { error: 'Verdeo respondió 500' })]);
+    expect(inboundAdvice(inboundTone(value, now), value, now)).toContain('Verdeo respondió 500');
+  });
+
+  it('una firma rechazada después de la última corrida es el secreto', () => {
+    const value = tracking(
+      [run('2026-11-11T11:40:00.000Z')],
+      [{ count: 3, lastAt: '2026-11-11T11:50:00.000Z', reason: 'firma' }],
+    );
+    expect(inboundTone(value, now)).toBe('lento');
+    expect(inboundAdvice('lento', value, now)).toContain('VERDEO_SECRET');
+  });
+
+  it('sin señal, pero con una firma rechazada recién, también dice que es el secreto', () => {
+    const value = tracking(
+      [run('2026-11-11T09:00:00.000Z')],
+      [{ count: 9, lastAt: '2026-11-11T11:58:00.000Z', reason: 'firma' }],
+    );
+    expect(inboundTone(value, now)).toBe('mal');
+    expect(inboundAdvice('mal', value, now)).toContain('VERDEO_SECRET');
   });
 });

@@ -1,5 +1,6 @@
 import { apiRequest } from './api.js';
 import { addDaysIso, todayInOperation } from './dates.js';
+import { inboundAdvice, inboundTone, inboundToneLabel, type InboundTracking } from './system.js';
 
 /**
  * Las tarjetas del feed que no escribe nadie: lo que el sistema ya sabe (DASHBOARD_FEED_PLAN.md).
@@ -31,7 +32,7 @@ export async function loadFeedCards(permissions: readonly string[]): Promise<Fee
   const today = todayInOperation();
   const tomorrow = addDaysIso(today, 1);
 
-  const [duplicates, inbound, drafts, calendar, chat, tips] = await Promise.all([
+  const [duplicates, inbound, drafts, calendar, chat, tips, inboundSignal] = await Promise.all([
     can('orders.read') ? json<{ groups: unknown[] }>('/api/v1/orders/duplicates') : null,
     can('orders.create') ? json<{ items: unknown[] }>('/api/v1/inbound-emails') : null,
     can('orders.confirm')
@@ -56,6 +57,8 @@ export async function loadFeedCards(permissions: readonly string[]): Promise<Fee
     can('feed.post')
       ? json<{ items: { href: string; key: string; text: string }[] }>('/api/v1/feed/tips')
       : null,
+    // El script de Gmail: quien ve el estado del sistema se entera si deja de andar.
+    can('audit.read') ? json<{ inbound: InboundTracking | null }>('/api/v1/system/inbound') : null,
   ]);
 
   const cards: FeedCard[] = [];
@@ -86,6 +89,24 @@ export async function loadFeedCards(permissions: readonly string[]): Promise<Fee
         'pedidos por correo para revisar',
       ),
     });
+  }
+  /*
+   * El script de correo sin señal o con errores (2026-11-11). La clave lleva la última corrida:
+   * marcar la tarjeta como hecha la esconde hasta que cambie algo.
+   */
+  const tracking = inboundSignal?.inbound;
+  if (tracking) {
+    const tone = inboundTone(tracking);
+    if (tone !== 'bien') {
+      const last = tracking.runs[0];
+      cards.push({
+        count: null,
+        href: '/app/sistema',
+        key: `correo-script:${tone}:${last?.ranAt ?? 'nunca'}`,
+        kind: 'alerta',
+        text: `Correo entrante: ${inboundToneLabel(tone).toLocaleLowerCase('es-AR')}. ${inboundAdvice(tone, tracking)}`,
+      });
+    }
   }
   const draftCount = drafts?.items.length ?? 0;
   if (draftCount > 0) {

@@ -23,7 +23,11 @@ Por qué así y no de otra forma: `docs/12-development/INBOUND_LISTENERS_PLAN.md
    la etiqueta `verdeo-importado`. En Verdeo aparece en Pedidos, y en _Panel de control → Estado del
    sistema → Correo entrante_ se ve la hora del último recibido.
 6. **Dejarlo andando.** Elegí `instalarDisparador` y apretá _Ejecutar_ una vez. Desde ahí corre solo
-   cada 5 minutos.
+   cada 5 minutos. **Sin este paso no corre nunca**: ejecutar `importarPedidos` a mano no lo deja
+   programado. En _Activadores_ (el reloj) tiene que haber uno solo.
+7. **Seguimiento.** Cada corrida con novedades, y si no una cada 30 minutos, se reporta a Verdeo:
+   _Estado del sistema → Correo entrante_ dice si está al día, con errores o sin señal. Detalle en
+   `docs/12-development/CORREO_PRODUCCION.md`, B.7.
 
 ## Si algo no anda
 
