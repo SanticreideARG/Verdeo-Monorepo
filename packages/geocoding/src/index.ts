@@ -26,6 +26,12 @@ export interface GeocodingInput {
    */
   area?:
     { points: readonly { latitude: number; longitude: number }[]; radiusKm: number } | undefined;
+  /**
+   * La localidad del domicilio dentro de una región, cuando la dirección, la zona o la ciudad del
+   * domicilio la nombran ("Plottier"). Se busca sólo ahí (2026-11-11): en el Alto Valle la misma calle
+   * existe en cinco localidades y Neuquén capital tapaba a las demás.
+   */
+  locality?: { latitude: number; longitude: number; name: string } | undefined;
   requestId: string;
   writtenAddress: string;
 }
@@ -262,12 +268,34 @@ export class GoogleMapsGeocodingProvider implements GeocodingProvider {
     }
 
     const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
-    url.searchParams.set('address', input.writtenAddress);
+    const locality = input.locality;
+    const namesLocality =
+      locality &&
+      input.writtenAddress
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .includes(
+          locality.name
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase(),
+        );
+    url.searchParams.set(
+      'address',
+      locality && !namesLocality
+        ? `${input.writtenAddress}, ${locality.name}`
+        : input.writtenAddress,
+    );
     url.searchParams.set('key', this.apiKey);
     url.searchParams.set('region', this.regionCode);
     url.searchParams.set('components', 'country:AR');
-    if (input.origin) {
-      const box = boundingBox(input.origin, input.radiusKm ?? DEFAULT_CITY_RADIUS_KM);
+    const center = locality ?? input.origin;
+    if (center) {
+      const box = boundingBox(
+        center,
+        locality ? LOCALITY_RADIUS_KM : (input.radiusKm ?? DEFAULT_CITY_RADIUS_KM),
+      );
       url.searchParams.set(
         'bounds',
         `${String(box.south)},${String(box.west)}|${String(box.north)},${String(box.east)}`,

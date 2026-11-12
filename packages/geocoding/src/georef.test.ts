@@ -256,6 +256,106 @@ describe('GeorefGeocodingProvider en una región', () => {
   });
 });
 
+describe('GeorefGeocodingProvider en el Alto Valle (2026-11-11)', () => {
+  const neuquen = { latitude: -38.952, longitude: -68.059 };
+  const plottier = { latitude: -38.946, longitude: -68.234 };
+  const direccion = (localidad: string, lat: number, lon: number) => ({
+    altura: { valor: 500 },
+    calle: { nombre: 'GENERAL JOSE DE SAN MARTIN' },
+    localidad_censal: { nombre: localidad },
+    nomenclatura: `GENERAL JOSE DE SAN MARTIN 500, ${localidad}`,
+    ubicacion: { lat, lon },
+  });
+  // Neuquén capital repite la misma dirección en varios tramos; Plottier viene detrás.
+  const respuesta = [
+    direccion('Neuquén', -38.95, -68.06),
+    direccion('Neuquén', -38.9501, -68.0601),
+    direccion('Neuquén', -38.9502, -68.0602),
+    direccion('Plottier', -38.947, -68.233),
+  ];
+  const fetchImpl = () =>
+    vi.fn((url: URL) =>
+      Promise.resolve(
+        url.pathname.endsWith('/ubicacion')
+          ? json({ ubicacion: { departamento: { id: '58035' }, provincia: { id: '58' } } })
+          : json({ direcciones: respuesta }),
+      ),
+    );
+  const region = {
+    area: { points: [neuquen, plottier], radiusKm: 15 },
+    idempotencyKey: 'k',
+    requestId: 'r',
+    writtenAddress: 'San Martín 500',
+  };
+
+  it('pide más de diez por departamento y deja una sola por localidad', async () => {
+    const llamar = fetchImpl();
+    const provider = new GeorefGeocodingProvider(
+      siguiente().provider,
+      llamar as unknown as typeof fetch,
+    );
+    const found = await provider.geocode(region);
+    const busqueda = llamar.mock.calls
+      .map(([url]) => url)
+      .find((url) => url.pathname.endsWith('/direcciones'));
+    expect(busqueda?.searchParams.get('max')).toBe('100');
+    expect(found.map((row) => row.city).sort()).toEqual(['Neuquén', 'Plottier']);
+  });
+
+  it('con la localidad del domicilio, sólo ofrece las de esa localidad', async () => {
+    const next = siguiente();
+    const provider = new GeorefGeocodingProvider(
+      next.provider,
+      fetchImpl() as unknown as typeof fetch,
+    );
+    const found = await provider.geocode({
+      ...region,
+      locality: { ...plottier, name: 'Plottier' },
+    });
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ city: 'Plottier', confidence: 0.95 });
+    expect(next.geocode).not.toHaveBeenCalled();
+  });
+
+  it('si en esa localidad Georef no tiene la altura, sigue con el buscador siguiente', async () => {
+    const next = siguiente();
+    const llamar = vi.fn((url: URL) =>
+      Promise.resolve(
+        url.pathname.endsWith('/ubicacion')
+          ? json({ ubicacion: { departamento: { id: '58035' }, provincia: { id: '58' } } })
+          : json({ direcciones: respuesta.slice(0, 3) }),
+      ),
+    );
+    const provider = new GeorefGeocodingProvider(next.provider, llamar as unknown as typeof fetch);
+    expect(
+      await provider.geocode({ ...region, locality: { ...plottier, name: 'Plottier' } }),
+    ).toEqual([]);
+    expect(next.geocode).toHaveBeenCalledTimes(1);
+  });
+
+  it('sin saber la localidad, suma los del buscador siguiente, sin darlos por seguros', async () => {
+    const otro = {
+      confidence: 0.95,
+      formattedAddress: 'San Martín 500, Plottier',
+      latitude: -38.948,
+      longitude: -68.231,
+      providerCandidateId: 'osm:1',
+    };
+    const next = siguiente([otro]);
+    const llamar = vi.fn((url: URL) =>
+      Promise.resolve(
+        url.pathname.endsWith('/ubicacion')
+          ? json({ ubicacion: { departamento: { id: '58035' }, provincia: { id: '58' } } })
+          : json({ direcciones: respuesta.slice(0, 1) }),
+      ),
+    );
+    const provider = new GeorefGeocodingProvider(next.provider, llamar as unknown as typeof fetch);
+    const found = await provider.geocode(region);
+    expect(found.map((row) => row.formattedAddress)).toContain('San Martín 500, Plottier');
+    expect(found.find((row) => row.providerCandidateId === 'osm:1')?.confidence).toBe(0.75);
+  });
+});
+
 describe('GeorefPlaceFinder', () => {
   const localidades = (rows: unknown[]) =>
     vi.fn(() => Promise.resolve(new Response(JSON.stringify({ localidades: rows }))));

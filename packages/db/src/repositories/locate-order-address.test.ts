@@ -10,7 +10,7 @@ import type { GeocodingCandidate, GeocodingInput, GeocodingProvider } from '@ver
 
 import type { Database } from '../index.js';
 import * as schema from '../schema/index.js';
-import { PostgresOperationsService } from './postgres-operations-service.js';
+import { localityOfAddress, PostgresOperationsService } from './postgres-operations-service.js';
 
 const migrationsFolder = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'migrations');
 
@@ -393,8 +393,8 @@ describe('ciudad sin punto de origen', () => {
        select id, 'Neuquén; Villa Regina' from operating_sites`,
     );
     const points = [
-      { latitude: -38.952, longitude: -68.059 },
-      { latitude: -39.095, longitude: -67.082 },
+      { latitude: -38.952, longitude: -68.059, name: 'Neuquén' },
+      { latitude: -39.095, longitude: -67.082, name: 'Villa Regina' },
     ];
     const service = new PostgresOperationsService(ctx.db, provider, {
       find: () => Promise.resolve(null),
@@ -563,5 +563,41 @@ describe('ubicación pegada a mano', () => {
   it('sin ubicación pegada, el mismo resultado lejano no se ofrece', async () => {
     const { service } = await base(desdeElEnlace);
     expect((await service.locateOrderAddress(ORDER, reglas, contexto)).status).toBe('no_match');
+  });
+});
+
+describe('localityOfAddress: la localidad de un domicilio en una región', () => {
+  const valle = [
+    { latitude: -38.946, longitude: -68.234, name: 'Plottier' },
+    { latitude: -38.952, longitude: -68.059, name: 'Neuquén' },
+    { latitude: -38.95, longitude: -67.99, name: 'Cipolletti' },
+    { latitude: -39.03, longitude: -67.57, name: 'General Roca' },
+    { latitude: -38.95, longitude: -67.92, name: 'General Fernández Oro' },
+  ];
+
+  it('la reconoce en la dirección, la segunda línea, la ciudad o la zona', () => {
+    expect(localityOfAddress(valle, ['San Martín 500, Plottier'])?.name).toBe('Plottier');
+    expect(localityOfAddress(valle, ['San Martín 500', 'Barrio Centro - PLOTTIER'])?.name).toBe(
+      'Plottier',
+    );
+    expect(localityOfAddress(valle, ['Tucumán 855', null, null, 'Roca'])?.name).toBe(
+      'General Roca',
+    );
+    expect(localityOfAddress(valle, ['Mitre 20', 'Fernandez Oro'])?.name).toBe(
+      'General Fernández Oro',
+    );
+  });
+
+  it('"Plottier, Neuquén" es Plottier: Neuquén también es la provincia', () => {
+    expect(localityOfAddress(valle, ['San Martín 500, Plottier, Neuquén'])?.name).toBe('Plottier');
+  });
+
+  it('si no nombra ninguna, o nombra dos, no se sabe', () => {
+    expect(localityOfAddress(valle, ['San Martín 500', 'Valle'])).toBeNull();
+    expect(localityOfAddress(valle, ['San Martín 500', 'Cipolletti o Roca'])).toBeNull();
+  });
+
+  it('no confunde una palabra dentro de otra', () => {
+    expect(localityOfAddress(valle, ['Calle Rocamora 12'])).toBeNull();
   });
 });

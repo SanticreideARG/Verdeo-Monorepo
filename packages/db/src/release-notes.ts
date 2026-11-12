@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-11-valle-por-localidad',
+    body: `Ubicar direcciones en Valle: si la dirección, la segunda línea o la zona dicen la localidad ("Plottier", "Roca"), se busca sólo ahí. Las direcciones de Plottier y General Roca ya no quedan tapadas por las de Neuquén capital. Si no dice la localidad, se ofrecen las opciones de cada una para elegir.`,
+  },
+  {
     key: '2026-11-11-seguimiento-correo',
     body: `Estado del sistema: el correo entrante muestra si el script de Gmail está al día, con errores o sin señal, sus últimas corridas y qué hacer en cada caso. Si deja de andar, aparece un aviso en el tablero. El script ahora también toma los pedidos que Gmail junta en una misma conversación.`,
   },

@@ -95,18 +95,35 @@ export class GeorefGeocodingProvider implements GeocodingProvider {
 
     let candidates: GeocodingCandidate[];
     try {
-      candidates = await this.search(street, input.origin, input.area);
+      candidates = await this.search(street, input.origin, input.area, input.locality);
     } catch {
       // Georef caído o lento: no frena la ubicación, sigue el buscador siguiente.
       candidates = [];
     }
-    return candidates.length > 0 ? candidates : this.next.geocode(input);
+    if (candidates.length === 0) return this.next.geocode(input);
+    /*
+     * En una región sin saber la localidad, Georef sólo conoce las alturas de algunas (en Plottier,
+     * menos de una cuadra de cada diez): lo que encuentra puede ser la misma calle en otra localidad.
+     * Se suman los del buscador siguiente para que la de verdad también esté entre las opciones.
+     */
+    if (input.area && !input.locality) {
+      const more = await this.next.geocode(input).catch(() => []);
+      return [
+        ...candidates,
+        ...more.map((candidate) => ({
+          ...candidate,
+          confidence: Math.min(candidate.confidence, 0.75),
+        })),
+      ];
+    }
+    return candidates;
   }
 
   private async search(
     street: string,
     origin: GeocodingInput['origin'],
     area?: GeocodingInput['area'],
+    locality?: GeocodingInput['locality'],
   ): Promise<GeocodingCandidate[]> {
     const points = area?.points ?? (origin ? [origin] : []);
     const reach = area?.radiusKm ?? MAX_DISTANCE_KM;
@@ -123,7 +140,11 @@ export class GeorefGeocodingProvider implements GeocodingProvider {
       [...(places.size > 0 ? places.values() : [null])].map(async (place) => {
         const url = new URL(`${BASE_URL}/direcciones`);
         url.searchParams.set('direccion', street);
-        url.searchParams.set('max', '10');
+        /*
+         * En una región, más de diez (2026-11-11): Plottier y Neuquén comparten departamento, y las
+         * diez primeras eran siempre de Neuquén capital, que tiene la misma calle en varios tramos.
+         */
+        url.searchParams.set('max', area ? '100' : '10');
         if (place) {
           url.searchParams.set('provincia', place.provinceId);
           if (place.departmentId) url.searchParams.set('departamento', place.departmentId);
@@ -132,6 +153,17 @@ export class GeorefGeocodingProvider implements GeocodingProvider {
       }),
     );
 
+    /*
+     * La localidad del domicilio: la que Georef dice que es, y si no lo dice, la que le queda más
+     * cerca. Sólo la distancia no alcanza: la avenida San Martín de Neuquén llega casi a Plottier.
+     */
+    const inLocality = (row: { address: GeorefAddress; latitude: number; longitude: number }) => {
+      if (!locality) return true;
+      const named = row.address.localidad_censal?.nombre;
+      if (named) return placeWords(named) === placeWords(locality.name);
+      return distanceKm(locality, row) <= nearest(row) + 0.5;
+    };
+    const seen = new Set<string>();
     const found = bodies
       .flatMap((body) => body.direcciones ?? [])
       .map((address) => ({
@@ -144,9 +176,17 @@ export class GeorefGeocodingProvider implements GeocodingProvider {
           Number.isFinite(row.latitude) &&
           Number.isFinite(row.longitude) &&
           row.address.ubicacion?.lat != null &&
-          (points.length === 0 || nearest(row) <= reach),
+          (points.length === 0 || nearest(row) <= reach) &&
+          inLocality(row),
       )
-      .sort((a, b) => (points.length > 0 ? nearest(a) - nearest(b) : 0));
+      .sort((a, b) => (points.length > 0 ? nearest(a) - nearest(b) : 0))
+      // Georef devuelve la misma dirección una vez por tramo: una sola por localidad.
+      .filter((row) => {
+        const key = `${row.address.localidad_censal?.nombre ?? ''}|${row.address.nomenclatura ?? ''}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
 
     // Dos calles distintas con la misma altura ("Rivadavia" y "Comodoro Martín Rivadavia"): gana
     // la que se llama exactamente como se escribió. Si no hay una sola así, va a revisión.
@@ -235,7 +275,9 @@ export interface PlaceFinder {
   /** El primero de los nombres que no deja dudas. */
   find(names: readonly string[]): Promise<{ latitude: number; longitude: number } | null>;
   /** Todos los que se pudieron ubicar, para una región de varias localidades. */
-  findAll(names: readonly string[]): Promise<{ latitude: number; longitude: number }[]>;
+  findAll(
+    names: readonly string[],
+  ): Promise<{ latitude: number; longitude: number; name: string }[]>;
 }
 
 function placeWords(text: string): string {
@@ -272,8 +314,12 @@ export class GeorefPlaceFinder implements PlaceFinder {
   }
 
   public async findAll(names: readonly string[]) {
-    const points = await Promise.all([...new Set(names)].map((name) => this.lookup(name)));
-    return points.filter((point) => point !== null);
+    const unique = [...new Set(names)];
+    const points = await Promise.all(unique.map((name) => this.lookup(name)));
+    // El nombre sin la provincia: "General Roca, Río Negro" se reconoce como "General Roca".
+    return points.flatMap((point, index) =>
+      point ? [{ ...point, name: (unique[index] ?? '').split(',')[0]?.trim() ?? '' }] : [],
+    );
   }
 
   private async lookup(name: string) {

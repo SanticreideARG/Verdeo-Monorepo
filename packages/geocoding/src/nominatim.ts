@@ -1,6 +1,7 @@
 import { searchableAddress } from './address-query.js';
 import {
   boundingBox,
+  LOCALITY_RADIUS_KM,
   DEFAULT_CITY_RADIUS_KM,
   GeocodingProviderError,
   LocationLinkGeocodingProvider,
@@ -70,7 +71,10 @@ export class NominatimGeocodingProvider implements GeocodingProvider {
     // Sin piso ni depto y sin el nombre de la zona de reparto, que no son lugares; con la ciudad,
     // que orienta la búsqueda.
     const { places, street } = searchableAddress(input.writtenAddress);
-    const city = input.cityHint?.replace(/,?\s*argentina\s*$/i, '').trim();
+    // La localidad del domicilio, si se sabe, orienta mejor que la ciudad: "Plottier" y no "Valle".
+    const city = (input.locality?.name ?? input.cityHint)
+      ?.replace(/,?\s*argentina\s*$/i, '')
+      .trim();
     const query = [street, ...places, ...(city && places.length === 0 ? [city] : []), 'Argentina']
       .filter((part) => part.length > 0)
       .join(', ');
@@ -84,8 +88,12 @@ export class NominatimGeocodingProvider implements GeocodingProvider {
      * Sólo dentro del recuadro de la ciudad. Sin esto, una "San Martín 500" devolvía la de otra
      * provincia: con el país solo, OpenStreetMap ofrecía lugares a cientos de kilómetros.
      */
-    if (input.origin) {
-      const box = boundingBox(input.origin, input.radiusKm ?? DEFAULT_CITY_RADIUS_KM);
+    const center = input.locality ?? input.origin;
+    if (center) {
+      const box = boundingBox(
+        center,
+        input.locality ? LOCALITY_RADIUS_KM : (input.radiusKm ?? DEFAULT_CITY_RADIUS_KM),
+      );
       url.searchParams.set(
         'viewbox',
         [box.west, box.north, box.east, box.south].map(String).join(','),

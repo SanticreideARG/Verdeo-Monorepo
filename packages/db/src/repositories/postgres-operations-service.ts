@@ -761,7 +761,7 @@ interface GeoPoint {
 
 interface CityArea {
   /** Las localidades de una región; null cuando la ciudad es un punto con su radio. */
-  localities: GeoPoint[] | null;
+  localities: (GeoPoint & { name: string })[] | null;
   origin: GeoPoint;
   radiusKm: number;
 }
@@ -770,6 +770,41 @@ function isInCity(area: CityArea, point: GeoPoint): boolean {
   return area.localities
     ? area.localities.some((locality) => distanceKm(locality, point) <= LOCALITY_RADIUS_KM)
     : distanceKm(area.origin, point) <= area.radiusKm;
+}
+
+function plainWords(text: string): string {
+  return ` ${text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()} `;
+}
+
+/**
+ * En qué localidad de una región queda un domicilio, si algo lo dice: la dirección, su segunda
+ * línea, la ciudad cargada o el nombre de la zona (2026-11-11). "General Roca" también se reconoce
+ * como "Roca" y "General Fernández Oro" como "Fernández Oro". Si nombran a más de una se descartan
+ * las que son también nombre de provincia ("Plottier, Neuquén" es Plottier); si sigue habiendo más de
+ * una, o ninguna, no se sabe.
+ */
+export function localityOfAddress<T extends { name: string }>(
+  localities: readonly T[],
+  texts: readonly (string | null | undefined)[],
+): T | null {
+  const haystack = plainWords(texts.filter(Boolean).join(' '));
+  const forms = (name: string) => {
+    const full = plainWords(name).trim();
+    const short = full.replace(/^(general|gral) /, '');
+    return [...new Set([full, short])].filter((form) => form.length >= 4);
+  };
+  const named = localities.filter((locality) =>
+    forms(locality.name).some((form) => haystack.includes(` ${form} `)),
+  );
+  if (named.length <= 1) return named[0] ?? null;
+  const PROVINCES = new Set(['neuquen', 'rio negro', 'mendoza', 'cordoba', 'buenos aires']);
+  const specific = named.filter((locality) => !PROVINCES.has(plainWords(locality.name).trim()));
+  return specific.length === 1 ? (specific[0] ?? null) : null;
 }
 
 const OUTSIDE_CITY_REASON =
@@ -2755,6 +2790,14 @@ export class PostgresOperationsService {
     const geocodingSettings = await this.geocodingSettingsForZone(
       initialized.address.geographicZoneId,
     );
+    const locality = geocodingSettings.area?.localities
+      ? localityOfAddress(geocodingSettings.area.localities, [
+          initialized.address.writtenAddress,
+          initialized.address.unit,
+          initialized.address.city,
+          geocodingSettings.zoneName,
+        ])
+      : null;
     let candidates: ReturnType<typeof validateGeocodingCandidates>;
     try {
       candidates = validateGeocodingCandidates(
@@ -2772,8 +2815,23 @@ export class PostgresOperationsService {
                 },
               }
             : {}),
-          ...((geocodingSettings.cityContext ?? initialized.address.city)
-            ? { cityHint: geocodingSettings.cityContext ?? initialized.address.city ?? undefined }
+          ...(locality
+            ? {
+                locality: {
+                  latitude: locality.latitude,
+                  longitude: locality.longitude,
+                  name: locality.name,
+                },
+              }
+            : {}),
+          ...((locality?.name ?? geocodingSettings.cityContext ?? initialized.address.city)
+            ? {
+                cityHint:
+                  locality?.name ??
+                  geocodingSettings.cityContext ??
+                  initialized.address.city ??
+                  undefined,
+              }
             : {}),
           ...(initialized.address.locationUrl
             ? { locationUrl: initialized.address.locationUrl }
@@ -3982,6 +4040,7 @@ export class PostgresOperationsService {
   private async geocodingSettingsForZone(zoneId: string) {
     const [zone] = await this.database
       .select({
+        displayName: geographicZones.displayName,
         operatingSiteId: geographicZones.operatingSiteId,
       })
       .from(geographicZones)
@@ -3997,6 +4056,8 @@ export class PostgresOperationsService {
       origin: area?.origin ?? null,
       radiusKm: area?.radiusKm ?? stored?.radiusKm ?? 60,
       useAi: stored?.useAi ?? true,
+      /** El nombre de la zona: en una región suele ser el de la localidad ("Plottier"). */
+      zoneName: zone?.displayName ?? null,
     };
   }
 

@@ -206,6 +206,7 @@ Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", f
 - [x] "Referencia de la ciudad" admite una región: localidades separadas por `;`, 15 km alrededor de cada una, y Georef busca en cada departamento. Valle se carga con la migración 0082.
 - [x] Sin origen ni referencia, el área sale del nombre de las zonas (`GeorefPlaceFinder`), salteando los nombres que existen en más de una provincia.
 - [x] Celular: los resultados de "Ubicar dirección" ya no ensanchan la página.
+- [x] (2026-11-11) Plottier y General Roca no se ubicaban: Georef devolvía diez resultados por departamento y Neuquén capital los ocupaba todos, y en Plottier Georef casi no tiene alturas (7 % de las cuadras; Roca, 33 %). Ahora: hasta 100 por departamento sin repetidos; la localidad del domicilio se reconoce en la dirección, la línea 2, la ciudad o la zona ("Roca", "Fernández Oro") y se busca sólo ahí, con Georef por nombre de localidad y OpenStreetMap en 15 km a su alrededor; sin localidad, se suman los de OpenStreetMap como opciones.
 
 ## Calendario 2 (plan, 2026-11-06) — [plan](../03-features/CALENDARIO_PLAN.md)
 

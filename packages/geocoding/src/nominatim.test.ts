@@ -59,6 +59,30 @@ describe('NominatimGeocodingProvider', () => {
     expect(url.searchParams.get('q')).toBe('Julián Álvarez 1010, Villa Crespo, CABA, Argentina');
   });
 
+  it('con la localidad del domicilio la nombra y busca sólo alrededor de ella', async () => {
+    const fetch = fetcher([]);
+    const provider = new NominatimGeocodingProvider(fetch, 'test', () => Promise.resolve());
+    await provider.geocode(
+      entrada({
+        area: { points: [{ latitude: -38.95, longitude: -68.06 }], radiusKm: 15 },
+        cityHint: 'Valle',
+        locality: { latitude: -38.946, longitude: -68.234, name: 'Plottier' },
+        origin: { latitude: -39.0, longitude: -67.6 },
+        radiusKm: 80,
+        writtenAddress: 'San Martín 500',
+      }),
+    );
+    const url = fetch.mock.calls[0]?.[0] as URL;
+    expect(url.searchParams.get('q')).toBe('San Martín 500, Plottier, Argentina');
+    const [west, north, east, south] = (url.searchParams.get('viewbox') ?? '')
+      .split(',')
+      .map(Number);
+    // 15 km alrededor de Plottier, no el recuadro de toda la región.
+    expect((east ?? 0) - (west ?? 0)).toBeLessThan(0.5);
+    expect((north ?? 0) - (south ?? 0)).toBeLessThan(0.3);
+    expect(url.searchParams.get('bounded')).toBe('1');
+  });
+
   // La regla de uso del servicio público: como mucho un pedido por segundo.
   it('espera entre un pedido y el siguiente', async () => {
     const wait = vi.fn(() => Promise.resolve());
