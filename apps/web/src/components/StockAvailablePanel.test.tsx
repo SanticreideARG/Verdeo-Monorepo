@@ -62,7 +62,7 @@ describe('StockAvailablePanel', () => {
 
     fireEvent.click(head);
     expect(screen.getByText('Del período')).toBeTruthy();
-    expect(screen.getByText('De períodos anteriores')).toBeTruthy();
+    expect(screen.getByText('Enviado a stock y de períodos anteriores')).toBeTruthy();
     // Lo que no tiene disponible no aparece.
     expect(screen.queryByText(/Real 400/)).toBeNull();
     expect(window.localStorage.getItem('verdeo-orders-stock-open')).toBe('1');
