@@ -37,6 +37,7 @@ const when = (iso: string) =>
   });
 
 const FORMAT_LABELS: Record<string, string> = {
+  cierre: 'congelada al cerrar el período',
   pdf: 'impresa',
   whatsapp: 'copiada',
   xlsx: 'descargada',

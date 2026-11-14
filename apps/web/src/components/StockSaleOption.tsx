@@ -14,10 +14,17 @@ import type { SurplusItem } from '../lib/operations.js';
 export function StockSaleOption({
   checked,
   cycleId,
+  lotsCount = 0,
   onChange,
 }: {
   checked: boolean;
   cycleId: string | null;
+  /**
+   * Cuántas viandas ya cocinadas hay para vender con este menú: lo enviado a stock y lo de
+   * períodos anteriores (2026-11-14). Se eligen abajo, en "Ya cocinado"; sin esto, el aviso decía
+   * que no había nada aunque hubiera.
+   */
+  lotsCount?: number;
   onChange: (checked: boolean) => void;
 }) {
   const [available, setAvailable] = useState<SurplusItem[] | null>(null);
@@ -58,8 +65,9 @@ export function StockSaleOption({
           <p className="stock-sale-list">Mirando qué hay disponible…</p>
         ) : available.length === 0 ? (
           <p className="stock-sale-list stock-sale-empty">
-            No hay nada disponible en el stock de este período. Se carga en Cocina → Stock del
-            período.
+            {lotsCount > 0
+              ? `No hay stock del período cargado en Cocina. Lo enviado a stock y lo de períodos anteriores (${String(lotsCount)} ${lotsCount === 1 ? 'vianda' : 'viandas'}) se elige abajo, en "Ya cocinado".`
+              : 'No hay stock para vender con este menú: ni el del período, que se carga en Cocina, ni pedidos enviados a stock.'}
           </p>
         ) : (
           <p className="stock-sale-list">

@@ -59,8 +59,11 @@ export function StockLotsPicker({
   return (
     <div className="stock-lots field-wide">
       <p className="stock-lots-title">
-        <strong>Stock de períodos anteriores</strong>
-        <small>Ya cocinado, a precio normal. Se vende hasta un mes después de su período.</small>
+        <strong>Ya cocinado</strong>
+        <small>
+          Pedidos enviados a stock y stock de períodos anteriores, a precio normal. Se vende hasta
+          un mes después de su período.
+        </small>
       </p>
       <ul>
         {lots.map((lot) => {

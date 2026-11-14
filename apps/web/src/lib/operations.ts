@@ -318,6 +318,8 @@ export interface OrderRevision {
 }
 
 export interface KitchenSummary {
+  /** Un período cerrado muestra la planilla congelada al cerrarlo (2026-11-14). */
+  frozenAt?: string | null;
   base: {
     exceptions: {
       customerDisplayName: string;

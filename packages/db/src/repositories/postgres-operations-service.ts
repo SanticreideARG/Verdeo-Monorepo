@@ -807,6 +807,9 @@ export function localityOfAddress<T extends { name: string }>(
   return specific.length === 1 ? (specific[0] ?? null) : null;
 }
 
+/** La planilla que se guarda al cerrar un período: la que se muestra mientras siga cerrado. */
+const CLOSING_SHEET_FORMAT = 'cierre';
+
 const OUTSIDE_CITY_REASON =
   'Sólo encontró lugares lejos de la ciudad (de otras zonas o provincias). Pegá la ubicación de Google Maps o corregí la dirección.';
 const CITY_UNKNOWN_REASON =
@@ -5969,6 +5972,17 @@ export class PostgresOperationsService {
    * direcciones se auditan.
    */
   public async setCycleClosed(cycleId: string, closed: boolean, context: OperationsContext) {
+    const result = await this.closeOrReopenCycle(cycleId, closed, context);
+    if (closed) {
+      const sites = await this.database.select({ id: operatingSites.id }).from(operatingSites);
+      for (const siteId of [null, ...sites.map((site) => site.id)]) {
+        await this.freezeKitchenSheet(cycleId, siteId, context.actorUserId ?? null);
+      }
+    }
+    return result;
+  }
+
+  private async closeOrReopenCycle(cycleId: string, closed: boolean, context: OperationsContext) {
     return this.database
       .transaction(async (transaction) => {
         const [current] = await transaction
@@ -9569,6 +9583,12 @@ export class PostgresOperationsService {
           cycleId: string;
           /** Sólo los pedidos de un reparto: cocina y etiquetas de esa salida. */
           deliveryRunId?: string | undefined;
+          /**
+           * Sumar los pedidos cancelados que pasaron a stock (2026-11-14). Se cocinan igual: sólo
+           * cambió para quién. Para la producción sí; para las etiquetas no, que llevarían el
+           * nombre de quien ya no lo recibe.
+           */
+          includeSentToStock?: boolean | undefined;
           operatingSiteId?: string | null | undefined;
           zone?: string | undefined;
         }
@@ -9593,6 +9613,7 @@ export class PostgresOperationsService {
         orderPublicNumber: orders.publicNumber,
         // Para separar lo vendido del stock (venta de oportunidad): ya se cocinó como stock.
         orderSource: orders.source,
+        orderStatus: orders.status,
         quantityUnits: orderItems.quantityUnits,
         variantName: orderItems.variantSnapshot,
       })
@@ -9614,7 +9635,12 @@ export class PostgresOperationsService {
               // único que hace falta, no las ciento cincuenta del ciclo.
               ...(filter.zone ? [eq(customerAddresses.operationalZone, filter.zone)] : []),
               ...(filter.deliveryRunId ? [eq(orders.deliveryRunId, filter.deliveryRunId)] : []),
-              inArray(orders.status, ['CONFIRMED', 'READY', 'DELIVERED']),
+              filter.includeSentToStock
+                ? or(
+                    inArray(orders.status, ['CONFIRMED', 'READY', 'DELIVERED']),
+                    and(eq(orders.status, 'CANCELLED'), eq(orders.cancelledToStock, true)),
+                  )
+                : inArray(orders.status, ['CONFIRMED', 'READY', 'DELIVERED']),
               // Lo que sale de un lote de stock ya está cocinado: ni se cocina ni lleva etiqueta.
               isNull(orderItems.stockLotId),
             ),
@@ -9686,6 +9712,11 @@ export class PostgresOperationsService {
       );
       return {
         ...line,
+        // Un pedido que pasó a stock se sigue cocinando, pero ya no es de ese cliente.
+        customerDisplayName:
+          line.orderStatus === 'CANCELLED'
+            ? `Stock (era de ${line.customerDisplayName})`
+            : line.customerDisplayName,
         dietaryInstructions: instructions
           .filter((instruction) => instruction.orderId === line.orderId)
           .map((instruction) => instruction.instruction),
@@ -9708,7 +9739,11 @@ export class PostgresOperationsService {
     cycleId: string,
     operatingSiteId: string | null,
   ): Promise<KitchenSheetOrder[]> {
-    const lines = await this.loadKitchenLines({ cycleId, operatingSiteId });
+    const lines = await this.loadKitchenLines({
+      cycleId,
+      includeSentToStock: true,
+      operatingSiteId,
+    });
     const byOrder = new Map<string, KitchenSheetOrder>();
     for (const line of lines) {
       // Lo vendido del stock no se cocina: tampoco va en la planilla.
@@ -9936,7 +9971,81 @@ export class PostgresOperationsService {
 
   // Production is bounded by the operation (ADR-028): a global scope consolidates every operation,
   // a concrete one cooks only its own demand.
+  /**
+   * La producción de un período. Cerrado, es la planilla tal como quedó al cerrarlo (2026-11-14):
+   * lo que pasa después —un pedido que se cancela, stock que se vende— ya no cambia lo que se
+   * cocinó. Reabrirlo la vuelve a calcular en vivo, y cerrarlo otra vez la congela de nuevo.
+   */
   public async kitchenSummary(
+    cycleId: string,
+    operatingSiteId?: string | null,
+    deliveryRunId?: string,
+  ) {
+    if (!deliveryRunId) {
+      const frozen = await this.frozenKitchenSummary(cycleId, operatingSiteId ?? null);
+      if (frozen) return frozen;
+    }
+    return this.liveKitchenSummary(cycleId, operatingSiteId, deliveryRunId);
+  }
+
+  /** La planilla congelada al cerrar, o null si el período está abierto. */
+  private async frozenKitchenSummary(cycleId: string, operatingSiteId: string | null) {
+    const [cycle] = await this.database
+      .select({ status: salesCycles.status })
+      .from(salesCycles)
+      .where(eq(salesCycles.id, cycleId))
+      .limit(1);
+    if (cycle?.status !== 'CLOSED') return null;
+    const [sheet] = await this.database
+      .select({ createdAt: kitchenSheets.createdAt, report: kitchenSheets.report })
+      .from(kitchenSheets)
+      .where(
+        and(
+          eq(kitchenSheets.salesCycleId, cycleId),
+          eq(kitchenSheets.format, CLOSING_SHEET_FORMAT),
+          operatingSiteId
+            ? eq(kitchenSheets.operatingSiteId, operatingSiteId)
+            : isNull(kitchenSheets.operatingSiteId),
+        ),
+      )
+      .orderBy(desc(kitchenSheets.createdAt))
+      .limit(1);
+    if (sheet) {
+      return {
+        ...(sheet.report as unknown as Awaited<
+          ReturnType<PostgresOperationsService['liveKitchenSummary']>
+        >),
+        frozenAt: sheet.createdAt,
+      };
+    }
+    // Cerrado antes de que existiera el congelado: se congela ahora, para que deje de moverse.
+    const created = await this.freezeKitchenSheet(cycleId, operatingSiteId, null);
+    return { ...created.report, frozenAt: created.createdAt };
+  }
+
+  /** Guarda la planilla de producción de un período como quedó al cerrarlo. */
+  private async freezeKitchenSheet(
+    cycleId: string,
+    operatingSiteId: string | null,
+    actorUserId: string | null,
+  ) {
+    const report = await this.liveKitchenSummary(cycleId, operatingSiteId);
+    const sheetOrders = await this.kitchenSheetOrders(cycleId, operatingSiteId);
+    const [row] = await this.database
+      .insert(kitchenSheets)
+      .values({
+        actorUserId,
+        format: CLOSING_SHEET_FORMAT,
+        operatingSiteId,
+        orders: sheetOrders,
+        report: JSON.parse(JSON.stringify(report)) as Record<string, unknown>,
+        salesCycleId: cycleId,
+      })
+      .returning({ createdAt: kitchenSheets.createdAt });
+    return { createdAt: row?.createdAt ?? new Date(), report };
+  }
+
+  private async liveKitchenSummary(
     cycleId: string,
     operatingSiteId?: string | null,
     deliveryRunId?: string,
@@ -9951,7 +10060,7 @@ export class PostgresOperationsService {
     const lines = await this.loadKitchenLines({
       cycleId,
       operatingSiteId,
-      ...(deliveryRunId ? { deliveryRunId } : {}),
+      ...(deliveryRunId ? { deliveryRunId } : { includeSentToStock: true }),
     });
     // El stock para la venta también se cocina: va aparte, para que se vea de dónde sale el número.
     // El stock de la ciudad del resumen; con todas, el de todas (STOCK_POR_CIUDAD_PLAN.md).
@@ -9984,6 +10093,7 @@ export class PostgresOperationsService {
       ...buildKitchenSummary(toCook),
       cycle,
       familyOrder: familyRows.map((row) => row.name),
+      frozenAt: null as Date | null,
       generatedAt: new Date(),
       stock: stock
         .map(({ familyName, quantityUnits, variantName }) => ({

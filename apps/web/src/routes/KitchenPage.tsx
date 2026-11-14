@@ -207,8 +207,10 @@ export function KitchenPage() {
               (lot) =>
                 `${String(lot.quantityUnits)} ${lot.familyName} ${lot.variantName} (${lot.operatingSiteName})`,
             )
-            .join(', ')}. Se corrige en Cocina → Stock.`
-        : 'Período cerrado. No quedaba nada sin vender.',
+            .join(
+              ', ',
+            )}. Se corrige en Cocina → Stock. La planilla de producción quedó congelada como estaba al cerrar.`
+        : 'Período cerrado. No quedaba nada sin vender. La planilla de producción quedó congelada como estaba al cerrar.',
     );
     await loadMenus();
     await loadSurplus(selectedMenu.cycle.id);
@@ -324,6 +326,17 @@ export function KitchenPage() {
 
             {kitchen ? (
               <>
+                {kitchen.frozenAt ? (
+                  <p className="screen-notice mt-6" role="status">
+                    <strong>Período cerrado:</strong> la producción es la que quedó al cerrarlo, el{' '}
+                    {new Intl.DateTimeFormat('es-AR', {
+                      dateStyle: 'short',
+                      timeStyle: 'short',
+                    }).format(new Date(kitchen.frozenAt))}
+                    . Lo que cambie en los pedidos después ya no la mueve. Para recalcularla, reabrí
+                    el período.
+                  </p>
+                ) : null}
                 {/*
                  * Intuitivos con platos que no saben de qué menú vienen: en la planilla salen en
                  * "SIN MENÚ DE ORIGEN". Se corrigen editando el pedido y eligiendo el plato de su menú.

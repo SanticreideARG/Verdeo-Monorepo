@@ -1225,6 +1225,8 @@ export const MessageTemplateListResponseSchema = z.object({
 });
 
 export const KitchenSummaryResponseSchema = z.object({
+  /** Cuándo se congeló: un período cerrado muestra la planilla tal como quedó al cerrarlo. */
+  frozenAt: IsoDateTimeSchema.nullable().default(null),
   base: z.array(
     z.object({
       exceptions: z.array(

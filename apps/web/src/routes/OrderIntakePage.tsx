@@ -1545,6 +1545,8 @@ export function OrderIntakePage() {
         {/* Lo que se puede vender ya cocinado, sin ir a Cocina. */}
         {permissions.includes('orders.read') ? (
           <StockAvailablePanel
+            canRemoveLots={permissions.includes('production.report')}
+            canRemovePeriod={permissions.includes('production.adjust_surplus')}
             canSell={permissions.includes('orders.create')}
             menus={publishedMenus}
             onSell={sellFromStock}
@@ -1971,6 +1973,7 @@ export function OrderIntakePage() {
                     <StockSaleOption
                       checked={fromStock}
                       cycleId={selectedMenu?.cycle.id ?? null}
+                      lotsCount={stockLots.reduce((sum, lot) => sum + lot.available, 0)}
                       onChange={setFromStock}
                     />
                   ) : null}

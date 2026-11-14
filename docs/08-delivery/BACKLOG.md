@@ -192,6 +192,13 @@ Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", f
 - [x] Zonas geográficas: "Renombrar" en cada ciudad y "Nombre" en los datos de cada zona. La API ya lo aceptaba (`PATCH /operating-sites/:id` y `/zones/:id` con `displayName`); faltaba en la pantalla. El slug y el prefijo de pedidos no cambian. Avisa si otra zona de la ciudad ya tiene ese nombre.
 - [ ] Unificar Neuquén y Río Negro: ver la propuesta en la conversación del 2026-11-06 (pasar zonas de una operación a otra sin tocar el historial). Pendiente de decisión.
 
+## Stock y planilla de producción (2026-11-14)
+
+- [x] Un pedido enviado a stock (cancelado con "pasar a stock") sigue contando en la producción de su período, como "Stock (era de …)": se cocina igual. Venderlo desde el lote no lo suma ni lo resta. Las etiquetas no lo llevan.
+- [x] Cerrar un período congela su planilla de producción (por ciudad y la de todas): se guarda en `kitchen_sheets` con formato `cierre` y se muestra mientras siga cerrado. Reabrir la recalcula; volver a cerrar la congela de nuevo. Un período cerrado antes de esto se congela la primera vez que se mira.
+- [x] "Sale del stock" ya no dice que no hay nada cuando hay pedidos enviados a stock o lotes de períodos anteriores: los cuenta y manda a "Ya cocinado".
+- [x] Pedidos → Stock disponible: "Quitar" da de baja lo que queda de un renglón (lote o stock del período), con motivo en el historial. No se borra, para que las cuentas sigan cerrando.
+
 ## Seguimiento del script de correo (2026-11-11)
 
 - [x] El script reporta cada corrida a `POST /api/v1/inbound/run`, firmado como los mails: enseguida si mandó o falló algo, si no cada 30 minutos (no despierta la base cada 5). Tabla `inbound_email_runs` (migración 0083), 30 días.

@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-14-stock-y-produccion',
+    body: `Stock y producción: lo enviado a stock ya no desaparece de la planilla de producción, porque se cocina igual, y venderlo después no cambia los números. Al cerrar un período, su planilla queda congelada como estaba; reabrirlo la recalcula. En Nuevo pedido, "Sale del stock" cuenta también lo enviado a stock y lo de períodos anteriores. En Pedidos → Stock disponible se puede quitar un artículo: se da de baja lo que queda y queda en el historial.`,
+  },
+  {
     key: '2026-11-11-valle-por-localidad',
     body: `Ubicar direcciones en Valle: si la dirección, la segunda línea o la zona dicen la localidad ("Plottier", "Roca"), se busca sólo ahí. Las direcciones de Plottier y General Roca ya no quedan tapadas por las de Neuquén capital. Si no dice la localidad, se ofrecen las opciones de cada una para elegir.`,
   },

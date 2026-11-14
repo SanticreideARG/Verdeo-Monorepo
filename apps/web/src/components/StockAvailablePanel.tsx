@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 
 import { apiRequest } from '../lib/api.js';
+import { errorMessage } from '../lib/operations.js';
+import { showToast } from '../lib/toast.js';
+import { ConfirmDialog } from './ConfirmDialog.js';
 import type { SurplusItem, SurplusReport, WeeklyMenu } from '../lib/operations.js';
 import { lotsForMenu, offeringForStock, type StockLot } from '../lib/stockLots.js';
 
@@ -11,6 +14,7 @@ export type StockSale =
 
 interface PeriodStock extends SurplusItem {
   alias: string;
+  cycleId: string;
   menuId: string | null;
   offeringId: string | null;
 }
@@ -44,16 +48,23 @@ function expiresSoon(value: string): boolean {
  * elegida arriba, sin tener que ir a Cocina. Dos grupos: lo que queda del período (el mismo número
  * que "Sale del stock") y los lotes de períodos anteriores, los que vencen antes primero.
  *
- * Es sólo para mirar: cargar y dar de baja sigue siendo de Cocina. "Vender" abre Nuevo pedido con
- * la variedad y "Sale del stock" (o el lote) ya elegidos. Cerrado es un renglón; se recuerda si se
- * dejó abierto.
+ * Cargar sigue siendo de Cocina. "Vender" abre Nuevo pedido con la variedad y "Sale del stock" (o
+ * el lote) ya elegidos. "Quitar" (2026-11-14) da de baja lo que queda de ese renglón, con su
+ * motivo en el historial: no se borra, para que lo vendido y las cuentas del período sigan
+ * cerrando. Cerrado es un renglón; se recuerda si se dejó abierto.
  */
 export function StockAvailablePanel({
+  canRemoveLots = false,
+  canRemovePeriod = false,
   canSell,
   menus,
   onSell,
   version,
 }: {
+  /** Quitar lo enviado a stock y lo de períodos anteriores: el permiso de Cocina → Stock. */
+  canRemoveLots?: boolean;
+  /** Quitar el stock del período: el permiso de dar de baja el excedente. */
+  canRemovePeriod?: boolean;
   canSell: boolean;
   /** Los menús publicados de la ciudad: de ahí sale el período y con qué opción se vende. */
   menus: readonly WeeklyMenu[];
@@ -64,6 +75,10 @@ export function StockAvailablePanel({
   const [open, setOpen] = useState(storedOpen);
   const [period, setPeriod] = useState<PeriodStock[] | null>(null);
   const [lots, setLots] = useState<StockLot[] | null>(null);
+  const [removing, setRemoving] = useState<
+    { item: PeriodStock; kind: 'period' } | { kind: 'lot'; lot: StockLot } | null
+  >(null);
+  const [reloads, setReloads] = useState(0);
 
   const cycles = [...new Map(menus.map((menu) => [menu.cycle.id, menu] as const)).values()];
   const cyclesKey = cycles.map((menu) => menu.id).join(',');
@@ -84,6 +99,7 @@ export function StockAvailablePanel({
             return {
               ...item,
               alias: menu.cycle.alias,
+              cycleId: menu.cycle.id,
               menuId: offering ? menu.id : null,
               offeringId: offering?.id ?? null,
             };
@@ -112,8 +128,40 @@ export function StockAvailablePanel({
     return () => {
       active = false;
     };
-    // Lo que cambia lo que se pide son los períodos publicados y cada pedido guardado.
-  }, [cyclesKey, version]);
+    // Lo que cambia lo que se pide son los períodos publicados, cada pedido guardado y lo quitado.
+  }, [cyclesKey, version, reloads]);
+
+  async function remove() {
+    const target = removing;
+    setRemoving(null);
+    if (!target) return;
+    const reason = 'Quitado del stock desde Pedidos.';
+    const response =
+      target.kind === 'lot'
+        ? await apiRequest(`/api/v1/stock-lots/${target.lot.id}`, {
+            body: JSON.stringify({ writeOffRemaining: true }),
+            method: 'PATCH',
+          })
+        : await apiRequest(`/api/v1/production/${target.item.cycleId}/surplus/writeoffs`, {
+            body: JSON.stringify({
+              entries: [
+                {
+                  familyName: target.item.familyName,
+                  quantityUnits: target.item.disponible,
+                  reason,
+                  variantName: target.item.variantName,
+                },
+              ],
+            }),
+            method: 'POST',
+          });
+    if (!response.ok) {
+      showToast(await errorMessage(response));
+      return;
+    }
+    showToast('Quitado del stock.');
+    setReloads((count) => count + 1);
+  }
 
   if (period === null || lots === null) return null;
 
@@ -192,6 +240,15 @@ export function StockAvailablePanel({
                           Vender
                         </button>
                       ) : null}
+                      {canRemovePeriod ? (
+                        <button
+                          className="link-button"
+                          onClick={() => setRemoving({ item, kind: 'period' })}
+                          type="button"
+                        >
+                          Quitar
+                        </button>
+                      ) : null}
                     </li>
                   );
                 })}
@@ -200,7 +257,7 @@ export function StockAvailablePanel({
           ) : null}
           {lots.length > 0 ? (
             <div className="stock-available-group">
-              <h3>De períodos anteriores</h3>
+              <h3>Enviado a stock y de períodos anteriores</h3>
               <ul>
                 {lots.map((lot) => {
                   const menu = menuForLot(lot);
@@ -233,6 +290,15 @@ export function StockAvailablePanel({
                           Vender
                         </button>
                       ) : null}
+                      {canRemoveLots ? (
+                        <button
+                          className="link-button"
+                          onClick={() => setRemoving({ kind: 'lot', lot })}
+                          type="button"
+                        >
+                          Quitar
+                        </button>
+                      ) : null}
                     </li>
                   );
                 })}
@@ -240,6 +306,20 @@ export function StockAvailablePanel({
             </div>
           ) : null}
         </div>
+      ) : null}
+      {removing ? (
+        <ConfirmDialog
+          confirmLabel="Quitar"
+          detail={
+            removing.kind === 'lot'
+              ? `${shortFamily(removing.lot.familyName)} ${removing.lot.variantName} · ${removing.lot.cycleAlias}: se dan de baja las ${String(removing.lot.available)} que quedan. Lo ya vendido no cambia, y queda en el historial.`
+              : `${shortFamily(removing.item.familyName)} ${removing.item.variantName} · ${removing.item.alias}: se dan de baja las ${String(removing.item.disponible)} que quedan. Lo ya vendido no cambia, y queda en el historial.`
+          }
+          onCancel={() => setRemoving(null)}
+          onConfirm={remove}
+          tone="destructivo"
+          title="¿Quitar del stock?"
+        />
       ) : null}
     </section>
   );

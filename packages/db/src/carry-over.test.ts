@@ -402,6 +402,70 @@ describe('cancelado después de cocinarse: pasa a stock', () => {
     ).rejects.toThrow(/ya se vendió/);
   });
 
+  it('sigue contando en la producción de su período, y venderlo no lo suma ni lo resta (2026-11-14)', async () => {
+    const { service } = await conB();
+    const order = await service.createOrder(
+      {
+        ...pedido('2026-10-19'),
+        initialStatus: 'CONFIRMED' as const,
+        items: [{ offeringId: OFFERING, quantityUnits: 2 }],
+      },
+      contexto,
+    );
+    const keto = async () =>
+      (await service.kitchenSummary(CYCLE)).base.find((row) => row.familyName === 'Keto')
+        ?.quantityUnits ?? 0;
+    expect(await keto()).toBe(2);
+    await cancelar(service, order.id, true);
+    // Se cocina igual: sólo cambió para quién.
+    expect(await keto()).toBe(2);
+    const [lot] = await service.listStockLots({ onlyAvailable: true, operatingSiteId: SITE });
+    await service.createOrder(
+      {
+        ...pedido('2026-10-19'),
+        initialStatus: 'CONFIRMED' as const,
+        items: [{ offeringId: OFFERING, quantityUnits: 1, stockLotId: lot?.id }],
+      },
+      contexto,
+    );
+    expect(await keto()).toBe(2);
+    // Cancelado sin pasar a stock, sí deja de cocinarse.
+    const other = await service.createOrder(
+      { ...pedido('2026-10-19'), initialStatus: 'CONFIRMED' as const },
+      contexto,
+    );
+    expect(await keto()).toBe(3);
+    await cancelar(service, other.id, false);
+    expect(await keto()).toBe(2);
+  });
+
+  it('cerrado, la producción queda como estaba al cerrar; reabierto, vuelve a moverse', async () => {
+    const { service } = await conB();
+    const order = await service.createOrder(
+      {
+        ...pedido('2026-10-19'),
+        initialStatus: 'CONFIRMED' as const,
+        items: [{ offeringId: OFFERING, quantityUnits: 2 }],
+      },
+      contexto,
+    );
+    await service.setCycleClosed(CYCLE, true, contexto);
+    await cancelar(service, order.id, false);
+    const frozen = await service.kitchenSummary(CYCLE);
+    expect(frozen.frozenAt).not.toBeNull();
+    expect(frozen.base.map((row) => [row.familyName, row.quantityUnits])).toEqual([['Keto', 2]]);
+    // También por ciudad.
+    expect((await service.kitchenSummary(CYCLE, SITE)).base[0]?.quantityUnits).toBe(2);
+
+    await service.setCycleClosed(CYCLE, false, contexto);
+    const live = await service.kitchenSummary(CYCLE);
+    expect(live.frozenAt).toBeNull();
+    expect(live.base).toEqual([]);
+
+    await service.setCycleClosed(CYCLE, true, contexto);
+    expect((await service.kitchenSummary(CYCLE)).base).toEqual([]);
+  });
+
   it('reactivar un pedido que pasó a stock saca sus viandas del lote', async () => {
     const { service } = await conB();
     const order = await service.createOrder(
