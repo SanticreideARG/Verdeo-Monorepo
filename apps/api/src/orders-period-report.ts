@@ -42,7 +42,7 @@ const MONEY = '"$" #,##0';
 
 /** El estilo de una celda; la librería lo tipa como `any`. */
 interface Style {
-  alignment?: { vertical?: 'center'; wrapText?: boolean };
+  alignment?: { horizontal?: 'center'; vertical?: 'center'; wrapText?: boolean };
   fill?: { fgColor: { rgb: string }; patternType: 'solid' };
   font?: { bold?: boolean; color?: { rgb: string }; italic?: boolean; sz?: number };
 }
@@ -138,11 +138,18 @@ const zoneColumn: Column = {
   width: 16,
 };
 
-const neighborhoodColumn: Column = {
-  header: 'Barrio',
-  value: (row) => text(row.order.neighborhood ?? '', muted(row)),
-  width: 18,
+/*
+ * Una columna en blanco antes de la zona, para anotar a mano el horario (2026-11-15). Reemplaza a
+ * "Barrio", que quien reparte no usaba. El sistema todavía no la llena.
+ */
+const scheduleNotesColumn: Column = {
+  header: 'Notas de horario',
+  value: () => text(''),
+  width: 16,
 };
+
+/** Nombre y porción del reparto, centrados para leerlos de un vistazo (2026-11-15). */
+const CENTERED: Style = { alignment: { horizontal: 'center', vertical: 'center', wrapText: true } };
 
 const sizeColumn: Column = {
   header: 'Pedido',
@@ -213,9 +220,10 @@ function ordersLayout(): Layout {
 }
 
 /**
- * "Reparto": tiempo de ruta, horario, zona, dirección (en una línea), nombre, tamaño, variedad,
- * venta, pago y celular. Un renglón por bulto; quien reparte sólo cobra el efectivo, así que la
- * transferencia va en $0 y el total del día es el del efectivo.
+ * "Reparto": tiempo de ruta, horario, notas de horario (en blanco), zona, dirección (en una
+ * línea), nombre, tamaño, variedad, venta, pago y celular. Un renglón por bulto; quien reparte sólo
+ * cobra el efectivo, así que la transferencia va en $0 y el total del día es el del efectivo.
+ * Nombre y tamaño van centrados; el nombre de un Especial (Intuitivo), en negrita.
  */
 function deliveryLayout(report: PeriodReport): Layout {
   const longest = Math.max(
@@ -225,8 +233,8 @@ function deliveryLayout(report: PeriodReport): Layout {
   const columns: Column[] = [
     routeTimeColumn,
     timeSlotColumn,
+    scheduleNotesColumn,
     zoneColumn,
-    neighborhoodColumn,
     {
       header: 'Dirección',
       value: (row) =>
@@ -236,10 +244,20 @@ function deliveryLayout(report: PeriodReport): Layout {
     {
       header: 'Nombre',
       plain: true,
-      value: (row) => text(row.order.customerName, {}),
+      value: (row) =>
+        text(
+          row.order.customerName,
+          row.composable ? { ...CENTERED, font: { bold: true } } : CENTERED,
+        ),
       width: 24,
     },
-    sizeColumn,
+    {
+      ...sizeColumn,
+      value: (row) => {
+        const cell = sizeColumn.value(row);
+        return { ...cell, s: CENTERED };
+      },
+    },
     { header: 'Variedad', value: (row) => text(row.variety), width: 22 },
     ...trailing((row) =>
       money(isTransfer(row.order.paymentExpectation) ? 0 : row.order.totalMinor),

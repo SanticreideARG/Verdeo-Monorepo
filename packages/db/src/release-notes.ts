@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-15-planilla-de-reparto',
+    body: `Planilla de reparto (hoja "Reparto" del Excel del período): el nombre del cliente y la porción salen centrados, y el nombre de un menú especial va en negrita. Ya no está la columna Barrio; en su lugar, antes de Zona, hay una columna "Notas de horario" en blanco para anotar a mano.`,
+  },
+  {
     key: '2026-11-14-stock-y-produccion',
     body: `Stock y producción: lo enviado a stock ya no desaparece de la planilla de producción, porque se cocina igual, y venderlo después no cambia los números. Al cerrar un período, su planilla queda congelada como estaba; reabrirlo la recalcula. En Nuevo pedido, "Sale del stock" cuenta también lo enviado a stock y lo de períodos anteriores. En Pedidos → Stock disponible se puede quitar un artículo: se da de baja lo que queda y queda en el historial.`,
   },

@@ -31,7 +31,7 @@ export interface PeriodReportOrder {
   dietaryInstructions: readonly string[];
   isNew: boolean;
   items: readonly PeriodReportItem[];
-  /** El barrio del domicilio, si tiene: va en la hoja de reparto. */
+  /** El barrio del domicilio, si tiene. La hoja de reparto ya no lo muestra (2026-11-15). */
   neighborhood: string | null;
   notes: string | null;
   paid: boolean;

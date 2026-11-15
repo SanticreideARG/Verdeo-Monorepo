@@ -118,8 +118,11 @@ describe('buildPeriodReportExcel: Reparto', () => {
     const { cell, rgb } = sheetOf(book, 'Reparto');
     expect(cell('A2')?.v).toBe('Tiempo de ruta');
     expect(cell('A5')?.v).toBe('≈ 40 min');
-    expect(cell('D2')?.v).toBe('Barrio');
-    expect(cell('D5')?.v).toBe('Centro');
+    // Sin barrio: una columna en blanco para anotar el horario, antes de la zona.
+    expect(cell('C2')?.v).toBe('Notas de horario');
+    expect(cell('C5')?.v).toBe('');
+    expect(cell('D2')?.v).toBe('Zona');
+    expect(cell('D5')?.v).toBe('Capital');
     expect(cell('B5')?.v).toBe('10 a 12');
     expect(cell('E5')?.v).toBe('Calle 1 · Depto 2');
     expect(cell('F5')?.v).toBe('Ana');

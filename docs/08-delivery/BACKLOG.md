@@ -192,6 +192,12 @@ Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", f
 - [x] Zonas geográficas: "Renombrar" en cada ciudad y "Nombre" en los datos de cada zona. La API ya lo aceptaba (`PATCH /operating-sites/:id` y `/zones/:id` con `displayName`); faltaba en la pantalla. El slug y el prefijo de pedidos no cambian. Avisa si otra zona de la ciudad ya tiene ese nombre.
 - [ ] Unificar Neuquén y Río Negro: ver la propuesta en la conversación del 2026-11-06 (pasar zonas de una operación a otra sin tocar el historial). Pendiente de decisión.
 
+## Planilla de reparto (2026-11-15)
+
+- [x] Hoja "Reparto" del informe del período: Nombre y Pedido (la porción) centrados; el nombre de un Especial (Intuitivo), en negrita.
+- [x] Sale la columna "Barrio" (el barrio sigue en el mensaje de la ruta y en el CSV). En su lugar, antes de "Zona", una columna "Notas de horario" en blanco para anotar a mano.
+- [ ] Llenar "Notas de horario" desde el sistema (por ahora queda vacía, a pedido).
+
 ## Stock y planilla de producción (2026-11-14)
 
 - [x] Un pedido enviado a stock (cancelado con "pasar a stock") sigue contando en la producción de su período, como "Stock (era de …)": se cocina igual. Venderlo desde el lote no lo suma ni lo resta. Las etiquetas no lo llevan.
