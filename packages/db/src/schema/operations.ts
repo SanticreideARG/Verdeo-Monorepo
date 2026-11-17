@@ -337,6 +337,34 @@ export const salesCycles = pgTable(
   ],
 );
 
+/*
+ * Las fechas propias de una ciudad en una semana (2026-11-16).
+ *
+ * La semana se crea con una sola apertura, parcial de cocina y cierre, que valen para todas las
+ * ciudades. Una ciudad puede cambiar cualquiera de las tres: lo que guarda acá pisa a la de la
+ * semana; lo que queda en null sigue a la semana, así que corregir la semana general todavía
+ * llega a las ciudades que no se tocaron. Una fila por semana y ciudad.
+ */
+export const salesCycleSiteDates = pgTable(
+  'sales_cycle_site_dates',
+  {
+    salesCycleId: uuid('sales_cycle_id')
+      .notNull()
+      .references(() => salesCycles.id, { onDelete: 'cascade' }),
+    operatingSiteId: uuid('operating_site_id')
+      .notNull()
+      .references(() => operatingSites.id, { onDelete: 'cascade' }),
+    openAt: timestamp('open_at', { withTimezone: true }),
+    partialKitchenCutoffAt: timestamp('partial_kitchen_cutoff_at', { withTimezone: true }),
+    closeAt: timestamp('close_at', { withTimezone: true }),
+    updatedByUserId: uuid('updated_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    ...timestamps,
+  },
+  (table) => [primaryKey({ columns: [table.salesCycleId, table.operatingSiteId] })],
+);
+
 // `kind` is a domain discriminator, not a reconfigurable catalog: FIXED families define their five
 // dishes, COMPOSABLE ones let the customer pick five from the published universe. The engine branches
 // on this value so the display name stays freely renameable (ADR-030).
