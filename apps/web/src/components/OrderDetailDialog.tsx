@@ -198,11 +198,19 @@ export function OrderDetailDialog({
                 <dt>Estado</dt>
                 {/* Lo que importa no es que exista un pago, es si la plata entró y cuándo. */}
                 <dd>
-                  {isNoCharge(order.paymentExpectation)
-                    ? 'No se cobra'
-                    : order.paidAt
-                      ? `Cobrado ${formatMoment(order.paidAt)}`
-                      : 'Sin cobrar'}
+                  {order.paymentParts?.length && !order.paidAt
+                    ? // Pago dividido (2026-11-17): cada parte con lo suyo.
+                      order.paymentParts
+                        .map(
+                          (part) =>
+                            `${part.method} ${formatMoney(part.amountMinor, order.currency)}: ${part.paidAt ? `cobrado ${formatMoment(part.paidAt)}` : 'pendiente'}`,
+                        )
+                        .join(' · ')
+                    : isNoCharge(order.paymentExpectation)
+                      ? 'No se cobra'
+                      : order.paidAt
+                        ? `Cobrado ${formatMoment(order.paidAt)}`
+                        : 'Sin cobrar'}
                 </dd>
               </div>
             </dl>

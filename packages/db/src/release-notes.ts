@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-17-pago-dividido-y-borrar-varios',
+    body: `Pago dividido: un pedido se puede pagar parte en efectivo y parte por transferencia. Se elige "Dividido" en el medio de pago, al cargarlo o desde la lista, y se escribe cuánto va en efectivo: el resto va por transferencia. En la columna Cobrado cada parte tiene su tilde, y el pedido queda cobrado cuando están las dos. Quien reparte cobra sólo la parte en efectivo. Además, ahora se pueden borrar varios pedidos de una vez: se tildan en la lista y se eliminan juntos, con un solo motivo.`,
+  },
+  {
     key: '2026-11-16-fechas-por-ciudad',
     body: `Fechas por ciudad: al editar la semana de una ciudad ya se pueden cambiar su apertura, su parcial de cocina y su cierre, y valen sólo para esa ciudad. Las demás siguen con las de la semana. Cuando una ciudad tiene fechas distintas, se avisa arriba del formulario, y en la semana general se ve qué ciudades las tienen. El calendario muestra el parcial y el cierre de cada ciudad.`,
   },

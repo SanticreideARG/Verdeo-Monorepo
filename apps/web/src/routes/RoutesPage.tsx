@@ -29,7 +29,7 @@ import { formatDay, formatDayLong, todayInOperation } from '../lib/dates.js';
 import { googleMapsLink } from '../lib/mapLinks.js';
 import { maskSurname } from '../lib/maskName.js';
 import { neighborhoodHeading } from '../lib/neighborhoodGroups.js';
-import { courierCollects, routeMessage, withoutNewMark } from '../lib/routeMessage.js';
+import { courierDue, routeMessage, withoutNewMark } from '../lib/routeMessage.js';
 import { errorMessage, formatMoney } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { useNarrowViewport } from '../lib/useNarrowViewport.js';
@@ -72,6 +72,7 @@ interface RouteStop {
   neighborhood: string | null;
   orderId: string;
   paymentExpectation: string;
+  cashDueMinor?: number | null;
   publicNumber: string;
   sequence: number;
   status: string;
@@ -381,8 +382,8 @@ export function RoutesPage() {
         [stop.deliveryAddress, stop.deliveryAddressLine2 ?? ''].filter(Boolean).join(' · '),
         stopMapLink(stop),
         // Sólo lo que cobra quien reparte; la transferencia no (2026-10-25).
-        courierCollects(stop.paymentExpectation) ? stop.paymentExpectation : 'No cobrar',
-        courierCollects(stop.paymentExpectation) ? String(stop.totalMinor / 100) : '',
+        courierDue(stop)?.label ?? 'No cobrar',
+        courierDue(stop) ? String((courierDue(stop)?.amountMinor ?? 0) / 100) : '',
       ]),
     ];
     // BOM para que Excel abra los acentos bien; sin esto "Neuquén" sale roto.

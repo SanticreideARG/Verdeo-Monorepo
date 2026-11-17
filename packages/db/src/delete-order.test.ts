@@ -7,6 +7,9 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Database } from './index.js';
+import { NearestNeighborRouteOptimizer } from '@verdeo/routing';
+
+import { PostgresDeliveryService } from './repositories/postgres-delivery-service.js';
 import { PostgresOperationsService } from './repositories/postgres-operations-service.js';
 import * as schema from './schema/index.js';
 
@@ -212,5 +215,132 @@ describe('eliminar un pedido definitivamente', () => {
     await expect(
       operations.deleteOrder('0a000000-0000-4000-8000-0000000000ff', 'no está', CONTEXT),
     ).rejects.toThrow();
+  });
+});
+
+describe('eliminar varios pedidos de una vez (2026-11-17)', () => {
+  it('borra todos los tildados con un solo motivo y deja un evento por pedido', async () => {
+    const { client, operations } = await sembrada();
+
+    const resultado = await operations.deleteOrders([ORDER, OTRO], 'pruebas viejas', CONTEXT);
+
+    expect(resultado).toEqual({
+      collectedMinor: 25000,
+      count: 2,
+      publicNumbers: ['CIP-00001', 'CIP-00002'],
+    });
+    expect(await cuantos(client, 'select count(*)::int as n from orders')).toBe(0);
+    const eventos = await client.query<{ metadata: { bulk: number; reason: string } }>(
+      "select metadata from audit_events where action = 'order.deleted'",
+    );
+    expect(eventos.rows.map((row) => row.metadata)).toEqual([
+      { bulk: 2, reason: 'pruebas viejas' },
+      { bulk: 2, reason: 'pruebas viejas' },
+    ]);
+  });
+
+  it('si uno no existe, no borra ninguno', async () => {
+    const { client, operations } = await sembrada();
+    await expect(
+      operations.deleteOrders([OTRO, '0a000000-0000-4000-8000-0000000000ff'], '', CONTEXT),
+    ).rejects.toThrow();
+    expect(await cuantos(client, 'select count(*)::int as n from orders')).toBe(2);
+  });
+});
+
+describe('pago dividido (2026-11-17)', () => {
+  const PARTES = [{ amountMinor: 10000, method: 'Efectivo' }, { method: 'Transferencia' }];
+
+  it('divide el pago: la última parte se lleva lo que falta', async () => {
+    const { operations } = await sembrada();
+    await operations.updateOrder(OTRO, { paymentParts: PARTES }, false, CONTEXT);
+
+    const pedido = await operations.getOrder(OTRO);
+    expect(pedido?.paymentExpectation).toBe('Efectivo + Transferencia');
+    expect(
+      pedido?.paymentParts.map(({ amountMinor, method, paidAt }) => ({
+        amountMinor,
+        method,
+        paidAt,
+      })),
+    ).toEqual([
+      { amountMinor: 10000, method: 'Efectivo', paidAt: null },
+      { amountMinor: 20000, method: 'Transferencia', paidAt: null },
+    ]);
+  });
+
+  it('rechaza partes que no dejan nada para la última', async () => {
+    const { operations } = await sembrada();
+    await expect(
+      operations.updateOrder(
+        OTRO,
+        { paymentParts: [{ amountMinor: 30000, method: 'Efectivo' }, { method: 'Transferencia' }] },
+        false,
+        CONTEXT,
+      ),
+    ).rejects.toThrow(/Revisá los montos/);
+  });
+
+  it('cada parte tiene su tilde, y el pedido queda cobrado con las dos', async () => {
+    const { operations } = await sembrada();
+    await operations.updateOrder(OTRO, { paymentParts: PARTES }, false, CONTEXT);
+
+    const conEfectivo = await operations.setOrderPaid(OTRO, true, CONTEXT, 0);
+    expect(conEfectivo.paidAt).toBeNull();
+    expect(conEfectivo.paymentParts.map((part) => part.paidAt !== null)).toEqual([true, false]);
+
+    const conTodo = await operations.setOrderPaid(OTRO, true, CONTEXT, 1);
+    expect(conTodo.paidAt).not.toBeNull();
+
+    // Destildar una parte vuelve el pedido a pendiente.
+    const sinTransferencia = await operations.setOrderPaid(OTRO, false, CONTEXT, 1);
+    expect(sinTransferencia.paidAt).toBeNull();
+    expect(sinTransferencia.paymentParts.map((part) => part.paidAt !== null)).toEqual([
+      true,
+      false,
+    ]);
+  });
+
+  it('volver a un solo medio borra las partes', async () => {
+    const { client, operations } = await sembrada();
+    await operations.updateOrder(OTRO, { paymentParts: PARTES }, false, CONTEXT);
+    await operations.updateOrder(OTRO, { paymentExpectation: 'Transferencia' }, false, CONTEXT);
+
+    expect(await cuantos(client, 'select count(*)::int as n from order_payment_parts')).toBe(0);
+    expect((await operations.getOrder(OTRO))?.paymentExpectation).toBe('Transferencia');
+  });
+
+  it('editar otra cosa del pedido no toca las partes', async () => {
+    const { operations } = await sembrada();
+    await operations.updateOrder(OTRO, { paymentParts: PARTES }, false, CONTEXT);
+    await operations.setOrderPaid(OTRO, true, CONTEXT, 0);
+    // El formulario manda el medio tal como está.
+    await operations.updateOrder(
+      OTRO,
+      { notes: 'tocar timbre', paymentExpectation: 'Efectivo + Transferencia' },
+      false,
+      CONTEXT,
+    );
+    const pedido = await operations.getOrder(OTRO);
+    expect(pedido?.paymentParts.map((part) => part.paidAt !== null)).toEqual([true, false]);
+  });
+
+  it('en la ruta, quien reparte cobra sólo la parte en efectivo', async () => {
+    const { client, operations } = await sembrada();
+    await operations.updateOrder(OTRO, { paymentParts: PARTES }, false, CONTEXT);
+    const delivery = new PostgresDeliveryService(
+      drizzle(client, { schema }) as unknown as Database,
+      new NearestNeighborRouteOptimizer(),
+      {} as never,
+    );
+
+    const progreso = await delivery.routeProgress(ROUTE);
+    // ORDER: 25000 en efectivo. OTRO: 10000 en efectivo y 20000 por transferencia.
+    expect(progreso.cashMinor).toBe(35000);
+    expect(progreso.transferMinor).toBe(20000);
+    expect(progreso.transferUnpaidMinor).toBe(20000);
+
+    await operations.setOrderPaid(OTRO, true, CONTEXT, 1);
+    expect((await delivery.routeProgress(ROUTE)).transferPaidMinor).toBe(20000);
   });
 });

@@ -9,6 +9,27 @@ export interface PaymentStatus {
   tone: 'none' | 'paid' | 'pending';
 }
 
+/**
+ * Lo que un pedido tiene en efectivo: todo si su medio es efectivo, nada si no, y la parte en
+ * efectivo si está dividido (2026-11-17).
+ */
+export function cashAmountOf(
+  order: {
+    paymentExpectation: string;
+    paymentParts?: readonly { amountMinor: number; method: string }[] | undefined;
+    totalMinor: number;
+  },
+  methods: readonly PaymentChoice[],
+): number {
+  const parts = order.paymentParts ?? [];
+  if (parts.length > 0) {
+    return parts
+      .filter((part) => isCashMethod(part.method, methods))
+      .reduce((sum, part) => sum + part.amountMinor, 0);
+  }
+  return isCashMethod(order.paymentExpectation, methods) ? order.totalMinor : 0;
+}
+
 export function isCashMethod(value: string, methods: readonly PaymentChoice[]): boolean {
   const key = value.trim().toLowerCase();
   const found = methods.find(
@@ -29,6 +50,7 @@ export function paymentStatus(
     deliveryDate: string;
     paidAt: string | null;
     paymentExpectation: string;
+    paymentParts?: readonly { method: string; paidAt: string | null }[] | undefined;
     status: string;
   },
   methods: readonly PaymentChoice[],
@@ -37,6 +59,18 @@ export function paymentStatus(
   if (order.status === 'CANCELLED') return { hint: null, label: 'Cancelado', tone: 'none' };
   if (isNoCharge(order.paymentExpectation)) return { hint: null, label: 'Sin cargo', tone: 'none' };
   if (order.paidAt) return { hint: null, label: 'Cobrado', tone: 'paid' };
+  /*
+   * Pago dividido (2026-11-17): cada parte se tilda a mano, también la de efectivo. Está cobrado
+   * cuando lo están todas, y eso ya lo dice `paidAt`.
+   */
+  const missing = (order.paymentParts ?? []).filter((part) => !part.paidAt);
+  if ((order.paymentParts ?? []).length > 0) {
+    return {
+      hint: `Pago dividido: falta tildar ${missing.map((part) => part.method).join(' y ')}.`,
+      label: 'Pendiente',
+      tone: 'pending',
+    };
+  }
   if (!isCashMethod(order.paymentExpectation, methods)) {
     return { hint: 'Se marca a mano al recibir el pago.', label: 'Pendiente', tone: 'pending' };
   }

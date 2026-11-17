@@ -20,6 +20,7 @@ import {
   neighborhoods,
   operatingSites,
   orderItems,
+  orderPaymentParts,
   orderStatusHistory,
   orders,
   paymentMethods,
@@ -29,6 +30,12 @@ import {
   payments,
   users,
 } from '../schema/index.js';
+import {
+  splitCashMethods,
+  splitCashMinor,
+  splitTransferPaid,
+  syncPaidFromParts,
+} from './payment-parts.js';
 import { PostgresAuditSink } from './postgres-audit-sink.js';
 import type { MessagingContext } from './postgres-messaging-service.js';
 
@@ -638,6 +645,11 @@ export class PostgresDeliveryService {
         neighborhood: neighborhoods.displayName,
         orderId: deliveryStops.orderId,
         paymentExpectation: orders.paymentExpectation,
+        /*
+         * Pago dividido (2026-11-17): lo que se cobra en efectivo, que es lo único que cobra quien
+         * reparte. Null si el pedido se paga con un solo medio.
+         */
+        cashDueMinor: splitCashMinor,
         publicNumber: orders.publicNumber,
         sequence: deliveryStops.sequence,
         status: deliveryStops.status,
@@ -1249,9 +1261,24 @@ export class PostgresDeliveryService {
      * hoja quedan en el efectivo.
      */
     const stops = (await this.sheetStops(routeId)).map((stop) =>
-      stop.isCash
-        ? stop
-        : { ...stop, collectedMinor: 0, paymentExpectation: '', prepaid: true, totalMinor: 0 },
+      stop.cashMinor === 0
+        ? {
+            ...stop,
+            collectedMinor: 0,
+            paymentExpectation: '',
+            prepaid: true,
+            totalMinor: 0,
+            transferMinor: 0,
+          }
+        : stop.splitCashMethods === null
+          ? stop
+          : // Pago dividido (2026-11-17): cobra sólo la parte en efectivo.
+            {
+              ...stop,
+              paymentExpectation: `${stop.splitCashMethods} (el resto es transferencia)`,
+              totalMinor: stop.cashMinor,
+              transferMinor: 0,
+            },
     );
     return {
       deliveryDate: route.deliveryDate,
@@ -1349,6 +1376,10 @@ export class PostgresDeliveryService {
         isCash: sql<boolean>`coalesce((select pm.is_cash from payment_methods pm where lower(pm.display_name) = lower(${orders.paymentExpectation}) or lower(pm.code) = lower(${orders.paymentExpectation}) limit 1), lower(${orders.paymentExpectation}) like '%efectivo%')`,
         // Cobrado: el tilde de Pedidos o el pago registrado.
         paid: sql<boolean>`(${orders.paidAt} is not null or coalesce(${payments.status} = 'PAID', false))`,
+        // Pago dividido (2026-11-17): la parte en efectivo, sus medios, y si la otra ya entró.
+        splitCashMethods,
+        splitCashMinor,
+        splitTransferPaid,
         publicNumber: orders.publicNumber,
         sequence: deliveryStops.sequence,
         status: deliveryStops.status,
@@ -1368,14 +1399,33 @@ export class PostgresDeliveryService {
       rows.map((row) => ({ customerDisplayName: row.customerDisplayName, orderId: row.orderId })),
     );
 
-    return rows.map(({ customerDisplayName, orderId, ...row }) => ({
-      ...row,
-      collectedMinor: Number(row.collectedMinor),
-      customerFirstName: customerDisplayName.split(' ')[0] ?? customerDisplayName,
-      deliveryLatitude: row.deliveryLatitude === null ? null : Number(row.deliveryLatitude),
-      deliveryLongitude: row.deliveryLongitude === null ? null : Number(row.deliveryLongitude),
-      detail: detalles.get(orderId) ?? '',
-    }));
+    return rows
+      .map(
+        ({ customerDisplayName, splitCashMethods, splitCashMinor, splitTransferPaid, ...row }) => {
+          /*
+           * Cuánto de la parada es efectivo y cuánto transferencia. Un pedido con un solo medio es
+           * todo una cosa o la otra; uno dividido (2026-11-17), lo que dicen sus partes.
+           */
+          const split = splitCashMinor !== null;
+          const cashMinor = split ? Number(splitCashMinor) : row.isCash ? row.totalMinor : 0;
+          return {
+            ...row,
+            cashMinor,
+            customerDisplayName,
+            splitCashMethods: split ? (splitCashMethods ?? '') : null,
+            transferMinor: row.totalMinor - cashMinor,
+            transferPaid: split ? Boolean(splitTransferPaid) : row.paid,
+          };
+        },
+      )
+      .map(({ customerDisplayName, orderId, ...row }) => ({
+        ...row,
+        collectedMinor: Number(row.collectedMinor),
+        customerFirstName: customerDisplayName.split(' ')[0] ?? customerDisplayName,
+        deliveryLatitude: row.deliveryLatitude === null ? null : Number(row.deliveryLatitude),
+        deliveryLongitude: row.deliveryLongitude === null ? null : Number(row.deliveryLongitude),
+        detail: detalles.get(orderId) ?? '',
+      }));
   }
 
   /**
@@ -1393,12 +1443,13 @@ export class PostgresDeliveryService {
   /** Lo que hay que rendir y lo que falta entregar, calculado una vez para toda la hoja. */
   private sheetTotals(
     stops: readonly {
+      cashMinor: number;
       collectedMinor: number;
-      isCash: boolean;
-      paid: boolean;
       prepaid: boolean;
       status: string;
       totalMinor: number;
+      transferMinor: number;
+      transferPaid: boolean;
     }[],
   ) {
     /*
@@ -1406,15 +1457,23 @@ export class PostgresDeliveryService {
      * no cobradas (2026-10-22): es lo que se mira para saber qué plata vuelve en mano y qué hay que
      * ir a buscar al banco.
      */
-    const sum = (list: readonly { totalMinor: number }[]) =>
-      list.reduce((total, stop) => total + stop.totalMinor, 0);
-    const transfers = stops.filter((stop) => !stop.isCash);
+    // Un pedido dividido (2026-11-17) suma su efectivo a un lado y su transferencia al otro.
+    const sum = (
+      list: readonly (typeof stops)[number][],
+      amount: 'cashMinor' | 'totalMinor' | 'transferMinor',
+    ) => list.reduce((total, stop) => total + stop[amount], 0);
     const breakdown = {
-      cashMinor: sum(stops.filter((stop) => stop.isCash)),
-      totalMinor: sum(stops),
-      transferMinor: sum(transfers),
-      transferPaidMinor: sum(transfers.filter((stop) => stop.paid)),
-      transferUnpaidMinor: sum(transfers.filter((stop) => !stop.paid)),
+      cashMinor: sum(stops, 'cashMinor'),
+      totalMinor: sum(stops, 'totalMinor'),
+      transferMinor: sum(stops, 'transferMinor'),
+      transferPaidMinor: sum(
+        stops.filter((stop) => stop.transferPaid),
+        'transferMinor',
+      ),
+      transferUnpaidMinor: sum(
+        stops.filter((stop) => !stop.transferPaid),
+        'transferMinor',
+      ),
     };
     return {
       ...breakdown,
@@ -1451,6 +1510,8 @@ export class PostgresDeliveryService {
           paymentExpectation: orders.paymentExpectation,
           prepaid: sql<boolean>`coalesce(${payments.status} = 'PAID', false)`,
           routeId: deliveryStops.routeId,
+          splitCashMethods,
+          splitCashMinor,
           status: deliveryStops.status,
           totalMinor: orders.totalMinor,
         })
@@ -1494,7 +1555,31 @@ export class PostgresDeliveryService {
         });
       }
 
-      if (input.collected && !stop.prepaid) {
+      /*
+       * Pago dividido (2026-11-17): quien reparte cobra sólo el efectivo, y eso tilda la parte en
+       * efectivo del pedido. La transferencia se tilda aparte, desde Pedidos.
+       */
+      const split = stop.splitCashMinor !== null;
+      if (split && input.collected && Number(stop.splitCashMinor) > 0) {
+        await transaction
+          .update(orderPaymentParts)
+          .set({ paidAt: new Date(), paidByUserId: null, updatedAt: new Date() })
+          .where(
+            and(
+              eq(orderPaymentParts.orderId, stop.orderId),
+              isNull(orderPaymentParts.paidAt),
+              sql`coalesce((select pm.is_cash from payment_methods pm where lower(pm.display_name) = lower(${orderPaymentParts.method}) or lower(pm.code) = lower(${orderPaymentParts.method}) limit 1), lower(${orderPaymentParts.method}) like '%efectivo%')`,
+            ),
+          );
+        await syncPaidFromParts(transaction, stop.orderId);
+      }
+      const due = split
+        ? {
+            amountMinor: Number(stop.splitCashMinor),
+            method: stop.splitCashMethods ?? stop.paymentExpectation,
+          }
+        : { amountMinor: stop.totalMinor, method: stop.paymentExpectation };
+      if (input.collected && !stop.prepaid && due.amountMinor > 0) {
         await transaction
           .insert(payments)
           .values({
@@ -1505,18 +1590,18 @@ export class PostgresDeliveryService {
           })
           .onConflictDoNothing();
         await transaction.insert(cashCollections).values({
-          amountMinor: stop.totalMinor,
+          amountMinor: due.amountMinor,
           deliveryRouteId: routeId,
-          method: stop.paymentExpectation,
+          method: due.method,
           orderId: stop.orderId,
         });
         const [method] = await transaction
           .select({ isCash: paymentMethods.isCash })
           .from(paymentMethods)
-          .where(eq(paymentMethods.code, stop.paymentExpectation))
+          .where(eq(paymentMethods.code, due.method))
           .limit(1);
         // Lo que se cobró en mano queda para rendir; lo demás ya está en la cuenta.
-        const enMano = method?.isCash ?? /efectivo/i.test(stop.paymentExpectation);
+        const enMano = split || (method?.isCash ?? /efectivo/i.test(due.method));
         await transaction
           .update(payments)
           .set({ status: enMano ? 'TO_SETTLE' : 'PAID', updatedAt: new Date() })

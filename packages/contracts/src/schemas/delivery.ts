@@ -64,6 +64,8 @@ export const DeliveryStopSchema = z.object({
   neighborhood: z.string().nullable(),
   orderId: UuidSchema,
   paymentExpectation: z.string(),
+  /** Pago dividido (2026-11-17): lo que se cobra en efectivo. Null: un solo medio. */
+  cashDueMinor: z.number().int().nullable().default(null),
   publicNumber: z.string(),
   sequence: z.number().int(),
   status: DeliveryStopStatusSchema,

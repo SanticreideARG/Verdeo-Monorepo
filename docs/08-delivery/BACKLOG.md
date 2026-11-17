@@ -192,6 +192,15 @@ Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", f
 - [x] Zonas geográficas: "Renombrar" en cada ciudad y "Nombre" en los datos de cada zona. La API ya lo aceptaba (`PATCH /operating-sites/:id` y `/zones/:id` con `displayName`); faltaba en la pantalla. El slug y el prefijo de pedidos no cambian. Avisa si otra zona de la ciudad ya tiene ese nombre.
 - [ ] Unificar Neuquén y Río Negro: ver la propuesta en la conversación del 2026-11-06 (pasar zonas de una operación a otra sin tocar el historial). Pendiente de decisión.
 
+## Pago dividido y borrar varios pedidos (2026-11-17)
+
+- [x] Pago dividido: parte en un medio y el resto en otro ("Efectivo + Transferencia"). Se elige en el alta ("Dividido") o desde el medio de pago de la lista ("Dividido…", que abre una ventana con el monto de la primera parte; la segunda es lo que falta). Tabla `order_payment_parts` (migración 0085); la última parte se lleva lo que falta del total, también cuando el total cambia (si su monto cambia, su tilde se va).
+- [x] Doble tilde de cobrado: en la columna "Cobrado" cada parte tiene el suyo, con su confirmación. El pedido queda cobrado (`orders.paid_at`) cuando lo están todas, así que Por cobrar, Estadísticas y los informes siguen igual. La parte en efectivo no se da por cobrada sola al pasar el día de entrega: se tilda, o la tilda quien reparte al confirmar el cobro desde su enlace.
+- [x] Quien reparte cobra sólo la parte en efectivo (hoja del enlace, mensaje y CSV de la ruta); el total de la ruta y el "Total efectivo" del día suman cada parte de su lado.
+- [x] Volver a un solo medio desde el selector borra las partes; editar otra cosa del pedido no las toca.
+- [x] Borrar varios pedidos: en la lista, quien tiene el permiso de eliminar ve un tilde por pedido y uno en el encabezado para todos los que se ven (en el teléfono, en cada tarjeta). Arriba aparece "N pedidos tildados" con "Eliminar" y "Destildar". Un solo motivo para todos, opcional como al borrar uno; todo o nada, y un evento de auditoría por pedido con el motivo.
+- [ ] Pago dividido en el Excel de pedidos, el informe del período y el de cierre: hoy muestran el medio como "Efectivo + Transferencia" y el tilde del pedido, sin el detalle por parte.
+
 ## Fechas propias de cada ciudad (2026-11-16)
 
 - [x] La semana se crea con una apertura, un parcial de cocina y un cierre que valen para todas las ciudades. Al editar la semana de una ciudad, esas fechas ahora se pueden cambiar y quedan como propias de esa ciudad (tabla `sales_cycle_site_dates`, migración 0084): lo que no se cambió sigue a la semana, y una fecha que vuelve a coincidir con la de la semana deja de ser propia. El nombre sigue siendo uno solo.

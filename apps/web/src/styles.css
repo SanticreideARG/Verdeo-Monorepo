@@ -6003,6 +6003,8 @@ main .operation-card {
 }
 .data-cards > li.is-linked a,
 .data-cards > li.is-linked button,
+.data-cards > li.is-linked input,
+.data-cards > li.is-linked label,
 .data-cards > li.is-linked select {
   pointer-events: auto;
 }
@@ -13955,5 +13957,64 @@ body:has(.modal-backdrop) .assistant-launcher.is-operator.is-saying {
     background: none;
     color: var(--db-text);
     font-weight: 700;
+  }
+}
+
+/* Tildar filas para actuar sobre varias (2026-11-17). */
+.data-table-select {
+  width: 2.25rem;
+  text-align: center;
+}
+.data-table-select input,
+.data-cards-select {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+.data-cards-select {
+  flex: none;
+  margin: 0.15rem 0.6rem 0 0;
+  align-self: center;
+}
+.bulk-bar {
+  position: sticky;
+  top: 0.5rem;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--db-border, #ddd);
+  border-radius: 0.75rem;
+  background: var(--db-bg-1, #fff);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+}
+.bulk-bar strong {
+  margin-right: auto;
+}
+
+/* Pago dividido (2026-11-17): un tilde por parte. */
+.paid-parts {
+  display: grid;
+  gap: 0.25rem;
+}
+.paid-parts .paid-check span {
+  white-space: nowrap;
+}
+.split-payment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.split-payment-rest {
+  display: block;
+  padding: 0.55rem 0;
+  font-weight: 600;
+}
+@media (max-width: 480px) {
+  .split-payment-grid {
+    grid-template-columns: 1fr;
   }
 }

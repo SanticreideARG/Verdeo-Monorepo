@@ -298,6 +298,11 @@ export interface OrderSummary {
   /** La ciudad de la operación: la que decide numeración, menú y precios. */
   operatingSiteName: string | null;
   paidAt: string | null;
+  /**
+   * Pago dividido (2026-11-17): cada parte con su tilde. Vacío o ausente: un solo medio. Con
+   * partes, `paidAt` se llena cuando están cobradas todas.
+   */
+  paymentParts?: { amountMinor: number; method: string; paidAt: string | null; position: number }[];
   paymentExpectation: string;
   publicNumber: string;
   source: string;

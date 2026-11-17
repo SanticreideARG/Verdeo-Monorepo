@@ -26,12 +26,18 @@ import { InboundEmailsPanel } from '../components/InboundEmailsPanel.js';
 import { OrderImportDialog } from '../components/OrderImportDialog.js';
 import {
   paymentMethodLabel,
-  paymentOptions,
+  paymentOptionsWithSplit,
   paymentSelectValue,
+  SPLIT_CHOICE,
   usePaymentMethods,
   isNoChargeChoice,
 } from '../lib/paymentMethods.js';
-import { isCashMethod } from '../lib/paymentStatus.js';
+import { cashAmountOf } from '../lib/paymentStatus.js';
+import {
+  defaultSplitMethods,
+  parseMoneyInput,
+  SplitPaymentDialog,
+} from '../components/SplitPaymentDialog.js';
 import { orderRowActions, type OrderRowActionKey } from '../lib/orderRowActions.js';
 import {
   matchMenuOffering,
@@ -303,6 +309,12 @@ export function OrderIntakePage() {
   // Cambiar el cobro pide confirmación, en los dos sentidos (2026-10-23): un tilde suelto no se
   // nota y deja a alguien como que pagó, o como que debe.
   const [paying, setPaying] = useState<OrderSummary | null>(null);
+  // Pago dividido (2026-11-17): la ventana para dividir, y el tilde de una parte.
+  const [splitting, setSplitting] = useState<OrderSummary | null>(null);
+  const [payingPart, setPayingPart] = useState<{ order: OrderSummary; part: number } | null>(null);
+  // Pedidos tildados para borrar de a varios (2026-11-17), como en una casilla de correo.
+  const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   // Lo elegido del stock de períodos anteriores (STOCK_LOTS_PLAN.md) y los lotes que se pueden
   // vender con el menú elegido.
   const [stockPicks, setStockPicks] = useState<StockPicks>(new Map());
@@ -341,6 +353,8 @@ export function OrderIntakePage() {
   const [noChargeFor, setNoChargeFor] = useState<OrderSummary | null>(null);
   // Sólo muestra el motivo y el $0: al guardar manda lo que dice el formulario.
   const [noChargeChosen, setNoChargeChosen] = useState(false);
+  // "Dividido" en el alta (2026-11-17): pide cuánto va en efectivo.
+  const [splitChosen, setSplitChosen] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() =>
     readStoredColumns(COLUMNS_KEY, DEFAULT_COLUMNS, INTAKE_CATALOGUE),
   );
@@ -471,6 +485,10 @@ export function OrderIntakePage() {
    * paginada devolvería al principio y perdería de vista justo la fila recién tildada. */
   /** Cambiar el medio de pago desde la lista, sin abrir el pedido. */
   async function changePayment(order: OrderSummary, value: string, reason?: string) {
+    if (value === SPLIT_CHOICE) {
+      setSplitting(order);
+      return;
+    }
     // "Sin pago" pide el motivo antes de guardar: es lo que explica por qué ese pedido da $0.
     if (reason === undefined && isNoChargeChoice(value, paymentMethods)) {
       setNoChargeFor(order);
@@ -498,6 +516,7 @@ export function OrderIntakePage() {
               notes: updated.notes,
               paidAt: updated.paidAt,
               paymentExpectation: updated.paymentExpectation,
+              paymentParts: updated.paymentParts ?? [],
               totalMinor: updated.totalMinor,
             }
           : row,
@@ -526,9 +545,14 @@ export function OrderIntakePage() {
     );
   }
 
-  async function togglePaid(order: OrderSummary) {
+  /** El tilde de cobrado: del pedido entero o, si el pago está dividido, de una parte. */
+  async function togglePaid(order: OrderSummary, part?: number) {
+    const paidNow =
+      part === undefined
+        ? Boolean(order.paidAt)
+        : Boolean(order.paymentParts?.find((row) => row.position === part)?.paidAt);
     const response = await apiRequest(`/api/v1/orders/${order.id}/paid`, {
-      body: JSON.stringify({ paid: !order.paidAt }),
+      body: JSON.stringify({ paid: !paidNow, ...(part === undefined ? {} : { part }) }),
       method: 'POST',
     });
     if (!response.ok) {
@@ -537,11 +561,73 @@ export function OrderIntakePage() {
     }
     const updated = (await response.json()) as OrderSummary;
     setOrders((current) =>
-      current.map((row) => (row.id === updated.id ? { ...row, paidAt: updated.paidAt } : row)),
+      current.map((row) =>
+        row.id === updated.id
+          ? { ...row, paidAt: updated.paidAt, paymentParts: updated.paymentParts ?? [] }
+          : row,
+      ),
     );
   }
 
+  /** Dividir el pago (2026-11-17), o cambiar cómo está dividido. */
+  async function saveSplit(order: OrderSummary, parts: { amountMinor?: number; method: string }[]) {
+    const response = await apiRequest(`/api/v1/orders/${order.id}`, {
+      body: JSON.stringify({ paymentParts: parts }),
+      method: 'PATCH',
+    });
+    if (!response.ok) {
+      setError(await describeResponse(response));
+      return;
+    }
+    const updated = (await response.json()) as OrderSummary;
+    setOrders((current) =>
+      current.map((row) =>
+        row.id === updated.id
+          ? {
+              ...row,
+              paidAt: updated.paidAt,
+              paymentExpectation: updated.paymentExpectation,
+              paymentParts: updated.paymentParts ?? [],
+              totalMinor: updated.totalMinor,
+            }
+          : row,
+      ),
+    );
+    setSplitting(null);
+  }
+
+  /**
+   * Borrar los pedidos tildados (2026-11-17), con un solo motivo para todos. Todo o nada: si uno
+   * no se puede borrar, no se borra ninguno.
+   */
+  async function removePicked(reason: string) {
+    setMessage('');
+    const orderIds = orders.filter((order) => picked.has(order.id)).map((order) => order.id);
+    const response = await apiRequest('/api/v1/orders/bulk-delete', {
+      body: JSON.stringify({ orderIds, ...(reason ? { reason } : {}) }),
+      method: 'POST',
+      notify: false,
+    });
+    if (!response.ok) {
+      setBulkDeleting(false);
+      setMessage(await errorMessage(response));
+      return;
+    }
+    const result = (await response.json()) as { count: number };
+    setBulkDeleting(false);
+    setPicked(new Set());
+    showToast(
+      result.count === 1 ? '1 pedido eliminado.' : `${String(result.count)} pedidos eliminados.`,
+    );
+    await loadData();
+  }
+
   const publishedMenus = menus.filter((menu) => menu.status === 'PUBLISHED');
+  // Lo tildado que está a la vista: un filtro nuevo no deja tildes escondidos.
+  const pickedOrders = orders.filter((order) => picked.has(order.id));
+  const payingPartRow = payingPart
+    ? (payingPart.order.paymentParts ?? []).find((part) => part.position === payingPart.part)
+    : undefined;
   const selectedMenu = menus.find((menu) => menu.id === selectedMenuId) ?? null;
   /*
    * El día de reparto, entre los de la ciudad para este menú. Arranca en el de siempre; si la
@@ -1045,6 +1131,16 @@ export function OrderIntakePage() {
         return;
       }
       const noChargeNote = noChargeOrder ? `Sin pago: ${noChargeReason}` : '';
+      // Pago dividido (2026-11-17): el monto de la primera parte; la segunda es lo que falta.
+      const splitOrder = formText(form, 'paymentExpectation') === SPLIT_CHOICE;
+      const splitMethods = defaultSplitMethods(paymentMethods);
+      const splitFirstMinor = splitOrder
+        ? parseMoneyInput(formText(form, 'splitCashAmount'))
+        : null;
+      if (splitOrder && (splitFirstMinor === null || splitFirstMinor <= 0)) {
+        setMessage(`Escribí cuánto paga en ${splitMethods[0].toLowerCase()}.`);
+        return;
+      }
 
       const createdOrder = await mutate('/api/v1/orders', {
         customerId,
@@ -1062,7 +1158,17 @@ export function OrderIntakePage() {
           : [],
         items: [...cartItemsPayload(lines), ...fromLots],
         menuId: formText(form, 'menuId'),
-        paymentExpectation: formText(form, 'paymentExpectation'),
+        paymentExpectation: splitOrder
+          ? splitMethods.join(' + ')
+          : formText(form, 'paymentExpectation'),
+        ...(splitOrder && splitFirstMinor !== null
+          ? {
+              paymentParts: [
+                { amountMinor: splitFirstMinor, method: splitMethods[0] },
+                { method: splitMethods[1] },
+              ],
+            }
+          : {}),
         ...(formText(form, 'deliveryDayText').trim()
           ? { deliveryDayText: formText(form, 'deliveryDayText').trim() }
           : {}),
@@ -2079,9 +2185,10 @@ export function OrderIntakePage() {
                       <select
                         defaultValue=""
                         name="paymentExpectation"
-                        onChange={(event) =>
-                          setNoChargeChosen(isNoChargeChoice(event.target.value, paymentMethods))
-                        }
+                        onChange={(event) => {
+                          setNoChargeChosen(isNoChargeChoice(event.target.value, paymentMethods));
+                          setSplitChosen(event.target.value === SPLIT_CHOICE);
+                        }}
                         required
                       >
                         <option disabled value="">
@@ -2092,6 +2199,9 @@ export function OrderIntakePage() {
                             {method.displayName}
                           </option>
                         ))}
+                        <option value={SPLIT_CHOICE}>
+                          Dividido: {defaultSplitMethods(paymentMethods).join(' + ')}
+                        </option>
                       </select>
                     ) : (
                       <input name="paymentExpectation" placeholder="Transferencia" required />
@@ -2101,6 +2211,18 @@ export function OrderIntakePage() {
                     <label className="field">
                       Motivo (va en las notas)
                       <input name="noChargeReason" placeholder="Prueba, regalo, compensación…" />
+                    </label>
+                  ) : null}
+                  {splitChosen ? (
+                    <label className="field">
+                      En {defaultSplitMethods(paymentMethods)[0].toLowerCase()} (el resto, en{' '}
+                      {defaultSplitMethods(paymentMethods)[1].toLowerCase()})
+                      <input
+                        inputMode="decimal"
+                        name="splitCashAmount"
+                        placeholder="Ej. 10000"
+                        required
+                      />
                     </label>
                   ) : null}
                   <label className="field">
@@ -2178,6 +2300,7 @@ export function OrderIntakePage() {
                 onClick={() => {
                   draft.clear();
                   setNoChargeChosen(false);
+                  setSplitChosen(false);
                   resetCart();
                   setSelectedCustomer(null);
                   setDeliveryAddress('');
@@ -2259,6 +2382,29 @@ export function OrderIntakePage() {
               </label>
             ) : null}
           </div>
+          {pickedOrders.length > 0 ? (
+            <div aria-label="Pedidos tildados" className="bulk-bar" role="region">
+              <strong>
+                {pickedOrders.length === 1
+                  ? '1 pedido tildado'
+                  : `${String(pickedOrders.length)} pedidos tildados`}
+              </strong>
+              <button
+                className="button button-danger"
+                onClick={() => setBulkDeleting(true)}
+                type="button"
+              >
+                Eliminar
+              </button>
+              <button
+                className="button button-secondary"
+                onClick={() => setPicked(new Set())}
+                type="button"
+              >
+                Destildar
+              </button>
+            </div>
+          ) : null}
           <DataTable
             {...(byDelivery
               ? {
@@ -2281,9 +2427,11 @@ export function OrderIntakePage() {
                       const vigentes = group.filter((order) => order.status !== 'CANCELLED');
                       const currency = vigentes[0]?.currency ?? 'ARS';
                       const total = vigentes.reduce((sum, order) => sum + order.totalMinor, 0);
-                      const cash = vigentes
-                        .filter((order) => isCashMethod(order.paymentExpectation, paymentMethods))
-                        .reduce((sum, order) => sum + order.totalMinor, 0);
+                      // Un pago dividido suma sólo su parte en efectivo (2026-11-17).
+                      const cash = vigentes.reduce(
+                        (sum, order) => sum + cashAmountOf(order, paymentMethods),
+                        0,
+                      );
                       return (
                         <>
                           Total <strong>{formatMoney(total, currency)}</strong>
@@ -2316,9 +2464,10 @@ export function OrderIntakePage() {
                               onChange={(event) => void changePayment(order, event.target.value)}
                               value={paymentSelectValue(order.paymentExpectation, paymentMethods)}
                             >
-                              {paymentOptions(
+                              {paymentOptionsWithSplit(
                                 paymentSelectValue(order.paymentExpectation, paymentMethods),
                                 paymentMethods,
+                                Boolean(order.paymentParts?.length),
                               ).map((option) => (
                                 <option key={option.value} value={option.value}>
                                   {option.label}
@@ -2349,6 +2498,26 @@ export function OrderIntakePage() {
                             render: (order: OrderSummary) =>
                               isNoCharge(order.paymentExpectation) ? (
                                 '—'
+                              ) : order.paymentParts?.length ? (
+                                // Pago dividido (2026-11-17): un tilde por parte.
+                                <div className="paid-parts">
+                                  {order.paymentParts.map((part) => (
+                                    <label className="paid-check" key={part.position}>
+                                      <input
+                                        aria-label={`Marcar ${part.method} de ${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName} como cobrado`}
+                                        checked={Boolean(part.paidAt)}
+                                        onChange={() =>
+                                          setPayingPart({ order, part: part.position })
+                                        }
+                                        type="checkbox"
+                                      />
+                                      <span>
+                                        {part.method}{' '}
+                                        {formatMoney(part.amountMinor, order.currency)}
+                                      </span>
+                                    </label>
+                                  ))}
+                                </div>
                               ) : (
                                 <label className="paid-check">
                                   <input
@@ -2403,6 +2572,24 @@ export function OrderIntakePage() {
             rowKey={(order) => order.id}
             rowTone={orderRowTone}
             rows={orders}
+            {...(canDelete
+              ? {
+                  selection: {
+                    label: (order: OrderSummary) =>
+                      `Tildar el pedido de ${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName}`,
+                    onToggle: (keys: readonly string[], on: boolean) =>
+                      setPicked((current) => {
+                        const next = new Set(current);
+                        for (const key of keys) {
+                          if (on) next.add(key);
+                          else next.delete(key);
+                        }
+                        return next;
+                      }),
+                    selected: picked,
+                  },
+                }
+              : {})}
           />
           {nextCursor ? (
             <button
@@ -2466,6 +2653,68 @@ export function OrderIntakePage() {
           }}
           title={paying.paidAt ? '¿Volver a pendiente?' : '¿Ya pagó?'}
           tone={paying.paidAt ? 'destructivo' : 'normal'}
+        />
+      ) : null}
+
+      {payingPart && payingPartRow ? (
+        <ConfirmDialog
+          confirmLabel={payingPartRow.paidAt ? 'Volver a pendiente' : 'Marcar como cobrado'}
+          detail={
+            payingPartRow.paidAt
+              ? `La parte en ${payingPartRow.method} (${formatMoney(payingPartRow.amountMinor, payingPart.order.currency)}) del pedido de ${payingPart.order.customer.displayName} figura como cobrada. Va a volver a pendiente.`
+              : `La parte en ${payingPartRow.method} (${formatMoney(payingPartRow.amountMinor, payingPart.order.currency)}) del pedido de ${payingPart.order.customer.displayName} pasa a cobrada. El pedido queda cobrado cuando están todas las partes.`
+          }
+          onCancel={() => setPayingPart(null)}
+          onConfirm={async () => {
+            await togglePaid(payingPart.order, payingPart.part);
+            setPayingPart(null);
+          }}
+          title={
+            payingPartRow.paidAt
+              ? '¿Volver a pendiente?'
+              : `¿Ya pagó la parte en ${payingPartRow.method.toLowerCase()}?`
+          }
+          tone={payingPartRow.paidAt ? 'destructivo' : 'normal'}
+        />
+      ) : null}
+
+      {splitting ? (
+        <SplitPaymentDialog
+          currency={splitting.currency}
+          current={splitting.paymentParts ?? []}
+          customerName={splitting.customer.displayName}
+          methods={paymentMethods}
+          onCancel={() => setSplitting(null)}
+          onSave={(parts) => saveSplit(splitting, parts)}
+          totalMinor={splitting.totalMinor}
+        />
+      ) : null}
+
+      {bulkDeleting ? (
+        <ReasonDialog
+          confirmLabel={
+            pickedOrders.length === 1
+              ? 'Eliminar 1 pedido'
+              : `Eliminar ${String(pickedOrders.length)} pedidos`
+          }
+          detail={
+            `${pickedOrders.length === 1 ? 'El pedido tildado deja' : `Los ${String(pickedOrders.length)} pedidos tildados dejan`} de existir. Si alguno fue un pedido real que no va, conviene cancelarlo: así queda a la vista. El motivo vale para todos.` +
+            (pickedOrders.some(
+              (order) => order.paidAt || order.paymentParts?.some((part) => part.paidAt),
+            )
+              ? ' Hay pedidos que figuran como cobrados: esos cobros también se borran.'
+              : '')
+          }
+          label="Motivo (opcional, vale para todos)"
+          onCancel={() => setBulkDeleting(false)}
+          onConfirm={(reason) => removePicked(reason)}
+          optional
+          placeholder="Ej. pedidos de prueba"
+          title={
+            pickedOrders.length === 1
+              ? '¿Eliminar el pedido tildado?'
+              : `¿Eliminar ${String(pickedOrders.length)} pedidos?`
+          }
         />
       ) : null}
 

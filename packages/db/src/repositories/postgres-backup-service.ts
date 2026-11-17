@@ -27,6 +27,7 @@ import {
   orderDietaryInstructions,
   orderItemSelections,
   orderItems,
+  orderPaymentParts,
   orderRevisions,
   orderStatusHistory,
   orders,
@@ -191,6 +192,8 @@ const RESTORE_ORDER: readonly { clave: readonly string[]; nombre: string; tabla:
   { clave: ['id'], nombre: 'order_status_history', tabla: orderStatusHistory },
   { clave: ['id'], nombre: 'order_revisions', tabla: orderRevisions },
   { clave: ['id'], nombre: 'order_dietary_instructions', tabla: orderDietaryInstructions },
+  // Pago dividido (2026-11-17).
+  { clave: ['orderId', 'position'], nombre: 'order_payment_parts', tabla: orderPaymentParts },
   { clave: ['id'], nombre: 'payments', tabla: payments },
   { clave: ['id'], nombre: 'production_snapshots', tabla: productionSnapshots },
   { clave: ['id'], nombre: 'production_actuals', tabla: productionActuals },
@@ -393,6 +396,12 @@ export class PostgresBackupService {
             .select()
             .from(orderDietaryInstructions)
             .where(inArray(orderDietaryInstructions.orderId, list)),
+        );
+        data.order_payment_parts = await this.some(orderIds, (list) =>
+          this.database
+            .select()
+            .from(orderPaymentParts)
+            .where(inArray(orderPaymentParts.orderId, list)),
         );
       }
     }

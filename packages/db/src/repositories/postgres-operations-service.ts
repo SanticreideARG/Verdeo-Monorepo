@@ -111,6 +111,7 @@ import {
   labelPrints,
   orderItemSelections,
   orderItems,
+  orderPaymentParts,
   orderRevisions,
   menuCatalogSettings,
   orders,
@@ -136,6 +137,15 @@ import {
 import { ilikeIgnoringAccents } from './accent-search.js';
 import { findMergeCandidates, mergeCustomers } from './customer-merge.js';
 import { assignOrderToRun, dropEmptyAutoRun, leaveRun, runLabel } from './delivery-runs.js';
+import {
+  type PaymentPartInput,
+  paymentPartsByOrder,
+  rebalancePaymentParts,
+  resolveParts,
+  savePaymentParts,
+  splitLabel,
+  syncPaidFromParts,
+} from './payment-parts.js';
 import { PostgresAuditSink } from './postgres-audit-sink.js';
 import { statsEvents } from './stats-events.js';
 import { statsPeriods } from './stats-periods.js';
@@ -365,6 +375,8 @@ export interface OrderInput {
   deliveryDayText?: string | undefined;
   deliveryTimeSlot?: string | undefined;
   paymentExpectation: string;
+  /** Pago dividido (2026-11-17): dos o más partes; la última se lleva lo que falta. */
+  paymentParts?: readonly PaymentPartInput[] | undefined;
   source: string;
   /** "<tanda>:<fila>" de una importación: el mismo pedido no se crea dos veces. */
   importKey?: string | undefined;
@@ -393,6 +405,8 @@ export interface OrderUpdateInput {
   deliveryDayText?: string | null | undefined;
   deliveryTimeSlot?: string | null | undefined;
   paymentExpectation?: string | undefined;
+  /** Pago dividido (2026-11-17): las partes, o null para volver a un solo medio. */
+  paymentParts?: readonly PaymentPartInput[] | null | undefined;
   reason?: string | undefined;
 }
 
@@ -6634,6 +6648,8 @@ export class PostgresOperationsService {
     orderId: string,
     paid: boolean,
     context: OperationsContext & { actorUserId: string },
+    /** Una parte de un pago dividido (2026-11-17). Sin parte, todas. */
+    part?: number,
   ) {
     return this.database
       .transaction(async (transaction) => {
@@ -6651,14 +6667,37 @@ export class PostgresOperationsService {
           throw new OperationsConflictError('Un pedido sin pago no se cobra.');
 
         const paidAt = paid ? new Date() : null;
-        await transaction
-          .update(orders)
-          .set({
-            paidAt,
-            paidByUserId: paid ? context.actorUserId : null,
-            updatedAt: new Date(),
-          })
-          .where(eq(orders.id, orderId));
+        const parts = await transaction
+          .select({ position: orderPaymentParts.position })
+          .from(orderPaymentParts)
+          .where(eq(orderPaymentParts.orderId, orderId));
+        if (part !== undefined && !parts.some((row) => row.position === part))
+          throw new OperationsNotFoundError('No se encontró esa parte del pago');
+        if (parts.length > 0) {
+          // Cada parte tiene su tilde; el del pedido sale de ellas.
+          await transaction
+            .update(orderPaymentParts)
+            .set({
+              paidAt,
+              paidByUserId: paid ? context.actorUserId : null,
+              updatedAt: new Date(),
+            })
+            .where(
+              part === undefined
+                ? eq(orderPaymentParts.orderId, orderId)
+                : and(eq(orderPaymentParts.orderId, orderId), eq(orderPaymentParts.position, part)),
+            );
+          await syncPaidFromParts(transaction, orderId);
+        } else {
+          await transaction
+            .update(orders)
+            .set({
+              paidAt,
+              paidByUserId: paid ? context.actorUserId : null,
+              updatedAt: new Date(),
+            })
+            .where(eq(orders.id, orderId));
+        }
 
         const audit = new AuditService(new PostgresAuditSink(transaction));
         await audit.record({
@@ -6669,7 +6708,7 @@ export class PostgresOperationsService {
           correlationId: context.correlationId,
           entityId: orderId,
           entityType: 'order',
-          metadata: { publicNumber: current.publicNumber },
+          metadata: { part: part ?? null, publicNumber: current.publicNumber },
           requestId: context.requestId,
           source: context.source,
         });
@@ -6755,6 +6794,8 @@ export class PostgresOperationsService {
           deliveryAddressLine2: orders.deliveryAddressLine2,
           deliveryDayText: orders.deliveryDayText,
           deliveryTimeSlot: orders.deliveryTimeSlot,
+          paidAt: orders.paidAt,
+          paidByUserId: orders.paidByUserId,
           paymentExpectation: orders.paymentExpectation,
           status: orders.status,
           totalMinor: orders.totalMinor,
@@ -6860,8 +6901,11 @@ export class PostgresOperationsService {
         snapshot: JSON.parse(JSON.stringify(beforeSnapshot)) as Record<string, unknown>,
       });
 
-      const nextPayment =
-        input.paymentExpectation === undefined
+      // Con partes, el medio del pedido es el de todas: "Efectivo + Transferencia" (2026-11-17).
+      const splitParts = input.paymentParts ?? null;
+      const nextPayment = splitParts
+        ? splitLabel(splitParts)
+        : input.paymentExpectation === undefined
           ? current.paymentExpectation
           : await this.storedPayment(transaction, input.paymentExpectation);
       const noCharge = isNoCharge(nextPayment);
@@ -6958,7 +7002,9 @@ export class PostgresOperationsService {
         ...(input.deliveryTimeSlot !== undefined
           ? { deliveryTimeSlot: input.deliveryTimeSlot }
           : {}),
-        ...(input.paymentExpectation !== undefined ? { paymentExpectation: nextPayment } : {}),
+        ...(input.paymentExpectation !== undefined || splitParts
+          ? { paymentExpectation: nextPayment }
+          : {}),
         updatedAt: new Date(),
       };
       if (resolvedItems) {
@@ -6976,6 +7022,25 @@ export class PostgresOperationsService {
         }
       }
       await transaction.update(orders).set(changes).where(eq(orders.id, orderId));
+      /*
+       * El pago dividido (2026-11-17): partes nuevas; volver a un solo medio (o a "Sin pago") las
+       * borra; un total distinto se lo lleva la última parte.
+       */
+      const finalTotal = resolvedTotal ?? repricedTotal ?? current.totalMinor;
+      if (splitParts && !noCharge) {
+        const resolved = resolveParts(splitParts, finalTotal);
+        if ('error' in resolved) throw new OperationsConflictError(resolved.error);
+        await savePaymentParts(transaction, orderId, resolved.parts, current);
+      } else if (
+        noCharge ||
+        input.paymentParts === null ||
+        (input.paymentExpectation !== undefined && nextPayment !== current.paymentExpectation)
+      ) {
+        await savePaymentParts(transaction, orderId, [], current);
+      } else if (finalTotal !== current.totalMinor) {
+        const problem = await rebalancePaymentParts(transaction, orderId, finalTotal);
+        if (problem) throw new OperationsConflictError(problem);
+      }
       // Con otra fecha, otro reparto.
       if (input.deliveryDate !== undefined) await assignOrderToRun(transaction, orderId);
 
@@ -7241,7 +7306,11 @@ export class PostgresOperationsService {
           deliverySettings.defaultWeekday,
         );
 
-    const paymentExpectation = await this.storedPayment(transaction, input.paymentExpectation);
+    const splitParts = input.paymentParts?.length ? input.paymentParts : null;
+    // Con partes, el medio del pedido es el de todas: "Efectivo + Transferencia" (2026-11-17).
+    const paymentExpectation = splitParts
+      ? splitLabel(splitParts)
+      : await this.storedPayment(transaction, input.paymentExpectation);
     const noCharge = isNoCharge(paymentExpectation);
     // Sólo lo carga el equipo: no se le ofrece al cliente, y mandarlo a mano no regala el pedido.
     if (noCharge && input.source === 'web')
@@ -7287,6 +7356,17 @@ export class PostgresOperationsService {
       })
       .returning({ id: orders.id });
     if (!createdOrder) throw new Error('Order creation did not return a row');
+    if (splitParts) {
+      const resolved = resolveParts(
+        splitParts,
+        calculateOrderTotal(resolvedItems.map(({ totalMinor }) => totalMinor)),
+      );
+      if ('error' in resolved) throw new OperationsConflictError(resolved.error);
+      await savePaymentParts(transaction, createdOrder.id, resolved.parts, {
+        paidAt: null,
+        paidByUserId: null,
+      });
+    }
     // Entra al reparto de su fecha en su ciudad; si no hay ninguno, se crea (DELIVERY_RUNS_PLAN.md).
     await assignOrderToRun(transaction, createdOrder.id);
 
@@ -8940,11 +9020,14 @@ export class PostgresOperationsService {
       });
     };
 
+    const partsByOrder = await paymentPartsByOrder(database, presentIds);
     const byId = new Map(
       rows.map((row) => [
         row.id,
         {
           ...row,
+          // El pago dividido, con el tilde de cada parte (2026-11-17). Vacío: un solo medio.
+          paymentParts: partsByOrder.get(row.id) ?? [],
           // `numeric` llega como texto desde Postgres; el contrato pide números.
           deliveryLatitude: row.deliveryLatitude === null ? null : Number(row.deliveryLatitude),
           deliveryLongitude: row.deliveryLongitude === null ? null : Number(row.deliveryLongitude),
@@ -9498,6 +9581,11 @@ export class PostgresOperationsService {
         weeklyMenuId: menu.id,
       })
       .where(eq(orders.id, orderId));
+    // Con otro precio, la última parte de un pago dividido se lleva la diferencia (2026-11-17).
+    if (totalMinor !== order.totalMinor) {
+      const problem = await rebalancePaymentParts(transaction, orderId, totalMinor);
+      if (problem) throw new OperationsConflictError(problem);
+    }
     await assignOrderToRun(transaction, orderId);
 
     const audit = new AuditService(new PostgresAuditSink(transaction));
@@ -9529,79 +9617,116 @@ export class PostgresOperationsService {
   }
 
   public async deleteOrder(orderId: string, reason: string, context: OperationsContext) {
+    return this.database.transaction((transaction) =>
+      this.deleteOrderIn(transaction, orderId, reason, context),
+    );
+  }
+
+  /**
+   * Borrar varios pedidos de una vez (2026-11-17), como se borran varios mails: se tildan en la
+   * lista y se borran con un solo motivo para todos. Todo o nada: si uno no se puede borrar, no se
+   * borra ninguno, y cada pedido deja su propio evento de auditoría con ese motivo.
+   */
+  public async deleteOrders(
+    orderIds: readonly string[],
+    reason: string,
+    context: OperationsContext,
+  ) {
+    const ids = [...new Set(orderIds)];
     return this.database.transaction(async (transaction) => {
-      const [existing] = await transaction
-        .select({
-          customerDisplayName: customers.displayName,
-          customerId: orders.customerId,
-          deliveryDate: orders.deliveryDate,
-          id: orders.id,
-          operatingSiteId: orders.operatingSiteId,
-          paidAt: orders.paidAt,
-          publicNumber: orders.publicNumber,
-          status: orders.status,
-          totalMinor: orders.totalMinor,
-        })
-        .from(orders)
-        .innerJoin(customers, eq(customers.id, orders.customerId))
-        .where(eq(orders.id, orderId))
-        .limit(1);
-      if (!existing) throw new OperationsNotFoundError('No se encontró el pedido');
-
-      const [cobrado] = await transaction
-        .select({ total: sql<number>`coalesce(sum(${cashCollections.amountMinor}), 0)::int` })
-        .from(cashCollections)
-        .where(eq(cashCollections.orderId, orderId));
-
-      const audit = new AuditService(new PostgresAuditSink(transaction));
-      await audit.record({
-        action: 'order.deleted',
-        actor: auditActor(context),
-        before: {
-          collectedMinor: cobrado?.total ?? 0,
-          customerDisplayName: existing.customerDisplayName,
-          customerId: existing.customerId,
-          deliveryDate: existing.deliveryDate,
-          paidAt: existing.paidAt?.toISOString() ?? null,
-          publicNumber: existing.publicNumber,
-          status: existing.status,
-          totalMinor: existing.totalMinor,
-        },
-        correlationId: context.correlationId,
-        entityId: orderId,
-        entityType: 'order',
-        metadata: { reason: reason.trim() || null },
-        requestId: context.requestId,
-        source: context.source,
-      });
-
-      const cobros = await transaction
-        .select({ id: cashCollections.id })
-        .from(cashCollections)
-        .where(eq(cashCollections.orderId, orderId));
-      if (cobros.length > 0) {
-        await transaction.delete(cashSettlements).where(
-          inArray(
-            cashSettlements.collectionId,
-            cobros.map(({ id }) => id),
-          ),
+      const deleted: { collectedMinor: number; publicNumber: string }[] = [];
+      for (const orderId of ids) {
+        deleted.push(
+          await this.deleteOrderIn(transaction, orderId, reason, context, { bulk: ids.length }),
         );
       }
-      await transaction.delete(cashCollections).where(eq(cashCollections.orderId, orderId));
-      await transaction
-        .delete(transferReconciliations)
-        .where(eq(transferReconciliations.orderId, orderId));
-      await transaction.delete(deliveryStops).where(eq(deliveryStops.orderId, orderId));
-      // Sin clave foránea, así que no cae solo: ver el comentario de `manual_notices`.
-      await transaction.delete(manualNotices).where(eq(manualNotices.orderId, orderId));
-      await leaveRun(transaction, orderId);
-      await transaction.delete(orders).where(eq(orders.id, orderId));
-
       return {
-        collectedMinor: cobrado?.total ?? 0,
-        publicNumber: existing.publicNumber,
+        collectedMinor: deleted.reduce((sum, order) => sum + order.collectedMinor, 0),
+        count: deleted.length,
+        publicNumbers: deleted.map((order) => order.publicNumber),
       };
     });
+  }
+
+  private async deleteOrderIn(
+    transaction: DatabaseTransaction,
+    orderId: string,
+    reason: string,
+    context: OperationsContext,
+    /** Si vino de un borrado de varios: cuántos eran. */
+    batch?: { bulk: number },
+  ) {
+    const [existing] = await transaction
+      .select({
+        customerDisplayName: customers.displayName,
+        customerId: orders.customerId,
+        deliveryDate: orders.deliveryDate,
+        id: orders.id,
+        operatingSiteId: orders.operatingSiteId,
+        paidAt: orders.paidAt,
+        publicNumber: orders.publicNumber,
+        status: orders.status,
+        totalMinor: orders.totalMinor,
+      })
+      .from(orders)
+      .innerJoin(customers, eq(customers.id, orders.customerId))
+      .where(eq(orders.id, orderId))
+      .limit(1);
+    if (!existing) throw new OperationsNotFoundError('No se encontró el pedido');
+
+    const [cobrado] = await transaction
+      .select({ total: sql<number>`coalesce(sum(${cashCollections.amountMinor}), 0)::int` })
+      .from(cashCollections)
+      .where(eq(cashCollections.orderId, orderId));
+
+    const audit = new AuditService(new PostgresAuditSink(transaction));
+    await audit.record({
+      action: 'order.deleted',
+      actor: auditActor(context),
+      before: {
+        collectedMinor: cobrado?.total ?? 0,
+        customerDisplayName: existing.customerDisplayName,
+        customerId: existing.customerId,
+        deliveryDate: existing.deliveryDate,
+        paidAt: existing.paidAt?.toISOString() ?? null,
+        publicNumber: existing.publicNumber,
+        status: existing.status,
+        totalMinor: existing.totalMinor,
+      },
+      correlationId: context.correlationId,
+      entityId: orderId,
+      entityType: 'order',
+      metadata: { ...(batch ? { bulk: batch.bulk } : {}), reason: reason.trim() || null },
+      requestId: context.requestId,
+      source: context.source,
+    });
+
+    const cobros = await transaction
+      .select({ id: cashCollections.id })
+      .from(cashCollections)
+      .where(eq(cashCollections.orderId, orderId));
+    if (cobros.length > 0) {
+      await transaction.delete(cashSettlements).where(
+        inArray(
+          cashSettlements.collectionId,
+          cobros.map(({ id }) => id),
+        ),
+      );
+    }
+    await transaction.delete(cashCollections).where(eq(cashCollections.orderId, orderId));
+    await transaction
+      .delete(transferReconciliations)
+      .where(eq(transferReconciliations.orderId, orderId));
+    await transaction.delete(deliveryStops).where(eq(deliveryStops.orderId, orderId));
+    // Sin clave foránea, así que no cae solo: ver el comentario de `manual_notices`.
+    await transaction.delete(manualNotices).where(eq(manualNotices.orderId, orderId));
+    await leaveRun(transaction, orderId);
+    await transaction.delete(orders).where(eq(orders.id, orderId));
+
+    return {
+      collectedMinor: cobrado?.total ?? 0,
+      publicNumber: existing.publicNumber,
+    };
   }
 
   public async transitionOrder(

@@ -50,6 +50,17 @@ export interface DataColumn<T> {
 
 type SortState = { dir: 'asc' | 'desc'; key: string };
 
+/**
+ * Tildar filas para actuar sobre varias a la vez, como en una casilla de correo (2026-11-17). La
+ * tabla dibuja los tildes; qué se hace con lo tildado lo decide la pantalla.
+ */
+export interface RowSelection<T> {
+  /** Para el lector de pantalla: "Elegir el pedido de Ana". */
+  label: (row: T) => string;
+  onToggle: (keys: readonly string[], selected: boolean) => void;
+  selected: ReadonlySet<string>;
+}
+
 type NarrowView = 'cards' | 'table';
 
 function readNarrowView(storageKey: string | undefined): NarrowView {
@@ -105,6 +116,7 @@ export function DataTable<T>({
   rows,
   rowTone,
   narrowViewKey,
+  selection,
 }: {
   /** Para lectores de pantalla: qué contiene la tabla. */
   caption: string;
@@ -149,6 +161,8 @@ export function DataTable<T>({
    * costado: sirve para comparar muchos pedidos de un vistazo, que en tarjetas no se puede.
    */
   narrowViewKey?: string;
+  /** Tildes al inicio de cada fila, y en el encabezado uno para todas las que se ven. */
+  selection?: RowSelection<T>;
 }) {
   const narrow = useNarrowViewport();
   const [sort, setSort] = useState<SortState | null>(null);
@@ -206,6 +220,21 @@ export function DataTable<T>({
     : rows;
 
   const groups = groupBy ? groupRows(sorted, groupBy.key) : [{ key: '', rows: sorted }];
+  const span = columns.length + (selection ? 1 : 0);
+  const visibleKeys = rows.map(rowKey);
+  const selectedVisible = selection
+    ? visibleKeys.filter((key) => selection.selected.has(key)).length
+    : 0;
+  const rowCheck = (row: T, className: string) =>
+    selection ? (
+      <input
+        aria-label={selection.label(row)}
+        checked={selection.selected.has(rowKey(row))}
+        className={className}
+        onChange={(event) => selection.onToggle([rowKey(row)], event.target.checked)}
+        type="checkbox"
+      />
+    ) : null;
 
   /** Un clic ordena ascendente; el segundo sobre la misma columna invierte; el tercero desordena. */
   function toggleSort(key: string) {
@@ -288,6 +317,7 @@ export function DataTable<T>({
                     />
                   ) : null}
                   <div className="data-cards-head">
+                    {rowCheck(row, 'data-cards-select')}
                     <p className="data-cards-title">{primary?.render(row)}</p>
                     {chip ? <span className="data-cards-chip">{chip.render(row)}</span> : null}
                     {/* El menú de la fila va arriba, al lado del estado: al pie ocupaba un renglón
@@ -340,6 +370,27 @@ export function DataTable<T>({
           <caption className="sr-only">{caption}</caption>
           <thead>
             <tr>
+              {selection ? (
+                <th className="data-table-select" scope="col">
+                  <input
+                    aria-label={
+                      selectedVisible === visibleKeys.length
+                        ? 'Destildar todas las filas'
+                        : 'Tildar todas las filas'
+                    }
+                    checked={visibleKeys.length > 0 && selectedVisible === visibleKeys.length}
+                    onChange={() =>
+                      selection.onToggle(visibleKeys, selectedVisible !== visibleKeys.length)
+                    }
+                    ref={(input) => {
+                      if (input)
+                        input.indeterminate =
+                          selectedVisible > 0 && selectedVisible < visibleKeys.length;
+                    }}
+                    type="checkbox"
+                  />
+                </th>
+              ) : null}
               {columns.map((column) =>
                 column.sortValue ? (
                   <th
@@ -380,7 +431,7 @@ export function DataTable<T>({
               <Fragment key={group.key}>
                 {groupBy ? (
                   <tr className="data-table-group">
-                    <th colSpan={columns.length} scope="colgroup">
+                    <th colSpan={span} scope="colgroup">
                       <span>{groupBy.label(group.key, group.rows)}</span>
                     </th>
                   </tr>
@@ -405,6 +456,7 @@ export function DataTable<T>({
                         : undefined
                     }
                   >
+                    {selection ? <td className="data-table-select">{rowCheck(row, '')}</td> : null}
                     {columns.map((column) => (
                       <td
                         className={column.emphasis ? 'is-emphasis' : undefined}
@@ -418,7 +470,7 @@ export function DataTable<T>({
                 ))}
                 {groupBy?.footer ? (
                   <tr className="data-table-group-foot">
-                    <td colSpan={columns.length}>
+                    <td colSpan={span}>
                       <span>{groupBy.footer(group.key, group.rows)}</span>
                     </td>
                   </tr>
@@ -436,6 +488,7 @@ export function DataTable<T>({
           {columns.some((column) => column.total) ? (
             <tfoot>
               <tr>
+                {selection ? <td /> : null}
                 {columns.map((column) => (
                   <td className={column.emphasis ? 'is-emphasis' : undefined} key={column.key}>
                     {column.total?.(sorted)}

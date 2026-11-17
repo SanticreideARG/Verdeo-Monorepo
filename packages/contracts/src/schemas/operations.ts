@@ -774,6 +774,12 @@ export const OrderItemInputSchema = z.object({
   selectedDishes: z.array(SelectedDishSchema).min(1).max(50).optional(),
 });
 
+/** Una parte de un pago dividido. La última no lleva monto: es lo que falta para el total. */
+export const PaymentPartInputSchema = z.object({
+  amountMinor: z.number().int().positive().optional(),
+  method: z.string().trim().min(1).max(60),
+});
+
 export const OrderCreateRequestSchema = z.object({
   /**
    * Crear el pedido ya confirmado, en un paso.
@@ -804,11 +810,19 @@ export const OrderCreateRequestSchema = z.object({
   deliveryDayText: z.string().trim().max(80).optional(),
   deliveryTimeSlot: z.string().trim().max(80).optional(),
   paymentExpectation: z.string().trim().min(1).max(80),
+  /*
+   * Pago dividido (2026-11-17): parte en efectivo, parte por transferencia. La última parte se
+   * lleva lo que falta para el total, así que su monto no hace falta. Con partes, el medio del
+   * pedido queda "Efectivo + Transferencia".
+   */
+  paymentParts: z.array(PaymentPartInputSchema).min(2).max(4).optional(),
   source: OrderSourceSchema.default('manual'),
 });
 
 export const PublicOrderCreateRequestSchema = OrderCreateRequestSchema.omit({
   customerId: true,
+  // El pago dividido lo arregla el equipo, no el formulario público.
+  paymentParts: true,
 }).extend({
   customer: CustomerCreateRequestSchema,
   // Un pedido que entra por el sitio es "web", no "manual". Heredaba el default del esquema interno
@@ -969,7 +983,11 @@ export const StockLotUpdateRequestSchema = z.object({
 });
 
 /** Un tilde, nada más: quién y cuándo los pone el servidor. */
-export const OrderPaidRequestSchema = z.object({ paid: z.boolean() });
+export const OrderPaidRequestSchema = z.object({
+  paid: z.boolean(),
+  // Una parte de un pago dividido (2026-11-17), por su posición. Sin parte, todo el pedido.
+  part: z.number().int().min(0).max(3).optional(),
+});
 
 // "NUEVO" del cliente en el período del pedido (2026-11-01): se marca en todos sus pedidos de ese período.
 export const OrderNewRequestSchema = z.object({ isNew: z.boolean() });
@@ -993,6 +1011,8 @@ export const OrderUpdateRequestSchema = z
     deliveryDayText: z.string().trim().max(80).nullable().optional(),
     deliveryTimeSlot: z.string().trim().max(80).nullable().optional(),
     paymentExpectation: z.string().trim().min(1).max(80).optional(),
+    // Pago dividido (2026-11-17): las partes, o null para volver a un solo medio.
+    paymentParts: z.array(PaymentPartInputSchema).min(2).max(4).nullable().optional(),
     /*
      * Opcional a propósito.
      *
@@ -1057,6 +1077,20 @@ export const OrderSchema = z.object({
   // Cuándo se tildó como cobrado. Null = todavía no.
   paidAt: IsoDateTimeSchema.nullable(),
   paymentExpectation: z.string(),
+  /**
+   * Pago dividido (2026-11-17): cada parte con su tilde. Vacío: un solo medio. Con partes, `paidAt`
+   * se llena recién cuando están cobradas todas.
+   */
+  paymentParts: z
+    .array(
+      z.object({
+        amountMinor: z.number().int(),
+        method: z.string(),
+        paidAt: IsoDateTimeSchema.nullable(),
+        position: z.number().int(),
+      }),
+    )
+    .default([]),
   publicNumber: z.string(),
   source: OrderSourceSchema,
   status: OrderStatusSchema,
@@ -1676,6 +1710,7 @@ export type PublicOrderTrackResponse = z.infer<typeof PublicOrderTrackResponseSc
 export type Order = z.infer<typeof OrderSchema>;
 export type OrderTransitionRequest = z.infer<typeof OrderTransitionRequestSchema>;
 export type OrderPaidRequest = z.infer<typeof OrderPaidRequestSchema>;
+export type OrderBulkDeleteRequest = z.infer<typeof OrderBulkDeleteRequestSchema>;
 export type OrderNewRequest = z.infer<typeof OrderNewRequestSchema>;
 export type OrderUpdateRequest = z.infer<typeof OrderUpdateRequestSchema>;
 export type OrderListQuery = z.infer<typeof OrderListQuerySchema>;
@@ -2102,6 +2137,18 @@ export const CustomerMoveSiteResponseSchema = z.object({
 export const OrderDeleteRequestSchema = z.object({
   // Opcional (2026-10-20): borrar un pedido de prueba no necesita explicación.
   reason: z.string().trim().max(500).optional(),
+});
+
+/** Borrar varios pedidos de una vez (2026-11-17), con un solo motivo para todos. */
+export const OrderBulkDeleteRequestSchema = z.object({
+  orderIds: z.array(UuidSchema).min(1).max(500),
+  reason: z.string().trim().max(500).optional(),
+});
+
+export const OrderBulkDeleteResponseSchema = z.object({
+  collectedMinor: z.number().int(),
+  count: z.number().int(),
+  publicNumbers: z.array(z.string()),
 });
 
 export const OrderDeleteResponseSchema = z.object({

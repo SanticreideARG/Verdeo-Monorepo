@@ -171,6 +171,8 @@ import {
   OrderListQuerySchema,
   OrderPageResponseSchema,
   OrderRevisionListResponseSchema,
+  OrderBulkDeleteRequestSchema,
+  OrderBulkDeleteResponseSchema,
   OrderDeleteRequestSchema,
   OrderDeleteResponseSchema,
   ReceivablesResponseSchema,
@@ -567,6 +569,11 @@ interface OperationsEngine {
     context: OperationsContext,
   ): Promise<unknown>;
   deleteOrder(orderId: string, reason: string, context: OperationsContext): Promise<unknown>;
+  deleteOrders(
+    orderIds: readonly string[],
+    reason: string,
+    context: OperationsContext,
+  ): Promise<unknown>;
   listManualNotices(input: {
     cycleId?: string | undefined;
     operatingSiteId?: string | null | undefined;
@@ -645,6 +652,7 @@ interface OperationsEngine {
     orderId: string,
     paid: boolean,
     context: OperationsContext & { actorUserId: string },
+    part?: number,
   ): Promise<unknown>;
   setOrderNew(orderId: string, isNew: boolean, context: OperationsContext): Promise<unknown>;
   setCycleClosed(cycleId: string, closed: boolean, context: OperationsContext): Promise<unknown>;
@@ -7183,10 +7191,12 @@ export function createApp(options: CreateAppOptions) {
     const input = OrderPaidRequestSchema.safeParse(await context.req.json().catch(() => null));
     if (!params.success || !input.success) return badRequest(context, 'Revisá el pedido.');
 
-    const order = await requireOperations().setOrderPaid(params.data.id, input.data.paid, {
-      ...operationsContext(context),
-      actorUserId: session.userId,
-    });
+    const order = await requireOperations().setOrderPaid(
+      params.data.id,
+      input.data.paid,
+      { ...operationsContext(context), actorUserId: session.userId },
+      input.data.part,
+    );
     return context.json(OrderSchema.parse(contractValue(order)));
   });
 
@@ -7273,6 +7283,25 @@ export function createApp(options: CreateAppOptions) {
             operationsContext(context),
           );
     return context.json(result);
+  });
+
+  /*
+   * Borrar varios pedidos de una vez (2026-11-17): los tildados en la lista, con un solo motivo.
+   * Mismo permiso que borrar uno, y todo o nada.
+   */
+  app.post('/api/v1/orders/bulk-delete', async (context) => {
+    if (!context.get('session').permissions.includes('orders.delete')) return forbidden(context);
+    const input = OrderBulkDeleteRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!input.success)
+      return badRequest(context, 'Revisá los pedidos elegidos.', input.error.issues);
+    const deleted = await requireOperations().deleteOrders(
+      input.data.orderIds,
+      input.data.reason ?? '',
+      operationsContext(context),
+    );
+    return context.json(OrderBulkDeleteResponseSchema.parse(contractValue(deleted)));
   });
 
   app.delete('/api/v1/orders/:id', async (context) => {

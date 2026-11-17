@@ -271,7 +271,12 @@ export function buildOrderColumns(
           ? '—'
           : order.paidAt
             ? `Sí · ${formatDay(order.paidAt)}`
-            : 'No',
+            : order.paymentParts?.length
+              ? // Pago dividido (2026-11-17): qué parte ya entró.
+                order.paymentParts
+                  .map((part) => `${part.method}: ${part.paidAt ? 'sí' : 'no'}`)
+                  .join(' · ')
+              : 'No',
       sortValue: (order) => (order.paidAt ? 1 : 0),
       // "18 de 24" contesta de un vistazo lo que la columna sólo contesta contando a mano.
       total: (rows) =>

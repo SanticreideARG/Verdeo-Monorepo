@@ -66,6 +66,28 @@ export function paymentOptions(
   return options;
 }
 
+/** La opción "Dividido…" de un selector de medio de pago (2026-11-17): abre la ventana. */
+export const SPLIT_CHOICE = '__dividido__';
+
+/**
+ * Las opciones del selector de la lista, con el pago dividido: si el pedido ya está dividido, va
+ * primero como "Dividido: Efectivo + Transferencia"; al final, "Dividido…" para dividirlo o
+ * cambiar las partes.
+ */
+export function paymentOptionsWithSplit(
+  current: string,
+  methods: readonly PaymentChoice[],
+  split: boolean,
+): { label: string; value: string }[] {
+  const options = split
+    ? [
+        { label: `Dividido: ${current}`, value: current },
+        ...methods.map((method) => ({ label: method.displayName, value: method.displayName })),
+      ]
+    : paymentOptions(current, methods);
+  return [...options, { label: split ? 'Cambiar la división…' : 'Dividido…', value: SPLIT_CHOICE }];
+}
+
 /** El valor del selector para un pedido: el nombre parametrizado si el guardado es su código. */
 export function paymentSelectValue(current: string, methods: readonly PaymentChoice[]): string {
   const key = normalize(current);

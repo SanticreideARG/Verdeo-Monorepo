@@ -12,6 +12,8 @@ export interface RouteMessageStop {
   detail: string;
   neighborhood: string | null;
   paymentExpectation: string;
+  /** Pago dividido (2026-11-17): lo que se cobra en efectivo. Null: un solo medio. */
+  cashDueMinor?: number | null;
   sequence: number;
   totalMinor: number;
 }
@@ -41,9 +43,25 @@ export function courierCollects(paymentExpectation: string): boolean {
  * ni el monto ni el medio de lo que no le toca.
  */
 export function courierPayment(stop: RouteMessageStop): string {
+  const due = courierDue(stop);
+  return due ? `${due.label} · ${formatMoney(due.amountMinor, 'ARS')}` : 'No cobrar';
+}
+
+/**
+ * Qué cobra quien reparte en una parada, o null si nada. En un pago dividido (2026-11-17), sólo la
+ * parte en efectivo: la transferencia no pasa por sus manos.
+ */
+export function courierDue(
+  stop: Pick<RouteMessageStop, 'cashDueMinor' | 'paymentExpectation' | 'totalMinor'>,
+): { amountMinor: number; label: string } | null {
+  if (stop.cashDueMinor !== undefined && stop.cashDueMinor !== null) {
+    return stop.cashDueMinor > 0
+      ? { amountMinor: stop.cashDueMinor, label: 'Efectivo (el resto es transferencia)' }
+      : null;
+  }
   return courierCollects(stop.paymentExpectation)
-    ? `${stop.paymentExpectation} · ${formatMoney(stop.totalMinor, 'ARS')}`
-    : 'No cobrar';
+    ? { amountMinor: stop.totalMinor, label: stop.paymentExpectation }
+    : null;
 }
 
 /**

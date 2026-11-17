@@ -94,6 +94,7 @@ const customerOperationsStubs = {
   listMenuCatalogSettings: vi.fn(),
   getSurplusConfig: vi.fn(),
   deleteOrder: vi.fn(),
+  deleteOrders: vi.fn(),
   listManualNotices: vi.fn(() =>
     Promise.resolve({ items: [], templateDisplayName: '', templateKey: '' }),
   ),
