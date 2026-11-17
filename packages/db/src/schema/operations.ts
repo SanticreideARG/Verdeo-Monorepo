@@ -881,6 +881,36 @@ export const stockLots = pgTable(
   ],
 );
 
+/**
+ * Un pago dividido (2026-11-17): parte en efectivo, parte por transferencia, cada parte con su
+ * propio tilde de cobrado.
+ *
+ * Un pedido sin filas acá se paga entero con `orders.payment_expectation` y se tilda con
+ * `orders.paid_at`, como siempre. Con filas, las partes suman el total del pedido y
+ * `orders.paid_at` se sigue llenando, pero sólo cuando están cobradas todas: lo que mira "¿está
+ * cobrado?" en el resto del sistema no tiene que saber que hay partes.
+ */
+export const orderPaymentParts = pgTable(
+  'order_payment_parts',
+  {
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    // El orden en que se muestran: 0, 1, ...
+    position: integer('position').notNull(),
+    // El medio, como `payment_expectation`: el nombre del catálogo de medios de pago.
+    method: text('method').notNull(),
+    amountMinor: integer('amount_minor').notNull(),
+    paidAt: timestamp('paid_at', { withTimezone: true }),
+    paidByUserId: uuid('paid_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps,
+  },
+  (table) => [
+    primaryKey({ columns: [table.orderId, table.position] }),
+    check('order_payment_parts_amount_check', sql`${table.amountMinor} > 0`),
+  ],
+);
+
 export const orderItems = pgTable(
   'order_items',
   {
