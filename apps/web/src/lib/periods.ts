@@ -19,11 +19,13 @@ export function periodsFromMenus(menus: readonly WeeklyMenu[]): Period[] {
   const byId = new Map<string, Period>();
   for (const menu of menus) {
     if (!byId.has(menu.cycle.id)) {
+      // Las fechas de la semana, no las de una ciudad que tenga propias (2026-11-16).
+      const dates = menu.cycle.week ?? menu.cycle;
       byId.set(menu.cycle.id, {
         alias: menu.cycle.alias,
-        closeAt: menu.cycle.closeAt,
+        closeAt: dates.closeAt,
         id: menu.cycle.id,
-        openAt: menu.cycle.openAt,
+        openAt: dates.openAt,
         status: menu.cycle.status,
       });
     }

@@ -120,6 +120,7 @@ import {
   productVariants,
   productionActuals,
   productionSnapshots,
+  salesCycleSiteDates,
   salesCycles,
   surplusConfigs,
   surplusWriteoffs,
@@ -809,6 +810,34 @@ export function localityOfAddress<T extends { name: string }>(
 
 /** La planilla que se guarda al cerrar un período: la que se muestra mientras siga cerrado. */
 const CLOSING_SHEET_FORMAT = 'cierre';
+
+/** Las tres fechas de una semana. */
+interface CycleDates {
+  closeAt: Date;
+  openAt: Date;
+  partialKitchenCutoffAt: Date;
+}
+const CYCLE_DATE_FIELDS = ['openAt', 'partialKitchenCutoffAt', 'closeAt'] as const;
+type CycleDateField = (typeof CYCLE_DATE_FIELDS)[number];
+type OwnCycleDates = { [Field in CycleDateField]: Date | null };
+
+/**
+ * Las fechas de una semana en una ciudad (2026-11-16): las propias de la ciudad y, donde no tiene,
+ * las de la semana. `ownDates` dice cuáles difieren de las de la semana, para avisarlo.
+ */
+function withSiteDates(week: CycleDates, own: OwnCycleDates | undefined) {
+  const dates: CycleDates = {
+    closeAt: own?.closeAt ?? week.closeAt,
+    openAt: own?.openAt ?? week.openAt,
+    partialKitchenCutoffAt: own?.partialKitchenCutoffAt ?? week.partialKitchenCutoffAt,
+  };
+  const ownDates = CYCLE_DATE_FIELDS.filter(
+    (field) => dates[field].getTime() !== week[field].getTime(),
+  );
+  return { dates, ownDates };
+}
+
+const siteDatesKey = (cycleId: string, siteId: string) => `${cycleId}|${siteId}`;
 
 const OUTSIDE_CITY_REASON =
   'Sólo encontró lugares lejos de la ciudad (de otras zonas o provincias). Pegá la ubicación de Google Maps o corregí la dirección.';
@@ -4221,14 +4250,21 @@ export class PostgresOperationsService {
    */
   public async deliveryOptionsForMenu(menuId: string, operatingSiteId: string) {
     const [menu] = await this.database
-      .select({ closeAt: salesCycles.closeAt })
+      .select({ closeAt: salesCycles.closeAt, cycleId: salesCycles.id })
       .from(weeklyMenus)
       .innerJoin(salesCycles, eq(salesCycles.id, weeklyMenus.salesCycleId))
       .where(eq(weeklyMenus.id, menuId))
       .limit(1);
     if (!menu) throw new OperationsNotFoundError('No se encontró el menú semanal');
     const settings = await this.getDeliverySettings(operatingSiteId);
-    const options = deliveryOptions(menu.closeAt, settings.weekdays);
+    // El cierre de esta ciudad, que puede no ser el de la semana (2026-11-16).
+    const closeAt = await this.siteCloseAt(
+      this.database,
+      menu.cycleId,
+      operatingSiteId,
+      menu.closeAt,
+    );
+    const options = deliveryOptions(closeAt, settings.weekdays);
     return {
       defaultDate: resolveDeliveryDate(options, null, settings.defaultWeekday),
       options,
@@ -5358,62 +5394,97 @@ export class PostgresOperationsService {
       }
     }
 
-    return menuRows.map((menu) => ({
-      cycle: {
-        alias: menu.cycleAlias,
+    /*
+     * Fechas por ciudad (2026-11-16): el menú de una ciudad lleva las suyas en `cycle`, que es lo
+     * que usan la venta y el formulario; las de la semana van aparte en `cycle.week`. El de la
+     * semana general dice qué ciudades tienen fechas propias.
+     */
+    const siteDates = await this.allSiteDates();
+    const citiesWithOwnDates = new Map<string, string[]>();
+    for (const row of siteDates.values()) {
+      const menu = menuRows.find((candidate) => candidate.cycleId === row.cycleId);
+      if (!menu) continue;
+      const { ownDates } = withSiteDates(menu, row);
+      if (ownDates.length === 0) continue;
+      citiesWithOwnDates.set(row.cycleId, [
+        ...(citiesWithOwnDates.get(row.cycleId) ?? []),
+        row.operatingSiteName,
+      ]);
+    }
+
+    return menuRows.map((menu) => {
+      const week: CycleDates = {
         closeAt: menu.closeAt,
-        id: menu.cycleId,
         openAt: menu.openAt,
         partialKitchenCutoffAt: menu.partialKitchenCutoffAt,
-        status: menu.cycleStatus,
-      },
-      id: menu.id,
-      // Sin fila de ajustes vale el mismo valor que la tabla, para que una ciudad sin configurar
-      // se comporte igual que una configurada con los valores de fábrica.
-      intuitivoMaxDishes:
-        (menu.operatingSiteId ? reglaBySite.get(menu.operatingSiteId)?.maxDishes : null) ?? 15,
-      intuitivoPricing: {
-        extraDishMinor:
-          (menu.operatingSiteId ? reglaBySite.get(menu.operatingSiteId)?.extraDishMinor : null) ??
-          0,
-        factorBasisPoints:
-          (menu.operatingSiteId
-            ? reglaBySite.get(menu.operatingSiteId)?.factorBasisPoints
-            : null) ?? 10_000,
-        mode:
-          (menu.operatingSiteId ? reglaBySite.get(menu.operatingSiteId)?.mode : null) ??
-          'proporcional',
-        roundingMinor:
-          (menu.operatingSiteId ? reglaBySite.get(menu.operatingSiteId)?.roundingMinor : null) ??
-          50_000,
-      },
-      offerings: offeringRows
-        .filter((offering) => offering.menuId === menu.id)
-        .map(
-          ({
-            overrideCurrency,
-            overridePriceMinor,
-            sizeCurrency,
-            sizePriceMinor,
-            ...offering
-          }) => ({
-            ...offering,
-            currency: (overridePriceMinor === null ? sizeCurrency : overrideCurrency) ?? 'ARS',
-            dishes: itemRows
-              .filter((item) => item.offeringId === offering.id)
-              .map((item) => item.dishName),
-            // The published price an operator sees is the resolved one, not the raw override.
-            priceOverridden: overridePriceMinor !== null,
-            unitPriceMinor: overridePriceMinor ?? sizePriceMinor ?? 0,
-          }),
-        ),
-      operatingSiteId: menu.operatingSiteId,
-      operatingSiteName: menu.operatingSiteName,
-      publishedAt: menu.publishedAt,
-      revision: menu.revision,
-      sourceMenuId: menu.sourceMenuId,
-      status: menu.status,
-    }));
+      };
+      const { dates, ownDates } = withSiteDates(
+        week,
+        menu.operatingSiteId
+          ? siteDates.get(siteDatesKey(menu.cycleId, menu.operatingSiteId))
+          : undefined,
+      );
+      return {
+        cycle: {
+          alias: menu.cycleAlias,
+          ...dates,
+          id: menu.cycleId,
+          ownDates: [...ownDates],
+          sitesWithOwnDates:
+            menu.operatingSiteId === null
+              ? [...(citiesWithOwnDates.get(menu.cycleId) ?? [])].sort()
+              : [],
+          status: menu.cycleStatus,
+          week,
+        },
+        id: menu.id,
+        // Sin fila de ajustes vale el mismo valor que la tabla, para que una ciudad sin configurar
+        // se comporte igual que una configurada con los valores de fábrica.
+        intuitivoMaxDishes:
+          (menu.operatingSiteId ? reglaBySite.get(menu.operatingSiteId)?.maxDishes : null) ?? 15,
+        intuitivoPricing: {
+          extraDishMinor:
+            (menu.operatingSiteId ? reglaBySite.get(menu.operatingSiteId)?.extraDishMinor : null) ??
+            0,
+          factorBasisPoints:
+            (menu.operatingSiteId
+              ? reglaBySite.get(menu.operatingSiteId)?.factorBasisPoints
+              : null) ?? 10_000,
+          mode:
+            (menu.operatingSiteId ? reglaBySite.get(menu.operatingSiteId)?.mode : null) ??
+            'proporcional',
+          roundingMinor:
+            (menu.operatingSiteId ? reglaBySite.get(menu.operatingSiteId)?.roundingMinor : null) ??
+            50_000,
+        },
+        offerings: offeringRows
+          .filter((offering) => offering.menuId === menu.id)
+          .map(
+            ({
+              overrideCurrency,
+              overridePriceMinor,
+              sizeCurrency,
+              sizePriceMinor,
+              ...offering
+            }) => ({
+              ...offering,
+              currency: (overridePriceMinor === null ? sizeCurrency : overrideCurrency) ?? 'ARS',
+              dishes: itemRows
+                .filter((item) => item.offeringId === offering.id)
+                .map((item) => item.dishName),
+              // The published price an operator sees is the resolved one, not the raw override.
+              priceOverridden: overridePriceMinor !== null,
+              unitPriceMinor: overridePriceMinor ?? sizePriceMinor ?? 0,
+            }),
+          ),
+        operatingSiteId: menu.operatingSiteId,
+        operatingSiteName: menu.operatingSiteName,
+        publishedAt: menu.publishedAt,
+        revision: menu.revision,
+        sourceMenuId: menu.sourceMenuId,
+        status: menu.status,
+      };
+    });
   }
 
   /**
@@ -5424,15 +5495,28 @@ export class PostgresOperationsService {
   public async currentPublishedMenu(operatingSiteId?: string | null) {
     const menus = await this.listMenus(true);
     const now = Date.now();
-    const open = menus.filter(
-      (menu) => menu.cycle.openAt.getTime() <= now && menu.cycle.closeAt.getTime() >= now,
-    );
+    const isOpen = (dates: { closeAt: Date; openAt: Date }) =>
+      dates.openAt.getTime() <= now && dates.closeAt.getTime() >= now;
 
     if (operatingSiteId) {
-      const regional = open.find((menu) => menu.operatingSiteId === operatingSiteId);
+      // La de la ciudad, con sus fechas (que pueden no ser las de la semana).
+      const regional = menus.find(
+        (menu) => menu.operatingSiteId === operatingSiteId && isOpen(menu.cycle),
+      );
       if (regional) return regional;
+      // Sin menú propio vende la semana general, pero con las fechas de la ciudad si tiene.
+      const siteDates = await this.allSiteDates();
+      for (const menu of menus) {
+        if (menu.operatingSiteId !== null) continue;
+        const { dates, ownDates } = withSiteDates(
+          menu.cycle.week,
+          siteDates.get(siteDatesKey(menu.cycle.id, operatingSiteId)),
+        );
+        if (isOpen(dates)) return { ...menu, cycle: { ...menu.cycle, ...dates, ownDates } };
+      }
+      return null;
     }
-    return open.find((menu) => menu.operatingSiteId === null) ?? null;
+    return menus.find((menu) => menu.operatingSiteId === null && isOpen(menu.cycle)) ?? null;
   }
 
   // Shared by createMenu (a brand-new menu row) and updateMenu (an existing one, offerings/prices
@@ -5677,6 +5761,29 @@ export class PostgresOperationsService {
   }
 
   /**
+   * Cambiar las fechas de la semana no puede dejar a una ciudad con las suyas desordenadas: un
+   * parcial propio que quede después del nuevo cierre de la semana, por ejemplo.
+   */
+  private async checkSiteDatesStillInOrder(
+    transaction: DatabaseTransaction,
+    cycleId: string,
+    week: CycleDates,
+  ) {
+    for (const row of (await this.allSiteDates(transaction)).values()) {
+      if (row.cycleId !== cycleId) continue;
+      const { dates } = withSiteDates(week, row);
+      if (
+        dates.openAt < dates.partialKitchenCutoffAt &&
+        dates.partialKitchenCutoffAt < dates.closeAt
+      )
+        continue;
+      throw new OperationsConflictError(
+        `Con estas fechas, las de ${row.operatingSiteName} quedarían fuera de orden (apertura, parcial de cocina y cierre). Corregí primero las fechas propias de ${row.operatingSiteName}.`,
+      );
+    }
+  }
+
+  /**
    * "Los menús se deben poder modificar. Pueden haber errores de carga."
    *
    * Se actualiza sólo este menú (maestro o regional; editar una revisión regional nunca toca a su
@@ -5708,35 +5815,73 @@ export class PostgresOperationsService {
         if (!existing) throw new OperationsNotFoundError('No se encontró el menú semanal');
 
         /*
-         * El ciclo de venta —nombre y fechas de la semana— es uno solo y lo comparten todas las
-         * localidades. Guardar la revisión de Neuquén le cambiaba el nombre y las fechas a Mendoza
-         * y a Buenos Aires sin que nadie se enterara. Desde una revisión regional el ciclo no se
-         * toca; si vienen valores distintos se avisa, porque descartarlos en silencio es la otra
-         * forma de mentir sobre lo que se guardó.
+         * El nombre de la semana es uno solo y lo comparten todas las localidades: desde una
+         * ciudad no se cambia, y si viene distinto se avisa, porque descartarlo en silencio es la
+         * otra forma de mentir sobre lo que se guardó.
+         *
+         * Las fechas sí (2026-11-16): las de la semana valen para todas las ciudades, y una ciudad
+         * puede tener las suyas. Lo que se guarda desde una ciudad queda como fecha propia de esa
+         * ciudad; la fecha que vuelve a coincidir con la de la semana deja de ser propia.
          */
-        const cycleChanged =
-          existing.alias !== input.alias ||
-          existing.openAt.getTime() !== new Date(input.openAt).getTime() ||
-          existing.closeAt.getTime() !== new Date(input.closeAt).getTime() ||
-          existing.partialKitchenCutoffAt.getTime() !==
-            new Date(input.partialKitchenCutoffAt).getTime();
+        const requested: CycleDates = {
+          closeAt: new Date(input.closeAt),
+          openAt: new Date(input.openAt),
+          partialKitchenCutoffAt: new Date(input.partialKitchenCutoffAt),
+        };
+        const datesChanged = CYCLE_DATE_FIELDS.some(
+          (field) => existing[field].getTime() !== requested[field].getTime(),
+        );
 
         if (existing.operatingSiteId === null) {
-          if (cycleChanged) {
+          if (existing.alias !== input.alias || datesChanged) {
+            await this.checkSiteDatesStillInOrder(transaction, existing.salesCycleId, requested);
             await transaction
               .update(salesCycles)
-              .set({
-                alias: input.alias,
-                closeAt: new Date(input.closeAt),
-                openAt: new Date(input.openAt),
-                partialKitchenCutoffAt: new Date(input.partialKitchenCutoffAt),
-              })
+              .set({ alias: input.alias, ...requested })
               .where(eq(salesCycles.id, existing.salesCycleId));
           }
-        } else if (cycleChanged) {
-          throw new OperationsConflictError(
-            'El nombre y las fechas de la semana son los mismos para todas las localidades: se cambian en la semana general, no acá.',
-          );
+        } else {
+          if (existing.alias !== input.alias) {
+            throw new OperationsConflictError(
+              'El nombre de la semana es el mismo para todas las localidades: se cambia en la semana general, no acá.',
+            );
+          }
+          const own: OwnCycleDates = {
+            closeAt: null,
+            openAt: null,
+            partialKitchenCutoffAt: null,
+          };
+          for (const field of CYCLE_DATE_FIELDS) {
+            own[field] =
+              existing[field].getTime() === requested[field].getTime() ? null : requested[field];
+          }
+          if (CYCLE_DATE_FIELDS.every((field) => own[field] === null)) {
+            await transaction
+              .delete(salesCycleSiteDates)
+              .where(
+                and(
+                  eq(salesCycleSiteDates.salesCycleId, existing.salesCycleId),
+                  eq(salesCycleSiteDates.operatingSiteId, existing.operatingSiteId),
+                ),
+              );
+          } else {
+            await transaction
+              .insert(salesCycleSiteDates)
+              .values({
+                ...own,
+                operatingSiteId: existing.operatingSiteId,
+                salesCycleId: existing.salesCycleId,
+                updatedByUserId: context.actorUserId ?? null,
+              })
+              .onConflictDoUpdate({
+                set: {
+                  ...own,
+                  updatedAt: new Date(),
+                  updatedByUserId: context.actorUserId ?? null,
+                },
+                target: [salesCycleSiteDates.salesCycleId, salesCycleSiteDates.operatingSiteId],
+              });
+          }
         }
 
         const offerings = this.coerceComposableNames(input.offerings);
@@ -6598,6 +6743,7 @@ export class PostgresOperationsService {
           closeAt: salesCycles.closeAt,
           customerId: orders.customerId,
           cycleStatus: salesCycles.status,
+          salesCycleId: orders.salesCycleId,
           deliveryAddress: orders.deliveryAddressSnapshot,
           deliveryAddressId: orders.deliveryAddressId,
           deliveryDate: orders.deliveryDate,
@@ -6624,7 +6770,14 @@ export class PostgresOperationsService {
       // hasta el reparto, así que no se traban.
       const changesComposition =
         input.items !== undefined || input.dietaryInstructions !== undefined;
-      const cycleLocked = current.cycleStatus === 'CLOSED' || new Date() >= current.closeAt;
+      // El cierre de la ciudad del pedido, que puede no ser el de la semana (2026-11-16).
+      const closeAt = await this.siteCloseAt(
+        transaction,
+        current.salesCycleId,
+        current.operatingSiteId,
+        current.closeAt,
+      );
+      const cycleLocked = current.cycleStatus === 'CLOSED' || new Date() >= closeAt;
       if (changesComposition && cycleLocked && !allowCycleOverride) {
         throw new OperationsConflictError(
           'El período ya cerró: cambiar lo que se cocina en este pedido requiere autorización',
@@ -7080,7 +7233,10 @@ export class PostgresOperationsService {
     const deliveryDate = input.deliveryDateIsCustom
       ? input.deliveryDate
       : resolveDeliveryDate(
-          deliveryOptions(menu.closeAt, deliverySettings.weekdays),
+          deliveryOptions(
+            await this.siteCloseAt(transaction, menu.salesCycleId, operatingSiteId, menu.closeAt),
+            deliverySettings.weekdays,
+          ),
           input.deliveryDate,
           deliverySettings.defaultWeekday,
         );
@@ -9307,7 +9463,10 @@ export class PostgresOperationsService {
     );
     const deliverySettings = await this.getDeliverySettings(input.targetSiteId, transaction);
     const deliveryDate = resolveDeliveryDate(
-      deliveryOptions(order.closeAt, deliverySettings.weekdays),
+      deliveryOptions(
+        await this.siteCloseAt(transaction, order.cycleId, input.targetSiteId, order.closeAt),
+        deliverySettings.weekdays,
+      ),
       order.deliveryDate,
       deliverySettings.defaultWeekday,
     );
@@ -9477,7 +9636,14 @@ export class PostgresOperationsService {
       if (!current) throw new OperationsNotFoundError('No se encontró el pedido');
 
       const fromStatus = current.status as OrderStatus;
-      const cycleLocked = current.cycleStatus === 'CLOSED' || new Date() >= current.closeAt;
+      // El cierre de la ciudad del pedido, que puede no ser el de la semana (2026-11-16).
+      const closeAt = await this.siteCloseAt(
+        transaction,
+        current.salesCycleId,
+        current.operatingSiteId,
+        current.closeAt,
+      );
+      const cycleLocked = current.cycleStatus === 'CLOSED' || new Date() >= closeAt;
       /*
        * El motivo de una cancelación es el que se eligió de la lista, más el detalle si lo hay.
        *
@@ -9526,7 +9692,7 @@ export class PostgresOperationsService {
         .where(eq(orders.id, orderId));
       // Las viandas de un pedido cancelado ya cocinado van al stock; al reactivarlo, vuelven.
       const order = {
-        closeAt: current.closeAt,
+        closeAt,
         id: orderId,
         operatingSiteId: current.operatingSiteId,
         salesCycleId: current.salesCycleId,
@@ -9946,7 +10112,12 @@ export class PostgresOperationsService {
       await this.cancelledOrderToStock(
         transaction,
         {
-          closeAt: current.closeAt,
+          closeAt: await this.siteCloseAt(
+            transaction,
+            current.salesCycleId,
+            current.operatingSiteId,
+            current.closeAt,
+          ),
           id: orderId,
           operatingSiteId: current.operatingSiteId,
           salesCycleId: current.salesCycleId,
@@ -9971,6 +10142,56 @@ export class PostgresOperationsService {
 
   // Production is bounded by the operation (ADR-028): a global scope consolidates every operation,
   // a concrete one cooks only its own demand.
+  /** Las fechas propias de una ciudad en una semana, si tiene alguna. */
+  private async siteDatesOf(
+    executor: Pick<Database, 'select'>,
+    cycleId: string,
+    operatingSiteId: string | null,
+  ): Promise<OwnCycleDates | undefined> {
+    if (!operatingSiteId) return undefined;
+    const [row] = await executor
+      .select({
+        closeAt: salesCycleSiteDates.closeAt,
+        openAt: salesCycleSiteDates.openAt,
+        partialKitchenCutoffAt: salesCycleSiteDates.partialKitchenCutoffAt,
+      })
+      .from(salesCycleSiteDates)
+      .where(
+        and(
+          eq(salesCycleSiteDates.salesCycleId, cycleId),
+          eq(salesCycleSiteDates.operatingSiteId, operatingSiteId),
+        ),
+      )
+      .limit(1);
+    return row;
+  }
+
+  /** El cierre de una semana en una ciudad: el propio, o el de la semana. */
+  private async siteCloseAt(
+    executor: Pick<Database, 'select'>,
+    cycleId: string,
+    operatingSiteId: string | null,
+    weekCloseAt: Date,
+  ) {
+    return (await this.siteDatesOf(executor, cycleId, operatingSiteId))?.closeAt ?? weekCloseAt;
+  }
+
+  /** Todas las fechas propias de las ciudades, por semana y ciudad, con el nombre de la ciudad. */
+  private async allSiteDates(executor: Pick<Database, 'select'> = this.database) {
+    const rows = await executor
+      .select({
+        closeAt: salesCycleSiteDates.closeAt,
+        cycleId: salesCycleSiteDates.salesCycleId,
+        openAt: salesCycleSiteDates.openAt,
+        operatingSiteId: salesCycleSiteDates.operatingSiteId,
+        operatingSiteName: operatingSites.displayName,
+        partialKitchenCutoffAt: salesCycleSiteDates.partialKitchenCutoffAt,
+      })
+      .from(salesCycleSiteDates)
+      .innerJoin(operatingSites, eq(operatingSites.id, salesCycleSiteDates.operatingSiteId));
+    return new Map(rows.map((row) => [siteDatesKey(row.cycleId, row.operatingSiteId), row]));
+  }
+
   /**
    * La producción de un período. Cerrado, es la planilla tal como quedó al cerrarlo (2026-11-14):
    * lo que pasa después —un pedido que se cancela, stock que se vende— ya no cambia lo que se

@@ -634,14 +634,31 @@ export const MenuOfferingSchema = z.object({
   variantName: z.string(),
 });
 
+const CycleDateFieldSchema = z.enum(['openAt', 'partialKitchenCutoffAt', 'closeAt']);
+
 export const WeeklyMenuSchema = z.object({
+  /*
+   * Las fechas de la semana en la ciudad de este menú (2026-11-16): las propias de la ciudad o,
+   * donde no tiene, las de la semana. Las de la semana van en `week`; `ownDates` dice cuáles de
+   * esta ciudad difieren, y `sitesWithOwnDates` (sólo en la semana general) qué ciudades tienen
+   * fechas propias.
+   */
   cycle: z.object({
     alias: z.string(),
     closeAt: IsoDateTimeSchema,
     id: UuidSchema,
     openAt: IsoDateTimeSchema,
+    ownDates: z.array(CycleDateFieldSchema).default([]),
     partialKitchenCutoffAt: IsoDateTimeSchema,
+    sitesWithOwnDates: z.array(z.string()).default([]),
     status: z.string(),
+    week: z
+      .object({
+        closeAt: IsoDateTimeSchema,
+        openAt: IsoDateTimeSchema,
+        partialKitchenCutoffAt: IsoDateTimeSchema,
+      })
+      .optional(),
   }),
   id: UuidSchema,
   /*

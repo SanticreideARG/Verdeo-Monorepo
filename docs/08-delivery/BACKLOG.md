@@ -192,6 +192,13 @@ Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", f
 - [x] Zonas geográficas: "Renombrar" en cada ciudad y "Nombre" en los datos de cada zona. La API ya lo aceptaba (`PATCH /operating-sites/:id` y `/zones/:id` con `displayName`); faltaba en la pantalla. El slug y el prefijo de pedidos no cambian. Avisa si otra zona de la ciudad ya tiene ese nombre.
 - [ ] Unificar Neuquén y Río Negro: ver la propuesta en la conversación del 2026-11-06 (pasar zonas de una operación a otra sin tocar el historial). Pendiente de decisión.
 
+## Fechas propias de cada ciudad (2026-11-16)
+
+- [x] La semana se crea con una apertura, un parcial de cocina y un cierre que valen para todas las ciudades. Al editar la semana de una ciudad, esas fechas ahora se pueden cambiar y quedan como propias de esa ciudad (tabla `sales_cycle_site_dates`, migración 0084): lo que no se cambió sigue a la semana, y una fecha que vuelve a coincidir con la de la semana deja de ser propia. El nombre sigue siendo uno solo.
+- [x] Aviso en la ciudad: "Una o más fechas de Valle difieren de las demás ciudades: parcial de cocina." En la semana general se avisa qué ciudades tienen fechas propias; cambiarla no se las pisa, y no deja guardar si dejaría las fechas de una ciudad fuera de orden.
+- [x] Usan las fechas de la ciudad: la venta (qué semana está abierta en el formulario y en Nuevo pedido), el día de reparto por defecto, el bloqueo de cambios después del cierre, el vencimiento del stock de un pedido cancelado y el calendario (con una ciudad elegida, las suyas; con todas, las de la semana y aparte las de cada ciudad distinta).
+- [ ] Siguen con las de la semana: la lista de períodos, las estadísticas y el vencimiento de lo que pasa al stock al cerrar el período.
+
 ## Planilla de reparto (2026-11-15)
 
 - [x] Hoja "Reparto" del informe del período: Nombre y Pedido (la porción) centrados; el nombre de un Especial (Intuitivo), en negrita.

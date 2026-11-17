@@ -37,6 +37,7 @@ import {
   productVariants,
   productionActuals,
   productionSnapshots,
+  salesCycleSiteDates,
   salesCycles,
   surveyAnswers,
   surveyQuestions,
@@ -175,6 +176,11 @@ const RESTORE_ORDER: readonly { clave: readonly string[]; nombre: string; tabla:
   { clave: ['id'], nombre: 'customer_preferences', tabla: customerPreferences },
   { clave: ['id'], nombre: 'customer_restrictions', tabla: customerRestrictions },
   { clave: ['id'], nombre: 'sales_cycles', tabla: salesCycles },
+  {
+    clave: ['salesCycleId', 'operatingSiteId'],
+    nombre: 'sales_cycle_site_dates',
+    tabla: salesCycleSiteDates,
+  },
   { clave: ['id'], nombre: 'weekly_menus', tabla: weeklyMenus },
   { clave: ['id'], nombre: 'weekly_menu_prices', tabla: weeklyMenuPrices },
   { clave: ['id'], nombre: 'weekly_menu_offerings', tabla: weeklyMenuOfferings },
@@ -308,6 +314,13 @@ export class PostgresBackupService {
       data.sales_cycles = cycle
         ? await this.database.select().from(salesCycles).where(eq(salesCycles.id, cycle))
         : await this.database.select().from(salesCycles);
+      // Las fechas propias de cada ciudad (2026-11-16).
+      data.sales_cycle_site_dates = cycle
+        ? await this.database
+            .select()
+            .from(salesCycleSiteDates)
+            .where(eq(salesCycleSiteDates.salesCycleId, cycle))
+        : await this.database.select().from(salesCycleSiteDates);
       const menus = cycle
         ? await this.database.select().from(weeklyMenus).where(eq(weeklyMenus.salesCycleId, cycle))
         : await this.database.select().from(weeklyMenus);

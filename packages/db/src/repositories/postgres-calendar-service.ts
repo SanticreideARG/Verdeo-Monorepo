@@ -1,8 +1,13 @@
 import { AuditService } from '@verdeo/audit';
-import { and, asc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 
 import type { Database } from '../index.js';
-import { calendarReminders, operatingSites, salesCycles } from '../schema/index.js';
+import {
+  calendarReminders,
+  operatingSites,
+  salesCycleSiteDates,
+  salesCycles,
+} from '../schema/index.js';
 import { PostgresAuditSink } from './postgres-audit-sink.js';
 
 export interface CalendarContext {
@@ -98,6 +103,11 @@ export class PostgresCalendarService {
       )
       .orderBy(asc(calendarReminders.remindOn));
 
+    /*
+     * Las semanas cuyo cierre cae cerca del rango: una ciudad puede cerrar o tener su parcial
+     * unos días antes o después que la semana (2026-11-16), así que se busca con margen y se
+     * filtra cada fecha después.
+     */
     const cycles = await this.database
       .select({
         alias: salesCycles.alias,
@@ -108,10 +118,30 @@ export class PostgresCalendarService {
       .from(salesCycles)
       .where(
         and(
-          gte(sql`${salesCycles.closeAt}::date`, input.from),
-          lte(sql`${salesCycles.closeAt}::date`, input.to),
+          gte(sql`${salesCycles.closeAt}::date`, sql`${input.from}::date - 31`),
+          lte(sql`${salesCycles.closeAt}::date`, sql`${input.to}::date + 31`),
         ),
       );
+    const siteDates =
+      cycles.length === 0
+        ? []
+        : await this.database
+            .select({
+              closeAt: salesCycleSiteDates.closeAt,
+              cycleId: salesCycleSiteDates.salesCycleId,
+              operatingSiteId: salesCycleSiteDates.operatingSiteId,
+              operatingSiteName: operatingSites.displayName,
+              partialKitchenCutoffAt: salesCycleSiteDates.partialKitchenCutoffAt,
+            })
+            .from(salesCycleSiteDates)
+            .innerJoin(operatingSites, eq(operatingSites.id, salesCycleSiteDates.operatingSiteId))
+            .where(
+              inArray(
+                salesCycleSiteDates.salesCycleId,
+                cycles.map((cycle) => cycle.id),
+              ),
+            );
+    const inRange = (day: string) => day >= input.from && day <= input.to;
 
     const events: CalendarEvent[] = reminders.map((row) => ({
       day: row.remindOn,
@@ -125,18 +155,29 @@ export class PostgresCalendarService {
     }));
 
     for (const cycle of cycles) {
-      events.push({
-        day: toDay(cycle.closeAt),
-        done: false,
-        id: `cycle-close-${cycle.id}`,
-        kind: 'cycle_close',
-        notes: null,
-        operatingSiteName: null,
-        scope: 'derived',
-        title: `Cierra ${cycle.alias}`,
-      });
-      const cutoff = toDay(cycle.partialKitchenCutoffAt);
-      if (cutoff >= input.from && cutoff <= input.to) {
+      const own = siteDates.filter((row) => row.cycleId === cycle.id);
+      /*
+       * Con una ciudad elegida, sus fechas: las propias o las de la semana. Con todas, las de la
+       * semana y, aparte, las de cada ciudad que tenga otras, con su nombre.
+       */
+      const mine = input.operatingSiteId
+        ? own.find((row) => row.operatingSiteId === input.operatingSiteId)
+        : undefined;
+      const close = toDay(mine?.closeAt ?? cycle.closeAt);
+      const cutoff = toDay(mine?.partialKitchenCutoffAt ?? cycle.partialKitchenCutoffAt);
+      if (inRange(close)) {
+        events.push({
+          day: close,
+          done: false,
+          id: `cycle-close-${cycle.id}`,
+          kind: 'cycle_close',
+          notes: null,
+          operatingSiteName: null,
+          scope: 'derived',
+          title: `Cierra ${cycle.alias}`,
+        });
+      }
+      if (inRange(cutoff)) {
         events.push({
           day: cutoff,
           done: false,
@@ -147,6 +188,35 @@ export class PostgresCalendarService {
           scope: 'derived',
           title: `Parcial de cocina · ${cycle.alias}`,
         });
+      }
+      if (input.operatingSiteId) continue;
+      for (const row of own) {
+        const siteClose = row.closeAt ? toDay(row.closeAt) : null;
+        if (siteClose && siteClose !== close && inRange(siteClose)) {
+          events.push({
+            day: siteClose,
+            done: false,
+            id: `cycle-close-${cycle.id}-${row.operatingSiteId}`,
+            kind: 'cycle_close',
+            notes: null,
+            operatingSiteName: row.operatingSiteName,
+            scope: 'derived',
+            title: `Cierra ${cycle.alias} · ${row.operatingSiteName}`,
+          });
+        }
+        const siteCutoff = row.partialKitchenCutoffAt ? toDay(row.partialKitchenCutoffAt) : null;
+        if (siteCutoff && siteCutoff !== cutoff && inRange(siteCutoff)) {
+          events.push({
+            day: siteCutoff,
+            done: false,
+            id: `cutoff-${cycle.id}-${row.operatingSiteId}`,
+            kind: 'kitchen_cutoff',
+            notes: null,
+            operatingSiteName: row.operatingSiteName,
+            scope: 'derived',
+            title: `Parcial de cocina · ${cycle.alias} · ${row.operatingSiteName}`,
+          });
+        }
       }
     }
 

@@ -185,13 +185,22 @@ export interface MenuOffering {
 }
 
 export interface WeeklyMenu {
+  /**
+   * Las fechas son las de la ciudad de este menú: las propias o, si no tiene, las de la semana
+   * (2026-11-16). Las de la semana, en `week`.
+   */
   cycle: {
     alias: string;
     closeAt: string;
     id: string;
     openAt: string;
+    /** Qué fechas de esta ciudad difieren de las de la semana. */
+    ownDates?: ('closeAt' | 'openAt' | 'partialKitchenCutoffAt')[];
     partialKitchenCutoffAt: string;
+    /** En la semana general: las ciudades con alguna fecha propia. */
+    sitesWithOwnDates?: string[];
     status: string;
+    week?: { closeAt: string; openAt: string; partialKitchenCutoffAt: string };
   };
   id: string;
   /** Hasta cuántos platos admite un Intuitivo en la ciudad de este menú. */

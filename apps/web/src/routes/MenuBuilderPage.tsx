@@ -32,6 +32,21 @@ function formText(form: FormData, key: string): string {
   return typeof value === 'string' ? value : '';
 }
 
+const DATE_LABELS = {
+  closeAt: 'cierre',
+  openAt: 'apertura',
+  partialKitchenCutoffAt: 'parcial de cocina',
+} as const;
+
+/** "parcial de cocina y cierre": las fechas propias de una ciudad, o null si no tiene. */
+function ownDatesLabel(fields: readonly (keyof typeof DATE_LABELS)[] | undefined): string | null {
+  if (!fields || fields.length === 0) return null;
+  const labels = fields.map((field) => DATE_LABELS[field]);
+  return labels.length === 1
+    ? (labels[0] ?? null)
+    : `${labels.slice(0, -1).join(', ')} y ${labels.at(-1) ?? ''}`;
+}
+
 function isoToLocalInput(iso: string): string {
   // <input type="datetime-local"> wants "YYYY-MM-DDTHH:mm" in local time, not the UTC ISO string.
   const date = new Date(iso);
@@ -477,12 +492,25 @@ export function MenuBuilderPage() {
         >
           {draftRestored ? <DraftNotice onDiscard={clearWeekDraft} /> : null}
           {cycleLocked ? (
-            /* El nombre y las fechas viven en el ciclo de venta, que es uno solo para todas las
-               localidades: editarlos desde acá se los cambiaba también a las otras ciudades. Se
-               muestran, porque ubican, pero se cambian en la semana general. */
+            /* El nombre vive en el ciclo de venta, que es uno solo para todas las localidades: se
+               muestra, porque ubica, pero se cambia en la semana general. Las fechas, en cambio,
+               pueden ser propias de la ciudad (2026-11-16). */
             <p className="intake-rule mb-4">
-              Estás ajustando <strong>{editingMenu?.operatingSiteName}</strong>. El nombre y las
-              fechas son los mismos para todas las localidades: se cambian en la semana general.
+              Estás ajustando <strong>{editingMenu?.operatingSiteName}</strong>. Las fechas que
+              cambies acá valen sólo para esta ciudad; el nombre se cambia en la semana general.
+            </p>
+          ) : null}
+          {editingMenu && ownDatesLabel(editingMenu.cycle.ownDates) ? (
+            <p className="screen-notice mb-4" role="status">
+              Una o más fechas de {editingMenu.operatingSiteName} difieren de las demás ciudades:{' '}
+              {ownDatesLabel(editingMenu.cycle.ownDates)}.
+            </p>
+          ) : null}
+          {editingMenu && !cycleLocked && editingMenu.cycle.sitesWithOwnDates?.length ? (
+            <p className="screen-notice mb-4" role="status">
+              {editingMenu.cycle.sitesWithOwnDates.join(', ')}{' '}
+              {editingMenu.cycle.sitesWithOwnDates.length === 1 ? 'tiene' : 'tienen'} fechas
+              propias: lo que cambies acá no les cambia esas fechas.
             </p>
           ) : null}
           <div className="form-grid">
@@ -501,7 +529,6 @@ export function MenuBuilderPage() {
               <input
                 defaultValue={editingMenu ? isoToLocalInput(editingMenu.cycle.openAt) : undefined}
                 name="openAt"
-                readOnly={cycleLocked}
                 required
                 type="datetime-local"
               />
@@ -515,7 +542,6 @@ export function MenuBuilderPage() {
                     : undefined
                 }
                 name="partialKitchenCutoffAt"
-                readOnly={cycleLocked}
                 required
                 type="datetime-local"
               />
@@ -525,7 +551,6 @@ export function MenuBuilderPage() {
               <input
                 defaultValue={editingMenu ? isoToLocalInput(editingMenu.cycle.closeAt) : undefined}
                 name="closeAt"
-                readOnly={cycleLocked}
                 required
                 type="datetime-local"
               />

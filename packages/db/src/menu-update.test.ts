@@ -7,12 +7,14 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/pglite';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { PostgresCalendarService } from './repositories/postgres-calendar-service.js';
 import { PostgresOperationsService } from './repositories/postgres-operations-service.js';
 import type { Database } from './index.js';
 import {
   customers,
   orderItems,
   orders,
+  salesCycleSiteDates,
   salesCycles,
   weeklyMenuItems,
   weeklyMenuOfferings,
@@ -420,5 +422,148 @@ describe('corregir la semana general llega a las ciudades', () => {
       .from(weeklyMenuPrices)
       .where(eq(weeklyMenuPrices.weeklyMenuId, regionalB.id));
     expect(price?.value).toBe(31000);
+  });
+});
+
+describe('fechas propias de una ciudad (2026-11-16)', () => {
+  async function distribuida() {
+    const { db, service } = await seeded();
+    const master = await service.createMenu(
+      { ...menuInputBase, offerings: [fixedOffering('Real')] },
+      CONTEXT,
+    );
+    await service.distributeMenu(
+      master.id,
+      { mode: 'CREATE_MISSING', operatingSiteIds: [SITE_A, SITE_B] },
+      CONTEXT,
+    );
+    const regionals = await db
+      .select({ id: weeklyMenus.id, operatingSiteId: weeklyMenus.operatingSiteId })
+      .from(weeklyMenus)
+      .where(eq(weeklyMenus.sourceMenuId, master.id));
+    const regionalA = regionals.find((row) => row.operatingSiteId === SITE_A);
+    const regionalB = regionals.find((row) => row.operatingSiteId === SITE_B);
+    if (!regionalA || !regionalB) throw new Error('Faltan las revisiones regionales');
+    return { db, master, regionalA, regionalB, service };
+  }
+  const OWN_CUTOFF = '2026-08-24T15:00:00.000Z';
+
+  it('una ciudad cambia su parcial de cocina sin tocar la semana ni a las demás', async () => {
+    const { db, master, regionalA, regionalB, service } = await distribuida();
+    await service.updateMenu(
+      regionalA.id,
+      { ...menuInputBase, offerings: [fixedOffering('Real')], partialKitchenCutoffAt: OWN_CUTOFF },
+      CONTEXT,
+    );
+
+    const menus = await service.listMenus();
+    const a = menus.find((menu) => menu.id === regionalA.id);
+    const b = menus.find((menu) => menu.id === regionalB.id);
+    const general = menus.find((menu) => menu.id === master.id);
+    expect(a?.cycle.partialKitchenCutoffAt.toISOString()).toBe(OWN_CUTOFF);
+    expect(a?.cycle.ownDates).toEqual(['partialKitchenCutoffAt']);
+    expect(a?.cycle.week.partialKitchenCutoffAt.toISOString()).toBe(
+      menuInputBase.partialKitchenCutoffAt,
+    );
+    // El cierre sigue siendo el de la semana.
+    expect(a?.cycle.closeAt.toISOString()).toBe(menuInputBase.closeAt);
+    expect(b?.cycle.partialKitchenCutoffAt.toISOString()).toBe(
+      menuInputBase.partialKitchenCutoffAt,
+    );
+    expect(b?.cycle.ownDates).toEqual([]);
+    expect(general?.cycle.sitesWithOwnDates).toEqual(['Sitio A']);
+
+    // Sólo se guardó la fecha distinta.
+    const [own] = await db.select().from(salesCycleSiteDates);
+    expect(own?.closeAt).toBeNull();
+    expect(own?.openAt).toBeNull();
+    expect(own?.partialKitchenCutoffAt?.toISOString()).toBe(OWN_CUTOFF);
+  });
+
+  it('volver a la fecha de la semana la deja de ser propia', async () => {
+    const { db, regionalA, service } = await distribuida();
+    await service.updateMenu(
+      regionalA.id,
+      { ...menuInputBase, offerings: [fixedOffering('Real')], partialKitchenCutoffAt: OWN_CUTOFF },
+      CONTEXT,
+    );
+    await service.updateMenu(
+      regionalA.id,
+      { ...menuInputBase, offerings: [fixedOffering('Real')] },
+      CONTEXT,
+    );
+    expect(await db.select().from(salesCycleSiteDates)).toEqual([]);
+  });
+
+  it('cambiar la semana llega a las ciudades sin fecha propia y respeta la propia', async () => {
+    const { master, regionalA, regionalB, service } = await distribuida();
+    await service.updateMenu(
+      regionalA.id,
+      { ...menuInputBase, offerings: [fixedOffering('Real')], partialKitchenCutoffAt: OWN_CUTOFF },
+      CONTEXT,
+    );
+    const newCutoff = '2026-08-25T12:00:00.000Z';
+    await service.updateMenu(
+      master.id,
+      { ...menuInputBase, offerings: [fixedOffering('Real')], partialKitchenCutoffAt: newCutoff },
+      CONTEXT,
+    );
+    const menus = await service.listMenus();
+    const a = menus.find((menu) => menu.id === regionalA.id);
+    const b = menus.find((menu) => menu.id === regionalB.id);
+    expect(a?.cycle.partialKitchenCutoffAt.toISOString()).toBe(OWN_CUTOFF);
+    expect(b?.cycle.partialKitchenCutoffAt.toISOString()).toBe(newCutoff);
+  });
+
+  it('no deja que la semana desordene las fechas propias de una ciudad', async () => {
+    const { master, regionalA, service } = await distribuida();
+    await service.updateMenu(
+      regionalA.id,
+      { ...menuInputBase, offerings: [fixedOffering('Real')], partialKitchenCutoffAt: OWN_CUTOFF },
+      CONTEXT,
+    );
+    // La semana cerraría antes del parcial propio de Sitio A.
+    await expect(
+      service.updateMenu(
+        master.id,
+        {
+          ...menuInputBase,
+          closeAt: '2026-08-24T12:00:00.000Z',
+          offerings: [fixedOffering('Real')],
+          partialKitchenCutoffAt: '2026-08-23T12:00:00.000Z',
+        },
+        CONTEXT,
+      ),
+    ).rejects.toThrow(/Sitio A/);
+  });
+
+  it('el calendario muestra el parcial de cada ciudad', async () => {
+    const { db, regionalA, service } = await distribuida();
+    await service.updateMenu(
+      regionalA.id,
+      { ...menuInputBase, offerings: [fixedOffering('Real')], partialKitchenCutoffAt: OWN_CUTOFF },
+      CONTEXT,
+    );
+    const calendar = new PostgresCalendarService(db);
+    const range = {
+      from: '2026-08-01',
+      to: '2026-08-31',
+      viewerUserId: 'b0000000-0000-4000-8000-000000000999',
+    };
+    const cutoffs = (events: Awaited<ReturnType<typeof calendar.listEvents>>) =>
+      events
+        .filter((event) => event.kind === 'kitchen_cutoff')
+        .map((event) => `${event.day} ${event.title}`);
+
+    expect(cutoffs(await calendar.listEvents({ ...range, operatingSiteId: SITE_A }))).toEqual([
+      '2026-08-24 Parcial de cocina · Semana 34',
+    ]);
+    expect(cutoffs(await calendar.listEvents({ ...range, operatingSiteId: SITE_B }))).toEqual([
+      '2026-08-25 Parcial de cocina · Semana 34',
+    ]);
+    expect(cutoffs(await calendar.listEvents(range))).toEqual([
+      '2026-08-24 Parcial de cocina · Semana 34 · Sitio A',
+      '2026-08-25 Parcial de cocina · Semana 34',
+    ]);
   });
 });

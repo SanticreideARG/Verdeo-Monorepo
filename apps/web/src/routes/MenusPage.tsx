@@ -40,13 +40,15 @@ interface WeekRow {
 function groupByWeek(menus: readonly WeeklyMenu[]): WeekRow[] {
   const weeks = new Map<string, WeekRow>();
   for (const menu of menus) {
+    // Las fechas de la semana, no las de una ciudad que tenga propias (2026-11-16).
+    const dates = menu.cycle.week ?? menu.cycle;
     const row = weeks.get(menu.cycle.id) ?? {
       alias: menu.cycle.alias,
-      closeAt: menu.cycle.closeAt,
+      closeAt: dates.closeAt,
       cycleId: menu.cycle.id,
       master: null,
       offerings: 0,
-      openAt: menu.cycle.openAt,
+      openAt: dates.openAt,
       sites: [],
     };
     if (menu.operatingSiteId === null) row.master = menu;

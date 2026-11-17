@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-16-fechas-por-ciudad',
+    body: `Fechas por ciudad: al editar la semana de una ciudad ya se pueden cambiar su apertura, su parcial de cocina y su cierre, y valen sólo para esa ciudad. Las demás siguen con las de la semana. Cuando una ciudad tiene fechas distintas, se avisa arriba del formulario, y en la semana general se ve qué ciudades las tienen. El calendario muestra el parcial y el cierre de cada ciudad.`,
+  },
+  {
     key: '2026-11-15-planilla-de-reparto',
     body: `Planilla de reparto (hoja "Reparto" del Excel del período): el nombre del cliente y la porción salen centrados, y el nombre de un menú especial va en negrita. Ya no está la columna Barrio; en su lugar, antes de Zona, hay una columna "Notas de horario" en blanco para anotar a mano.`,
   },
