@@ -245,9 +245,9 @@ export function buildOrderColumns(
       key: 'zona',
       label: 'Zona',
       /*
-       * La "Zona" que se escribe en el pedido (`deliveryDayText`, antes "Día de reparto"). Leía la
-       * zona del domicilio, que casi nunca está cargada, y la columna salía en "—" aunque el pedido
-       * dijera su zona (2026-11-01). La del domicilio queda como respaldo.
+       * La "Zona" que se escribe en el pedido (`deliveryDayText`, antes "Día de reparto") y, si no
+       * hay, la del domicilio: su zona geográfica (Neuquén Centro, Plottier…), que el servidor manda
+       * en `deliveryZone`. Antes el respaldo era un texto viejo vacío en Valle (2026-11-18).
        */
       render: (order) => zoneOf(order) || '—',
       sortValue: (order) => zoneOf(order),

@@ -461,6 +461,18 @@ function zoneOfOrder(order: {
   return order.deliveryDayText?.trim() || order.deliveryZone?.trim() || null;
 }
 
+/**
+ * La zona del domicilio: la zona geográfica a la que pertenece (Neuquén Centro, Plottier, CABA…) y,
+ * sólo si no tiene, el texto libre de antes de las zonas geográficas (`operational_zone`).
+ *
+ * Se leía únicamente ese texto viejo, que en Valle está vacío: la zona se asigna al importar la base
+ * y vive en `geographic_zone_id`, así que la columna Zona de Pedidos salía en "—" (2026-11-18).
+ * Pide el `leftJoin` de `geographicZones` sobre el domicilio del pedido.
+ */
+const addressZone = sql<
+  string | null
+>`coalesce(${geographicZones.displayName}, nullif(trim(${customerAddresses.operationalZone}), ''))`;
+
 function sameFamily(left: string, right: string): boolean {
   const key = (value: string) =>
     value
@@ -8147,7 +8159,7 @@ export class PostgresOperationsService {
       ...(input.cycleId ? [eq(orders.salesCycleId, input.cycleId)] : []),
       ...(input.from ? [gte(orders.createdAt, new Date(input.from))] : []),
       ...(input.to ? [lte(orders.createdAt, new Date(input.to))] : []),
-      ...(input.zone ? [eq(customerAddresses.operationalZone, input.zone)] : []),
+      ...(input.zone ? [eq(addressZone, input.zone)] : []),
       ...(input.search
         ? [
             or(
@@ -8170,6 +8182,7 @@ export class PostgresOperationsService {
       .from(orders)
       .innerJoin(customers, eq(customers.id, orders.customerId))
       .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+      .leftJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(orders.createdAt), desc(orders.id))
       .limit(input.limit + 1);
@@ -8197,6 +8210,7 @@ export class PostgresOperationsService {
         .from(orders)
         .innerJoin(customers, eq(customers.id, orders.customerId))
         .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+        .leftJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
         .where(filtered);
       const [units] = await this.database
         .select({
@@ -8206,6 +8220,7 @@ export class PostgresOperationsService {
         .innerJoin(orders, eq(orders.id, orderItems.orderId))
         .innerJoin(customers, eq(customers.id, orders.customerId))
         .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+        .leftJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
         .where(and(filtered, ne(orders.status, 'CANCELLED')));
       summary = {
         orderCount: Number(row?.orderCount ?? 0),
@@ -8254,6 +8269,7 @@ export class PostgresOperationsService {
       .select({ id: orders.id, runId: orders.deliveryRunId, siteId: orders.operatingSiteId })
       .from(orders)
       .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+      .leftJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
       .where(
         and(
           eq(orders.salesCycleId, input.cycleId),
@@ -8261,7 +8277,7 @@ export class PostgresOperationsService {
           notStockCustomer,
           input.operatingSiteId ? eq(orders.operatingSiteId, input.operatingSiteId) : undefined,
           input.runId ? eq(orders.deliveryRunId, input.runId) : undefined,
-          input.zone ? eq(customerAddresses.operationalZone, input.zone) : undefined,
+          input.zone ? eq(addressZone, input.zone) : undefined,
         ),
       );
     const loaded = await this.loadOrders(
@@ -8881,7 +8897,7 @@ export class PostgresOperationsService {
         /* La ventana de entrega del domicilio, para los avisos: "{{ reparto.ventana }}" es
            justo el dato que evita el mensaje siguiente preguntando a que hora llega. */
         deliveryWindow: customerAddresses.deliveryWindow,
-        deliveryZone: customerAddresses.operationalZone,
+        deliveryZone: addressZone,
         id: orders.id,
         isNewOverride: orders.isNewOverride,
         menuId: orders.weeklyMenuId,
@@ -8904,6 +8920,7 @@ export class PostgresOperationsService {
       .from(orders)
       .innerJoin(customers, eq(customers.id, orders.customerId))
       .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+      .leftJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
       .leftJoin(operatingSites, eq(operatingSites.id, orders.operatingSiteId))
       .where(inArray(orders.id, [...orderIds]));
     if (rows.length === 0) return [];
@@ -9905,7 +9922,7 @@ export class PostgresOperationsService {
         // La etiqueta puede querer mostrar la fecha y la zona: viajan siempre y Ajustes decide si
         // se imprimen. Un dato que no llega hasta acá no se puede activar sin volver al backend.
         deliveryDate: orders.deliveryDate,
-        deliveryZone: customerAddresses.operationalZone,
+        deliveryZone: addressZone,
         familyAbbreviation: productFamilies.abbreviation,
         familyName: orderItems.productNameSnapshot,
         // Para buscarle los platos a una variedad estándar: son los del menú de esa oferta.
@@ -9923,6 +9940,7 @@ export class PostgresOperationsService {
       .innerJoin(orders, eq(orders.id, orderItems.orderId))
       .innerJoin(customers, eq(customers.id, orders.customerId))
       .leftJoin(customerAddresses, eq(customerAddresses.id, orders.deliveryAddressId))
+      .leftJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
       .leftJoin(productVariants, eq(productVariants.id, orderItems.productVariantId))
       .leftJoin(productFamilies, eq(productFamilies.id, productVariants.productFamilyId))
       .where(
@@ -9935,7 +9953,7 @@ export class PostgresOperationsService {
                 : []),
               // Imprimir por zona: cocina termina una zona entera y la etiqueta de esa tanda es lo
               // único que hace falta, no las ciento cincuenta del ciclo.
-              ...(filter.zone ? [eq(customerAddresses.operationalZone, filter.zone)] : []),
+              ...(filter.zone ? [eq(addressZone, filter.zone)] : []),
               ...(filter.deliveryRunId ? [eq(orders.deliveryRunId, filter.deliveryRunId)] : []),
               filter.includeSentToStock
                 ? or(

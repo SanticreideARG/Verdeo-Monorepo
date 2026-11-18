@@ -461,3 +461,36 @@ describe('la zona en las planillas', () => {
     expect(report.orders.map((order) => order.zone).sort()).toEqual(['Palermo', null]);
   });
 });
+
+describe('la zona geográfica del domicilio (2026-11-18)', () => {
+  /*
+   * En Valle la zona de cada domicilio es su zona geográfica (Neuquén Centro, Plottier…), asignada
+   * al importar la base; el texto viejo `operational_zone` está vacío. La columna Zona de Pedidos
+   * leía sólo ese texto y salía en "—".
+   */
+  it('el pedido sin "Zona" escrita muestra la zona geográfica del domicilio, y se filtra por ella', async () => {
+    const { client, service } = await base();
+    await client.exec(`
+      insert into geographic_zones (id, operating_site_id, slug, display_name)
+      values ('${ZONE}', '${SITE}', 'plottier', 'Plottier');
+      insert into customer_addresses (id, customer_id, label, written_address, geographic_zone_id)
+      values ('${ADDRESS}', '${CUSTOMER}', 'Casa', 'Mitre 100', '${ZONE}');
+    `);
+    await service.createOrder({ ...pedido('2026-10-18'), deliveryAddressId: ADDRESS }, contexto);
+    await service.createOrder(
+      { ...pedido('2026-10-18'), deliveryAddressId: ADDRESS, deliveryDayText: 'Izq' },
+      contexto,
+    );
+    await client.exec(`update orders set status = 'CONFIRMED'`);
+
+    const listed = await service.listOrders({ limit: 10 });
+    expect(
+      (listed.items as { deliveryDayText: string | null; deliveryZone: string | null }[])
+        .map((order) => order.deliveryDayText?.trim() || order.deliveryZone)
+        .sort(),
+    ).toEqual(['Izq', 'Plottier']);
+
+    const report = await service.periodOrdersReport({ cycleId: CYCLE, zone: 'Plottier' });
+    expect(report.orders.map((order) => order.zone).sort()).toEqual(['Izq', 'Plottier']);
+  });
+});

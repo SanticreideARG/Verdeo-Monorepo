@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Database } from './index.js';
 import { PostgresOperationsService } from './repositories/postgres-operations-service.js';
@@ -45,6 +45,20 @@ const seed = `
 `;
 
 let close: (() => Promise<void>) | null = null;
+/*
+ * Los lotes viven 30 días desde el cierre del período (19/10/2026): con el reloj real, desde el
+ * 18/11/2026 todos los lotes de este archivo nacían vencidos y seis tests fallaban sin que nada
+ * cambiara. Se fija sólo la fecha de JavaScript, a una semana del cierre, y sólo en los tests de
+ * lotes: los que comparan con el now() de la base necesitan el reloj real.
+ */
+function relojDeLote() {
+  vi.useFakeTimers({ now: new Date('2026-10-26T12:00:00Z'), toFake: ['Date'] });
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 afterEach(async () => {
   await close?.();
   close = null;
@@ -102,6 +116,8 @@ const seedB = `
 `;
 
 describe('stock de períodos anteriores (lotes)', () => {
+  beforeEach(relojDeLote);
+
   async function cerrarConSobrante() {
     const { client, service } = await base();
     await client.exec(seedB);
@@ -348,6 +364,7 @@ describe('cancelado después de cocinarse: pasa a stock', () => {
   });
 
   it('el Intuitivo abre su lote con sus platos y se vende en B con esos platos', async () => {
+    relojDeLote();
     const { service } = await conB();
     const order = await service.createOrder(
       {
@@ -403,6 +420,7 @@ describe('cancelado después de cocinarse: pasa a stock', () => {
   });
 
   it('sigue contando en la producción de su período, y venderlo no lo suma ni lo resta (2026-11-14)', async () => {
+    relojDeLote();
     const { service } = await conB();
     const order = await service.createOrder(
       {

@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-18-zona-del-domicilio',
+    body: `Pedidos: la columna Zona muestra la zona del domicilio del cliente (Neuquén Centro, Plottier, Cipolletti…) cuando el pedido no tiene una zona escrita. Antes salía "—" en los pedidos de Valle. Lo mismo en la planilla del período, el Excel, los mensajes y las etiquetas por zona. Si en el pedido se escribe una zona, esa sigue mandando.`,
+  },
+  {
     key: '2026-11-17-fechas-dd-mm',
     body: `Las fechas se escriben y se leen siempre como acá: DD/MM/AAAA y la hora en 24 horas (22/11/2026 09:57), sin importar el idioma de la computadora. Antes, en una computadora en inglés, los campos de fecha mostraban el mes primero y la hora con AM/PM. Al lado de cada fecha, el botón del calendario sigue abriendo el calendario para elegirla con el mouse.`,
   },

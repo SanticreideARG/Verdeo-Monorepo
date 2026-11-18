@@ -192,6 +192,10 @@ Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", f
 - [x] Zonas geográficas: "Renombrar" en cada ciudad y "Nombre" en los datos de cada zona. La API ya lo aceptaba (`PATCH /operating-sites/:id` y `/zones/:id` con `displayName`); faltaba en la pantalla. El slug y el prefijo de pedidos no cambian. Avisa si otra zona de la ciudad ya tiene ese nombre.
 - [ ] Unificar Neuquén y Río Negro: ver la propuesta en la conversación del 2026-11-06 (pasar zonas de una operación a otra sin tocar el historial). Pendiente de decisión.
 
+## Zona del domicilio en Pedidos y etiquetas (2026-11-18)
+
+- [x] La columna Zona de Pedidos salía en "—" en Valle. Leía la "Zona" escrita en el pedido y, si no había, el texto libre viejo del domicilio (`operational_zone`), que en Valle está vacío: ahí la zona es la zona geográfica del domicilio (Neuquén Centro, Plottier…), asignada al importar la base. Ahora, sin "Zona" escrita, se muestra la zona geográfica del domicilio, y el texto viejo sólo si no tuviera. Misma regla en la planilla del período, el Excel de pedidos, la variable `{{ reparto.zona }}` de los mensajes, las etiquetas y sus filtros "por zona".
+
 ## Fechas en DD/MM/AAAA HH:MM en toda la app (2026-11-17)
 
 - [x] Los campos de fecha y hora del navegador (`type="date"`, `datetime-local`, `time`) mostraban el formato del idioma de Windows o del navegador: en uno en inglés, "11/22/2026 09:57 AM". Se reemplazaron los 16 por campos propios (`components/DateInputs.tsx`) que siempre se escriben y se leen DD/MM/AAAA HH:MM, 24 horas, con un botón que abre el calendario del navegador. El valor que se manda no cambió. Están en: fechas de la semana (Menús), entrega (alta y edición del pedido), repartos, etiquetas, Cocina, Calendario, Estadísticas, novedades y hora de salida de la ruta.
