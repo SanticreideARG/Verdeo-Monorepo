@@ -64,14 +64,11 @@ export function itemsFromOrder(order: OrderSummary): EditableItem[] {
  */
 export function OrderItemsEditor({
   items,
-  maxDishes,
   offerings,
   onChange,
   pricing,
 }: {
   items: readonly EditableItem[];
-  /** El techo de platos del Intuitivo en la ciudad del pedido. */
-  maxDishes: number;
   offerings: readonly MenuOffering[];
   onChange: (next: EditableItem[]) => void;
   /** Cómo cobra la ciudad los platos de más, para que el total estimado coincida con el real. */
@@ -155,7 +152,6 @@ export function OrderItemsEditor({
                   {offering?.mealsPerUnit ?? 5}
                 </p>
                 <IntuitivoDishPicker
-                  maxDishes={maxDishes}
                   minDishes={offering?.mealsPerUnit ?? 5}
                   offerings={offerings}
                   onChange={(next) => update(item.key, { selectedDishes: next })}

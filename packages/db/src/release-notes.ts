@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-17-borradores-intuitivo-telefono',
+    body: `Los borradores ya no suman en las viandas de cada reparto: cuentan recién al confirmarse, igual que en Cocina. El Menú especial (Intuitivo) ya no tiene máximo de platos. Y al importar emails, si el mail no trae el celular en su lugar, se toma el teléfono que el cliente haya escrito en cualquier parte del mensaje. En los emails, "Vegan" se toma como Real y "Vegetariano" ya no: va como Vegetariano.`,
+  },
+  {
     key: '2026-11-17-pago-dividido-y-borrar-varios',
     body: `Pago dividido: un pedido se puede pagar parte en efectivo y parte por transferencia. Se elige "Dividido" en el medio de pago, al cargarlo o desde la lista, y se escribe cuánto va en efectivo: el resto va por transferencia. En la columna Cobrado cada parte tiene su tilde, y el pedido queda cobrado cuando están las dos. Quien reparte cobra sólo la parte en efectivo. Además, ahora se pueden borrar varios pedidos de una vez: se tildan en la lista y se eliminan juntos, con un solo motivo.`,
   },

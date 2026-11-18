@@ -4444,7 +4444,17 @@ export class PostgresOperationsService {
             })
             .from(orderItems)
             .innerJoin(orders, eq(orders.id, orderItems.orderId))
-            .where(and(inArray(orders.deliveryRunId, ids), ne(orders.status, 'CANCELLED')))
+            /*
+             * Las viandas del reparto son lo que se cocina para él: un borrador todavía no
+             * (2026-11-17). Sumaba todo lo no cancelado, y un borrador aparecía como producción
+             * antes de confirmarse. Los borradores siguen contados aparte, como aviso.
+             */
+            .where(
+              and(
+                inArray(orders.deliveryRunId, ids),
+                inArray(orders.status, ['CONFIRMED', 'READY', 'DELIVERED']),
+              ),
+            )
             .groupBy(
               orders.deliveryRunId,
               orderItems.productNameSnapshot,
@@ -7535,7 +7545,7 @@ export class PostgresOperationsService {
     // The composable variety is the same for every line, so it is resolved once instead of per item.
     const composableFamilyName = await this.composableFamilyName(transaction);
     // Una sola lectura para todo el pedido: la regla es de la ciudad, no del renglón.
-    const { maxDishes, rule } = await this.intuitivoRuleForSite(transaction, operatingSiteId);
+    const { rule } = await this.intuitivoRuleForSite(transaction, operatingSiteId);
 
     for (const item of items) {
       const [offering] = await transaction
@@ -7689,7 +7699,8 @@ export class PostgresOperationsService {
         baseDishes: baseDishes.map(({ dishName }) => dishName),
         composableFamilyName,
         familyName: offering.familyName,
-        maxDishes,
+        // Sin máximo de platos por menú (2026-11-17): era 15 por ciudad.
+        maxDishes: null,
         mealsPerUnit: offering.mealsPerUnit,
         ...(selectedNames ? { selectedDishes: selectedNames } : {}),
       });

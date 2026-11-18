@@ -81,10 +81,9 @@ export function matchOffering(
 /**
  * Los menús del formulario del sitio que en el catálogo se llaman de otra forma.
  *
- * El formulario sigue diciendo "Paleo & Keto", "Vegetariano" o "Vegan", y comparar por el nombre no alcanza:
- * "Vegetariano" coincidiría con la variedad Vegetariano, y la regla es que es Real. Vale sólo para
- * los mails: en una planilla "vegetariano" quiere decir Vegetariano. "Vegan" también es Real (pedido de
- * cocina, 2026-11-10).
+ * El formulario sigue diciendo "Paleo & Keto" o "Vegan", y comparar por el nombre no alcanza. "Vegan"
+ * es Real (pedido de cocina, 2026-11-10). "Vegetariano" era Real también, y no: es la variedad
+ * Vegetariano, así que va por su nombre como cualquier otra (2026-11-17).
  */
 const EMAIL_MENU_FAMILIES: Readonly<Record<string, string>> = {
   'anti age y detox': 'antiage',
@@ -93,7 +92,6 @@ const EMAIL_MENU_FAMILIES: Readonly<Record<string, string>> = {
   'paleo y keto': 'keto',
   vegan: 'real',
   vegano: 'real',
-  vegetariano: 'real',
 };
 
 /** A qué variedad del catálogo corresponde un menú del mail, si se llama distinto. */

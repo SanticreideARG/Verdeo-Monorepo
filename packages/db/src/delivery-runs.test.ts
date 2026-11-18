@@ -141,6 +141,16 @@ describe('repartos', () => {
     expect(rows).toEqual([{ delivery_date: '2026-10-19' }]);
   });
 
+  it('las viandas del reparto no cuentan los borradores hasta confirmarlos (2026-11-17)', async () => {
+    const { service } = await base();
+    await service.createOrder({ ...pedido('2026-10-18'), initialStatus: 'CONFIRMED' }, contexto);
+    await service.createOrder(pedido('2026-10-18'), contexto);
+    const [run] = (await service.listDeliveryRuns(SITE, '2026-10-01')).runs;
+    // Los dos pedidos están en el reparto, uno avisado como borrador; la vianda es una sola.
+    expect(run).toMatchObject({ drafts: 1, orders: 2 });
+    expect(run?.varieties.reduce((sum, item) => sum + item.units, 0)).toBe(1);
+  });
+
   it('con la lista consolidada, un pedido nuevo de ese día queda sin reparto', async () => {
     const { client, service } = await base();
     await service.createOrder(pedido('2026-10-18'), contexto);

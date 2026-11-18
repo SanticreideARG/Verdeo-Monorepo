@@ -762,16 +762,17 @@ export const OrderItemInputSchema = z.object({
    * Los platos elegidos de un Intuitivo.
    *
    * Era `.length(5)`, que clavaba la composición en cinco y además impedía repetir un plato. La
-   * cantidad que vale la decide el servidor contra el tamaño del pedido y el máximo configurado
-   * de la ciudad: acá sólo se fija un techo duro, para que un cero de más no llegue a la base.
+   * cantidad que vale la decide el servidor contra el tamaño del pedido (sin máximo desde el 2026-11-17).
+   * Acá sólo se fija un techo duro, para que un cero de más no llegue a la base.
    */
-  selectedDishNames: z.array(RequiredTextSchema).min(1).max(50).optional(),
+  // Sin máximo de platos por menú (2026-11-17); el tope es sólo contra un envío desbocado.
+  selectedDishNames: z.array(RequiredTextSchema).min(1).max(1_000).optional(),
   /**
    * Lo mismo con el menú de cada plato. Si viene, manda sobre `selectedDishNames`, que queda para
    * quien sólo tiene nombres (el importador, la IA): esos se ubican si el nombre está en un solo
    * menú, y si no, quedan sin origen.
    */
-  selectedDishes: z.array(SelectedDishSchema).min(1).max(50).optional(),
+  selectedDishes: z.array(SelectedDishSchema).min(1).max(1_000).optional(),
 });
 
 /** Una parte de un pago dividido. La última no lleva monto: es lo que falta para el total. */
@@ -1744,8 +1745,8 @@ export const CustomerOrderCreateRequestSchema = z.object({
         offeringId: UuidSchema,
         quantityUnits: z.number().int().positive().max(99),
         // Mismo techo duro que el pedido interno: la cantidad que vale la decide el servidor.
-        selectedDishNames: z.array(z.string().trim().min(1).max(300)).min(1).max(50).optional(),
-        selectedDishes: z.array(SelectedDishSchema).min(1).max(50).optional(),
+        selectedDishNames: z.array(z.string().trim().min(1).max(300)).min(1).max(1_000).optional(),
+        selectedDishes: z.array(SelectedDishSchema).min(1).max(1_000).optional(),
       }),
     )
     .min(1)

@@ -103,9 +103,10 @@ describe('matchEmailOffering: los menús del formulario del sitio', () => {
     { composable: true, familyName: 'Intuitivo', id: 'intuitivo-400', sizeName: '400' },
   ];
 
-  it('"Vegetariano" es Real, aunque haya una variedad Vegetariano publicada', () => {
-    expect(matchEmailOffering('Menú Vegetariano', '400', catalogo)).toBe('real-400');
-    expect(matchEmailOffering('Menú Vegetariano', '250', catalogo)).toBe('real-250');
+  it('"Vegetariano" es la variedad Vegetariano, no Real (2026-11-17)', () => {
+    expect(matchEmailOffering('Menú Vegetariano', '400', catalogo)).toBe('vegetariano-400');
+    // Sin Vegetariano en 250, no cae en Real: elige una persona.
+    expect(matchEmailOffering('Menú Vegetariano', '250', catalogo)).toBeNull();
   });
 
   it('"Vegan" también es Real', () => {
@@ -126,7 +127,7 @@ describe('matchEmailOffering: los menús del formulario del sitio', () => {
   it('sin esa variedad en ese tamaño no cae en otra parecida: elige una persona', () => {
     expect(matchEmailOffering('Menú Antiage & Detox', '250', catalogo)).toBeNull();
     const sinReal = catalogo.filter((oferta) => !oferta.id.startsWith('real'));
-    expect(matchEmailOffering('Menú Vegetariano', '400', sinReal)).toBeNull();
+    expect(matchEmailOffering('Menú Vegan', '400', sinReal)).toBeNull();
   });
 
   it('dos variedades de la misma familia son una ambigüedad', () => {

@@ -690,7 +690,6 @@ export function PublicOrderPage() {
                 <div className="field field-wide">
                   Elegí tus platos
                   <IntuitivoDishPicker
-                    maxDishes={menu.intuitivoMaxDishes}
                     minDishes={offering.mealsPerUnit}
                     offerings={menu.offerings}
                     onChange={setSelectedDishes}

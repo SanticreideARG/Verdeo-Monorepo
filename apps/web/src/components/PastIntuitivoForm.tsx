@@ -198,7 +198,6 @@ export function PastIntuitivoForm({
           <div className="field field-wide">
             Platos
             <IntuitivoDishPicker
-              maxDishes={menu.intuitivoMaxDishes}
               minDishes={size.mealsPerUnit}
               offerings={menu.offerings}
               onChange={setDishes}

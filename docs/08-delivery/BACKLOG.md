@@ -192,6 +192,15 @@ Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", f
 - [x] Zonas geográficas: "Renombrar" en cada ciudad y "Nombre" en los datos de cada zona. La API ya lo aceptaba (`PATCH /operating-sites/:id` y `/zones/:id` con `displayName`); faltaba en la pantalla. El slug y el prefijo de pedidos no cambian. Avisa si otra zona de la ciudad ya tiene ese nombre.
 - [ ] Unificar Neuquén y Río Negro: ver la propuesta en la conversación del 2026-11-06 (pasar zonas de una operación a otra sin tocar el historial). Pendiente de decisión.
 
+## Borradores fuera de las viandas del reparto, Intuitivo sin máximo, teléfono en los mails (2026-11-17)
+
+- [x] Borradores y producción: el resumen de Cocina, la planilla del período, las etiquetas, el excedente y las fotos de producción ya contaban sólo confirmados, listos y entregados. Lo que sumaba borradores eran las viandas por variedad de cada reparto (Producción y reparto → Repartos): ahora cuentan lo mismo que Cocina. Los borradores siguen en el reparto, con el aviso "N en borrador".
+- [x] Intuitivo sin máximo de platos por menú (era 15 por ciudad, configurable hasta 50): ni el servidor, ni el alta, ni la edición, ni el formulario público lo cortan. Sigue el mínimo de platos del tamaño. El campo "Máximo de platos" sale de Ajustes → Catálogo; la columna `intuitivo_max_dishes` queda sin uso.
+- [x] Importar emails: si el mail no trae "Celular:" (o lo que dice no es un número), se toma un teléfono escrito en cualquier parte del mail: primero uno con etiqueta ("Tel:", "WhatsApp", "Cel", "Móvil", "Contacto"), si no, el primero suelto que tenga código de área (10 a 13 dígitos; no toma fechas, precios, alturas ni CUIT). Vale para pegar emails y para el correo entrante.
+- [x] Importar emails: "Vegetariano" deja de tomarse como Real; va a la variedad Vegetariano por su nombre. "Vegan" sigue siendo Real. Si Vegetariano no está publicado en ese tamaño, elige una persona.
+- [x] Corregido de paso: con "Celular:", "Dirección de entrega:" o "Barrio:" vacíos, el lector tomaba el renglón siguiente como valor (un celular vacío daba la dirección como teléfono).
+- [ ] Ojo en el alta: Enter en un campo envía con "Guardar y confirmar" (es a propósito, para quien confirma siempre). Si se quiere que Enter guarde como borrador, es un cambio de una línea.
+
 ## Pago dividido y borrar varios pedidos (2026-11-17)
 
 - [x] Pago dividido: parte en un medio y el resto en otro ("Efectivo + Transferencia"). Se elige en el alta ("Dividido") o desde el medio de pago de la lista ("Dividido…", que abre una ventana con el monto de la primera parte; la segunda es lo que falta). Tabla `order_payment_parts` (migración 0085); la última parte se lleva lo que falta del total, también cuando el total cambia (si su monto cambia, su tilde se va).

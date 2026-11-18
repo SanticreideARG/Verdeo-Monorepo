@@ -414,3 +414,63 @@ describe('matchLocalityToSite con ciudades renombradas', () => {
     expect(matchLocalityToSite('Bahía Blanca', sites)).toBeNull();
   });
 });
+
+describe('teléfono escrito en cualquier parte del mail (2026-11-17)', () => {
+  const pedido = { 'Menú Vegan 400': '1' };
+
+  it('sin "Celular:", toma el que viene con etiqueta en el mensaje', () => {
+    const { rows } = parseOrderEmails(
+      email({
+        from: 'Ana <ana@example.com>',
+        items: pedido,
+        message: 'Entregar después de las 18, piso 3. Mi WhatsApp: (0299) 15 549-3102',
+        phone: '',
+      }),
+    );
+    expect(rows[0]?.phone).toBe('+5492995493102');
+  });
+
+  it('también uno suelto, sin etiqueta', () => {
+    const { rows } = parseOrderEmails(
+      email({
+        from: 'Ana <ana@example.com>',
+        items: pedido,
+        message: 'Cualquier cosa llamame al 11 5555 0101, gracias',
+        phone: 'no tengo',
+      }),
+    );
+    expect(rows[0]?.phone).toBe('+5491155550101');
+  });
+
+  it('prefiere el que tiene etiqueta y no confunde fechas, precios ni alturas', () => {
+    const { rows } = parseOrderEmails(
+      email({
+        address: 'Av. Siempre Viva 1234',
+        from: 'Ana <ana@example.com>',
+        items: pedido,
+        message: 'Pagué $ 125.000 el 17/11/2026, código 4455. Tel: +54 9 11 4444-0202',
+        phone: '',
+      }),
+    );
+    expect(rows[0]?.phone).toBe('+5491144440202');
+  });
+
+  it('sin ningún teléfono, queda vacío', () => {
+    const { rows } = parseOrderEmails(
+      email({ from: 'Ana <ana@example.com>', items: pedido, message: 'Gracias', phone: '' }),
+    );
+    expect(rows[0]?.phone).toBeNull();
+  });
+
+  it('el "Celular:" del formulario sigue mandando', () => {
+    const { rows } = parseOrderEmails(
+      email({
+        from: 'Ana <ana@example.com>',
+        items: pedido,
+        message: 'Mi otro número: 11 4444 0202',
+        phone: '1155550101',
+      }),
+    );
+    expect(rows[0]?.phone).toBe('+5491155550101');
+  });
+});

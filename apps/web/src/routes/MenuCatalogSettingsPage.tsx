@@ -170,24 +170,10 @@ export function MenuCatalogSettingsPage() {
                 {canManage && site.intuitivoEnabled ? (
                   <div className="catalog-pricing">
                     <p>
-                      Intuitivo de más platos: hasta <b>{site.intuitivoMaxDishes}</b> por menú. El
-                      precio del tamaño no se toca; lo que pasa de ahí se propone así.
+                      Intuitivo de más platos, sin máximo por menú. El precio del tamaño no se toca;
+                      lo que pasa de ahí se propone así.
                     </p>
                     <div className="catalog-pricing-fields">
-                      <label className="field">
-                        Máximo de platos
-                        {/* Se guarda al salir del campo y no en cada tecla: escribir "15" pasa por
-                            "1", y guardar eso dejaría la ciudad en un máximo de un plato. */}
-                        <input
-                          defaultValue={site.intuitivoMaxDishes}
-                          max={50}
-                          min={1}
-                          onBlur={(event) =>
-                            void save(site, { intuitivoMaxDishes: Number(event.target.value) })
-                          }
-                          type="number"
-                        />
-                      </label>
                       <label className="field">
                         Cómo se cobra
                         <select

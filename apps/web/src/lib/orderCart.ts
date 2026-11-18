@@ -48,7 +48,8 @@ export type PendingLine = { line: CartLine } | { reason: string } | null;
  */
 /** Lo que la ciudad permite y cómo cobra los platos de más. */
 export interface IntuitivoLimits {
-  maxDishes: number;
+  /** Sin esto, sin techo de platos (2026-11-17). */
+  maxDishes?: number | null | undefined;
   pricing: {
     extraDishMinor: number;
     factorBasisPoints: number;
@@ -69,7 +70,7 @@ export function pendingCartLine(
       reason: `Elegí al menos ${String(offering.mealsPerUnit)} platos del Menú especial antes de agregarlo.`,
     };
   }
-  if (offering.composable && dishes.length > limits.maxDishes) {
+  if (offering.composable && limits.maxDishes != null && dishes.length > limits.maxDishes) {
     return { reason: `Un Menú especial admite hasta ${String(limits.maxDishes)} platos.` };
   }
   return {

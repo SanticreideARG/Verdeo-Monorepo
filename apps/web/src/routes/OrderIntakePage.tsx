@@ -154,15 +154,6 @@ const FIELD_LABELS: Record<string, string> = {
   source: 'el origen del pedido',
 };
 
-/*
- * Cuántos platos lleva un Intuitivo.
- *
- * Está acá y no escrito en cada comparación porque deja de ser fijo: el contrato todavía pide
- * exactamente cinco, y el pedido de permitir hasta quince se resuelve cambiando esto y el
- * esquema, no buscando cincos por el archivo.
- */
-const DISHES_PER_INTUITIVO = 5;
-
 function formText(form: FormData, key: string): string {
   const value = form.get(key);
   return typeof value === 'string' ? value : '';
@@ -649,7 +640,6 @@ export function OrderIntakePage() {
    * elegidos, y el total diría una cosa mientras el pedido sale con otra.
    */
   const intuitivoLimits = {
-    maxDishes: selectedMenu?.intuitivoMaxDishes ?? DISHES_PER_INTUITIVO,
     pricing: selectedMenu?.intuitivoPricing ?? {
       extraDishMinor: 0,
       factorBasisPoints: 10_000,
@@ -2094,7 +2084,6 @@ export function OrderIntakePage() {
                   <div className="field field-wide mt-4">
                     Platos del Menú especial
                     <IntuitivoDishPicker
-                      maxDishes={selectedMenu?.intuitivoMaxDishes ?? DISHES_PER_INTUITIVO}
                       minDishes={selectedOffering.mealsPerUnit}
                       offerings={selectedMenu?.offerings ?? []}
                       onChange={setSelectedDishes}

@@ -1,4 +1,4 @@
-import { canonicalArgentinePhone } from '@verdeo/customers';
+import { argentinePhoneKey, canonicalArgentinePhone } from '@verdeo/customers';
 
 import type { OrderImportItem, OrderImportRow } from './order-import.js';
 
@@ -97,6 +97,48 @@ function field(block: string, label: RegExp): string | null {
   return value ? value : null;
 }
 
+/** Las líneas de encabezado de un mail reenviado: ahí no hay teléfonos del cliente, hay fechas. */
+const HEADER_LINE = /^\s*(?:From|To|Cc|Date|Subject|De|Para|Fecha|Asunto|Enviado|Sent):/i;
+
+/** Un número de teléfono escrito como lo escribe una persona: "+54 9 11 5555-0101", "(0299) 15 549 3102". */
+const PHONE_CANDIDATE = /(?<![\d$])\+?\(?\d[\d\s().-]{7,22}\d(?!\d)/g;
+
+/** "Tel.", "Teléfono", "Cel", "WhatsApp", "wsp", "Móvil", "Contacto" antes del número. */
+const PHONE_LABEL =
+  /(?:tel(?:[eé]fono)?|cel(?:ular)?|whats?\s?app|wsp|wpp|m[oó]vil|contacto)\.?\s*:?\s*$/i;
+
+/**
+ * Si lo escrito es un teléfono y no otro número: entre diez y trece dígitos (con código de área),
+ * sin barras de fecha y sin la forma de un CUIT. Lo demás —un precio, una fecha, una altura— no
+ * llega a diez dígitos o no tiene código de área.
+ */
+function phoneLike(raw: string): boolean {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length < 10 || digits.length > 13) return false;
+  if (/^\d{2}-\d{8}-\d$/.test(raw.trim())) return false;
+  return argentinePhoneKey(raw) !== null;
+}
+
+/**
+ * El teléfono del cliente cuando el mail no lo trae en "Celular:" (2026-11-17): uno escrito en
+ * cualquier parte, con etiqueta ("Tel: …", "WhatsApp …") o suelto en el mensaje. Primero los que
+ * tienen etiqueta; si no hay, el primer número que parece un teléfono. Los encabezados no se miran.
+ */
+export function findPhoneInText(text: string): string | null {
+  const lines = text.split(/\r?\n/).filter((line) => !HEADER_LINE.test(line));
+  let loose: string | null = null;
+  for (const line of lines) {
+    for (const match of line.matchAll(PHONE_CANDIDATE)) {
+      const raw = match[0].trim();
+      if (!phoneLike(raw)) continue;
+      const before = line.slice(0, match.index);
+      if (PHONE_LABEL.test(before)) return raw;
+      loose ??= raw;
+    }
+  }
+  return loose;
+}
+
 interface ParsedBlock {
   customerName: string;
   deliveryAddress: string | null;
@@ -121,9 +163,18 @@ function parseBlock(block: string): ParsedBlock | null {
   // Sin nombre, el correo: un cliente sin ningún nombre no se puede crear ni reconocer.
   const customerName = nameFromHeader || email || from;
 
-  const phoneRaw = field(block, /^Celular:\s*(.*)$/im);
-  const address = field(block, /^Direcci[oó]n de entrega:\s*(.*)$/im);
-  const neighborhood = field(block, /^Barrio\s*:\s*(.*)$/im);
+  /*
+   * El "Celular:" del formulario; si no está, o lo que dice no es un número, cualquier teléfono
+   * escrito en el mail (2026-11-17).
+   */
+  /*
+   * `[ \t]*` y no `\s*` después de los dos puntos: con el campo vacío, `\s*` cruzaba el salto de
+   * línea y tomaba el renglón siguiente ("Celular:" vacío daba la dirección como teléfono).
+   */
+  const celular = field(block, /^Celular:[ \t]*(.*)$/im);
+  const phoneRaw = celular && phoneLike(celular) ? celular : (findPhoneInText(block) ?? celular);
+  const address = field(block, /^Direcci[oó]n de entrega:[ \t]*(.*)$/im);
+  const neighborhood = field(block, /^Barrio[ \t]*:[ \t]*(.*)$/im);
 
   const warnings: string[] = [];
   const items: OrderImportItem[] = [];

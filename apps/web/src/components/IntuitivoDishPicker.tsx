@@ -26,7 +26,8 @@ function dishGroups(
  * pide que alguien se lleve dos porciones del mismo guiso: con un interruptor eso es imposible de
  * expresar, y con una cuenta es apretar "+" dos veces.
  *
- * La cantidad va de `minDishes` (lo que trae el tamaño) a `maxDishes` (lo que configuró la ciudad).
+ * La cantidad va de `minDishes` (lo que trae el tamaño) para arriba, sin techo (2026-11-17); un
+ * `maxDishes` lo limita si se pasa.
  * Pasarse del estándar es un pedido válido y su precio lo propone el servidor; quedarse corto no,
  * porque cambiaría lo que se vende por el mismo precio del menú.
  */
@@ -38,7 +39,7 @@ export function IntuitivoDishPicker({
   priceLabel,
   selected,
 }: {
-  maxDishes: number;
+  maxDishes?: number | null | undefined;
   minDishes: number;
   offerings: readonly MenuOffering[];
   onChange: (next: PickedDish[]) => void;
@@ -52,6 +53,7 @@ export function IntuitivoDishPicker({
 }) {
   const groups = dishGroups(offerings);
   const total = selected.length;
+  const atLimit = maxDishes != null && total >= maxDishes;
 
   /*
    * Cada plato es "este plato de este menú": el mismo nombre en dos menús son dos platos, y la
@@ -61,7 +63,7 @@ export function IntuitivoDishPicker({
     left.dishName === right.dishName && left.familyName === right.familyName;
 
   function add(dish: PickedDish) {
-    if (total >= maxDishes) return;
+    if (atLimit) return;
     onChange([...selected, dish]);
   }
 
@@ -95,16 +97,18 @@ export function IntuitivoDishPicker({
    * Decía "listo" y nada más, y "listo" suena a "no se puede agregar nada": quien quería llevar
    * más platos no sabía que el selector se lo permitía.
    */
-  const margen = maxDishes - total;
+  const margen = maxDishes == null ? null : maxDishes - total;
   const recalculo = priceLabel ? `cada unidad pasa a ${priceLabel}` : 'el precio se recalcula';
   const estado =
     faltan > 0
       ? `elegí ${String(faltan)} más`
       : total === minDishes
-        ? margen > 0
-          ? `listo · podés sumar hasta ${String(margen)} más`
-          : 'listo'
-        : margen > 0
+        ? margen === null
+          ? 'listo · podés sumar más'
+          : margen > 0
+            ? `listo · podés sumar hasta ${String(margen)} más`
+            : 'listo'
+        : margen !== null && margen > 0
           ? `${String(total - minDishes)} de más · podés sumar ${String(margen)} más · ${recalculo}`
           : `${String(total - minDishes)} de más · ${recalculo}`;
 
@@ -169,7 +173,7 @@ export function IntuitivoDishPicker({
                   <b aria-hidden={count === 0}>{count > 0 ? count : ''}</b>
                   <button
                     aria-label={`Agregar ${dishName} (${group.familyName})`}
-                    disabled={total >= maxDishes}
+                    disabled={atLimit}
                     onClick={() => add(dish)}
                     type="button"
                   >
@@ -181,7 +185,7 @@ export function IntuitivoDishPicker({
           </div>
         </div>
       ))}
-      {total >= maxDishes ? (
+      {atLimit ? (
         <p className="intuitivo-picker-limit">Llegaste al máximo de {maxDishes} platos por menú.</p>
       ) : null}
       {groups.length === 0 ? (

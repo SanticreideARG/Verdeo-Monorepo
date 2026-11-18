@@ -101,8 +101,6 @@ export function OrderDetailPage() {
    */
   const [items, setItems] = useState<EditableItem[]>([]);
   const [offerings, setOfferings] = useState<MenuOffering[]>([]);
-  // El techo de platos de la ciudad del pedido: viaja con el menú, que esta pantalla ya carga.
-  const [maxDishes, setMaxDishes] = useState(5);
   // Cómo cobra la ciudad los platos de más, para que el total estimado sea el que va a cobrar el
   // servidor y no el del menú.
   const [pricing, setPricing] = useState<WeeklyMenu['intuitivoPricing']>({
@@ -160,7 +158,6 @@ export function OrderDetailPage() {
         const menu = menus.find((candidate) => candidate.id === loaded.menuId);
         setOfferings(menu?.offerings ?? []);
         if (menu) {
-          setMaxDishes(menu.intuitivoMaxDishes);
           setPricing(menu.intuitivoPricing);
         }
         setCycle(menu ? { alias: menu.cycle.alias, id: menu.cycle.id } : null);
@@ -279,7 +276,7 @@ export function OrderDetailPage() {
         return;
       }
       /*
-       * Un Intuitivo lleva entre los platos de su tamaño y el máximo de la ciudad.
+       * Un Intuitivo lleva por lo menos los platos de su tamaño; sin máximo (2026-11-17).
        *
        * Antes exigía exactamente cinco: un pedido con siete platos se podía crear y no se podía
        * volver a guardar al editarlo, porque esta pantalla lo rechazaba.
@@ -288,9 +285,7 @@ export function OrderDetailPage() {
         const offering = offerings.find((candidate) => candidate.id === item.offeringId);
         if (!offering?.composable) return null;
         const cantidad = item.selectedDishes.length;
-        return cantidad < offering.mealsPerUnit || cantidad > maxDishes
-          ? { desde: offering.mealsPerUnit, hasta: maxDishes }
-          : null;
+        return cantidad < offering.mealsPerUnit ? { desde: offering.mealsPerUnit } : null;
       };
       const incomplete = items.find((item) => !item.offeringId || platosFuera(item) !== null);
       if (incomplete) {
@@ -299,7 +294,7 @@ export function OrderDetailPage() {
           !incomplete.offeringId
             ? 'Hay un ítem sin variedad elegida.'
             : rango
-              ? `Un Menú especial tiene que llevar entre ${String(rango.desde)} y ${String(rango.hasta)} platos.`
+              ? `Un Menú especial tiene que llevar por lo menos ${String(rango.desde)} platos.`
               : 'Revisá los ítems.',
         );
         return;
@@ -626,7 +621,6 @@ export function OrderDetailPage() {
                 ) : (
                   <OrderItemsEditor
                     items={items}
-                    maxDishes={maxDishes}
                     offerings={offerings}
                     onChange={setItems}
                     pricing={pricing}
