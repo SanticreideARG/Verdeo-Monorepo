@@ -29,6 +29,7 @@ import {
 import { todayInOperation } from '../lib/dates.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { showToast } from '../lib/toast.js';
+import { DateInput } from '../components/DateInputs.js';
 
 interface OrderHit {
   customer: { displayName: string };
@@ -628,11 +629,7 @@ export function LabelsPage() {
                 {fields.includes('produccion') ? (
                   <label className="field">
                     Fecha de producción
-                    <input
-                      onChange={(event) => setProductionDate(event.target.value)}
-                      type="date"
-                      value={productionDate}
-                    />
+                    <DateInput onChange={setProductionDate} value={productionDate} />
                     <small className="field-hint">
                       No se guarda: se elige en cada tanda y arranca en hoy.
                     </small>

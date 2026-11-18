@@ -14018,3 +14018,54 @@ body:has(.modal-backdrop) .assistant-launcher.is-operator.is-saying {
     grid-template-columns: 1fr;
   }
 }
+
+/*
+ * Campos de fecha propios (2026-11-17): siempre DD/MM/AAAA HH:MM. El calendario del navegador
+ * queda escondido debajo del botón y se abre con él.
+ */
+.date-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.date-input > input[type='text'] {
+  flex: 1;
+  min-width: 0;
+  padding-right: 2.6rem;
+  font-variant-numeric: tabular-nums;
+}
+.date-input-picker {
+  position: absolute;
+  right: 0.35rem;
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.date-input-picker:hover {
+  background: rgb(0 0 0 / 6%);
+}
+.date-input-picker svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+.date-input-native {
+  position: absolute;
+  right: 0.35rem;
+  bottom: 0;
+  width: 2rem;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}

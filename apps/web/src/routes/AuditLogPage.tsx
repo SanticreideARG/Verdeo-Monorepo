@@ -6,6 +6,7 @@ import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus
 import { SettingsTabs } from '../components/SettingsTabs.js';
 import { apiRequest } from '../lib/api.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { formatDateTimeNumeric } from '../lib/dates.js';
 
 interface AuditEvent {
   action: string;
@@ -25,9 +26,7 @@ interface AuditEvent {
 }
 
 function timeLabel(value: string): string {
-  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'medium' }).format(
-    new Date(value),
-  );
+  return formatDateTimeNumeric(value);
 }
 
 function actorLabel(event: AuditEvent): string {

@@ -13,6 +13,7 @@ import { periodsFromMenus, type Period } from '../lib/periods.js';
 import { showToast } from '../lib/toast.js';
 import { hasPersistedState, usePersistedState } from '../lib/usePersistedState.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { DateTimeInput } from '../components/DateInputs.js';
 
 const emptyOffering = (): OfferingDraft => ({
   description: '',
@@ -48,7 +49,7 @@ function ownDatesLabel(fields: readonly (keyof typeof DATE_LABELS)[] | undefined
 }
 
 function isoToLocalInput(iso: string): string {
-  // <input type="datetime-local"> wants "YYYY-MM-DDTHH:mm" in local time, not the UTC ISO string.
+  // El campo de fecha y hora quiere "YYYY-MM-DDTHH:mm" en hora local, no el ISO en UTC.
   const date = new Date(iso);
   const pad = (value: number) => String(value).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
@@ -526,16 +527,15 @@ export function MenuBuilderPage() {
             </label>
             <label className="field">
               Apertura
-              <input
+              <DateTimeInput
                 defaultValue={editingMenu ? isoToLocalInput(editingMenu.cycle.openAt) : undefined}
                 name="openAt"
                 required
-                type="datetime-local"
               />
             </label>
             <label className="field">
               Parcial de cocina
-              <input
+              <DateTimeInput
                 defaultValue={
                   editingMenu
                     ? isoToLocalInput(editingMenu.cycle.partialKitchenCutoffAt)
@@ -543,16 +543,14 @@ export function MenuBuilderPage() {
                 }
                 name="partialKitchenCutoffAt"
                 required
-                type="datetime-local"
               />
             </label>
             <label className="field">
               Cierre
-              <input
+              <DateTimeInput
                 defaultValue={editingMenu ? isoToLocalInput(editingMenu.cycle.closeAt) : undefined}
                 name="closeAt"
                 required
-                type="datetime-local"
               />
             </label>
           </div>

@@ -10,6 +10,7 @@ import { errorMessage, type WeeklyMenu } from '../lib/operations.js';
 import { periodsFromMenus, type Period } from '../lib/periods.js';
 import { showToast } from '../lib/toast.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { formatDateTimeNumeric } from '../lib/dates.js';
 
 interface Manifiesto {
   counts: Record<string, number>;
@@ -385,7 +386,7 @@ export function BackupsPage() {
                 <div className="grid gap-1 text-sm text-ink-muted">
                   <p>
                     <strong className="text-forest">
-                      {new Date(paquete.manifest.generatedAt).toLocaleString('es-AR')}
+                      {formatDateTimeNumeric(paquete.manifest.generatedAt)}
                     </strong>{' '}
                     · {paquete.manifest.schemaVersion}
                   </p>

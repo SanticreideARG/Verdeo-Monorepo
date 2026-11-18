@@ -5,6 +5,7 @@ import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus
 import { apiRequest } from '../lib/api.js';
 import { errorMessage } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { formatDateTimeNumeric } from '../lib/dates.js';
 
 interface ConversationRow {
   customerDisplayName: string | null;
@@ -28,9 +29,7 @@ function formText(form: FormData, key: string): string {
 }
 
 function timeLabel(value: string): string {
-  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(
-    new Date(value),
-  );
+  return formatDateTimeNumeric(value);
 }
 
 /** Customer WhatsApp inbox (Fase 5 skeleton — MESSAGING_WHATSAPP.md). Distinct from `/app/chat`,

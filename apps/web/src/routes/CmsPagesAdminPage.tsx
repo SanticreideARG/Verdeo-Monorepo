@@ -12,6 +12,7 @@ import { apiRequest } from '../lib/api.js';
 import { errorMessage } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { showToast } from '../lib/toast.js';
+import { formatDateTimeNumeric } from '../lib/dates.js';
 
 type Section = { id: string; type: string } & Record<string, unknown>;
 
@@ -114,9 +115,7 @@ function formText(form: FormData, key: string): string {
 }
 
 function timeLabel(value: string): string {
-  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(
-    new Date(value),
-  );
+  return formatDateTimeNumeric(value);
 }
 
 /** "Contenidos" (Administración): typed pages for the public site, not a generic HTML editor.

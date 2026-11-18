@@ -25,7 +25,7 @@ import {
 import { RouteMap } from '../components/RouteMap.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
-import { formatDay, formatDayLong, todayInOperation } from '../lib/dates.js';
+import { formatDay, formatDayLong, todayInOperation, formatDateTimeNumeric } from '../lib/dates.js';
 import { googleMapsLink } from '../lib/mapLinks.js';
 import { maskSurname } from '../lib/maskName.js';
 import { neighborhoodHeading } from '../lib/neighborhoodGroups.js';
@@ -856,8 +856,7 @@ export function RoutesPage() {
                       <div className="route-link">
                         <p>
                           Pasale este enlace a quien reparte. Abre la hoja del día en el teléfono,
-                          sin clave. Vence el{' '}
-                          {new Date(issuedLink.expiresAt).toLocaleString('es-AR')}.
+                          sin clave. Vence el {formatDateTimeNumeric(issuedLink.expiresAt)}.
                         </p>
                         <code>{issuedLink.url}</code>
                         <div>

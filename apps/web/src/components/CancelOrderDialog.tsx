@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { apiRequest } from '../lib/api.js';
+import { formatDateTimeNumeric } from '../lib/dates.js';
 
 export interface CancellationReason {
   active: boolean;
@@ -182,12 +183,8 @@ export function CancelOrderDialog({
             </label>
             {cooked && sentAt ? (
               <p className="intake-rule intake-rule-alert" role="status">
-                Este pedido ya salió en la planilla de cocina del{' '}
-                {new Date(sentAt).toLocaleString('es-AR', {
-                  dateStyle: 'short',
-                  timeStyle: 'short',
-                })}
-                : probablemente ya está cocinado. Si no lo está, destildá la casilla de abajo.
+                Este pedido ya salió en la planilla de cocina del {formatDateTimeNumeric(sentAt)}:
+                probablemente ya está cocinado. Si no lo está, destildá la casilla de abajo.
               </p>
             ) : null}
             {cooked ? (

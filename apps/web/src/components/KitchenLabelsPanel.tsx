@@ -4,6 +4,7 @@ import { ActionButton } from './ActionButton.js';
 import { apiRequest } from '../lib/api.js';
 import { todayInOperation } from '../lib/dates.js';
 import { errorMessage } from '../lib/operations.js';
+import { DateInput } from './DateInputs.js';
 
 /**
  * Imprimir las etiquetas de cocina: una por plato, para pegar en cada recipiente.
@@ -81,9 +82,8 @@ export function KitchenLabelsPanel({
     <div className="kitchen-labels grid gap-3">
       <label className="field max-w-xs">
         Fecha de elaboración
-        <input
-          onChange={(event) => setElaboratedOn(event.target.value || todayInOperation())}
-          type="date"
+        <DateInput
+          onChange={(value) => setElaboratedOn(value || todayInOperation())}
           value={elaboratedOn}
         />
       </label>

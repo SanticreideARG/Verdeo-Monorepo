@@ -48,6 +48,7 @@ import {
   type CustomerDetail,
   type CustomerSummary,
 } from '../lib/operations.js';
+import { formatDateNumeric } from '../lib/dates.js';
 
 type CustomerTab = 'contactos' | 'datos' | 'domicilios' | 'pedidos' | 'resumen';
 
@@ -69,9 +70,7 @@ function CustomerOrderCard({ order }: { order: CustomerDetail['orders'][number] 
         <Link to={`/app/pedidos/${order.id}`}>Ver pedido</Link>
       </strong>
       <span className="status-chip">{orderStatusLabel(order.status)}</span>
-      <span>
-        {new Intl.DateTimeFormat('es-AR').format(new Date(`${order.deliveryDate}T12:00:00`))}
-      </span>
+      <span>{formatDateNumeric(order.deliveryDate)}</span>
       <b>{formatMoney(order.totalMinor, order.currency)}</b>
       {order.items.length > 0 ? (
         <ul className="crm-order-items">
@@ -1408,10 +1407,7 @@ export function CustomersPage() {
                         </small>
                       </label>
                     ) : null}
-                    <p>
-                      Cliente desde{' '}
-                      {new Intl.DateTimeFormat('es-AR').format(new Date(detail.createdAt))}
-                    </p>
+                    <p>Cliente desde {formatDateNumeric(detail.createdAt)}</p>
                   </div>
                   <div className="crm-profile-metrics">
                     <span>

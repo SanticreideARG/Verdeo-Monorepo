@@ -46,6 +46,7 @@ import {
 import { paymentStatus } from '../lib/paymentStatus.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { useOrderFormSettings } from '../lib/useOrderFormSettings.js';
+import { DateInput } from '../components/DateInputs.js';
 
 // Ya se cocinó: al cancelarlo se puede pasar a stock (2026-10-25).
 const COOKED: readonly string[] = ['CONFIRMED', 'READY', 'DELIVERED'];
@@ -527,12 +528,7 @@ export function OrderDetailPage() {
               ) : (
                 <label className="field">
                   Entrega
-                  <input
-                    defaultValue={order.deliveryDate}
-                    name="deliveryDate"
-                    required
-                    type="date"
-                  />
+                  <DateInput defaultValue={order.deliveryDate} name="deliveryDate" required />
                 </label>
               )}
               <label className="field">

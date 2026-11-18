@@ -96,6 +96,7 @@ import {
   type CartLine,
 } from '../lib/orderCart.js';
 import { usePersistedState } from '../lib/usePersistedState.js';
+import { DateInput } from '../components/DateInputs.js';
 
 // Ya se cocinó: al cancelarlo se puede pasar a stock (2026-10-25).
 const COOKED: readonly string[] = ['CONFIRMED', 'READY', 'DELIVERED'];
@@ -1861,12 +1862,11 @@ export function OrderIntakePage() {
                      */
                     <label className="field">
                       Entrega
-                      <input
-                        onChange={(event) => {
-                          setCustomDeliveryDate(event.target.value);
+                      <DateInput
+                        onChange={(value) => {
+                          setCustomDeliveryDate(value);
                           setOtherDate(true);
                         }}
-                        type="date"
                         value={otherDate ? customDeliveryDate : deliveryDate}
                       />
                       {selectedMenu ? (

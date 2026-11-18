@@ -11,6 +11,7 @@ import {
 } from '../lib/feedUnread.js';
 import { errorMessage } from '../lib/operations.js';
 import { showToast } from '../lib/toast.js';
+import { DateInput } from './DateInputs.js';
 
 type FeedTag = 'aviso' | 'cambio' | 'novedad';
 
@@ -438,7 +439,7 @@ export function FeedPanel({
               <label className="feed-check">
                 <input name="pin" type="checkbox" />
                 Fijar arriba hasta
-                <input defaultValue={defaultPinDate()} name="pinUntil" type="date" />
+                <DateInput defaultValue={defaultPinDate()} name="pinUntil" />
               </label>
             ) : null}
           </div>

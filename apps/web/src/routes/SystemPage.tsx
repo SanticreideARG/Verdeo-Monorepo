@@ -19,11 +19,10 @@ import {
 } from '../lib/system.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { useSystemStatus } from '../lib/useSystemStatus.js';
+import { formatDateTimeNumeric } from '../lib/dates.js';
 
 function moment(value: string): string {
-  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'medium' }).format(
-    new Date(value),
-  );
+  return formatDateTimeNumeric(value);
 }
 
 const REJECTION_LABELS: Record<string, string> = {

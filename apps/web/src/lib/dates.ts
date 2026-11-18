@@ -107,6 +107,27 @@ export function formatDayHeading(value: string): string {
   return `${weekday} ${formatDayLong(value)}`;
 }
 
+/**
+ * "22/11/2026" — la fecha en números, como se escribe acá: día, mes y año completo (2026-11-17).
+ * Una fecha sola ("2026-11-22") es ese día; un momento, el día en la hora de la operación.
+ */
+export function formatDateNumeric(value: string): string {
+  const { day, month, year } = partsOf(value);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(day)}/${pad(month)}/${String(year)}`;
+}
+
+/** "22/11/2026 09:57" — fecha y hora en números, 24 horas, en la hora de la operación. */
+export function formatDateTimeNumeric(iso: string): string {
+  const time = new Intl.DateTimeFormat('es-AR', {
+    hour: '2-digit',
+    hour12: false,
+    minute: '2-digit',
+    timeZone: OPERATION_TIME_ZONE,
+  }).format(new Date(iso));
+  return `${formatDateNumeric(iso)} ${time}`;
+}
+
 /** "13 sep 2026, 14:05" — cuando la hora es parte del dato: una sesión, una revisión, un cambio. */
 export function formatMoment(iso: string): string {
   // 24 horas, explícito: el formato por defecto de `es-AR` devuelve "11:15 p. m.", que en una

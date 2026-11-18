@@ -192,6 +192,12 @@ Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", f
 - [x] Zonas geográficas: "Renombrar" en cada ciudad y "Nombre" en los datos de cada zona. La API ya lo aceptaba (`PATCH /operating-sites/:id` y `/zones/:id` con `displayName`); faltaba en la pantalla. El slug y el prefijo de pedidos no cambian. Avisa si otra zona de la ciudad ya tiene ese nombre.
 - [ ] Unificar Neuquén y Río Negro: ver la propuesta en la conversación del 2026-11-06 (pasar zonas de una operación a otra sin tocar el historial). Pendiente de decisión.
 
+## Fechas en DD/MM/AAAA HH:MM en toda la app (2026-11-17)
+
+- [x] Los campos de fecha y hora del navegador (`type="date"`, `datetime-local`, `time`) mostraban el formato del idioma de Windows o del navegador: en uno en inglés, "11/22/2026 09:57 AM". Se reemplazaron los 16 por campos propios (`components/DateInputs.tsx`) que siempre se escriben y se leen DD/MM/AAAA HH:MM, 24 horas, con un botón que abre el calendario del navegador. El valor que se manda no cambió. Están en: fechas de la semana (Menús), entrega (alta y edición del pedido), repartos, etiquetas, Cocina, Calendario, Estadísticas, novedades y hora de salida de la ruta.
+- [x] Los textos de fecha y hora en números (historial, auditoría, mensajes, usuarios, sistema, planilla de cocina, copias de seguridad, enlace de ruta, clientes) pasan a DD/MM/AAAA HH:MM, con el año entero y sin segundos. Los que dicen el mes en letras ("22 nov 2026") quedan como están.
+- [x] El Excel de clientes: Alta y Última modificación en DD/MM/AAAA (eran AAAA-MM-DD). El CSV de pedidos sigue en ISO (`creado_en_utc`): es para procesar, no para leer.
+
 ## Borradores fuera de las viandas del reparto, Intuitivo sin máximo, teléfono en los mails (2026-11-17)
 
 - [x] Borradores y producción: el resumen de Cocina, la planilla del período, las etiquetas, el excedente y las fotos de producción ya contaban sólo confirmados, listos y entregados. Lo que sumaba borradores eran las viandas por variedad de cada reparto (Producción y reparto → Repartos): ahora cuentan lo mismo que Cocina. Los borradores siguen en el reparto, con el aviso "N en borrador".

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
-import { formatDayLong } from '../lib/dates.js';
+import { formatDayLong, formatDateTimeNumeric } from '../lib/dates.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage, formatMoney } from '../lib/operations.js';
 
@@ -30,9 +30,7 @@ function statusLabel(status: string): string {
 }
 
 function timeLabel(value: string): string {
-  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(
-    new Date(value),
-  );
+  return formatDateTimeNumeric(value);
 }
 
 function formText(form: FormData, key: string): string {

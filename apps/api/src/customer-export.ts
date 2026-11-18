@@ -39,8 +39,12 @@ interface CustomerExportColumn {
   value: (row: CustomerExportRow) => string | number | null;
 }
 
+/** "22/11/2026": la fecha como se escribe acá (2026-11-17), no "2026-11-22". */
 function isoDate(value: Date | string): string {
-  return (value instanceof Date ? value.toISOString() : value).slice(0, 10);
+  const [year, month, day] = (value instanceof Date ? value.toISOString() : value)
+    .slice(0, 10)
+    .split('-');
+  return `${day ?? ''}/${month ?? ''}/${year ?? ''}`;
 }
 
 export const CUSTOMER_EXPORT_COLUMNS: readonly CustomerExportColumn[] = [

@@ -20,7 +20,7 @@ import { PeriodPicker } from '../components/PeriodPicker.js';
 import { RunFilter } from '../components/RunFilter.js';
 import { apiRequest } from '../lib/api.js';
 import { downloadLabelsPdf } from '../lib/labelsPdf.js';
-import { todayInOperation } from '../lib/dates.js';
+import { todayInOperation, formatDateTimeNumeric } from '../lib/dates.js';
 import { errorMessage, type WeeklyMenu } from '../lib/operations.js';
 import { currentPeriod, periodsFromMenus, type Period } from '../lib/periods.js';
 import {
@@ -39,6 +39,7 @@ import {
 } from '../lib/productionLabels.js';
 import { showToast } from '../lib/toast.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { DateInput } from '../components/DateInputs.js';
 
 interface PrintedLabel {
   key: string;
@@ -569,9 +570,8 @@ export function LabelsStudioPage() {
               <RunFilter onChange={setRunId} value={runId} />
               <label className="field">
                 Fecha de elaboración
-                <input
-                  onChange={(event) => setProductionDate(event.target.value || todayInOperation())}
-                  type="date"
+                <DateInput
+                  onChange={(value) => setProductionDate(value || todayInOperation())}
                   value={productionDate}
                 />
                 <span className="field-hint">Va en el pie de los platos: «ELAB # dd-mm».</span>
@@ -741,13 +741,8 @@ export function LabelsStudioPage() {
             <p className="mt-1 text-sm text-ink-muted">
               De las {String(batch.length)} de la tanda, {String(repeated.length)} ya salieron en
               este período
-              {repeatedLast
-                ? ` (la última vez, ${new Date(repeatedLast).toLocaleString('es-AR', {
-                    dateStyle: 'short',
-                    timeStyle: 'short',
-                  })})`
-                : ''}
-              . Podés sacarlas de la tanda o {output === 'pdf' ? 'incluirlas' : 'imprimirlas'} de
+              {repeatedLast ? ` (la última vez, ${formatDateTimeNumeric(repeatedLast)})` : ''}.
+              Podés sacarlas de la tanda o {output === 'pdf' ? 'incluirlas' : 'imprimirlas'} de
               nuevo.
             </p>
             <div className="form-actions mt-5">

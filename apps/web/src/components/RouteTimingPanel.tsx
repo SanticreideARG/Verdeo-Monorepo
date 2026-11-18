@@ -10,6 +10,7 @@ import {
   type TimedStop,
 } from '../lib/routeTiming.js';
 import { showToast } from '../lib/toast.js';
+import { TimeInput } from './DateInputs.js';
 
 export interface RoutePoint {
   address: string;
@@ -149,7 +150,7 @@ export function RouteTimingPanel<T extends TimedStop & { sequence: number }>({
           </label>
           <label className="field">
             Hora de salida
-            <input defaultValue={departureTime ?? ''} name="departureTime" type="time" />
+            <TimeInput defaultValue={departureTime ?? ''} name="departureTime" />
           </label>
           <p className="field-hint">
             Una dirección con calle, número y ciudad, un link de Google Maps o coordenadas. Vacío

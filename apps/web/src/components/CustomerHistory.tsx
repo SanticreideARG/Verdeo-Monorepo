@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { apiRequest } from '../lib/api.js';
+import { formatDateTimeNumeric } from '../lib/dates.js';
 
 interface HistoryItem {
   action: string;
@@ -61,14 +62,13 @@ export function CustomerHistory({ customerId }: { customerId: string }) {
   if (!items) return <p>Cargando historial…</p>;
   if (items.length === 0) return <p>Todavía no hay cambios registrados.</p>;
 
-  const date = new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' });
   return (
     <ul className="crm-history">
       {items.map((item, index) => (
         <li key={`${item.occurredAt}-${String(index)}`}>
           <span>{LABELS[item.action] ?? 'Cambio registrado'}</span>
           <small>
-            {date.format(new Date(item.occurredAt))}
+            {formatDateTimeNumeric(item.occurredAt)}
             {item.actorDisplayName ? ` · ${item.actorDisplayName}` : ''}
           </small>
         </li>

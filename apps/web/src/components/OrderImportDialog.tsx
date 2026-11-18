@@ -4,7 +4,7 @@ import { useEffect, useState, type ChangeEvent } from 'react';
 import { apiRequest } from '../lib/api.js';
 import { DeliveryDayPicker, weekdayName } from './DeliveryDayPicker.js';
 import { heraSay } from './HeraLauncher.js';
-import { formatDay } from '../lib/dates.js';
+import { formatDay, formatDateTimeNumeric } from '../lib/dates.js';
 import { errorMessage } from '../lib/operations.js';
 import { whatsappHref } from '../lib/phone.js';
 import { isParametrized, paymentSelectValue, usePaymentMethods } from '../lib/paymentMethods.js';
@@ -797,7 +797,7 @@ export function OrderImportDialog({
             <h2>{inbound ? 'Pedido por correo' : 'Importar pedidos'}</h2>
             <p>
               {inbound
-                ? `${inbound.fromAddress} · ${new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(inbound.receivedAt))}`
+                ? `${inbound.fromAddress} · ${formatDateTimeNumeric(inbound.receivedAt)}`
                 : summary}
             </p>
           </div>

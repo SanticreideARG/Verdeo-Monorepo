@@ -7,6 +7,7 @@ import { addDaysIso, todayInOperation } from '../lib/dates.js';
 import { errorMessage } from '../lib/operations.js';
 import { showToast } from '../lib/toast.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { DateInput } from '../components/DateInputs.js';
 
 interface CalendarEvent {
   day: string;
@@ -202,7 +203,7 @@ export function CalendarPage() {
             </label>
             <label className="field">
               Fecha
-              <input name="remindOn" required type="date" />
+              <DateInput name="remindOn" required />
             </label>
             <label className="field">
               Para quién

@@ -8,6 +8,7 @@ import { showToast } from '../lib/toast.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { weekdayName } from './DeliveryDayPicker.js';
 import { DeliveryRunOrders, type MovedOrder, type RunOrder } from './DeliveryRunOrders.js';
+import { DateInput } from './DateInputs.js';
 
 interface DeliveryRun {
   autoCreated: boolean;
@@ -327,7 +328,7 @@ export function DeliveryRunsPanel({
         <form className="delivery-runs-form" onSubmit={(event) => void create(event)}>
           <label className="field">
             Fecha
-            <input min={todayInOperation()} name="deliveryDate" required type="date" />
+            <DateInput min={todayInOperation()} name="deliveryDate" required />
           </label>
           <label className="field">
             Nombre
@@ -598,12 +599,11 @@ export function DeliveryRunsPanel({
                   >
                     <label className="field">
                       Nueva fecha (mueve sus {run.orders} pedidos)
-                      <input
+                      <DateInput
                         defaultValue={run.deliveryDate}
                         min={todayInOperation()}
                         name="deliveryDate"
                         required
-                        type="date"
                       />
                     </label>
                     <button className="button button-primary" type="submit">

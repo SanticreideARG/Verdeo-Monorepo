@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-17-fechas-dd-mm',
+    body: `Las fechas se escriben y se leen siempre como acá: DD/MM/AAAA y la hora en 24 horas (22/11/2026 09:57), sin importar el idioma de la computadora. Antes, en una computadora en inglés, los campos de fecha mostraban el mes primero y la hora con AM/PM. Al lado de cada fecha, el botón del calendario sigue abriendo el calendario para elegirla con el mouse.`,
+  },
+  {
     key: '2026-11-17-borradores-intuitivo-telefono',
     body: `Los borradores ya no suman en las viandas de cada reparto: cuentan recién al confirmarse, igual que en Cocina. El Menú especial (Intuitivo) ya no tiene máximo de platos. Y al importar emails, si el mail no trae el celular en su lugar, se toma el teléfono que el cliente haya escrito en cualquier parte del mensaje. En los emails, "Vegan" se toma como Real y "Vegetariano" ya no: va como Vegetariano.`,
   },

@@ -7,6 +7,7 @@ import { SettingsTabs } from '../components/SettingsTabs.js';
 import { apiRequest } from '../lib/api.js';
 import { errorMessage } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { formatDateNumeric } from '../lib/dates.js';
 
 interface ArchivedCustomer {
   createdAt: string;
@@ -100,7 +101,7 @@ export function ArchivedCustomersPage() {
           {items.map((customer) => (
             <li key={customer.id}>
               <Link to={`/app/clientes?customerId=${customer.id}`}>{customer.displayName}</Link>
-              <small>Alta {new Date(customer.createdAt).toLocaleDateString('es-AR')}</small>
+              <small>Alta {formatDateNumeric(customer.createdAt)}</small>
             </li>
           ))}
         </ul>

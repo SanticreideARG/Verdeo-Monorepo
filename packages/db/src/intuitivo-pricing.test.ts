@@ -178,14 +178,15 @@ describe('precio del Intuitivo con más platos', () => {
    * El máximo existe porque nada distingue un pedido familiar de un cero de más: quince platos es
    * un pedido grande, cincuenta es un error de tipeo que llega a cocina.
    */
-  it('rechaza más platos que el máximo de la ciudad', async () => {
+  // Sin máximo de platos por menú (2026-11-17): el que quedó guardado en la ciudad ya no corta.
+  it('acepta más platos que el viejo máximo de la ciudad', async () => {
     const { client, operations } = await sembrada();
     await client.exec(
       `insert into menu_catalog_settings (operating_site_id, intuitivo_max_dishes)
        values ('${SITE}', 6);`,
     );
 
-    await expect(crear(operations, [...CINCO, 'Plato F', 'Plato G'])).rejects.toThrow(/at most 6/);
+    await expect(crear(operations, [...CINCO, 'Plato F', 'Plato G'])).resolves.toBeTruthy();
   });
 
   it('rechaza menos platos que el estándar del tamaño', async () => {

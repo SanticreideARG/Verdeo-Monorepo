@@ -5,6 +5,7 @@ import { errorMessage, type WeeklyMenu } from '../lib/operations.js';
 import { currentPeriod, periodsFromMenus, type Period } from '../lib/periods.js';
 import { showToast } from '../lib/toast.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
+import { formatDateTimeNumeric } from '../lib/dates.js';
 
 export interface AssistantModeSummary {
   group: string;
@@ -53,9 +54,7 @@ function storedConversationId(): string | null {
 }
 
 function historyDate(iso: string): string {
-  return new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(
-    new Date(iso),
-  );
+  return formatDateTimeNumeric(iso);
 }
 
 /**

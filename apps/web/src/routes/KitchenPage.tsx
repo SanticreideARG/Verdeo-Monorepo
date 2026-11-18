@@ -16,7 +16,7 @@ import {
   dishLabel,
   pickedDishes,
 } from '../lib/operations.js';
-import { formatMoment } from '../lib/dates.js';
+import { formatMoment, formatDateTimeNumeric } from '../lib/dates.js';
 import { currentPeriod, periodsFromMenus } from '../lib/periods.js';
 import {
   chooseWorkingPeriod,
@@ -329,12 +329,8 @@ export function KitchenPage() {
                 {kitchen.frozenAt ? (
                   <p className="screen-notice mt-6" role="status">
                     <strong>Período cerrado:</strong> la producción es la que quedó al cerrarlo, el{' '}
-                    {new Intl.DateTimeFormat('es-AR', {
-                      dateStyle: 'short',
-                      timeStyle: 'short',
-                    }).format(new Date(kitchen.frozenAt))}
-                    . Lo que cambie en los pedidos después ya no la mueve. Para recalcularla, reabrí
-                    el período.
+                    {formatDateTimeNumeric(kitchen.frozenAt)}. Lo que cambie en los pedidos después
+                    ya no la mueve. Para recalcularla, reabrí el período.
                   </p>
                 ) : null}
                 {/*

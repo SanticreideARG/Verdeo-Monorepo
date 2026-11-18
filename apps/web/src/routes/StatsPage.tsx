@@ -20,6 +20,7 @@ import {
 } from '../lib/operations.js';
 import { mixSegments, periodPoints } from '../lib/statsPeriods.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { DateInput } from '../components/DateInputs.js';
 
 /**
  * The window of the same length immediately before [from, to] — what "vs. período anterior" means.
@@ -274,21 +275,11 @@ export function StatsPage() {
         >
           <label className="field">
             Desde
-            <input
-              max={to || undefined}
-              onChange={(event) => setFrom(event.target.value)}
-              type="date"
-              value={from}
-            />
+            <DateInput max={to || undefined} onChange={setFrom} value={from} />
           </label>
           <label className="field">
             Hasta
-            <input
-              min={from || undefined}
-              onChange={(event) => setTo(event.target.value)}
-              type="date"
-              value={to}
-            />
+            <DateInput min={from || undefined} onChange={setTo} value={to} />
           </label>
           {sites.length > 0 ? (
             <label className="field">
