@@ -218,6 +218,33 @@ export function KitchenPage() {
     await loadSurplus(selectedMenu.cycle.id);
   }
 
+  /*
+   * Reabrir un período cerrado por error (2026-11-19). Sus pedidos vuelven a poder editarse y la
+   * planilla de producción vuelve a ser la viva. Lo que pasó al stock de períodos anteriores al
+   * cerrar se queda ahí: se corrige en Cocina → Stock si hace falta.
+   */
+  async function reopenCycle() {
+    if (!selectedMenu) return;
+    if (
+      !window.confirm(
+        `¿Reabrir ${selectedMenu.cycle.alias}? Sus pedidos vuelven a poder editarse. Lo que pasó al stock de períodos anteriores al cerrar queda allí.`,
+      )
+    )
+      return;
+    setMessage('');
+    const response = await apiRequest(`/api/v1/production/${selectedMenu.cycle.id}/closed`, {
+      body: JSON.stringify({ closed: false }),
+      method: 'POST',
+    });
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    showToast(`${selectedMenu.cycle.alias} reabierto.`);
+    await loadMenus();
+    await loadSurplus(selectedMenu.cycle.id);
+  }
+
   if (failed) return <DashboardFailed label="la producción" />;
   if (!profile) return <DashboardLoading />;
 
@@ -310,6 +337,15 @@ export function KitchenPage() {
                       type="button"
                     >
                       Cerrar período
+                    </button>
+                  ) : null}
+                  {canGenerate && selectedMenu && selectedMenu.cycle.status === 'CLOSED' ? (
+                    <button
+                      className="button button-secondary kitchen-close"
+                      onClick={() => void reopenCycle()}
+                      type="button"
+                    >
+                      Reabrir período
                     </button>
                   ) : null}
                 </div>

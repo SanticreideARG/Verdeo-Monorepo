@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-19-reabrir-periodo',
+    body: `Cocina: si un período se cerró por error, "Reabrir período" lo vuelve a abrir y sus pedidos se pueden editar de nuevo. Lo que pasó al stock de períodos anteriores al cerrar queda allí (se corrige en Cocina → Stock); volver a cerrarlo no lo duplica.`,
+  },
+  {
     key: '2026-11-18-zona-auto-fechas-especiales',
     body: `Valle y Mendoza: en Nuevo pedido, la Zona se completa sola con la zona del domicilio, y así sale en la lista y en el Excel; también en los pedidos importados. Si escribís otra, gana la tuya (se cambia por ciudad en Panel de control → Reparto). En Pedidos, la columna "Editar fechas" (desde "Columnas") cambia la fecha de reparto desde la lista, de a uno o varios tildados juntos. En Cocina, "Copiar especiales" los copia para WhatsApp sin espacios adelante de cada plato. En el informe del período, el nombre de un especial va en negrita y cursiva.`,
   },

@@ -192,6 +192,10 @@ Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", f
 - [x] Zonas geográficas: "Renombrar" en cada ciudad y "Nombre" en los datos de cada zona. La API ya lo aceptaba (`PATCH /operating-sites/:id` y `/zones/:id` con `displayName`); faltaba en la pantalla. El slug y el prefijo de pedidos no cambian. Avisa si otra zona de la ciudad ya tiene ese nombre.
 - [ ] Unificar Neuquén y Río Negro: ver la propuesta en la conversación del 2026-11-06 (pasar zonas de una operación a otra sin tocar el historial). Pendiente de decisión.
 
+## Reabrir un período cerrado (2026-11-19)
+
+- [x] Cocina → Cierre de pedidos: "Reabrir período" en un período cerrado (pide confirmación). Usa el `POST /api/v1/production/:cycleId/closed` con `closed: false`, que ya existía y se audita como `sales_cycle.reopened`, pero no tenía botón. Lo que pasó al stock de períodos anteriores al cerrar se queda ahí; volver a cerrar no lo duplica.
+
 ## Zona automática, editar fechas en la lista y especiales para WhatsApp (2026-11-18)
 
 - [x] La Zona del pedido puede salir de la zona del domicilio, por ciudad (Panel de control → Reparto, "La Zona del pedido es la zona del domicilio"; migración 0086, que la prende en Valle y Mendoza). Prendido: en Nuevo pedido el campo Zona se completa al elegir el cliente o la "Zona del domicilio"; el servidor la completa en cualquier alta sin Zona escrita (importador incluido) y, al cambiar de domicilio, la Zona lo sigue salvo que se haya escrito otra a mano.
