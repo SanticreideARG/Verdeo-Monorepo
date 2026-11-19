@@ -1108,6 +1108,13 @@ export const siteDeliverySettings = pgTable(
     routeEndAddress: text('route_end_address'),
     routeEndLatitude: numeric('route_end_latitude', { precision: 9, scale: 6 }),
     routeEndLongitude: numeric('route_end_longitude', { precision: 9, scale: 6 }),
+    /*
+     * La "Zona" del pedido es la zona del domicilio (2026-11-18): en Valle y Mendoza son lo mismo y
+     * se cargaba dos veces. Prendido, un pedido sin zona escrita toma la zona geográfica de su
+     * domicilio. En Buenos Aires no: ahí la Zona del pedido es el barrio (Palermo) y la del
+     * domicilio, CABA.
+     */
+    orderZoneFromAddress: boolean('order_zone_from_address').default(false).notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
