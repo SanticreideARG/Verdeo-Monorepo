@@ -4139,6 +4139,7 @@ export class PostgresOperationsService {
     const [stored] = await executor
       .select({
         defaultWeekday: siteDeliverySettings.defaultWeekday,
+        orderZoneFromAddress: siteDeliverySettings.orderZoneFromAddress,
         routeEndAddress: siteDeliverySettings.routeEndAddress,
         routeEndLatitude: siteDeliverySettings.routeEndLatitude,
         routeEndLongitude: siteDeliverySettings.routeEndLongitude,
@@ -4160,6 +4161,7 @@ export class PostgresOperationsService {
         stored?.defaultWeekday != null && weekdays.includes(stored.defaultWeekday)
           ? stored.defaultWeekday
           : (weekdays[0] ?? null),
+      orderZoneFromAddress: stored?.orderZoneFromAddress ?? false,
       routeEnd: point(
         stored?.routeEndAddress ?? null,
         stored?.routeEndLatitude ?? null,
@@ -4221,6 +4223,7 @@ export class PostgresOperationsService {
     operatingSiteId: string,
     input: {
       defaultWeekday: number | null;
+      orderZoneFromAddress?: boolean | undefined;
       routeEndAddress?: string | undefined;
       routeStartAddress?: string | undefined;
       weekdays: readonly number[];
@@ -4243,6 +4246,11 @@ export class PostgresOperationsService {
       points[`route${which}Longitude`] = place ? place.longitude.toFixed(6) : null;
     }
     const before = await this.getDeliverySettings(operatingSiteId);
+    // La regla de la zona sólo se toca si viene: guardar los días no la apaga.
+    const zoneRule =
+      input.orderZoneFromAddress === undefined
+        ? {}
+        : { orderZoneFromAddress: input.orderZoneFromAddress };
     const weekdays = [...new Set(input.weekdays)].filter((day) => day >= 0 && day <= 6).sort();
     const defaultWeekday =
       input.defaultWeekday !== null && weekdays.includes(input.defaultWeekday)
@@ -4250,16 +4258,16 @@ export class PostgresOperationsService {
         : (weekdays[0] ?? null);
     await this.database
       .insert(siteDeliverySettings)
-      .values({ defaultWeekday, operatingSiteId, weekdays, ...points })
+      .values({ defaultWeekday, operatingSiteId, weekdays, ...points, ...zoneRule })
       .onConflictDoUpdate({
-        set: { defaultWeekday, updatedAt: new Date(), weekdays, ...points },
+        set: { defaultWeekday, updatedAt: new Date(), weekdays, ...points, ...zoneRule },
         target: siteDeliverySettings.operatingSiteId,
       });
     const audit = new AuditService(new PostgresAuditSink(this.database));
     await audit.record({
       action: 'delivery.settings_updated',
       actor: auditActor(context),
-      after: { defaultWeekday, weekdays },
+      after: { defaultWeekday, weekdays, ...zoneRule },
       before,
       correlationId: context.correlationId,
       entityId: operatingSiteId,
@@ -4294,6 +4302,7 @@ export class PostgresOperationsService {
     return {
       defaultDate: resolveDeliveryDate(options, null, settings.defaultWeekday),
       options,
+      zoneFromAddress: settings.orderZoneFromAddress,
     };
   }
 
@@ -6967,6 +6976,7 @@ export class PostgresOperationsService {
           ? current.deliveryLocationUrl
           : input.deliveryLocationUrl;
       let addressLine2: string | null | undefined = input.deliveryAddressLine2;
+      let followedZone: string | undefined;
       if (addressId) {
         const [address] = await transaction
           .select({
@@ -6974,6 +6984,7 @@ export class PostgresOperationsService {
             operatingSiteId: geographicZones.operatingSiteId,
             unit: customerAddresses.unit,
             writtenAddress: customerAddresses.writtenAddress,
+            zoneName: geographicZones.displayName,
           })
           .from(customerAddresses)
           .innerJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
@@ -6996,6 +7007,32 @@ export class PostgresOperationsService {
         // Con otro cliente, la línea 2 del domicilio viejo no sirve: va la del nuevo, salvo que se
         // haya escrito otra.
         if (customerChanged && addressLine2 === undefined) addressLine2 = address.unit;
+        /*
+         * Otro domicilio, en una ciudad donde la Zona del pedido es la del domicilio: la Zona sigue
+         * al domicilio, salvo que se haya escrito a mano otra distinta de la del anterior.
+         */
+        if (
+          input.deliveryDayText === undefined &&
+          addressId !== current.deliveryAddressId &&
+          (await this.getDeliverySettings(current.operatingSiteId, transaction))
+            .orderZoneFromAddress
+        ) {
+          const previousZone = current.deliveryAddressId
+            ? (
+                await transaction
+                  .select({ name: geographicZones.displayName })
+                  .from(customerAddresses)
+                  .innerJoin(
+                    geographicZones,
+                    eq(geographicZones.id, customerAddresses.geographicZoneId),
+                  )
+                  .where(eq(customerAddresses.id, current.deliveryAddressId))
+                  .limit(1)
+              )[0]?.name
+            : undefined;
+          const written = current.deliveryDayText?.trim() ?? '';
+          if (!written || written === previousZone) followedZone = address.zoneName;
+        }
       } else if (customerChanged && input.deliveryAddress?.trim()) {
         // Una dirección escrita que no se pudo ubicar en una zona: queda el texto, sin domicilio.
         deliveryAddress = input.deliveryAddress.trim();
@@ -7020,7 +7057,11 @@ export class PostgresOperationsService {
         deliveryLocationUrlSnapshot: deliveryLocationUrl,
         ...(input.notes !== undefined ? { notes: input.notes } : {}),
         ...(addressLine2 !== undefined ? { deliveryAddressLine2: addressLine2 } : {}),
-        ...(input.deliveryDayText !== undefined ? { deliveryDayText: input.deliveryDayText } : {}),
+        ...(input.deliveryDayText !== undefined
+          ? { deliveryDayText: input.deliveryDayText }
+          : followedZone !== undefined
+            ? { deliveryDayText: followedZone }
+            : {}),
         ...(input.deliveryTimeSlot !== undefined
           ? { deliveryTimeSlot: input.deliveryTimeSlot }
           : {}),
@@ -7220,6 +7261,8 @@ export class PostgresOperationsService {
     let deliveryLocationUrl = input.deliveryLocationUrl;
     let geographicZoneId: string | null = null;
     let operatingSiteId: string | null = null;
+    // El nombre de la zona del domicilio, por si la ciudad la usa como "Zona" del pedido.
+    let addressZoneName: string | null = null;
 
     /**
      * An order with no `deliveryAddressId` is unroutable: `createRoute` joins stops through that
@@ -7275,6 +7318,7 @@ export class PostgresOperationsService {
           operatingSiteId: geographicZones.operatingSiteId,
           unit: customerAddresses.unit,
           writtenAddress: customerAddresses.writtenAddress,
+          zoneName: geographicZones.displayName,
         })
         .from(customerAddresses)
         .innerJoin(geographicZones, eq(geographicZones.id, customerAddresses.geographicZoneId))
@@ -7300,6 +7344,7 @@ export class PostgresOperationsService {
       // The operation is derived from the delivery zone; it is never chosen by the operator.
       geographicZoneId = address.geographicZoneId;
       operatingSiteId = address.operatingSiteId;
+      addressZoneName = address.zoneName;
     }
 
     // Without a stored address the order still needs an operation, so the caller's active scope
@@ -7365,7 +7410,16 @@ export class PostgresOperationsService {
         importKey: input.importKey,
         notes: input.notes,
         deliveryAddressLine2,
-        deliveryDayText: input.deliveryDayText ?? null,
+        /*
+         * La "Zona" escrita gana. Sin escribir, en una ciudad donde la Zona del pedido es la del
+         * domicilio (Valle, Mendoza), va la zona del domicilio: así se ve en la lista y el Excel
+         * también en lo que entra por el importador (2026-11-18).
+         */
+        deliveryDayText: input.deliveryDayText?.trim()
+          ? input.deliveryDayText
+          : deliverySettings.orderZoneFromAddress
+            ? addressZoneName
+            : (input.deliveryDayText ?? null),
         deliveryTimeSlot: input.deliveryTimeSlot ?? null,
         operatingSiteId,
         paymentExpectation,

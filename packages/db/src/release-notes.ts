@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-18-zona-auto-fechas-especiales',
+    body: `Valle y Mendoza: en Nuevo pedido, la Zona se completa sola con la zona del domicilio, y así sale en la lista y en el Excel; también en los pedidos importados. Si escribís otra, gana la tuya (se cambia por ciudad en Panel de control → Reparto). En Pedidos, la columna "Editar fechas" (desde "Columnas") cambia la fecha de reparto desde la lista, de a uno o varios tildados juntos. En Cocina, "Copiar especiales" los copia para WhatsApp sin espacios adelante de cada plato. En el informe del período, el nombre de un especial va en negrita y cursiva.`,
+  },
+  {
     key: '2026-11-18-zona-del-domicilio',
     body: `Pedidos: la columna Zona muestra la zona del domicilio del cliente (Neuquén Centro, Plottier, Cipolletti…) cuando el pedido no tiene una zona escrita. Antes salía "—" en los pedidos de Valle. Lo mismo en la planilla del período, el Excel, los mensajes y las etiquetas por zona. Si en el pedido se escribe una zona, esa sigue mandando.`,
   },

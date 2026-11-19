@@ -50,8 +50,13 @@ import { EmptyState } from '../components/EmptyState.js';
 import { ReasonDialog } from '../components/ReasonDialog.js';
 import { ErrorNotice } from '../components/ErrorNotice.js';
 import { IntuitivoDishPicker } from '../components/IntuitivoDishPicker.js';
-import { DeliveryDayPicker, useDeliveryOptions } from '../components/DeliveryDayPicker.js';
-import { deliveryDateFor, formatDayHeading } from '../lib/dates.js';
+import {
+  DeliveryDayPicker,
+  type DeliveryOption,
+  useDeliveryOptions,
+  weekdayName,
+} from '../components/DeliveryDayPicker.js';
+import { deliveryDateFor, formatDateNumeric, formatDayHeading } from '../lib/dates.js';
 import { apiRequest, storedOperatingSiteId } from '../lib/api.js';
 import { AppearanceContext } from '../lib/appearanceContext.js';
 import { describeResponse, type AppError } from '../lib/errors.js';
@@ -306,6 +311,14 @@ export function OrderIntakePage() {
   const [payingPart, setPayingPart] = useState<{ order: OrderSummary; part: number } | null>(null);
   // Pedidos tildados para borrar de a varios (2026-11-17), como en una casilla de correo.
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
+  /*
+   * "Editar fechas" (2026-11-18): los pedidos tildados para cambiarles la fecha juntos, las fechas
+   * de reparto de cada menú (las de su ciudad), y si hay un cambio en curso.
+   */
+  const [dateBatch, setDateBatch] = useState<ReadonlySet<string>>(() => new Set());
+  const [dateOptions, setDateOptions] = useState<Record<string, DeliveryOption[]>>({});
+  const requestedDateMenus = useRef(new Set<string>());
+  const [movingDates, setMovingDates] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   // Lo elegido del stock de períodos anteriores (STOCK_LOTS_PLAN.md) y los lotes que se pueden
   // vender con el menú elegido.
@@ -626,6 +639,131 @@ export function OrderIntakePage() {
    * ciudad no tiene días configurados hay uno solo, el del cierre, y no se elige nada.
    */
   const deliveryChoices = useDeliveryOptions(selectedMenu?.id ?? null);
+
+  const editingDates = visibleColumns.includes('editar-fechas');
+  useEffect(() => {
+    if (!editingDates) return;
+    for (const menuId of new Set(orders.map((order) => order.menuId))) {
+      if (!menuId || requestedDateMenus.current.has(menuId)) continue;
+      requestedDateMenus.current.add(menuId);
+      void apiRequest(`/api/v1/delivery/options?menuId=${encodeURIComponent(menuId)}`, {
+        notify: false,
+      })
+        .then(async (response) =>
+          response.ok ? ((await response.json()) as { options?: DeliveryOption[] }) : null,
+        )
+        .catch(() => null)
+        .then((result) => {
+          const options = Array.isArray(result?.options) ? result.options : [];
+          setDateOptions((current) => ({ ...current, [menuId]: options }));
+        });
+    }
+  }, [editingDates, orders]);
+
+  /**
+   * Cambiar la fecha de reparto desde la lista. Si el pedido está tildado, cambia la de todos los
+   * tildados; si no, sólo la suya. Uno que no se pueda (período cerrado, por ejemplo) se dice por
+   * nombre y no frena a los demás.
+   */
+  async function changeDeliveryDates(order: OrderSummary, date: string) {
+    const targets = (
+      dateBatch.has(order.id) ? orders.filter((row) => dateBatch.has(row.id)) : [order]
+    ).filter((row) => row.deliveryDate !== date);
+    if (targets.length === 0) return;
+    setMovingDates(true);
+    setMessage('');
+    const moved: string[] = [];
+    const failed: string[] = [];
+    for (const target of targets) {
+      const response = await apiRequest(`/api/v1/orders/${target.id}`, {
+        body: JSON.stringify({ deliveryDate: date }),
+        method: 'PATCH',
+        notify: false,
+      });
+      const name = maskSurnames
+        ? maskSurname(target.customer.displayName)
+        : target.customer.displayName;
+      if (!response.ok) {
+        failed.push(`${name} (${(await describeResponse(response)).message})`);
+        continue;
+      }
+      const updated = (await response.json()) as OrderSummary;
+      moved.push(updated.id);
+      setOrders((current) =>
+        current.map((row) =>
+          row.id === updated.id ? { ...row, deliveryDate: updated.deliveryDate } : row,
+        ),
+      );
+    }
+    setMovingDates(false);
+    setDateBatch((current) => new Set([...current].filter((id) => !moved.includes(id))));
+    if (moved.length > 0)
+      showToast(
+        moved.length === 1
+          ? `Fecha cambiada al ${formatDateNumeric(date)}.`
+          : `Fecha cambiada al ${formatDateNumeric(date)} en ${String(moved.length)} pedidos.`,
+      );
+    if (failed.length > 0) setMessage(`No se pudo cambiar la fecha de: ${failed.join('; ')}.`);
+  }
+
+  function dateEditColumn(column: OrderColumn): OrderColumn {
+    return {
+      ...column,
+      render: (order: OrderSummary) => {
+        const name = maskSurnames
+          ? maskSurname(order.customer.displayName)
+          : order.customer.displayName;
+        const options = dateOptions[order.menuId] ?? [];
+        // La fecha que tiene, aunque no sea uno de los días de reparto de hoy, para que se vea.
+        const choices = options.some((option) => option.date === order.deliveryDate)
+          ? options
+          : [
+              {
+                date: order.deliveryDate,
+                weekday: new Date(`${order.deliveryDate}T12:00:00Z`).getUTCDay(),
+              },
+              ...options,
+            ];
+        return (
+          <div className="date-edit">
+            <input
+              aria-label={`Tildar a ${name} para cambiar la fecha junto con otros`}
+              checked={dateBatch.has(order.id)}
+              onChange={() =>
+                setDateBatch((current) => {
+                  const next = new Set(current);
+                  if (next.has(order.id)) next.delete(order.id);
+                  else next.add(order.id);
+                  return next;
+                })
+              }
+              type="checkbox"
+            />
+            <select
+              aria-label={`Fecha de reparto de ${name}`}
+              className="inline-select"
+              disabled={movingDates || options.length === 0}
+              onChange={(event) => void changeDeliveryDates(order, event.target.value)}
+              title={
+                options.length === 0
+                  ? 'Elegí una ciudad arriba para ver sus días de reparto.'
+                  : dateBatch.has(order.id) && dateBatch.size > 1
+                    ? `Cambia la fecha de los ${String(dateBatch.size)} pedidos tildados.`
+                    : undefined
+              }
+              value={order.deliveryDate}
+            >
+              {choices.map((option) => (
+                <option key={option.date} value={option.date}>
+                  {weekdayName(option.weekday)} {formatDateNumeric(option.date)}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+      },
+    };
+  }
   const [chosenDeliveryDate, setChosenDeliveryDate] = useState('');
   // "Otra fecha": una que no es día de reparto, elegida a mano (como al editar el pedido).
   const [otherDate, setOtherDate] = useState(false);
@@ -772,6 +910,7 @@ export function OrderIntakePage() {
     const detail = (await response.json()) as {
       addresses?: {
         active: boolean;
+        geographicZoneId?: string;
         latitude: number | null;
         longitude: number | null;
         primary: boolean;
@@ -787,6 +926,7 @@ export function OrderIntakePage() {
     }
     setDeliveryAddress(chosen.writtenAddress);
     setDeliveryAddressLine2(chosen.unit ?? '');
+    if (chosen.geographicZoneId) fillZoneFromAddress(chosen.geographicZoneId);
     setAddressHint('Domicilio del cliente. Podés cambiarlo para esta entrega.');
     if (chosen.latitude !== null && chosen.longitude !== null) {
       setAddressPoint({
@@ -795,6 +935,22 @@ export function OrderIntakePage() {
         longitude: chosen.longitude,
       });
     }
+  }
+
+  /*
+   * En Valle y Mendoza la Zona del pedido es la zona del domicilio (pedido 2026-11-18, ajuste en
+   * Panel de control → Reparto): elegir el domicilio, o su zona, completa el campo. No pisa lo que
+   * se escribió a mano.
+   */
+  function fillZoneFromAddress(zoneId: string) {
+    if (!deliveryChoices.zoneFromAddress) return;
+    const name = zones.find((zone) => zone.id === zoneId)?.displayName ?? '';
+    const field = formRef.current?.elements.namedItem('deliveryDayText');
+    if (!name || !(field instanceof HTMLInputElement)) return;
+    if (field.value.trim() && field.value !== autoZone.current) return;
+    autoZone.current = name;
+    field.value = name;
+    setZoneHint('La zona del domicilio.');
   }
 
   /** Elegir un cliente: su domicilio, su último pedido, y el foco a la variedad para seguir. */
@@ -845,7 +1001,7 @@ export function OrderIntakePage() {
       field.value = auto.current;
       setHint(value ? 'La del último pedido. Podés cambiarla para esta entrega.' : '');
     };
-    fill('deliveryDayText', autoZone, setZoneHint);
+    if (!deliveryChoices.zoneFromAddress) fill('deliveryDayText', autoZone, setZoneHint);
     fill('deliveryTimeSlot', autoSlot, setSlotHint);
   }
 
@@ -1929,7 +2085,10 @@ export function OrderIntakePage() {
                     <label className="field">
                       Zona del domicilio
                       <select
-                        onChange={(event) => setAddressZoneId(event.target.value)}
+                        onChange={(event) => {
+                          setAddressZoneId(event.target.value);
+                          fillZoneFromAddress(event.target.value);
+                        }}
                         value={addressZoneId}
                       >
                         <option value="">Elegir zona</option>
@@ -1954,7 +2113,9 @@ export function OrderIntakePage() {
                         autoZone.current = '';
                         setZoneHint('');
                       }}
-                      placeholder="Ej. Centro"
+                      placeholder={
+                        deliveryChoices.zoneFromAddress ? 'La del domicilio' : 'Ej. Centro'
+                      }
                     />
                     {zoneHint ? <small className="field-hint">{zoneHint}</small> : null}
                   </label>
@@ -2371,6 +2532,23 @@ export function OrderIntakePage() {
               </label>
             ) : null}
           </div>
+          {editingDates && dateBatch.size > 0 ? (
+            <div aria-label="Pedidos para cambiar de fecha" className="bulk-bar" role="region">
+              <strong>
+                {dateBatch.size === 1
+                  ? '1 pedido tildado para cambiar la fecha'
+                  : `${String(dateBatch.size)} pedidos tildados para cambiar la fecha`}
+              </strong>
+              <span className="text-sm">Elegí la nueva fecha en cualquiera de ellos.</span>
+              <button
+                className="button button-secondary"
+                onClick={() => setDateBatch(new Set())}
+                type="button"
+              >
+                Destildar
+              </button>
+            </div>
+          ) : null}
           {pickedOrders.length > 0 ? (
             <div aria-label="Pedidos tildados" className="bulk-bar" role="region">
               <strong>
@@ -2442,84 +2620,86 @@ export function OrderIntakePage() {
               .map(
                 // "Cobrado" es un tilde que se puede tocar cuando hay permiso para editar.
                 (column) =>
-                  column.key === 'pago'
-                    ? {
-                        ...column,
-                        render: (order: OrderSummary) =>
-                          permissions.includes('orders.edit') && paymentMethods.length > 0 ? (
-                            <select
-                              aria-label={`Medio de pago de ${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName}`}
-                              className="inline-select"
-                              onChange={(event) => void changePayment(order, event.target.value)}
-                              value={paymentSelectValue(order.paymentExpectation, paymentMethods)}
-                            >
-                              {paymentOptionsWithSplit(
-                                paymentSelectValue(order.paymentExpectation, paymentMethods),
-                                paymentMethods,
-                                Boolean(order.paymentParts?.length),
-                              ).map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            paymentMethodLabel(order.paymentExpectation, paymentMethods)
-                          ),
-                      }
-                    : column.key === 'nuevo' && permissions.includes('orders.edit')
+                  column.key === 'editar-fechas' && permissions.includes('orders.edit')
+                    ? dateEditColumn(column)
+                    : column.key === 'pago'
                       ? {
                           ...column,
-                          render: (order: OrderSummary) => (
-                            <label className="paid-check">
-                              <input
-                                aria-label={`${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName} es cliente nuevo`}
-                                checked={Boolean(order.customer.isNew)}
-                                onChange={() => void toggleNew(order)}
-                                type="checkbox"
-                              />
-                            </label>
-                          ),
+                          render: (order: OrderSummary) =>
+                            permissions.includes('orders.edit') && paymentMethods.length > 0 ? (
+                              <select
+                                aria-label={`Medio de pago de ${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName}`}
+                                className="inline-select"
+                                onChange={(event) => void changePayment(order, event.target.value)}
+                                value={paymentSelectValue(order.paymentExpectation, paymentMethods)}
+                              >
+                                {paymentOptionsWithSplit(
+                                  paymentSelectValue(order.paymentExpectation, paymentMethods),
+                                  paymentMethods,
+                                  Boolean(order.paymentParts?.length),
+                                ).map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              paymentMethodLabel(order.paymentExpectation, paymentMethods)
+                            ),
                         }
-                      : column.key === 'cobrado' && permissions.includes('orders.edit')
+                      : column.key === 'nuevo' && permissions.includes('orders.edit')
                         ? {
                             ...column,
-                            render: (order: OrderSummary) =>
-                              isNoCharge(order.paymentExpectation) ? (
-                                '—'
-                              ) : order.paymentParts?.length ? (
-                                // Pago dividido (2026-11-17): un tilde por parte.
-                                <div className="paid-parts">
-                                  {order.paymentParts.map((part) => (
-                                    <label className="paid-check" key={part.position}>
-                                      <input
-                                        aria-label={`Marcar ${part.method} de ${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName} como cobrado`}
-                                        checked={Boolean(part.paidAt)}
-                                        onChange={() =>
-                                          setPayingPart({ order, part: part.position })
-                                        }
-                                        type="checkbox"
-                                      />
-                                      <span>
-                                        {part.method}{' '}
-                                        {formatMoney(part.amountMinor, order.currency)}
-                                      </span>
-                                    </label>
-                                  ))}
-                                </div>
-                              ) : (
-                                <label className="paid-check">
-                                  <input
-                                    aria-label={`Marcar ${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName} como cobrado`}
-                                    checked={Boolean(order.paidAt)}
-                                    onChange={() => setPaying(order)}
-                                    type="checkbox"
-                                  />
-                                  <span>{order.paidAt ? 'Cobrado' : 'Pendiente'}</span>
-                                </label>
-                              ),
+                            render: (order: OrderSummary) => (
+                              <label className="paid-check">
+                                <input
+                                  aria-label={`${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName} es cliente nuevo`}
+                                  checked={Boolean(order.customer.isNew)}
+                                  onChange={() => void toggleNew(order)}
+                                  type="checkbox"
+                                />
+                              </label>
+                            ),
                           }
-                        : column,
+                        : column.key === 'cobrado' && permissions.includes('orders.edit')
+                          ? {
+                              ...column,
+                              render: (order: OrderSummary) =>
+                                isNoCharge(order.paymentExpectation) ? (
+                                  '—'
+                                ) : order.paymentParts?.length ? (
+                                  // Pago dividido (2026-11-17): un tilde por parte.
+                                  <div className="paid-parts">
+                                    {order.paymentParts.map((part) => (
+                                      <label className="paid-check" key={part.position}>
+                                        <input
+                                          aria-label={`Marcar ${part.method} de ${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName} como cobrado`}
+                                          checked={Boolean(part.paidAt)}
+                                          onChange={() =>
+                                            setPayingPart({ order, part: part.position })
+                                          }
+                                          type="checkbox"
+                                        />
+                                        <span>
+                                          {part.method}{' '}
+                                          {formatMoney(part.amountMinor, order.currency)}
+                                        </span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <label className="paid-check">
+                                    <input
+                                      aria-label={`Marcar ${maskSurnames ? maskSurname(order.customer.displayName) : order.customer.displayName} como cobrado`}
+                                      checked={Boolean(order.paidAt)}
+                                      onChange={() => setPaying(order)}
+                                      type="checkbox"
+                                    />
+                                    <span>{order.paidAt ? 'Cobrado' : 'Pendiente'}</span>
+                                  </label>
+                                ),
+                            }
+                          : column,
               )}
             empty={
               <EmptyState

@@ -41,7 +41,7 @@ const DAYS = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES'] as const;
 const MONEY = '"$" #,##0';
 
 /** El estilo de una celda; la librería lo tipa como `any`. */
-interface Style {
+export interface Style {
   alignment?: { horizontal?: 'center'; vertical?: 'center'; wrapText?: boolean };
   fill?: { fgColor: { rgb: string }; patternType: 'solid' };
   font?: { bold?: boolean; color?: { rgb: string }; italic?: boolean; sz?: number };
@@ -151,6 +151,14 @@ const scheduleNotesColumn: Column = {
 /** Nombre y porción del reparto, centrados para leerlos de un vistazo (2026-11-15). */
 const CENTERED: Style = { alignment: { horizontal: 'center', vertical: 'center', wrapText: true } };
 
+/** El estilo del nombre en el Reparto: centrado; el de un especial, en negrita y cursiva. */
+export function deliveryNameStyle(composable: boolean): Style {
+  return composable ? { ...CENTERED, font: { bold: true, italic: true } } : CENTERED;
+}
+
+/** El de la porción: centrada. Un especial suma negrita y cursiva como el resto del renglón. */
+export const DELIVERY_SIZE_STYLE: Style = CENTERED;
+
 const sizeColumn: Column = {
   header: 'Pedido',
   value: (row) => {
@@ -223,7 +231,8 @@ function ordersLayout(): Layout {
  * "Reparto": tiempo de ruta, horario, notas de horario (en blanco), zona, dirección (en una
  * línea), nombre, tamaño, variedad, venta, pago y celular. Un renglón por bulto; quien reparte sólo
  * cobra el efectivo, así que la transferencia va en $0 y el total del día es el del efectivo.
- * Nombre y tamaño van centrados; el nombre de un Especial (Intuitivo), en negrita.
+ * Nombre y tamaño van centrados; el nombre de un Especial (Intuitivo), en negrita y cursiva
+ * (2026-11-18), como el resto de su renglón.
  */
 function deliveryLayout(report: PeriodReport): Layout {
   const longest = Math.max(
@@ -244,18 +253,14 @@ function deliveryLayout(report: PeriodReport): Layout {
     {
       header: 'Nombre',
       plain: true,
-      value: (row) =>
-        text(
-          row.order.customerName,
-          row.composable ? { ...CENTERED, font: { bold: true } } : CENTERED,
-        ),
+      value: (row) => text(row.order.customerName, deliveryNameStyle(row.composable)),
       width: 24,
     },
     {
       ...sizeColumn,
       value: (row) => {
         const cell = sizeColumn.value(row);
-        return { ...cell, s: CENTERED };
+        return { ...cell, s: DELIVERY_SIZE_STYLE };
       },
     },
     { header: 'Variedad', value: (row) => text(row.variety), width: 22 },

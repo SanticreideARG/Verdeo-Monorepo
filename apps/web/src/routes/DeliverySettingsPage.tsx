@@ -17,6 +17,8 @@ interface RoutePlace {
 
 interface Settings {
   defaultWeekday: number | null;
+  /** La "Zona" del pedido sale de la zona del domicilio (2026-11-18). */
+  orderZoneFromAddress?: boolean;
   /** De dónde sale y adónde vuelve la ruta, por defecto (2026-10-24). */
   routeEnd?: RoutePlace | null;
   routeStart?: RoutePlace | null;
@@ -83,6 +85,7 @@ export function DeliverySettingsPage() {
     const response = await apiRequest('/api/v1/delivery/settings', {
       body: JSON.stringify({
         defaultWeekday: settings.defaultWeekday,
+        orderZoneFromAddress: Boolean(settings.orderZoneFromAddress),
         weekdays: settings.weekdays,
         ...(start !== (settings.routeStart?.address ?? '') ? { routeStartAddress: start } : {}),
         ...(end !== (settings.routeEnd?.address ?? '') ? { routeEndAddress: end } : {}),
@@ -172,6 +175,27 @@ export function DeliverySettingsPage() {
                 </div>
               </fieldset>
             ) : null}
+
+            <fieldset className="delivery-days">
+              <legend>Zona del pedido</legend>
+              <label className="check-field">
+                <input
+                  checked={Boolean(settings.orderZoneFromAddress)}
+                  disabled={!canManage}
+                  onChange={(event) =>
+                    setSettings({ ...settings, orderZoneFromAddress: event.target.checked })
+                  }
+                  type="checkbox"
+                />
+                La Zona del pedido es la zona del domicilio
+              </label>
+              <p className="text-sm text-ink-muted">
+                Al elegir el domicilio o su zona, el campo Zona del pedido se completa solo, y así
+                sale en la lista y en el Excel. También en los pedidos importados. Si se escribe
+                otra zona a mano, gana la escrita. Dejalo apagado donde la Zona es el barrio
+                (Palermo) y la del domicilio es más grande (CABA).
+              </p>
+            </fieldset>
 
             <fieldset className="delivery-days">
               <legend>Salida y llegada de las rutas</legend>

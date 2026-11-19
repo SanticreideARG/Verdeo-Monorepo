@@ -192,6 +192,15 @@ Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", f
 - [x] Zonas geográficas: "Renombrar" en cada ciudad y "Nombre" en los datos de cada zona. La API ya lo aceptaba (`PATCH /operating-sites/:id` y `/zones/:id` con `displayName`); faltaba en la pantalla. El slug y el prefijo de pedidos no cambian. Avisa si otra zona de la ciudad ya tiene ese nombre.
 - [ ] Unificar Neuquén y Río Negro: ver la propuesta en la conversación del 2026-11-06 (pasar zonas de una operación a otra sin tocar el historial). Pendiente de decisión.
 
+## Zona automática, editar fechas en la lista y especiales para WhatsApp (2026-11-18)
+
+- [x] La Zona del pedido puede salir de la zona del domicilio, por ciudad (Panel de control → Reparto, "La Zona del pedido es la zona del domicilio"; migración 0086, que la prende en Valle y Mendoza). Prendido: en Nuevo pedido el campo Zona se completa al elegir el cliente o la "Zona del domicilio"; el servidor la completa en cualquier alta sin Zona escrita (importador incluido) y, al cambiar de domicilio, la Zona lo sigue salvo que se haya escrito otra a mano.
+- [x] Columna opcional "Editar fechas", al lado de "Entrega": un desplegable con los días de reparto de la ciudad de cada pedido y un tilde para cambiar varios juntos. Cada cambio va por el PATCH del pedido; uno que falla se nombra y no frena a los demás. Sin ciudad elegida arriba, el desplegable queda deshabilitado.
+- [x] Cocina → Especiales: "Copiar especiales" copia el texto para WhatsApp (tamaño y cliente, un plato por renglón, renglón en blanco entre especiales) sin la sangría de las viñetas, que llegaba como espacios adelante de cada plato. La lista de la pantalla ya no tiene viñetas.
+- [x] Informe del período, hoja "Reparto": el nombre de un especial va en negrita y cursiva (era sólo negrita). El centrado de nombre y porción ya estaba; ahora tiene test.
+- [ ] Salida y llegada fijas por ciudad (Córdoba: Mariano Fragueiro 3160; Buenos Aires: Miller 2103; Mendoza: link de Maps): ya se cargan en Panel de control → Reparto, es dato y no código. Cargarlas en producción.
+- [x] Los tests de lotes de `carry-over.test.ts` dependían de la fecha real y fallaban desde el 18/11: fijan la fecha de JavaScript.
+
 ## Zona del domicilio en Pedidos y etiquetas (2026-11-18)
 
 - [x] La columna Zona de Pedidos salía en "—" en Valle. Leía la "Zona" escrita en el pedido y, si no había, el texto libre viejo del domicilio (`operational_zone`), que en Valle está vacío: ahí la zona es la zona geográfica del domicilio (Neuquén Centro, Plottier…), asignada al importar la base. Ahora, sin "Zona" escrita, se muestra la zona geográfica del domicilio, y el texto viejo sólo si no tuviera. Misma regla en la planilla del período, el Excel de pedidos, la variable `{{ reparto.zona }}` de los mensajes, las etiquetas y sus filtros "por zona".

@@ -233,6 +233,17 @@ export function buildOrderColumns(
       sortValue: (order) => order.deliveryDate,
     },
     {
+      key: 'editar-fechas',
+      label: 'Editar fechas',
+      /*
+       * Cambiar la fecha de reparto desde la lista, de a uno o varios juntos (pedido 2026-11-18).
+       * Va al lado de "Entrega" y se prende sólo si se quiere: el desplegable y el tilde los arma
+       * la pantalla, que tiene el permiso y las fechas de cada ciudad. Sin permiso, la fecha.
+       */
+      render: (order) => formatDay(order.deliveryDate),
+      sortValue: (order) => order.deliveryDate,
+    },
+    {
       key: 'domicilio',
       label: 'Domicilio',
       render: (order) =>

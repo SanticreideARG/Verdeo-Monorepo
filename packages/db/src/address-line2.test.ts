@@ -494,3 +494,74 @@ describe('la zona geográfica del domicilio (2026-11-18)', () => {
     expect(report.orders.map((order) => order.zone).sort()).toEqual(['Izq', 'Plottier']);
   });
 });
+
+describe('la Zona del pedido sale del domicilio (2026-11-18)', () => {
+  const OTRA_ZONA = 'b0000000-0000-4000-8000-000000000010';
+  const OTRO_DOMICILIO = 'b1000000-0000-4000-8000-000000000002';
+  const zonas = (prendida: boolean) => `
+    insert into geographic_zones (id, operating_site_id, slug, display_name) values
+      ('${ZONE}', '${SITE}', 'plottier', 'Plottier'),
+      ('${OTRA_ZONA}', '${SITE}', 'neuquen-oeste', 'Neuquén Oeste');
+    insert into customer_addresses (id, customer_id, label, written_address, geographic_zone_id) values
+      ('${ADDRESS}', '${CUSTOMER}', 'Casa', 'Mitre 100', '${ZONE}'),
+      ('${OTRO_DOMICILIO}', '${CUSTOMER}', 'Trabajo', 'Roca 50', '${OTRA_ZONA}');
+    insert into site_delivery_settings (operating_site_id, order_zone_from_address)
+    values ('${SITE}', ${String(prendida)});
+  `;
+  type Creado = { deliveryDayText: string | null; id: string };
+
+  it('prendido: sin Zona escrita va la del domicilio, y la escrita gana', async () => {
+    const { client, service } = await base();
+    await client.exec(zonas(true));
+
+    const solo = (await service.createOrder(
+      { ...pedido('2026-10-18'), deliveryAddressId: ADDRESS },
+      contexto,
+    )) as Creado;
+    expect(solo.deliveryDayText).toBe('Plottier');
+
+    const escrita = (await service.createOrder(
+      { ...pedido('2026-10-18'), deliveryAddressId: ADDRESS, deliveryDayText: 'Izq' },
+      contexto,
+    )) as Creado;
+    expect(escrita.deliveryDayText).toBe('Izq');
+  });
+
+  it('prendido: al cambiar de domicilio la Zona lo sigue, salvo que se haya escrito otra', async () => {
+    const { client, service } = await base();
+    await client.exec(zonas(true));
+    const order = (await service.createOrder(
+      { ...pedido('2026-10-18'), deliveryAddressId: ADDRESS },
+      contexto,
+    )) as Creado;
+
+    const movido = (await service.updateOrder(
+      order.id,
+      { deliveryAddressId: OTRO_DOMICILIO },
+      true,
+      contexto,
+    )) as Creado;
+    expect(movido.deliveryDayText).toBe('Neuquén Oeste');
+
+    await service.updateOrder(order.id, { deliveryDayText: 'Izq' }, true, contexto);
+    const aMano = (await service.updateOrder(
+      order.id,
+      { deliveryAddressId: ADDRESS },
+      true,
+      contexto,
+    )) as Creado;
+    expect(aMano.deliveryDayText).toBe('Izq');
+  });
+
+  it('apagado: la Zona queda como se escribió', async () => {
+    const { client, service } = await base();
+    await client.exec(zonas(false));
+
+    const order = (await service.createOrder(
+      { ...pedido('2026-10-18'), deliveryAddressId: ADDRESS },
+      contexto,
+    )) as Creado;
+    expect(order.deliveryDayText).toBeNull();
+    expect(await service.getDeliverySettings(SITE)).toMatchObject({ orderZoneFromAddress: false });
+  });
+});

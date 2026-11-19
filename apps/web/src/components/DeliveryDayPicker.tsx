@@ -25,9 +25,15 @@ export function weekdayName(weekday: number): string {
  * Sin días configurados vuelve una sola: la del cierre del período.
  */
 export function useDeliveryOptions(menuId?: string | null) {
-  const [state, setState] = useState<{ defaultDate: string; options: DeliveryOption[] }>({
+  const [state, setState] = useState<{
+    defaultDate: string;
+    options: DeliveryOption[];
+    /** La ciudad completa la "Zona" del pedido con la zona del domicilio (2026-11-18). */
+    zoneFromAddress: boolean;
+  }>({
     defaultDate: '',
     options: [],
+    zoneFromAddress: false,
   });
   useEffect(() => {
     let cancelled = false;
@@ -35,14 +41,22 @@ export function useDeliveryOptions(menuId?: string | null) {
     void apiRequest(`/api/v1/delivery/options${query}`, { notify: false })
       .then(async (response) =>
         response.ok
-          ? ((await response.json()) as { defaultDate: string; options: DeliveryOption[] })
+          ? ((await response.json()) as {
+              defaultDate: string;
+              options: DeliveryOption[];
+              zoneFromAddress?: boolean;
+            })
           : null,
       )
       .catch(() => null)
       .then((result) => {
         // Una respuesta sin la forma esperada se ignora: sin opciones no se elige nada.
         if (!cancelled && result && Array.isArray(result.options)) {
-          setState({ defaultDate: result.defaultDate || '', options: result.options });
+          setState({
+            defaultDate: result.defaultDate || '',
+            options: result.options,
+            zoneFromAddress: Boolean(result.zoneFromAddress),
+          });
         }
       });
     return () => {

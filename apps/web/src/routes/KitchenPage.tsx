@@ -25,6 +25,8 @@ import {
   workingPeriodSnapshot,
 } from '../lib/workingPeriod.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { specialsText } from '../lib/specialsText.js';
+import { showToast } from '../lib/toast.js';
 
 function stockUnits(kitchen: KitchenSummary): number {
   return (kitchen.stock ?? []).reduce((sum, item) => sum + item.quantityUnits, 0);
@@ -408,7 +410,27 @@ export function KitchenPage() {
                     </div>
                   </article>
                   <article className="operation-card">
-                    <h3 className="text-xl font-semibold text-forest">Especiales</h3>
+                    <div className="kitchen-specials-head">
+                      <h3 className="text-xl font-semibold text-forest">Especiales</h3>
+                      {/*
+                       * Copiar todo para mandarlo a cocina por WhatsApp (pedido 2026-11-18): copiar
+                       * la lista a mano traía la sangría de las viñetas delante de cada plato.
+                       */}
+                      {kitchen.custom.length > 0 ? (
+                        <button
+                          className="button button-secondary"
+                          onClick={() => {
+                            void navigator.clipboard
+                              .writeText(specialsText(kitchen.custom))
+                              .then(() => showToast('Especiales copiados. Pegalos en WhatsApp.'))
+                              .catch(() => showToast('No se pudo copiar. Probá de nuevo.'));
+                          }}
+                          type="button"
+                        >
+                          Copiar especiales
+                        </button>
+                      ) : null}
+                    </div>
                     {/*
                      * El formato que usa cocina (pedido 2026-11-09): de título el tamaño y el
                      * cliente, abajo un plato por renglón, y un renglón en blanco antes del

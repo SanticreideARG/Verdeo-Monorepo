@@ -2,7 +2,12 @@ import { buildPeriodReport, type PeriodReportOrder } from '@verdeo/orders';
 import { describe, expect, it } from 'vitest';
 import xlsxStyle, { type CellObject } from 'xlsx-js-style';
 
-import { buildPeriodReportExcel, dayTitle } from './orders-period-report.js';
+import {
+  buildPeriodReportExcel,
+  dayTitle,
+  DELIVERY_SIZE_STYLE,
+  deliveryNameStyle,
+} from './orders-period-report.js';
 
 const XLSX = xlsxStyle;
 
@@ -170,6 +175,18 @@ describe('buildPeriodReportExcel: Reparto', () => {
     expect(cell('M9')?.v).toBe('Producto');
     expect(cell('M10')?.v).toBe('KETO 400');
     expect(cell('N10')?.v).toBe(2);
+  });
+});
+
+describe('estilos del Reparto (2026-11-18)', () => {
+  it('nombre y porción centrados; el nombre del especial, en negrita y cursiva', () => {
+    expect(deliveryNameStyle(false).alignment?.horizontal).toBe('center');
+    expect(DELIVERY_SIZE_STYLE.alignment?.horizontal).toBe('center');
+    expect(deliveryNameStyle(true)).toMatchObject({
+      alignment: { horizontal: 'center' },
+      font: { bold: true, italic: true },
+    });
+    expect(deliveryNameStyle(false).font).toBeUndefined();
   });
 });
 

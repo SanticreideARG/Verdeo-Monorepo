@@ -2173,6 +2173,8 @@ export const DeliverySettingsSchema = z.object({
   /** De dónde sale y adónde vuelve la ruta, por defecto. */
   routeEnd: RoutePointSchema.nullable().optional(),
   routeStart: RoutePointSchema.nullable().optional(),
+  /** La "Zona" del pedido sale de la zona del domicilio (2026-11-18). */
+  orderZoneFromAddress: z.boolean().optional(),
 });
 
 /**
@@ -2183,6 +2185,7 @@ export const DeliverySettingsUpdateSchema = z.object({
   defaultWeekday: z.number().int().min(0).max(6).nullable(),
   routeEndAddress: z.string().trim().max(500).optional(),
   routeStartAddress: z.string().trim().max(500).optional(),
+  orderZoneFromAddress: z.boolean().optional(),
   weekdays: z.array(z.number().int().min(0).max(6)).max(7),
 });
 
@@ -2204,6 +2207,8 @@ export type DeliverySettings = z.infer<typeof DeliverySettingsSchema>;
 export const DeliveryOptionsResponseSchema = z.object({
   defaultDate: z.string(),
   options: z.array(z.object({ date: z.string(), weekday: z.number().int().min(0).max(6) })),
+  /** La ciudad completa la "Zona" del pedido con la zona del domicilio (2026-11-18). */
+  zoneFromAddress: z.boolean().optional(),
 });
 
 const IsoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);

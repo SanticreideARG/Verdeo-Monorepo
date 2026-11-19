@@ -91,6 +91,7 @@ describe('días de reparto', () => {
     expect(await service.deliveryOptionsForMenu(MENU, SITE)).toEqual({
       defaultDate: '2026-10-18',
       options: [{ date: '2026-10-18', weekday: 0 }],
+      zoneFromAddress: false,
     });
     const order = (await service.createOrder(pedido('2026-10-25'), contexto)) as {
       deliveryDate: string;
@@ -109,6 +110,7 @@ describe('días de reparto', () => {
         { date: '2026-10-18', weekday: 0 },
         { date: '2026-10-24', weekday: 6 },
       ],
+      zoneFromAddress: false,
     });
     const sabado = (await service.createOrder(pedido('2026-10-24'), contexto)) as {
       deliveryDate: string;
