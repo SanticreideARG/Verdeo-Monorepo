@@ -7,12 +7,11 @@ import { ChatAvatar } from '../components/ChatAvatar.js';
 import { ChatReferenceCard } from '../components/ChatReferenceCard.js';
 import { apiRequest } from '../lib/api.js';
 import {
-  CHAT_POLL_ACTIVE_MS,
-  CHAT_POLL_HIDDEN_MS,
   chatMapsUrl as mapsUrl,
   chatTimeLabel as timeLabel,
   contactsWithoutConversation,
   conversationName,
+  pollWhileVisible,
   type ChatContact,
   type ChatConversation,
   type ChatMessage,
@@ -23,8 +22,6 @@ import { cachedProfile, rememberProfile } from '../lib/useDashboardProfile.js';
 import { errorMessage } from '../lib/operations.js';
 
 /** Las funciones no sostienen un socket, así que la conversación se consulta mientras se mira. */
-const POLL_ACTIVE_MS = CHAT_POLL_ACTIVE_MS;
-const POLL_HIDDEN_MS = CHAT_POLL_HIDDEN_MS;
 
 /** Search result shape used by the reference picker — the same fields exist on both the customer
  * and order list endpoints, just under a different label field, so we normalize to this locally. */
@@ -133,24 +130,14 @@ export function ChatPage() {
     void loadMessages(selectedId);
   }, [loadMessages, selectedId]);
 
-  // Polling slows down while the tab is hidden: an operator with the window in the background does
-  // not need a five-second refresh, and every poll is a function invocation.
+  // Every poll is a paid function invocation: every thirty seconds, and none while the tab is hidden.
   useEffect(() => {
     if (!canChat) return;
-    let timer = 0;
-    const tick = () => {
-      const delay = document.visibilityState === 'visible' ? POLL_ACTIVE_MS : POLL_HIDDEN_MS;
-      timer = window.setTimeout(() => {
-        void (async () => {
-          await loadConversations();
-          await loadPresence();
-          if (selectedId) await loadMessages(selectedId);
-          tick();
-        })();
-      }, delay);
-    };
-    tick();
-    return () => window.clearTimeout(timer);
+    return pollWhileVisible(async () => {
+      await loadConversations();
+      await loadPresence();
+      if (selectedId) await loadMessages(selectedId);
+    });
   }, [canChat, loadConversations, loadMessages, loadPresence, selectedId]);
 
   useEffect(() => {

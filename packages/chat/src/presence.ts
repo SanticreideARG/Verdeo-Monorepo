@@ -10,9 +10,13 @@
  * drivers adds a row. Only the offline derivation is code, because only it is a rule.
  */
 
-/** Three missed beats. Tolerant enough that a slow request does not blink a colleague offline. */
-export const PRESENCE_STALE_AFTER_MS = 90_000;
-export const PRESENCE_HEARTBEAT_MS = 30_000;
+/*
+ * Three missed beats. Tolerant enough that a slow request does not blink a colleague offline.
+ * Every beat is a paid function invocation (2026-11-20: the account went over the free tier), so
+ * the beat is every two minutes and offline shows after six.
+ */
+export const PRESENCE_STALE_AFTER_MS = 360_000;
+export const PRESENCE_HEARTBEAT_MS = 120_000;
 
 export const OFFLINE_STATUS = 'offline';
 

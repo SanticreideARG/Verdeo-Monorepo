@@ -8,8 +8,11 @@ interface PresenceStatus {
   reachable: boolean;
 }
 
-/** Matches the server's staleness window: three beats missed before a colleague reads as offline. */
-const HEARTBEAT_MS = 30_000;
+/*
+ * Matches the server's staleness window (PRESENCE_HEARTBEAT_MS in @chat): three beats missed before
+ * a colleague reads as offline. Two minutes, not thirty seconds: every beat is a paid invocation.
+ */
+const HEARTBEAT_MS = 120_000;
 
 /**
  * The user's own presence: a heartbeat while the tab is open, plus the status they declare.

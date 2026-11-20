@@ -192,6 +192,12 @@ Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", f
 - [x] Zonas geográficas: "Renombrar" en cada ciudad y "Nombre" en los datos de cada zona. La API ya lo aceptaba (`PATCH /operating-sites/:id` y `/zones/:id` con `displayName`); faltaba en la pantalla. El slug y el prefijo de pedidos no cambian. Avisa si otra zona de la ciudad ya tiene ese nombre.
 - [ ] Unificar Neuquén y Río Negro: ver la propuesta en la conversación del 2026-11-06 (pasar zonas de una operación a otra sin tocar el historial). Pendiente de decisión.
 
+## Menos consultas automáticas: la cuenta de Vercel se pausó (2026-11-20)
+
+- [x] La cuenta gratis de Vercel se pausó por pasar 1.000.000 de invocaciones de funciones (1,27 M), CPU y solicitudes al CDN, todo de `verdeo-monorepo-api`. Causa: las consultas automáticas del chat interno (cada 5 s a la vista y 30 s escondida, más la presencia cada 30 s) con varias pestañas abiertas todo el día.
+- [x] `pollWhileVisible` (`apps/web/src/lib/chat.ts`): chat (dock y página) cada 30 s y nada con la pestaña escondida; al volver se pone al día enseguida. Bandeja de mensajes: conversaciones cada 30 s, la conversación abierta cada 15 s, también sólo a la vista. Presencia: latido cada 2 min y desconectado a los 6 min (antes 30 s y 90 s).
+- [ ] Revisar el uso en Vercel → Usage una semana después del cambio. Pendiente aparte: qué causó el pico de ~200.000 invocaciones del 26-oct.
+
 ## Reabrir un período cerrado (2026-11-19)
 
 - [x] Cocina → Cierre de pedidos: "Reabrir período" en un período cerrado (pide confirmación). Usa el `POST /api/v1/production/:cycleId/closed` con `closed: false`, que ya existía y se audita como `sales_cycle.reopened`, pero no tenía botón. Lo que pasó al stock de períodos anteriores al cerrar se queda ahí; volver a cerrar no lo duplica.

@@ -16,7 +16,7 @@ describe('presence', () => {
   });
 
   it('treats a stale heartbeat as disconnected', () => {
-    expect(isConnected(secondsAgo(120), now)).toBe(false);
+    expect(isConnected(secondsAgo(400), now)).toBe(false);
   });
 
   it('tolerates a beat right at the threshold', () => {

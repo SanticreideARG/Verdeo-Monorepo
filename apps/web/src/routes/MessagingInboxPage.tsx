@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { DashboardShell } from '../components/DashboardShell.js';
 import { DashboardFailed, DashboardLoading } from '../components/DashboardStatus.js';
 import { apiRequest } from '../lib/api.js';
+import { pollWhileVisible } from '../lib/chat.js';
 import { errorMessage } from '../lib/operations.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
 import { formatDateTimeNumeric } from '../lib/dates.js';
@@ -68,15 +69,14 @@ export function MessagingInboxPage() {
       return;
     }
     void loadConversations().finally(() => setLoading(false));
-    const interval = setInterval(() => void loadConversations(), 10_000);
-    return () => clearInterval(interval);
+    // Cada consulta es una invocación que se paga: cada 30 segundos y sólo con la pestaña a la vista.
+    return pollWhileVisible(loadConversations);
   }, [canRead, loadConversations]);
 
   useEffect(() => {
     if (!selectedId) return;
     void loadMessages(selectedId);
-    const interval = setInterval(() => void loadMessages(selectedId), 5_000);
-    return () => clearInterval(interval);
+    return pollWhileVisible(() => loadMessages(selectedId), 15_000);
   }, [selectedId, loadMessages]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {

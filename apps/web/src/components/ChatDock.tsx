@@ -13,8 +13,6 @@ import { Link } from 'react-router-dom';
 import { apiRequest } from '../lib/api.js';
 import { foldText } from '../lib/text.js';
 import {
-  CHAT_POLL_ACTIVE_MS,
-  CHAT_POLL_HIDDEN_MS,
   PRESENCE_LABELS,
   chatMapsUrl,
   chatTimeLabel,
@@ -25,6 +23,7 @@ import {
   fetchMessages,
   fetchPresence,
   openConversationWith,
+  pollWhileVisible,
   unreadTotal,
   type ChatContact,
   type ChatConversation,
@@ -143,25 +142,17 @@ export function ChatDock({
    * y no minimizadas — una minimizada no se está leyendo, y pedirle la conversación la marcaría
    * leída sin que nadie la haya visto.
    */
-  useEffect(() => {
-    let timer = 0;
-    const tick = () => {
-      const delay =
-        document.visibilityState === 'visible' ? CHAT_POLL_ACTIVE_MS : CHAT_POLL_HIDDEN_MS;
-      timer = window.setTimeout(() => {
-        void (async () => {
-          await loadConversations();
-          await loadPresence();
-          for (const entry of windows) {
-            if (!entry.minimized) await loadTranscript(entry.conversationId);
-          }
-          tick();
-        })();
-      }, delay);
-    };
-    tick();
-    return () => window.clearTimeout(timer);
-  }, [loadConversations, loadPresence, loadTranscript, windows]);
+  useEffect(
+    () =>
+      pollWhileVisible(async () => {
+        await loadConversations();
+        await loadPresence();
+        for (const entry of windows) {
+          if (!entry.minimized) await loadTranscript(entry.conversationId);
+        }
+      }),
+    [loadConversations, loadPresence, loadTranscript, windows],
+  );
 
   const openConversation = useCallback(
     (conversationId: string) => {

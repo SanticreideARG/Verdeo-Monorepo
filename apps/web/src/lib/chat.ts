@@ -57,9 +57,56 @@ export interface ChatMessage {
   reference: ChatReference | null;
 }
 
-/** Las funciones no sostienen un socket, así que la conversación se consulta mientras se mira. */
-export const CHAT_POLL_ACTIVE_MS = 5_000;
-export const CHAT_POLL_HIDDEN_MS = 30_000;
+/*
+ * Las funciones no sostienen un socket, así que la conversación se consulta mientras se mira.
+ *
+ * Cada consulta es una invocación que se paga: con 5 segundos a la vista y 30 escondida, unas
+ * pocas pestañas abiertas pasaron el millón de invocaciones del plan gratis de Vercel y pausaron
+ * la cuenta (2026-11-20). Ahora es cada 30 segundos y sólo a la vista; al volver a la pestaña se
+ * pone al día enseguida.
+ */
+export const CHAT_POLL_MS = 30_000;
+
+/**
+ * Corre `poll` cada `intervalMs` mientras la pestaña está a la vista. Escondida no consulta nada;
+ * al volver a verse consulta enseguida y retoma. Devuelve la función que lo detiene.
+ */
+export function pollWhileVisible(
+  poll: () => Promise<void>,
+  intervalMs: number = CHAT_POLL_MS,
+): () => void {
+  let timer = 0;
+  let stopped = false;
+  let running = false;
+  const schedule = () => {
+    window.clearTimeout(timer);
+    if (stopped || document.visibilityState !== 'visible') return;
+    timer = window.setTimeout(() => void run(), intervalMs);
+  };
+  const run = async () => {
+    if (stopped || running) return;
+    running = true;
+    try {
+      await poll();
+    } catch {
+      // Una consulta fallida no corta el ciclo: la próxima vuelve a intentar.
+    } finally {
+      running = false;
+    }
+    schedule();
+  };
+  const onVisibility = () => {
+    if (document.visibilityState === 'visible') void run();
+    else window.clearTimeout(timer);
+  };
+  document.addEventListener('visibilitychange', onVisibility);
+  schedule();
+  return () => {
+    stopped = true;
+    window.clearTimeout(timer);
+    document.removeEventListener('visibilitychange', onVisibility);
+  };
+}
 
 export function conversationName(conversation: ChatConversation): string {
   if (conversation.title) return conversation.title;

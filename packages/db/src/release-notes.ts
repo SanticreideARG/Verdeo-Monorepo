@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-20-chat-cada-30-segundos',
+    body: `Chat interno y bandeja de mensajes: los mensajes nuevos aparecen dentro de los 30 segundos (antes, 5) y no se consulta nada mientras Verdeo está en una pestaña escondida; al volver se pone al día enseguida. El "conectado" de un compañero se actualiza cada 2 minutos. Es para no gastar de más en el servidor.`,
+  },
+  {
     key: '2026-11-19-reabrir-periodo',
     body: `Cocina: si un período se cerró por error, "Reabrir período" lo vuelve a abrir y sus pedidos se pueden editar de nuevo. Lo que pasó al stock de períodos anteriores al cerrar queda allí (se corrige en Cocina → Stock); volver a cerrarlo no lo duplica.`,
   },
