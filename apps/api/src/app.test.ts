@@ -12,7 +12,7 @@ import {
 import { createLogger } from '@verdeo/observability';
 import type { EmailSender } from '@verdeo/email';
 
-import { createApp, SITE_SCOPE_HEADER } from './app.js';
+import { CORS_PREFLIGHT_MAX_AGE_S, createApp, SITE_SCOPE_HEADER } from './app.js';
 
 const emptySessions = {
   authenticate: () => Promise.resolve(null),
@@ -188,6 +188,21 @@ const app = createApp({
 });
 
 describe('API foundation', () => {
+  // Cada OPTIONS es una invocación que se paga: el navegador tiene que poder guardarlo dos horas.
+  it('lets the browser cache the CORS preflight', async () => {
+    const response = await app.request('/api/v1/me', {
+      headers: {
+        'access-control-request-headers': SITE_SCOPE_HEADER,
+        'access-control-request-method': 'GET',
+        origin: 'http://localhost:5173',
+      },
+      method: 'OPTIONS',
+    });
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get('access-control-max-age')).toBe(String(CORS_PREFLIGHT_MAX_AGE_S));
+  });
+
   it('exposes a contract-valid health endpoint', async () => {
     const response = await app.request('/health');
     const body: unknown = await response.json();

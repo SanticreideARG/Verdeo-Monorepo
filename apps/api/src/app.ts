@@ -1733,6 +1733,9 @@ function statusForCode(code: ApiErrorCode): 400 | 401 | 403 | 404 | 409 | 429 | 
   return statuses[code];
 }
 
+/** Cuánto guarda el navegador el permiso de CORS: dos horas, el máximo que respeta Chrome. */
+export const CORS_PREFLIGHT_MAX_AGE_S = 7200;
+
 export function createApp(options: CreateAppOptions) {
   const requestStats = new RequestStats();
   const processStartedAt = new Date().toISOString();
@@ -2116,7 +2119,16 @@ export function createApp(options: CreateAppOptions) {
       status: context.res.status,
     });
   });
-  app.use('*', cors({ origin: options.appOrigin, credentials: true }));
+  /*
+   * La web y la API están en dominios distintos y cada consulta lleva `x-verdeo-site`, así que el
+   * navegador pregunta antes con un OPTIONS, y cada OPTIONS es una invocación que se paga. Sin
+   * `maxAge` Chrome guarda la respuesta cinco segundos: casi cada consulta costaba dos. Con dos
+   * horas (el tope de Chrome) se pregunta una vez por dirección (2026-11-20).
+   */
+  app.use(
+    '*',
+    cors({ credentials: true, maxAge: CORS_PREFLIGHT_MAX_AGE_S, origin: options.appOrigin }),
+  );
 
   app.get('/health', (context) => {
     const payload = HealthResponseSchema.parse({
