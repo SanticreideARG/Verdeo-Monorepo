@@ -183,6 +183,8 @@ import {
   StockLotUpdateRequestSchema,
   PrintedLabelsRequestSchema,
   PrintedLabelsResponseSchema,
+  OrderMovePeriodRequestSchema,
+  OrderMovePeriodResponseSchema,
   OrderMoveSiteRequestSchema,
   OrderMoveSiteResponseSchema,
   CustomerMoveSiteRequestSchema,
@@ -866,6 +868,11 @@ interface OperationsEngine {
   moveOrderToSite(
     orderId: string,
     input: { addressId?: string | undefined; targetSiteId: string; zoneId?: string | undefined },
+    context: OperationsContext,
+    preview?: boolean,
+  ): Promise<unknown>;
+  moveOrderToPreviousPeriod(
+    orderId: string,
     context: OperationsContext,
     preview?: boolean,
   ): Promise<unknown>;
@@ -7194,6 +7201,25 @@ export function createApp(options: CreateAppOptions) {
       preview ?? false,
     );
     return context.json(OrderMoveSiteResponseSchema.parse(contractValue(result)));
+  });
+
+  /*
+   * Mover un pedido al período anterior (2026-11-23), sólo uno atrás y sólo si está abierto. Lo
+   * hace quien edita pedidos. Con `preview: true` devuelve lo que cambiaría sin guardar nada.
+   */
+  app.post('/api/v1/orders/:id/previous-period', async (context) => {
+    if (!context.get('session').permissions.includes('orders.edit')) return forbidden(context);
+    const params = IdParamSchema.safeParse({ id: context.req.param('id') });
+    const input = OrderMovePeriodRequestSchema.safeParse(
+      await context.req.json().catch(() => ({})),
+    );
+    if (!params.success || !input.success) return badRequest(context, 'Revisá el pedido.');
+    const result = await requireOperations().moveOrderToPreviousPeriod(
+      params.data.id,
+      operationsContext(context),
+      input.data.preview ?? false,
+    );
+    return context.json(OrderMovePeriodResponseSchema.parse(contractValue(result)));
   });
 
   app.post('/api/v1/orders/:id/paid', async (context) => {

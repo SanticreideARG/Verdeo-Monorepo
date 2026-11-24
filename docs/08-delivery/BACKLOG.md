@@ -192,6 +192,11 @@ Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", f
 - [x] Zonas geográficas: "Renombrar" en cada ciudad y "Nombre" en los datos de cada zona. La API ya lo aceptaba (`PATCH /operating-sites/:id` y `/zones/:id` con `displayName`); faltaba en la pantalla. El slug y el prefijo de pedidos no cambian. Avisa si otra zona de la ciudad ya tiene ese nombre.
 - [ ] Unificar Neuquén y Río Negro: ver la propuesta en la conversación del 2026-11-06 (pasar zonas de una operación a otra sin tocar el historial). Pendiente de decisión.
 
+## Mover un pedido al período anterior (2026-11-23)
+
+- [x] Ficha del pedido → "Mover al período anterior" (`POST /api/v1/orders/:id/previous-period`, con `preview`). Con dos períodos abiertos, los pedidos nuevos caían en el último aunque fueran para un reparto pendiente del anterior. Sólo un período atrás (el de `open_at` inmediatamente anterior); misma variedad en el menú de ese período (el de la ciudad o el general), su precio, uno de sus días de reparto; conserva número, ciudad, cliente, domicilio, cobro y lote de stock. Pago dividido: la última parte absorbe la diferencia. Auditado como `order.moved_period`.
+- [x] Si el anterior está cerrado, la vista previa devuelve `closed` y la ficha ofrece reabrirlo (sólo con `production.generate`).
+
 ## Menos consultas automáticas: la cuenta de Vercel se pausó (2026-11-20)
 
 - [x] La cuenta gratis de Vercel se pausó por pasar 1.000.000 de invocaciones de funciones (1,27 M), CPU y solicitudes al CDN, todo de `verdeo-monorepo-api`. Causa: las consultas automáticas del chat interno (cada 5 s a la vista y 30 s escondida, más la presencia cada 30 s) con varias pestañas abiertas todo el día.

@@ -9427,6 +9427,157 @@ export class PostgresOperationsService {
     });
   }
 
+  /**
+   * Mover un pedido al período anterior (2026-11-23).
+   *
+   * Con dos períodos abiertos a la vez, el anterior puede tener repartos pendientes, pero los
+   * pedidos nuevos caen en el último. Esto pasa uno al período inmediatamente anterior, y sólo a
+   * ése: mover más atrás sería reescribir semanas ya hechas. Con el anterior cerrado no se mueve:
+   * la vista previa lo avisa (`closed`) para ofrecer reabrirlo.
+   *
+   * Como "Mover a otra ciudad": la misma variedad en el menú de ese período, su precio y uno de sus
+   * días de reparto (el mismo si existe). Mantiene número, ciudad, cliente, domicilio y cobro.
+   */
+  public async moveOrderToPreviousPeriod(
+    orderId: string,
+    context: OperationsContext,
+    preview = false,
+  ) {
+    return this.inTransactionOrPreview(preview, async (transaction) => {
+      const [order] = await transaction
+        .select({
+          cycleId: orders.salesCycleId,
+          deliveryDate: orders.deliveryDate,
+          openAt: salesCycles.openAt,
+          operatingSiteId: orders.operatingSiteId,
+          paymentExpectation: orders.paymentExpectation,
+          publicNumber: orders.publicNumber,
+          status: orders.status,
+          totalMinor: orders.totalMinor,
+        })
+        .from(orders)
+        .innerJoin(salesCycles, eq(salesCycles.id, orders.salesCycleId))
+        .where(eq(orders.id, orderId))
+        .limit(1);
+      if (!order) throw new OperationsNotFoundError('No se encontró el pedido');
+      if (!['DRAFT', 'CONFIRMED', 'READY'].includes(order.status))
+        throw new OperationsConflictError(
+          'Sólo se mueven pedidos en borrador, confirmados o listos',
+        );
+
+      const [previous] = await transaction
+        .select({
+          alias: salesCycles.alias,
+          closeAt: salesCycles.closeAt,
+          id: salesCycles.id,
+          status: salesCycles.status,
+        })
+        .from(salesCycles)
+        .where(lt(salesCycles.openAt, order.openAt))
+        .orderBy(desc(salesCycles.openAt))
+        .limit(1);
+      if (!previous) throw new OperationsConflictError('No hay un período anterior a este pedido');
+      if (previous.status === 'CLOSED') {
+        if (preview)
+          return { closed: true as const, cycleAlias: previous.alias, cycleId: previous.id };
+        throw new OperationsConflictError(
+          `${previous.alias} está cerrado: reabrilo antes de mover el pedido`,
+        );
+      }
+
+      // El menú de ese período en la ciudad del pedido; si no tiene uno propio, el general.
+      const [menu] = await transaction
+        .select({ id: weeklyMenus.id })
+        .from(weeklyMenus)
+        .where(
+          and(
+            eq(weeklyMenus.salesCycleId, previous.id),
+            eq(weeklyMenus.status, 'PUBLISHED'),
+            or(
+              eq(weeklyMenus.operatingSiteId, order.operatingSiteId),
+              isNull(weeklyMenus.operatingSiteId),
+            ),
+          ),
+        )
+        .orderBy(sql`${weeklyMenus.operatingSiteId} is null`)
+        .limit(1);
+      if (!menu)
+        throw new OperationsConflictError(
+          `${previous.alias} no tiene un menú publicado para la ciudad de este pedido`,
+        );
+
+      const { mapped, missing } = await this.itemsForMenu(transaction, orderId, menu.id, true);
+      if (missing.length > 0)
+        throw new OperationsConflictError(
+          `${previous.alias} no ofrece ${missing.join(', ')}. Cambialo en el pedido antes de moverlo.`,
+        );
+      const resolvedItems = this.chargeFor(
+        isNoCharge(order.paymentExpectation),
+        await this.resolveOrderItems(transaction, menu.id, mapped, order.operatingSiteId),
+      );
+      const deliverySettings = await this.getDeliverySettings(order.operatingSiteId, transaction);
+      const deliveryDate = resolveDeliveryDate(
+        deliveryOptions(
+          await this.siteCloseAt(transaction, previous.id, order.operatingSiteId, previous.closeAt),
+          deliverySettings.weekdays,
+        ),
+        order.deliveryDate,
+        deliverySettings.defaultWeekday,
+      );
+      const totalMinor = calculateOrderTotal(resolvedItems.map((item) => item.totalMinor));
+
+      // Cambia el día: sale del reparto y de las rutas, y entra al del día nuevo.
+      await transaction.delete(deliveryStops).where(eq(deliveryStops.orderId, orderId));
+      await leaveRun(transaction, orderId);
+      await transaction.delete(orderItems).where(eq(orderItems.orderId, orderId));
+      await this.persistOrderItems(transaction, orderId, resolvedItems);
+      await transaction
+        .update(orders)
+        .set({
+          currency: resolvedItems[0]?.currency ?? 'ARS',
+          deliveryDate,
+          salesCycleId: previous.id,
+          totalMinor,
+          updatedAt: new Date(),
+          weeklyMenuId: menu.id,
+        })
+        .where(eq(orders.id, orderId));
+      if (totalMinor !== order.totalMinor) {
+        const problem = await rebalancePaymentParts(transaction, orderId, totalMinor);
+        if (problem) throw new OperationsConflictError(problem);
+      }
+      await assignOrderToRun(transaction, orderId);
+
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: 'order.moved_period',
+        actor: auditActor(context),
+        after: { deliveryDate, salesCycleId: previous.id, totalMinor },
+        before: {
+          deliveryDate: order.deliveryDate,
+          salesCycleId: order.cycleId,
+          totalMinor: order.totalMinor,
+        },
+        correlationId: context.correlationId,
+        entityId: orderId,
+        entityType: 'order',
+        requestId: context.requestId,
+        source: context.source,
+      });
+      return {
+        closed: false as const,
+        cycleAlias: previous.alias,
+        cycleId: previous.id,
+        deliveryDate,
+        id: orderId,
+        previousDeliveryDate: order.deliveryDate,
+        previousTotalMinor: order.totalMinor,
+        publicNumber: order.publicNumber,
+        totalMinor,
+      };
+    });
+  }
+
   /** Corre en una transacción; con `preview`, la deshace al final y devuelve lo calculado. */
   private async inTransactionOrPreview<T>(
     preview: boolean,
@@ -9463,6 +9614,80 @@ export class PostgresOperationsService {
       .limit(1);
     if (!zone) throw new OperationsConflictError('La zona elegida no es de la ciudad destino');
     return zone.id;
+  }
+
+  /**
+   * Los renglones de un pedido, cada uno con la misma variedad en otro menú (otra ciudad u otro
+   * período), con sus platos elegidos. Lo que ese menú no ofrece se nombra en `missing`.
+   */
+  private async itemsForMenu(
+    transaction: DatabaseTransaction,
+    orderId: string,
+    menuId: string,
+    // El lote es de una ciudad: al cambiar de ciudad no sigue; al cambiar de período, sí.
+    keepStockLots = false,
+  ) {
+    const items = await transaction
+      .select({
+        id: orderItems.id,
+        name: orderItems.productNameSnapshot,
+        quantityUnits: orderItems.quantityUnits,
+        variant: orderItems.variantSnapshot,
+        stockLotId: orderItems.stockLotId,
+        variantId: orderItems.productVariantId,
+      })
+      .from(orderItems)
+      .where(eq(orderItems.orderId, orderId));
+    const targetOfferings = await transaction
+      .select({ id: weeklyMenuOfferings.id, variantId: weeklyMenuOfferings.productVariantId })
+      .from(weeklyMenuOfferings)
+      .where(
+        and(eq(weeklyMenuOfferings.weeklyMenuId, menuId), eq(weeklyMenuOfferings.active, true)),
+      );
+    const selections = items.length
+      ? await transaction
+          .select({
+            dishName: orderItemSelections.dishNameSnapshot,
+            family: orderItemSelections.sourceFamilySnapshot,
+            orderItemId: orderItemSelections.orderItemId,
+          })
+          .from(orderItemSelections)
+          .where(
+            inArray(
+              orderItemSelections.orderItemId,
+              items.map((item) => item.id),
+            ),
+          )
+          .orderBy(asc(orderItemSelections.slot))
+      : [];
+    const missing: string[] = [];
+    const mapped = items.flatMap((item) => {
+      const target = targetOfferings.find((offering) => offering.variantId === item.variantId);
+      if (!target) {
+        missing.push(`${item.name} ${item.variant}`);
+        return [];
+      }
+      const own = selections.filter((selection) => selection.orderItemId === item.id);
+      const withFamily = own.every((selection) => selection.family);
+      return [
+        {
+          offeringId: target.id,
+          quantityUnits: item.quantityUnits,
+          ...(keepStockLots && item.stockLotId ? { stockLotId: item.stockLotId } : {}),
+          ...(own.length === 0
+            ? {}
+            : withFamily
+              ? {
+                  selectedDishes: own.map((selection) => ({
+                    dishName: selection.dishName,
+                    familyName: selection.family ?? '',
+                  })),
+                }
+              : { selectedDishNames: own.map((selection) => selection.dishName) }),
+        },
+      ];
+    });
+    return { mapped, missing };
   }
 
   private async moveOrderInTransaction(
@@ -9512,64 +9737,7 @@ export class PostgresOperationsService {
       );
 
     // Cada renglón, con la misma variedad en el menú de la ciudad destino.
-    const items = await transaction
-      .select({
-        id: orderItems.id,
-        name: orderItems.productNameSnapshot,
-        quantityUnits: orderItems.quantityUnits,
-        variant: orderItems.variantSnapshot,
-        variantId: orderItems.productVariantId,
-      })
-      .from(orderItems)
-      .where(eq(orderItems.orderId, orderId));
-    const targetOfferings = await transaction
-      .select({ id: weeklyMenuOfferings.id, variantId: weeklyMenuOfferings.productVariantId })
-      .from(weeklyMenuOfferings)
-      .where(
-        and(eq(weeklyMenuOfferings.weeklyMenuId, menu.id), eq(weeklyMenuOfferings.active, true)),
-      );
-    const selections = items.length
-      ? await transaction
-          .select({
-            dishName: orderItemSelections.dishNameSnapshot,
-            family: orderItemSelections.sourceFamilySnapshot,
-            orderItemId: orderItemSelections.orderItemId,
-          })
-          .from(orderItemSelections)
-          .where(
-            inArray(
-              orderItemSelections.orderItemId,
-              items.map((item) => item.id),
-            ),
-          )
-          .orderBy(asc(orderItemSelections.slot))
-      : [];
-    const missing: string[] = [];
-    const mapped = items.flatMap((item) => {
-      const target = targetOfferings.find((offering) => offering.variantId === item.variantId);
-      if (!target) {
-        missing.push(`${item.name} ${item.variant}`);
-        return [];
-      }
-      const own = selections.filter((selection) => selection.orderItemId === item.id);
-      const withFamily = own.every((selection) => selection.family);
-      return [
-        {
-          offeringId: target.id,
-          quantityUnits: item.quantityUnits,
-          ...(own.length === 0
-            ? {}
-            : withFamily
-              ? {
-                  selectedDishes: own.map((selection) => ({
-                    dishName: selection.dishName,
-                    familyName: selection.family ?? '',
-                  })),
-                }
-              : { selectedDishNames: own.map((selection) => selection.dishName) }),
-        },
-      ];
-    });
+    const { mapped, missing } = await this.itemsForMenu(transaction, orderId, menu.id);
     if (missing.length > 0)
       throw new OperationsConflictError(
         `La ciudad destino no ofrece ${missing.join(', ')} en ese período. Cambialo en el pedido antes de moverlo.`,

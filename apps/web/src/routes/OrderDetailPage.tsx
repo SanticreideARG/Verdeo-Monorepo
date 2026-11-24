@@ -363,6 +363,85 @@ export function OrderDetailPage() {
   const payment = paymentStatus(order, paymentMethods, todayInOperation());
   const neighbours = neighboursOf(order.id);
   // De READY en adelante el servidor rechaza cambios en lo que se cocina.
+  /*
+   * Mover al período anterior (2026-11-23): con dos períodos abiertos, los pedidos nuevos caen en
+   * el último aunque sean para un reparto pendiente del anterior. Sólo un período atrás; si está
+   * cerrado, ofrece reabrirlo (a quien puede cerrar períodos). Antes de mover muestra el período,
+   * el día y el total que va a quedar.
+   */
+  async function moveToPreviousPeriod() {
+    if (!order) return;
+    setMessage('');
+    const url = `/api/v1/orders/${order.id}/previous-period`;
+    const previewOf = async () => {
+      const response = await apiRequest(url, {
+        body: JSON.stringify({ preview: true }),
+        method: 'POST',
+        notify: false,
+      });
+      if (!response.ok) {
+        setMessage(await errorMessage(response));
+        return null;
+      }
+      return (await response.json()) as
+        | { closed: true; cycleAlias: string; cycleId: string }
+        | {
+            closed: false;
+            cycleAlias: string;
+            deliveryDate: string;
+            previousTotalMinor: number;
+            totalMinor: number;
+          };
+    };
+
+    let preview = await previewOf();
+    if (!preview) return;
+    if (preview.closed) {
+      if (!profile?.permissions.includes('production.generate')) {
+        setMessage(
+          `${preview.cycleAlias} está cerrado. Pedile a quien cierra los períodos que lo reabra para mover el pedido.`,
+        );
+        return;
+      }
+      if (
+        !window.confirm(
+          `${preview.cycleAlias} está cerrado. ¿Reabrirlo para mover el pedido? Sus pedidos vuelven a poder editarse.`,
+        )
+      )
+        return;
+      const reopened = await apiRequest(`/api/v1/production/${preview.cycleId}/closed`, {
+        body: JSON.stringify({ closed: false }),
+        method: 'POST',
+        notify: false,
+      });
+      if (!reopened.ok) {
+        setMessage(await errorMessage(reopened));
+        return;
+      }
+      showToast(`${preview.cycleAlias} reabierto.`);
+      preview = await previewOf();
+      if (!preview || preview.closed) return;
+    }
+
+    const total =
+      preview.totalMinor === preview.previousTotalMinor
+        ? `El total queda igual (${formatMoney(preview.totalMinor, order.currency)}).`
+        : `El total pasa de ${formatMoney(preview.previousTotalMinor, order.currency)} a ${formatMoney(preview.totalMinor, order.currency)}, el precio de ese período.`;
+    if (
+      !window.confirm(
+        `¿Mover el pedido a ${preview.cycleAlias}? Reparto: ${formatDayLong(preview.deliveryDate)}. ${total}`,
+      )
+    )
+      return;
+    const response = await apiRequest(url, { body: '{}', method: 'POST', notify: false });
+    if (!response.ok) {
+      setMessage(await errorMessage(response));
+      return;
+    }
+    showToast(`Pedido movido a ${preview.cycleAlias}.`);
+    await load();
+  }
+
   const compositionEditable = order.status === 'DRAFT' || order.status === 'CONFIRMED';
   const canConfirm = profile.permissions.includes('orders.confirm');
   const canCancel = profile.permissions.includes('orders.cancel');
@@ -879,6 +958,16 @@ export function OrderDetailPage() {
                 type="button"
               >
                 Mover a otra ciudad
+              </button>
+            ) : null}
+            {/* Cayó en el último período pero es para un reparto pendiente del anterior. */}
+            {canEdit && ['DRAFT', 'CONFIRMED', 'READY'].includes(order.status) ? (
+              <button
+                className="button button-secondary"
+                onClick={() => void moveToPreviousPeriod()}
+                type="button"
+              >
+                Mover al período anterior
               </button>
             ) : null}
           </div>

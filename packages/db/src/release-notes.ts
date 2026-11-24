@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-23-mover-periodo-anterior',
+    body: `Pedidos: si un pedido cayó en el período nuevo pero es para un reparto pendiente del anterior, en su ficha "Mover al período anterior" lo pasa (sólo un período atrás). Toma el menú, el precio y un día de reparto de ese período, y antes de mover te muestra el día y el total. Si ese período estaba cerrado, te ofrece reabrirlo.`,
+  },
+  {
     key: '2026-11-20-chat-cada-30-segundos',
     body: `Chat interno y bandeja de mensajes: los mensajes nuevos aparecen dentro de los 30 segundos (antes, 5) y no se consulta nada mientras Verdeo está en una pestaña escondida; al volver se pone al día enseguida. El "conectado" de un compañero se actualiza cada 2 minutos. Es para no gastar de más en el servidor.`,
   },

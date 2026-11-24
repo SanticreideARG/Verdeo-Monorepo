@@ -2121,6 +2121,29 @@ export const OrderMoveSiteResponseSchema = z.object({
   totalMinor: z.number().int(),
 });
 
+/**
+ * Mover un pedido al período anterior. Con `preview` se calcula y no se guarda; si ese período
+ * está cerrado, la vista previa responde `closed: true` para ofrecer reabrirlo.
+ */
+export const OrderMovePeriodRequestSchema = z.object({
+  preview: z.boolean().optional(),
+});
+
+export const OrderMovePeriodResponseSchema = z.discriminatedUnion('closed', [
+  z.object({ closed: z.literal(true), cycleAlias: z.string(), cycleId: UuidSchema }),
+  z.object({
+    closed: z.literal(false),
+    cycleAlias: z.string(),
+    cycleId: UuidSchema,
+    deliveryDate: z.string(),
+    id: UuidSchema,
+    previousDeliveryDate: z.string(),
+    previousTotalMinor: z.number().int(),
+    publicNumber: z.string(),
+    totalMinor: z.number().int(),
+  }),
+]);
+
 /** Mover un cliente a otra ciudad, con la zona de cada domicilio y sus pedidos abiertos. */
 export const CustomerMoveSiteRequestSchema = z.object({
   addressZones: z.record(UuidSchema, UuidSchema).optional(),

@@ -67,6 +67,7 @@ const customerOperationsStubs = {
   updateStockLot: vi.fn(),
   moveCustomerToSite: vi.fn(),
   moveOrderToSite: vi.fn(),
+  moveOrderToPreviousPeriod: vi.fn(),
   listReceivables: vi.fn(),
   addCustomerIdentity: vi.fn(),
   addCustomerPreference: vi.fn(),
