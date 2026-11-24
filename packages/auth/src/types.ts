@@ -11,6 +11,8 @@ export interface AuthenticatedSession {
 }
 
 export interface SessionRecord extends AuthenticatedSession {
+  /** La última vez que se anotó uso; sin el dato, se anota siempre. */
+  lastSeenAt?: Date | null;
   revokedAt: Date | null;
   tokenHash: string;
 }

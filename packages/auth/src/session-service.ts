@@ -6,6 +6,13 @@ import type {
   SessionSummary,
 } from './types.js';
 
+/*
+ * Cada cuánto se anota "visto por última vez" (2026-11-20). Antes era en cada consulta: una
+ * escritura en la base por cada llamada a la API, también las del chat. Sólo se muestra en la lista
+ * de sesiones abiertas, donde cinco minutos de diferencia no cambian nada.
+ */
+export const SESSION_TOUCH_INTERVAL_MS = 5 * 60 * 1000;
+
 export class SessionService {
   public constructor(
     private readonly sessions: SessionRepository,
@@ -20,7 +27,10 @@ export class SessionService {
 
     if (!session || session.revokedAt || session.expiresAt <= currentTime) return null;
 
-    await this.sessions.touch(session.sessionId, currentTime);
+    const seenRecently =
+      session.lastSeenAt &&
+      currentTime.getTime() - session.lastSeenAt.getTime() < SESSION_TOUCH_INTERVAL_MS;
+    if (!seenRecently) await this.sessions.touch(session.sessionId, currentTime);
 
     return {
       expiresAt: session.expiresAt,

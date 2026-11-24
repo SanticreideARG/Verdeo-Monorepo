@@ -7,6 +7,39 @@ import type { SessionRepository } from './types.js';
 const token = 'valid-session-token-that-is-longer-than-32-characters';
 
 describe('SessionService', () => {
+  // Una escritura en la base por consulta era CPU que se paga: se anota cada cinco minutos.
+  it('does not write the last-seen time again within five minutes', async () => {
+    const touch = vi.fn<SessionRepository['touch']>();
+    const now = new Date('2026-08-17T12:00:00Z');
+    const findByTokenHash = vi.fn<SessionRepository['findByTokenHash']>();
+    const repository: SessionRepository = {
+      create: vi.fn(),
+      findByTokenHash,
+      listForUser: vi.fn(),
+      revoke: vi.fn(),
+      revokeOwned: vi.fn(),
+      touch,
+    };
+    const record = (minutesAgo: number) => ({
+      expiresAt: new Date('2026-08-18T12:00:00Z'),
+      lastSeenAt: new Date(now.getTime() - minutesAgo * 60 * 1000),
+      permissions: [],
+      revokedAt: null,
+      sessionId: 'session-id',
+      tokenHash: hashSessionToken(token),
+      userId: 'user-id',
+    });
+    const service = new SessionService(repository, () => now);
+
+    findByTokenHash.mockResolvedValueOnce(record(4));
+    await service.authenticate(token);
+    expect(touch).not.toHaveBeenCalled();
+
+    findByTokenHash.mockResolvedValueOnce(record(6));
+    await service.authenticate(token);
+    expect(touch).toHaveBeenCalledOnce();
+  });
+
   it('returns an active session without exposing its token hash', async () => {
     const touch = vi.fn<SessionRepository['touch']>();
     const findByTokenHash = vi.fn<SessionRepository['findByTokenHash']>();

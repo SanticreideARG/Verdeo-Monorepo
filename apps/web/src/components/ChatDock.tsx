@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -24,6 +25,8 @@ import {
   fetchPresence,
   openConversationWith,
   pollWhileVisible,
+  PRESENCE_REFRESH_MS,
+  atMostEvery,
   unreadTotal,
   type ChatContact,
   type ChatConversation,
@@ -142,16 +145,21 @@ export function ChatDock({
    * y no minimizadas — una minimizada no se está leyendo, y pedirle la conversación la marcaría
    * leída sin que nadie la haya visto.
    */
+  const pollPresence = useMemo(
+    () => atMostEvery(loadPresence, PRESENCE_REFRESH_MS),
+    [loadPresence],
+  );
+
   useEffect(
     () =>
       pollWhileVisible(async () => {
         await loadConversations();
-        await loadPresence();
+        await pollPresence();
         for (const entry of windows) {
           if (!entry.minimized) await loadTranscript(entry.conversationId);
         }
       }),
-    [loadConversations, loadPresence, loadTranscript, windows],
+    [loadConversations, pollPresence, loadTranscript, windows],
   );
 
   const openConversation = useCallback(

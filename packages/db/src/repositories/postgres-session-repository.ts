@@ -23,6 +23,7 @@ export class PostgresSessionRepository implements SessionRepository {
       .select({
         customerId: customerLogins.customerId,
         expiresAt: sessions.expiresAt,
+        lastSeenAt: sessions.lastSeenAt,
         revokedAt: sessions.revokedAt,
         sessionId: sessions.id,
         tokenHash: sessions.tokenHash,

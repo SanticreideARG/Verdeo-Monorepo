@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CHAT_POLL_MS, pollWhileVisible } from './chat.js';
+import { atMostEvery, CHAT_POLL_MS, PRESENCE_REFRESH_MS, pollWhileVisible } from './chat.js';
 
 let visibility: DocumentVisibilityState = 'visible';
 
@@ -69,5 +69,21 @@ describe('pollWhileVisible', () => {
     await vi.advanceTimersByTimeAsync(CHAT_POLL_MS * 2);
     expect(poll).toHaveBeenCalledTimes(2);
     stop();
+  });
+});
+
+describe('atMostEvery', () => {
+  it('corre la primera vez y no de nuevo antes del intervalo', async () => {
+    const run = vi.fn(() => Promise.resolve());
+    const throttled = atMostEvery(run, PRESENCE_REFRESH_MS);
+
+    await throttled();
+    await vi.advanceTimersByTimeAsync(CHAT_POLL_MS);
+    await throttled();
+    expect(run).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(PRESENCE_REFRESH_MS);
+    await throttled();
+    expect(run).toHaveBeenCalledTimes(2);
   });
 });

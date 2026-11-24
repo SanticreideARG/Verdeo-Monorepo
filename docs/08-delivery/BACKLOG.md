@@ -202,6 +202,8 @@ Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", f
 - [x] La cuenta gratis de Vercel se pausó por pasar 1.000.000 de invocaciones de funciones (1,27 M), CPU y solicitudes al CDN, todo de `verdeo-monorepo-api`. Causa: las consultas automáticas del chat interno (cada 5 s a la vista y 30 s escondida, más la presencia cada 30 s) con varias pestañas abiertas todo el día.
 - [x] `pollWhileVisible` (`apps/web/src/lib/chat.ts`): chat (dock y página) cada 30 s y nada con la pestaña escondida; al volver se pone al día enseguida. Bandeja de mensajes: conversaciones cada 30 s, la conversación abierta cada 15 s, también sólo a la vista. Presencia: latido cada 2 min y desconectado a los 6 min (antes 30 s y 90 s).
 - [x] CORS con `maxAge` de 2 h: la web y la API están en dominios distintos y cada consulta lleva `x-verdeo-site`, así que el navegador mandaba un OPTIONS antes; sin `maxAge` Chrome lo guarda 5 s y casi cada consulta costaba dos invocaciones.
+- [x] La sesión anota "visto por última vez" como mucho cada 5 minutos (`SESSION_TOUCH_INTERVAL_MS`), no en cada consulta: era una escritura en la base por llamada a la API.
+- [x] El chat pide la presencia de los compañeros como mucho cada 2 minutos (`PRESENCE_REFRESH_MS`, el ritmo del latido), no en cada vuelta de 30 s: de dos consultas por vuelta a poco más de una.
 - [ ] Revisar el uso en Vercel → Usage una semana después del cambio. Pendiente aparte: qué causó el pico de ~200.000 invocaciones del 26-oct.
 
 ## Reabrir un período cerrado (2026-11-19)

@@ -12,6 +12,8 @@ import {
   contactsWithoutConversation,
   conversationName,
   pollWhileVisible,
+  PRESENCE_REFRESH_MS,
+  atMostEvery,
   type ChatContact,
   type ChatConversation,
   type ChatMessage,
@@ -130,15 +132,20 @@ export function ChatPage() {
     void loadMessages(selectedId);
   }, [loadMessages, selectedId]);
 
+  const pollPresence = useMemo(
+    () => atMostEvery(loadPresence, PRESENCE_REFRESH_MS),
+    [loadPresence],
+  );
+
   // Every poll is a paid function invocation: every thirty seconds, and none while the tab is hidden.
   useEffect(() => {
     if (!canChat) return;
     return pollWhileVisible(async () => {
       await loadConversations();
-      await loadPresence();
+      await pollPresence();
       if (selectedId) await loadMessages(selectedId);
     });
-  }, [canChat, loadConversations, loadMessages, loadPresence, selectedId]);
+  }, [canChat, loadConversations, loadMessages, pollPresence, selectedId]);
 
   useEffect(() => {
     transcriptRef.current?.scrollTo({

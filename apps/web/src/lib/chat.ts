@@ -67,6 +67,26 @@ export interface ChatMessage {
  */
 export const CHAT_POLL_MS = 30_000;
 
+/*
+ * La presencia de los compañeros cambia, como mucho, con su latido (cada dos minutos en el
+ * servidor): pedirla cada 30 segundos era una invocación de más por vuelta sin nada nuevo.
+ */
+export const PRESENCE_REFRESH_MS = 120_000;
+
+/**
+ * `run` como mucho una vez cada `intervalMs`: las llamadas de más en ese lapso no hacen nada.
+ * La primera corre siempre.
+ */
+export function atMostEvery(run: () => Promise<void>, intervalMs: number): () => Promise<void> {
+  let last = Number.NEGATIVE_INFINITY;
+  return async () => {
+    const now = Date.now();
+    if (now - last < intervalMs) return;
+    last = now;
+    await run();
+  };
+}
+
 /**
  * Corre `poll` cada `intervalMs` mientras la pestaña está a la vista. Escondida no consulta nada;
  * al volver a verse consulta enseguida y retoma. Devuelve la función que lo detiene.
