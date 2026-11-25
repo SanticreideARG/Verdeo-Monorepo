@@ -141,4 +141,4 @@ Serif Variable igual: instalada se usa ésa; si no, Source Serif 4.
   Intuitivo vuelve a tener vertical, con el nombre del cliente y el tamaño. El resto, con "Mostrar
   más"; una tildada no se esconde.
 - **Llenar la última hoja**: una casilla completa los lugares libres con verticales Keto 400
-  (`fillerLabels`, sueltas: no se anotan como impresas).
+  o Keto 250, a elección (`fillerLabels`, sueltas: no se anotan como impresas).

@@ -30,6 +30,8 @@ import {
 } from '../lib/workingPeriod.js';
 import {
   adjustGroup,
+  FILLER_SIZES,
+  type FillerSize,
   fillerLabels,
   looseLabels,
   menuGroups,
@@ -137,8 +139,9 @@ export function LabelsStudioPage() {
   const [adjust, setAdjust] = useState<Map<string, number>>(new Map());
   // Las que se sacaron de la tanda con la "×" de la vista previa.
   const [removed, setRemoved] = useState<Set<string>>(new Set());
-  // Llenar la última hoja con verticales Keto 400 (2026-10-25).
+  // Llenar la última hoja con verticales Keto 400 (2026-10-25) o Keto 250 (2026-11-25).
   const [fillLastSheet, setFillLastSheet] = useState(false);
+  const [fillSize, setFillSize] = useState<FillerSize>('400');
   // Las verticales que no se imprimen siempre, a la vista sólo si se piden.
   const [showAllMenus, setShowAllMenus] = useState(false);
 
@@ -283,10 +286,10 @@ export function LabelsStudioPage() {
     productionSheetCount(baseBatch.length, startAt) * LABELS_PER_SHEET -
     (startAt - 1) -
     baseBatch.length;
-  // Llenar la última hoja con verticales Keto 400, para no tirar etiquetas en blanco.
+  // Llenar la última hoja con verticales Keto (400 o 250), para no tirar etiquetas en blanco.
   const batch = useMemo(
-    () => (fillLastSheet ? [...baseBatch, ...fillerLabels(freeAtEnd)] : baseBatch),
-    [baseBatch, fillLastSheet, freeAtEnd],
+    () => (fillLastSheet ? [...baseBatch, ...fillerLabels(freeAtEnd, fillSize)] : baseBatch),
+    [baseBatch, fillLastSheet, fillSize, freeAtEnd],
   );
 
   const printedKeys = useMemo(() => new Set(printed.keys()), [printed]);
@@ -623,15 +626,30 @@ export function LabelsStudioPage() {
                 </button>
               </div>
               {freeAtEnd > 0 && baseBatch.length > 0 ? (
-                <label className="label-switch">
-                  <input
-                    checked={fillLastSheet}
-                    onChange={(event) => setFillLastSheet(event.target.checked)}
-                    type="checkbox"
-                  />
-                  Llenar la última hoja con Keto 400 ({String(freeAtEnd)}{' '}
-                  {freeAtEnd === 1 ? 'lugar libre' : 'lugares libres'})
-                </label>
+                <div className="label-switch">
+                  <label className="label-switch">
+                    <input
+                      checked={fillLastSheet}
+                      onChange={(event) => setFillLastSheet(event.target.checked)}
+                      type="checkbox"
+                    />
+                    Llenar la última hoja con
+                  </label>
+                  <select
+                    aria-label="Tamaño de Keto para llenar la última hoja"
+                    onChange={(event) => setFillSize(event.target.value as FillerSize)}
+                    value={fillSize}
+                  >
+                    {FILLER_SIZES.map((size) => (
+                      <option key={size} value={size}>
+                        Keto {size}
+                      </option>
+                    ))}
+                  </select>
+                  <span>
+                    ({String(freeAtEnd)} {freeAtEnd === 1 ? 'lugar libre' : 'lugares libres'})
+                  </span>
+                </div>
               ) : null}
               {loose.length > 0 ? (
                 <ul className="studio-loose-list">

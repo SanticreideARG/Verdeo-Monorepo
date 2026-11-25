@@ -189,4 +189,11 @@ describe('fillerLabels', () => {
     expect(labels.every((label) => label.key.startsWith('suelta:'))).toBe(true);
     expect(fillerLabels(-1)).toEqual([]);
   });
+
+  it('también con Keto 250', () => {
+    const labels = fillerLabels(2, '250');
+    expect(labels).toHaveLength(2);
+    expect(labels[0]).toMatchObject({ kind: 'menu', line: 'KETO', size: '250' });
+    expect(labels[0]?.key).toBe('suelta:relleno:keto-250:0');
+  });
 });

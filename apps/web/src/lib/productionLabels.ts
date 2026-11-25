@@ -147,16 +147,24 @@ export function menuGroups(rows: readonly LabelData[]): LabelGroup[] {
   );
 }
 
+/** Los tamaños de Keto con que se puede llenar la última hoja (Keto 250 desde 2026-11-25). */
+export const FILLER_SIZES = ['400', '250'] as const;
+export type FillerSize = (typeof FILLER_SIZES)[number];
+
 /**
- * Etiquetas verticales Keto 400 para llenar los lugares libres de la última hoja (2026-10-25): así
+ * Etiquetas verticales Keto para llenar los lugares libres de la última hoja (2026-10-25): así
  * no se tira papel de etiquetas en blanco. Son sueltas: no se anotan como impresas.
  */
-export function fillerLabels(count: number, line = 'KETO'): ProductionLabel[] {
+export function fillerLabels(
+  count: number,
+  size: FillerSize = '400',
+  line = 'KETO',
+): ProductionLabel[] {
   return Array.from({ length: Math.max(0, count) }, (_, index) => ({
-    key: `suelta:relleno:keto-400:${String(index)}`,
+    key: `suelta:relleno:keto-${size}:${String(index)}`,
     kind: 'menu' as const,
     line,
-    size: '400',
+    size,
   }));
 }
 
