@@ -171,6 +171,40 @@ describe('mover un pedido al período anterior', () => {
     expect((await periodoDe(client, order.id))?.cycle).toBe(NEW_CYCLE);
   });
 
+  // Un pedido que se lleva lo último de un stock (2026-11-24): su propia vianda no cuenta.
+  it('mueve un pedido que se lleva lo último de un stock', async () => {
+    const { client, operations } = await sembrada();
+    const LOT = 'f4000000-0000-4000-8000-000000000001';
+    await client.exec(
+      `insert into stock_lots (id, operating_site_id, sales_cycle_id, family_name, variant_name,
+                               quantity_units, expires_at)
+       values ('${LOT}', '${SITE}', '${OLD_CYCLE}', 'Keto', '250', 1, '2126-12-31T00:00:00Z');`,
+    );
+    const order = await operations.createOrder(
+      {
+        customerId: CUSTOMER,
+        deliveryAddress: 'Calle 1',
+        deliveryDate: '2126-01-15',
+        dietaryInstructions: [],
+        items: [{ offeringId: NEW_OFFERING, quantityUnits: 1, stockLotId: LOT }],
+        menuId: NEW_MENU,
+        operatingSiteId: SITE,
+        paymentExpectation: 'Efectivo',
+        source: 'manual',
+      },
+      CONTEXT,
+    );
+
+    await expect(operations.moveOrderToPreviousPeriod(order.id, CONTEXT)).resolves.toMatchObject({
+      closed: false,
+    });
+    const lot = await client.query<{ lot: string | null }>(
+      `select stock_lot_id as lot from order_items where order_id = $1`,
+      [order.id],
+    );
+    expect(lot.rows[0]?.lot).toBe(LOT);
+  });
+
   it('no mueve más atrás del primer período', async () => {
     const { operations } = await sembrada();
     const order = await pedidoEn(operations, OLD_MENU, OLD_OFFERING, '2126-01-08');

@@ -9513,7 +9513,11 @@ export class PostgresOperationsService {
         );
       const resolvedItems = this.chargeFor(
         isNoCharge(order.paymentExpectation),
-        await this.resolveOrderItems(transaction, menu.id, mapped, order.operatingSiteId),
+        // Sus propias viandas del lote no cuentan como vendidas: si no, un pedido que se lleva
+        // lo último de un stock no se podía mover ("quedan 0"), 2026-11-24.
+        await this.resolveOrderItems(transaction, menu.id, mapped, order.operatingSiteId, {
+          excludeOrderId: orderId,
+        }),
       );
       const deliverySettings = await this.getDeliverySettings(order.operatingSiteId, transaction);
       const deliveryDate = resolveDeliveryDate(

@@ -195,6 +195,7 @@ Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", f
 ## Mover un pedido al período anterior (2026-11-23)
 
 - [x] Ficha del pedido → "Mover al período anterior" (`POST /api/v1/orders/:id/previous-period`, con `preview`). Con dos períodos abiertos, los pedidos nuevos caían en el último aunque fueran para un reparto pendiente del anterior. Sólo un período atrás (el de `open_at` inmediatamente anterior); misma variedad en el menú de ese período (el de la ciudad o el general), su precio, uno de sus días de reparto; conserva número, ciudad, cliente, domicilio, cobro y lote de stock. Pago dividido: la última parte absorbe la diferencia. Auditado como `order.moved_period`.
+- [x] Arreglo (2026-11-24): un pedido que se llevaba lo último de un stock no se podía mover ("Del stock de … quedan 0"): el chequeo contaba su propia vianda como vendida. Ahora la excluye, como al editar.
 - [x] Si el anterior está cerrado, la vista previa devuelve `closed` y la ficha ofrece reabrirlo (sólo con `production.generate`).
 
 ## Menos consultas automáticas: la cuenta de Vercel se pausó (2026-11-20)
