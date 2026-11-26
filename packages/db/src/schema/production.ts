@@ -217,6 +217,13 @@ export const labelSettings = pgTable(
     namePosition: text('name_position').default('arriba').notNull(),
     /** El recuadro punteado guía la tijera; sobre etiqueta autoadhesiva sobra. */
     showBorders: boolean('show_borders').default(true).notNull(),
+    /*
+     * La fecha de elaboración que propone el generador (2026-11-25): el primer día de la semana
+     * `productionWeekday` (0 domingo … 6 sábado; 4, jueves) dentro del período, corrido
+     * `productionWeekOffset` semanas. Se cambia a mano en el generador para una tanda puntual.
+     */
+    productionWeekday: integer('production_weekday').default(4).notNull(),
+    productionWeekOffset: integer('production_week_offset').default(0).notNull(),
     updatedByUserId: uuid('updated_by_user_id').references(() => users.id, {
       onDelete: 'set null',
     }),
@@ -240,6 +247,14 @@ export const labelSettings = pgTable(
     check(
       'label_settings_font_scale_check',
       sql`${table.fontScale} >= 60 and ${table.fontScale} <= 200`,
+    ),
+    check(
+      'label_settings_production_weekday_check',
+      sql`${table.productionWeekday} between 0 and 6`,
+    ),
+    check(
+      'label_settings_production_week_offset_check',
+      sql`${table.productionWeekOffset} between -1 and 4`,
     ),
   ],
 );
