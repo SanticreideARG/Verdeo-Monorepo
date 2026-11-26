@@ -192,6 +192,16 @@ Replanteo completo de Clientes sin perder nada: encabezado con total y "Más", f
 - [x] Zonas geográficas: "Renombrar" en cada ciudad y "Nombre" en los datos de cada zona. La API ya lo aceptaba (`PATCH /operating-sites/:id` y `/zones/:id` con `displayName`); faltaba en la pantalla. El slug y el prefijo de pedidos no cambian. Avisa si otra zona de la ciudad ya tiene ese nombre.
 - [ ] Unificar Neuquén y Río Negro: ver la propuesta en la conversación del 2026-11-06 (pasar zonas de una operación a otra sin tocar el historial). Pendiente de decisión.
 
+## Fecha de elaboración: el jueves del período (2026-11-25)
+
+- [x] El generador de etiquetas propone como fecha de elaboración el jueves del período elegido (antes, hoy): el primero desde la apertura, en días de la operación (`periodProductionDate`).
+- [x] Parametrizable: día de la semana y desfase de −1 a 4 semanas en `label_settings` (migración 0087, `productionWeekday` / `productionWeekOffset` en `/api/v1/label-settings`), editables en el generador con `production.generate`.
+- [x] Cambiada a mano, la fecha queda la elegida aunque se cambie de período; "Usar la del período" vuelve a la calculada.
+
+## Sacar Mensajes y Avisos del menú (2026-11-25)
+
+- [x] La sección "Mensajería" (Mensajes y Avisos) sale del menú lateral. Las pantallas siguen en `/app/mensajes` y `/app/avisos`; no se borra nada.
+
 ## Llenar la última hoja con Keto 250 (2026-11-25)
 
 - [x] Etiquetas → Sueltas: "Llenar la última hoja con" ofrece Keto 400 o Keto 250 (`FILLER_SIZES`, `fillerLabels(count, size)`). Sigue siendo suelta: no se anota como impresa.

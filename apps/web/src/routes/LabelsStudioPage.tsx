@@ -41,6 +41,7 @@ import {
 } from '../lib/productionLabels.js';
 import { showToast } from '../lib/toast.js';
 import { useDashboardProfile } from '../lib/useDashboardProfile.js';
+import { periodProductionDate, WEEK_OFFSETS, WEEKDAY_NAMES } from '../lib/productionDate.js';
 import { DateInput } from '../components/DateInputs.js';
 
 interface PrintedLabel {
@@ -123,12 +124,18 @@ function printInFrame(html: string) {
 export function LabelsStudioPage() {
   const { failed, logout, profile } = useDashboardProfile();
   const canRead = profile?.permissions.includes('production.read') ?? false;
+  const canConfigure = profile?.permissions.includes('production.generate') ?? false;
 
   const [periods, setPeriods] = useState<Period[]>([]);
   const [cycleId, setCycleId] = useState('');
   const [runId, setRunId] = useState('');
-  // La fecha de elaboración va en el pie de los platos: casi siempre es hoy.
-  const [productionDate, setProductionDate] = useState(() => todayInOperation());
+  /*
+   * La fecha de elaboración va en el pie de los platos (2026-11-25): por defecto, el jueves del
+   * período —día y desfase en la configuración de etiquetas—. Si se cambia a mano, queda la elegida
+   * hasta volver con "Usar la del período".
+   */
+  const [dateRule, setDateRule] = useState({ labelsPerPage: 8, weekOffset: 0, weekday: 4 });
+  const [manualDate, setManualDate] = useState<string | null>(null);
   const [plates, setPlates] = useState<KitchenLabelRow[]>([]);
   const [units, setUnits] = useState<LabelData[]>([]);
   const [loading, setLoading] = useState(false);
@@ -192,6 +199,49 @@ export function LabelsStudioPage() {
   }
 
   useReturnToCurrentPeriod(() => setCycleId(currentPeriod(periods)?.id ?? ''));
+
+  const cyclePeriod = periods.find((period) => period.id === cycleId);
+  const periodDate = cyclePeriod
+    ? periodProductionDate(cyclePeriod, dateRule.weekday, dateRule.weekOffset)
+    : todayInOperation();
+  const productionDate = manualDate ?? periodDate;
+
+  useEffect(() => {
+    if (!canRead) return;
+    void apiRequest('/api/v1/label-settings', { notify: false }).then(async (response) => {
+      if (!response.ok) return;
+      const settings = (await response.json()) as {
+        labelsPerPage: number;
+        productionWeekOffset?: number;
+        productionWeekday?: number;
+      };
+      setDateRule({
+        labelsPerPage: settings.labelsPerPage,
+        weekOffset: settings.productionWeekOffset ?? 0,
+        weekday: settings.productionWeekday ?? 4,
+      });
+    });
+  }, [canRead]);
+
+  async function saveDateRule(next: { weekOffset: number; weekday: number }) {
+    const previous = dateRule;
+    setDateRule({ ...dateRule, ...next });
+    const response = await apiRequest('/api/v1/label-settings', {
+      body: JSON.stringify({
+        labelsPerPage: dateRule.labelsPerPage,
+        productionWeekOffset: next.weekOffset,
+        productionWeekday: next.weekday,
+      }),
+      method: 'PATCH',
+    });
+    if (!response.ok) {
+      setDateRule(previous);
+      setMessage(await errorMessage(response));
+      return;
+    }
+    setManualDate(null);
+    showToast('Listo: es la fecha de elaboración por defecto.');
+  }
 
   useEffect(() => {
     if (!canRead) return;
@@ -574,11 +624,77 @@ export function LabelsStudioPage() {
               <label className="field">
                 Fecha de elaboración
                 <DateInput
-                  onChange={(value) => setProductionDate(value || todayInOperation())}
+                  onChange={(value) => setManualDate(value && value !== periodDate ? value : null)}
                   value={productionDate}
                 />
-                <span className="field-hint">Va en el pie de los platos: «ELAB # dd-mm».</span>
+                <span className="field-hint">
+                  Va en el pie de los platos: «ELAB # dd-mm».{' '}
+                  {manualDate ? (
+                    <button
+                      className="link-button"
+                      onClick={() => setManualDate(null)}
+                      type="button"
+                    >
+                      Usar la del período
+                    </button>
+                  ) : (
+                    `Es el ${WEEKDAY_NAMES[dateRule.weekday]?.toLowerCase() ?? ''} del período${
+                      dateRule.weekOffset === 0
+                        ? ''
+                        : dateRule.weekOffset < 0
+                          ? ', una semana antes'
+                          : `, ${String(dateRule.weekOffset)} ${dateRule.weekOffset === 1 ? 'semana' : 'semanas'} después`
+                    }.`
+                  )}
+                </span>
               </label>
+              {canConfigure ? (
+                <details className="field-hint">
+                  <summary>Cambiar el día por defecto</summary>
+                  <div className="mt-2 flex flex-wrap gap-3">
+                    <label className="field">
+                      Día
+                      <select
+                        onChange={(event) =>
+                          void saveDateRule({
+                            weekOffset: dateRule.weekOffset,
+                            weekday: Number(event.target.value),
+                          })
+                        }
+                        value={dateRule.weekday}
+                      >
+                        {[1, 2, 3, 4, 5, 6, 0].map((day) => (
+                          <option key={day} value={day}>
+                            {WEEKDAY_NAMES[day]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      Semana
+                      <select
+                        onChange={(event) =>
+                          void saveDateRule({
+                            weekOffset: Number(event.target.value),
+                            weekday: dateRule.weekday,
+                          })
+                        }
+                        value={dateRule.weekOffset}
+                      >
+                        {WEEK_OFFSETS.map((offset) => (
+                          <option key={offset} value={offset}>
+                            {offset === 0
+                              ? 'La del período'
+                              : offset < 0
+                                ? 'Una semana antes'
+                                : `${String(offset)} ${offset === 1 ? 'semana' : 'semanas'} después`}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </details>
+              ) : null}
             </div>
 
             {groupCard('Platos', platoGroups)}

@@ -1468,6 +1468,10 @@ export const LabelSettingsSchema = z.object({
   showCustomerName: z.boolean(),
   nameScale: z.number().int().min(50).max(200),
   namePosition: NamePositionSchema,
+  /** La fecha de elaboración por defecto: ese día de la semana del período (0 domingo … 6). */
+  productionWeekday: z.number().int().min(0).max(6),
+  /** Semanas que se corre ese día: de una antes a cuatro después. */
+  productionWeekOffset: z.number().int().min(-1).max(4),
 });
 
 export const LabelSettingsUpdateRequestSchema = z.object({
@@ -1498,6 +1502,8 @@ export const LabelSettingsUpdateRequestSchema = z.object({
   showCustomerName: z.boolean().optional(),
   nameScale: z.number().int().min(50).max(200).optional(),
   namePosition: NamePositionSchema.optional(),
+  productionWeekday: z.number().int().min(0).max(6).optional(),
+  productionWeekOffset: z.number().int().min(-1).max(4).optional(),
 });
 
 export const ProductionActualEntrySchema = z.object({

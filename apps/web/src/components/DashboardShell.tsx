@@ -164,21 +164,10 @@ const navigationClusters: Array<{ items: NavigationItem[]; label: string }> = [
       },
     ],
   },
-  {
-    label: 'Mensajería',
-    items: [
-      // El chat interno ya no está acá: vive en la barra de arriba (`ChatDock`), donde se puede
-      // contestar sin irse de lo que se esté haciendo. Esta sección es la mensajería con clientes.
-      { href: '/app/mensajes', icon: 'whatsapp', label: 'Mensajes', permission: 'messages.read' },
-      // Avisar es a mano: la cola de a quien hay que escribirle esta semana, no un inbox.
-      {
-        href: '/app/avisos',
-        icon: 'whatsapp',
-        label: 'Avisos',
-        permission: 'messages.templates.use',
-      },
-    ],
-  },
+  /*
+   * "Mensajería" (Mensajes y Avisos) salió del menú el 2026-11-25: por ahora no se usa. Las
+   * pantallas siguen en /app/mensajes y /app/avisos; para volver a mostrarlas, reponer la sección.
+   */
   {
     label: 'Inteligencia',
     items: [

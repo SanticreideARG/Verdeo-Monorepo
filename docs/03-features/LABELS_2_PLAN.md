@@ -140,5 +140,10 @@ Serif Variable igual: instalada se usa ésa; si no, Source Serif 4.
 - **Verticales**: a la vista sólo el Keto 400 y los Intuitivos (`LabelGroup.featured`); el
   Intuitivo vuelve a tener vertical, con el nombre del cliente y el tamaño. El resto, con "Mostrar
   más"; una tildada no se esconde.
+- **Fecha de elaboración** (2026-11-25): arranca en el jueves del período elegido
+  (`periodProductionDate`); el día y un desfase en semanas se guardan en `label_settings`
+  (`production_weekday`, `production_week_offset`, migración 0087) y se cambian desde el mismo
+  generador ("Cambiar el día por defecto", con `production.generate`). Cambiada a mano, queda
+  hasta "Usar la del período".
 - **Llenar la última hoja**: una casilla completa los lugares libres con verticales Keto 400
   o Keto 250, a elección (`fillerLabels`, sueltas: no se anotan como impresas).

@@ -583,6 +583,8 @@ const LABEL_SETTINGS_FALLBACK = {
   showCustomerName: true,
   nameScale: 100,
   namePosition: 'arriba',
+  productionWeekday: 4,
+  productionWeekOffset: 0,
 } as const;
 
 /**
@@ -10868,6 +10870,8 @@ export class PostgresOperationsService {
       showCustomerName?: boolean | undefined;
       nameScale?: number | undefined;
       namePosition?: string | undefined;
+      productionWeekday?: number | undefined;
+      productionWeekOffset?: number | undefined;
     },
     context: OperationsContext,
   ) {
@@ -10921,6 +10925,8 @@ export class PostgresOperationsService {
           namePosition: (NAME_POSITIONS as readonly string[]).includes(input.namePosition ?? '')
             ? (input.namePosition as string)
             : (existing?.namePosition ?? 'arriba'),
+          productionWeekday: input.productionWeekday ?? existing?.productionWeekday ?? 4,
+          productionWeekOffset: input.productionWeekOffset ?? existing?.productionWeekOffset ?? 0,
         };
         let row: typeof labelSettings.$inferSelect | undefined;
         if (existing) {

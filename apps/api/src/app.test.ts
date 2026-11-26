@@ -2574,6 +2574,8 @@ describe('API foundation', () => {
       showCustomerName: true,
       nameScale: 100,
       namePosition: 'arriba',
+      productionWeekday: 4,
+      productionWeekOffset: 0,
       kitchenMode: false,
       showSize: false,
       intuitivoCustomerName: true,
