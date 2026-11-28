@@ -203,7 +203,7 @@ Plan: `docs/03-features/TAGS_Y_STOCK_CON_NOMBRE_PLAN.md`.
   - **Producción** (Excel, PDF y WhatsApp): una lista por tag con sus pedidos, con ☐ si lo pide; "al final del nombre" va pegado al cliente en Intuitivos y excepciones.
   - **Planilla de pedidos**, hojas "Pedidos" y "Reparto": el tag al final del nombre o una columna con ☐ al final (en "Pedidos", en el primer renglón del pedido; en "Reparto", en cada bulto).
 - [x] Stock con nombre: la vianda del stock vendida lleva etiqueta con el nombre de quien la compra.
-  - En el generador, una vertical por pedido con el nombre y "stock Noviembre 2", siempre a la vista.
+  - En el generador, una vertical por pedido, siempre a la vista: el tamaño (250 Kcal), el nombre y la fecha de la tanda ("Cristian · 250 Kcal · 26-11"). Sin la variedad ni el período del lote (2026-11-28).
   - En la hoja "Reparto", la variedad lleva el nombre y va en negrita y cursiva, como un Intuitivo.
   - Se desmarca por ítem en la ficha del pedido (`PATCH /api/v1/orders/:id/items/:itemId/name-label`).
   - No se cocina de nuevo ni sale en las etiquetas de platos.

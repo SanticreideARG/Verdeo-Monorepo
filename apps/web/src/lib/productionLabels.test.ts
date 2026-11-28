@@ -128,20 +128,27 @@ describe('menuGroups', () => {
 
 describe('menuGroups: stock con nombre (2026-11-28)', () => {
   it('una vertical con el nombre de quien la compra, a la vista y aparte de las fijas', () => {
-    const groups = menuGroups([
-      unit({ customerDisplayName: 'Cristian', familyName: 'Menú Nuevo Keto', variantName: '250' }),
-      unit({
-        customerDisplayName: 'Cristian',
-        familyName: 'Menú Nuevo Keto',
-        orderPublicNumber: 'CIP-9',
-        stockLabel: 'Noviembre 2',
-        variantName: '250',
-      }),
-    ]);
+    const groups = menuGroups(
+      [
+        unit({
+          customerDisplayName: 'Cristian',
+          familyName: 'Menú Nuevo Keto',
+          variantName: '250',
+        }),
+        unit({
+          customerDisplayName: 'Cristian',
+          familyName: 'Menú Nuevo Keto',
+          orderPublicNumber: 'CIP-9',
+          stockLabel: 'Noviembre 2',
+          variantName: '250',
+        }),
+      ],
+      '2026-11-26',
+    );
     const stock = groups.find((group) => group.id.startsWith('menu:stock:'));
     expect(stock).toMatchObject({ featured: true });
-    expect(stock?.title).toContain('stock Noviembre 2');
-    expect(stock?.labels[0]).toMatchObject({ line: 'Cristian', size: '250' });
+    expect(stock?.title).toBe('Cristian · 250 Kcal · 26-11');
+    expect(stock?.labels[0]).toMatchObject({ date: '26-11', line: 'Cristian', size: '250' });
     expect(groups.filter((group) => !group.id.startsWith('menu:stock:'))).toHaveLength(1);
   });
 });

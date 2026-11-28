@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-28-stock-con-fecha',
+    body: `Etiquetas del stock con nombre: la vertical lleva el tamaño (250 Kcal), el nombre de quien la compra y, abajo, la fecha de la tanda que se imprime. Ya no dice la variedad ni el período en que se cocinó.`,
+  },
+  {
     key: '2026-11-28-stock-con-nombre',
     body: `Stock de semanas anteriores: la vianda que se vende del stock ahora sale en Etiquetas con el nombre de quien la compra, como un Intuitivo, y en la hoja "Reparto" va destacada con el nombre. Si la etiqueta de cuando se cocinó alcanza, se desmarca en la ficha del pedido.`,
   },

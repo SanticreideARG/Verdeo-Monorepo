@@ -40,6 +40,8 @@ export type ProductionLabel =
       line: string;
       /** El número grande: "400". */
       size: string;
+      /** Sólo en la vianda del stock con nombre: la fecha de la tanda ("26-11"), abajo del nombre. */
+      date?: string;
     };
 
 /** "Pechuga rellena | Puré de calabaza" → el plato y su acompañamiento. */
@@ -169,7 +171,7 @@ const FIT_SCRIPT = `<script>
 
 function menuHtml(label: Extract<ProductionLabel, { kind: 'menu' }>): string {
   const isName = [...label.line].length > 12;
-  return `<div class="menu"><img class="badge" src="${PRODUCTION_BADGE}" alt=""><div class="turn"><div class="figures"><span class="size">${escape(label.size)}</span><span class="kcal">Kcal</span></div><p class="line${isName ? ' name' : ''}">${escape(label.line.toLocaleUpperCase('es-AR'))}</p></div></div>`;
+  return `<div class="menu"><img class="badge" src="${PRODUCTION_BADGE}" alt=""><div class="turn"><div class="figures"><span class="size">${escape(label.size)}</span><span class="kcal">Kcal</span></div><p class="line${isName ? ' name' : ''}">${escape(label.line.toLocaleUpperCase('es-AR'))}</p>${label.date ? `<p class="date">${escape(label.date)}</p>` : ''}</div></div>`;
 }
 
 /** La "×" de la vista previa avisa a la página que la contiene qué etiqueta sacar. */
@@ -338,6 +340,7 @@ function css(preview: boolean): string {
   .menu .kcal { grid-column: 2; grid-row: 2; font-size: 14pt; line-height: 15pt; padding-left: 0.4mm; }
   .menu .line { margin: 0.4mm 0 0; font-size: 12pt; line-height: 1.05; }
   .menu .line.name { font-size: 9.5pt; max-width: 26mm; }
+  .menu .date { margin: 0.6mm 0 0; font-size: 9pt; line-height: 1; }
   `;
 }
 

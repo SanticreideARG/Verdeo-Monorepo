@@ -98,7 +98,9 @@ export function plateGroups(
  * Las etiquetas de menú: una por vianda. Las variedades fijas, agrupadas por variedad y tamaño; los
  * Intuitivos, uno por cliente (llevan su nombre).
  */
-export function menuGroups(rows: readonly LabelData[]): LabelGroup[] {
+export function menuGroups(rows: readonly LabelData[], productionDate?: string): LabelGroup[] {
+  // La vianda del stock con nombre lleva la fecha de la tanda, no el período en que se cocinó.
+  const day = productionDate ? elaborationDay(productionDate) : '';
   const groups = new Map<string, LabelGroup>();
   const seen = new Set<string>();
   for (const row of rows) {
@@ -113,7 +115,8 @@ export function menuGroups(rows: readonly LabelData[]): LabelGroup[] {
      */
     /*
      * Una vianda del stock de otro período lleva el nombre de quien la compra, como un Intuitivo
-     * (2026-11-28): un grupo por pedido y variedad, siempre a la vista.
+     * (2026-11-28): un grupo por pedido y variedad, siempre a la vista. Lleva el tamaño, el nombre
+     * y la fecha de la tanda, sin la variedad ni el período del lote.
      */
     const named = Boolean(row.stockLabel);
     const groupId = row.composable
@@ -126,7 +129,7 @@ export function menuGroups(rows: readonly LabelData[]): LabelGroup[] {
     const title = row.composable
       ? `${row.customerDisplayName} · Menú especial ${size}`
       : named
-        ? `${row.customerDisplayName} · ${familyShortName(row.familyName)} ${size} · stock ${row.stockLabel ?? ''}`
+        ? `${row.customerDisplayName} · ${size} Kcal${day ? ` · ${day}` : ''}`
         : `${familyShortName(row.familyName)} ${size}`;
     const group = groups.get(groupId) ?? {
       featured,
@@ -147,6 +150,7 @@ export function menuGroups(rows: readonly LabelData[]): LabelGroup[] {
       kind: 'menu',
       line: row.composable || named ? row.customerDisplayName : familyShortName(row.familyName),
       size,
+      ...(named && day ? { date: day } : {}),
     });
   }
   // La jerarquía de productos: Keto 400, Keto 250, Antiage, Real, Vegetariano, Intuitivos (éstos,

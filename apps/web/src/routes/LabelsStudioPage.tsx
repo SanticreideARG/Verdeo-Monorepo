@@ -299,7 +299,7 @@ export function LabelsStudioPage() {
   }, [canRead, cycleId, runId]);
 
   const platoGroups = useMemo(() => plateGroups(plates, productionDate), [plates, productionDate]);
-  const menuGroupList = useMemo(() => menuGroups(units), [units]);
+  const menuGroupList = useMemo(() => menuGroups(units, productionDate), [units, productionDate]);
 
   // Lo que se puede agregar suelto: cada plato distinto y cada menú (variedad y tamaño, o cliente).
   const looseOptions = useMemo(() => {

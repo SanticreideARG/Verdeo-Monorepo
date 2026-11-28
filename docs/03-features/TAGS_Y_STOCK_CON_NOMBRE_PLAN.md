@@ -136,7 +136,8 @@ dejar de ser lo que es. No cambia la variedad, ni el precio, ni las estadística
 - `Label.stockLabel` / `LabelData.stockLabel`. En `menuGroups` del generador hay un grupo por
   pedido y variedad, `menu:stock:…`:
   - lleva el nombre del cliente en la vertical;
-  - el título es "Cristian · Keto 250 · stock Noviembre 2";
+  - el título es "Cristian · 250 Kcal · 26-11" y la etiqueta lleva, abajo del nombre, la fecha de
+    la tanda (la del generador, `ProductionLabel.date`), no la variedad ni el período del lote;
   - está siempre a la vista y se ordena con los Intuitivos.
 - Planilla de pedidos, hoja "Reparto": la variedad pasa a ser "Cristian · KETO · Noviembre 2" y el
   renglón va en negrita y cursiva (`PeriodReportRow.named`).

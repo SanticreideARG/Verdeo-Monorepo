@@ -89,6 +89,15 @@ describe('la hoja', () => {
     expect(renderProductionSheets({ labels })).not.toContain('overflow-wrap: anywhere');
   });
 
+  it('la vertical del stock con nombre lleva la fecha de la tanda abajo del nombre (2026-11-28)', () => {
+    const labels: ProductionLabel[] = [
+      { date: '26-11', key: 's-1', kind: 'menu', line: 'Cristian', size: '250' },
+    ];
+    const html = renderProductionSheets({ labels });
+    expect(html).toContain('<p class="line">CRISTIAN</p><p class="date">26-11</p>');
+    expect(renderProductionSheets({ labels: [menu('m-1')] })).not.toContain('class="date"');
+  });
+
   it('en la vista previa, una "×" por etiqueta para sacarla; nunca en la impresión', () => {
     const labels: ProductionLabel[] = [
       { dish: 'Lomo', footer: 'KETO', key: 'k-1', kind: 'plato', side: null },
