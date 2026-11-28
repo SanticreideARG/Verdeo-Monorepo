@@ -129,6 +129,14 @@ export const DEFAULT_HELP_ARTICLES: (typeof helpArticles.$inferInsert)[] = [
     title: 'Cambiar el cliente de un pedido',
   },
   {
+    body: 'Los tags son aclaraciones en pills de color, como "Sin semillas". Se ven al lado del nombre en la lista de pedidos y en las fichas.\n\n**Ponerlos**: en la ficha del pedido o del cliente, "+ Tag" agrega uno y la × lo saca. Sólo aparecen los que valen ahí: los que se aplican a pedidos o a clientes y, en un pedido, los de su ciudad.\n\n**Del cliente**: un tag del cliente marca todos sus pedidos, y en el pedido se ve con "· cliente". Se saca desde la ficha del cliente, y al sacarlo deja de verse en todos sus pedidos.\n\n**Crearlos y configurarlos**: en [Panel de control → Tags](/app/ajustes/tags) se eligen el nombre, el color, a qué se aplica, en qué ciudades vale y cómo sale en cada planilla (no sale, al final del nombre o en una columna con casilla). Un tag archivado no se ofrece más, pero lo que ya lo tenía lo sigue mostrando.',
+    category: 'Pedidos / Editar y cancelar',
+    key: 'pedidos-tags',
+    ordinal: 4,
+    requiredPermission: 'orders.read',
+    title: 'Tags: "Sin semillas" y otras aclaraciones',
+  },
+  {
     body: 'Si un pedido o un cliente se cargó en la ciudad que no era, se mueve, sin borrar ni volver a cargar.\n\n**Un pedido**: en su ficha, "Mover a otra ciudad". Elegís la ciudad y la zona, y "Ver qué cambia" muestra el número nuevo (con el prefijo de esa ciudad), el precio y el día de reparto de allá. Recién con "Mover" se guarda. Se pueden mover los pedidos en borrador, confirmados y listos. Si la otra ciudad no ofrece alguna variedad del pedido en ese período, no lo mueve y dice cuál, para cambiarla antes.\n\n**Un cliente**: en su ficha, "Cambiar de ciudad". Elegís la ciudad y la zona; si tiene varios domicilios, la zona de cada uno. El cliente deja la ciudad anterior, sus domicilios se vuelven a ubicar en el mapa, y sus pedidos en borrador y confirmados se mueven con él en el mismo momento.\n\nLos demás datos (nombre, dirección, notas) no cambian solos: si hace falta, se corrigen a mano. En la auditoría queda de dónde a dónde se movió cada cosa.\n\n**Al período anterior**: con dos períodos abiertos, un pedido nuevo cae en el último aunque sea para un reparto pendiente del anterior. En su ficha, "Mover al período anterior" lo pasa al período inmediatamente anterior (sólo uno atrás): toma el menú, el precio y un día de reparto de ese período, y conserva número, cliente, domicilio y cobro. Antes de mover muestra el día y el total. Si ese período está cerrado, ofrece reabrirlo a quien puede cerrar períodos.',
     category: 'Pedidos / Editar y cancelar',
     key: 'pedidos-mover-ciudad',

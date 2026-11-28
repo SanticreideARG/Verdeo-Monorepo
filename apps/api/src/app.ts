@@ -137,6 +137,13 @@ import {
   LabelBackgroundListResponseSchema,
   LabelListResponseSchema,
   LabelSettingsSchema,
+  SetTagsRequestSchema,
+  SetTagsResponseSchema,
+  TagCreateRequestSchema,
+  TagListResponseSchema,
+  TagSchema,
+  TagUpdateRequestSchema,
+  type TagUpdateRequest,
   LabelSettingsUpdateRequestSchema,
   LoginRequestSchema,
   LoginResponseSchema,
@@ -657,6 +664,18 @@ interface OperationsEngine {
     part?: number,
   ): Promise<unknown>;
   setOrderNew(orderId: string, isNew: boolean, context: OperationsContext): Promise<unknown>;
+  // Tags personalizables (2026-11-28).
+  listTags?(): Promise<unknown>;
+  saveTag?(
+    id: string | null,
+    input: TagUpdateRequest,
+    context: OperationsContext,
+  ): Promise<unknown>;
+  setTags?(
+    target: { customerId: string } | { orderId: string },
+    tagIds: readonly string[],
+    context: OperationsContext,
+  ): Promise<unknown>;
   setCycleClosed(cycleId: string, closed: boolean, context: OperationsContext): Promise<unknown>;
   listStockLots(input: {
     onlyAvailable?: boolean | undefined;
@@ -3033,6 +3052,8 @@ export function createApp(options: CreateAppOptions) {
    */
   app.use('/api/v1/cancellation-reasons', requireAuthentication);
   app.use('/api/v1/label-settings', requireAuthentication);
+  app.use('/api/v1/tags', requireAuthentication);
+  app.use('/api/v1/tags/*', requireAuthentication);
   app.use('/api/v1/label-settings/*', requireAuthentication);
   app.use('/api/v1/surveys', requireAuthentication);
   app.use('/api/v1/surveys/*', requireAuthentication);
@@ -7236,6 +7257,74 @@ export function createApp(options: CreateAppOptions) {
       input.data.part,
     );
     return context.json(OrderSchema.parse(contractValue(order)));
+  });
+
+  /*
+   * Tags personalizables (TAGS_Y_STOCK_CON_NOMBRE_PLAN.md, 2026-11-28). La lista la lee quien ve
+   * pedidos o clientes; crearlos y editarlos es del Panel de control; ponerlos, de quien edita el
+   * cliente o el pedido.
+   */
+  app.get('/api/v1/tags', async (context) => {
+    const permissions = context.get('session').permissions;
+    if (!permissions.includes('orders.read') && !permissions.includes('customers.read'))
+      return forbidden(context);
+    const operations = requireOperations();
+    if (!operations.listTags) return context.json({ items: [] });
+    return context.json(
+      TagListResponseSchema.parse(contractValue({ items: await operations.listTags() })),
+    );
+  });
+
+  app.post('/api/v1/tags', async (context) => {
+    if (!context.get('session').permissions.includes('settings.access')) return forbidden(context);
+    const input = TagCreateRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!input.success) return badRequest(context, 'Revisá el tag.', input.error.issues);
+    const operations = requireOperations();
+    if (!operations.saveTag) return forbidden(context);
+    const tag = await operations.saveTag(null, input.data, operationsContext(context));
+    return context.json(TagSchema.parse(contractValue(tag)), 201);
+  });
+
+  app.patch('/api/v1/tags/:id', async (context) => {
+    if (!context.get('session').permissions.includes('settings.access')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    const input = TagUpdateRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success)
+      return badRequest(context, 'Revisá el tag.', input.success ? undefined : input.error.issues);
+    const operations = requireOperations();
+    if (!operations.saveTag) return forbidden(context);
+    const tag = await operations.saveTag(params.data.id, input.data, operationsContext(context));
+    return context.json(TagSchema.parse(contractValue(tag)));
+  });
+
+  app.put('/api/v1/customers/:id/tags', async (context) => {
+    if (!context.get('session').permissions.includes('customers.edit')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    const input = SetTagsRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success) return badRequest(context, 'Revisá los tags.');
+    const operations = requireOperations();
+    if (!operations.setTags) return forbidden(context);
+    const tags = await operations.setTags(
+      { customerId: params.data.id },
+      input.data.tagIds,
+      operationsContext(context),
+    );
+    return context.json(SetTagsResponseSchema.parse(contractValue({ tags })));
+  });
+
+  app.put('/api/v1/orders/:id/tags', async (context) => {
+    if (!context.get('session').permissions.includes('orders.edit')) return forbidden(context);
+    const params = IdParamSchema.safeParse(context.req.param());
+    const input = SetTagsRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!params.success || !input.success) return badRequest(context, 'Revisá los tags.');
+    const operations = requireOperations();
+    if (!operations.setTags) return forbidden(context);
+    const tags = await operations.setTags(
+      { orderId: params.data.id },
+      input.data.tagIds,
+      operationsContext(context),
+    );
+    return context.json(SetTagsResponseSchema.parse(contractValue({ tags })));
   });
 
   /** "NUEVO" desde la lista, sin confirmación: el cliente en el período de este pedido. */

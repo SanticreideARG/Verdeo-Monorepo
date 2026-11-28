@@ -14091,3 +14091,98 @@ body:has(.modal-backdrop) .assistant-launcher.is-operator.is-saying {
   opacity: 0;
   pointer-events: none;
 }
+
+/* Tags personalizables (2026-11-28): pills de color sólido con texto blanco, legibles en los dos
+   temas. El color sale de la paleta cerrada de contratos (TAG_COLORS). */
+.tag-pill {
+  --tag: #3a7d44;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  padding: 0.08rem 0.55rem;
+  background: var(--tag);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.tag-pill small {
+  font-weight: 500;
+  opacity: 0.85;
+}
+.tag-pill button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.tag-pill[data-color='green'] {
+  --tag: #2f7d3e;
+}
+.tag-pill[data-color='teal'] {
+  --tag: #137a74;
+}
+.tag-pill[data-color='blue'] {
+  --tag: #2a62b8;
+}
+.tag-pill[data-color='violet'] {
+  --tag: #6a48b8;
+}
+.tag-pill[data-color='pink'] {
+  --tag: #b83a7a;
+}
+.tag-pill[data-color='red'] {
+  --tag: #c0392b;
+}
+.tag-pill[data-color='orange'] {
+  --tag: #c2571a;
+}
+.tag-pill[data-color='amber'] {
+  --tag: #a86b00;
+}
+.tag-pill[data-color='brown'] {
+  --tag: #7a5233;
+}
+.tag-pill[data-color='gray'] {
+  --tag: #5f6670;
+}
+.tag-pills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 0.4rem;
+  vertical-align: 0.1em;
+}
+.tag-editor {
+  margin-left: 0;
+}
+.tag-add {
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+}
+.tag-color-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+}
+.tags-settings-list {
+  display: grid;
+  gap: 0.6rem;
+}
+.tags-settings-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+.tags-settings-list li.is-archived .tag-pill {
+  opacity: 0.5;
+}

@@ -2,6 +2,7 @@ import { LABEL_FIELDS, LABEL_LAYOUTS, NAME_POSITIONS } from '@verdeo/labels';
 import { z } from 'zod';
 
 import { IsoDateTimeSchema, UuidSchema } from './common.js';
+import { AppliedTagSchema } from './tags.js';
 
 const RequiredTextSchema = z.string().trim().min(1).max(200);
 const OptionalTextSchema = z.string().trim().max(500).optional();
@@ -451,6 +452,8 @@ export const CustomerOrderSummarySchema = z.object({
 export const CustomerDetailSchema = CustomerSummarySchema.extend({
   addresses: z.array(CustomerAddressSchema).optional(),
   isNew: z.boolean().default(false),
+  /** Sus tags propios: marcan todos sus pedidos (2026-11-28). */
+  tags: z.array(AppliedTagSchema).default([]),
   isNewOverride: z.boolean().nullable().default(null),
   firstName: z.string().nullable(),
   identities: z.array(CustomerIdentitySchema).optional(),
@@ -1051,6 +1054,7 @@ export const OrderSchema = z.object({
   deliveryZone: z.string().nullable(),
   /** La ciudad de la operación: la que decide numeración, menú y precios. */
   operatingSiteName: z.string().nullable(),
+  operatingSiteId: UuidSchema.nullable().default(null),
   dietaryInstructions: z.array(z.string()),
   id: UuidSchema,
   items: z.array(
@@ -1095,6 +1099,8 @@ export const OrderSchema = z.object({
   publicNumber: z.string(),
   source: OrderSourceSchema,
   status: OrderStatusSchema,
+  /** Sus tags y los de su cliente que valen en su ciudad (2026-11-28). */
+  tags: z.array(AppliedTagSchema).default([]),
   totalMinor: z.number().int(),
   updatedAt: IsoDateTimeSchema,
 });

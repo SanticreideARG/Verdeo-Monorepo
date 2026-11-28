@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-28-tags',
+    body: `Tags: aclaraciones en pills de color, como "Sin semillas", que se ponen a clientes o a pedidos desde sus fichas. El de un cliente marca todos sus pedidos. Se crean y se configuran en Panel de control → Tags: color, ciudades, a qué se aplican y cómo salen en las planillas.`,
+  },
+  {
     key: '2026-11-25-fecha-elaboracion-jueves',
     body: `Etiquetas: la fecha de elaboración arranca en el jueves del período elegido, no en hoy. Se puede cambiar a mano para una tanda, y "Cambiar el día por defecto" elige otro día o lo corre semanas. Además, Mensajes y Avisos ya no están en el menú.`,
   },

@@ -1,3 +1,4 @@
+import type { AppliedTag } from './tags.js';
 import { describeResponse, errorText } from './errors.js';
 
 export interface AIProviderConfig {
@@ -70,6 +71,8 @@ export interface CustomerAddress {
 
 export interface CustomerDetail extends CustomerSummary {
   addresses?: CustomerAddress[];
+  /** Sus tags: marcan todos sus pedidos (2026-11-28). */
+  tags?: AppliedTag[];
   isNew?: boolean;
   /** Lo marcado a mano; null es el cálculo automático. */
   isNewOverride?: boolean | null;
@@ -307,6 +310,10 @@ export interface OrderSummary {
   publicNumber: string;
   source: string;
   status: 'DRAFT' | 'CONFIRMED' | 'READY' | 'DELIVERED' | 'CANCELLED';
+  /** Sus tags y los de su cliente que valen en su ciudad (2026-11-28). */
+  tags?: AppliedTag[];
+  /** La ciudad del pedido: decide qué tags se le pueden poner. */
+  operatingSiteId?: string | null;
   totalMinor: number;
   updatedAt: string;
 }

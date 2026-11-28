@@ -1,3 +1,4 @@
+import { TagPills } from '../components/TagPills.js';
 import { isNoCharge } from '@verdeo/orders';
 import { Link } from 'react-router-dom';
 
@@ -130,6 +131,7 @@ export function buildOrderColumns(
               NUEVO
             </span>
           ) : null}
+          <TagPills tags={order.tags} />
         </>
       ),
       // Se ordena por lo que se muestra: con los apellidos tapados, ordenar por el nombre completo

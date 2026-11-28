@@ -31,6 +31,7 @@ import { ArchivedCustomersPage } from './ArchivedCustomersPage.js';
 import { SystemPage } from './SystemPage.js';
 import { AddressSettingsPage } from './AddressSettingsPage.js';
 import { DeliverySettingsPage } from './DeliverySettingsPage.js';
+import { TagsSettingsPage } from './TagsSettingsPage.js';
 import { BackupsPage } from './BackupsPage.js';
 import { GeographySettingsPage } from './GeographySettingsPage.js';
 import { MenuCatalogSettingsPage } from './MenuCatalogSettingsPage.js';
@@ -510,6 +511,14 @@ export function App() {
           element={
             <SettingsGate>
               <AddressSettingsPage />
+            </SettingsGate>
+          }
+        />
+        <Route
+          path="/app/ajustes/tags"
+          element={
+            <SettingsGate>
+              <TagsSettingsPage />
             </SettingsGate>
           }
         />

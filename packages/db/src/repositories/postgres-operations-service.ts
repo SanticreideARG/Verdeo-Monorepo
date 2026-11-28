@@ -133,10 +133,23 @@ import {
   weeklyMenus,
   kitchenSheets,
   type KitchenSheetOrder,
+  customerTags,
+  orderTags,
 } from '../schema/index.js';
 import { ilikeIgnoringAccents } from './accent-search.js';
 import { findMergeCandidates, mergeCustomers } from './customer-merge.js';
 import { assignOrderToRun, dropEmptyAutoRun, leaveRun, runLabel } from './delivery-runs.js';
+import {
+  getTag,
+  listTags,
+  replaceCustomerTags,
+  replaceOrderTags,
+  saveTag,
+  tagAppliesToSite,
+  type TagInput,
+  tagsByCustomer,
+  tagsByOrder,
+} from './tags.js';
 import {
   type PaymentPartInput,
   paymentPartsByOrder,
@@ -733,6 +746,8 @@ function computeProductionDelta(
 // an unhandled exception and a generic 500, instead of the friendly conflict message below.
 interface PgConflictInfo {
   code?: string;
+  // postgres.js lo llama `constraint_name`; el protocolo de PGlite (los tests), `constraint`.
+  constraint?: string;
   constraint_name?: string;
 }
 
@@ -748,6 +763,7 @@ function postgresConflictInfo(error: unknown): PgConflictInfo | undefined {
 // gets the safe generic fallback rather than leaking the raw constraint name.
 const CONFLICT_MESSAGES_BY_CONSTRAINT: Record<string, string> = {
   sales_cycles_alias_unique: 'Ya existe una semana con ese alias — elegí uno distinto.',
+  tags_name_unique: 'Ya hay un tag con ese nombre.',
   // Puede ser de un cliente archivado, que ya no sale en las listas.
   customer_identities_active_value_unique:
     'Ese teléfono o correo ya es de otro cliente. Si no lo encontrás, puede estar archivado: pedile a quien administra que lo reactive.',
@@ -757,7 +773,7 @@ function translateDatabaseConflict(error: unknown): never {
   const pg = postgresConflictInfo(error);
   if (pg?.code === '23505') {
     throw new OperationsConflictError(
-      (pg.constraint_name && CONFLICT_MESSAGES_BY_CONSTRAINT[pg.constraint_name]) ??
+      CONFLICT_MESSAGES_BY_CONSTRAINT[pg.constraint_name ?? pg.constraint ?? ''] ??
         'Ya existe un registro con esos datos únicos.',
     );
   }
@@ -1247,6 +1263,8 @@ export class PostgresOperationsService {
     const newness = {
       isNew: isNewCustomer(customer.isNewOverride, activeOrders?.count ?? 0),
       isNewOverride: customer.isNewOverride,
+      // Sus tags (2026-11-28): viajan con "nuevo" porque las dos ramas de la respuesta los llevan.
+      tags: (await tagsByCustomer(this.database, [customerId])).get(customerId) ?? [],
     };
 
     const orderRows = await this.database
@@ -6761,6 +6779,120 @@ export class PostgresOperationsService {
    * en ese período: se marca en todos sus pedidos del período del pedido tocado, y no en los de
    * otros períodos. Devuelve los pedidos que cambiaron, para actualizar la lista en el lugar.
    */
+  // --- Tags personalizables (TAGS_Y_STOCK_CON_NOMBRE_PLAN.md, 2026-11-28) ----------------------
+
+  public async listTags() {
+    return listTags(this.database);
+  }
+
+  /** Alta (`id` null) o edición de un tag, auditada. */
+  public async saveTag(id: string | null, input: TagInput, context: OperationsContext) {
+    return this.database
+      .transaction(async (transaction) => {
+        const before = id ? await getTag(transaction, id) : null;
+        if (id && !before) throw new OperationsNotFoundError('No se encontró el tag');
+        const tagId = await saveTag(transaction, id, input, context.actorUserId ?? null);
+        const after = await getTag(transaction, tagId);
+        if (!after) throw new Error('Tag save did not return a row');
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        await audit.record({
+          action: id ? 'tag.updated' : 'tag.created',
+          actor: auditActor(context),
+          after: after as unknown as JsonValue,
+          ...(before ? { before: before as unknown as JsonValue } : {}),
+          correlationId: context.correlationId,
+          entityId: tagId,
+          entityType: 'tag',
+          requestId: context.requestId,
+          source: context.source,
+        });
+        return after;
+      })
+      .catch(translateDatabaseConflict);
+  }
+
+  /**
+   * Reemplaza los tags propios de un cliente o de un pedido. Sólo acepta tags activos que se
+   * puedan poner ahí; en un pedido, además, que valgan en su ciudad. Uno archivado que ya tenía se
+   * conserva.
+   */
+  public async setTags(
+    target: { customerId: string } | { orderId: string },
+    tagIds: readonly string[],
+    context: OperationsContext,
+  ) {
+    return this.database
+      .transaction(async (transaction) => {
+        const all = await listTags(transaction);
+        const isOrder = 'orderId' in target;
+        let siteId: string | null = null;
+        let current: readonly string[];
+        if (isOrder) {
+          const [order] = await transaction
+            .select({ siteId: orders.operatingSiteId })
+            .from(orders)
+            .where(eq(orders.id, target.orderId))
+            .limit(1);
+          if (!order) throw new OperationsNotFoundError('No se encontró el pedido');
+          siteId = order.siteId;
+          current = (
+            await transaction
+              .select({ tagId: orderTags.tagId })
+              .from(orderTags)
+              .where(eq(orderTags.orderId, target.orderId))
+          ).map((row) => row.tagId);
+        } else {
+          const [customer] = await transaction
+            .select({ id: customers.id })
+            .from(customers)
+            .where(eq(customers.id, target.customerId))
+            .limit(1);
+          if (!customer) throw new OperationsNotFoundError('No se encontró el cliente');
+          current = (
+            await transaction
+              .select({ tagId: customerTags.tagId })
+              .from(customerTags)
+              .where(eq(customerTags.customerId, target.customerId))
+          ).map((row) => row.tagId);
+        }
+        for (const tagId of tagIds) {
+          const tag = all.find((candidate) => candidate.id === tagId);
+          if (!tag) throw new OperationsNotFoundError('No se encontró el tag');
+          if (current.includes(tagId)) continue;
+          if (!tag.active) throw new OperationsConflictError(`"${tag.name}" está archivado.`);
+          if (tag.appliesTo !== 'BOTH' && tag.appliesTo !== (isOrder ? 'ORDER' : 'CUSTOMER'))
+            throw new OperationsConflictError(
+              `"${tag.name}" se pone sólo a ${tag.appliesTo === 'ORDER' ? 'pedidos' : 'clientes'}.`,
+            );
+          if (isOrder && !tagAppliesToSite(tag, siteId))
+            throw new OperationsConflictError(
+              `"${tag.name}" no se usa en la ciudad de este pedido.`,
+            );
+        }
+        const actor = context.actorUserId ?? null;
+        if (isOrder) await replaceOrderTags(transaction, target.orderId, tagIds, actor);
+        else await replaceCustomerTags(transaction, target.customerId, tagIds, actor);
+        const names = (ids: readonly string[]) =>
+          ids.map((id) => all.find((tag) => tag.id === id)?.name ?? id);
+        const audit = new AuditService(new PostgresAuditSink(transaction));
+        await audit.record({
+          action: isOrder ? 'order.tags_changed' : 'customer.tags_changed',
+          actor: auditActor(context),
+          after: { tags: names(tagIds) },
+          before: { tags: names(current) },
+          correlationId: context.correlationId,
+          entityId: isOrder ? target.orderId : target.customerId,
+          entityType: isOrder ? 'order' : 'customer',
+          requestId: context.requestId,
+          source: context.source,
+        });
+        return isOrder
+          ? ((await tagsByOrder(transaction, [target.orderId])).get(target.orderId) ?? [])
+          : ((await tagsByCustomer(transaction, [target.customerId])).get(target.customerId) ?? []);
+      })
+      .catch(translateDatabaseConflict);
+  }
+
   public async setOrderNew(orderId: string, isNew: boolean, context: OperationsContext) {
     return this.database
       .transaction(async (transaction) => {
@@ -8960,6 +9092,7 @@ export class PostgresOperationsService {
         // La ciudad de la operación, no la del domicilio: es la que decide numeración, menú y
         // precios, y la que alguien busca cuando pregunta "¿de dónde era este pedido?".
         operatingSiteName: operatingSites.displayName,
+        operatingSiteId: orders.operatingSiteId,
         notes: orders.notes,
         deliveryAddressLine2: orders.deliveryAddressLine2,
         deliveryDayText: orders.deliveryDayText,
@@ -9105,6 +9238,8 @@ export class PostgresOperationsService {
     };
 
     const partsByOrder = await paymentPartsByOrder(database, presentIds);
+    // Los tags del pedido y los de su cliente que valen en su ciudad (2026-11-28).
+    const tagsOfOrder = await tagsByOrder(database, presentIds);
     const byId = new Map(
       rows.map((row) => [
         row.id,
@@ -9112,6 +9247,7 @@ export class PostgresOperationsService {
           ...row,
           // El pago dividido, con el tilde de cada parte (2026-11-17). Vacío: un solo medio.
           paymentParts: partsByOrder.get(row.id) ?? [],
+          tags: tagsOfOrder.get(row.id) ?? [],
           // `numeric` llega como texto desde Postgres; el contrato pide números.
           deliveryLatitude: row.deliveryLatitude === null ? null : Number(row.deliveryLatitude),
           deliveryLongitude: row.deliveryLongitude === null ? null : Number(row.deliveryLongitude),

@@ -47,6 +47,14 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         permission: 'sites.read',
       },
       {
+        description:
+          'Aclaraciones en pills de color, como «Sin semillas», para clientes y pedidos.',
+        href: '/app/ajustes/tags',
+        keywords: ['tag', 'etiqueta', 'aclaración', 'sin semillas', 'pill', 'marca', 'color'],
+        label: 'Tags',
+        permission: 'settings.access',
+      },
+      {
         description: 'Cómo se arma y se cobra el menú personalizado en cada ciudad.',
         href: '/app/ajustes/menu',
         keywords: ['intuitivo', 'especial', 'menú', 'precio', 'platos', 'personalizado'],

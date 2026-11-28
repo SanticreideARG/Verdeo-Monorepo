@@ -1,3 +1,5 @@
+import { TagEditor } from '../components/TagPills.js';
+import { useTags } from '../lib/tags.js';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { Link, useParams, useSearchParams } from 'react-router-dom';
@@ -71,6 +73,8 @@ export function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const paymentMethods = usePaymentMethods();
   const [order, setOrder] = useState<OrderSummary | null>(null);
+  // Los tags que se le pueden poner (2026-11-28).
+  const { tags: allTags } = useTags();
   // Si salió en una planilla de cocina y si pasó al stock (2026-10-28).
   const [kitchenStatus, setKitchenStatus] = useState<{ cancelledToStock: boolean } | null>(null);
   const [confirmToStock, setConfirmToStock] = useState(false);
@@ -458,6 +462,16 @@ export function OrderDetailPage() {
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-semibold text-forest">{order.customer.displayName}</h1>
               <span className="status-chip">{orderStatusLabel(order.status)}</span>
+            </div>
+            <div className="mt-2">
+              <TagEditor
+                allTags={allTags}
+                canEdit={canEdit}
+                onChange={(tags) => setOrder({ ...order, tags })}
+                siteId={order.operatingSiteId ?? null}
+                tags={order.tags ?? []}
+                target={{ orderId: order.id }}
+              />
             </div>
           </div>
           <div className="order-detail-nav">

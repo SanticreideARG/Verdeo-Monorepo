@@ -1,3 +1,5 @@
+import { TagEditor } from '../components/TagPills.js';
+import { useTags } from '../lib/tags.js';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -180,6 +182,8 @@ export function CustomersPage() {
   const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
+  // Los tags que se le pueden poner a un cliente (2026-11-28).
+  const { tags: allTags } = useTags();
   const [zones, setZones] = useState<
     { displayName: string; id: string; operatingSiteId: string }[]
   >([]);
@@ -1388,6 +1392,13 @@ export function CustomersPage() {
                     <span className="status-chip">{customerStatusLabel(detail.status)}</span>
                     {detail.isNew ? <span className="new-badge">NUEVO</span> : null}
                     <h2>{detail.displayName}</h2>
+                    <TagEditor
+                      allTags={allTags}
+                      canEdit={canEditCustomer}
+                      onChange={(tags) => setDetail({ ...detail, tags })}
+                      tags={detail.tags ?? []}
+                      target={{ customerId: detail.id }}
+                    />
                     {/*
                      * "NUEVO" se calcula solo (primera compra) y se puede forzar a mano: es para
                      * saber a quién mandarle las recomendaciones para descongelar.
