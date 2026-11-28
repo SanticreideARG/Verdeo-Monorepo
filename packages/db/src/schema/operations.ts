@@ -936,6 +936,12 @@ export const orderItems = pgTable(
      * cocinada, no suma a lo que hay que cocinar y descuenta del lote. Null: se cocina esta semana.
      */
     stockLotId: uuid('stock_lot_id').references(() => stockLots.id, { onDelete: 'set null' }),
+    /*
+     * Una vianda del stock lleva etiqueta con el nombre de quien la compra, como un Intuitivo
+     * (2026-11-28): sale en el generador y en la hoja de reparto. Sólo cuenta con `stockLotId`;
+     * se desmarca si la etiqueta de cuando se cocinó alcanza.
+     */
+    nameLabel: boolean('name_label').default(true).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

@@ -617,6 +617,13 @@
       "when": 1795661686751,
       "tag": "0087_dia_de_elaboracion",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1795835492458,
+      "tag": "0088_tags_y_stock_con_nombre",
+      "breakpoints": true
     }
   ]
 }
