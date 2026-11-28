@@ -364,6 +364,31 @@ export function OrderDetailPage() {
   }
 
   const canEdit = profile.permissions.includes('orders.edit');
+
+  async function setNameLabel(itemId: string, nameLabel: boolean) {
+    if (!order) return;
+    const response = await apiRequest(`/api/v1/orders/${order.id}/items/${itemId}/name-label`, {
+      body: JSON.stringify({ nameLabel }),
+      method: 'PATCH',
+    });
+    if (!response.ok) {
+      showToast(await errorMessage(response), 'error');
+      return;
+    }
+    setOrder({
+      ...order,
+      items: order.items.map((item) =>
+        item.id === itemId && item.stockLot
+          ? { ...item, stockLot: { ...item.stockLot, nameLabel } }
+          : item,
+      ),
+    });
+    showToast(
+      nameLabel
+        ? 'Sale en Etiquetas con el nombre del cliente.'
+        : 'Ya no sale en Etiquetas: lleva la de cuando se cocinó.',
+    );
+  }
   const payment = paymentStatus(order, paymentMethods, todayInOperation());
   const neighbours = neighboursOf(order.id);
   // De READY en adelante el servidor rechaza cambios en lo que se cocina.
@@ -873,6 +898,18 @@ export function OrderDetailPage() {
                   </strong>
                   <span>{formatMoney(item.totalMinor, order.currency)}</span>
                 </div>
+                {/* Del stock: la etiqueta con el nombre de quien la compra (2026-11-28). */}
+                {item.stockLot ? (
+                  <label className="label-switch mt-1">
+                    <input
+                      checked={item.stockLot.nameLabel !== false}
+                      disabled={!canEdit}
+                      onChange={(event) => void setNameLabel(item.id, event.target.checked)}
+                      type="checkbox"
+                    />
+                    Etiqueta con el nombre de {order.customer.displayName}
+                  </label>
+                ) : null}
                 {/* Uno por línea: cinco platos separados por comas se leen como una frase larga, y lo
                     que hace falta es contarlos y ubicar uno. */}
                 {item.dishSelections.length > 0 ? (

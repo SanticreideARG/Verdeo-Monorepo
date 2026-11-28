@@ -285,7 +285,7 @@ export interface OrderSummary {
     id: string;
     offeringId: string | null;
     /** Del stock de un período anterior: de cuál (STOCK_LOTS_PLAN.md). */
-    stockLot?: { cycleAlias: string; id: string } | null;
+    stockLot?: { cycleAlias: string; id: string; nameLabel?: boolean } | null;
     productName: string;
     quantityUnits: number;
     totalMinor: number;

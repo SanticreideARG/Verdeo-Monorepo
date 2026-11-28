@@ -33,6 +33,8 @@ export interface KitchenSourceLine {
   /** El origen del pedido: lo vendido del stock (`opportunity_sale`) no suma a lo que se cocina. */
   orderSource?: string | undefined;
   quantityUnits: number;
+  /** Del stock de un período anterior, con etiqueta con nombre: de cuál ("Noviembre 2"). */
+  stockLabel?: string | null | undefined;
   variantName: string;
 }
 
@@ -109,5 +111,7 @@ export interface Label {
   /** Qué unidad de las del renglón es ésta: se imprime como "1 de 3" cuando hay más de una. */
   unitIndex: number;
   unitTotal: number;
+  /** Una vianda del stock que lleva el nombre de quien la compra: de qué período es. */
+  stockLabel?: string | null;
   variantName: string;
 }

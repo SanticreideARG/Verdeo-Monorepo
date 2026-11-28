@@ -379,7 +379,7 @@ function buildSheet(title: string, report: PeriodReport, layout: Layout): WorkSh
       layout.columns.forEach((column, index) => {
         const cell = column.value(line);
         // Un Intuitivo va en negrita cursiva, como en la planilla.
-        if (line.composable && !column.plain) {
+        if ((line.composable || line.named) && !column.plain) {
           const style = (cell.s ?? {}) as Style;
           cell.s = { ...style, font: { ...style.font, bold: true, italic: true } };
         }

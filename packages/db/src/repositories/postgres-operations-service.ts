@@ -6893,6 +6893,40 @@ export class PostgresOperationsService {
       .catch(translateDatabaseConflict);
   }
 
+  /**
+   * Una vianda del stock lleva, o no, etiqueta con el nombre de quien la compra (2026-11-28). Por
+   * defecto sí: se desmarca si la etiqueta de cuando se cocinó alcanza.
+   */
+  public async setItemNameLabel(
+    orderId: string,
+    itemId: string,
+    nameLabel: boolean,
+    context: OperationsContext,
+  ) {
+    return this.database.transaction(async (transaction) => {
+      const [item] = await transaction
+        .update(orderItems)
+        .set({ nameLabel })
+        .where(and(eq(orderItems.id, itemId), eq(orderItems.orderId, orderId)))
+        .returning({ id: orderItems.id, stockLotId: orderItems.stockLotId });
+      if (!item) throw new OperationsNotFoundError('No se encontró el ítem del pedido');
+      if (!item.stockLotId)
+        throw new OperationsConflictError('Sólo las viandas del stock llevan etiqueta con nombre.');
+      const audit = new AuditService(new PostgresAuditSink(transaction));
+      await audit.record({
+        action: 'order.item_name_label',
+        actor: auditActor(context),
+        after: { itemId, nameLabel },
+        correlationId: context.correlationId,
+        entityId: orderId,
+        entityType: 'order',
+        requestId: context.requestId,
+        source: context.source,
+      });
+      return { itemId, nameLabel };
+    });
+  }
+
   public async setOrderNew(orderId: string, isNew: boolean, context: OperationsContext) {
     return this.database
       .transaction(async (transaction) => {
@@ -8595,6 +8629,7 @@ export class PostgresOperationsService {
               dishSelections: item.dishSelections,
               dishSources: item.dishSources,
               stockLabel: item.stockLot?.cycleAlias ?? null,
+              nameLabel: item.stockLot?.nameLabel ?? false,
               familyName: item.productName,
               mealsPerUnit: kind?.mealsPerUnit ?? 5,
               quantityUnits: item.quantityUnits,
@@ -9135,6 +9170,7 @@ export class PostgresOperationsService {
         variantName: orderItems.variantSnapshot,
         stockLotId: orderItems.stockLotId,
         stockLotCycleAlias: salesCycles.alias,
+        nameLabel: orderItems.nameLabel,
       })
       .from(orderItems)
       .leftJoin(stockLots, eq(stockLots.id, orderItems.stockLotId))
@@ -9275,7 +9311,12 @@ export class PostgresOperationsService {
             quantityUnits: item.quantityUnits,
             // Del stock de un período anterior: de cuál ("Octubre 2").
             stockLot: item.stockLotId
-              ? { cycleAlias: item.stockLotCycleAlias ?? '', id: item.stockLotId }
+              ? {
+                  cycleAlias: item.stockLotCycleAlias ?? '',
+                  id: item.stockLotId,
+                  // Lleva etiqueta con el nombre de quien la compra (2026-11-28).
+                  nameLabel: item.nameLabel,
+                }
               : null,
             totalMinor: item.totalMinor,
             unitPriceMinor: item.unitPriceMinor,
@@ -10277,6 +10318,11 @@ export class PostgresOperationsService {
            * nombre de quien ya no lo recibe.
            */
           includeSentToStock?: boolean | undefined;
+          /**
+           * Sumar las viandas del stock que llevan etiqueta con el nombre de quien las compra
+           * (2026-11-28). Sólo para las etiquetas de vianda: no se cocinan de nuevo.
+           */
+          namedStock?: boolean | undefined;
           operatingSiteId?: string | null | undefined;
           zone?: string | undefined;
         }
@@ -10303,6 +10349,10 @@ export class PostgresOperationsService {
         orderSource: orders.source,
         orderStatus: orders.status,
         quantityUnits: orderItems.quantityUnits,
+        // Del stock de un período anterior: de cuál ("Noviembre 2"). Null si se cocina ahora.
+        stockLabel: sql<
+          string | null
+        >`(select sc.alias from stock_lots sl join sales_cycles sc on sc.id = sl.sales_cycle_id where sl.id = ${orderItems.stockLotId})`,
         variantName: orderItems.variantSnapshot,
       })
       .from(orderItems)
@@ -10330,8 +10380,11 @@ export class PostgresOperationsService {
                     and(eq(orders.status, 'CANCELLED'), eq(orders.cancelledToStock, true)),
                   )
                 : inArray(orders.status, ['CONFIRMED', 'READY', 'DELIVERED']),
-              // Lo que sale de un lote de stock ya está cocinado: ni se cocina ni lleva etiqueta.
-              isNull(orderItems.stockLotId),
+              // Lo que sale de un lote de stock ya está cocinado: no se cocina. La etiqueta con
+              // el nombre de quien lo compra, sí (salvo que se haya desmarcado en el ítem).
+              filter.namedStock
+                ? or(isNull(orderItems.stockLotId), eq(orderItems.nameLabel, true))
+                : isNull(orderItems.stockLotId),
             ),
       )
       .orderBy(asc(orders.publicNumber));
@@ -10945,6 +10998,7 @@ export class PostgresOperationsService {
     return buildLabels(
       await this.loadKitchenLines({
         cycleId,
+        namedStock: true,
         operatingSiteId,
         ...(zone ? { zone } : {}),
         ...(deliveryRunId ? { deliveryRunId } : {}),

@@ -1064,7 +1064,15 @@ export const OrderSchema = z.object({
       dishSources: z.array(DishSourceSchema).default([]),
       id: UuidSchema,
       // Del stock de un período anterior: de cuál.
-      stockLot: z.object({ cycleAlias: z.string(), id: UuidSchema }).nullable().optional(),
+      stockLot: z
+        .object({
+          cycleAlias: z.string(),
+          id: UuidSchema,
+          /** Lleva etiqueta con el nombre de quien la compra (2026-11-28). */
+          nameLabel: z.boolean().default(true),
+        })
+        .nullable()
+        .optional(),
       // Null cuando la oferta del menú se borró: el ítem conserva sus snapshots de nombre y precio,
       // pero deja de saber contra qué variedad del menú se cargó.
       offeringId: UuidSchema.nullable(),
@@ -1392,6 +1400,8 @@ export const LabelSchema = z.object({
   dietaryInstructions: z.array(z.string()),
   familyName: z.string(),
   orderPublicNumber: z.string(),
+  /** Una vianda del stock con el nombre de quien la compra: de qué período es (2026-11-28). */
+  stockLabel: z.string().nullable().default(null),
   unitIndex: z.number().int(),
   unitTotal: z.number().int(),
   variantName: z.string(),
@@ -2507,3 +2517,6 @@ export const KitchenLabelSchema = z.object({
 
 export const KitchenLabelListResponseSchema = z.object({ items: z.array(KitchenLabelSchema) });
 export type KitchenLabel = z.infer<typeof KitchenLabelSchema>;
+
+/** Si una vianda del stock lleva etiqueta con el nombre de quien la compra (2026-11-28). */
+export const OrderItemNameLabelRequestSchema = z.object({ nameLabel: z.boolean() });

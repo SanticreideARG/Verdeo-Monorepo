@@ -20,6 +20,8 @@ export interface PeriodReportItem {
   quantityUnits: number;
   /** Del stock de un período anterior: de cuál ("Octubre 2"). Va al lado de la variedad. */
   stockLabel?: string | null;
+  /** Del stock y con etiqueta con el nombre de quien la compra (2026-11-28). */
+  nameLabel?: boolean;
   variantName: string;
 }
 
@@ -56,6 +58,8 @@ export interface PeriodReportOrder {
  */
 export interface PeriodReportRow {
   composable: boolean;
+  /** Una vianda del stock con el nombre de quien la compra: va destacada, como un Intuitivo. */
+  named?: boolean;
   familyName: string;
   /** El primer renglón del pedido: el único que lleva la venta. */
   first: boolean;
@@ -215,7 +219,13 @@ export function buildPeriodReport(orders: readonly PeriodReportOrder[]): PeriodR
         const meals = Array.from({ length: DAYS }, (_, day) =>
           day < Math.min(DAYS, item.mealsPerUnit) ? short + ofStock : '',
         );
-        const variety = item.composable ? order.customerName : short + ofStock;
+        // Del stock con nombre (2026-11-28): la variedad lleva el nombre, como un Intuitivo.
+        const named = Boolean(item.stockLabel && item.nameLabel);
+        const variety = item.composable
+          ? order.customerName
+          : named
+            ? `${order.customerName} · ${short}${ofStock}`
+            : short + ofStock;
         const label = item.composable ? `${variety} ${size}` : `${short} ${size}${ofStock}`;
         const entry = summary.get(label) ?? {
           composable: item.composable,
@@ -236,6 +246,7 @@ export function buildPeriodReport(orders: readonly PeriodReportOrder[]): PeriodR
         for (let bundle = 0; bundle < bundles; bundle += 1) {
           deliveryRows.push({
             composable: item.composable,
+            named,
             familyName: item.familyName,
             first: deliveryRows.every((row) => row.order !== order),
             meals,

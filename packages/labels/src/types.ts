@@ -74,6 +74,8 @@ export interface LabelData {
   orderPublicNumber: string;
   unitIndex: number;
   unitTotal: number;
+  /** Una vianda del stock con el nombre de quien la compra: de qué período es (2026-11-28). */
+  stockLabel?: string | null;
   variantName: string;
 }
 

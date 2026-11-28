@@ -202,7 +202,12 @@ Plan: `docs/03-features/TAGS_Y_STOCK_CON_NOMBRE_PLAN.md`.
 - [x] Planillas según el modo de cada tag:
   - **Producción** (Excel, PDF y WhatsApp): una lista por tag con sus pedidos, con ☐ si lo pide; "al final del nombre" va pegado al cliente en Intuitivos y excepciones.
   - **Planilla de pedidos**, hojas "Pedidos" y "Reparto": el tag al final del nombre o una columna con ☐ al final (en "Pedidos", en el primer renglón del pedido; en "Reparto", en cada bulto).
-- [ ] Stock con nombre: la vianda del stock vendida lleva etiqueta con el nombre del comprador (generador de etiquetas y hoja de reparto), desmarcable por ítem.
+- [x] Stock con nombre: la vianda del stock vendida lleva etiqueta con el nombre de quien la compra.
+  - En el generador, una vertical por pedido con el nombre y "stock Noviembre 2", siempre a la vista.
+  - En la hoja "Reparto", la variedad lleva el nombre y va en negrita y cursiva, como un Intuitivo.
+  - Se desmarca por ítem en la ficha del pedido (`PATCH /api/v1/orders/:id/items/:itemId/name-label`).
+  - No se cocina de nuevo ni sale en las etiquetas de platos.
+- [ ] Revisar: editar los ítems de un pedido vuelve a marcar "etiqueta con nombre" (el ítem se reescribe con el valor por defecto).
 
 ## Fecha de elaboración: el jueves del período (2026-11-25)
 

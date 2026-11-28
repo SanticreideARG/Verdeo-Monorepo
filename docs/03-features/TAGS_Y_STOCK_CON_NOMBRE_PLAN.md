@@ -1,6 +1,6 @@
 # Tags personalizables y stock con nombre: plan
 
-Pedido del 2026-11-28. Estado: **en curso**: fases 1 (tags) y 2 (planillas) hechas; fase 3 (stock con nombre) pendiente.
+Pedido del 2026-11-28. Estado: **hecho** (2026-11-28): fases 1 (tags), 2 (planillas) y 3 (stock con nombre).
 
 ## 1. Tags personalizables
 
@@ -125,3 +125,22 @@ dejar de ser lo que es. No cambia la variedad, ni el precio, ni las estadística
   - `tagCheckColumns`: una columna con ☐ por tag, al final de la hoja. En "Pedidos" la casilla va
     en el primer renglón del pedido y en "Reparto", en cada bulto.
   - Usa `orders_sheet` para la hoja "Pedidos" y `delivery_sheet` para "Reparto".
+
+### Fase 3: stock con nombre (2026-11-28)
+
+- `order_items.name_label` (migración 0088), por defecto en `true`. Sólo cuenta en un ítem con
+  `stock_lot_id`.
+- `loadKitchenLines({ namedStock: true })`, que usa sólo `cycleLabels`: suma las viandas del stock
+  con `name_label`, cada una con su `stockLabel`, que es el alias del período del lote. La
+  producción y las etiquetas de platos siguen sin incluirlas: ya están cocinadas.
+- `Label.stockLabel` / `LabelData.stockLabel`. En `menuGroups` del generador hay un grupo por
+  pedido y variedad, `menu:stock:…`:
+  - lleva el nombre del cliente en la vertical;
+  - el título es "Cristian · Keto 250 · stock Noviembre 2";
+  - está siempre a la vista y se ordena con los Intuitivos.
+- Planilla de pedidos, hoja "Reparto": la variedad pasa a ser "Cristian · KETO · Noviembre 2" y el
+  renglón va en negrita y cursiva (`PeriodReportRow.named`).
+- Ficha del pedido: casilla "Etiqueta con el nombre de …" en cada vianda del stock
+  (`PATCH /api/v1/orders/:id/items/:itemId/name-label`, con `orders.edit`). Auditoría:
+  `order.item_name_label`.
+- Pendiente: editar los ítems de un pedido los reescribe y la casilla vuelve a quedar marcada.

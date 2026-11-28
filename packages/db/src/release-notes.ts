@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-28-stock-con-nombre',
+    body: `Stock de semanas anteriores: la vianda que se vende del stock ahora sale en Etiquetas con el nombre de quien la compra, como un Intuitivo, y en la hoja "Reparto" va destacada con el nombre. Si la etiqueta de cuando se cocinó alcanza, se desmarca en la ficha del pedido.`,
+  },
+  {
     key: '2026-11-28-tags-en-planillas',
     body: `Tags en las planillas: la de producción trae una lista por tag (por ejemplo, los pedidos "Sin semillas") y la planilla de pedidos los muestra en "Pedidos" y "Reparto", al final del nombre o en una columna con casilla para marcar, según cómo esté configurado cada tag.`,
   },

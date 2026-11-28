@@ -205,6 +205,45 @@ describe('mover un pedido al período anterior', () => {
     expect(lot.rows[0]?.lot).toBe(LOT);
   });
 
+  // La vianda del stock lleva etiqueta con el nombre de quien la compra (2026-11-28).
+  it('la vianda del stock sale en las etiquetas con el nombre; desmarcada, no', async () => {
+    const { client, operations } = await sembrada();
+    const LOT = 'f4000000-0000-4000-8000-000000000002';
+    await client.exec(
+      `insert into stock_lots (id, operating_site_id, sales_cycle_id, family_name, variant_name,
+                               quantity_units, expires_at)
+       values ('${LOT}', '${SITE}', '${OLD_CYCLE}', 'Keto', '250', 2, '2126-12-31T00:00:00Z');`,
+    );
+    const order = await operations.createOrder(
+      {
+        customerId: CUSTOMER,
+        deliveryAddress: 'Calle 1',
+        deliveryDate: '2126-01-15',
+        dietaryInstructions: [],
+        items: [{ offeringId: NEW_OFFERING, quantityUnits: 1, stockLotId: LOT }],
+        menuId: NEW_MENU,
+        operatingSiteId: SITE,
+        paymentExpectation: 'Efectivo',
+        source: 'manual',
+      },
+      CONTEXT,
+    );
+    await client.exec(`update orders set status = 'CONFIRMED' where id = '${order.id}'`);
+
+    const labels = await operations.cycleLabels(NEW_CYCLE);
+    expect(labels).toEqual([
+      expect.objectContaining({ customerDisplayName: 'María Pérez', stockLabel: 'Semana 1' }),
+    ]);
+
+    const item = await client.query<{ id: string }>(
+      `select id from order_items where order_id = $1`,
+      [order.id],
+    );
+    await operations.setItemNameLabel(order.id, item.rows[0]!.id, false, CONTEXT);
+    expect(await operations.cycleLabels(NEW_CYCLE)).toEqual([]);
+    expect((await operations.getOrder(order.id)).items[0]?.stockLot?.nameLabel).toBe(false);
+  });
+
   it('no mueve más atrás del primer período', async () => {
     const { operations } = await sembrada();
     const order = await pedidoEn(operations, OLD_MENU, OLD_OFFERING, '2126-01-08');

@@ -138,6 +138,7 @@ import {
   LabelListResponseSchema,
   LabelSettingsSchema,
   SetTagsRequestSchema,
+  OrderItemNameLabelRequestSchema,
   SetTagsResponseSchema,
   TagCreateRequestSchema,
   TagListResponseSchema,
@@ -666,6 +667,12 @@ interface OperationsEngine {
   setOrderNew(orderId: string, isNew: boolean, context: OperationsContext): Promise<unknown>;
   // Tags personalizables (2026-11-28).
   listTags?(): Promise<unknown>;
+  setItemNameLabel?(
+    orderId: string,
+    itemId: string,
+    nameLabel: boolean,
+    context: OperationsContext,
+  ): Promise<unknown>;
   saveTag?(
     id: string | null,
     input: TagUpdateRequest,
@@ -7310,6 +7317,26 @@ export function createApp(options: CreateAppOptions) {
       operationsContext(context),
     );
     return context.json(SetTagsResponseSchema.parse(contractValue({ tags })));
+  });
+
+  // Una vianda del stock: con o sin etiqueta con el nombre de quien la compra (2026-11-28).
+  app.patch('/api/v1/orders/:id/items/:itemId/name-label', async (context) => {
+    if (!context.get('session').permissions.includes('orders.edit')) return forbidden(context);
+    const params = z.object({ id: z.uuid(), itemId: z.uuid() }).safeParse(context.req.param());
+    const input = OrderItemNameLabelRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!params.success || !input.success) return badRequest(context, 'Revisá el ítem.');
+    const operations = requireOperations();
+    if (!operations.setItemNameLabel) return forbidden(context);
+    return context.json(
+      await operations.setItemNameLabel(
+        params.data.id,
+        params.data.itemId,
+        input.data.nameLabel,
+        operationsContext(context),
+      ),
+    );
   });
 
   app.put('/api/v1/orders/:id/tags', async (context) => {

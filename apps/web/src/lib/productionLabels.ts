@@ -111,20 +111,31 @@ export function menuGroups(rows: readonly LabelData[]): LabelGroup[] {
      * El Intuitivo lleva el nombre del cliente y el tamaño, nunca la palabra "Intuitivo" (2026-10-25).
      * Se imprimen siempre los Intuitivos y el Keto 400; el resto de las verticales, si se piden.
      */
+    /*
+     * Una vianda del stock de otro período lleva el nombre de quien la compra, como un Intuitivo
+     * (2026-11-28): un grupo por pedido y variedad, siempre a la vista.
+     */
+    const named = Boolean(row.stockLabel);
     const groupId = row.composable
       ? `menu:intuitivo:${row.orderPublicNumber}`
-      : `menu:${row.familyName}:${row.variantName}`;
-    const featured = row.composable || (familyRank(row.familyName) === 0 && size === '400');
+      : named
+        ? `menu:stock:${row.orderPublicNumber}:${row.familyName}:${row.variantName}`
+        : `menu:${row.familyName}:${row.variantName}`;
+    const featured =
+      row.composable || named || (familyRank(row.familyName) === 0 && size === '400');
     const title = row.composable
       ? `${row.customerDisplayName} · Menú especial ${size}`
-      : `${familyShortName(row.familyName)} ${size}`;
+      : named
+        ? `${row.customerDisplayName} · ${familyShortName(row.familyName)} ${size} · stock ${row.stockLabel ?? ''}`
+        : `${familyShortName(row.familyName)} ${size}`;
     const group = groups.get(groupId) ?? {
       featured,
       id: groupId,
       kind: 'menu' as const,
       labels: [],
       product: {
-        composable: row.composable,
+        // Con los Intuitivos al final: también son de un cliente.
+        composable: row.composable || named,
         familyName: row.familyName,
         variantName: row.variantName,
       },
@@ -134,7 +145,7 @@ export function menuGroups(rows: readonly LabelData[]): LabelGroup[] {
     group.labels.push({
       key,
       kind: 'menu',
-      line: row.composable ? row.customerDisplayName : familyShortName(row.familyName),
+      line: row.composable || named ? row.customerDisplayName : familyShortName(row.familyName),
       size,
     });
   }
