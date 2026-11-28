@@ -168,6 +168,46 @@ const sizeColumn: Column = {
   width: 8,
 };
 
+type TagSheet = 'deliverySheet' | 'ordersSheet';
+
+/** El nombre del cliente con los tags que van "al final del nombre" en esta hoja (2026-11-28). */
+function nameWithTags(row: PeriodReportRow, sheet: TagSheet): string {
+  const extra = (row.order.tags ?? [])
+    .filter((tag) => tag[sheet] === 'NAME')
+    .map((tag) => tag.name);
+  return extra.length > 0
+    ? `${row.order.customerName} · ${extra.join(' · ')}`
+    : row.order.customerName;
+}
+
+/**
+ * Una columna con ☐ por cada tag que la pide en esta hoja y aparece en el informe. En "Pedidos" la
+ * casilla va en el primer renglón del pedido; en "Reparto", en cada bulto.
+ */
+function tagCheckColumns(report: PeriodReport, sheet: TagSheet, onlyFirst: boolean): Column[] {
+  const names = [
+    ...new Set(
+      report.days.flatMap((day) =>
+        [...day.rows, ...day.deliveryRows].flatMap((row) =>
+          (row.order.tags ?? []).filter((tag) => tag[sheet] === 'CHECK').map((tag) => tag.name),
+        ),
+      ),
+    ),
+  ];
+  return names.map((name) => ({
+    header: name,
+    value: (row: PeriodReportRow) =>
+      text(
+        (!onlyFirst || row.first) &&
+          (row.order.tags ?? []).some((tag) => tag.name === name && tag[sheet] === 'CHECK')
+          ? '☐'
+          : '',
+        CENTERED,
+      ),
+    width: Math.max(6, name.length + 2),
+  }));
+}
+
 function addressOf(row: PeriodReportRow, separator: string): string {
   return [row.order.addressLine1, row.order.addressLine2 ?? ''].filter(Boolean).join(separator);
 }
@@ -189,7 +229,7 @@ function trailing(sale: (row: PeriodReportRow) => CellObject): Column[] {
 }
 
 /** "Pedidos": dirección, nombre, tamaño, los cinco días, venta, pago y celular. */
-function ordersLayout(): Layout {
+function ordersLayout(report: PeriodReport): Layout {
   const columns: Column[] = [
     { header: 'Dirección', value: (row) => text(addressOf(row, '\n'), muted(row)), width: 42 },
     {
@@ -198,7 +238,7 @@ function ordersLayout(): Layout {
       value: (row) => {
         // Sólo el cliente nuevo lleva color, según por dónde entró; el resto, sin estilos.
         const color = row.order.isNew ? newColor(row.order.source) : null;
-        return text(row.order.customerName, color ? fill(color) : {});
+        return text(nameWithTags(row, 'ordersSheet'), color ? fill(color) : {});
       },
       width: 24,
     },
@@ -216,6 +256,7 @@ function ordersLayout(): Layout {
           : BASE,
       ),
     ),
+    ...tagCheckColumns(report, 'ordersSheet', true),
   ];
   return {
     columns,
@@ -253,7 +294,7 @@ function deliveryLayout(report: PeriodReport): Layout {
     {
       header: 'Nombre',
       plain: true,
-      value: (row) => text(row.order.customerName, deliveryNameStyle(row.composable)),
+      value: (row) => text(nameWithTags(row, 'deliverySheet'), deliveryNameStyle(row.composable)),
       width: 24,
     },
     {
@@ -267,6 +308,7 @@ function deliveryLayout(report: PeriodReport): Layout {
     ...trailing((row) =>
       money(isTransfer(row.order.paymentExpectation) ? 0 : row.order.totalMinor),
     ),
+    ...tagCheckColumns(report, 'deliverySheet', false),
   ];
   return {
     columns,
@@ -395,7 +437,7 @@ export function buildPeriodReportExcel(
   const book = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(
     book,
-    buildSheet(`Pedidos — ${alias}`, report, ordersLayout()),
+    buildSheet(`Pedidos — ${alias}`, report, ordersLayout(report)),
     'Pedidos',
   );
   XLSX.utils.book_append_sheet(

@@ -199,7 +199,9 @@ Plan: `docs/03-features/TAGS_Y_STOCK_CON_NOMBRE_PLAN.md`.
 - [x] Migración 0088: `tags`, `tag_sites`, `customer_tags`, `order_tags` y `order_items.name_label`. Trae "Sin semillas".
 - [x] Ajustes → Tags: nombre, color, se aplica a (clientes, pedidos o ambos), ciudades, cómo sale en cada planilla (no sale, al final del nombre o columna con ☐) y archivar.
 - [x] Pills en la ficha del pedido y del cliente (con "+ Tag" y ×) y en la lista de pedidos. El tag del cliente marca todos sus pedidos, calculado al leer.
-- [ ] Planillas: producción, hoja de reparto y planilla de pedidos según el modo de cada tag.
+- [x] Planillas según el modo de cada tag:
+  - **Producción** (Excel, PDF y WhatsApp): una lista por tag con sus pedidos, con ☐ si lo pide; "al final del nombre" va pegado al cliente en Intuitivos y excepciones.
+  - **Planilla de pedidos**, hojas "Pedidos" y "Reparto": el tag al final del nombre o una columna con ☐ al final (en "Pedidos", en el primer renglón del pedido; en "Reparto", en cada bulto).
 - [ ] Stock con nombre: la vianda del stock vendida lleva etiqueta con el nombre del comprador (generador de etiquetas y hoja de reparto), desmarcable por ítem.
 
 ## Fecha de elaboración: el jueves del período (2026-11-25)

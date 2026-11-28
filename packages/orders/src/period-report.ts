@@ -40,6 +40,8 @@ export interface PeriodReportOrder {
   publicNumber: string;
   /** Por dónde entró el pedido ("email", "whatsapp"…): pinta de qué color va un cliente nuevo. */
   source: string;
+  /** Sus tags y cómo sale cada uno en "Pedidos" y en "Reparto" (2026-11-28). */
+  tags?: readonly { deliverySheet: string; name: string; ordersSheet: string }[];
   /** La parada en la ruta del día, si ya hay una; `minutes` es el tiempo estimado de ruta. */
   route: { minutes: number | null; routeLabel: string; sequence: number } | null;
   /** El reparto ("Mañana · de 10 a 13h"): va en la barra de carga del día. */

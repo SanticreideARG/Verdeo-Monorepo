@@ -1,6 +1,6 @@
 # Tags personalizables y stock con nombre: plan
 
-Pedido del 2026-11-28. Estado: **en curso**: fase 1 (tags: modelo, Ajustes, pills) hecha; fases 2 (planillas) y 3 (stock con nombre) pendientes.
+Pedido del 2026-11-28. Estado: **en curso**: fases 1 (tags) y 2 (planillas) hechas; fase 3 (stock con nombre) pendiente.
 
 ## 1. Tags personalizables
 
@@ -108,3 +108,20 @@ dejar de ser lo que es. No cambia la variedad, ni el precio, ni las estadística
   - `TagPills` al lado del nombre en la lista de pedidos.
   - Las pills (`.tag-pill[data-color]`) son de color sólido con texto blanco y se leen en los dos
     temas.
+
+### Fase 2: planillas (2026-11-28)
+
+- **Planilla de producción**:
+  - `kitchenSummary.tagged`: una lista por tag con `production_sheet` distinto de OFF, con
+    pedido, cliente y viandas.
+  - En Excel va una hoja por tag; en PDF y WhatsApp, una sección.
+  - El modo CHECK agrega la casilla ☐.
+  - El modo NAME, además, pega el tag al nombre del cliente ("Lola · Sin semillas"). Se ve en
+    Intuitivos y excepciones.
+  - La planilla congelada de antes no tiene la lista: el contrato la completa con `[]`.
+- **Planilla de pedidos** (`orders-period-report.ts`):
+  - `PeriodReportOrder.tags`.
+  - `nameWithTags`: el tag al final del nombre.
+  - `tagCheckColumns`: una columna con ☐ por tag, al final de la hoja. En "Pedidos" la casilla va
+    en el primer renglón del pedido y en "Reparto", en cada bulto.
+  - Usa `orders_sheet` para la hoja "Pedidos" y `delivery_sheet` para "Reparto".

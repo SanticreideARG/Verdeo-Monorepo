@@ -151,6 +151,10 @@ Nuevo "Informe del período" (Pedidos → Columnas): el Excel de pedidos en colu
 • Antes de cancelar o borrar en lote, revisá el período y la ciudad elegidos arriba.`,
   },
   {
+    key: '2026-11-28-tags-en-planillas',
+    body: `Tags en las planillas: la de producción trae una lista por tag (por ejemplo, los pedidos "Sin semillas") y la planilla de pedidos los muestra en "Pedidos" y "Reparto", al final del nombre o en una columna con casilla para marcar, según cómo esté configurado cada tag.`,
+  },
+  {
     key: '2026-11-28-tags',
     body: `Tags: aclaraciones en pills de color, como "Sin semillas", que se ponen a clientes o a pedidos desde sus fichas. El de un cliente marca todos sus pedidos. Se crean y se configuran en Panel de control → Tags: color, ciudades, a qué se aplican y cómo salen en las planillas.`,
   },

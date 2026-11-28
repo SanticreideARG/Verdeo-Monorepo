@@ -1344,6 +1344,26 @@ export const KitchenSummaryResponseSchema = z.object({
       }),
     )
     .default([]),
+  /**
+   * Los pedidos con un tag que sale en la planilla de producción (2026-11-28): una lista por tag,
+   * porque la planilla suma por variedad y un "Sin semillas" se perdería en el total. `checkColumn`:
+   * el tag pide una columna con ☐ para marcar.
+   */
+  tagged: z
+    .array(
+      z.object({
+        checkColumn: z.boolean(),
+        name: z.string(),
+        orders: z.array(
+          z.object({
+            customerDisplayName: z.string(),
+            items: z.string(),
+            orderPublicNumber: z.string(),
+          }),
+        ),
+      }),
+    )
+    .default([]),
   totalOrders: z.number().int(),
   totalUnits: z.number().int(),
 });

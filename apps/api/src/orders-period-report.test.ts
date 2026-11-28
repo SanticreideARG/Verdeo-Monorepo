@@ -178,6 +178,36 @@ describe('buildPeriodReportExcel: Reparto', () => {
   });
 });
 
+describe('tags en la planilla (2026-11-28)', () => {
+  it('"al final del nombre" y "columna con ☐", cada hoja con su modo', () => {
+    const book = read([
+      order({
+        tags: [
+          { deliverySheet: 'CHECK', name: 'Sin semillas', ordersSheet: 'NAME' },
+          { deliverySheet: 'OFF', name: 'Urgente', ordersSheet: 'CHECK' },
+        ],
+      }),
+      order({ customerName: 'Bea', publicNumber: 'MZA-00002' }),
+    ]);
+    const pedidos = sheetOf(book, 'Pedidos');
+    expect(pedidos.cell('B5')?.v).toBe('Ana · Sin semillas');
+    expect(pedidos.cell('B7')?.v).toBe('Bea');
+    // La casilla, después de Celular: sólo en el primer renglón del pedido que la tiene.
+    expect(pedidos.cell('L2')?.v).toBe('Urgente');
+    expect(pedidos.cell('L5')?.v).toBe('☐');
+    expect(pedidos.cell('L6')?.v).toBe('');
+    expect(pedidos.cell('L7')?.v).toBe('');
+
+    const reparto = sheetOf(book, 'Reparto');
+    const headers = Array.from(
+      { length: 14 },
+      (_, index) => reparto.cell(`${XLSX.utils.encode_col(index)}2`)?.v,
+    );
+    expect(headers).toContain('Sin semillas');
+    expect(headers).not.toContain('Urgente');
+  });
+});
+
 describe('estilos del Reparto (2026-11-18)', () => {
   it('nombre y porción centrados; el nombre del especial, en negrita y cursiva', () => {
     expect(deliveryNameStyle(false).alignment?.horizontal).toBe('center');

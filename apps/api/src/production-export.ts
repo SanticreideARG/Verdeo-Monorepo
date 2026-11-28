@@ -35,6 +35,12 @@ export interface ProductionReport {
   stock?: readonly { familyName: string; quantityUnits: number; variantName: string }[];
   /** "Parcial (martes 20:00)", "Final" o "Consolidado al momento". */
   subtitle: string;
+  /** Los pedidos de cada tag que sale en esta planilla (2026-11-28). */
+  tagged?: readonly {
+    checkColumn: boolean;
+    name: string;
+    orders: readonly { customerDisplayName: string; items: string; orderPublicNumber: string }[];
+  }[];
   totalOrders: number;
   totalUnits: number;
 }
@@ -473,6 +479,26 @@ export function buildProductionExcel(report: ProductionReport): ArrayBuffer {
     );
   }
 
+  // Una hoja por tag que sale en la planilla (2026-11-28), con la casilla si el tag la pide.
+  for (const group of report.tagged ?? []) {
+    if (group.orders.length === 0) continue;
+    XLSX.utils.book_append_sheet(
+      workbook,
+      sheetWithTitle(
+        `${title} — ${group.name}`,
+        group.orders.map((order) => ({
+          ...(group.checkColumn ? { '☐': '☐' } : {}),
+          Pedido: order.orderPublicNumber,
+          Cliente: order.customerDisplayName,
+          Viandas: order.items,
+        })),
+        group.checkColumn ? [5, 12, 30, 60] : [12, 30, 60],
+        [],
+      ),
+      group.name.slice(0, 31).replace(/[\\/?*[\]:]/g, ' '),
+    );
+  }
+
   // `type: 'array'` devuelve un ArrayBuffer, no un Uint8Array. Declararlo como Uint8Array era una
   // mentira que el compilador aceptaba y que después hacía leer `.buffer` —undefined en un
   // ArrayBuffer—, así que la respuesta salía vacía: un .xlsx de cero bytes, sin ningún error.
@@ -523,6 +549,16 @@ export function buildProductionWhatsAppText(report: ProductionReport): string {
     lines.push('', '*Platos a preparar*');
     for (const entry of dishTally) {
       lines.push(`• ${tallyLabel(entry)}: ${entry.portions}`);
+    }
+  }
+
+  for (const group of report.tagged ?? []) {
+    if (group.orders.length === 0) continue;
+    lines.push('', `*${group.name}*`);
+    for (const order of group.orders) {
+      lines.push(
+        `${group.checkColumn ? '☐' : '•'} ${order.customerDisplayName} (#${order.orderPublicNumber}): ${order.items}`,
+      );
     }
   }
 
@@ -628,6 +664,20 @@ export function buildProductionPrintHtml(report: ProductionReport): string {
   </table>`
       : ''
   }
+  ${(report.tagged ?? [])
+    .filter((group) => group.orders.length > 0)
+    .map(
+      (group) => `<h2>${escape(group.name)}</h2><table>
+    <thead><tr>${group.checkColumn ? '<th>☐</th>' : ''}<th>Pedido</th><th>Cliente</th><th>Viandas</th></tr></thead>
+    <tbody>${group.orders
+      .map(
+        (order) =>
+          `<tr>${group.checkColumn ? '<td>☐</td>' : ''}<td>${escape(order.orderPublicNumber)}</td><td>${escape(order.customerDisplayName)}</td><td>${escape(order.items)}</td></tr>`,
+      )
+      .join('')}</tbody>
+  </table>`,
+    )
+    .join('')}
   <p class="total">Total: ${totalUnits} unidades en ${totalOrders} ${totalOrders === 1 ? 'pedido' : 'pedidos'}</p>
 </body>
 </html>`;

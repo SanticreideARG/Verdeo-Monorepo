@@ -54,6 +54,30 @@ const report: ProductionReport = {
   totalUnits: 15,
 };
 
+describe('tags en la planilla de producción (2026-11-28)', () => {
+  it('una hoja por tag, con la casilla si la pide', () => {
+    const book = read(
+      buildProductionExcel({
+        ...report,
+        tagged: [
+          {
+            checkColumn: true,
+            name: 'Sin semillas',
+            orders: [
+              { customerDisplayName: 'Lola', items: 'Keto 250 × 1', orderPublicNumber: 'NQN-1' },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(book.SheetNames).toContain('Sin semillas');
+    const rows = XLSX.utils.sheet_to_json<Record<string, string>>(book.Sheets['Sin semillas']!, {
+      range: 1,
+    });
+    expect(rows[0]).toMatchObject({ '☐': '☐', Cliente: 'Lola', Viandas: 'Keto 250 × 1' });
+  });
+});
+
 function read(built: ArrayBuffer) {
   return XLSX.read(built, { cellStyles: true, type: 'array' });
 }

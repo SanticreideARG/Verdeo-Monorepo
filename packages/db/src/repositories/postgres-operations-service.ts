@@ -8583,6 +8583,11 @@ export class PostgresOperationsService {
           deliveryDate: order.deliveryDate,
           dietaryInstructions: order.dietaryInstructions,
           isNew: order.customer.isNew,
+          tags: order.tags.map((tag) => ({
+            deliverySheet: tag.deliverySheet,
+            name: tag.name,
+            ordersSheet: tag.ordersSheet,
+          })),
           items: order.items.map((item) => {
             const kind = kindOf.get(item.id);
             return {
@@ -10811,7 +10816,55 @@ export class PostgresOperationsService {
      * stock, o en el excedente de lo que se cocinó. Contarlo como pedido lo cocinaba dos veces.
      * Sigue teniendo su etiqueta con cliente: eso sale de las etiquetas, no de este resumen.
      */
-    const toCook = lines.filter((line) => line.orderSource !== 'opportunity_sale');
+    const cooking = lines.filter((line) => line.orderSource !== 'opportunity_sale');
+    /*
+     * Tags en la planilla de producción (2026-11-28): "al final del nombre" va pegado al cliente
+     * (se ve en Intuitivos y excepciones); además, cada tag que sale tiene su lista de pedidos,
+     * porque una vianda fija se suma con las demás y el tag no se vería.
+     */
+    const lineTags = await tagsByOrder(this.database, [
+      ...new Set(cooking.map((line) => line.orderId)),
+    ]);
+    const toCook = cooking.map((line) => {
+      const extra = (lineTags.get(line.orderId) ?? [])
+        .filter((tag) => tag.productionSheet === 'NAME')
+        .map((tag) => tag.name);
+      return extra.length > 0
+        ? { ...line, customerDisplayName: `${line.customerDisplayName} · ${extra.join(' · ')}` }
+        : line;
+    });
+    type TaggedOrder = { customerDisplayName: string; items: string[]; orderPublicNumber: string };
+    const taggedByName = new Map<
+      string,
+      { checkColumn: boolean; name: string; orders: Map<string, TaggedOrder> }
+    >();
+    for (const line of cooking) {
+      for (const tag of lineTags.get(line.orderId) ?? []) {
+        if (tag.productionSheet === 'OFF') continue;
+        const group = taggedByName.get(tag.id) ?? {
+          checkColumn: tag.productionSheet === 'CHECK',
+          name: tag.name,
+          orders: new Map<string, TaggedOrder>(),
+        };
+        const order: TaggedOrder = group.orders.get(line.orderId) ?? {
+          customerDisplayName: line.customerDisplayName,
+          items: [],
+          orderPublicNumber: line.orderPublicNumber,
+        };
+        order.items.push(`${line.familyName} ${line.variantName} × ${String(line.quantityUnits)}`);
+        group.orders.set(line.orderId, order);
+        taggedByName.set(tag.id, group);
+      }
+    }
+    const tagged = [...taggedByName.values()].map((group) => ({
+      checkColumn: group.checkColumn,
+      name: group.name,
+      orders: [...group.orders.values()]
+        .map((order) => ({ ...order, items: order.items.join(', ') }))
+        .sort((left, right) =>
+          left.customerDisplayName.localeCompare(right.customerDisplayName, 'es-AR'),
+        ),
+    }));
     /*
      * El orden de las variedades tal como están cargadas en el menú del período (Keto, Anti-Age,
      * Vegetariano, Real…): la planilla de cocina va en ese orden y no alfabético.
@@ -10831,6 +10884,7 @@ export class PostgresOperationsService {
     return {
       ...buildKitchenSummary(toCook),
       cycle,
+      tagged,
       familyOrder: familyRows.map((row) => row.name),
       frozenAt: null as Date | null,
       generatedAt: new Date(),
